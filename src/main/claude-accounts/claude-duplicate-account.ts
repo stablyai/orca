@@ -1,4 +1,4 @@
-import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import type { ClaudeManagedAccountSummary } from '../../shared/managed-account-types'
 import { getClaudeWslSelectionKey } from './runtime-selection'
 
 export type ClaudeAccountIdentityCandidate = {
@@ -35,9 +35,9 @@ function runtimeScopeKey(
 // duplicate is only a match on email + organization + runtime scope, each side
 // normalized so a legacy/undefined field cannot dodge the check (#6616).
 export function findDuplicateClaudeAccount(
-  accounts: readonly ClaudeManagedAccount[],
+  accounts: readonly ClaudeManagedAccountSummary[],
   candidate: ClaudeAccountIdentityCandidate
-): ClaudeManagedAccount | null {
+): ClaudeManagedAccountSummary | null {
   const email = normalizeEmail(candidate.email)
   if (!email) {
     return null

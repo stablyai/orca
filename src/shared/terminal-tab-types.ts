@@ -95,11 +95,10 @@ export type TerminalTab = {
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
   /**
-   * The pane an `agent.launch` laid out before its agent existed, while its fate is open or once it
-   * is final. Pending (no `outcome`): the pane's spawn reads the launch record. Cleared once the
-   * agent attaches or the pane is an ordinary terminal again. `outcome`: the launch never ran there,
-   * and the pane says so for the tab's life, until a different launch (`operationId`) reuses it; a
-   * retry of the same launch changes nothing.
+   * The pane an `agent.launch` laid out before its agent existed, for this session only. Cleared once
+   * the agent attaches or the pane is an ordinary terminal again. `outcome`: what main says the
+   * launch left the pane, which it keeps until it quits; the pane says so until a different launch
+   * (`operationId`) reuses it, and a retry of the same launch changes nothing. Never saved.
    */
   agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
@@ -154,4 +153,8 @@ export type TerminalLayoutSnapshot = {
   /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
+  /** Each pane's last grid, so main starts its terminal at that size. Older builds drop it. */
+  lastGridsByLeafId?: Record<string, TerminalGrid>
 }
+
+export type TerminalGrid = { cols: number; rows: number }

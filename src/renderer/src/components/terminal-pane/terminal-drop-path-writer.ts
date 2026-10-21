@@ -1,7 +1,7 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../shared/image-paste-following-text'
 import { shellEscapePath } from './pane-helpers'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
 import {
   canPasteImageDropPathRaw,

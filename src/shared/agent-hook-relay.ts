@@ -1,4 +1,5 @@
 import type { AgentProcessPresence } from './agent-process-presence'
+import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
 // the relay sends to Orca. Consumed by `src/wsl-guest/agent-hook-server.ts` (which
 // produces it after the shared listener parses an HTTP POST) and by
@@ -107,6 +108,8 @@ export type AgentHookRelayEnvelope = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
+  /** Optional, replay only: Claude requests the relay saw end while this receiver may have been away. */
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */
@@ -248,18 +251,11 @@ export type AgentHookInstallManagedHooksParams = {
   claudeVersion?: string
 }
 
-/** Feature-flag env var. Read once at process start by Orca and the relay.
- *  Remote agent hooks ship as the default SSH behavior; set "0" to opt out. */
+/** Opt-out env var for the Windows WSL agent-hook relay, read on each relay start; set "0" to
+ *  disable. */
 export const ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV = 'ORCA_FEATURE_REMOTE_AGENT_HOOKS' as const
 
-export function isRemoteAgentHooksEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isWslAgentHookRelayEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
-  if (raw === undefined) {
-    return true
-  }
-  const trimmed = raw.trim()
-  if (trimmed.length === 0 || trimmed === '0') {
-    return false
-  }
-  return true
+  return raw === undefined || !['', '0'].includes(raw.trim())
 }

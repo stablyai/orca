@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/pr-refresh-state'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
-import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
 import {
   hasChecksPanelGitStatusBranchChanged,
   readChecksPanelRefreshGitIdentitySnapshot,

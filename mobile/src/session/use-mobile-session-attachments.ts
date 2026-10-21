@@ -8,6 +8,8 @@ import {
   MobileWorkspaceOnOtherRuntimeError
 } from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
+import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-structured-composer'
+import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
@@ -42,7 +44,9 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     nativeChatController,
     getActiveWorktreeConnectionId,
     refreshCanPaste,
-    activeSessionTab
+    activeSessionTab,
+    agentSessionHostSupport,
+    hostId
   } = scope
   const clipboardContents = useClipboardReader().contents
   const agent =
@@ -78,27 +82,42 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     showToast
   })
 
+  const structuredNativeChat = activeSessionTab?.type === 'agent-session'
+  const nativeChatSessionId = resolveMobileNativeChatSessionId(activeSessionTab)
   // Terminal input pastes an attached image straight into the visible terminal;
   // native chat instead holds it as a composer chip and rides it along on submit.
-  const { attachImage, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
+  const { attachImage, isAttaching, nativeChatImages, nativeChatFiles } =
+    useMobileSessionImageAttachments({
+      client,
+      agent,
+      activeHandle,
+      activeHandleRef,
+      canSend,
+      connState,
+      deviceTokenRef,
+      nativeChatScopeKey,
+      nativeChatInputLeaseReady,
+      getActiveWorktreeConnectionId,
+      beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
+      nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
+      structuredNativeChat,
+      nativeChatSessionId,
+      readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
+      showToast,
+      onNativeChatSendError: nativeChatSendError.show,
+      onSuccess: triggerSelection,
+      onError: triggerError
+    })
+  const nativeChatStructuredComposer = useMobileNativeChatStructuredComposer({
     client,
-    agent,
-    activeHandle,
-    activeHandleRef,
-    canSend,
-    connState,
-    deviceTokenRef,
-    nativeChatScopeKey,
-    nativeChatInputLeaseReady,
-    getActiveWorktreeConnectionId,
-    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
-    nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
-    structuredNativeChat: activeSessionTab?.type === 'agent-session',
-    readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
-    showToast,
-    onNativeChatSendError: nativeChatSendError.show,
-    onSuccess: triggerSelection,
-    onError: triggerError
+    hostId,
+    sessionId: nativeChatSessionId,
+    structured: structuredNativeChat,
+    connected: connState === 'connected',
+    acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
+    conversationCommands:
+      nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
+    files: nativeChatFiles
   })
 
   // Why: refresh canPaste on mount, AppState active, after paste.
@@ -179,7 +198,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,
     isAttaching,
-    nativeChatImages
+    nativeChatImages,
+    nativeChatStructuredComposer
   }
 }
 

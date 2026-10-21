@@ -36,13 +36,26 @@ vi.mock('react-native', async () => {
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Bot: 'Bot',
   Brain: 'Brain',
+  Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
   Copy: 'Copy',
+  Eye: 'Eye',
+  FileMinus2: 'FileMinus2',
+  FilePen: 'FilePen',
+  FilePlus2: 'FilePlus2',
+  Folder: 'Folder',
+  Globe: 'Globe',
+  ListChecks: 'ListChecks',
+  MessageSquareMore: 'MessageSquareMore',
+  Pencil: 'Pencil',
+  Plug: 'Plug',
+  Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
-  Wrench: 'Wrench',
-  ChevronRight: 'ChevronRight'
+  Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
@@ -148,7 +161,20 @@ describe('MobileNativeChatMessage visuals', () => {
   })
 
   it('never renders visuals in system rows', () => {
-    const props = markdownProps(message('s1', 'system', '::orca-visual{file="a.html"}'))
-    expect(props.renderVisual).toBeUndefined()
+    act(() => {
+      renderer = create(
+        createElement(
+          MobileNativeChatVisualContext.Provider,
+          { value: renderVisual },
+          createElement(MobileNativeChatMessage, {
+            message: message('s1', 'system', '::orca-visual{file="a.html"}')
+          })
+        )
+      )
+    })
+    expect(renderer!.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toEqual([])
+    expect(
+      renderer!.root.findAll((node) => String(node.type) === 'Text').map((node) => node.children)
+    ).toContainEqual(['::orca-visual{file="a.html"}'])
   })
 })

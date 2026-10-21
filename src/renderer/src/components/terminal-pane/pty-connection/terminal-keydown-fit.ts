@@ -13,7 +13,7 @@ import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { retireLiveAgentRowOnConfirmedProcessExit } from './confirmed-process-exit-row-retire'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -23,12 +23,6 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.onTerminalKeyDown = (event: KeyboardEvent): void => {
     if (isPlainEscapeKeyEvent(event)) {
       session.setPendingTerminalInputIntent('plain-escape')
-      // Why: plain Escape produces real terminal input (\x1b), so it is a
-      // genuine "user is here" signal and must still dismiss attention before
-      // the early return for interrupt-intent inference.
-      session.deps.clearTerminalTabUnread(session.deps.tabId)
-      session.deps.clearTerminalPaneUnread(session.cacheKey)
-      session.deps.clearWorktreeUnread(session.deps.worktreeId)
       return
     }
     if (isCtrlCKeyEvent(event)) {
@@ -37,10 +31,8 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       }
       session.setPendingTerminalInputIntent('ctrl-c')
     }
-    // Why: only treat keydowns that will produce real terminal input as the
-    // "user is here" signal. Modifier-only presses, autorepeat, and Cmd/Ctrl+C
-    // copy chords with an active selection must not dismiss attention on a
-    // sibling pane before the user has seen it.
+    // Why: only keydowns that will produce real terminal input reach the sample
+    // below; modifier-only presses, autorepeat, and copy chords do not.
     if (
       event.repeat ||
       event.key === 'Alt' ||
@@ -66,9 +58,6 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       session.sampleVisiblePaneForegroundAgent()
     }
-    session.deps.clearTerminalTabUnread(session.deps.tabId)
-    session.deps.clearTerminalPaneUnread(session.cacheKey)
-    session.deps.clearWorktreeUnread(session.deps.worktreeId)
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
@@ -182,8 +171,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     paneKey: session.cacheKey,
     statusLane: 'pty',
     getPtyId: () => session.transport.getPtyId(),
-    isRemotePtyId: (ptyId) =>
-      Boolean(isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)),
+    isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchHookLifecycle: (payload) =>
@@ -244,14 +232,14 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       }),
     shouldPollProcessCadence: () => {
       const ptyId = session.transport.getPtyId()
-      if (ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId))) {
+      if (isRemoteExecutionHostPtyId(ptyId)) {
         return false
       }
       return isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current
     },
     shouldPollNoEvidenceProcessCadence: () => {
       const ptyId = session.transport.getPtyId()
-      return !(ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)))
+      return !isRemoteExecutionHostPtyId(ptyId)
     },
     isProcessInspectionCostly: () =>
       isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),

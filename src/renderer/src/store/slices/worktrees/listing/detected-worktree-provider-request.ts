@@ -1,8 +1,6 @@
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import {
-  runtimeTargetForOwnerHostId,
-  type RuntimeClientTarget
-} from '../../../../runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'
 import {
@@ -26,7 +24,7 @@ import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree-sca
 
 /** The listing host is the one the caller asked about, never the focused one. */
 export function detectedWorktreeTarget(executionHostId: ExecutionHostId): RuntimeClientTarget {
-  const target = runtimeTargetForOwnerHostId(executionHostId)
+  const target = ipcOrRuntimeTargetForHostId(executionHostId)
   if (!target) {
     throw new Error('The workspace host is unresolved.')
   }

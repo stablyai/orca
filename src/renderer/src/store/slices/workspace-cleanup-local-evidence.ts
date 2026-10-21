@@ -1,9 +1,6 @@
 import type { AppState } from '../types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
-import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 
@@ -58,16 +55,12 @@ export function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[
   }
 
   const openEditorWorktreeIds = new Set(state.openFiles.map((file) => file.worktreeId))
-  const agentStatusesByTabId = buildWorkspaceCleanupAgentStatusIndex(state)
+  // A working-title agent needs a live PTY, so the PTY check below already covers it.
+  for (const worktreeId of getWorkspaceCleanupLiveAgentSessionWorktreeIds(state)) {
+    ids.add(worktreeId)
+  }
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tabIds = new Set(tabs.map((tab) => tab.id))
     if (tabs.some((tab) => (state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0)) {
-      ids.add(worktreeId)
-    }
-    if (
-      hasFreshIndexedLiveAgent(agentStatusesByTabId, tabIds) ||
-      hasWorkingTitleAgent(state, tabs)
-    ) {
       ids.add(worktreeId)
     }
   }
@@ -99,60 +92,9 @@ export function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[
   return [...ids]
 }
 
-export function buildWorkspaceCleanupAgentStatusIndex(
-  state: AppState,
-  includedTabIds?: ReadonlySet<string>
-): Map<string, AgentStatusEntry[]> {
-  const agentStatusesByTabId = new Map<string, AgentStatusEntry[]>()
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
-    const tabId = getPaneKeyTabId(entry.paneKey)
-    if (includedTabIds && !includedTabIds.has(tabId)) {
-      continue
-    }
-    const entries = agentStatusesByTabId.get(tabId) ?? []
-    entries.push(entry)
-    agentStatusesByTabId.set(tabId, entries)
-  }
-  return agentStatusesByTabId
-}
-
-export function hasFreshIndexedLiveAgent(
-  agentStatusesByTabId: ReadonlyMap<string, readonly AgentStatusEntry[]>,
-  tabIds: Set<string>
-): boolean {
-  const now = Date.now()
-  for (const tabId of tabIds) {
-    for (const entry of agentStatusesByTabId.get(tabId) ?? []) {
-      if (
-        isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) &&
-        (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
-      ) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-export function hasWorkingTitleAgent(
-  state: AppState,
-  tabs: { id: string; title: string }[]
-): boolean {
-  for (const tab of tabs) {
-    if ((state.ptyIdsByTabId[tab.id]?.length ?? 0) === 0) {
-      continue
-    }
-    const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
-    const titles =
-      paneTitles && Object.keys(paneTitles).length > 0 ? Object.values(paneTitles) : [tab.title]
-    for (const title of titles) {
-      const status = classifyTitleActivity(title)
-      if (status === 'working' || status === 'permission') {
-        return true
-      }
-    }
-  }
-  return false
+/** Workspaces with a live agent session, attributed like the sidebar so structured chats count too. */
+export function getWorkspaceCleanupLiveAgentSessionWorktreeIds(state: AppState): Set<string> {
+  return getWorktreeIdsWithLiveAgent(state.agentStatusByPaneKey, state.tabsByWorktree, Date.now())
 }
 
 export async function probeTerminalLiveness(
@@ -222,11 +164,6 @@ function hasIdleAgentTitleForPty(
 
 function isIdleAgentTitle(title: string): boolean {
   return classifyTitleActivity(title) === 'idle'
-}
-
-function getPaneKeyTabId(paneKey: AgentStatusEntry['paneKey']): string {
-  const separatorIndex = paneKey.lastIndexOf(':')
-  return separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
 }
 
 function normalizeProcessName(value: string | null): string | null {

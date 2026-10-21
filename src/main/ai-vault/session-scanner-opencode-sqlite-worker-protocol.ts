@@ -17,6 +17,8 @@ export type OpenCodeSqliteListRequest = {
   limit: number | null
   /** When 'opencode2', lists from the v2 channel-scoped DB schema (session_v2). */
   agent?: 'opencode2' | 'zcode'
+  /** Lists only sessions whose directory is in scope; an older reader ignores it and lists unfiltered. */
+  scopePaths?: readonly string[]
 }
 
 export type OpenCodeSqliteParseRequest = {

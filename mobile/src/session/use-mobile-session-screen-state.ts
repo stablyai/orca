@@ -6,7 +6,7 @@ import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
-import type { CustomKey } from '../components/CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'

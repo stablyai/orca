@@ -2,10 +2,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getExecutionHostIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PtyTransport } from './pty-transport-types'

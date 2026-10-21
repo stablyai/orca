@@ -10,6 +10,9 @@ import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
 import { encodeGitPathspecs } from '../../../shared/git-pathspec-stdin'
+import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
+
+const DISCARD_WRITE = ['restore', '--worktree'] as const
 
 /**
  * Discard working tree changes for a file.
@@ -30,7 +33,7 @@ export async function discardChanges(
     let tracked = false
     try {
       await gitExecFileAsync(
-        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
+        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, worktreePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
@@ -41,9 +44,13 @@ export async function discardChanges(
     }
 
     if (tracked) {
-      await gitExecFileAsync(['restore', '--worktree', '--', literalPathspec(filePath, options)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        ['restore', '--worktree', '--', literalPathspec(filePath, worktreePath, options)],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
+      await redoWriteForDriveCheckoutSuspects(worktreePath, [filePath], DISCARD_WRITE, options)
       return
     }
 
@@ -130,10 +137,11 @@ export async function bulkDiscardChanges(
           {
             ...gitOptionsForWorktree(worktreePath, options),
             stdin: encodeGitPathspecs(
-              trackedPaths.map((filePath) => literalPathspec(filePath, options))
+              trackedPaths.map((filePath) => literalPathspec(filePath, worktreePath, options))
             )
           }
         )
+        await redoWriteForDriveCheckoutSuspects(worktreePath, trackedPaths, DISCARD_WRITE, options)
       }
     )
   } finally {

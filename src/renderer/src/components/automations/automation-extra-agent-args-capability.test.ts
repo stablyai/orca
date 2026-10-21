@@ -11,9 +11,9 @@ const getRuntimeEnvironmentStatus = vi.fn()
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args),
-  hasRuntimeRpcErrorCode: () => false
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 const RUNTIME = { kind: 'runtime', environmentId: 'env-1', pairingRevision: 4 } as const
 const OWNER = { authority: RUNTIME, selector: { kind: 'self' } } as const

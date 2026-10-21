@@ -7,8 +7,8 @@ import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl } from './SettingsFormControls'
-import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-sync-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/actions/git-operation-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
@@ -126,7 +126,7 @@ export function RepositoryForkSyncSection({
     syncInFlightRef.current = true
     setSyncing(true)
     try {
-      const target = runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo))
+      const target = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo))
       if (!target) {
         throw new Error(UNRESOLVED_GIT_HOST_ERROR)
       }

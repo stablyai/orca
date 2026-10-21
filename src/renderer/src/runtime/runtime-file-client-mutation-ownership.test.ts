@@ -3,11 +3,11 @@ import {
   copyRuntimePath,
   createRuntimePath,
   deleteRuntimePath,
-  importExternalPathsToRuntime,
   readRuntimeDirectory,
   renameRuntimePath,
   writeRuntimeFile
-} from './runtime-file-client'
+} from './runtime-file-mutation-client'
+import { importExternalPathsToRuntime } from './runtime-file-import-client'
 import { markRuntimeEnvironmentCompatible } from './runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {

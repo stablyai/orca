@@ -204,11 +204,11 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // did not just forward focus/control input. Treat the BEL as authoritative
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
-    session.deps.markWorktreeUnread(session.deps.worktreeId)
-    session.deps.markTerminalTabUnread(session.deps.tabId, 'terminal-bell')
-    if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {
-      session.deps.markTerminalPaneUnread(session.cacheKey, 'terminal-bell')
-    }
+    session.deps.markTerminalBell({
+      worktreeId: session.deps.worktreeId,
+      tabId: session.deps.tabId,
+      paneKey: session.cacheKey
+    })
     // Why: agent CLIs often emit BEL in the same completion burst as their
     // working->idle title change. Delay only the OS notification so the richer
     // agent-complete notification can win the main-process worktree cooldown.

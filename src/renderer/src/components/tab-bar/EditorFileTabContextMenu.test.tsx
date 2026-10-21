@@ -210,7 +210,7 @@ async function renderMenu(
     repoConnectionId?: string | null
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
-    mode?: 'edit' | 'check-details' | 'chat-visual'
+    mode?: 'edit' | 'check-details'
     unifiedTabId?: string
   } = {}
 ): Promise<unknown> {
@@ -367,8 +367,8 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     )
 
     expect(labels).toContain('Close Others')
-    expect(labels.some((label) => label.includes('Close Tabs To The Right'))).toBe(true)
-    expect(labels.some((label) => label.includes('Close Tabs To The Left'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Right'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Left'))).toBe(true)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {
@@ -429,7 +429,7 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
     expect(extractText(reveal.props.children)).toContain('Local only')
   })
 
-  it.each(['check-details', 'chat-visual'] as const)(
+  it.each(['check-details'] as const)(
     'offers no path actions and no trailing separator for a %s tab, which has no file on disk',
     async (mode) => {
       const tree = expandNode(await renderMenu({ mode }))

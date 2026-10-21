@@ -52,16 +52,15 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   }
 }
 
-vi.mock('@/store', () => {
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
-  }
-  useAppStore.getState = () => mockStore.state
-  return { useAppStore }
-})
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+    {
+      getState: () => mockStore.state,
+      subscribe: () => () => {}
+    }
+  )
+}))
 
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
@@ -129,9 +128,7 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 vi.mock('./CacheTimer', () => ({
   default: () => null,

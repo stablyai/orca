@@ -15,8 +15,25 @@ type HeldPane = {
   phase: NewerDaemonHoldPhase
   /** Banner hidden for this app session; the pane stays held. */
   dismissed: boolean
-  release: () => Promise<HeldPaneReopenOutcome>
+  /** Whose newer build holds it: this machine, or a paired server (its environment id). */
+  host: string
+  /** A local pane's restore; a server's pane has none, since the server's frames release it. */
+  release?: () => Promise<HeldPaneReopenOutcome>
 }
+
+const LOCAL_HOLD_HOST = 'local'
+
+/** How each host's Reopen stops its newer build; true once its held panes may start. */
+const hostReopens = new Map<string, () => Promise<boolean>>([
+  [
+    LOCAL_HOLD_HOST,
+    () =>
+      window.api.pty.reopenNewerDaemonTerminals().then(
+        (result) => result.reopened,
+        () => false
+      )
+  ]
+])
 
 export const newerDaemonHoldStore = createStore<{ panes: Record<string, HeldPane> }>(() => ({
   panes: {}
@@ -40,10 +57,13 @@ export function dismissHeldPaneBanner(paneKey: string): void {
 /** Registers a held pane; the returned teardown forgets it if it unmounts while held. */
 export function holdPaneForNewerDaemon(
   paneKey: string,
-  pane: Omit<HeldPane, 'phase' | 'dismissed'>
+  pane: { resumable: boolean; release: () => Promise<HeldPaneReopenOutcome> }
 ): () => void {
   newerDaemonHoldStore.setState(({ panes }) => ({
-    panes: { ...panes, [paneKey]: { ...pane, phase: 'held', dismissed: false } }
+    panes: {
+      ...panes,
+      [paneKey]: { ...pane, host: LOCAL_HOLD_HOST, phase: 'held', dismissed: false }
+    }
   }))
   return () =>
     newerDaemonHoldStore.setState(({ panes }) => {
@@ -60,7 +80,10 @@ export function useNewerDaemonHold(
   paneKey: string
 ): { resumable: boolean; phase: NewerDaemonHoldPhase; heldCount: number } | null {
   const pane = useStore(newerDaemonHoldStore, (state) => state.panes[paneKey])
-  const heldCount = useStore(newerDaemonHoldStore, (state) => Object.keys(state.panes).length)
+  const heldCount = useStore(
+    newerDaemonHoldStore,
+    (state) => Object.values(state.panes).filter((held) => held.host === pane?.host).length
+  )
   return pane && !pane.dismissed
     ? { resumable: pane.resumable, phase: pane.phase, heldCount }
     : null
@@ -88,27 +111,72 @@ export function announceReopenedTerminals(outcomes: readonly HeldPaneReopenOutco
   )
 }
 
-/** Stops the newer daemon, then lets every held pane through its normal restore path. */
-export async function reopenHeldTerminals(): Promise<void> {
+/**
+ * A paired server's held panes as its frames publish them now: a pane its frames stop holding
+ * leaves, and one still held keeps its banner's phase. `reopen` asks that server to release them.
+ */
+export function showServerHeldPanes(
+  environmentId: string,
+  paneKeys: readonly string[],
+  reopen: () => Promise<boolean>
+): void {
+  const host = `server:${environmentId}`
+  if (paneKeys.length === 0) {
+    hostReopens.delete(host)
+  } else {
+    hostReopens.set(host, reopen)
+  }
+  const { panes: current } = newerDaemonHoldStore.getState()
+  const shown = Object.keys(current).filter((key) => current[key]?.host === host)
+  if (shown.length === paneKeys.length && paneKeys.every((key) => shown.includes(key))) {
+    return
+  }
+  newerDaemonHoldStore.setState(({ panes }) => {
+    const next = Object.fromEntries(Object.entries(panes).filter(([, pane]) => pane.host !== host))
+    for (const key of paneKeys) {
+      // A pane still held keeps its phase; one this machine holds keeps its own hold.
+      next[key] ??= panes[key] ?? { resumable: false, phase: 'held', dismissed: false, host }
+    }
+    return { panes: next }
+  })
+}
+
+/** Stops the newer build holding this pane, then lets each of that host's held panes start. */
+export async function reopenHeldTerminals(paneKey: string): Promise<void> {
   const { panes } = newerDaemonHoldStore.getState()
-  const attempt = Object.keys(panes)
-  if (Object.values(panes).some((pane) => pane.phase === 'reopening')) {
+  // Why no fallback host: a server pane that just left must never stop this machine's service.
+  const host = panes[paneKey]?.host
+  if (host === undefined) {
     return
   }
-  updatePanes(attempt, { phase: 'reopening' })
-  const reopened = await window.api.pty.reopenNewerDaemonTerminals().then(
-    (result) => result.reopened,
-    () => false
-  )
+  const attempt = Object.entries(panes).filter(([, pane]) => pane.host === host)
+  const reopen = hostReopens.get(host)
+  if (!reopen || attempt.some(([, pane]) => pane.phase === 'reopening')) {
+    return
+  }
+  const attemptKeys = attempt.map(([key]) => key)
+  updatePanes(attemptKeys, { phase: 'reopening' })
+  const reopened = await reopen().catch(() => false)
   if (!reopened) {
-    updatePanes(attempt, { phase: 'failed' })
+    updatePanes(attemptKeys, { phase: 'failed' })
     return
   }
-  const released = Object.values(newerDaemonHoldStore.getState().panes)
-  newerDaemonHoldStore.setState({ panes: {} })
+  // A server's panes stay Reopening until its frames stop holding them.
+  if (host !== LOCAL_HOLD_HOST) {
+    return
+  }
+  const current = newerDaemonHoldStore.getState().panes
+  const releases = Object.values(current).flatMap((pane) =>
+    pane.host === LOCAL_HOLD_HOST && pane.release ? [pane.release] : []
+  )
+  newerDaemonHoldStore.setState({
+    panes: Object.fromEntries(
+      Object.entries(current).filter(([, pane]) => pane.host !== LOCAL_HOLD_HOST)
+    )
+  })
   const outcomes = await Promise.all(
-    released.map((pane) =>
-      pane.release().catch((): HeldPaneReopenOutcome => ({ reopened: false, agentResumed: false }))
+    releases.map((release) =>
+      release().catch((): HeldPaneReopenOutcome => ({ reopened: false, agentResumed: false }))
     )
   )
   announceReopenedTerminals(outcomes)

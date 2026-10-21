@@ -4,7 +4,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { hydrateDrivers, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { hydrateOverrides, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
 
 // Why: the emitters are plain module listener Sets, so N mounted subscribers

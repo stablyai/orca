@@ -1,7 +1,7 @@
 import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import {
-  aiVaultSessionDepthCovers,
+  aiVaultCachedDepthServes,
   truncateAiVaultListResult
 } from '../../../../shared/ai-vault-session-depth'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
@@ -30,7 +30,7 @@ export function readCachedAiVaultSessionResult(args: {
   scopePaths: readonly string[]
 }): AiVaultListResult | null {
   const cached = cachedSessionResults.get(args.key)
-  if (!cached || !aiVaultSessionDepthCovers(cached.limit, args.limit)) {
+  if (!cached || !aiVaultCachedDepthServes(cached.limit, args.limit, args.scopePaths)) {
     return null
   }
   cachedSessionResults.delete(args.key)
@@ -42,6 +42,7 @@ export function cacheAiVaultSessionResult(args: {
   key: string
   executionHostScope: ExecutionHostScope
   limit: AiVaultSessionLimit
+  scopePaths: readonly string[]
   result: AiVaultListResult
   replaceHostEntries: boolean
 }): void {
@@ -53,7 +54,7 @@ export function cacheAiVaultSessionResult(args: {
     }
   } else {
     const cached = cachedSessionResults.get(args.key)
-    if (cached && aiVaultSessionDepthCovers(cached.limit, args.limit)) {
+    if (cached && aiVaultCachedDepthServes(cached.limit, args.limit, args.scopePaths)) {
       return
     }
   }

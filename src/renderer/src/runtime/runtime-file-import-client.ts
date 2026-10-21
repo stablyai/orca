@@ -33,6 +33,8 @@ export async function importExternalPathsToRuntime(
     assertCurrent?: () => void
     /** Local imports only; remote destinations stay root-relative. */
     access?: LocalFileAccess
+    /** Remote `.orca/drops` uploads: name an extensionless image by its bytes. */
+    nameExtensionlessImages?: boolean
   }
 ): Promise<{ results: ImportItemResult[] }> {
   const target = context.target
@@ -77,7 +79,10 @@ export async function importExternalPathsToRuntime(
     assertCurrent: assertImportSessionCurrent
   }
   importSession.assertCurrent()
-  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({ sourcePaths })
+  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({
+    sourcePaths,
+    nameExtensionlessImages: options?.nameExtensionlessImages
+  })
   importSession.assertCurrent()
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()

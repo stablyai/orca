@@ -1,4 +1,3 @@
-import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
@@ -15,8 +14,8 @@ import {
   getProviderAccountsOwnerKey,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
+import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
-  getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
@@ -41,7 +40,7 @@ import {
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { CursorAccountsSection } from './CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './ZcodePlanAccountsSection'
@@ -52,13 +51,16 @@ import type {
   CodexAccountAction,
   RemoveAccountTarget
 } from './accounts-pane-types'
-import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './accounts-pane-runtime'
+import {
+  EMPTY_WSL_DISTROS,
+  getRuntimeSentenceLabel,
+  getSelectedAccountRuntime
+} from './accounts-pane-runtime'
 import { watchCodexConfigSyncStatus } from './accounts-pane-config-sync'
 import {
   createClaudeAccountActionRunner,
   createCodexAccountActionRunner
 } from './accounts-pane-account-actions'
-import { createMiniMaxCredentialActions } from './accounts-pane-minimax-actions'
 import { renderAccountsLocationSection } from './accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './accounts-pane-codex-section'
@@ -66,7 +68,8 @@ import {
   renderGeminiAccountsSection,
   renderOpenCodeAccountsSection
 } from './accounts-pane-provider-setting-sections'
-import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
+import { MiniMaxAccountsSection } from './MiniMaxAccountsSection'
+import { useUsageHostSettings } from './use-usage-host-settings'
 import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
@@ -80,7 +83,8 @@ export function AccountsPane({
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
-  accountOwnerPlatform = null
+  accountOwnerPlatform = null,
+  wslHostDistro = null
 }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
@@ -92,21 +96,13 @@ export function AccountsPane({
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId' | 'apiKey'>>(
     new Set()
   )
-  const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
-  const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
-  const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
-  const [miniMaxApiKeyProtection, setMiniMaxApiKeyProtection] =
-    useState<SecretAtRestProtection | null>(null)
-  const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
-  const [miniMaxCookieProtection, setMiniMaxCookieProtection] =
-    useState<SecretAtRestProtection | null>(null)
-  const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
     wslAvailable,
     wslDistros,
-    wslCapabilitiesLoading
+    wslCapabilitiesLoading,
+    wslHostDistro
   )
   // Why: a server owns its provider accounts (see #7973); every list/select/remove
   // below goes to the host chosen in the page, never to the focused one.
@@ -134,17 +130,10 @@ export function AccountsPane({
   const accountRuntime = isRemoteAccountScope
     ? { runtime: 'host' as const, label: remoteServerLabel ?? '' }
     : localAccountRuntime
-  // Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
-  const accountRuntimeSentenceLabel =
-    !isRemoteAccountScope &&
-    accountRuntime.runtime === 'host' &&
-    !navigator.userAgent.includes('Windows')
-      ? `${accountRuntime.label.charAt(0).toLocaleLowerCase()}${accountRuntime.label.slice(1)}`
-      : accountRuntime.label
-  const localAccountRuntimeSentenceLabel =
-    localAccountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
-      ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
-      : localAccountRuntime.label
+  const accountRuntimeSentenceLabel = isRemoteAccountScope
+    ? accountRuntime.label
+    : getRuntimeSentenceLabel(accountRuntime)
+  const localAccountRuntimeSentenceLabel = getRuntimeSentenceLabel(localAccountRuntime)
   // Why: users read the remote-scoped list as their desktop accounts being
   // deleted (#8186); say they are intact and link the default-runtime control.
   // The web client has no desktop-owned accounts and cannot select Local
@@ -247,34 +236,14 @@ export function AccountsPane({
     recordedOpenCodeSettingEditsRef.current.add(field)
     recordFeatureInteraction('usage-tracking')
   }
-  const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
-    try {
-      const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.cookieConfigured)
-      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
-      setMiniMaxCookieProtection(status.cookieProtection)
-      setMiniMaxApiKeyProtection(status.apiKeyProtection)
-    } catch (error) {
-      console.error('Failed to load MiniMax credential status:', error)
-    }
-  }
-  const { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey } =
-    createMiniMaxCredentialActions({
-      miniMaxCookieDraft,
-      setMiniMaxCookieDraft,
-      miniMaxApiKeyDraft,
-      setMiniMaxApiKeyDraft,
-      setMiniMaxApiKeyConfigured,
-      setMiniMaxApiKeyProtection,
-      setMiniMaxConfigured,
-      setMiniMaxCookieProtection,
-      setMiniMaxCredentialBusy,
-      recordFeatureInteraction
-    })
-
-  useEffect(() => {
-    void refreshMiniMaxCredentialStatus()
-  }, [])
+  // Why: MiniMax/GLM keys are read by the selected host's own usage poller, so they live there too.
+  const usageCredentialHost = { owner: accountOwner, label: remoteServerLabel }
+  const usageHostSettings = useUsageHostSettings(
+    accountOwner,
+    remoteServerLabel,
+    settings,
+    updateSettings
+  )
 
   useEffect(() => {
     const owner: RuntimeClientTarget = scopeEnvironmentId
@@ -324,7 +293,7 @@ export function AccountsPane({
     recordFeatureInteraction
   })
   const runClaudeAccountAction = createClaudeAccountActionRunner({
-    settings,
+    accountOwner,
     isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,
@@ -374,21 +343,7 @@ export function AccountsPane({
     codexRateLimitTarget,
     setRemoveCodexTarget,
     runCodexAccountAction,
-    recordOpenCodeSettingEdit,
-    miniMaxRateLimits,
-    miniMaxApiKeyDraft,
-    setMiniMaxApiKeyDraft,
-    miniMaxApiKeyConfigured,
-    miniMaxApiKeyProtection,
-    saveMiniMaxApiKey,
-    clearMiniMaxApiKey,
-    miniMaxCookieDraft,
-    setMiniMaxCookieDraft,
-    miniMaxConfigured,
-    miniMaxCookieProtection,
-    miniMaxCredentialBusy,
-    saveMiniMaxCookie,
-    clearMiniMaxCookie
+    recordOpenCodeSettingEdit
   }
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
@@ -399,6 +354,7 @@ export function AccountsPane({
     ) : null,
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
+    !wslHostDistro &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
       ? renderAccountsLocationSection(model)
       : null,
@@ -422,9 +378,15 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries())
-      ? renderMiniMaxAccountsSection(model)
-      : null,
+    matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
+      <MiniMaxAccountsSection
+        key={`minimax:${accountOwnerKey}`}
+        host={usageCredentialHost}
+        usageSettings={usageHostSettings}
+        miniMaxRateLimits={isRemoteAccountScope ? null : miniMaxRateLimits}
+        recordFeatureInteraction={recordFeatureInteraction}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
@@ -432,7 +394,11 @@ export function AccountsPane({
       <CursorAccountsSection key="cursor" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
-      <ZcodePlanAccountsSection key="zcode" />
+      <ZcodePlanAccountsSection
+        key={`zcode:${accountOwnerKey}`}
+        host={usageCredentialHost}
+        usageSettings={usageHostSettings}
+      />
     ) : null
   ]
 

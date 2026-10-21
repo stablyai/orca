@@ -83,6 +83,22 @@ describe('web Jira preload API', () => {
     ])
   })
 
+  it('routes site-bound favourite reads through the paired runtime', async () => {
+    const favourites = {
+      filters: [{ id: '10001', name: 'My work', jql: 'project = 10002', siteId: 'site-a' }],
+      truncated: false
+    }
+    const runtimeCalls = mockRuntimeClient(() => favourites)
+    const {
+      window: { api }
+    } = await installApi()
+
+    await expect(api.jira.listFavouriteFilters({ siteId: 'site-a' })).resolves.toEqual(favourites)
+    expect(runtimeCalls).toEqual([
+      { method: 'jira.listFavouriteFilters', params: { siteId: 'site-a' } }
+    ])
+  })
+
   it('maps desktop-only Jira methods onto the server methods that exist', async () => {
     const runtimeCalls = mockRuntimeClient(() => [])
     const {
@@ -119,5 +135,22 @@ describe('web Jira preload API', () => {
     expect(runtimeCalls).toEqual([
       { method: 'jira.getIssueStream', params: { key: 'ORCA-1', siteId: 'site-1' } }
     ])
+  })
+
+  it('does not dispatch desktop title generation from the web client', async () => {
+    const runtimeCalls = mockRuntimeClient(() => undefined)
+    const {
+      window: { api }
+    } = await installApi()
+    const request = { siteId: 'site-1', draftId: 'draft-1', requestId: 'request-1' }
+
+    await expect(
+      api.jira.generateIssueSummary({ ...request, description: 'Draft issue description' })
+    ).resolves.toEqual({
+      success: false,
+      error: 'Jira title generation is unavailable in the web client.'
+    })
+    await expect(api.jira.cancelGenerateIssueSummary(request)).resolves.toBeUndefined()
+    expect(runtimeCalls).toEqual([])
   })
 })

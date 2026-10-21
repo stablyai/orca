@@ -3,11 +3,11 @@ import {
   type MobileNotificationDismissEvent
 } from './runtime-mobile-notification-controller'
 
-export function captureOriginalDeliveryRetirement(directory: string): {
+export async function captureOriginalDeliveryRetirement(directory: string): Promise<{
   originalEpoch: string
   restartedEpoch: string
   event: MobileNotificationDismissEvent
-} {
+}> {
   const original = new RuntimeMobileNotificationController()
   original.configureDismissalStore(directory)
   original.dispatch({
@@ -28,6 +28,7 @@ export function captureOriginalDeliveryRetirement(directory: string): {
       cause: { kind: 'prompt', promptId: 'A' }
     }
   })
+  await original.closeDismissals()
   const restarted = new RuntimeMobileNotificationController()
   restarted.configureDismissalStore(directory)
   let event: MobileNotificationDismissEvent | undefined
@@ -40,6 +41,8 @@ export function captureOriginalDeliveryRetirement(directory: string): {
     sessionId: 'session-a',
     observedCursor: { epoch: 'journal-a', sequence: 1 }
   })
+  // Why: the caller deletes the directory next; an unflushed write would recreate it.
+  await restarted.closeDismissals()
   if (!event) {
     throw new Error('read did not withdraw the prompt')
   }

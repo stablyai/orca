@@ -7,7 +7,10 @@ import type {
 } from './file-explorer-types'
 import type { InlineInput } from './file-explorer-inline-input-row'
 import { useAppStore } from '@/store'
-import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import {
+  isWorktreeCatchUpPayload,
+  ORCA_WORKTREE_FILE_CHANGE_EVENT
+} from '@/hooks/worktree-file-change-event'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
@@ -161,13 +164,7 @@ export function useFileExplorerWatch({
         normalizeRuntimePathForComparison(dirPath) ===
           normalizeRuntimePathForComparison(currentWorktreePath) ||
         expandedRef.current.has(dirPath),
-      dirConcurrency: fileExplorerRefreshConcurrency(owner),
-      // Why 0ms for every transport: each producer already flushes on the shared
-      // WATCH_BATCH_* window — local/SSH via filesystem-watcher, runtime files.watch via
-      // createFileWatchEventBatcher — so a second 150ms here only adds latency, not coalescing.
-      // A new transport must batch at the producer before joining this path.
-      trailingMs: 0,
-      maxWaitMs: 0
+      dirConcurrency: fileExplorerRefreshConcurrency(owner)
     })
     activeResyncByWatchKey.set(currentWatchKey, scheduler.requestFullRefresh)
 
@@ -237,17 +234,28 @@ export function useFileExplorerWatch({
         handleFsChanged(event.detail.payload)
       }
     }
+    // Why: IPC-bus trees otherwise miss the renderer-synthesized catch-up after a workspace is watched again.
+    const handleCatchUp = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
+      if (
+        event.detail.runtimeEnvironmentId === null &&
+        isWorktreeCatchUpPayload(event.detail.payload)
+      ) {
+        handleFsChanged(event.detail.payload)
+      }
+    }
     let unsubscribeListener: (() => void) | null = null
     if (activeRuntimeEnvironmentId?.trim() && activeWorktreeId) {
       // The app watcher owns recovery; a separate stream would strand this consumer after reconnect.
       window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
     } else {
       unsubscribeListener = window.api.fs.onFsChanged(handleFsChanged)
+      window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleCatchUp)
     }
 
     return () => {
       disposed = true
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleCatchUp)
       unsubscribeListener?.()
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)

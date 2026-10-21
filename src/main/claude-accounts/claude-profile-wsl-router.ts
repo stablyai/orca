@@ -7,7 +7,7 @@ import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from '../../shared/claude-profile-routing'
-import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../shared/relay-artifacts'
+import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl'
 import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'

@@ -44,9 +44,7 @@ vi.mock('@/runtime/runtime-server-directory-browser', () => ({
   browseRuntimeServerDirectory: mocks.browseRuntimeServerDirectory
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 

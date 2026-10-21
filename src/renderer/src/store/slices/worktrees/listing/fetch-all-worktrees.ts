@@ -1,3 +1,4 @@
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
@@ -208,7 +209,7 @@ export function createFetchAllWorktrees(
         `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
         stale
       )
-      get().purgeWorktreeTerminalState(stale)
+      runAsAutomaticDeselection(() => get().purgeWorktreeTerminalState(stale))
     }
     set({ hasHydratedWorktreePurge: true })
   }

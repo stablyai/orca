@@ -9,11 +9,9 @@ import {
 import { joinPath } from '../../lib/path'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import type { LoadedMcpConfigInspection } from './McpConfigFileRow'
-import {
-  readRuntimeDirectory,
-  readRuntimeFileContent,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 
 function isMissingFileError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)

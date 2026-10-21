@@ -236,7 +236,10 @@ function MobileNativeChatBackgroundTasksImpl({
             ) : (
               <Text style={styles.unavailable}>{say('detailsUnavailable')}</Text>
             )}
-            {!view.supportsStop && view.supportsStopAll ? (
+            {view.incomplete && groups.length > 0 ? (
+              <Text style={styles.unavailable}>{say('detailsUnavailable')}</Text>
+            ) : null}
+            {view.offersStopAll ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={say('stopAll')}

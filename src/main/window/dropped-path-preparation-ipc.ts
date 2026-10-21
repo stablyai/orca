@@ -8,14 +8,18 @@ import type {
   PreparedDroppedPaths
 } from '../../shared/native-file-drop-preparation'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
-import { getDragTempCopyRoot, scheduleDragTempCopySweep } from './dragged-temp-file-copy'
+import { getDragTempCopyRoot } from './dragged-temp-file-copy'
 import {
   createDroppedPathPreparationQueue,
-  windowDragTempCopyLane
+  windowDragTempCopyLane,
+  type DroppedPathPreparationDeps
 } from './dropped-path-preparation'
 import { getDarwinUserTempDir } from './darwin-user-temp-dir'
 
-export function registerDroppedPathPreparation(mainWindow: BrowserWindow): void {
+export function registerDroppedPathPreparation(
+  mainWindow: BrowserWindow,
+  localChatAttachmentStore?: DroppedPathPreparationDeps['localChatAttachmentStore']
+): void {
   const prepareChannel = 'fs:prepareDroppedPaths'
   const mainWebContents = mainWindow.webContents
   const isWindowGone = (): boolean => mainWindow.isDestroyed() || mainWebContents.isDestroyed()
@@ -23,6 +27,7 @@ export function registerDroppedPathPreparation(mainWindow: BrowserWindow): void 
   const prepare = createDroppedPathPreparationQueue(
     {
       platform: process.platform,
+      localChatAttachmentStore,
       getCopyEnvironment: async () => ({
         platform: process.platform,
         sourceTempRoot: await getDarwinUserTempDir(),
@@ -60,7 +65,6 @@ export function registerDroppedPathPreparation(mainWindow: BrowserWindow): void 
       activePrepareHandler = undefined
     }
   })
-  scheduleDragTempCopySweep(() => getDragTempCopyRoot(app.getPath('temp')))
 }
 
 let activePrepareHandler: unknown
@@ -70,7 +74,9 @@ function isPrepareDroppedPathsRequest(value: unknown): value is PrepareDroppedPa
     !!value &&
     typeof value === 'object' &&
     'consumer' in value &&
-    (value.consumer === 'agent' || value.consumer === 'main-reader') &&
+    (value.consumer === 'agent' ||
+      value.consumer === 'main-reader' ||
+      value.consumer === 'local-chat') &&
     'paths' in value &&
     Array.isArray(value.paths) &&
     value.paths.every((path: unknown) => typeof path === 'string')

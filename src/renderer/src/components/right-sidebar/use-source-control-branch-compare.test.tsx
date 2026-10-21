@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   >
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchCompare: mocks.getRuntimeGitBranchCompare
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))

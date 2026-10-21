@@ -7,7 +7,7 @@
 // and no draft text ever rides an answer. A host-held draft is a card above
 // the composer, never a transcript bubble.
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
@@ -176,6 +176,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   setLocalRuntimeCapabilitiesForTests(null)
 })
 

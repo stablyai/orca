@@ -110,6 +110,11 @@ export function configureHostReadableTranscriptPathSources(options: {
   getAdditionalCodexHomePaths = options.getAdditionalCodexHomePaths
 }
 
+/** The extra Codex homes this host reads directly; WSL shares are the separate distro tier. */
+export function hostAdditionalCodexHomePaths(): string[] {
+  return (getAdditionalCodexHomePaths?.() ?? []).filter((home) => !isWslUncPath(home))
+}
+
 async function defaultListWslHomeDirs(): Promise<string[]> {
   return listRunningWslHomeDirsAsync()
 }

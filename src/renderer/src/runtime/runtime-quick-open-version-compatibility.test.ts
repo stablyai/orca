@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { searchRuntimeFilePaths, listRuntimeFiles } from './runtime-file-client'
+import { searchRuntimeFilePaths, listRuntimeFiles } from './runtime-file-search-client'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createWebRuntimeSessionTerminal } from './web-runtime-session'
+import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -41,23 +40,27 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -258,7 +261,7 @@ describe('web-runtime-session terminal workspace routing', () => {
 
   it('does not touch the host selection when the caller opted out of selecting', async () => {
     const selection: MutableSelection = {
-      activeWorktreeId: WORKTREE_ID,
+      activeWorktreeId: 'repo::/other',
       activeWorkspaceExecutionHostId: 'local'
     }
     stubSelectableWorkspaceStore(selection)
@@ -273,6 +276,7 @@ describe('web-runtime-session terminal workspace routing', () => {
     })
 
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(selection.activeWorktreeId).toBe('repo::/other')
     expect(selection.activeWorkspaceExecutionHostId).toBe('local')
   })
 })

@@ -1,4 +1,3 @@
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
@@ -7,19 +6,14 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { HostAuthority } from '../../../../shared/host-authority'
 import { translate } from '@/i18n/i18n'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
-import {
-  getFloatingWorkspaceOperationRoute,
-  resolveWorktreeOperationRoute,
-  type WorktreeOperationRoute
-} from '@/lib/worktree-operation-route'
+import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
@@ -49,57 +43,67 @@ export type FileExplorerOwnerState = Pick<
 > &
   Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>
 
+/**
+ * The owner every File Explorer read and write routes to, from the strict owner: a twin refuses
+ * and focus never decides. Only a folder this app owns reads its host from its repos.
+ */
 export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
   worktreeId: string | null | undefined
 ): FileExplorerOperationOwner {
-  const floatingRoute = worktreeId ? getFloatingWorkspaceOperationRoute(worktreeId) : null
-  if (floatingRoute?.executionHostId) {
-    return operationOwnerFromHostId(floatingRoute.executionHostId)
+  if (!worktreeId) {
+    return { kind: 'local' }
   }
-  const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
-  if (worktreeId && parsedWorkspace?.type !== 'folder') {
-    const route = resolveWorktreeOperationRoute(state, worktreeId)
-    if (!route) {
-      return { kind: 'unresolved' }
-    }
-    if (route.runtimeEnvironmentId) {
-      return {
-        kind: 'runtime',
-        environmentId: route.runtimeEnvironmentId,
-        executionHostId:
-          route.executionHostId ?? toRuntimeExecutionHostId(route.runtimeEnvironmentId)
-      }
-    }
-    if (route.executionHostId) {
-      return operationOwnerFromHostId(route.executionHostId)
-    }
-  }
-
-  const connectionId = getConnectionIdFromState(state, worktreeId ?? null)
-  const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  // Why: global runtime focus is not ownership evidence while SSH/local
-  // metadata is unresolved; destructive actions must wait for explicit provenance.
-  if (connectionId === undefined && explicitRuntimeEnvironmentId === null) {
+  const match = resolveOwner(state, { workspaceId: worktreeId })
+  if (match.kind === 'ambiguous') {
     return { kind: 'unresolved' }
   }
-  // Why: inferred SSH ownership outranks a projected runtime owner, but an explicit
-  // workspace runtime still owns its files.
-  const runtimeEnvironmentId =
-    connectionId && explicitRuntimeEnvironmentId === null
-      ? null
-      : getRuntimeEnvironmentIdForWorktree(state, worktreeId)?.trim()
-  if (runtimeEnvironmentId) {
+  if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+    return match.kind === 'resolved'
+      ? operationOwnerFromAuthority(match.owner)
+      : { kind: 'unresolved' }
+  }
+  if (match.kind === 'resolved' && match.owner.endpoint.kind === 'environment') {
+    return operationOwnerFromAuthority(match.owner)
+  }
+  return thisAppFolderOwner(state, worktreeId)
+}
+
+/**
+ * An unstamped folder takes its host from its repos (the rule main shares), which `resolveOwner`
+ * does not read; a server it is restored on wins until that server's folder catalog loads.
+ */
+function thisAppFolderOwner(
+  state: FileExplorerOwnerState,
+  workspaceId: string
+): FileExplorerOperationOwner {
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
+  const environmentId = owner.kind === 'resolved' ? owner.environmentId?.trim() : null
+  if (environmentId) {
     return {
       kind: 'runtime',
-      environmentId: runtimeEnvironmentId,
-      executionHostId: toRuntimeExecutionHostId(runtimeEnvironmentId)
+      environmentId,
+      executionHostId: toRuntimeExecutionHostId(environmentId)
     }
   }
+  const connectionId = getConnectionIdFromState(state, workspaceId)
   if (connectionId === undefined) {
     return { kind: 'unresolved' }
   }
   return connectionId ? { kind: 'ssh', connectionId } : { kind: 'local' }
+}
+
+/** Keeps both halves of the pair: a server's nested SSH target stays the write's host (review-5 #9). */
+function operationOwnerFromAuthority({ endpoint, at }: HostAuthority): FileExplorerOperationOwner {
+  if (endpoint.kind === 'environment') {
+    return {
+      kind: 'runtime',
+      environmentId: endpoint.environmentId,
+      executionHostId: at === 'local' ? toRuntimeExecutionHostId(endpoint.environmentId) : at
+    }
+  }
+  const host = parseExecutionHostId(at)
+  return host?.kind === 'ssh' ? { kind: 'ssh', connectionId: host.targetId } : { kind: 'local' }
 }
 
 export function getFileExplorerOperationOwner(
@@ -254,18 +258,4 @@ export function getFileExplorerOwnerUnresolvedMessage(): string {
     'auto.components.right.sidebar.fileExplorerOperationOwner.unresolved',
     "Couldn't determine which host owns this workspace. Check the connection and try again."
   )
-}
-
-function operationOwnerFromHostId(hostId: ExecutionHostId): FileExplorerOperationOwner {
-  const parsed = parseExecutionHostId(hostId)
-  switch (parsed?.kind) {
-    case 'local':
-      return { kind: 'local' }
-    case 'ssh':
-      return { kind: 'ssh', connectionId: parsed.targetId }
-    case 'runtime':
-      return { kind: 'runtime', environmentId: parsed.environmentId, executionHostId: hostId }
-    case undefined:
-      return { kind: 'unresolved' }
-  }
 }

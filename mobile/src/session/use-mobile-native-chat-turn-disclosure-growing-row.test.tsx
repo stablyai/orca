@@ -46,4 +46,15 @@ describe('useMobileNativeChatTurnDisclosure growing row', () => {
       messages.map((message, index) => disclosure.resolveRow(index, message).mayStillGrow)
     ).toEqual([false, false, true, false])
   })
+
+  it('puts only the terminal-backed streaming row in the live turn', () => {
+    const messages = [userMessage('u1'), assistantMessage('a1'), assistantMessage('streaming')]
+    act(() => {
+      renderer = create(createElement(Harness, { messages, enabled: false }))
+    })
+    const { disclosure } = renderer!.root.findByType(Result).props
+    expect(
+      messages.map((message, index) => disclosure.resolveRow(index, message).activeTurnIsWorking)
+    ).toEqual([false, false, true])
+  })
 })

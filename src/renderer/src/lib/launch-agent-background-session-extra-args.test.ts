@@ -40,6 +40,9 @@ vi.mock('@/store', () => ({
   }
 }))
 
+// Why: the background mount's sleeping-agent scan reads store state these launches never seed.
+vi.mock('@/lib/sleeping-agent-wake-requests', () => ({ requestSleepingAgentWakeOnMount: vi.fn() }))
+
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent

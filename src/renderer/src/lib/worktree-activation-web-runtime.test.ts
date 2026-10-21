@@ -1,27 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
-import type { AppStoreState } from './worktree-activation-test-harness'
+import type { AppStoreState } from './worktree-activation.test-fixture'
 import {
   createMockStore,
-  registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+  registerWorktreeActivationReset,
+  createdTabStartups
+} from './worktree-activation.test-fixture'
 import { useAppStore } from '@/store'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
+} from './worktree-activation-created-agent.test-fixture'
 import {
   resetWebRuntimeWakeTerminalRespawnForTests,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
+import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 registerWorktreeActivationReset()
 
 afterEach(() => {
   vi.unstubAllGlobals()
   resetWebRuntimeWakeTerminalRespawnForTests()
+  resetWebSessionTabsSnapshotFreshnessForTests()
 })
 
 describe('activateAndRevealWorktree', () => {
@@ -195,6 +200,7 @@ describe('activateAndRevealFolderWorkspace', () => {
       revealWorktreeInSidebar: vi.fn()
     } as unknown as Partial<AppStoreState>)
 
+    rememberEmptyHostAnswerForTests('web-runtime-1', folderWorkspaceKey('folder-1'))
     activateAndRevealFolderWorkspace('folder-1', {
       ...activation,
       runtimeEnvironmentId: 'web-runtime-1'
@@ -294,14 +300,12 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-2',
+    expect(createdTabStartups(store)['tab-2']).toEqual(
       expect.objectContaining({
         command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
       })
     )
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-2',
+    expect(createdTabStartups(store)['tab-2']).toEqual(
       expect.objectContaining({
         command: expect.stringContaining('printf')
       })

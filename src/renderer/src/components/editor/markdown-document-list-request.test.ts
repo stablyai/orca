@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   getMarkdownDocumentListRequestKey,
   requestSharedMarkdownDocumentList

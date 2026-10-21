@@ -201,7 +201,11 @@ describe('project group store routing', () => {
       result: { status: { path: '/workspace/platform', exists: true } },
       _meta: { runtimeId: 'runtime-remote' }
     })
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    const folderGroup: ProjectGroup = {
+      ...projectGroup,
+      parentPath: '/workspace/platform',
+      executionHostId: 'runtime:env-1'
+    }
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never,
@@ -845,14 +849,15 @@ describe('project group store routing', () => {
     const store = createTestStore()
     store.setState({ repos: [remoteRepo], projectGroups: [projectGroup] })
 
-    await expect(
-      store.getState().moveProjectToGroup(remoteRepo.id, projectGroup.id, 3)
-    ).resolves.toBe(true)
+    await expect(store.getState().moveProjectToGroup(remoteRepo, projectGroup.id, 3)).resolves.toBe(
+      true
+    )
 
     expect(projectGroupsMoveProject).toHaveBeenCalledWith({
       projectId: remoteRepo.id,
       groupId: projectGroup.id,
-      order: 3
+      order: 3,
+      hostId: 'local'
     })
     // Why: the repos slice stamps updated repos with their owning execution
     // host so multi-host routing never has to guess (multi-host design).

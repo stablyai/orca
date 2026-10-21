@@ -7,10 +7,8 @@ import type {
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import {
-  runtimeTargetForOwnerHostId,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
   data: T | null
@@ -220,7 +218,7 @@ export function hostedReviewRepoOwnerTarget(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
 ): RuntimeClientTarget {
   return (
-    (repo ? runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+    (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
   )
 }
 

@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react'
 
 // Newly requested pages must start a guest even when opened in the background. Restored pages are
-// deliberately absent so worktree restoration can remain lazy.
+// deliberately absent so worktree restoration can remain lazy. An admission ends when the guest's
+// first load settles (or the page closes); it is a one-time start, not a reason to stay laid out.
 const admittedPageIds = new Set<string>()
 const listeners = new Set<() => void>()
 let version = 0

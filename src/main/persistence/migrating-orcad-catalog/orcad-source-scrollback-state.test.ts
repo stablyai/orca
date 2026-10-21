@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration-scrollback'
+import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import { hasDuplicateOrcadMigrationScrollbackDescriptors } from './orcad-source-scrollback-state'
 
 const FIRST: OrcadMigrationTerminalScrollbackSnapshot = {

@@ -29,8 +29,12 @@ import {
 } from '../../shared/orcad-local-serve-selection'
 import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
 import { detectNativeHostAbi, nativeSlotName } from './native-host-abi'
-import { materializeOrcadArtifact } from '../ssh/orcad-artifact-materializer'
-import { materializeCachedNodeRuntime } from '../ssh/pinned-runtime-materializer'
+import { materializeOrcadArtifact } from './orcad-artifact-materializer'
+import { materializeCachedNodeRuntime } from '../node-runtime/pinned-runtime-materializer'
+import {
+  copyVerifiedAppImageNodeRuntime,
+  type AppImageNodeRuntime
+} from '../node-runtime/appimage-bundled-node-runtime'
 import { serveProfileHasSshTargets } from './serve-profile-ssh-targets'
 import { errorMessage } from '../../shared/error-message'
 
@@ -44,6 +48,8 @@ export type ServeRuntimeSelectionInput = {
   hostTarget?: () => string
   materializeSlot?: typeof materializeOrcadArtifact
   materializeRuntime?: typeof materializeCachedNodeRuntime
+  /** The pinned Node an AppImage carries; the slot uses it before trying a download. */
+  bundledNodeRuntime?: AppImageNodeRuntime | null
   nativePreflight?: (runtime: string, entry: string) => Promise<string>
   profileHasSshTargets?: (userDataPath: string) => boolean
 }
@@ -87,7 +93,7 @@ export async function selectServeRuntime(
       templateDir,
       cacheRoot
     })
-    await placeSlotRuntime(slotDir, target, cacheRoot, input.materializeRuntime)
+    await placeSlotRuntime(slotDir, target, cacheRoot, input)
   } catch (error) {
     return electron(`the orcad slot for ${target} could not be prepared: ${errorMessage(error)}`)
   }
@@ -133,12 +139,15 @@ function profileSshReason(input: ServeRuntimeSelectionInput): string | null {
   }
 }
 
-/** The slot references its runtime beside it; the cached pinned Node is linked into place. */
+/** The slot references its runtime beside it: the AppImage's own copy, else the cached download. */
 async function placeSlotRuntime(
   slotDir: string,
   target: ServerTarget,
   cacheRoot: string,
-  materializeRuntime: typeof materializeCachedNodeRuntime = materializeCachedNodeRuntime
+  {
+    materializeRuntime = materializeCachedNodeRuntime,
+    bundledNodeRuntime
+  }: Pick<ServeRuntimeSelectionInput, 'materializeRuntime' | 'bundledNodeRuntime'>
 ): Promise<void> {
   const destination = join(
     slotDir,
@@ -146,6 +155,14 @@ async function placeSlotRuntime(
   )
   if (existsSync(destination)) {
     return
+  }
+  if (bundledNodeRuntime?.target === target) {
+    try {
+      await copyVerifiedAppImageNodeRuntime(bundledNodeRuntime, destination)
+      return
+    } catch (error) {
+      console.error(`orca serve: not using the bundled Node (${errorMessage(error)})`)
+    }
   }
   const cached = await materializeRuntime(target, cacheRoot, { fetcher: fetch })
   mkdirSync(dirname(destination), { recursive: true })

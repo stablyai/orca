@@ -36,7 +36,8 @@ export function sendModelRestoreNeededMarker(
   session: PtyIpcSession,
   id: string,
   reason: PtyModelRestoreReason,
-  markerSeq: number | undefined
+  markerSeq: number | undefined,
+  hiddenDropEpisode?: number
 ): boolean {
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return false
@@ -45,7 +46,8 @@ export function sendModelRestoreNeededMarker(
     session.mainWindow.webContents.send('pty:modelRestoreNeeded', {
       id,
       reason,
-      ...(typeof markerSeq === 'number' ? { markerSeq } : {})
+      ...(typeof markerSeq === 'number' ? { markerSeq } : {}),
+      ...(typeof hiddenDropEpisode === 'number' ? { hiddenDropEpisode } : {})
     })
   } catch (error) {
     // Why: a disposed render frame throws synchronously here, and this rides the data path.

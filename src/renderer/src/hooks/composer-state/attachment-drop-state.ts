@@ -22,7 +22,7 @@ import { translate } from '@/i18n/i18n'
 import { joinPath } from '@/lib/path'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { useAppStore } from '@/store'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { showComposerDropFailureToast } from '../composer-drop-failure-toast'
 import {
@@ -186,7 +186,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         },
         sourcePaths,
         destinationDir,
-        { ensureDestinationDir: true, assertCurrent }
+        { ensureDestinationDir: true, assertCurrent, nameExtensionlessImages: true }
       )
       const uploadResult = collectComposerDropResult(results)
       if (uploadResult.failureCount > 0 && canReportFailure()) {

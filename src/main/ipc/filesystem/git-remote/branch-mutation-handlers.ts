@@ -4,7 +4,7 @@ import { gitFastForward, gitPull, gitPullRebaseFromBase, gitPush } from '../../.
 import { validateGitPushTarget } from '../../../git/push-target-validation'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { materializeWorktreePushTargetRemote } from '../../worktree-remote'
+import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from '../../worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
@@ -41,7 +41,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             store,
             undefined,
             gitOptions,
-            args.worktreeId
+            ipcGitWorktreeTarget(args)
           )
         : undefined
       if (materializedPushTarget) {
@@ -83,7 +83,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             store,
             undefined,
             gitOptions,
-            args.worktreeId
+            ipcGitWorktreeTarget(args)
           )
         : undefined
       if (materializedPushTarget) {
@@ -124,7 +124,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             store,
             undefined,
             gitOptions,
-            args.worktreeId
+            ipcGitWorktreeTarget(args)
           )
         : undefined
       if (materializedPushTarget) {

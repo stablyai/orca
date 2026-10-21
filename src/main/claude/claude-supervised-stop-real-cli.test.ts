@@ -80,7 +80,7 @@ async function until<T>(read: () => Promise<T | null> | T | null, what: string, 
 
 async function open(sessionId: string, cwd: string, resume: boolean, frames: Frame[]) {
   const settings = process.env.ORCA_REAL_CLAUDE_SETTINGS
-  const permission = claudeStructuredPermissionOptions('bypassPermissions')
+  const permission = claudeStructuredPermissionOptions('full-access')
   const connection = await openClaudeStreamJsonConnection(
     {
       pathToClaudeCodeExecutable: CLAUDE_BIN,

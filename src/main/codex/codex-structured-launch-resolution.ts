@@ -1,7 +1,7 @@
 // How a durable session record becomes a Codex process launch.
 //
 // Every input is read back from the record the store already made durable, not
-// from the call that triggered the acquire. A client that attaches twice must
+// from the call that triggered spawn. A client that attaches twice must
 // land in the same working directory under the same account home, and a resume
 // must name the thread this session actually proved — never one a caller asks
 // for, which is how a resume becomes a fork wearing a resume's name.
@@ -9,13 +9,15 @@
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
-  NATIVE_CHAT_VISUALS_DIR_ENV,
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
 
@@ -24,9 +26,6 @@ export type CodexStructuredLaunchPartDeps = {
   /** Overridden in tests; production scans the boot-cached PATH and version-manager dirs. */
   resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
-  /** The user's Agent Permissions setting as thread policy, re-read per acquisition.
-   *  States both postures outright — a resume inherits the last one for any field left absent. */
-  resolvePermissionPolicy?: () => CodexStructuredPermissionPolicy
 }
 
 export type CodexStructuredInvocationDeps = Pick<
@@ -35,6 +34,10 @@ export type CodexStructuredInvocationDeps = Pick<
 > & {
   /** Fresh shell/configured environment for this spawn; never written to the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
+  /** Rereads that environment when Codex is not found in it; absent never retries. */
+  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
+  /** Where the program starts, for a PATH entry relative to it; Orca's own when absent. */
+  resolveWorkingDirectory?: () => Promise<string> | string
 }
 
 export type CodexStructuredInvocation = {
@@ -49,7 +52,17 @@ export type CodexStructuredInvocation = {
  * session it stands in for. Env VALUES stay out of the catalog fingerprint:
  * drift there heals on the next refresh.
  */
-export async function resolveCodexStructuredInvocation(
+export function resolveCodexStructuredInvocation(
+  deps: CodexStructuredInvocationDeps
+): Promise<CodexStructuredInvocation> {
+  return resolveAgainAfterRefreshOnMissingProgram(
+    () => readCodexStructuredInvocation(deps),
+    deps.refreshEnvironmentAfterMiss,
+    { env: ({ environment }) => environment, cwd: deps.resolveWorkingDirectory }
+  )
+}
+
+async function readCodexStructuredInvocation(
   deps: CodexStructuredInvocationDeps
 ): Promise<CodexStructuredInvocation> {
   const environment = await deps.resolveEnvironment?.()
@@ -71,11 +84,12 @@ export function codexStructuredLaunchPart(
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const { command } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: basis.launchDirectory,
       resolveEnvironment: basis.environment
     })
     const environment = await basis.environment()
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
-    const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A Codex record's chain holds only Codex handles; the launch admission refuses anything else.
     const resumeThreadId = head?.handle.nativeId ?? null
@@ -95,7 +109,8 @@ export function codexStructuredLaunchPart(
         // Only a thread this session created may still be one Codex never saved: a resumed,
         // forked or adopted head names a conversation Codex held.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-        ...(permissionPolicy ? { permissionPolicy } : {}),
+        // States every posture outright: a resume inherits the last one for any field left absent.
+        permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask'),
         ...(model ? { model } : {}),
         ...(visuals ? { visuals } : {}),
         ...(resumeThreadId
@@ -112,7 +127,10 @@ export function codexStructuredLaunchPart(
         visuals
       ),
       // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
-      inheritedEnvToDelete: visuals ? [] : [NATIVE_CHAT_VISUALS_DIR_ENV]
+      inheritedEnvToDelete: [
+        ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+        LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
+      ]
     }
   }
 }

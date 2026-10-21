@@ -31,3 +31,37 @@ export const codexResetCapabilityListSchema = z
  * different message. The forward is opaque on purpose, not a member left unchecked.
  */
 export const codexResetCreditReplySchema = z.unknown()
+
+/**
+ * The scope a reset is confirmed against, with the pairing the host contract enforces: a host
+ * target names no distro, and a WSL target names an exact one.
+ */
+export const CodexResetCreditExpectedScopeSchema = z
+  .strictObject({
+    target: z.strictObject({
+      runtime: z.enum(['host', 'wsl']),
+      wslDistro: z.string().min(1).max(255).nullable()
+    }),
+    accountId: z.string().min(1).max(512),
+    accountRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    offerRevision: z.string().startsWith('v1:').max(4_096)
+  })
+  .superRefine((scope, context) => {
+    if (scope.target.runtime === 'host' && scope.target.wslDistro !== null) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Host reset scopes cannot name a WSL distro',
+        path: ['target', 'wslDistro']
+      })
+    }
+    if (
+      scope.target.runtime === 'wsl' &&
+      (scope.target.wslDistro === null || scope.target.wslDistro.trim() !== scope.target.wslDistro)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'WSL reset scopes require an exact distro',
+        path: ['target', 'wslDistro']
+      })
+    }
+  })

@@ -107,7 +107,7 @@ describe('against a real react-native-web TextInput', () => {
       expect(field).toBeInstanceOf(HTMLInputElement)
       expect(field?.value).toBe('')
     } finally {
-      root.unmount()
+      await act(async () => root.unmount())
       container.remove()
     }
   })

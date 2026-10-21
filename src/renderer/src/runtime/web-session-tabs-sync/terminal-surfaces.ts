@@ -1,10 +1,11 @@
+import { readStructuredAgentLaunchRecord } from '@/lib/structured-agent-session-launch-persistence'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionAgentTab
 } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session-chat-label'
-import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
@@ -12,7 +13,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   WEB_TERMINAL_SURFACE_TAB_PREFIX,
   toWebTerminalSurfaceTabId
-} from '../web-runtime-session'
+} from '../../../../shared/terminal-surface-id'
 import type {
   ReadyBrowserSurface,
   ReadyEditorSurface,
@@ -24,6 +25,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
+import { withPendingPaneTitleRenames } from '../pending-pane-title-renames'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -104,6 +106,13 @@ export function buildMirroredAgentTabs(
           candidate.contentType === 'agent-session' &&
           candidate.entityId === tab.sessionId
       )
+    const launch = readStructuredAgentLaunchRecord(tab.sessionId)
+    const address =
+      executionHostId === 'local' &&
+      launch?.executionHostId === executionHostId &&
+      launch.surfaceAddress?.worktreeId === snapshot.worktree
+        ? launch.surfaceAddress
+        : undefined
     const baseId = structuredAgentSessionTabId(tab.sessionId)
     let localId = existing?.id ?? baseId
     if (!existing || assignedIds.has(localId)) {
@@ -121,7 +130,11 @@ export function buildMirroredAgentTabs(
         entityId: tab.sessionId,
         // Keep the local group while a provisional tab is promoted; host placement can lag the
         // user's split choice and must not move the mounted pane during adoption.
-        groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
+        groupId:
+          existing?.groupId ??
+          address?.targetGroupId ??
+          hostGroupIdByTabId.get(tab.id) ??
+          fallbackGroupId,
         worktreeId: snapshot.worktree,
         executionHostId,
         contentType: 'agent-session',
@@ -205,6 +218,7 @@ export function chooseRemoteTerminalLayout(
   // bufferless, terminalLayoutEqual compares buffers so the write is not bailed out, and
   // apply-terminal-records assigns it wholesale. Structure still comes from the host; only bytes
   // for leaves the host itself names are carried over.
+  const titlesByLeafId = withPendingPaneTitleRenames(parentLayout?.titlesByLeafId, leafIds)
   return retainLocalScrollbackInRemoteLayout(existingLayout, {
     // Why: host parentLayout is authoritative for split direction; else keep the prior client tree — a leaf-set mismatch prunes/grafts it, never re-guesses the directions it already carries.
     root: resolveTerminalLayoutRoot({
@@ -221,7 +235,7 @@ export function chooseRemoteTerminalLayout(
     ...(chatLeafId ? { chatLeafId } : {}),
     ptyIdsByLeafId,
     // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
-    ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})
+    ...(titlesByLeafId ? { titlesByLeafId } : {})
   })
 }
 

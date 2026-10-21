@@ -5,6 +5,7 @@
 // recording it would make the durable handle chain lie about what this session
 // actually proved.
 
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import {
   isCodexAppServerRequestError,
   type CodexAppServerConnection
@@ -28,41 +29,6 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-const resumeMetadataUnsupported = new WeakSet<object>()
-
-function isExcludeTurnsUnsupported(error: unknown): boolean {
-  return (
-    isCodexAppServerRequestError(error) &&
-    error.code === -32602 &&
-    /(?:unknown|unexpected|unsupported|unrecognized).{0,80}excludeTurns|excludeTurns.{0,80}(?:unknown|unexpected|unsupported|unrecognized)/i.test(
-      error.message
-    )
-  )
-}
-
-async function resumeCodexThread(
-  connection: Pick<CodexAppServerConnection, 'request'>,
-  params: Record<string, unknown>,
-  timeoutMs: number | undefined
-): Promise<unknown> {
-  if (resumeMetadataUnsupported.has(connection)) {
-    return connection.request('thread/resume', params, { timeoutMs })
-  }
-  try {
-    return await connection.request(
-      'thread/resume',
-      { ...params, excludeTurns: true },
-      { timeoutMs }
-    )
-  } catch (error) {
-    if (!isExcludeTurnsUnsupported(error)) {
-      throw error
-    }
-    resumeMetadataUnsupported.add(connection)
-    return connection.request('thread/resume', params, { timeoutMs })
-  }
-}
-
 /**
  * Codex's own answer that it holds no rollout for this exact thread: the thread was started but
  * never given input, so there is no conversation to lose. Codex matches the same exact text
@@ -80,6 +46,19 @@ function isCodexNoRolloutError(error: unknown, threadId: string): boolean {
   )
 }
 
+/**
+ * Codex rebuilds each command's env from `shell_environment_policy`, so `inherit = "core"` drops
+ * every Orca key the app-server holds. Codex adds `set` keys after that filter and merges these
+ * per key, so the user's own policy stays as written.
+ */
+function shellEnvironmentSetConfig(
+  env: Record<string, string> | undefined
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env ?? {}).map(([key, value]) => [`shell_environment_policy.set.${key}`, value])
+  )
+}
+
 export async function openCodexThread(
   connection: Pick<CodexAppServerConnection, 'request'>,
   launch: {
@@ -93,21 +72,28 @@ export async function openCodexThread(
     model?: string
     /** Config overrides for this thread, on start and resume alike. */
     threadConfig?: Record<string, unknown>
+    /** Env every command the agent runs must see, whatever the user's shell environment policy. */
+    commandEnv?: Record<string, string>
   },
-  timeoutMs: number | undefined
+  /** null: no deadline; the start that opens the thread bounds it (`signal`). */
+  timeoutMs: number | null | undefined,
+  signal?: AbortSignal
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
+  const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
   const threadSettings = {
     cwd: launch.cwd,
     ...launch.permissionPolicy,
-    ...(launch.threadConfig ? { config: launch.threadConfig } : {})
+    ...(Object.keys(config).length > 0 ? { config } : {})
   }
-  const startThread = (): Promise<unknown> =>
-    connection.request(
+  const startThread = (): Promise<unknown> => {
+    throwIfSignalAborted(signal)
+    return connection.request(
       'thread/start',
       { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
       { timeoutMs }
     )
+  }
   let supersededThreadId: string | undefined
   let opened: unknown
   if (!resumeThreadId) {
@@ -120,8 +106,14 @@ export async function openCodexThread(
       ...(launch.resumePath ? { path: launch.resumePath } : {})
     }
     try {
-      opened = await resumeCodexThread(connection, resumeParams, timeoutMs)
+      throwIfSignalAborted(signal)
+      opened = await connection.request(
+        'thread/resume',
+        { ...resumeParams, excludeTurns: true },
+        { timeoutMs }
+      )
     } catch (error) {
+      throwIfSignalAborted(signal)
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }

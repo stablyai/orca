@@ -7,6 +7,7 @@ import { ButtonGroup } from '../ui/button-group'
 import { Label } from '../ui/label'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
+import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
@@ -86,7 +87,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
         title={translate('auto.components.settings.AccountsPane.8bbfd74556', 'Claude Accounts')}
         description={translate(
           'accounts.claude.profileSwitching',
-          'Switching applies to the next Claude you start in any tab. Running sessions keep their account.'
+          'Switching applies to the next Claude you start in any tab.'
         )}
         keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
         className="space-y-3 py-2"
@@ -364,6 +365,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
           )}
         </div>
       </SearchableSetting>
+      {isRemoteAccountScope ? null : (
+        <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+      )}
     </section>
   )
 }

@@ -9,7 +9,7 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { directoryNode, fileNode } from './file-explorer-tree-node-test-fixtures'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
 
 const { downloadRuntimeFileMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   downloadRuntimeFileMock: vi.fn(),
@@ -24,8 +24,8 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeFileClient>()
+vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeFileReadClient>()
   return {
     ...actual,
     downloadRuntimeFile: downloadRuntimeFileMock

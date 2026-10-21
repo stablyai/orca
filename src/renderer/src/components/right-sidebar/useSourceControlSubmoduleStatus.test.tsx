@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 import { createRoot, type Root } from 'react-dom/client'
@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ getRuntimeGitSubmoduleStatus: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitSubmoduleStatus: mocks.getRuntimeGitSubmoduleStatus
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))

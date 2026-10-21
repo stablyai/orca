@@ -109,8 +109,6 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({}))
-
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'active'
 }))

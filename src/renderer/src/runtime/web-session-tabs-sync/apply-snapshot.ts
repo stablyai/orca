@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
   WebSessionTabsBatchContext,
@@ -15,6 +16,9 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
+import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
 
 /** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
@@ -32,17 +36,39 @@ export function applyWebSessionTabsSnapshotWithContext(
     return state
   }
   const worktreeId = rawSnapshot.worktree
+  // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — every mirror write (single, batch, operations) passes here.
+  const previousSnapshotTabIds =
+    ORCA_LAYOUT_OWNER_IS_MAIN && options?.contentScope !== 'agent-session'
+      ? indexMirroredTerminalSurfaces(environmentId, rawSnapshot)
+      : null
+  const frameDrawnPreviousTabIds =
+    previousSnapshotTabIds && isFrameDrawnServerWorkspace(environmentId, worktreeId)
+      ? previousSnapshotTabIds
+      : null
+  // A frame-drawn workspace still runs these stages for their intent and id-mapping ledgers; unbatched
+  // so their discarded record copies never reach the batch's shared state.
   const base = prepareWebSessionTabsSnapshotBase(
     state,
     rawSnapshot,
     environmentId,
     worktreeId,
     now,
-    batchContext,
+    frameDrawnPreviousTabIds ? undefined : batchContext,
     options
   )
   const browser = prepareWebSessionTabsSnapshotBrowser(base)
   const unified = prepareWebSessionTabsSnapshotUnified(browser)
+  if (frameDrawnPreviousTabIds) {
+    return buildFrameDrawnWorkspaceStatusPatch(
+      state,
+      base.snapshot,
+      environmentId,
+      worktreeId,
+      frameDrawnPreviousTabIds,
+      now,
+      batchContext
+    )
+  }
   const groups = prepareWebSessionTabsSnapshotGroups(unified)
   const terminalRecords = applyTerminalRecordUpdates(groups)
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)

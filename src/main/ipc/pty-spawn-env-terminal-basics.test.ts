@@ -1,6 +1,10 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
+import {
+  piBuildPtyEnvMock,
+  spawnMock,
+  wslUncDirectoryExistsAsyncMock
+} from './pty-ipc-mock-registry'
 import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
@@ -13,6 +17,11 @@ import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { selectShellStartupFeatures } from '../shell-startup-features'
 import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from './pty/host-env/codex-terminal-clipboard'
+import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -94,6 +103,26 @@ describe('registerPtyHandlers', () => {
             value: originalPlatform
           })
         }
+      }
+    )
+
+    it.each(['pi', 'omp', 'prime-agent'] as const)(
+      'prepares delayed %s hooks for the requested harness',
+      (agent) => {
+        piBuildPtyEnvMock.mockClear()
+        buildPtyHostEnv(
+          'delayed-agent',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            agentStatusHooksEnabled: true,
+            launchCommand: `sleep 30 && ${agent}`
+          }
+        )
+        expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual([agent])
+        expect(piBuildPtyEnvMock.mock.calls[0]?.[3]).toMatchObject({ materializeDefaultHome: true })
       }
     )
 
@@ -307,6 +336,7 @@ describe('registerPtyHandlers', () => {
         })
       }))
       __resetPersistedWindowsPathCacheForTests()
+      wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
 
       try {
         const provider = new LocalPtyProvider({
@@ -392,6 +422,46 @@ describe('registerPtyHandlers', () => {
         expect(spawnedEnv.JCODE_RUNTIME_DIR).toBeUndefined()
       }
     })
+    it.skipIf(!shouldInjectJcodeRuntimeDir(process.platform)).each(['window', 'host'] as const)(
+      '%s local spawn preserves its managed-dir failure policy',
+      async (lane) => {
+        const tabId = `jcode-fallback-${randomUUID()}`
+        const leafId = randomUUID()
+        const paneKey = makePaneKey(tabId, leafId)
+        const managedDir = buildJcodeRuntimeDir(paneKey)
+        const customDir = await mkdtemp(join(tmpdir(), 'orca-jcode-fallback-'))
+        const env = { JCODE_RUNTIME_DIR: customDir }
+        let managedFileCreated = false
+        try {
+          await mkdir(dirname(managedDir), { recursive: true })
+          await writeFile(managedDir, '', { flag: 'wx' })
+          managedFileCreated = true
+          const runtime = new OrcaRuntimeService()
+          const installed = vi.spyOn(runtime, 'setPtyController')
+          handlers.clear()
+          registerPtyHandlers(mainWindow, runtime)
+          const controller = installed.mock.calls.at(-1)?.[0]
+          const request = { cols: 80, rows: 24, env, tabId, leafId, worktreeId: 'wt-1' }
+          if (lane === 'host') {
+            if (!controller?.spawn) {
+              throw new Error('Runtime controller was not installed')
+            }
+            await controller.spawn(request)
+          } else {
+            await handlers.get('pty:spawn')!(null, request)
+          }
+          const spawnedEnv = spawnMock.mock.calls.at(-1)?.[2]?.env
+          expect(spawnedEnv?.JCODE_RUNTIME_DIR).toBe(lane === 'host' ? customDir : undefined)
+          expect(spawnedEnv?.ORCA_PANE_KEY).toBe(paneKey)
+          expect(env).toEqual({ JCODE_RUNTIME_DIR: customDir })
+        } finally {
+          if (managedFileCreated) {
+            await rm(managedDir, { force: true })
+          }
+          await rm(customDir, { recursive: true, force: true })
+        }
+      }
+    )
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
       // Why: the local provider spreads main's process.env, so a GUI launched from
       // inside a Claude session would stamp every pane as a nested child and Claude

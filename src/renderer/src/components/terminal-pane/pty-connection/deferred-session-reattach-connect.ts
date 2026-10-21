@@ -1,3 +1,4 @@
+import { armPaneOwnerRetry } from './pane-owner-recovery'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 import { isSshSessionGoneError, recordPtyConnectDiagnostic } from './pty-connect-limits'
@@ -6,6 +7,8 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import { holdForNewerDaemon } from './newer-daemon-hold-pane'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../shared/newer-daemon-hold'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
 
 import {
   awaitAgentStatusStartupSnapshot,
@@ -13,6 +16,7 @@ import {
 } from '@/hooks/ipc-events/agent-status-startup-snapshot'
 
 const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
+const PANE_OWNER_CHANGED_ERROR = 'terminal_pane_owner_changed'
 
 export function startDeferredSessionReattach(
   session: ConnectPanePtySession,
@@ -71,6 +75,7 @@ function connectDeferredSessionReattach(
 
   let expiredReattachError = false
   let paneOwnerUnverified = false
+  let paneOwnerChanged = false
   let heldByNewerDaemon = false
   const coldRestoreStartup = session.buildColdRestoreAgentResumeStartup()
   const outputCallbacks = session.captureTransportOutputCallbacks(
@@ -86,6 +91,9 @@ function connectDeferredSessionReattach(
       }
       if (message.includes(PANE_OWNER_UNVERIFIED_ERROR)) {
         paneOwnerUnverified = true
+      }
+      if (message.includes(PANE_OWNER_CHANGED_ERROR)) {
+        paneOwnerChanged = true
       }
       session.reportError(message)
     },
@@ -131,7 +139,7 @@ function connectDeferredSessionReattach(
     .finally(() => {
       session.transportConnectInFlightSince = null
     })
-  return Promise.resolve(reattachPromise)
+  const outcome = Promise.resolve(reattachPromise)
     .then(async (result): Promise<HeldPaneReopenOutcome> => {
       if (!isCurrentReattach()) {
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
@@ -154,7 +162,22 @@ function connectDeferredSessionReattach(
         }
         return NOT_REOPENED
       }
+      if (!result && paneOwnerChanged) {
+        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+        const gen = await preSignalPromise
+        if (typeof gen === 'number') {
+          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
+        }
+        armPaneOwnerRetry(session, outputCallbacks.generation, () =>
+          connectDeferredSessionReattach(session, deferredReattachSessionId)
+        )
+        session.settlePaneAttachAttempt('failed')
+        return NOT_REOPENED
+      }
       if (!result && paneOwnerUnverified) {
+        armPaneOwnerRetry(session, outputCallbacks.generation, () =>
+          connectDeferredSessionReattach(session, deferredReattachSessionId)
+        )
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
         const gen = await preSignalPromise
         if (typeof gen === 'number') {
@@ -219,8 +242,14 @@ function connectDeferredSessionReattach(
       if (!isCurrentReattach()) {
         return NOT_REOPENED
       }
-      if (message.includes(PANE_OWNER_UNVERIFIED_ERROR)) {
-        session.reportError(message)
+      if (
+        message.includes(PANE_OWNER_UNVERIFIED_ERROR) ||
+        message.includes(PANE_OWNER_CHANGED_ERROR)
+      ) {
+        outputCallbacks.callbacks.onError(message)
+        armPaneOwnerRetry(session, outputCallbacks.generation, () =>
+          connectDeferredSessionReattach(session, deferredReattachSessionId)
+        )
         session.settlePaneAttachAttempt('failed')
         return NOT_REOPENED
       }
@@ -237,4 +266,9 @@ function connectDeferredSessionReattach(
       session.deps.clearTabPtyId(session.deps.tabId, deferredReattachSessionId)
       return startFreshInstead()
     })
+  // Switch point: main clears the gone terminal's binding before this reattach's fresh start.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    holdInPlaceResumeUntilSettled(() => !session.disposed, coldRestoreStartup, outcome)
+  }
+  return outcome
 }

@@ -10,10 +10,12 @@ import { arch as osArch, platform as osPlatform, release as osRelease } from 'no
 import { getAppEnvironment } from '../../shared/app-environment'
 import { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
+import { TAB_CLOSE_TELEMETRY_SAMPLE_RATE } from '../../shared/telemetry-tab-event-schemas'
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { getCohortAtEmit } from './cohort-classifier'
 import { resolveConsent, type ConsentState } from './consent'
+import { isInTabCloseTelemetrySample } from './tab-close-sampling'
 import { commonPropsSchema, validate } from './validator'
 
 // Compile-time feature flag, independent of the build-identity gate — both must be satisfied to transmit.
@@ -39,6 +41,7 @@ const IS_OFFICIAL_BUILD: boolean =
 let posthog: PostHog | null = null
 let sessionId: string | null = null
 let commonProps: CommonProps | null = null
+let tabCloseSampled = false
 let shuttingDown = false
 let storeRef: Store | null = null
 
@@ -49,6 +52,8 @@ let testTransportEnabled = false
 
 // First-launch `app_opened` gate: no events transmit until the banner resolves; keep mark+emit atomic.
 let appOpenedTrackedThisSession = false
+// Main owns this budget so additional windows cannot multiply billed tab-action events.
+const trackedTabCloseDirections = new Set<'left' | 'right'>()
 
 function buildCommonProps(installId: string, sid: string, channel: 'stable' | 'rc'): CommonProps {
   // Don't truncate here; the validator's `.max(64)` is authoritative, so an over-long string drops rather than being silently masked.
@@ -70,6 +75,7 @@ export function initTelemetry(store: Store): void {
   shuttingDown = false
   // Reset per session: the "no app_opened until banner resolution" invariant is per-launch, not per-install.
   appOpenedTrackedThisSession = false
+  trackedTabCloseDirections.clear()
 
   if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD) {
     return
@@ -99,6 +105,7 @@ export function initTelemetry(store: Store): void {
     commonProps = null
     return
   }
+  tabCloseSampled = isInTabCloseTelemetrySample(commonProps.install_id)
 
   posthog = new PostHog(WRITE_KEY as string, {
     host: 'https://us.i.posthog.com',
@@ -186,6 +193,21 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     return false
   }
 
+  const tabCloseDirection =
+    name === 'tabs_directional_close_requested' &&
+    props !== null &&
+    typeof props === 'object' &&
+    'direction' in props &&
+    (props.direction === 'left' || props.direction === 'right')
+      ? props.direction
+      : null
+  if (tabCloseDirection && trackedTabCloseDirections.has(tabCloseDirection)) {
+    return false
+  }
+  if (name === 'tabs_directional_close_requested' && !tabCloseSampled) {
+    return false
+  }
+
   // (2) Burst cap before consent: the O(1) cap drops floods before the costly settings read, so a compromised opted-out renderer can't burn CPU.
   if (!consumeBurstToken(name)) {
     return false
@@ -202,6 +224,15 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   if (!result.ok) {
     return false
   }
+  const samplingProps =
+    name === 'app_opened'
+      ? {
+          tab_close_sampled: tabCloseSampled,
+          tab_close_sample_rate: TAB_CLOSE_TELEMETRY_SAMPLE_RATE
+        }
+      : name === 'tabs_directional_close_requested'
+        ? { sample_rate: TAB_CLOSE_TELEMETRY_SAMPLE_RATE }
+        : {}
 
   // (5) Capture. `$process_person_profile: false` stops posthog-node creating a person per install_id (no init-time equivalent).
   posthog.capture({
@@ -210,9 +241,13 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     properties: {
       ...commonProps,
       ...result.props,
+      ...samplingProps,
       $process_person_profile: false
     }
   })
+  if (tabCloseDirection) {
+    trackedTabCloseDirections.add(tabCloseDirection)
+  }
   return true
 }
 
@@ -221,10 +256,6 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     return
   }
   const settings = storeRef.getSettings()
-  const telemetryBeforeUpdate = settings.telemetry
-  const wasPendingBanner =
-    telemetryBeforeUpdate?.existedBeforeTelemetryRelease === true &&
-    telemetryBeforeUpdate.optedIn === null
   // Deep-merge (persistence.ts:552) so flipping `optedIn` won't clobber `installId` / `existedBeforeTelemetryRelease`.
   storeRef.updateSettings({
     telemetry: {
@@ -238,9 +269,8 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     if (client) {
       await client.optIn()
     }
-    if (wasPendingBanner) {
-      trackAppOpenedOnce()
-    }
+    // Settings opt-in also starts an observable session that needs an adoption denominator.
+    trackAppOpenedOnce()
     track('telemetry_opted_in', { via })
   } else {
     if (!client) {
@@ -303,9 +333,8 @@ export function trackAppOpenedOnce(): void {
   if (appOpenedTrackedThisSession) {
     return
   }
-  appOpenedTrackedThisSession = true
   // Why: `nth_repo_added: 0` marks the session-zero / pre-repo cohort. See docs/onboarding-funnel-cohort-addendum.md.
-  track('app_opened', { ...getCohortAtEmit() })
+  appOpenedTrackedThisSession = track('app_opened', { ...getCohortAtEmit() })
 }
 
 export async function shutdownTelemetry(): Promise<void> {
@@ -332,6 +361,7 @@ export function _setPostHogClientForTests(client: PostHog | null): void {
 
 export function _setCommonPropsForTests(props: CommonProps | null): void {
   commonProps = props
+  tabCloseSampled = props !== null && isInTabCloseTelemetrySample(props.install_id)
 }
 
 export function _setStoreForTests(store: Store | null): void {

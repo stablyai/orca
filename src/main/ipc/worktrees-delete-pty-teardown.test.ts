@@ -12,6 +12,7 @@ import {
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -446,7 +447,9 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(3)
     for (const item of approved) {
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(`repo-1::${item.path}`, 'local')
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: `repo-1::${item.path}`, hostId: 'local' })
+      )
     }
   })
 

@@ -20,7 +20,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   preloadHostModelCatalogSnapshots,
   resetHostModelCatalogSnapshotsForTests

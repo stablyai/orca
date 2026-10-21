@@ -7,6 +7,7 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
+import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
 import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
@@ -20,16 +21,29 @@ import {
   trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
-import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
+import {
+  isMarkdownDocumentName,
+  markdownDocumentFromFilePath
+} from '../../shared/markdown-document-paths'
 import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
-import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import {
+  registerRendererShutdownCheckpointHandler,
+  type QuitResumeRecordsFor
+} from './renderer-shutdown-checkpoint'
 import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
 import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
+import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
+
+import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
 type RegisterAppHandlersOptions = {
+  quitResumeRecordsFor?: QuitResumeRecordsFor
+  reconnectFactsFor?: ReconnectFactsFor
   onBeforeRelaunch?: () => void | Promise<void>
+  /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
+  onBeforeRelaunchExit?: () => void | Promise<void>
 }
 
 async function pickFloatingMarkdownDocument(
@@ -104,9 +118,14 @@ function resolveDevFeatureWallAssetDir(): string {
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
-  registerRendererShutdownCheckpointHandler(store)
+  registerRendererShutdownCheckpointHandler(
+    store,
+    options.quitResumeRecordsFor,
+    options.reconnectFactsFor
+  )
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
+  ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -151,6 +170,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:relaunch', async () => {
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
     setTimeout(() => {
       // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
       destroySystemTray()
@@ -164,6 +184,15 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       relaunchApp('admin-restart')
+      quitProcess()
+    }, 150)
+  })
+
+  ipcMain.handle('app:restartAsAdministrator', async () => {
+    const relaunchOptions = prepareWindowsAdministratorRestart()
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    setTimeout(() => {
+      relaunchApp('windows-administrator', undefined, relaunchOptions)
       quitProcess()
     }, 150)
   })

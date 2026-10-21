@@ -9,7 +9,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 

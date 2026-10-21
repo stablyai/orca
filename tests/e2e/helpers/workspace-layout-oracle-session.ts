@@ -122,8 +122,12 @@ export async function runOracleScenario(
         run.client = new RuntimeClient(session.userDataDir, 30_000)
         await subscribeWindowLayout(next.page, feed)
         await run.oracle.retarget(target(next.page, run.client))
-        await (reopen ?? bootstrapRestoredLaunch)(next.page, worktreeId)
-        await waitForPaneCount(next.page, paneCount, 30_000).catch(() => {})
+        if (reopen) {
+          await reopen(next.page, worktreeId)
+          await waitForPaneCount(next.page, paneCount, 30_000).catch(() => {})
+        } else {
+          await bootstrapRestoredLaunch(next.page, worktreeId, paneCount)
+        }
         const restartsTerminals = coldDaemon || options.terminalsRestart
         const after = await run.oracle.step(
           coldDaemon ? 'after cold relaunch' : 'after relaunch',
@@ -147,10 +151,7 @@ export async function runOracleScenario(
     })
     return run.oracle.findings
   } finally {
-    if (app) {
-      await session.close(app)
-    }
-    await session.dispose()
+    await session.dispose(app ?? undefined)
   }
 }
 

@@ -1,7 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type {
   SshConnectionState,
-  SshEndOldRelayTerminalsResult,
   SshConfigHostListArgs,
   SshConfigHostListResult,
   SshConfigHostResolution,
@@ -44,16 +43,16 @@ export const sshApi = {
   resolveConfigHost: (args: { alias: string }): Promise<SshConfigHostResolution | null> =>
     ipcRenderer.invoke('ssh:resolveConfigHost', args),
 
-  connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+  connect: async (args: {
+    targetId: string
+    automatic?: boolean
+  }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
   },
 
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
-
-  endOldRelayTerminals: (args: { targetId: string }): Promise<SshEndOldRelayTerminalsResult> =>
-    ipcRenderer.invoke('ssh:endOldRelayTerminals', args),
 
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)

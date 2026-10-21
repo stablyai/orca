@@ -9,7 +9,9 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: vi.fn(),
-  assertRuntimeEnvironmentCapability: vi.fn(),
+  assertRuntimeEnvironmentCapability: vi.fn()
+}))
+vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     code?: string
   }

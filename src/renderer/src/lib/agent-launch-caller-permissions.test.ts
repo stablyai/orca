@@ -25,10 +25,12 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => nul
 vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({ isWebRuntimeSessionActive: () => false }))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: () => false
+}))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
@@ -49,12 +51,14 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 }))
 // A launch the host delivers waits on its reply; these tests read only what was sent.
 const callRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc, RuntimeRpcCallError: Error }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
 
 function launchesThroughHost(profile: AgentLaunchCallerProfile): boolean {
   return newTabPromptLaunchesThroughHost({
     promptDelivery: profile.args.promptDelivery ?? 'auto-submit',
-    pastesPrompt: (profile.args.prompt?.trim() ?? '').length > 0
+    pastesPrompt: (profile.args.prompt?.trim() ?? '').length > 0,
+    isRemote: false
   })
 }
 
@@ -64,7 +68,7 @@ function launchesThroughHost(profile: AgentLaunchCallerProfile): boolean {
  * setting, shipped bypass default included.
  */
 function expectHostRequestArguments(profile: AgentLaunchCallerProfile): void {
-  const request = hostLaunchRequest(callRuntimeRpc)
+  const request = hostLaunchRequest(store)
   expect(queuedStartupCommand(store)).toBeUndefined()
   if (profile.args.agentArgs === undefined) {
     expect(request).not.toHaveProperty('agentArgs')

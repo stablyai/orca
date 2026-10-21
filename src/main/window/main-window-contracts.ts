@@ -5,6 +5,7 @@ import type {
   RecoveryReloadMilestone,
   RecoveryReloadTrigger
 } from './renderer-recovery-reload-watchdog'
+import type { RendererLivenessAtDeath } from './renderer-liveness-at-death'
 
 /** Per-load outcome from Electron's load promise, which is scoped to that one load unlike `did-finish-load`. */
 export type MainWindowLoadObserver = {
@@ -19,7 +20,8 @@ export type CreateMainWindowOptions = {
   onQuitAborted?: () => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
-    webContentsId: number
+    webContentsId: number,
+    liveness: RendererLivenessAtDeath
   ) => void
   /** Returns true when Orca should reload after renderer loss; update-relaunch/quit tear down children intentionally, so don't fight shutdown. */
   shouldRecoverRenderer?: (

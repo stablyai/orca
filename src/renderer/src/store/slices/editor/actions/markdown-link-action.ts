@@ -9,7 +9,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
-import { statRuntimePath } from '@/runtime/runtime-file-client'
+import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import { getOpenedEditFileIdAfterOpen } from '../file-ids/editor-file-ids'
 import { scheduleEditorLineReveal } from '../focus/editor-focus-reveal'
 

@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { StructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 
 const owners = new Map<string, StructuredAgentSessionReadOwner>()

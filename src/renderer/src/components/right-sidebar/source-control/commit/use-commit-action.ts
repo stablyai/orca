@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import { getConnectionId } from '@/lib/connection-context'
-import { commitRuntimeGit } from '@/runtime/runtime-git-client'
+import { commitRuntimeGit } from '@/runtime/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'

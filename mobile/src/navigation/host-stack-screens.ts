@@ -9,8 +9,6 @@ export const HOST_STACK_SCREENS = [
   { name: '[hostId]/agent-history/[worktreeId]', title: 'Agent Session History' },
   { name: '[hostId]/review/[worktreeId]', title: 'Changes' },
   { name: '[hostId]/pr/[worktreeId]', title: 'Pull Request' },
-  // OTA builds only: redirects to the host screen everywhere else.
-  { name: '[hostId]/web', title: 'Workspace' },
   // Last, and matched last: every pathname above has a file of its own, so this takes only what
   // expo-router would otherwise send to Unmatched. Declared for the title alone — an undeclared
   // child still renders, appended after these with this group's screenOptions.

@@ -11,7 +11,7 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, { getState: () => ({}) })
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: (...args: unknown[]) => mocks.importExternalPaths(...args)
 }))
 

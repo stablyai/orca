@@ -3,7 +3,6 @@ import type { ConversationNameContext } from '../../shared/conversation-name-gen
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
@@ -63,7 +62,7 @@ export function trimGeneratedCommitMessage(message: string): string {
 }
 
 export function resolveCommitMessageSettings(
-  settings: GlobalSettings,
+  settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: AiTextOperation = 'commitMessage',
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -78,7 +77,7 @@ export function resolveCommitMessageSettings(
 }
 
 export function resolveTextGenerationParams(
-  settings: GlobalSettings,
+  settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: AiTextOperation = 'commitMessage',
   repo?: Pick<Repo, 'sourceControlAi'> | null

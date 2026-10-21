@@ -3,29 +3,24 @@
 // hidden pages are still writing downloads — main treats a guest unregister as
 // a tab close and cancels their active downloads (browser-manager
 // unregisterGuest), so eviction has to skip those pages until they finish.
-type TrackedDownload = { browserPageId: string; active: boolean }
-
-const trackedDownloadsById = new Map<string, TrackedDownload>()
+// Main ends every download it tracks, so start and finish bound the veto.
+const browserPageIdByDownloadId = new Map<string, string>()
 const activeDownloadCountByPageId = new Map<string, number>()
 
 export function hasActiveBrowserPageDownload(browserPageId: string): boolean {
   return (activeDownloadCountByPageId.get(browserPageId) ?? 0) > 0
 }
 
-function setDownloadActive(
-  download: TrackedDownload,
-  active: boolean,
+function adjustActiveDownloadCount(
+  browserPageId: string,
+  delta: 1 | -1,
   onEvictionVetoChange: () => void
 ): void {
-  if (download.active === active) {
-    return
-  }
-  download.active = active
-  const count = (activeDownloadCountByPageId.get(download.browserPageId) ?? 0) + (active ? 1 : -1)
+  const count = (activeDownloadCountByPageId.get(browserPageId) ?? 0) + delta
   if (count <= 0) {
-    activeDownloadCountByPageId.delete(download.browserPageId)
+    activeDownloadCountByPageId.delete(browserPageId)
   } else {
-    activeDownloadCountByPageId.set(download.browserPageId, count)
+    activeDownloadCountByPageId.set(browserPageId, count)
   }
   onEvictionVetoChange()
 }
@@ -35,37 +30,20 @@ function trackDownloadStarted(
   browserPageId: string,
   onEvictionVetoChange: () => void
 ): void {
-  if (trackedDownloadsById.has(downloadId)) {
+  if (browserPageIdByDownloadId.has(downloadId)) {
     return
   }
-  const download: TrackedDownload = { browserPageId, active: false }
-  trackedDownloadsById.set(downloadId, download)
-  setDownloadActive(download, true, onEvictionVetoChange)
-}
-
-// Why: an interrupted-resumable download never fires Chromium's 'done' (no
-// finished event), and Orca has no resume path — without this transition the
-// veto would outlive the download for the whole session. A resumed download
-// re-actives on its next 'progressing' tick, restoring the veto.
-function trackDownloadProgress(
-  downloadId: string,
-  state: 'progressing' | 'interrupted' | null,
-  onEvictionVetoChange: () => void
-): void {
-  const download = trackedDownloadsById.get(downloadId)
-  if (!download || state === null) {
-    return
-  }
-  setDownloadActive(download, state === 'progressing', onEvictionVetoChange)
+  browserPageIdByDownloadId.set(downloadId, browserPageId)
+  adjustActiveDownloadCount(browserPageId, 1, onEvictionVetoChange)
 }
 
 function trackDownloadFinished(downloadId: string, onEvictionVetoChange: () => void): void {
-  const download = trackedDownloadsById.get(downloadId)
-  if (!download) {
+  const browserPageId = browserPageIdByDownloadId.get(downloadId)
+  if (browserPageId === undefined) {
     return
   }
-  setDownloadActive(download, false, onEvictionVetoChange)
-  trackedDownloadsById.delete(downloadId)
+  browserPageIdByDownloadId.delete(downloadId)
+  adjustActiveDownloadCount(browserPageId, -1, onEvictionVetoChange)
 }
 
 /** App-lifetime tracking; install once from the surface host (Terminal). The
@@ -77,17 +55,13 @@ export function installBrowserPageDownloadActivityTracking(
   const removeRequested = window.api.browser.onDownloadRequested((event) => {
     trackDownloadStarted(event.downloadId, event.browserPageId, onEvictionVetoChange)
   })
-  const removeProgress = window.api.browser.onDownloadProgress((event) => {
-    trackDownloadProgress(event.downloadId, event.state, onEvictionVetoChange)
-  })
   const removeFinished = window.api.browser.onDownloadFinished((event) => {
     trackDownloadFinished(event.downloadId, onEvictionVetoChange)
   })
   return () => {
     removeRequested()
-    removeProgress()
     removeFinished()
-    trackedDownloadsById.clear()
+    browserPageIdByDownloadId.clear()
     activeDownloadCountByPageId.clear()
   }
 }

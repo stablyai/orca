@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +14,7 @@ vi.mock('../git/worktree', () => ({
 describe('automatic mobile pairing with a missing Relay provider (#20005)', () => {
   it('installs the provider on demand instead of failing provider_missing', async () => {
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
       enableWebSocket: true,
@@ -54,6 +56,7 @@ describe('automatic mobile pairing with a missing Relay provider (#20005)', () =
   it('reports the provider missing when an install outlives the mint budget', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const server = new OrcaRuntimeRpcServer({
+      methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
       enableWebSocket: true,

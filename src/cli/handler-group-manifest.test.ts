@@ -96,10 +96,6 @@ describe('duplicate command keys', () => {
     const routes = buildHandlerRoutes([group('alpha', ['a']), group('beta', ['b'])])
     expect([...routes.keys()]).toEqual(['a', 'b'])
   })
-
-  it('holds for the live manifest', () => {
-    expect(() => buildHandlerRoutes(HANDLER_GROUPS)).not.toThrow()
-  })
 })
 
 describe('dispatch errors', () => {

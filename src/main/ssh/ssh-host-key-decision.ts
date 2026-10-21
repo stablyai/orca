@@ -5,7 +5,9 @@
  * rather than importing its sources so a test states its own trust state instead of writing files.
  * See docs/reference/ssh-host-key-verification.md.
  */
-import type { KnownHostsOutcome } from './ssh-known-hosts'
+import { isEphemeralRuntimeSshOwner } from '../../shared/managed-orcad-ssh-owner'
+import type { SshTargetOwner } from '../../shared/ssh-types'
+import type { KnownHostsOutcome } from './config/ssh-known-hosts'
 
 /** Phase 1 ships no dialog; `prompt` is reserved for Phase 2 and never produced today. */
 export type HostKeyAction = 'accept' | 'accept-and-remember' | 'reject' | 'prompt'
@@ -19,6 +21,18 @@ export type HostKeyDecision = {
   reason?: string
 }
 
+export type HostKeyPolicy =
+  | { kind: 'standard' }
+  /**
+   * A freshly provisioned VM presents a new key every launch, so first contact is expected rather
+   * than suspicious — and persisting would accumulate a record per launch.
+   */
+  | { kind: 'ephemeral' }
+
+export function hostKeyPolicyForOwner(owner: SshTargetOwner | undefined): HostKeyPolicy {
+  return isEphemeralRuntimeSshOwner(owner) ? { kind: 'ephemeral' } : { kind: 'standard' }
+}
+
 export type HostKeyDecisionInput = {
   /** From the user's known_hosts files, unioned. */
   knownHostsOutcome: KnownHostsOutcome
@@ -26,11 +40,8 @@ export type HostKeyDecisionInput = {
   storeOutcome: 'match' | 'mismatch' | 'unknown-type-known-host' | 'unknown'
   /** Effective `StrictHostKeyChecking`; anything unrecognised is treated as `ask`. */
   strictHostKeyChecking: string
-  /**
-   * A freshly provisioned VM presents a new key every launch, so first contact is expected rather
-   * than suspicious — and persisting would accumulate a record per launch.
-   */
-  isEphemeralRuntimeTarget: boolean
+  /** How this target's keys are trusted, decided by who owns the target. */
+  policy: HostKeyPolicy
   /**
    * `ssh -G` ran on the HOME-divergent `-F` path, which suppresses /etc/ssh/ssh_config, so a
    * site-wide StrictHostKeyChecking may exist that we cannot see. We refuse a NEW host rather than
@@ -86,30 +97,6 @@ function keygenRemoveTarget(displayHost: string, port: number): string {
 const STRICT_VALUES = new Set(['true', 'yes', 'always'])
 const LAX_VALUES = new Set(['false', 'no', 'off'])
 
-/**
- * The stricter of a user-resolved and a site-resolved StrictHostKeyChecking.
- *
- * Needed only where the two were read separately: `ssh -F` makes OpenSSH ignore /etc/ssh/ssh_config,
- * so the per-user resolution cannot represent a site policy and the site has to be probed on its
- * own. Ordering is strict > accept-new > ask > lax, and anything unrecognised is left to the
- * caller's own handling by falling through to the user value.
- */
-export function strictestHostKeyChecking(
-  userValue: string | undefined,
-  siteValue: string | null
-): string {
-  const user = userValue ?? 'ask'
-  if (siteValue === null) {
-    return user
-  }
-  const site = siteValue.trim().toLowerCase()
-  if (STRICT_VALUES.has(site) && !STRICT_VALUES.has(user.trim().toLowerCase())) {
-    return site
-  }
-  // A site that is lax never loosens a user who is not: refusing to write trust is the safe side.
-  return LAX_VALUES.has(site) ? user : site === 'accept-new' && user === 'ask' ? site : user
-}
-
 const CHANGED_KEY_HINT =
   'If you rebuilt or reprovisioned this machine, remove the saved key and reconnect.'
 
@@ -161,7 +148,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
   const {
     knownHostsOutcome,
     storeOutcome,
-    isEphemeralRuntimeTarget,
+    policy,
     siteConfigSuppressed,
     knownHostsUnreadable,
     displayHost,
@@ -279,7 +266,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
   // Accepting without recording is the rest of it: a new key every launch would otherwise grow a
   // row per VM, and a stale row eventually reads as a mismatch against a host that did nothing
   // wrong.
-  if (isEphemeralRuntimeTarget) {
+  if (policy.kind === 'ephemeral') {
     return { action: 'accept', outcome: unknownOutcome }
   }
   if (siteConfigSuppressed) {

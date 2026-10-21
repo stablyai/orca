@@ -1,5 +1,5 @@
 import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import { agentSessionThrownFailure } from '../../../shared/agent-session-write-failure'
@@ -14,7 +14,7 @@ import {
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/structured-agent-session-send-attempt'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type StructuredPromptDeliveryResult = {
   delivered: boolean
@@ -37,7 +37,7 @@ export type StructuredLaunchPromptOptions = {
   onPromptDelivered?: () => void
 }
 
-type LaunchReceipt = { sessionId: string; fence: number; firstMessage?: AgentJournalSubmission }
+type LaunchReceipt = StructuredAgentLaunchReceipt
 
 /** A launch's text, held in memory from the click until its chat exists, then sent once: every
  *  caller waiting on it shares the one send. From the click it holds the chat's one send slot, drawn
@@ -261,7 +261,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
       if (prompt.createOwned) {
         prompt.createSend?.settle(
           receipt.firstMessage
-            ? { kind: 'recorded', submission: receipt.firstMessage }
+            ? { kind: 'recorded', submission: receipt.firstMessage, cursor: receipt.cursor }
             : { kind: 'unconfirmed' }
         )
       }

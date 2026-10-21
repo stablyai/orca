@@ -9,17 +9,6 @@ import type {
 } from './parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
 
-export type {
-  WatcherProcessCallback,
-  WatcherProcessHooks,
-  WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
-export type {
-  WatcherProcessDeliveryOptions,
-  WatcherProcessEvent,
-  WatcherProcessSubscribeOptions
-} from './parcel-watcher-process-protocol'
-
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
 // Why: healthy roots share one child; only fault quarantine scales to four,
 // containing a failed shard without paying that RSS cost during normal use.

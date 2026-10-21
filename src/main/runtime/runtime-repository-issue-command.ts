@@ -4,10 +4,13 @@ import type { Repo } from '../../shared/repo-types'
 import { readIssueCommand, writeIssueCommand } from '../issue-command-file'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
+import type { RuntimeStore } from './runtime-store-contract'
+import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 type RuntimeRepositoryIssueCommandDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
   getLocalGitArgs: (repo: Repo) => [] | [GitRuntimeOptions]
+  getStore?: () => RuntimeStore | null
 }
 
 export class RuntimeRepositoryIssueCommand {
@@ -41,6 +44,7 @@ export class RuntimeRepositoryIssueCommand {
   /** Save a private override on its execution host; blank content restores the shared command. */
   async write(repoSelector: string, content: string): Promise<{ ok: true }> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    assertWslMoveRepoWritable(this.deps.getStore?.() ?? undefined, repo)
     if (isFolderRepo(repo)) {
       return { ok: true }
     }

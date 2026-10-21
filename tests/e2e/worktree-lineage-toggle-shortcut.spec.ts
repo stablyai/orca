@@ -5,6 +5,11 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { readPaneIdentitySnapshot } from './helpers/terminal'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import {
+  addRepoWithWorkspaces,
+  linkWorkspaces,
+  writeWorkspaceMeta
+} from './helpers/repo-with-workspaces'
 import { seedLineageScenario, seedWorkspaceLiveTerminal } from './worktree-lineage-state'
 
 test.use({ launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
@@ -192,55 +197,19 @@ test.describe('Toggle Child Workspaces shortcut', () => {
     await orcaPage.keyboard.press('Escape')
   })
 
-  test('a hovered parent takes precedence over another active family', async ({ orcaPage }) => {
-    const { parentId, childId } = await seedLineageScenario(orcaPage)
+  test('a hovered parent takes precedence over another active family', async ({
+    orcaPage
+  }, testInfo) => {
+    const { childId } = await seedLineageScenario(orcaPage)
     await setToggleBinding(orcaPage, ['Mod+Alt+H'])
-    const other = await orcaPage.evaluate(
-      ({ parentId, childId }) => {
-        const store = window.__store
-        if (!store) {
-          throw new Error('Missing store')
-        }
-        const state = store.getState()
-        const worktrees = Object.values(state.worktreesByRepo).flat()
-        const parent = worktrees.find((worktree) => worktree.id === parentId)
-        const child = worktrees.find((worktree) => worktree.id === childId)
-        const edge = state.worktreeLineageById[childId]
-        if (!parent || !child || !edge) {
-          throw new Error('Missing seeded family')
-        }
-        const otherParent = {
-          ...parent,
-          id: `${parentId}-other`,
-          instanceId: 'other-parent',
-          displayName: 'Another parent'
-        }
-        const otherChild = {
-          ...child,
-          id: `${childId}-other`,
-          instanceId: 'other-child',
-          displayName: 'Another child'
-        }
-        store.setState({
-          worktreesByRepo: {
-            ...state.worktreesByRepo,
-            [parent.repoId]: [...state.worktreesByRepo[parent.repoId], otherParent, otherChild]
-          },
-          worktreeLineageById: {
-            ...state.worktreeLineageById,
-            [otherChild.id]: {
-              ...edge,
-              worktreeId: otherChild.id,
-              worktreeInstanceId: otherChild.instanceId,
-              parentWorktreeId: otherParent.id,
-              parentWorktreeInstanceId: otherParent.instanceId
-            }
-          }
-        })
-        return { parentId: otherParent.id, childId: otherChild.id }
-      },
-      { parentId, childId }
-    )
+    const otherRepo = await addRepoWithWorkspaces(orcaPage, testInfo, 2)
+    const other = { parentId: otherRepo.ids[0]!, childId: otherRepo.ids[1]! }
+    await writeWorkspaceMeta(orcaPage, [
+      { worktreeId: other.parentId, updates: { displayName: 'Another parent' } },
+      { worktreeId: other.childId, updates: { displayName: 'Another child' } }
+    ])
+    await linkWorkspaces(orcaPage, [other])
+    await expect(sidebarWorktreeRow(orcaPage, other.childId)).toBeVisible()
     await sidebarWorktreeRow(orcaPage, other.parentId).hover()
     await orcaPage.keyboard.press(CHORD)
     await expect(sidebarWorktreeRow(orcaPage, other.childId)).toBeHidden()
@@ -268,18 +237,10 @@ test.describe('Toggle Child Workspaces shortcut', () => {
   }) => {
     const { parentId, childId } = await seedLineageScenario(orcaPage)
     await setToggleBinding(orcaPage, ['Mod+Alt+H'])
-    await orcaPage.evaluate((childId) => {
-      window.__store?.setState((state) => ({
-        worktreesByRepo: Object.fromEntries(
-          Object.entries(state.worktreesByRepo).map(([repoId, rows]) => [
-            repoId,
-            rows.map((row) =>
-              row.id === childId ? { ...row, instanceId: 'recreated-child' } : row
-            )
-          ])
-        )
-      }))
-    }, childId)
+    // Stands in for recreating the child at the same path: its new instance no longer matches the link.
+    await writeWorkspaceMeta(orcaPage, [
+      { worktreeId: childId, updates: { instanceId: 'recreated-child' } }
+    ])
     const parentRow = sidebarWorktreeRow(orcaPage, parentId)
     await expect(parentRow.getByRole('button', { name: /child workspace/ })).toHaveCount(0)
     await parentRow.click()
@@ -375,21 +336,14 @@ test.describe('Toggle Child Workspaces shortcut', () => {
   }) => {
     const { parentId, childId } = await seedLineageScenario(orcaPage)
     await setToggleBinding(orcaPage, ['Mod+Alt+H'])
-    await orcaPage.evaluate(async (parentId) => {
+    await writeWorkspaceMeta(orcaPage, [{ worktreeId: parentId, updates: { isPinned: true } }])
+    await orcaPage.evaluate(async () => {
       await window.__store?.getState().updateSettings({ showPinnedWorktreesInGroups: true })
-      window.__store?.setState((state) => ({
-        worktreesByRepo: Object.fromEntries(
-          Object.entries(state.worktreesByRepo).map(([repoId, rows]) => [
-            repoId,
-            rows.map((row) => (row.id === parentId ? { ...row, isPinned: true } : row))
-          ])
-        )
-      }))
       const sidebar = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
       sidebar?.addEventListener('orca-record-virtualized-scroll-anchor', () => {
         sidebar.dataset.anchorRecords = String(Number(sidebar.dataset.anchorRecords ?? 0) + 1)
       })
-    }, parentId)
+    })
     const chips = orcaPage.getByRole('button', { name: 'Hide 1 child workspace', exact: true })
     await expect(chips).toHaveCount(2)
     const natural = orcaPage

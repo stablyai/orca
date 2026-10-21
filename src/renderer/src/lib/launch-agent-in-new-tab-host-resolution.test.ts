@@ -4,7 +4,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+/** Startup commands published with the created tabs, in creation order. */
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 
 type StoreRepo = {
   id: string
@@ -57,7 +60,6 @@ const store = {
   ptyIdsByTabId: {} as Record<string, string[]>,
   createTab: mockCreateTab,
   closeTab: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: vi.fn(),
   setTabBarOrder: vi.fn(),
   setAgentStatus: vi.fn(),
@@ -87,9 +89,13 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: vi.fn(() => false),
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
+}))
+vi.mock('../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
@@ -108,7 +114,7 @@ async function launchOnLinux(): Promise<void> {
 }
 
 function queuedCommand(): string {
-  return mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command
+  return queuedStartups()[0]?.command
 }
 
 describe('launchAgentInNewTab execution host resolution', () => {

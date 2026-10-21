@@ -27,6 +27,13 @@ export async function withCliAgentLaunchRecovery<T>(
     ) {
       throw error
     }
+    // Keep the setup choice's pre-launch refusal intact for the CLI's existing recovery.
+    if (
+      error instanceof RuntimeClientError &&
+      error.message === 'Setup decision required for this repository'
+    ) {
+      throw error
+    }
     const args = recovery.rawArgs && recoverableOrchestrationArgs(recovery.rawArgs)
     const retryArgs: string[] = []
     for (let index = 0; index < (args?.length ?? 0); index++) {

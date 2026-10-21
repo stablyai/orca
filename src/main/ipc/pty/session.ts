@@ -2,7 +2,7 @@ import type { BrowserWindow, WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { IPtyProvider } from '../../providers/types'
+import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { PtyModelRestoreReason } from '../../../shared/pty-model-restore-marker'
 import type {
   PtyDeliveryWriteOff,
@@ -10,7 +10,8 @@ import type {
 } from '../../../shared/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
 import { PtyProducerFlowController } from '../pty-producer-flow-control'
-import { PtyPendingDataDrainQueue, type PendingPtyData } from '../pty-pending-data-drain-queue'
+import { PtyPendingDataDrainQueue } from '../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../pty-pending-data-drain-contract'
 import { activeRendererPtys } from './delivery/visibility-state'
 import {
   isHiddenPtyDeliveryGateEnabled,
@@ -156,7 +157,12 @@ export type PtyIpcSession = {
   transitionHiddenRendererPtyDeliveryState: (
     id: string,
     hidden: boolean
-  ) => { droppable: boolean; droppedWhileHidden: boolean; policyChanged: boolean }
+  ) => {
+    droppable: boolean
+    droppedWhileHidden: boolean
+    hiddenDropEpisode?: number
+    policyChanged: boolean
+  }
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   rendererPtyIsKnownHidden: (id: string) => boolean
   schedulePendingDataAfterCreditReport: (creditedAny: boolean) => void

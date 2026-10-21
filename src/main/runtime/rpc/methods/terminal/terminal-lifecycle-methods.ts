@@ -1,3 +1,5 @@
+import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -11,6 +13,7 @@ import {
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
+  TerminalReveal,
   TerminalSleep,
   TerminalSplit,
   TerminalStop,
@@ -36,7 +39,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.create',
     permission: 'workspace',
     params: TerminalCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientId, clientKind }) => {
+    handler: async (params, context) => {
+      const { runtime, pairedDeviceId, clientId, clientKind } = context
       // A focused terminal create predates paired-client navigation. Keep the
       // authority boundary here so a remote caller cannot activate the host
       // renderer. This legacy RPC remains a background create for paired viewers;
@@ -46,43 +50,53 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       const activate = pairedViewer ? false : params.activate === true
       const presentation =
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
-      return {
-        terminal: await runtime.dedupeTerminalCreate(
-          pairedDeviceId ?? clientId ?? 'local',
-          params.worktree,
-          params.clientMutationId,
-          params.reconcileExisting === true,
-          (canonicalWorktreeSelector, preAllocatedHandle) =>
-            runtime.createTerminal(canonicalWorktreeSelector, {
-              command: params.command,
-              ...(params.shell ? { shellOverride: params.shell } : {}),
-              startupCommandDelivery: params.startupCommandDelivery,
-              env: params.env,
-              envToDelete: params.envToDelete,
-              ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-              ...(params.resumeProviderSession
-                ? { resumeProviderSession: params.resumeProviderSession }
-                : {}),
-              ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-              ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-              ...(params.terminalKittyKeyboardProtocol === true
-                ? { terminalKittyKeyboardProtocol: true }
-                : {}),
-              ...(params.terminalColorQueryReplies
-                ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
-                : {}),
-              title: params.title,
-              focus,
-              rendererBacked: params.rendererBacked === true,
-              activate,
-              presentation,
-              tabId: params.tabId,
-              leafId: params.leafId,
-              ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
-              ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-            })
+      const terminal = await runtime.dedupeTerminalCreate(
+        pairedDeviceId ?? clientId ?? 'local',
+        params.worktree,
+        params.clientMutationId,
+        params.reconcileExisting === true,
+        (canonicalWorktreeSelector, preAllocatedHandle) =>
+          runtime.createTerminal(canonicalWorktreeSelector, {
+            command: params.command,
+            terminalImageViewerSupported: terminalImageViewerSupported(context),
+            ...(params.shell ? { shellOverride: params.shell } : {}),
+            startupCommandDelivery: params.startupCommandDelivery,
+            env: params.env,
+            envToDelete: params.envToDelete,
+            ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+            ...(params.resumeProviderSession
+              ? { resumeProviderSession: params.resumeProviderSession }
+              : {}),
+            ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+            ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.terminalKittyKeyboardProtocol === true
+              ? { terminalKittyKeyboardProtocol: true }
+              : {}),
+            ...(params.terminalColorQueryReplies
+              ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+              : {}),
+            title: params.title,
+            focus,
+            activate,
+            presentation,
+            tabId: params.tabId,
+            leafId: params.leafId,
+            ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
+            ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+          })
+      )
+      // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
+      if (
+        ORCA_SIDEBAR_INPUTS_IS_MAIN &&
+        context.caller?.kind === 'local-cli' &&
+        !terminal.isReattach
+      ) {
+        runtime.sidebarFacts?.sortStamps.noteTerminalStarted(
+          terminal.worktreeId,
+          terminal.executionHostId
         )
       }
+      return { terminal }
     }
   }),
   defineMethod({
@@ -162,6 +176,31 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         )
       })
     })
+  }),
+  defineMethod({
+    // Why a method of its own: terminal.focus resolves a handle on the host that runs the PTY, and a
+    // paired server has no window, so only the desktop showing its pane can reveal it (#24688).
+    name: 'terminal.reveal',
+    permission: 'workspace',
+    params: TerminalReveal,
+    handler: async (params, { runtime, clientKind }) => {
+      // Why local callers only: it moves this host's window, which terminal.focus lets a paired
+      // client do only by asking for host navigation, and a CLI or companion app here needs no more.
+      if (clientKind !== undefined) {
+        throw Object.assign(
+          new Error('terminal.reveal is available only to callers on this machine.'),
+          { code: 'forbidden' }
+        )
+      }
+      return {
+        reveal: await runtime.revealTerminalPane({
+          worktreeId: params.worktreeId,
+          tabId: params.tabId,
+          leafId: params.leafId ?? null,
+          executionHostId: params.executionHostId ?? null
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.close',

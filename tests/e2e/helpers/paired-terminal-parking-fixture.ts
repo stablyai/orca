@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 const FILL_ROWS = 6_000
 const FLOOD_ROWS = 4_000
@@ -18,6 +18,8 @@ function fixtureCommand(fixturePath: string, marker: string): string {
 
 export function createPairedTerminalParkingFixture(): {
   command: (marker: string) => string
+  /** PTY grid the fixture saw at `SIZE:<token>`, read off disk so a parked pane needs no client. */
+  readReportedSize: (marker: string, token: string) => string | null
   dispose: () => void
 } {
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-retention-memory-'))
@@ -25,6 +27,7 @@ export function createPairedTerminalParkingFixture(): {
   writeFileSync(
     fixturePath,
     [
+      "import { writeFileSync } from 'node:fs'",
       'const marker = process.argv[2]',
       'process.stdout.write(`READY:${marker}\\r\\n`)',
       'process.stdin.setRawMode?.(true)',
@@ -65,6 +68,11 @@ export function createPairedTerminalParkingFixture(): {
       '      process.stdout.write(`FILLED:${marker}\\r\\n`)',
       '      continue',
       '    }',
+      "    if (command.startsWith('SIZE:')) {",
+      "      const token = command.slice('SIZE:'.length)",
+      '      writeFileSync(`${process.argv[1]}.${marker}.${token}.size`, `${process.stdout.columns}x${process.stdout.rows}`)',
+      '      continue',
+      '    }',
       '    process.stdout.write(`LIVE:${command}\\r\\n`)',
       '  }',
       '})',
@@ -73,6 +81,10 @@ export function createPairedTerminalParkingFixture(): {
   )
   return {
     command: (marker) => fixtureCommand(fixturePath, marker),
+    readReportedSize: (marker, token) => {
+      const sizePath = `${fixturePath}.${marker}.${token}.size`
+      return existsSync(sizePath) ? readFileSync(sizePath, 'utf8') : null
+    },
     dispose: () => rmSync(scratch, { recursive: true, force: true })
   }
 }

@@ -1,19 +1,7 @@
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { SwitchIndicator } from '@/components/ui/switch'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
@@ -25,203 +13,276 @@ import {
 } from '../../../../shared/native-chat-session-options'
 import {
   nativeChatModelPillLabel,
-  nativeChatOptionsPillLabel,
+  nativeChatOptionValuesLabel,
   nativeChatOptionsPillTitle,
-  nativeChatSessionChoiceLabel,
-  nativeChatSessionOptionDisabledReason,
-  nativeChatSessionOptionLabel
+  nativeChatSessionOptionActionLabel,
+  nativeChatSessionOptionDisabledReason
 } from './native-chat-session-option-labels'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
-import { agentSessionThrownFailure } from '../../../../shared/agent-session-write-failure'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
+import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
 import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from './native-chat-picker-focus-return'
-import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
+import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
+import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
   isWorking: boolean
   pickerRequest?: NativeChatOptionPickerRequest | null
-  /** Where focus lands after a pick; see `useNativeChatPickerFocusReturn`. */
+  /** Where focus lands after a visit that changed something; see `useNativeChatPickerFocusReturn`. */
   focusComposer?: () => void
 }
 
-function PickerTooltipContent(props: {
-  label: string
-  disabledReason?: string | null
-  dispatched: boolean
-}): React.JSX.Element {
-  return (
-    <div className="space-y-0.5">
-      <div>{props.disabledReason ?? props.label}</div>
-      {props.dispatched ? (
-        <div>
-          {translate(
-            'components.native-chat.composer.sentNotConfirmed',
-            'Sent to the agent — not confirmed'
-          )}
-        </div>
-      ) : null}
-    </div>
-  )
+/** A descriptor write in flight; its value shows until it settles. */
+type PendingPick = { id: string; value?: SessionOptionValue }
+
+// Why: the picker stays open across a pick, so the choice has to land where it was made before
+// the host answers; a refused write falls back to the snapshot.
+function withPendingValue(
+  descriptor: SessionOptionDescriptor,
+  pending: PendingPick | null
+): SessionOptionDescriptor {
+  if (pending?.id !== descriptor.id) {
+    return descriptor
+  }
+  const { kind } = descriptor
+  if (kind.type === 'select' && typeof pending.value === 'string') {
+    return {
+      ...descriptor,
+      valueSource: 'dispatched',
+      kind: { ...kind, currentValue: pending.value }
+    }
+  }
+  if (kind.type === 'boolean' && typeof pending.value === 'boolean') {
+    return {
+      ...descriptor,
+      valueSource: 'dispatched',
+      kind: { ...kind, currentValue: pending.value }
+    }
+  }
+  return descriptor
+}
+
+// Why: value-only visible text must still include the category in the
+// accessible name (WCAG 2.5.3 Label in Name / voice control).
+function pillAccessibleName(title: string, value: string): string {
+  return value === title
+    ? title
+    : translate('components.native-chat.composer.pillAccessibleName', '{{value0}} {{value1}}', {
+        value0: title,
+        value1: value
+      })
 }
 
 function PickerTrigger(props: {
-  /** The trigger of whichever surface the pill opens. */
-  Trigger: typeof DropdownMenuTrigger | typeof PopoverTrigger
-  label: string
-  tooltipLabel: string
+  modelLabel: string
+  /** The options' values, shown after the model; empty when there are none to show. */
+  optionsLabel: string
+  accessibleName: string
   disabled: boolean
-  disabledReason?: string | null
+  disabledReason: string | null
   dispatched: boolean
-  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>
+  triggerRef: React.Ref<HTMLButtonElement>
+  onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
-  // Why: value-only visible text must still include the category in the
-  // accessible name (WCAG 2.5.3 Label in Name / voice control).
-  const accessibleName =
-    props.label === props.tooltipLabel
-      ? props.tooltipLabel
-      : translate('components.native-chat.composer.pillAccessibleName', '{{value0}} {{value1}}', {
-          value0: props.tooltipLabel,
-          value1: props.label
-        })
+  const [tooltipOpen, setTooltipOpen] = useState(false)
+  // Why: the pill already shows its values, so it only gets a tooltip for what it cannot show.
+  // Held closed rather than unmounted: a pick can flip this, and the open picker hangs off the pill.
+  const informative = props.disabledReason !== null || props.dispatched
   return (
-    <Tooltip>
+    <Tooltip open={informative && tooltipOpen} onOpenChange={setTooltipOpen}>
       <TooltipTrigger asChild>
-        <props.Trigger asChild disabled={props.disabled}>
+        <PopoverTrigger asChild disabled={props.disabled}>
           <Button
+            ref={props.triggerRef}
             type="button"
             variant="ghost"
             size="xs"
-            aria-label={accessibleName}
-            className="max-w-48"
+            aria-label={props.accessibleName}
+            className="max-w-64"
             onKeyDown={props.onKeyDown}
           >
-            <span className="truncate">{props.label}</span>
+            <span className="truncate text-chat-foreground">{props.modelLabel}</span>
+            {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
             <ChevronDown className="size-3" />
           </Button>
-        </props.Trigger>
+        </PopoverTrigger>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        <PickerTooltipContent
-          label={props.tooltipLabel}
-          disabledReason={props.disabledReason}
-          dispatched={props.dispatched}
-        />
+        <div className="space-y-0.5">
+          {props.disabledReason ? <div>{props.disabledReason}</div> : null}
+          {props.dispatched ? (
+            <div>
+              {translate(
+                'components.native-chat.composer.sentNotConfirmed',
+                'Sent to the agent — not confirmed'
+              )}
+            </div>
+          ) : null}
+        </div>
       </TooltipContent>
     </Tooltip>
   )
 }
 
-function DescriptorMenuRows(props: {
-  descriptor: SessionOptionDescriptor
-  pending: boolean
-  setValue: (value: SessionOptionValue) => void
-  invokeAction: () => void
-  /** Called by the rows whose choice closes the menu. */
-  notePick: () => void
+function SessionOptionPopover(props: {
+  model: SessionOptionDescriptor
+  options: readonly SessionOptionDescriptor[]
+  isWorking: boolean
+  /** Only the descriptor being saved holds its write controls. */
+  pendingIds: ReadonlySet<string>
+  request: NativeChatOptionPickerRequest | null
+  onSet: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
+  onAction: (descriptor: SessionOptionDescriptor) => void
+  focusComposer?: () => void
 }): React.JSX.Element {
-  const { descriptor, pending, setValue, invokeAction, notePick } = props
-  // Why: flip-only without a baseline is an action — never claim On/Off.
-  if (descriptor.action?.type === 'toggle-command') {
-    return (
-      <DropdownMenuItem
-        disabled={!descriptor.settable || pending}
-        onSelect={() => {
-          notePick()
-          invokeAction()
-        }}
-      >
-        {translate('components.native-chat.composer.toggleOption', 'Toggle {{value0}}', {
-          value0: nativeChatSessionOptionLabel(descriptor).toLowerCase()
-        })}
-      </DropdownMenuItem>
-    )
+  const { model, options, pendingIds } = props
+  // Why here: this unmounts with the pill, so a picker that went away comes back closed.
+  const [open, setOpen] = useState(false)
+  const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
+  // The option a slash command asked for, focused in place of the search by that opening only.
+  const [requestedOptionId, setRequestedOptionId] = useState<string | null>(null)
+  if (props.request !== seenRequest) {
+    setSeenRequest(props.request)
+    if (props.request) {
+      setOpen(true)
+      setRequestedOptionId(props.request.id === model.id ? null : props.request.id)
+    }
   }
-  // Why: agent-picker opens the TUI; it is not a set of radio choices, and that picker owns focus.
-  if (descriptor.action?.type === 'agent-picker') {
-    return (
-      <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
-        {translate(
-          'components.native-chat.composer.chooseInAgentPicker',
-          'Choose in agent picker…'
-        )}
-      </DropdownMenuItem>
-    )
+  const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
+  const modelTitle = translate('components.native-chat.composer.model', 'Model')
+  const modelLabel = nativeChatModelPillLabel(model)
+  const modelName = pillAccessibleName(modelTitle, modelLabel)
+  const optionsTitle = nativeChatOptionsPillTitle(options)
+  const optionsLabel = nativeChatOptionValuesLabel(options)
+  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
+  const optionsReason =
+    options.length > 0 && options.every((descriptor) => !descriptor.settable)
+      ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
+      : null
+
+  // Different descriptors can save together; hold only a repeat of the same pick.
+  const set = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
+    if (pendingIds.has(descriptor.id)) {
+      return
+    }
+    focusReturn.notePick()
+    // Why: effort is the last thing set before typing, so its level closes the picker.
+    if (descriptor.id === 'effort') {
+      setOpen(false)
+    }
+    if (descriptor.kind.currentValue !== value) {
+      props.onSet(descriptor, value)
+    }
   }
-  // Why one switch row and not On/Off: the option is binary, so a single control
-  // carries it. The row owns the label, which is why the caller drops its header.
-  if (descriptor.kind.type === 'boolean') {
-    const checked = descriptor.kind.currentValue
-    const label = nativeChatSessionOptionLabel(descriptor)
-    return (
-      <DropdownMenuItem
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        disabled={!descriptor.settable || pending}
-        // Keep the menu open: the write is async and its result lands in this row.
-        onSelect={(event) => {
-          event.preventDefault()
-          setValue(!checked)
-        }}
-        className="justify-between gap-2"
-      >
-        <span>{label}</span>
-        <SwitchIndicator checked={checked} />
-      </DropdownMenuItem>
-    )
+  const act = (descriptor: SessionOptionDescriptor): void => {
+    if (pendingIds.has(descriptor.id)) {
+      return
+    }
+    // Why: agent-picker opens the TUI, and that picker owns focus.
+    if (descriptor.action?.type !== 'agent-picker') {
+      focusReturn.notePick()
+    }
+    setOpen(false)
+    props.onAction(descriptor)
   }
+
   return (
-    <DropdownMenuRadioGroup
-      aria-label={nativeChatSessionOptionLabel(descriptor)}
-      value={descriptor.kind.currentValue}
-      onValueChange={(value) => {
-        notePick()
-        setValue(value)
-      }}
-    >
-      {descriptor.kind.choices.map((choice) => (
-        <DropdownMenuRadioItem
-          key={choice.value}
-          value={choice.value}
-          disabled={!descriptor.settable || pending}
-        >
-          <NativeChatSessionOptionChoiceBody
-            label={nativeChatSessionChoiceLabel(choice, descriptor.id)}
-            description={choice.description}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PickerTrigger
+        modelLabel={modelLabel}
+        optionsLabel={optionsLabel}
+        accessibleName={
+          optionsLabel
+            ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel)}`
+            : modelName
+        }
+        disabled={props.isWorking}
+        disabledReason={modelReason ?? optionsReason}
+        dispatched={
+          sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)
+        }
+        triggerRef={focusReturn.triggerRef}
+        // Why: a popover trigger opens on Enter and Space only; a menu also takes ArrowDown.
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            setOpen(true)
+          }
+        }}
+      />
+      <PopoverContent
+        // Why end: the pill's label changes under an open picker; only its right edge stays put.
+        align="end"
+        side="top"
+        collisionPadding={8}
+        className="flex w-96 max-w-(--radix-popover-content-available-width) flex-col"
+        onOpenAutoFocus={(event) => {
+          const content = event.currentTarget
+          const optionId = requestedOptionId
+          setRequestedOptionId(null)
+          if (!optionId || !(content instanceof HTMLElement)) {
+            return
+          }
+          const row = content.querySelector(`[data-option-id="${CSS.escape(optionId)}"]`)
+          const control =
+            row?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled)') ??
+            row?.querySelector<HTMLElement>('button:not(:disabled)')
+          if (control) {
+            event.preventDefault()
+            control.focus()
+          }
+        }}
+        onInteractOutside={focusReturn.onInteractOutside}
+        onCloseAutoFocus={focusReturn.onCloseAutoFocus}
+        // Why: a focused level's tooltip is the top layer, so Radix hands it the first Escape and
+        // the picker would take a second. The search is left to Radix, which waits out an IME.
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) {
+            setOpen(false)
+          }
+        }}
+      >
+        {model.kind.type === 'select' && !model.action ? (
+          <NativeChatModelCombobox
+            choices={model.kind.choices}
+            currentValue={model.kind.currentValue}
+            readOnly={!model.settable}
+            readOnlyReason={modelReason}
+            busy={pendingIds.has(model.id)}
+            onSelect={(value) => set(model, value)}
           />
-        </DropdownMenuRadioItem>
-      ))}
-    </DropdownMenuRadioGroup>
+        ) : (
+          <NativeChatSessionOptionWriteGroup
+            busy={pendingIds.has(model.id)}
+            className="flex flex-col p-1"
+          >
+            {modelReason && !model.settable ? (
+              <div className="px-2 py-1 text-xs text-muted-foreground">{modelReason}</div>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={!model.settable}
+              className="w-full justify-start"
+              onClick={() => act(model)}
+            >
+              {nativeChatSessionOptionActionLabel(model)}
+            </Button>
+          </NativeChatSessionOptionWriteGroup>
+        )}
+        <NativeChatSessionOptionRows
+          options={options}
+          shownReason={model.settable ? null : modelReason}
+          pendingIds={pendingIds}
+          onSet={set}
+          onAction={act}
+        />
+      </PopoverContent>
+    </Popover>
   )
-}
-
-/** A host's error is words for its log, so it gets the table's; a local surface's error is
- *  already written for the person. */
-function optionUpdateFailureDescription(error: unknown): string {
-  if (error instanceof RuntimeRpcCallError) {
-    return agentSessionWriteFailureText(agentSessionThrownFailure(error, error.code), 'option')
-  }
-  return error instanceof Error ? error.message : String(error)
-}
-
-function runSurfaceCall(
-  pendingKey: string,
-  setPendingId: (id: string | null) => void,
-  call: () => Promise<unknown>
-): void {
-  setPendingId(pendingKey)
-  void call()
-    .catch((error) => {
-      toast.error(
-        translate('components.native-chat.composer.optionUpdateFailed', 'Could not update option'),
-        { description: optionUpdateFailureDescription(error) }
-      )
-    })
-    .finally(() => setPendingId(null))
 }
 
 function NativeChatSessionOptionPickersInner({
@@ -231,128 +292,53 @@ function NativeChatSessionOptionPickersInner({
   pickerRequest,
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
-  const [pendingId, setPendingId] = useState<string | null>(null)
-  const modelMenuFocus = useNativeChatPickerFocusReturn(focusComposer)
-  const optionsMenuFocus = useNativeChatPickerFocusReturn(focusComposer)
-  const model = snapshot.find((descriptor) => descriptor.category === 'model')
-  const options = sortNativeChatSessionOptions(snapshot)
-  if (!surface || !model) {
+  const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
+  // Why: the session holds a request across composer remounts; one left standing reopens the
+  // picker each time a prompt card gives the composer back. Dropped even when nothing could open.
+  useEffect(() => pickerRequest?.consume(), [pickerRequest])
+  const reportedModel = snapshot.find((descriptor) => descriptor.category === 'model')
+  if (!surface || !reportedModel) {
     return null
   }
-  const requestedModelSequence = pickerRequest?.id === model.id ? pickerRequest.sequence : null
-  const requestedOptionsSequence = options.some((descriptor) => descriptor.id === pickerRequest?.id)
-    ? (pickerRequest?.sequence ?? null)
-    : null
+  const model = withPendingValue(reportedModel, pending.get(reportedModel.id) ?? null)
+  const options = sortNativeChatSessionOptions(snapshot).map((descriptor) =>
+    withPendingValue(descriptor, pending.get(descriptor.id) ?? null)
+  )
 
-  const setOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
-    runSurfaceCall(descriptor.id, setPendingId, () => surface.setOption(descriptor.id, value))
+  const markPending = (id: string) => (pick: PendingPick | null) => {
+    setPending((current) => {
+      const next = new Map(current)
+      if (pick === null) {
+        next.delete(id)
+      } else {
+        next.set(id, pick)
+      }
+      return next
+    })
   }
-  const invokeAction = (descriptor: SessionOptionDescriptor): void => {
-    runSurfaceCall(descriptor.id, setPendingId, () => surface.invokeAction(descriptor.id))
-  }
-
-  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
-  const modelPickerKey = `model:${requestedModelSequence ?? 'idle'}`
-  // Read only when a request remounts the picker.
-  const modelPickerDefaultOpen = requestedModelSequence !== null
-  const modelTrigger = {
-    label: nativeChatModelPillLabel(model),
-    tooltipLabel: translate('components.native-chat.composer.model', 'Model'),
-    disabled: isWorking || pendingId !== null,
-    disabledReason: modelReason,
-    dispatched: sessionOptionDispatchUnconfirmed(model)
-  }
-  const optionsTooltip = nativeChatOptionsPillTitle(options)
-  const optionsReason =
-    options.length > 0 && options.every((descriptor) => !descriptor.settable)
-      ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
-      : null
 
   return (
-    <div className="flex min-w-0 items-center gap-0.5 text-chat-foreground-faint">
-      {model.kind.type === 'select' && !model.action ? (
-        <NativeChatModelCombobox
-          key={modelPickerKey}
-          defaultOpen={modelPickerDefaultOpen}
-          choices={model.kind.choices}
-          currentValue={model.kind.currentValue}
-          readOnly={!model.settable || pendingId !== null}
-          readOnlyReason={modelReason}
-          onSelect={(value) => setOption(model, value)}
-          focusComposer={focusComposer}
-          renderTrigger={(onKeyDown) => (
-            <PickerTrigger Trigger={PopoverTrigger} {...modelTrigger} onKeyDown={onKeyDown} />
-          )}
-        />
-      ) : (
-        <DropdownMenu key={modelPickerKey} defaultOpen={modelPickerDefaultOpen}>
-          <PickerTrigger Trigger={DropdownMenuTrigger} {...modelTrigger} />
-          <DropdownMenuContent
-            align="start"
-            side="top"
-            collisionPadding={8}
-            className="w-64"
-            onCloseAutoFocus={modelMenuFocus.onCloseAutoFocus}
-          >
-            {modelReason && !model.settable ? (
-              <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
-            ) : null}
-            <DescriptorMenuRows
-              descriptor={model}
-              pending={pendingId !== null}
-              setValue={(value) => setOption(model, value)}
-              invokeAction={() => invokeAction(model)}
-              notePick={modelMenuFocus.notePick}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      {options.length > 0 ? (
-        <DropdownMenu
-          key={`options:${requestedOptionsSequence ?? 'idle'}`}
-          defaultOpen={requestedOptionsSequence !== null}
-        >
-          <PickerTrigger
-            Trigger={DropdownMenuTrigger}
-            label={nativeChatOptionsPillLabel(options)}
-            tooltipLabel={optionsTooltip}
-            disabled={isWorking || pendingId !== null}
-            disabledReason={optionsReason}
-            dispatched={options.some(sessionOptionDispatchUnconfirmed)}
-          />
-          <DropdownMenuContent
-            align="start"
-            side="top"
-            collisionPadding={8}
-            className="w-60"
-            onCloseAutoFocus={optionsMenuFocus.onCloseAutoFocus}
-          >
-            {options.map((descriptor, index) => {
-              const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason)
-              return (
-                <div key={descriptor.id}>
-                  {index > 0 ? <DropdownMenuSeparator /> : null}
-                  {descriptor.kind.type === 'boolean' && !descriptor.action ? null : (
-                    <DropdownMenuLabel>
-                      {nativeChatSessionOptionLabel(descriptor)}
-                    </DropdownMenuLabel>
-                  )}
-                  {reason && !descriptor.settable ? (
-                    <DropdownMenuLabel className="font-normal">{reason}</DropdownMenuLabel>
-                  ) : null}
-                  <DescriptorMenuRows
-                    descriptor={descriptor}
-                    pending={pendingId !== null}
-                    setValue={(value) => setOption(descriptor, value)}
-                    invokeAction={() => invokeAction(descriptor)}
-                    notePick={optionsMenuFocus.notePick}
-                  />
-                </div>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
+    <div className="flex min-w-0 items-center text-chat-foreground-faint">
+      <SessionOptionPopover
+        model={model}
+        options={options}
+        isWorking={isWorking}
+        pendingIds={new Set(pending.keys())}
+        request={pickerRequest ?? null}
+        onSet={(descriptor, value) =>
+          runSessionOptionSurfaceCall(
+            { id: descriptor.id, value },
+            markPending(descriptor.id),
+            () => surface.setOption(descriptor.id, value)
+          )
+        }
+        onAction={(descriptor) =>
+          runSessionOptionSurfaceCall({ id: descriptor.id }, markPending(descriptor.id), () =>
+            surface.invokeAction(descriptor.id)
+          )
+        }
+        focusComposer={focusComposer}
+      />
     </div>
   )
 }

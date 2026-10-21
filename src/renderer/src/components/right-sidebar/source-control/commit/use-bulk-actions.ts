@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
@@ -9,7 +9,7 @@ import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   stageRuntimeGitWorktreeScope
-} from '@/runtime/runtime-git-client'
+} from '@/runtime/runtime-git-working-tree-client'
 import {
   getStageAllPaths,
   getUnstageAllPaths,

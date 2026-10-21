@@ -43,6 +43,7 @@ export type TextGenerationOperation =
   | 'commit-message'
   | 'pull-request-fields'
   | 'branch-name'
+  | 'jira-issue-summary'
   | 'conversation-name'
 
 export type CommitMessageGenerationTarget =

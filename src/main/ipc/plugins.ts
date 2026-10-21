@@ -69,7 +69,6 @@ const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
 // Why re-exported: moved to ../plugins/plugin-client-list so the runtime RPC can reach
 // it without ipcMain. Existing importers of this path keep working.
-export { listPluginsForClients } from '../plugins/plugin-client-list'
 import { listPluginsForClients } from '../plugins/plugin-client-list'
 
 export function canRemoveInstalledPlugin(

@@ -4,7 +4,7 @@ import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import { getLocalImageCacheKey, loadLocalImageAbsolutePath } from './useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { documentResourceAccess } from '@/lib/local-file-access'
 
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT = 64

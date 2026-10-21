@@ -3,7 +3,7 @@ import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
-import { abortRuntimeGitMerge, abortRuntimeGitRebase } from './runtime-git-client'
+import { abortRuntimeGitMerge, abortRuntimeGitRebase } from './runtime-git-sync-client'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitAbortMerge = vi.fn()

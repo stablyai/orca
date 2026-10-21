@@ -40,8 +40,8 @@ function acceptsCommands(scope: RichMarkdownEditorScope, generation: number): bo
 /**
  * The two commands that need a URL the document does not have.
  *
- * A promise because the answer is a dialog: inside the WebView that is `window.prompt`, and on a
- * page it is a modal the host renders, which cannot answer before it has been shown. The
+ * A promise because the answer is a modal the page renders, which cannot answer before it has been
+ * shown. The
  * difference matters — a modal is a task boundary, so while it is open the host can stop the
  * document, make it read-only or replace its content, and the answer comes back to a document
  * that is no longer the one the user was pointing at.

@@ -2,7 +2,7 @@
 // repo-slug-index.ts) so store slices can import the sync lookup without pulling
 // in repo-slug-index's `@/store` dependency, which would form an import cycle.
 import type { Repo } from '../../../shared/repo-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from './repo-runtime-owner'
 import {
   githubHostFromIdentityKey,

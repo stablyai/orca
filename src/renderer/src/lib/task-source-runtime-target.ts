@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /**
  * Transport to a row-less source's host; a source that names no server runs on this app. The

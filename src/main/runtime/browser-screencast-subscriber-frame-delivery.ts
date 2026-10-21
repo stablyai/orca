@@ -1,4 +1,4 @@
-import type { ActiveBrowserScreencastSubscriber } from './runtime-browser-commands-browser-command-target-params'
+import type { ActiveBrowserScreencastSubscriber } from './browser/browser-screencast-contracts'
 import { recordScreencastSubscriberSend } from './browser-screencast-ghost-subscriber-eviction'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 

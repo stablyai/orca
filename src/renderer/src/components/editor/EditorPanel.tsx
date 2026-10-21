@@ -23,7 +23,10 @@ import {
   selectEditorPanelGitStatusEntries
 } from './editor-panel-git-entry-selector'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
-import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
+import {
+  createCurrentEditorArtifactRequest,
+  editorArtifactContentType
+} from './editor-artifact-upload'
 import { useEditorPanelSave } from './useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
 
@@ -296,33 +299,38 @@ function EditorPanelInner({
     activeFile.mode === 'markdown-preview'
       ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
       : activeFile.id
-  let activeMarkdownContent: string | null = null
+  let activeDocumentContent: string | null = null
   if (activeFile.mode === 'markdown-preview') {
-    activeMarkdownContent =
+    activeDocumentContent =
       editorDrafts[markdownDocumentStateFileId] ?? fileContents[activeFile.id]?.content ?? null
   } else if (activeFile.mode === 'edit') {
-    activeMarkdownContent =
+    activeDocumentContent =
       editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
   }
   const canShowMarkdownFrontmatterToggle = Boolean(
     model.isMarkdown &&
     (activeFile.mode === 'markdown-preview' || model.mdViewMode !== 'source') &&
-    activeMarkdownContent &&
-    extractFrontMatter(activeMarkdownContent)
+    activeDocumentContent &&
+    extractFrontMatter(activeDocumentContent)
   )
   // Why: front-matter shows by default; the map only carries per-file hide overrides.
   const isMarkdownFrontmatterVisible =
     markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
   const isMarkdownTableOfContentsVisible =
     markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
-  const createActiveMarkdownArtifactRequest = () =>
-    Promise.resolve(
-      createCurrentMarkdownArtifactRequest(
-        activeFile,
-        markdownDocumentStateFileId,
-        activeMarkdownContent ?? ''
-      )
-    )
+  const artifactContentType = editorArtifactContentType(activeFile.filePath, model.isMarkdown)
+  const createActiveArtifactRequest =
+    activeDocumentContent === null || artifactContentType === null
+      ? undefined
+      : () =>
+          Promise.resolve(
+            createCurrentEditorArtifactRequest(
+              activeFile,
+              markdownDocumentStateFileId,
+              activeDocumentContent ?? '',
+              artifactContentType
+            )
+          )
 
   return (
     <EditorCommandOwnerContext value={isCmdSaveOwner}>
@@ -367,9 +375,7 @@ function EditorPanelInner({
           onExportMarkdownToPdf={() =>
             void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
           }
-          createMarkdownArtifactRequest={
-            activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
-          }
+          createArtifactRequest={createActiveArtifactRequest}
           onContentChange={handleContentChange}
           onContentChangeForFile={handleContentChangeForFile}
           onDirtyStateHint={handleDirtyStateHint}

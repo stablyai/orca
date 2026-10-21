@@ -8,7 +8,7 @@ const { readSession, configuration } = vi.hoisted(() => ({
   configuration: { configured: true }
 }))
 
-vi.mock('./profile-cloud-session-store', () => ({ readOrcaCloudSession: readSession }))
+vi.mock('./profile-cloud-session-owner', () => ({ readCloudSession: readSession }))
 vi.mock('./profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => configuration,
   isOrcaCloudDevAuthEnabled: () => false

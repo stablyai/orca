@@ -3,24 +3,6 @@ import { useAppStore } from '../store'
 import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 import { useLocalStructuredChatsInUse } from './local-structured-chats'
 
-export {
-  isCurrentLocalStructuredSessionGeneration,
-  localStructuredSessionGeneration,
-  resetLocalStructuredSessionVersionForTests
-} from './local-structured-session-tabs-sync/inventory-generation-fence'
-export {
-  refreshLocalStructuredSessionTabs,
-  refreshLocalStructuredSessionWorktreeTabs,
-  restoreLocalStructuredSessionTabsOnce
-} from './local-structured-session-tabs-sync/inventory-refresh'
-export {
-  applyLocalStructuredSessionTabSnapshots,
-  applyStructuredSessionTabSnapshots
-} from './local-structured-session-tabs-sync/snapshot-apply'
-export { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-export { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
-export { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
-
 /** Mirrors this machine's structured chats whenever they can exist, whatever the chat setting says:
  *  the setting picks what new agents open as, and chats that already exist keep showing. */
 export function useLocalStructuredSessionTabsSync(): void {

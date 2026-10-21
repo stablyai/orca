@@ -18,6 +18,13 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { useAppStore } from '@/store'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initial = useAppStore.getState()
 
 function worktree(name: string, host: 'paired' | 'local' = 'paired'): Worktree {

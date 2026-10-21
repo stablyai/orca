@@ -29,11 +29,12 @@ import {
   getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 type EditorFileTabContextMenuProps = {
   open: boolean
@@ -60,6 +61,7 @@ type EditorFileTabContextMenuProps = {
   onCloseAll: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onOpenMarkdownPreview: (
     file: {
       filePath: string
@@ -97,6 +99,7 @@ export function EditorFileTabContextMenu({
   onCloseAll,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
@@ -108,7 +111,7 @@ export function EditorFileTabContextMenu({
       runtimeEnvironmentId: file.runtimeEnvironmentId
     })
   )
-  const revealBlocked = isLocalPathOpenBlocked(revealOwner)
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -183,16 +186,17 @@ export function EditorFileTabContextMenu({
           <PanelRightClose className="size-3.5" />
           {translate(
             'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
-            'Close Tabs To The Right'
+            'Close All Tabs To The Right'
           )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
           <PanelLeftClose className="size-3.5" />
           {translate(
             'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
-            'Close Tabs To The Left'
+            'Close All Tabs To The Left'
           )}
         </DropdownMenuItem>
+        <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
         {isVirtualEditorFile(file) ? null : <DropdownMenuSeparator />}
         {canShowMarkdownPreview ? (
           <>

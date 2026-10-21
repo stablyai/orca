@@ -10,7 +10,7 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from './rich-markdown-image-context'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 type RichMarkdownProgrammaticSyncOptions = {

@@ -85,7 +85,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       unreadTerminalPanes: { [targetPaneKey]: true, [siblingPaneKey]: true },
       unreadAgentCompletionPanes: { [targetPaneKey]: true, [siblingPaneKey]: true },
       lastTerminalInputAtByPaneKey: { [targetPaneKey]: 1000, [siblingPaneKey]: 1100 },
-      pendingSetupSplitByTabId: { 'tab-1': { command: 'setup', direction: 'horizontal' } },
       pendingIssueCommandSplitByTabId: { 'tab-1': { command: 'issue' } }
     })
     store.setState({ dropAgentStatusByWorktree: dropByWorktree as never })
@@ -152,7 +151,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(state.unreadAgentCompletionPanes[siblingPaneKey]).toBe(true)
     expect(state.lastTerminalInputAtByPaneKey[targetPaneKey]).toBeUndefined()
     expect(state.lastTerminalInputAtByPaneKey[siblingPaneKey]).toBe(1100)
-    expect(state.pendingSetupSplitByTabId['tab-1']).toBeDefined()
     expect(state.pendingIssueCommandSplitByTabId['tab-1']).toBeDefined()
     expect(dropByWorktree).not.toHaveBeenCalled()
   })

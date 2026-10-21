@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getHasAnyWorktreesFromState } from '@/store/selectors'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   mergeWorkspacePortScans,
   WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY,
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
-import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
@@ -55,7 +55,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
   const scanTargets = useMemo(
     () =>
       buildExecutionHostRegistry({ repos, settings })
-        .map((host) => runtimeTargetForExecutionHostId(host.id))
+        .map((host) => runtimeRpcTargetForAuthorityKey(host.id))
         .filter((target): target is NonNullable<typeof target> => target !== null),
     [repos, settings]
   )

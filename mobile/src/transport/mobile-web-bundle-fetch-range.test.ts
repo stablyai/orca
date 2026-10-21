@@ -7,6 +7,15 @@ import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 
+// Hashed before it resolves, as the native module's synchronous digest is.
+vi.mock('expo-crypto', async () => {
+  const { sha256: hash } = await import('@noble/hashes/sha256')
+  return {
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    digest: async (_algorithm: string, data: Uint8Array) => hash(data).buffer
+  }
+})
+
 /** The grids this fake host names on its manifest reply. The phone pages whatever grid the host
  *  names, so a few KiB exercises the same shapes as the real 384 KiB range and 48 KiB chunk; the
  *  desktop suite pins that the real host names `MOBILE_WEB_BUNDLE_RANGE_BYTES`. */

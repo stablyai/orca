@@ -73,14 +73,13 @@ const SKILL_DOCUMENT = {
   ]
 }
 
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
 beforeEach(() => {
   localStorage.clear()
   storage = createMemoryNativeChatComposerDraftStorage()
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   for (const renderer of loaded.splice(0)) {
     renderer.store.clearNativeChatComposerDraftsForTests()
@@ -93,9 +92,10 @@ describe('the editor and the draft store', () => {
     const renderer = await open({ hydrate: false })
     const { stopSync, input } = await mountEditor(renderer)
     const write = vi.spyOn(storage, 'write')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
     await act(async () => renderer.store.hydrateNativeChatComposerDrafts())
-    await act(async () => pause(400))
+    await act(async () => vi.advanceTimersByTimeAsync(400))
     await renderer.store.nativeChatComposerDraftWritesSettled()
     stopSync()
     expect(input().value).toBe('saved before the restart')
@@ -112,18 +112,19 @@ describe('the editor and the draft store', () => {
     )
     // A mention accepted: the composer writes the text, then the field sets it on the editor.
     const next = '$review this @src/a.ts '
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     act(() => {
       renderer.drafts.writeNativeChatDraftCache(SCOPE, next)
       first.input().value = next
     })
-    await act(async () => pause(400))
+    await act(async () => vi.advanceTimersByTimeAsync(400))
     await renderer.store.nativeChatComposerDraftWritesSettled()
     expect(JSON.stringify(storage.drafts.get(SCOPE)?.document ?? null)).toContain('nativeChatSkill')
 
     first.stopSync()
     first.unmount()
     const second = await mountEditor(renderer)
-    await pause(50)
+    await act(async () => vi.advanceTimersByTimeAsync(50))
     second.stopSync()
     expect(window.document.querySelector('[data-native-chat-skill]')).not.toBeNull()
   })
@@ -138,11 +139,15 @@ describe('the editor and the draft store', () => {
       await vi.waitFor(() => expect(receiving.drafts.readNativeChatDraftCache(SCOPE)).toBe('hello'))
     })
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     sending.drafts.writeNativeChatDraftCache(SCOPE, '')
     await sending.store.nativeChatComposerDraftWritesSettled()
-    await act(async () => pause(600))
+    await act(async () => {
+      await vi.waitFor(() => expect(receiving.drafts.readNativeChatDraftCache(SCOPE)).toBe(''))
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(600))
     await receiving.store.nativeChatComposerDraftWritesSettled()
-    await act(async () => pause(50))
+    await act(async () => vi.advanceTimersByTimeAsync(50))
     stopSync()
 
     expect(storage.drafts.has(SCOPE)).toBe(false)

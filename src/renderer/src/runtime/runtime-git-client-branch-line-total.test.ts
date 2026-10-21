@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getRuntimeGitStatus } from './runtime-git-client'
+import { getRuntimeGitStatus } from './runtime-git-status-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

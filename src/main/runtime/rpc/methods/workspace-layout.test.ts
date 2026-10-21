@@ -1,28 +1,36 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { WorkspaceLayoutEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { ALL_RPC_METHODS } from './index'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+
+const paired = vi.hoisted(() => ({ ids: ['one', 'two'] }))
+vi.mock('../../../../shared/runtime-environment-store', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listEnvironments: () => paired.ids.map((id) => ({ id }))
+}))
 
 const methods = eraseRpcMethods(ALL_RPC_METHODS)
 const subscribe = methods.find((method) => method.name === 'layout.subscribe')
 const unsubscribeMethod = methods.find((method) => method.name === 'layout.unsubscribe')
 const getRemoteSnapshots = methods.find((method) => method.name === 'layout.getRemoteSnapshots')
 
-function harness() {
+function harness(epoch?: string) {
   const cleanups = new Map<string, () => void>()
-  let publish: (event: WorkspaceLayoutEvent) => void = () => {}
+  let publish: (event: WorkspaceLayoutStreamEvent) => void = () => {}
   const unsubscribe = vi.fn()
   const fake = {
-    subscribeWorkspaceLayouts: (listener: (event: WorkspaceLayoutEvent) => void) => {
+    subscribeWorkspaceLayouts: (listener: (event: WorkspaceLayoutStreamEvent) => void) => {
       publish = listener
       return {
         snapshot: [
           { key: 'a', layout: { worktreeId: 'a' } },
           { key: 'b', layout: { worktreeId: 'b' } }
         ],
+        seq: 4,
+        ...(epoch ? { epoch } : {}),
         unsubscribe
       }
     },
@@ -35,7 +43,7 @@ function harness() {
     runtime,
     cleanups,
     unsubscribe,
-    publish: (event: WorkspaceLayoutEvent) => publish(event)
+    publish: (event: WorkspaceLayoutStreamEvent) => publish(event)
   }
 }
 
@@ -63,15 +71,42 @@ describe('layout.subscribe', () => {
       {
         type: 'snapshot',
         subscriptionId: expect.any(String),
-        workspaces: [{ key: 'b', layout: { worktreeId: 'b' } }]
+        workspaces: [{ key: 'b', layout: { worktreeId: 'b' } }],
+        seq: 4
       }
     ])
-    publish({ type: 'removed', key: 'a' })
-    publish({ type: 'removed', key: 'b' })
+    publish({ type: 'removed', key: 'a', seq: 5 })
+    publish({ type: 'removed', key: 'b', seq: 6 })
     runtime.cleanupSubscription(cleanupKey!)
     await done
-    expect(emitted.slice(1)).toEqual([{ type: 'removed', key: 'b' }, { type: 'end' }])
+    expect(emitted.slice(1)).toEqual([{ type: 'removed', key: 'b', seq: 6 }, { type: 'end' }])
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends each records frame with only the named workspaces, an empty one too', async () => {
+    const { runtime, cleanups, publish } = harness('epoch-1')
+    const emitted: unknown[] = []
+    if (!subscribe || !isStreamingMethod(subscribe)) {
+      throw new Error('layout.subscribe is not a streaming method')
+    }
+    const done = subscribe.handler(
+      { workspaces: ['b'] },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime and connectionId from its context.
+      { runtime, connectionId: 'conn-1' } as RpcContext,
+      (event) => emitted.push(event)
+    )
+    const removed = (key: string) => ({ key, change: 'removed' as const })
+    publish({ type: 'records', epoch: 'epoch-1', seq: 5, workspaces: [removed('a'), removed('b')] })
+    // Sent though it names none of them, so the subscriber's positions stay gapless.
+    publish({ type: 'records', epoch: 'epoch-1', seq: 6, workspaces: [removed('a')] })
+    runtime.cleanupSubscription([...cleanups.keys()][0]!)
+    await done
+    expect(emitted).toEqual([
+      expect.objectContaining({ type: 'snapshot', seq: 4, epoch: 'epoch-1' }),
+      { type: 'records', epoch: 'epoch-1', seq: 5, workspaces: [removed('b')] },
+      { type: 'records', epoch: 'epoch-1', seq: 6, workspaces: [] },
+      { type: 'end' }
+    ])
   })
 
   it('ends a subscription only for the connection that opened it', async () => {
@@ -133,5 +168,11 @@ describe('layout.getRemoteSnapshots', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime from its context.
     const result = await getRemoteSnapshots.handler(undefined, { runtime } as RpcContext)
     expect(result).toEqual({ snapshots })
+
+    // A server unpaired since its snapshot was stored seeds nothing.
+    paired.ids = ['two']
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime from its context.
+    const afterRemoval = await getRemoteSnapshots.handler(undefined, { runtime } as RpcContext)
+    expect(afterRemoval).toEqual({ snapshots: { two: snapshots.two } })
   })
 })

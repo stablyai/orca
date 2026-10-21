@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   shouldClearChecksPanelGitStatusSnapshot,

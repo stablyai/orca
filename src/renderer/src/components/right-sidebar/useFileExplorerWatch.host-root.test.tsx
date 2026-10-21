@@ -19,7 +19,7 @@ vi.mock('./file-explorer-operation-owner', () => {
     getFileExplorerOperationOwnerFromState: () => owner
   }
 })
-vi.mock('@/runtime/runtime-file-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
 const refreshDir = vi.fn(async () => {})
 const refreshTree = vi.fn(async () => 'refreshed' as const)
@@ -64,7 +64,7 @@ it('refreshes the selected host Explorer when another host publishes the same wo
   })
   const [target] = targets
   const adapter = buildEditorExternalWatchEventHandler((worktreePath, runtimeEnvironmentId) =>
-    targets.find(
+    targets.filter(
       (candidate) =>
         candidate.worktreePath === worktreePath &&
         candidate.runtimeEnvironmentId === runtimeEnvironmentId

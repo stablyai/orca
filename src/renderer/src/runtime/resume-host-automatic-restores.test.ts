@@ -5,7 +5,10 @@ const { callRuntimeRpc, runtimeEnvironmentSupportsCapability } = vi.hoisted(() =
   runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc, runtimeEnvironmentSupportsCapability }))
+vi.mock('./runtime-rpc-client', () => ({
+  callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability
+}))
 
 import {
   canResumeHostAutomaticRestores,

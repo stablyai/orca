@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { QuickSubmitOptions } from './quick-creation-request'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorkspaceIntentName } from '../../../../shared/workspace-name'
@@ -46,7 +47,8 @@ export type ComposerSubmitModel = {
     requestedAgent: TuiAgent | null,
     workspaceNameSeed: string,
     workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
-    repoId: string
+    repoId: string,
+    options?: QuickSubmitOptions
   ) => Promise<void>
   prepareQuickSubmit: (
     resolution: PendingSmartGitHubSubmitResolution,
@@ -59,6 +61,6 @@ export type ComposerSubmitModel = {
     workspaceNameSeed: string
   ) => QuickSubmitSource | null
   resetForNextCreate: () => void
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  submitQuick: (agent: TuiAgent | null, options?: QuickSubmitOptions) => Promise<void>
   submitFolderTarget: (requestedAgent: TuiAgent | null) => Promise<void>
 }

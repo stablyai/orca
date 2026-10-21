@@ -39,7 +39,7 @@ import {
   getLinkedItemDisplayName
 } from '@/components/sidebar/folder-workspace-composer-helpers'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import { getForkPushWarning } from '../fork-push-warning'
@@ -136,7 +136,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       const resolvePrBase = resolveGitHubPrStartPointForRepo({
         repoId: runRepo.id,
         prNumber: identity.number,
-        target: runtimeTargetForOwnerHostId(getRepoExecutionHostId(runRepo)),
+        target: ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(runRepo)),
         ...(normalizedItem.branchName ? { headRefName: normalizedItem.branchName } : {}),
         ...(normalizedItem.baseRefName ? { baseRefName: normalizedItem.baseRefName } : {}),
         ...(normalizedItem.isCrossRepository !== undefined

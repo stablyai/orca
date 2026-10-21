@@ -1,23 +1,23 @@
 /**
- * Detached executor for accepted Codex account-switch restarts.
+ * Detached executor for accepted account-switch restarts (Codex and Claude).
  *
  * Why: queued restarts used to execute only inside mounted TerminalPane
  * instances, so accepting the prompt stranded every unmounted pane — prompt
  * gone, keyboard blocked, Codex still running under the old account until the
- * tab was next revealed. This driver watches pendingCodexPaneRestartIds and
+ * tab was next revealed. This driver watches pendingPaneAccountRestarts and
  * kill-and-respawns any pane no mounted transport claims, rebinding the store
  * so a later mount reattaches to the replacement PTY like a restored session.
  */
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
+import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
+import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -25,9 +25,10 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { ptyDataHandlers, unregisterPtyDataHandlers } from './pty-dispatcher'
-import { collectLeafIds } from './terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { disposeParkedTerminalWatchersForPtyIds } from './terminal-parked-watcher-registry'
+import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 
 const inFlightPtyIds = new Set<string>()
 
@@ -36,7 +37,7 @@ export function resetDetachedCodexPaneRestartClaimsForTests(): void {
 }
 
 export async function sweepUnclaimedCodexPaneRestarts(): Promise<void> {
-  for (const ptyId of Object.keys(useAppStore.getState().pendingCodexPaneRestartIds)) {
+  for (const ptyId of Object.keys(useAppStore.getState().pendingPaneAccountRestarts)) {
     await sweepUnclaimedCodexPaneRestart(ptyId)
   }
 }
@@ -63,7 +64,7 @@ async function sweepUnclaimedCodexPaneRestart(ptyId: string): Promise<void> {
       // wake migrates it onto the respawned PTY — taking it here would lose
       // that restart. Only a notice still muting input forces a resolution.
       if (state.codexRestartNoticeByPtyId[ptyId]) {
-        if (state.consumePendingCodexPaneRestart(ptyId)) {
+        if (state.consumePendingPaneAccountRestart(ptyId)) {
           state.clearCodexRestartNotice(ptyId)
         }
       }
@@ -75,12 +76,21 @@ async function sweepUnclaimedCodexPaneRestart(ptyId: string): Promise<void> {
     if (hasRegisteredRuntimeTerminalTab(located.tab.id, located.worktreeId)) {
       return
     }
-    if (!useAppStore.getState().consumePendingCodexPaneRestart(ptyId)) {
+    // Why: a Claude restart waits out the turn; the scheduler re-sweeps on status changes.
+    if (
+      state.pendingPaneAccountRestarts[ptyId] === 'claude' &&
+      located.leafId &&
+      isClaudePaneMidTurn(state, makePaneKey(located.tab.id, located.leafId))
+    ) {
+      return
+    }
+    const agent = useAppStore.getState().consumePendingPaneAccountRestart(ptyId)
+    if (!agent) {
       return
     }
     inFlightPtyIds.add(ptyId)
     claimed = true
-    await executeDetachedCodexPaneRestart(located, ptyId)
+    await executeDetachedCodexPaneRestart(located, ptyId, agent)
   } catch (err) {
     console.warn('[codex-restart] detached pane restart failed:', err)
     // Why: one malformed claim must not abort later panes or leave this one with
@@ -127,45 +137,17 @@ function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | nul
   return null
 }
 
-function getWorkspacePath(state: AppState, worktreeId: string): string | null {
-  const parsed = parseWorkspaceKey(worktreeId)
-  return parsed?.type === 'folder'
-    ? (state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null)
-    : (getWorktreeMapFromState(state).get(worktreeId)?.path ?? null)
-}
-
-function buildPaneIdentityEnv(
-  state: AppState,
-  worktreeId: string,
-  tabId: string,
-  leafId: string
-): Record<string, string> {
-  const parsed = parseWorkspaceKey(worktreeId)
-  const folderWorkspace =
-    parsed?.type === 'folder'
-      ? state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
-      : null
-  return {
-    ORCA_WORKSPACE_ID: worktreeId,
-    ...(folderWorkspace
-      ? {
-          ORCA_PROJECT_GROUP_ID: folderWorkspace.projectGroupId,
-          ORCA_WORKSPACE_ROOT: folderWorkspace.folderPath
-        }
-      : {}),
-    ORCA_PANE_KEY: makePaneKey(tabId, leafId),
-    ORCA_TAB_ID: tabId,
-    ORCA_WORKTREE_ID: worktreeId
-  }
-}
-
 async function executeDetachedCodexPaneRestart(
   located: LocatedCodexPane,
-  ptyId: string
+  ptyId: string,
+  agent: AccountRestartAgent
 ): Promise<void> {
   const state = useAppStore.getState()
   if (!located.leafId) {
+    // Why: Claude cannot resume without a leaf's session, and a fresh Claude would lose the conversation.
+    if (agent === 'claude') {
+      return
+    }
     // Why: without a usable layout leaf the replacement cannot be bound in
     // place, so kill now and let the tab's next mount run the Codex startup.
     if (!isLocatedCodexPaneCurrent(state, located, ptyId)) {
@@ -182,12 +164,15 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   const { worktreeId, tab, leafId } = located
-  const startup = buildCodexAccountRestartStartup({
+  const startup = buildPaneAccountRestartStartup(agent, {
     worktreeId,
     tabId: tab.id,
     leafId,
     shellOverride: tab.shellOverride
   })
+  if (!startup) {
+    return
+  }
 
   const workspacePath = getWorkspacePath(state, worktreeId)
   const cwd = tab.startupCwd ?? workspacePath ?? undefined
@@ -207,7 +192,7 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   if (hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) || ptyDataHandlers.has(ptyId)) {
-    currentState.queueCodexPaneRestarts([ptyId])
+    currentState.queuePaneAccountRestarts([ptyId], agent)
     return
   }
 

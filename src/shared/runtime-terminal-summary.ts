@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from './execution-host'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalAgent } from './terminal-agent'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -19,6 +20,8 @@ export type RuntimeTerminalSummary = {
   tabId: string
   leafId: string
   title: string | null
+  /** A user's name for this pane from the host's saved layout; absent when unset or the host predates it. */
+  paneTitle?: string
   connected: boolean
   writable: boolean
   lastOutputAt: number | null
@@ -31,4 +34,9 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /**
+   * The execution host's word on the pane's terminal. Read this, not `connected`: `connected`
+   * keeps its old meaning, so an unreachable host reads connected. Absent from older hosts.
+   */
+  verdict?: PtyLivenessVerdict['status']
 }

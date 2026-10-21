@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -139,7 +142,8 @@ describe('attach', () => {
           origin: 'created',
           mintedAtFence: fence + 1,
           observedAt: NOW
-        }
+        },
+        acquisitionGeneration: 'generation-stale'
       }))
       .mockImplementation(async ({ fence, spawnToken }) => ({
         process: {
@@ -154,7 +158,8 @@ describe('attach', () => {
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW
-        }
+        },
+        acquisitionGeneration: `generation-${fence}`
       }))
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
@@ -237,33 +242,47 @@ describe('attach', () => {
 })
 
 describe('cancel', () => {
-  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+  /** The provider's turn row: a Stop naming a turn the journal never showed is late, a no-op. */
+  async function runningTurn(): Promise<void> {
     await attach()
+    acquire.mock.calls
+      .at(-1)![0]
+      .events!.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+        { kind: 'turn', turnId: 'turn-1', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    await host.flushStreamedEvents(SESSION)
+  }
+
+  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+    await runningTurn()
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.items[0]?.body).toMatchObject({
+    const note = page.ok ? page.page.items.find((item) => item.body.kind === 'status') : undefined
+    expect(note?.body).toMatchObject({
       kind: 'status',
       text: 'Cancellation requested.'
     })
-    expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
+    expect(JSON.stringify(note?.body)).not.toContain('turn-1')
   })
 
-  it('reports an unconfirmed cancellation rather than failing the call', async () => {
-    await attach()
+  it('ends the child when the turn runs on after an unanswered interrupt', async () => {
+    await runningTurn()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
-    expect(result).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
   })
 
   it('never interrupts twice on a replay', async () => {
-    await attach()
+    await runningTurn()
     const params = {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
@@ -328,7 +347,7 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
+  it('answers a strict prompt interruption that throws once saved from its receipt, the same on a retry, and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
@@ -341,24 +360,20 @@ describe('cancel', () => {
       ...fields
     }
 
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('interrupt receipt lost')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
+    // Saved before the interrupt, which then threw: the answer is its receipt, never rewritten, and
+    // the retry is answered from it without reaching the provider again. The card stays pending,
+    // and its turn says the cancellation was not confirmed.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const answered = await host.cancel(CALLER, params)
+    expect(answered).toMatchObject({ ok: true })
+    expect(await host.cancel(CALLER, params)).toEqual({ ...answered, replayed: true })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
-    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
-      ok: true,
-      page: {
-        items: [
-          expect.objectContaining({
-            body: expect.objectContaining({
-              resolution: expect.objectContaining({ state: 'pending' })
-            })
-          })
-        ]
-      }
-    })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    const bodies = page.ok ? page.page.items.map((item) => item.body) : []
+    expect(bodies).toEqual([
+      expect.objectContaining({ resolution: expect.objectContaining({ state: 'pending' }) }),
+      expect.objectContaining({ kind: 'status', text: 'Cancellation was not confirmed.' })
+    ])
   })
 })
 
@@ -517,7 +532,7 @@ describe('respondToPrompt', () => {
 })
 
 describe('setOption', () => {
-  it('goes to the provider and writes nothing to the journal', async () => {
+  it('saves a next-message pick without changing the provider', async () => {
     await attach()
     setOption.mockResolvedValueOnce({ model: 'gpt-5', effort: 'high' })
     const fields = { key: 'model', value: 'gpt-5' }
@@ -528,20 +543,20 @@ describe('setOption', () => {
     const result = await host.setOption(CALLER, params)
     expect(result).toMatchObject({
       ok: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
+      value: { ...fields, options: { model: 'gpt-5' } }
     })
     expect(await host.setOption(CALLER, params)).toMatchObject({
       ok: true,
       replayed: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
+      value: { ...fields, options: { model: 'gpt-5' } }
     })
-    expect(setOption).toHaveBeenCalledTimes(1)
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
+    expect(setOption).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5' })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(0)
   })
 
-  it('does not turn an unknown provider outcome into a successful replay', async () => {
+  it('replays the accepted pick without contacting the provider', async () => {
     await attach()
     setOption.mockRejectedValueOnce(new Error('reply lost'))
     const fields = { key: 'model', value: 'gpt-5' }
@@ -550,12 +565,12 @@ describe('setOption', () => {
       ...fields
     }
 
-    await expect(host.setOption(CALLER, params)).rejects.toThrow('reply lost')
+    expect(await host.setOption(CALLER, params)).toMatchObject({ ok: true })
     expect(await host.setOption(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
+      ok: true,
+      replayed: true
     })
-    expect(setOption).toHaveBeenCalledTimes(1)
+    expect(setOption).not.toHaveBeenCalled()
   })
 })
 
@@ -615,8 +630,15 @@ describe('restart', () => {
     await reboot(async () => ({ outcome: 'indeterminate', reason: 'read does not need ownership' }))
     acquire.mockClear()
     const listRecords = vi.spyOn(store, 'listRecords')
+    // A list already on the stream hears of a chat restored without a child only from the restore.
+    const listed: AgentSessionStatusEvent[] = []
+    host.subscribeStatus({ id: 'session-list', emit: (event) => listed.push(event) })
 
     await host.restoreReadableSessions()
+    expect(listed.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
+    })
     const restoreReads = listRecords.mock.calls.length
     await host.restoreReadableSessions()
 
@@ -856,6 +878,7 @@ describe('subscribe', () => {
     if (!replacement.ok) {
       throw new Error(`expected replacement owner, got ${replacement.refusal.code}`)
     }
-    expect(events.at(-1)).toMatchObject({ type: 'snapshot', fence: replacement.fence })
+    expect(events.findLast((event) => event.type === 'snapshot')?.fence).toBe(replacement.fence)
+    expect(events.at(-1)).toMatchObject({ fence: replacement.fence })
   })
 })

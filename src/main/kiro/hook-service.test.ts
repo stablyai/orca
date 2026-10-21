@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
 import { isPlainObject } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
@@ -232,6 +233,25 @@ describe('KiroHookService', () => {
     expect(result.detail).toContain('gone.json is could not be read')
     expect(result.detail).not.toContain('not valid JSON')
     expect(readAgent('kept').hooks).toBeDefined()
+  })
+
+  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under Kiro's shells.
+  it('registers the Windows batch hook command for every event', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      writeAgent('mine', { name: 'mine' })
+      expect(new KiroHookService().install().state).toBe('installed')
+      const hooks = readAgent('mine').hooks
+      if (!isPlainObject(hooks)) {
+        throw new Error('Expected hooks object')
+      }
+      const command = wrapWindowsBatchHookCommand(scriptPath())
+      for (const event of KIRO_HOOK_EVENTS) {
+        expect(hooks[event]).toEqual([expect.objectContaining({ command })])
+      }
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('ignores non-JSON files such as the shipped example config', () => {

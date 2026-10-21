@@ -217,6 +217,11 @@ function startPageDocument(
     // `stopHostNotify` takes it off with everything else.
     installErrorReporter: (report) => {
       const errorListener = (event: ErrorEvent) => {
+        // The window is the whole app's: a browser notice with no error behind it (a ResizeObserver
+        // loop elsewhere on the page) is not this terminal failing, and before ready it is fatal.
+        if (!event.error) {
+          return
+        }
         report(event.message, event.filename, event.lineno, event.colno, event.error)
       }
       window.addEventListener('error', errorListener)

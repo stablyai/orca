@@ -4,13 +4,13 @@ import type {
   RuntimeMobileSessionTabMoveResult
 } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   clearWebSessionReorderIntent,
   recordWebSessionReorderIntent
 } from './web-session-reorder-intent'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -46,7 +46,7 @@ export async function moveWebRuntimeSessionTab(
 
   try {
     const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
-      await import('./web-session-tabs-sync')
+      await import('./web-session-tabs-sync/tracking-mappings')
     const state = useAppStore.getState()
     const groups = state.groupsByWorktree?.[args.worktreeId] ?? []
     const targetGroup = groups.find((group) => group.id === args.targetGroupId)

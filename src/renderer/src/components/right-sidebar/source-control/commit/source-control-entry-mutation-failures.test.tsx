@@ -22,7 +22,7 @@ vi.mock('@/components/editor/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   requestEditorSaveQuiesce: vi.fn(async () => {})
 }))
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
   stageRuntimeGitPath: (...args: unknown[]) => mocks.stagePath(...args),
   unstageRuntimeGitPath: (...args: unknown[]) => mocks.unstagePath(...args),
   discardRuntimeGitPath: (...args: unknown[]) => mocks.discardPath(...args),

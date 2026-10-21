@@ -27,7 +27,7 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from './rich-markdown-image-context'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'

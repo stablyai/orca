@@ -1,3 +1,4 @@
+import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
 type NotificationStatusTranslator = (key: string, fallback: string) => string
@@ -7,22 +8,6 @@ const englishNotificationStatus: NotificationStatusTranslator = (_key, fallback)
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
 const NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH = 80
 const NOTIFICATION_BODY_PREVIEW_MAX_LENGTH = 180
-
-const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
-  claude: 'Claude',
-  openclaude: 'OpenClaude',
-  codex: 'Codex',
-  gemini: 'Gemini',
-  antigravity: 'Antigravity',
-  opencode: 'OpenCode',
-  cursor: 'Cursor',
-  aider: 'Aider',
-  pi: 'Pi',
-  omp: 'OMP',
-  droid: 'Droid',
-  grok: 'Grok',
-  hermes: 'Hermes'
-}
 
 export function buildNotificationOptions(
   args: NotificationDispatchRequest,
@@ -177,11 +162,9 @@ function buildAgentTaskCompleteFallbackBody(args: NotificationDispatchRequest): 
 }
 
 function formatNotificationAgentLabel(agentType: string | null | undefined): string {
-  const normalized = normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH)
-  if (!normalized || normalized === 'unknown') {
-    return 'Agent'
-  }
-  return AGENT_TYPE_LABELS[normalized] ?? normalized
+  return formatAgentTypeLabel(
+    normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH)
+  )
 }
 
 function normalizeNotificationText(value: string | null | undefined, maxLength: number): string {

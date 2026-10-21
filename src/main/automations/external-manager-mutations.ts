@@ -1,20 +1,16 @@
 import type {
   ExternalAutomationAction,
   ExternalAutomationActionInput,
-  ExternalAutomationCreateInput,
-  ExternalAutomationProvider,
-  ExternalAutomationUpdateInput
+  ExternalAutomationProvider
 } from '../../shared/automations-types'
 import { assertExternalAutomationJobId } from './external-manager-job-id'
 import { runLocalAutomationCommand } from './external-manager-local-command'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
-import { clearHermesCronOutputRunCountCache } from './hermes-cron-output'
 
 const PROVIDER_ACTION_COMMANDS: Record<
   ExternalAutomationProvider,
   Record<ExternalAutomationAction, string>
 > = {
-  hermes: { pause: 'pause', resume: 'resume', run: 'run', delete: 'remove' },
   openclaw: { pause: 'disable', resume: 'enable', run: 'run', delete: 'rm' }
 }
 
@@ -33,76 +29,6 @@ function providerActionCommand(
   return command
 }
 
-function normalizeHermesCronMutationInput(input: ExternalAutomationCreateInput): {
-  name: string
-  prompt: string
-  schedule: string
-  workdir: string | null
-} {
-  if (input.provider !== 'hermes') {
-    throw new Error('Only Hermes cron creation and editing are supported.')
-  }
-  const name = input.name.trim()
-  const prompt = input.prompt.trim()
-  const schedule = input.schedule.trim()
-  const workdir = input.workdir?.trim() || null
-  if (!prompt) {
-    throw new Error('Hermes cron requires a prompt.')
-  }
-  if (!schedule) {
-    throw new Error('Hermes cron requires a schedule.')
-  }
-  return {
-    name: name || prompt.slice(0, 50).trim() || 'Hermes cron',
-    prompt,
-    schedule,
-    workdir
-  }
-}
-
-/** Edit args when `jobId` is given, create args otherwise; both are argv, never a shell string. */
-function hermesCronMutationArgs(
-  jobId: string | null,
-  input: { name: string; prompt: string; schedule: string; workdir: string | null }
-): string[] {
-  const args = jobId
-    ? ['cron', 'edit', jobId, '--schedule', input.schedule, '--prompt', input.prompt]
-    : ['cron', 'create', input.schedule, input.prompt]
-  args.push('--name', input.name)
-  if (!jobId) {
-    args.push('--deliver', 'local')
-  }
-  if (input.workdir) {
-    args.push('--workdir', input.workdir)
-  }
-  return args
-}
-
-export async function createExternalAutomation(
-  input: ExternalAutomationCreateInput
-): Promise<void> {
-  const normalized = normalizeHermesCronMutationInput(input)
-  if (input.target.type === 'local') {
-    await runLocalAutomationCommand('hermes', hermesCronMutationArgs(null, normalized))
-    clearHermesCronOutputRunCountCache()
-    return
-  }
-  throw new SshHostNotServedError(input.target.connectionId)
-}
-
-export async function updateExternalAutomation(
-  input: ExternalAutomationUpdateInput
-): Promise<void> {
-  assertExternalAutomationJobId(input.jobId)
-  const normalized = normalizeHermesCronMutationInput(input)
-  if (input.target.type === 'local') {
-    await runLocalAutomationCommand('hermes', hermesCronMutationArgs(input.jobId, normalized))
-    clearHermesCronOutputRunCountCache(input.jobId)
-    return
-  }
-  throw new SshHostNotServedError(input.target.connectionId)
-}
-
 export async function runExternalAutomationAction(
   input: ExternalAutomationActionInput
 ): Promise<void> {
@@ -110,9 +36,6 @@ export async function runExternalAutomationAction(
   const command = providerActionCommand(input.provider, input.action)
   if (input.target.type === 'local') {
     await runLocalAutomationCommand(input.provider, ['cron', command, input.jobId])
-    if (input.provider === 'hermes') {
-      clearHermesCronOutputRunCountCache(input.jobId)
-    }
     return
   }
   throw new SshHostNotServedError(input.target.connectionId)

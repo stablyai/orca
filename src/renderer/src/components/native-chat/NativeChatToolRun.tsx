@@ -22,7 +22,7 @@ import {
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
-import { nativeChatToolRunIconName } from './native-chat-tool-category'
+import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
 import { nativeChatToolRunOutcome } from '../../../../shared/native-chat-tool-run-outcome'
 import {
   nativeChatAskRunBlocks,

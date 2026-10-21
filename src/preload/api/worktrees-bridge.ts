@@ -3,7 +3,11 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../../shared/worktree/base-ref-drift-types'
-import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
+import type { CreateWorktreeProgressEvent } from '../../shared/worktree/create-types'
+import type {
+  GitStatusMetadataChangedEvent,
+  WorktreeHeadIdentity
+} from '../../shared/worktree/types'
 import type { PreloadApi } from '../api-types'
 
 export const worktreesApi = {
@@ -26,13 +30,9 @@ export const worktreesApi = {
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 
-  onCreateProgress: (
-    callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { creationId?: string; phase: 'fetching' | 'creating' }
-    ) => callback(data)
+  onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: CreateWorktreeProgressEvent) =>
+      callback(data)
     ipcRenderer.on('createWorktree:progress', listener)
     return () => ipcRenderer.removeListener('createWorktree:progress', listener)
   },
@@ -77,8 +77,11 @@ export const worktreesApi = {
     return () => ipcRenderer.removeListener('worktrees:changed', listener)
   },
 
-  onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
+  onGitStatusMetadataChanged: (
+    callback: (data: GitStatusMetadataChangedEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: GitStatusMetadataChangedEvent) =>
+      callback(data)
     ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
     return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
   },

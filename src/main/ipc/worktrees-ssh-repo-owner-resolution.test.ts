@@ -14,6 +14,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, ipcEvent, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -369,7 +373,7 @@ describe('registerWorktreeHandlers', () => {
     store.getProjectHostSetups.mockReturnValue([])
     store.getAllWorktreeMeta.mockReturnValue(metaById)
     store.getWorktreeMeta.mockImplementation((worktreeId: string) => metaById[worktreeId])
-    store.removeWorktreeMeta.mockImplementation((worktreeId: string) => {
+    store.removeWorktreeMeta.mockImplementation(({ id: worktreeId }: HostWorktreeTarget) => {
       delete metaById[worktreeId]
     })
 
@@ -390,7 +394,9 @@ describe('registerWorktreeHandlers', () => {
       forgottenWorktreeIds: ['repo-1::/remote/deleted', 'repo-1::/remote/deleted-too']
     })
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(2)
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/remote/deleted', sshHostId)
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: 'repo-1::/remote/deleted', hostId: sshHostId })
+    )
     const pruneTargets = [
       { worktreeId: 'repo-1::/remote/deleted', executionHostId: sshHostId },
       { worktreeId: 'repo-1::/remote/deleted-too', executionHostId: sshHostId }
@@ -461,7 +467,7 @@ describe('registerWorktreeHandlers', () => {
     store.getRepos.mockReturnValue([runtimeRepo])
     store.getProjectHostSetups.mockReturnValue([])
     store.getAllWorktreeMeta.mockReturnValue(metaById)
-    store.removeWorktreeMeta.mockImplementation((worktreeId: string) => {
+    store.removeWorktreeMeta.mockImplementation(({ id: worktreeId }: HostWorktreeTarget) => {
       delete metaById[worktreeId]
     })
 
@@ -474,8 +480,7 @@ describe('registerWorktreeHandlers', () => {
     // The row stamped to another host needs that host's own scan, not this one's.
     expect(forgotten).toEqual({ forgottenWorktreeIds: ['repo-1::/home/orca/deleted'] })
     expect(store.removeWorktreeMeta).toHaveBeenCalledExactlyOnceWith(
-      'repo-1::/home/orca/deleted',
-      runtimeHostId
+      hostWorktreeTarget({ id: 'repo-1::/home/orca/deleted', hostId: runtimeHostId })
     )
   })
 

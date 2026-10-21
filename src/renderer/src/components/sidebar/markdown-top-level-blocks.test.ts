@@ -82,6 +82,16 @@ describe('splitMarkdownTopLevelBlocks', () => {
     expect(streamed(REPLY, step)).toEqual(cut(REPLY))
   })
 
+  it.each([1, 3, 7])('numbers each block by its source line, streamed %i at a time', (step) => {
+    let split: MarkdownBlockSplit | null = null
+    for (let end = step; end < REPLY.length + step; end += step) {
+      split = splitMarkdownTopLevelBlocks(REPLY.slice(0, end), split)
+    }
+    for (const block of split?.blocks ?? []) {
+      expect(block.line).toBe(REPLY.slice(0, block.start).split('\n').length)
+    }
+  })
+
   it('keeps Windows line endings inside their blocks', () => {
     const source = 'one\r\n\r\ntwo\r\n\r\n- three\r\n'
     expect(cut(source)).toEqual(['one\r\n\r\n', 'two\r\n\r\n', '- three\r\n'])

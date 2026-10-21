@@ -21,6 +21,8 @@ type AddRepoDialogStepContentProps = {
   nestedScanInProgress: boolean
   nestedScanId: string | null
   serverPath: string
+  /** The path came from Windows' picker or an Explorer drop, so the host's browser is skipped. */
+  serverPathPrefilled?: boolean
   isAddingServerPath: boolean
   cloneUrl: string
   cloneDestination: string
@@ -83,6 +85,7 @@ export function AddRepoDialogStepContent({
   nestedScanInProgress,
   nestedScanId,
   serverPath,
+  serverPathPrefilled = false,
   isAddingServerPath,
   cloneUrl,
   cloneDestination,
@@ -153,7 +156,7 @@ export function AddRepoDialogStepContent({
         hostSelector={hostSelector}
         actionsDisabled={actionsDisabled}
         browseHostKind={browseHostKind}
-        serverSshProjects={serverSsh?.state}
+        offersServerSshHosts={serverSsh !== null}
         onBrowse={onBrowse}
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}
@@ -171,7 +174,7 @@ export function AddRepoDialogStepContent({
         isAddingServerPath={isAddingServerPath}
         addProjectBusyLabel={addProjectBusyLabel}
         hostSelector={hostSelector}
-        initialBrowsing
+        initialBrowsing={!(serverPathPrefilled && serverPath.trim())}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}

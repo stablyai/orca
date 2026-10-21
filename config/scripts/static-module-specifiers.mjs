@@ -3,7 +3,7 @@ import ts from 'typescript-api'
 const MODULE_BUILTINS = new Set(['module', 'node:module'])
 const PROCESS_BUILTINS = new Set(['process', 'node:process'])
 
-function unwrap(node) {
+export function unwrap(node) {
   while (
     node &&
     (ts.isParenthesizedExpression(node) ||
@@ -22,14 +22,14 @@ function isNamed(node, name) {
   return ts.isIdentifier(node) && node.text === name
 }
 
-function literalString(node) {
+export function literalString(node) {
   node = unwrap(node)
   return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
     ? node.text
     : null
 }
 
-function propertyName(node) {
+export function propertyName(node) {
   if (ts.isPropertyAccessExpression(node)) {
     return node.name.text
   }

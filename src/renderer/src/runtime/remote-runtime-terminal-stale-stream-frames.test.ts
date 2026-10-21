@@ -6,9 +6,9 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 import {
   getRemoteRuntimeTerminalMultiplexer,
-  resetRemoteRuntimeTerminalMultiplexersForTests,
-  type RemoteRuntimeMultiplexedTerminal
+  resetRemoteRuntimeTerminalMultiplexersForTests
 } from './remote-runtime-terminal-multiplexer'
+import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal-multiplexer-types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 

@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RefObject } from 'react'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -32,6 +32,7 @@ export type ComposerRuntimeTargetModel = {
   folderDetectedIds: TuiAgent[] | null
   folderDetectedAgentIds: Set<TuiAgent> | null
   selectedWorkspaceTarget: WorkspaceCreationTargetResolution
+  resolvedRepoId: string
   selectedRepo: Repo | undefined
   selectedRepoIsGit: boolean
   selectedRepoExecutionHostId: ExecutionHostId | null

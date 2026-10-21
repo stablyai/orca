@@ -7,7 +7,13 @@ import {
   createStreamedGuest
 } from './single-page-browser-commands-host-test-double'
 import { E2EEChannel } from './rpc/e2ee-channel'
-import { decrypt, decryptBytes, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
+import {
+  decrypt,
+  decryptBytes,
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../shared/e2ee-crypto'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
@@ -76,7 +82,7 @@ function connectLegacyChannel() {
 }
 
 async function subscribe(sendBinary: RpcBinarySender) {
-  const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+  const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
   let resolveDone!: () => void
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve

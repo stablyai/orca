@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { persistWorktreeSortOrderByHost } from './worktree-sort-order-persistence'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 const localPersistSortOrder = vi.fn()
 const runtimeCall = vi.mocked(callRuntimeRpc)
@@ -65,10 +63,13 @@ describe('persistWorktreeSortOrderByHost', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'worktree.persistSortOrder',
-      { orderedIds: ['runtime-repo::wt-b'] },
+      { orderedIds: ['runtime-repo::wt-b'], hostIds: ['local'] },
       { timeoutMs: 15_000 }
     )
-    expect(localPersistSortOrder).toHaveBeenCalledWith({ orderedIds: ['local-repo::wt-a'] })
+    expect(localPersistSortOrder).toHaveBeenCalledWith({
+      orderedIds: ['local-repo::wt-a'],
+      hostIds: ['local']
+    })
   })
 
   it('handles best-effort persistence rejections from disconnected hosts', async () => {

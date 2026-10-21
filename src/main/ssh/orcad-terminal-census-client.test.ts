@@ -4,14 +4,21 @@ import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import { emptyOrcadActivationRecord, type OrcadActivationRecord } from './orcad-activation-record'
+import {
+  emptyOrcadActivationRecord,
+  type OrcadActivationRecord
+} from '../managed-server/activation/orcad-activation-record'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), ensure: vi.fn(), verify: vi.fn() }))
 vi.mock('../../shared/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: mocks.send
 }))
-vi.mock('./orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: mocks.ensure }))
-vi.mock('./orcad-managed-serving-verify', () => ({ verifyOrcadManagedServing: mocks.verify }))
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  ensureOrcadManagedTunnel: mocks.ensure
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-serving-verify', () => ({
+  verifyOrcadManagedServing: mocks.verify
+}))
 
 const { collectManagedTerminalCensus } = await import('./orcad-terminal-census-client')
 const collect = (record: OrcadActivationRecord) =>
@@ -46,7 +53,7 @@ function answerWith(capabilities: string[], response: unknown) {
 describe('managed orcad terminal census client', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    mocks.ensure.mockResolvedValue(undefined)
+    mocks.ensure.mockResolvedValue(environment)
     mocks.verify.mockResolvedValue({ state: 'serving' })
   })
 
@@ -101,6 +108,22 @@ describe('managed orcad terminal census client', () => {
   ])('reads %s as unverifiable, never as zero', async (_label, arrange) => {
     arrange()
     await expect(collect(active)).resolves.toEqual(unverifiable)
+  })
+
+  it('asks with the pairing the tunnel re-paired to, not the refused one it was given', async () => {
+    const repaired = createEnvironmentFromPairingOffer({
+      id: 'environment-1',
+      name: 'Managed',
+      now: 2,
+      offer: { v: 2, endpoint: 'ws://127.0.0.1:46768', deviceToken: 'fresh', publicKeyB64: 'k' },
+      connectionDependency: 'ssh-tunnel'
+    })
+    mocks.ensure.mockResolvedValue(repaired)
+    answerWith([ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY], { ok: true, result: census })
+    await collect(active)
+    expect(mocks.send.mock.calls[0]?.[0]).toMatchObject({
+      credential: { kind: 'token', deviceToken: 'fresh' }
+    })
   })
 
   it('reads an unparseable activation time as unverifiable', async () => {

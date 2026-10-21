@@ -8,7 +8,7 @@ import type {
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
-import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import type {
   RuntimeBrowserClientPage,
   RuntimeBrowserPageRegistry

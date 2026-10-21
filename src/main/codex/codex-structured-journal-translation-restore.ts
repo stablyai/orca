@@ -36,7 +36,7 @@ export function restoreCodexHistoryItem(
   const item = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
   const announcements = item ? readCodexSubagentAnnouncements(item, input.primaryThreadId) : []
   for (const announcement of announcements) {
-    input.executions.register(announcement.agentThreadId, announcement.label, undefined)
+    input.executions.register(announcement.agentThreadId, announcement.label)
   }
   const compaction = input.compactions.handle(event)
   if (compaction) {

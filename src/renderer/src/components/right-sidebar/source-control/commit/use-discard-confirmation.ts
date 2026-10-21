@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {

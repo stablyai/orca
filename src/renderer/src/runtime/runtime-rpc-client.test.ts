@@ -5,10 +5,9 @@ import {
   assertRuntimeEnvironmentCapability,
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCacheForTests,
-  runtimeEnvironmentSupportsCapability,
-  RuntimeRpcCallError,
-  unwrapRuntimeRpcResult
+  runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

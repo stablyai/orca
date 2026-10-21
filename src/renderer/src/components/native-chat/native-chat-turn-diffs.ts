@@ -1,5 +1,13 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { buildDiffSummaries } from './native-chat-edit-cards'
+import type { NativeChatEditFile } from '../../../../shared/native-chat-edit-model'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../../shared/native-chat-types'
+import {
+  buildDiffSummaries,
+  normalizedToolEditFiles
+} from '../../../../shared/native-chat-edit-cards'
 
 export type NativeChatDiffTarget = {
   messageId: string
@@ -11,12 +19,21 @@ export type NativeChatDiffTarget = {
 
 export type NativeChatDiffReveal = NativeChatDiffTarget & { requestId: number }
 
+export type NativeChatTurnDiffEdit = {
+  call: NativeChatToolCallBlock
+  result: NativeChatToolResultBlock
+  fileIndex: number
+  target: NativeChatDiffTarget
+  order: number
+}
+
 export type NativeChatTurnDiffFile = {
   path: string
   added: number
   removed: number
   truncated: boolean
   target: NativeChatDiffTarget
+  edits: NativeChatTurnDiffEdit[]
 }
 
 export type NativeChatTurnDiff = {
@@ -24,6 +41,13 @@ export type NativeChatTurnDiff = {
   added: number
   removed: number
   truncated: boolean
+}
+
+/** Resolve a patch only when its inline card is opened. */
+export function nativeChatTurnDiffEditFile(
+  edit: NativeChatTurnDiffEdit
+): NativeChatEditFile | undefined {
+  return normalizedToolEditFiles(edit.call, edit.result)?.[edit.fileIndex]
 }
 
 /** Recorded edit totals, grouped by the transcript's already-resolved turn boundaries. */
@@ -35,13 +59,14 @@ export function nativeChatTurnDiffs(
   partialTurnKey?: string
 ): Map<string, NativeChatTurnDiff> {
   const turns = new Map<string, Map<string, NativeChatTurnDiffFile>>()
+  let editOrder = 0
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
     if (!turnKey || turnKey === partialTurnKey) {
       continue
     }
     const sections = subagentSectionsOf?.get(message.id)
-    for (const edit of buildDiffSummaries(message.blocks).values()) {
+    for (const [call, edit] of buildDiffSummaries(message.blocks)) {
       let files = turns.get(turnKey)
       if (!files) {
         files = new Map()
@@ -54,19 +79,35 @@ export function nativeChatTurnDiffs(
         if (renamed) {
           files.delete(renamed.path)
         }
-        files.set(file.path, {
-          path: file.path,
-          added: file.added + (previous?.added ?? 0) + (renamed?.added ?? 0),
-          removed: file.removed + (previous?.removed ?? 0) + (renamed?.removed ?? 0),
-          truncated:
-            file.truncated || (previous?.truncated ?? false) || (renamed?.truncated ?? false),
-          target: {
-            messageId: message.id,
-            editKey: edit.key,
-            fileIndex,
-            ...(sections === undefined ? {} : { subagentSections: sections })
+        const target: NativeChatDiffTarget = {
+          messageId: message.id,
+          editKey: edit.key,
+          fileIndex,
+          ...(sections === undefined ? {} : { subagentSections: sections })
+        }
+        const entry = previous ??
+          renamed ?? {
+            path: file.path,
+            added: 0,
+            removed: 0,
+            truncated: false,
+            target,
+            edits: []
           }
-        })
+        if (renamed && previous) {
+          entry.added += renamed.added
+          entry.removed += renamed.removed
+          entry.truncated ||= renamed.truncated
+          entry.edits.push(...renamed.edits)
+          entry.edits.sort((left, right) => left.order - right.order)
+        }
+        entry.path = file.path
+        entry.added += file.added
+        entry.removed += file.removed
+        entry.truncated ||= file.truncated
+        entry.target = target
+        entry.edits.push({ call, result: edit.result, fileIndex, target, order: editOrder++ })
+        files.set(file.path, entry)
       }
     }
   }

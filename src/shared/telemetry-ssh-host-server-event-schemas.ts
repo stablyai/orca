@@ -14,6 +14,7 @@ const UNAVAILABLE_REASONS = [
   'artifacts_unavailable',
   'libc_unidentified',
   'runtime_self_test',
+  'runtime_noexec',
   'security_software',
   'native_preflight'
 ] as const
@@ -143,6 +144,26 @@ export const sshHostServerDeployFailedSchema = z
 export const sshHostServerMoveSchema = z
   .object({
     outcome: z.enum(SSH_HOST_SERVER_MOVE_OUTCOME_VALUES),
+    ...hostFields
+  })
+  .strict()
+
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15; drop with src/main/ssh/legacy-relay/.
+export const SSH_HOST_SERVER_LEGACY_RELAY_BRIDGE_TERMINAL_VALUES = [
+  'none',
+  '1',
+  '2_4',
+  '5_9',
+  '10_plus'
+] as const
+
+/** Hosts still running terminals an older Orca's relay holds, and each one's exit. */
+export const sshHostServerLegacyRelayBridgeSchema = z
+  .object({
+    // `active`: at most once per target per UTC day while it bridges terminals.
+    phase: z.enum(['connected', 'terminal_exited', 'active']),
+    // Bridged terminals when the host connected or was active; `none` on an exit row.
+    terminals: z.enum(SSH_HOST_SERVER_LEGACY_RELAY_BRIDGE_TERMINAL_VALUES),
     ...hostFields
   })
   .strict()

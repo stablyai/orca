@@ -2,9 +2,9 @@ import { useCallback, useEffect } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   cancelRuntimeGenerateCommitMessage,
-  generateRuntimeCommitMessage,
-  type RuntimeGenerateCommitMessageOverrides
-} from '@/runtime/runtime-git-client'
+  generateRuntimeCommitMessage
+} from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGenerateCommitMessageOverrides } from '@/runtime/runtime-git-client-context'
 import { useAppStore } from '@/store'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -169,20 +169,23 @@ export function useSourceControlCommitMessageGeneration({
           return
         }
 
-        updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
-          resolveCommitMessageGenerationSuccess({
-            record,
-            requestId,
-            message: result.message
-          })
-        )
+        const succeeded = resolveCommitMessageGenerationSuccess({
+          record:
+            useAppStore.getState().commitMessageGenerationRecords[activeCommitMessageGenerationKey],
+          requestId,
+          message: result.message
+        })
+        if (succeeded) {
+          setCommitMessageGenerationRecord(activeCommitMessageGenerationKey, succeeded)
+        }
         // Why: race protection — drop the generated message if the user typed into the textarea while the agent ran, rather than overwrite their edits.
+        // A run canceled (by Stop or by a commit) may still succeed on the host; its message
+        // describes changes the box no longer holds.
         updateCommitDrafts((prev) => {
           const current = prev[activeWorktreeId]
-          if (current && current.length > 0) {
-            return prev
-          }
-          return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
+          return !succeeded || (current && current.length > 0)
+            ? prev
+            : writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
         })
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
         setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))

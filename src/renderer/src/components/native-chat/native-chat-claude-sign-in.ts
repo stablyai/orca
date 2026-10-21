@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 /** The chat failures a sign-in to the selected Claude account fixes. */
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([

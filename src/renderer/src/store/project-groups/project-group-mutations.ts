@@ -5,18 +5,37 @@ import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from '../slices/project-group-removal-targets'
 import {
   getProjectGroupHostId,
+  isProjectGroupJoinableFromCatalog,
   projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
 } from '../slices/project-group-owner-routing'
-import { findRepoForHost, repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import {
+  findRepoForHost,
+  isSameRepoRow,
+  repoMatchesHostIdentity
+} from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerHostId } from '../../runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+
+function notifyProjectGroupOnOtherHost(): void {
+  toast.error(
+    translate('auto.store.slices.repos.moveToGroupOtherHost', 'Could not move project to group'),
+    {
+      description: translate(
+        'auto.store.slices.repos.moveToGroupOtherHostDesc',
+        'The computer this project runs on does not have this group. A project can only join groups saved on its own computer.'
+      )
+    }
+  )
+}
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -33,7 +52,7 @@ export function createProjectGroupMutationActions(
     createProjectGroup: async (name, hostId) => {
       try {
         // Why: a new group lands on the host of the project that seeds it, not the focused one.
-        const target = runtimeTargetForOwnerHostId(hostId)
+        const target = ipcOrRuntimeTargetForHostId(hostId)
         if (!target) {
           return null
         }
@@ -234,25 +253,32 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: async (projectId, groupId, order, hostId) => {
+    moveProjectToGroup: async (project, groupId, order) => {
       try {
-        const repo = findRepoForHost(get().repos, projectId, { settings: get().settings, hostId })
-        const target = repo ? runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo)) : null
-        if (!target) {
+        const repo = get().repos.find((candidate) => isSameRepoRow(candidate, project))
+        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+        const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
+        if (!repo || !repoHostId || !target) {
+          return false
+        }
+        if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
+          notifyProjectGroupOnOtherHost()
           return false
         }
         const moved =
           target.kind === 'local'
             ? await window.api.projectGroups.moveProject({
-                projectId,
+                projectId: repo.id,
                 groupId,
-                order
+                order,
+                hostId: repoHostId
               })
             : (
                 await callRuntimeRpc<{ repo: Repo | null }>(
                   target,
                   'projectGroup.moveProject',
-                  { repo: projectId, groupId, order },
+                  // Why connectionId: the server's own twins differ only by their SSH target there.
+                  { repo: repo.id, groupId, order, connectionId: repo.connectionId ?? null },
                   { timeoutMs: 15_000 }
                 )
               ).repo
@@ -262,8 +288,8 @@ export function createProjectGroupMutationActions(
         const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
         const movedHostId = getRepoExecutionHostId(ownedMoved)
         set((s) => {
-          const nextRepos = s.repos.map((repo) =>
-            repoMatchesHostIdentity(repo, projectId, movedHostId) ? ownedMoved : repo
+          const nextRepos = s.repos.map((candidate) =>
+            isSameRepoRow(candidate, repo) ? ownedMoved : candidate
           )
           return {
             repos: nextRepos,
@@ -275,6 +301,11 @@ export function createProjectGroupMutationActions(
             folderWorkspacePathStatuses: {}
           }
         })
+        // Why: hosts store an unknown group id as "no group" and still return the row (#13699).
+        if (groupId && (moved.projectGroupId ?? null) !== groupId) {
+          notifyProjectGroupOnOtherHost()
+          return false
+        }
         return true
       } catch (err) {
         console.error('Failed to move repo to group:', err)

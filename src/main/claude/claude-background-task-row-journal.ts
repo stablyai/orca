@@ -144,8 +144,10 @@ export function writeClaudeBackgroundTaskRow(
   }
   beforeAppend?.()
   const identity = claudeBackgroundTaskIdentity(id, row.generation)
+  // A task row a later run reuses (`resolveClaudeBackgroundTaskIdentity`) is that run's work now.
   const appendOptions = {
     turnScope: turnScope(),
+    executes: true as const,
     ...(lifecycle ? { lifecycle: true } : {})
   }
   const publishOptions = lifecycle ? { lifecycle: true } : {}

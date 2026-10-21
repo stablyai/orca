@@ -100,32 +100,29 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
-  it("spawns a launch pane this window made only once the host has taken it, and never once it's gone", async () => {
+  it("carries an AI button's launch in its pane's spawn, and says whether the agent started", async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
-    const { holdAgentLaunchPaneSpawn, releaseAgentLaunchPaneSpawn } =
-      await import('@/lib/agent-launch-pane-spawn-hold')
+    const { awaitAgentLaunchPaneStart } = await import('@/lib/agent-launch-pane-start')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-    const pane = { worktreeId: 'wt', tabId: 'tab-held', leafId: 'leaf-held' }
+    const agentLaunch = { launch: { agent: 'claude' } }
+    const pane = { worktreeId: 'wt', tabId: 'tab-launch', leafId: 'leaf-launch' }
 
-    holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
-    const transport = createIpcPtyTransport(pane)
-    const connecting = transport.connect({ url: '', callbacks: {} })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(spawn).not.toHaveBeenCalled()
+    const started = awaitAgentLaunchPaneStart(pane.tabId, pane.leafId)
+    spawn.mockResolvedValueOnce({ id: 'pty-launch' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport forwards the request untouched; main validates it.
+    await createIpcPtyTransport({ ...pane, agentLaunch } as never).connect({
+      url: '',
+      callbacks: {}
+    })
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-launch', agentLaunch })
+    )
+    await expect(started).resolves.toBe('pty-launch')
 
-    releaseAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
-    await connecting
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'tab-held' }))
-    transport.disconnect()
-
-    spawn.mockClear()
-    const release = holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
-    const closed = createIpcPtyTransport(pane)
-    const abandoned = closed.connect({ url: '', callbacks: {} })
-    closed.destroy?.()
-    release()
-    await expect(abandoned).resolves.toBeUndefined()
-    expect(spawn).not.toHaveBeenCalled()
+    spawn.mockRejectedValueOnce(new Error('agent_launch_pane_refused'))
+    const refused = awaitAgentLaunchPaneStart(pane.tabId, pane.leafId)
+    await createIpcPtyTransport(pane).connect({ url: '', callbacks: { onError: vi.fn() } })
+    await expect(refused).resolves.toBeNull()
   })
 
   it('keeps the recovery hint and raw diagnostic from a wrapped spawn error', async () => {

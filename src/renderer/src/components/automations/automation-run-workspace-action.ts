@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
-import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {

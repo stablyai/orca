@@ -48,6 +48,7 @@ describe('Delayed remote prompt delivery', () => {
   async function mountPausedRelay({ viewed = true, away = false } = {}) {
     const relayDirectory = join(fixture.directory, 'relay')
     const relay = new RuntimeMobileNotificationController()
+    fixture.relayControllers.push(relay)
     relay.configureDismissalStore(relayDirectory)
     const relayEvents: MobileNotificationEvent[] = []
     relay.onDispatched((event) => relayEvents.push(event))
@@ -155,7 +156,10 @@ describe('Delayed remote prompt delivery', () => {
           result: edge
         })
       },
-      liveDeliveries: () => new MobileNotificationDismissalStore(relayDirectory).liveDeliveries()
+      liveDeliveries: async () => {
+        await relay.flushDismissals()
+        return new MobileNotificationDismissalStore(relayDirectory).liveDeliveries()
+      }
     }
   }
 
@@ -205,7 +209,7 @@ describe('Delayed remote prompt delivery', () => {
       await act(async () => relay.release())
       expect(transport.dispatch).not.toHaveBeenCalled()
       expect(relay.relayEvents).toEqual([])
-      expect(relay.liveDeliveries()).toEqual([])
+      expect(await relay.liveDeliveries()).toEqual([])
       expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBeUndefined()
     }
   )
@@ -230,7 +234,7 @@ describe('Delayed remote prompt delivery', () => {
     expect(relay.relayEvents).toMatchObject([
       { type: 'notification', notificationId: agentSessionPromptAttentionKey(SCOPE, SESSION, 'B') }
     ])
-    expect(relay.liveDeliveries()).toHaveLength(1)
+    expect(await relay.liveDeliveries()).toHaveLength(1)
     expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
   })
 
@@ -271,7 +275,7 @@ describe('Delayed remote prompt delivery', () => {
     expect(dismissIds()).toEqual([])
     await act(async () => relay.release())
     expect(relay.relayEvents).toMatchObject([{ type: 'notification' }])
-    expect(relay.liveDeliveries()).toHaveLength(1)
+    expect(await relay.liveDeliveries()).toHaveLength(1)
   })
 
   it('a genuine read during unread writes prevents the final relay delivery', async () => {
@@ -294,7 +298,7 @@ describe('Delayed remote prompt delivery', () => {
       expect(readDuringUnread).toBe(true)
       await waitFor(() => expect(dismissIds()).toHaveLength(1))
       expect(relay.relayEvents).toEqual([])
-      expect(relay.liveDeliveries()).toEqual([])
+      expect(await relay.liveDeliveries()).toEqual([])
     } finally {
       stop()
     }
@@ -351,7 +355,7 @@ describe('Delayed remote prompt delivery', () => {
         )
       }
       expect(relay.relayEvents).toMatchObject([{ type: 'notification' }])
-      expect(relay.liveDeliveries()).toHaveLength(1)
+      expect(await relay.liveDeliveries()).toHaveLength(1)
     }
   )
 
@@ -395,7 +399,7 @@ describe('Delayed remote prompt delivery', () => {
           notificationId: `${agentSessionAttentionSubjectPrefix(SCOPE, SESSION)}turn:turn-1`
         }
       ])
-      expect(relay.liveDeliveries()).toHaveLength(1)
+      expect(await relay.liveDeliveries()).toHaveLength(1)
     }
   )
 })
@@ -405,6 +409,7 @@ describe('Remote prompt settlement', () => {
   async function mountRemoteRelay(options?: { promptStatus?: false; raise?: false }) {
     const relayDirectory = join(fixture.directory, 'relay')
     const relay = new RuntimeMobileNotificationController()
+    fixture.relayControllers.push(relay)
     relay.configureDismissalStore(relayDirectory)
     const delivery = createNotificationDeliveryService({
       readNotificationSettings: () => NOTIFICATION_SETTINGS,
@@ -478,10 +483,12 @@ describe('Remote prompt settlement', () => {
     await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
     await waitFor(() => expect(fixture.status).toBeTypeOf('function'))
     act(() => publishStatus())
-    const live = (kind: 'prompt' | 'completion') =>
-      new MobileNotificationDismissalStore(relayDirectory)
+    const live = async (kind: 'prompt' | 'completion') => {
+      await relay.flushDismissals()
+      return new MobileNotificationDismissalStore(relayDirectory)
         .liveDeliveries()
         .filter((entry) => entry.structuredOrigin?.cause.kind === kind)
+    }
     if (options?.raise === false) {
       return { live }
     }
@@ -492,7 +499,7 @@ describe('Remote prompt settlement', () => {
       }
       publishView()
     })
-    await waitFor(() => expect(live('prompt')).toHaveLength(1))
+    await waitFor(async () => expect(await live('prompt')).toHaveLength(1))
     return { live }
   }
 
@@ -567,7 +574,7 @@ describe('Remote prompt settlement', () => {
         fixture.hostFeed.observe(SESSION)
         publishStatus()
       })
-      await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+      await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
       expect(readCalls()).toBe(0)
       expect(transport.settle).toHaveBeenCalledOnce()
       // Prompt settlement never touches a completion alert.
@@ -575,7 +582,7 @@ describe('Remote prompt settlement', () => {
         ([request]: [NotificationDispatchRequest]) =>
           request.structuredOrigin?.cause.kind === 'completion'
       )
-      expect(relay.live('completion')).toHaveLength(relayedCompletions.length)
+      expect(await relay.live('completion')).toHaveLength(relayedCompletions.length)
     }
   )
 
@@ -586,7 +593,7 @@ describe('Remote prompt settlement', () => {
     revise((item) => interrupt(resolveA('cancelled')(item)))
     await waitFor(() => expect(fixture.status).not.toBe(before))
     act(() => publishStatus())
-    await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+    await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
   })
 
   it('keeps the relayed prompt alert while the host still reports a prompt pending', async () => {
@@ -597,7 +604,7 @@ describe('Remote prompt settlement', () => {
     })
     await act(async () => {})
     expect(transport.settle).not.toHaveBeenCalled()
-    expect(relay.live('prompt')).toHaveLength(1)
+    expect(await relay.live('prompt')).toHaveLength(1)
   })
 
   it('never settles from a status the desktop lost contact with', async () => {
@@ -606,7 +613,7 @@ describe('Remote prompt settlement', () => {
     act(() => endStatusStream())
     await act(async () => {})
     expect(transport.settle).not.toHaveBeenCalled()
-    expect(relay.live('prompt')).toHaveLength(1)
+    expect(await relay.live('prompt')).toHaveLength(1)
   })
 
   it('settles once per relayed prompt, not on every later status update', async () => {
@@ -633,7 +640,7 @@ describe('Remote prompt settlement', () => {
     act(() => publishStatus())
     await act(async () => {})
     expect(transport.settle).not.toHaveBeenCalled()
-    expect(relay.live('prompt')).toHaveLength(1)
+    expect(await relay.live('prompt')).toHaveLength(1)
   })
 
   it('keeps it when a queued frame lands in the same task as the edge', async () => {
@@ -644,7 +651,7 @@ describe('Remote prompt settlement', () => {
     })
     await act(async () => {})
     expect(transport.settle).not.toHaveBeenCalled()
-    expect(relay.live('prompt')).toHaveLength(2)
+    expect(await relay.live('prompt')).toHaveLength(2)
   })
 
   it('retries a settlement that failed on the next qualifying row', async () => {
@@ -657,13 +664,13 @@ describe('Remote prompt settlement', () => {
       publishStatus()
     })
     await waitFor(() => expect(transport.settle).toHaveBeenCalledOnce())
-    expect(relay.live('prompt')).toHaveLength(1)
+    expect(await relay.live('prompt')).toHaveLength(1)
     transport.settle.mockImplementation(settle ?? (async () => {}))
     act(() => {
       revise((item) => item)
       publishStatus()
     })
-    await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+    await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
     expect(transport.settle).toHaveBeenCalledTimes(2)
   })
 
@@ -686,7 +693,7 @@ describe('Remote prompt settlement', () => {
       addPrompt('B')
       publishStatus()
     })
-    await waitFor(() => expect(relay.live('prompt')).toHaveLength(1))
+    await waitFor(async () => expect(await relay.live('prompt')).toHaveLength(1))
     act(() => {
       revise(resolvePrompt('B', 'resolved'))
       fixture.hostFeed.observe(SESSION)
@@ -696,7 +703,7 @@ describe('Remote prompt settlement', () => {
     expect(replies).toHaveLength(1)
     // The host goes quiet; the reply alone must re-judge the mirror.
     await act(async () => replies[0]?.())
-    await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+    await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
   })
 
   it('settles a prompt whose edge arrives after its own resolution row', async () => {
@@ -721,7 +728,7 @@ describe('Remote prompt settlement', () => {
         )
       ).toBe(true)
     )
-    await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+    await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
     expect(transport.settle).toHaveBeenCalledOnce()
   })
 })

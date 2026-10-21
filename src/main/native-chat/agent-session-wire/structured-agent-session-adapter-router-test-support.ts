@@ -30,11 +30,22 @@ function declaringNothing(definition: StructuredAgentDefinition): StructuredAgen
   }
 }
 
-/** Claude and Codex declaring no capability and no resting options: what a host over a bare
- *  adapter double declares. */
-export const NO_STRUCTURED_AGENTS = new StructuredAgentRegistry([
-  { definition: declaringNothing(CLAUDE_STRUCTURED_AGENT), adapter: NO_METHODS },
-  { definition: declaringNothing(CODEX_STRUCTURED_AGENT), adapter: NO_METHODS }
+/** These agents declaring no capability and no resting options: what a host over a bare adapter
+ *  double declares. */
+export function structuredAgentsDeclaringNothing(
+  definitions: readonly StructuredAgentDefinition[]
+): StructuredAgentRegistry {
+  return new StructuredAgentRegistry(
+    definitions.map((definition) => ({
+      definition: declaringNothing(definition),
+      adapter: NO_METHODS
+    }))
+  )
+}
+
+export const NO_STRUCTURED_AGENTS = structuredAgentsDeclaringNothing([
+  CLAUDE_STRUCTURED_AGENT,
+  CODEX_STRUCTURED_AGENT
 ])
 
 /** This build's two agents over doubles. Each declares only what its double implements, so a
@@ -84,7 +95,9 @@ function implementedBy(
       ...declared,
       compact: declared.compact && Boolean(adapter.compact),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
-      rewind: declared.rewind && Boolean(adapter.rewind && adapter.recoverRewind)
+      rewind:
+        declared.rewind &&
+        Boolean(adapter.forkForRewind || (adapter.rewind && adapter.recoverRewind))
     }
   }
 }

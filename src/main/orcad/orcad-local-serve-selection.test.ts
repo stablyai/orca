@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,6 +22,7 @@ import {
 import { hashProfileStatePayload } from '../persistence/profile-state/profile-state-document-validation'
 import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import { selectServeRuntime, type ServeRuntimeSelectionInput } from './orcad-local-serve-selection'
+import type { AppImageNodeRuntime } from '../node-runtime/appimage-bundled-node-runtime'
 
 const TARGET = 'linux-x64-glibc'
 const SSH_TARGET = { id: 'ssh-1', label: 'box', host: 'box.example', port: 22, username: 'me' }
@@ -199,6 +201,57 @@ describe('orca serve runtime selection', () => {
     expect(options.materializeSlot).toHaveBeenCalledWith(TARGET, {
       templateDir: join(root, 'orcad-template'),
       cacheRoot: join(root, 'orcad-artifacts')
+    })
+  })
+
+  describe('an AppImage that carries the pinned Node', () => {
+    const offline = (): ServeRuntimeSelectionInput['materializeRuntime'] =>
+      vi.fn(async (): Promise<string> => {
+        throw new Error('fetch failed')
+      })
+
+    function bundledNode(bytes: string): AppImageNodeRuntime {
+      const path = join(root, 'resources', 'node-runtime', 'bin', 'node')
+      mkdirSync(join(path, '..'), { recursive: true })
+      writeFileSync(path, bytes)
+      return {
+        path,
+        target: TARGET,
+        executableSha256: createHash('sha256').update('#!/bin/sh\n# pinned\n').digest('hex')
+      }
+    }
+
+    it('prepares the slot from it on an offline first run', async () => {
+      const selection = await selectServeRuntime(
+        input({
+          materializeRuntime: offline(),
+          bundledNodeRuntime: bundledNode('#!/bin/sh\n# pinned\n')
+        })
+      )
+      const runtime = join(
+        root,
+        'orcad-artifacts',
+        TARGET,
+        '0.1.0+abc',
+        ...orcadNodeRuntimeRelativePath(TARGET, SHA)
+      )
+      expect(selection).toMatchObject({ kind: 'orcad', runtime })
+      expect(readFileSync(runtime, 'utf8')).toBe('#!/bin/sh\n# pinned\n')
+    })
+
+    it('downloads instead when the bundled bytes are not the pin', async () => {
+      const options = input({ bundledNodeRuntime: bundledNode('#!/bin/sh\n# tampered\n') })
+      expect(await selectServeRuntime(options)).toMatchObject({ kind: 'orcad' })
+      expect(options.materializeRuntime).toHaveBeenCalledOnce()
+    })
+
+    it('downloads instead when the bundled Node is for another host', async () => {
+      const options = input({
+        hostTarget: () => 'linux-x64-musl',
+        bundledNodeRuntime: bundledNode('#!/bin/sh\n# pinned\n')
+      })
+      await selectServeRuntime(options)
+      expect(options.materializeRuntime).toHaveBeenCalledOnce()
     })
   })
 

@@ -3,6 +3,7 @@ import type { ParsedTerminalFileLink } from '@/lib/terminal-links'
 import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
 import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'
+import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '@/components/terminal-pane/terminal-path-exists-cache'
 import {
   createNativeChatFileLinkExistence,
   UNVERIFIABLE_RETRY_DELAYS_MS
@@ -235,6 +236,27 @@ describe('createNativeChatFileLinkExistence', () => {
     expect(naming.onChange).toHaveBeenCalledOnce()
     expect(other.onChange).not.toHaveBeenCalled()
     expect(other.watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
+  })
+
+  it('keeps every answer a shown message needs, past the unobserved cache limit', async () => {
+    const { pathExists } = hostWith(() => true)
+    const existence = createNativeChatFileLinkExistence(host, pathExists)
+    const { watcher } = watching(existence)
+    const names = Array.from(
+      { length: TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES + 100 },
+      (_, index) => `file-${index}.md`
+    )
+    const render = (): boolean[] => names.map((name) => watcher.getSnapshot().check(link(name)))
+
+    render()
+    await settle()
+    expect(render().every(Boolean)).toBe(true)
+    await settle()
+    expect(pathExists).toHaveBeenCalledTimes(names.length)
+
+    existence.recheck()
+    await settle()
+    expect(pathExists).toHaveBeenCalledTimes(names.length * 2)
   })
 
   it('keeps a reply to an older question from overwriting a newer answer', async () => {

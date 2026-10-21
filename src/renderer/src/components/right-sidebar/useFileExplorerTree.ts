@@ -15,6 +15,7 @@ import {
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 import { collectStaleDirCachePaths } from './file-explorer-stale-dir-cache'
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
+import { describeFileExplorerReadError } from './file-explorer-read-error'
 import {
   clearFileExplorerDirsLoading,
   EMPTY_FILE_EXPLORER_LOADING_DIRS,
@@ -147,7 +148,7 @@ export function useFileExplorerTree(
           // empty tree, which made authorization/path bugs look like a real
           // empty worktree. Preserve the message so the UI can distinguish
           // "no files" from "could not read this worktree".
-          setRootError(error instanceof Error ? error.message : String(error))
+          setRootError(describeFileExplorerReadError(error))
           setSourceWorkspaceId(null)
           rootReadFailedRef.current = true
         }
@@ -156,7 +157,7 @@ export function useFileExplorerTree(
           [dirPath]: {
             ...prev[dirPath],
             children: prev[dirPath]?.children ?? [],
-            error: error instanceof Error ? error.message : String(error)
+            error: describeFileExplorerReadError(error)
           }
         }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))

@@ -1,7 +1,15 @@
+import type { TerminalWaiter } from './runtime-terminal-contracts'
+import type {
+  RuntimeTerminalWait,
+  RuntimeTerminalAgentStatus
+} from '../../shared/runtime-terminal-contracts'
+import { RuntimeMachineName } from './runtime-machine-name'
+import { OrcaRuntimeService } from './orca-runtime'
+import { makeTuiIdleLeaf, makeTuiIdlePty } from './tui-idle-wait-test-harness'
 import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import {
   createTranscriptPane,
@@ -485,5 +493,209 @@ describe('Screen rule readiness scope', () => {
         satisfied: true
       })
     }, 20_000)
+  })
+})
+
+describe('terminal wait ownership', () => {
+  beforeEach(() => {
+    vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function pendingStatus() {
+    const { promise, resolve } = Promise.withResolvers<RuntimeTerminalAgentStatus>()
+    return { status: promise, finish: resolve }
+  }
+
+  function interactiveWait(getStatus: (handle: string) => Promise<RuntimeTerminalAgentStatus>) {
+    const runtime = new OrcaRuntimeService()
+    runtime['getTerminalAgentStatusPtyId'] = () => 'pty-1'
+    runtime['getTerminalWaitPermissionInputs'] = () => ({
+      terminal: {
+        waitText: '',
+        waitBlockedAt: null,
+        title: null,
+        titleStatus: null,
+        titleStatusIsLive: false
+      },
+      lifecycle: null
+    })
+    runtime['getFreshExplicitAgentStatusForHandle'] = () => ({
+      status: 'permission',
+      updatedAt: 42,
+      stateStartedAt: 42
+    })
+    runtime['resolveAuthoritativeTerminalWaitPermission'] = () => null
+    runtime.getTerminalAgentStatus = getStatus
+    return runtime
+  }
+
+  it('shares permission probes per PTY and releases the completed probe', async () => {
+    const pending = pendingStatus()
+    const getStatus = vi.fn(() => pending.status)
+    const wait = interactiveWait(getStatus)
+    const first = wait.getTerminalInteractiveWait('handle-1')
+    const second = wait.getTerminalInteractiveWait('handle-2')
+    expect(getStatus).toHaveBeenCalledOnce()
+    pending.finish({ handle: 'handle-1', isRunningAgent: true, status: 'permission' })
+    expect(await first).toEqual({ source: 'hook', since: 42 })
+    expect(await second).toEqual({ source: 'hook', since: 42 })
+    await wait.getTerminalInteractiveWait('handle-3')
+    expect(getStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a timed-out permission probe in flight until its host responds', async () => {
+    const pending = pendingStatus()
+    const getStatus = vi.fn(() => pending.status)
+    const wait = interactiveWait(getStatus)
+    const first = wait.getTerminalInteractiveWait('handle-1')
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(await first).toBeUndefined()
+    const second = wait.getTerminalInteractiveWait('handle-2')
+    expect(getStatus).toHaveBeenCalledOnce()
+    pending.finish({ handle: 'handle-1', isRunningAgent: true, status: 'permission' })
+    expect(await second).toEqual({ source: 'hook', since: 42 })
+  })
+
+  it('isolates permission probes between runtimes with the same PTY id', async () => {
+    const pending = pendingStatus()
+    const getStatus = vi.fn(() => pending.status)
+    const first = interactiveWait(getStatus).getTerminalInteractiveWait('handle-1')
+    const second = interactiveWait(getStatus).getTerminalInteractiveWait('handle-1')
+    expect(getStatus).toHaveBeenCalledTimes(2)
+    pending.finish({ handle: 'handle-1', isRunningAgent: false, status: null })
+    expect(await first).toBeNull()
+    expect(await second).toBeNull()
+  })
+
+  it('rechecks current leaf evidence before delivery and coalesces repeated refusals', async () => {
+    let leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'working' })
+    const deliver = vi.fn()
+    const runtime = new OrcaRuntimeService()
+    const key = runtime['getLeafKey'](leaf.tabId, leaf.leafId)
+    runtime['leaves'].set(key, leaf)
+    runtime['deliverPendingMessagesForLeaf'] = deliver
+    expect(runtime['checkDeliverySettledAndArmRecheck'](leaf)).toBe(false)
+    expect(runtime['checkDeliverySettledAndArmRecheck'](leaf)).toBe(false)
+    expect(vi.getTimerCount()).toBe(1)
+    leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'idle' })
+    runtime['leaves'].set(key, leaf)
+    await vi.advanceTimersByTimeAsync(3050)
+    expect(deliver).toHaveBeenCalledOnce()
+    expect(deliver).toHaveBeenCalledWith(leaf)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels only the delivery recheck belonging to its runtime', async () => {
+    const leaf = makeTuiIdleLeaf({ lastOutputAt: Date.now(), lastAgentStatus: 'working' })
+    const first = new OrcaRuntimeService()
+    const second = new OrcaRuntimeService()
+    const key = first['getLeafKey'](leaf.tabId, leaf.leafId)
+    first['leaves'].set(key, leaf)
+    second['leaves'].set(key, leaf)
+    first['checkDeliverySettledAndArmRecheck'](leaf)
+    second['checkDeliverySettledAndArmRecheck'](leaf)
+    expect(vi.getTimerCount()).toBe(2)
+    first['clearDeliveryRecheck'](key)
+    expect(vi.getTimerCount()).toBe(1)
+    second['clearDeliveryRecheck'](key)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears a pending blocked scan without cancelling another runtime scan', async () => {
+    const pty = makeTuiIdlePty({ waitBlockedAt: null })
+    const getPty = vi.fn(() => pty)
+    const first = new OrcaRuntimeService()
+    const second = new OrcaRuntimeService()
+    vi.spyOn(first['ptysById'], 'get').mockImplementation(getPty)
+    vi.spyOn(second['ptysById'], 'get').mockImplementation(getPty)
+    first['scheduleWaitBlockedCheck']('pty-1', 'output', 10_000)
+    second['scheduleWaitBlockedCheck']('pty-1', 'output', 10_000)
+    first['scheduleWaitBlockedCheck']('pty-1', 'more', 10_001)
+    second['scheduleWaitBlockedCheck']('pty-1', 'more', 10_001)
+    expect(vi.getTimerCount()).toBe(2)
+    first['clearWaitBlockedCheckState']('pty-1')
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(getPty).toHaveBeenCalledTimes(3)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('routes settlement through the current runtime verdict and resolver', async () => {
+    const runtime = new OrcaRuntimeService()
+    const pending = Promise.withResolvers<RuntimeTerminalWait>()
+    const waiter: TerminalWaiter = {
+      handle: 'handle-1',
+      condition: 'tui-idle',
+      resolve: pending.resolve,
+      reject: pending.reject,
+      timeout: null,
+      cancelIdlePoll: null,
+      abortCleanup: null
+    }
+    runtime['handleByPtyId'].set('pty-1', waiter.handle)
+    runtime['terminalWaiters'].add(waiter)
+    const verdict = vi.fn<OrcaRuntimeService['evaluateTuiIdleForPty']>(() => ({
+      kind: 'ready-strong'
+    }))
+    runtime['evaluateTuiIdleForPty'] = verdict
+    const original = runtime['resolveWaiter']
+    const resolve = vi.fn<OrcaRuntimeService['resolveWaiter']>((...args) =>
+      original.call(runtime, ...args)
+    )
+    runtime['resolveWaiter'] = resolve
+    const pty = makeTuiIdlePty({ lastAgentStatus: 'working' })
+    runtime['resolvePtyTuiIdleWaiters'](pty, 'pty-1')
+    expect(verdict).toHaveBeenCalledExactlyOnceWith(pty)
+    expect(resolve).toHaveBeenCalledOnce()
+    await expect(pending.promise).resolves.toMatchObject({ satisfied: true, condition: 'tui-idle' })
+  })
+
+  it('keeps an absent launcher target as a rejected promise', async () => {
+    const runtime = new OrcaRuntimeService()
+    const result = runtime.resolveOrchestrationAgentLauncherForTarget('custom', {})
+    expect(result).toBeInstanceOf(Promise)
+    await expect(result).rejects.toThrow()
+  })
+
+  it('reads the launcher resolver before forwarding an absent target', async () => {
+    const runtime = new OrcaRuntimeService()
+    const events: string[] = []
+    const rejection = new Error('original_resolver_rejection')
+    const resolve = vi.fn<OrcaRuntimeService['resolveTerminalWorkspaceLaunchScope']>(
+      async function (this: OrcaRuntimeService) {
+        events.push('original-call')
+        expect(this).toBe(runtime)
+        throw rejection
+      }
+    )
+    const replacement = vi.fn()
+    Object.defineProperty(runtime, 'resolveTerminalWorkspaceLaunchScope', {
+      configurable: true,
+      get() {
+        events.push('callee')
+        return resolve
+      }
+    })
+    const target = {
+      get worktree() {
+        events.push('argument')
+        Object.defineProperty(runtime, 'resolveTerminalWorkspaceLaunchScope', {
+          value: replacement
+        })
+        return undefined
+      }
+    }
+    const result = runtime.resolveOrchestrationAgentLauncherForTarget('custom', target)
+    expect(result).toBeInstanceOf(Promise)
+    await expect(result).rejects.toBe(rejection)
+    expect(events).toEqual(['callee', 'argument', 'original-call'])
+    expect(resolve).toHaveBeenCalledExactlyOnceWith(undefined)
+    expect(replacement).not.toHaveBeenCalled()
   })
 })

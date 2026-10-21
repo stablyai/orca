@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError, type AiVaultScanIssue } from '../../shared/ai-vault-types'
 
 const fsMocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
@@ -48,6 +48,36 @@ function scan(scanRoot = root, issues: AiVaultScanIssue[] = [], limit = 100) {
 }
 
 describe('fresh discovery pipeline', () => {
+  it('stops on cancel mid-batch and reports the cut-short stats as no issue', async () => {
+    await createFiles(join(root, 'a'), 30)
+    await createFiles(join(root, 'b'), 30)
+    const controller = new AbortController()
+    let stats = 0
+    fsMocks.stat.mockImplementation(async (path: string) => {
+      stats += 1
+      if (stats === 5) {
+        controller.abort()
+        throw new DOMException('This operation was aborted', 'AbortError')
+      }
+      return fs.stat(path)
+    })
+    const issues: AiVaultScanIssue[] = []
+    const discovery = discoverFiles({
+      rootDir: root,
+      issues,
+      limit: 100,
+      agent: 'claude',
+      extensions: ['.jsonl'],
+      signal: controller.signal
+    })
+    await expect(discovery).rejects.toSatisfy(isAiVaultScanCancelledError)
+    expect(issues).toEqual([])
+    expect(stats).toBeLessThan(60)
+    // The next uncancelled scan sees every file.
+    fsMocks.stat.mockImplementation(fs.stat)
+    expect((await scan()).files).toHaveLength(60)
+  })
+
   it('formats timestamps only for retained files while still reading every candidate', async () => {
     await createFiles(root, 35)
     fsMocks.stat.mockImplementation(async (path: string) =>

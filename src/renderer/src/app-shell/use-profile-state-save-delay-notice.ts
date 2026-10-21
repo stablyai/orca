@@ -34,9 +34,7 @@ export function useProfileStateSaveDelayNotice(): void {
             'app.saving.delayedDescription',
             'Further saves may be delayed while this operation finishes.'
           ),
-          duration: Infinity,
-          dismissible: false,
-          closeButton: false
+          duration: Infinity
         }
       )
     }

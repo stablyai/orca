@@ -7,7 +7,7 @@ import {
   pullRuntimeGit,
   pushRuntimeGit,
   fastForwardRuntimeGit
-} from '@/runtime/runtime-git-client'
+} from '@/runtime/runtime-git-sync-client'
 import {
   isNonFastForwardRemoteError,
   resolveRemoteOperationErrorMessage

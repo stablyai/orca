@@ -1,7 +1,7 @@
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider } from '../../../providers/types'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { isPtyWriteUnavailableError } from '../../../providers/pty-write-unavailable-error'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,

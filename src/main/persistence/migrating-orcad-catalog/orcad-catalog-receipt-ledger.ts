@@ -3,13 +3,18 @@
  * read as committed for as long as a client could ask, and an abandoned stage must not hold the
  * server awake or take a staging slot forever.
  */
-import {
-  MAX_ORCAD_MIGRATION_IMPORT_RECEIPTS,
-  type OrcadMigrationImportReceipt,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
-import { MAX_ORCAD_MIGRATION_EVICTED_RECEIPTS } from '../../../shared/orcad-migration-evicted-receipts'
+import { MAX_ORCAD_MIGRATION_IMPORT_RECEIPTS } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationImportReceipt,
+  OrcadMigrationManifest
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { MAX_ORCAD_MIGRATION_EVICTED_RECEIPTS } from '../../../shared/orcad-migration/orcad-migration-evicted-receipts'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
+import {
+  orcadMigrationStagingKey,
+  type OrcadMigrationRequestIdentity
+} from './orcad-migration-staged-file'
 
 // A client resumes a stage within minutes; a week only covers a host left offline meanwhile.
 export const ORCAD_MIGRATION_STAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -74,5 +79,45 @@ export function expireOrcadMigrationStages(state: PersistedState, now: number): 
     return false
   }
   state.orcadMigrationStagedCatalogs = live
+  return true
+}
+
+export type OrcadMigrationCommitGenerationRuntime = Pick<
+  StoreRuntimeState,
+  'writeGeneration' | 'lastDurableWriteGeneration' | 'orcadMigrationCommitWriteGenerations'
+>
+
+/** Call right after the commit's `scheduleSave`; `generationBefore` is read just before it. */
+export function recordOrcadMigrationCommitWriteGeneration(
+  runtime: OrcadMigrationCommitGenerationRuntime,
+  migration: OrcadMigrationRequestIdentity,
+  generationBefore: number
+): void {
+  // A save suppressed by quit or maintenance never bumps the generation, so no in-process write
+  // can prove this commit; only a restart that reads it from disk does.
+  runtime.orcadMigrationCommitWriteGenerations.set(
+    orcadMigrationStagingKey(migration),
+    runtime.writeGeneration > generationBefore ? runtime.writeGeneration : Number.POSITIVE_INFINITY
+  )
+}
+
+/**
+ * Whether the receipt is on disk. A catalog-state query can see an in-memory receipt whose flush
+ * failed; consuming its received blobs then would leave a retry after restart without them.
+ */
+export function isOrcadMigrationCommitDurable(
+  runtime: OrcadMigrationCommitGenerationRuntime,
+  migration: OrcadMigrationRequestIdentity
+): boolean {
+  const key = orcadMigrationStagingKey(migration)
+  const required = runtime.orcadMigrationCommitWriteGenerations.get(key)
+  if (required === undefined) {
+    return true
+  }
+  if (runtime.lastDurableWriteGeneration < required) {
+    return false
+  }
+  // Durable stays durable, so the entry is no longer needed.
+  runtime.orcadMigrationCommitWriteGenerations.delete(key)
   return true
 }

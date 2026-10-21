@@ -25,7 +25,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab
 }))
 vi.mock('@/lib/terminal-tab-owner-activation', () => ({

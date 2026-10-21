@@ -37,6 +37,14 @@ function startBuild(mode, options = {}) {
     "console.log('windows launcher only')"
   )
   writeFileSync(
+    join(directory, 'config', 'scripts', 'build-windows-agent-hook.mjs'),
+    "console.log('windows agent hook only')"
+  )
+  writeFileSync(
+    join(directory, 'config', 'scripts', 'build-wayland-clipboard.mjs'),
+    "console.log('wayland clipboard only')"
+  )
+  writeFileSync(
     cli,
     `
     import { appendFileSync, existsSync } from 'node:fs'
@@ -355,9 +363,10 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     expect(result).toMatchObject({ code: 0, signal: null })
     expect(build.events()).toEqual([])
     expect(result.output).toContain(
-      platform === 'win32'
-        ? 'windows launcher only'
-        : 'no macOS native computer build required on linux'
+      platform === 'win32' ? 'windows launcher only' : 'wayland clipboard only'
     )
+    if (platform === 'win32') {
+      expect(result.output).toContain('windows agent hook only')
+    }
   })
 })

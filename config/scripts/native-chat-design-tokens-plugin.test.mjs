@@ -1,14 +1,14 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mjs'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { runOxlintPluginOnSources } from './oxlint-plugin-test-runner.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/native-chat-design-tokens.mjs')
 
-function lintSource(source) {
-  return runOxlintPluginOnSource({
+function lintSources(sources) {
+  return runOxlintPluginOnSources({
     pluginName: 'native-chat-design-tokens',
     pluginPath,
-    source,
+    sources,
     rules: {
       'native-chat-design-tokens/no-arbitrary-font-size': 'warn',
       'native-chat-design-tokens/no-softened-foreground': 'warn',
@@ -55,12 +55,20 @@ const accepted = [
   ]
 ]
 
+const diagnosticsBySource = new Map()
+beforeAll(() => {
+  const sources = [...violations, ...accepted].map(([, source]) => source)
+  lintSources(sources).forEach((diagnostics, index) => {
+    diagnosticsBySource.set(sources[index], diagnostics)
+  })
+})
+
 describe('native-chat-design-tokens oxlint plugin', () => {
   it.each(violations)('reports %s', (_name, source) => {
-    expect(lintSource(source)).toHaveLength(1)
+    expect(diagnosticsBySource.get(source)).toHaveLength(1)
   })
 
   it.each(accepted)('accepts %s', (_name, source) => {
-    expect(lintSource(source)).toEqual([])
+    expect(diagnosticsBySource.get(source)).toEqual([])
   })
 })

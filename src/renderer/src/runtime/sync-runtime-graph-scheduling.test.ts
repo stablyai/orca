@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getRuntimeMobileSessionSyncKey,
-  runtimeMobileSessionSyncKeysEqual,
+  runtimeMobileSessionSyncKeysEqual
+} from './sync-runtime-graph/sync-key'
+import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -10,6 +12,7 @@ import {
   hasRegisteredRuntimeTerminalTab,
   registerRuntimeTerminalTab
 } from './mounted-terminal-tab-registry'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
@@ -106,7 +109,11 @@ describe('scheduleRuntimeGraphSync', () => {
     const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
     vi.stubGlobal('HTMLElement', class HTMLElement {})
-    const pane = { id: 1, leafId: '11111111-1111-4111-8111-111111111111' }
+    const pane = {
+      id: 1,
+      leafId: '11111111-1111-4111-8111-111111111111',
+      terminal: { options: { fontSize: -1 } }
+    }
     const unregister = registerRuntimeTerminalTab({
       tabId: 'term-1',
       worktreeId: 'wt-1',
@@ -131,8 +138,9 @@ describe('scheduleRuntimeGraphSync', () => {
     setRuntimeGraphSyncEnabled(true)
     await flushRuntimeGraphSyncTimer()
 
-    expect(syncWindowGraph.mock.calls[0]?.[0].leaves).toContainEqual(
-      expect.objectContaining({ ptyId: 'pty-1', surface: 'background' })
+    const graph = syncWindowGraph.mock.calls[0]?.[0]
+    expect(ORCA_LAYOUT_OWNER_IS_MAIN ? graph.mountedLeaves : graph.leaves).toContainEqual(
+      expect.objectContaining({ leafId: pane.leafId, surface: 'background' })
     )
     unregister()
   })

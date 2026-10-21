@@ -165,13 +165,27 @@ test('reports safe trust reasons, keeps rejection final, and redacts arbitrary e
   }
 })
 
-test('stops after the second wrapped transient failure', async () => {
+test('outlasts a load-balancer warm-up of consecutive wrapped source 503s', async () => {
+  let calls = 0
+  const waits = []
+  const result = await probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
+    wait: async (ms) => { waits.push(ms) },
+    fetch: async () => ++calls <= 6
+      ? Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 })
+      : Response.json(provenProbe)
+  })
+  assert.equal(calls, 7)
+  assert.deepEqual(waits, Array(6).fill(10_000))
+  assert.equal(result.proven, true)
+})
+
+test('stops after two minutes of wrapped transient failures', async () => {
   let calls = 0
   await assert.rejects(probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
     wait: async () => {},
     fetch: async () => { calls++; return Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 }) }
   }), /returned 409.*source_503/)
-  assert.equal(calls, 2)
+  assert.equal(calls, 13)
 })
 
 // The probe allowlist is the committed rehome source list, so a declared source can always probe.

@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { translate } from '@/i18n/i18n'

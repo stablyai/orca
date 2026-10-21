@@ -15,6 +15,7 @@ import {
 } from './linux-package-downloaded-status'
 import { isExternallyManagedLinuxInstall } from './linux-update-package-type'
 import * as linuxPackageRecovery from './linux-package-update-recovery'
+import { preExtractDownloadedAppImageUpdate } from './cli/appimage-copy-pre-extraction'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -249,6 +250,10 @@ export function registerAutoUpdaterHandlers({
     }
     const macInstallerReady = process.platform === 'darwin' ? isMacInstallerReady() : true
     recordUpdaterLifecycle('update_downloaded', { version: info.version, macInstallerReady })
+    // Why: the first daemon after this update should run from its unpacked copy, not the mount.
+    void preExtractDownloadedAppImageUpdate(info.downloadedFile, (filePath) =>
+      linuxPackageRecovery.isInUpdaterPendingCache(filePath)
+    )
     const linuxPackageStatus = resolveLinuxPackageDownloadedStatus(info)
     if (linuxPackageStatus) {
       sendStatus(linuxPackageStatus)

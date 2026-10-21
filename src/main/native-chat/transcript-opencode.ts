@@ -107,6 +107,7 @@ export async function readOpenCodeNativeChatTranscriptFull(
   let records = 0
   let bytes = 0
   let cursor: number | undefined
+  let sourceEmpty = false
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       sessionId,
@@ -134,6 +135,9 @@ export async function readOpenCodeNativeChatTranscriptFull(
         }
         break
       }
+      if (pages.length === 0) {
+        sourceEmpty = page.beforeMessageRowId === null && !page.hasMore
+      }
       pages.push(page.items.map((item) => item.message))
       records += page.items.length
       bytes += Buffer.byteLength(JSON.stringify(page.items))
@@ -148,5 +152,5 @@ export async function readOpenCodeNativeChatTranscriptFull(
   } catch (err) {
     return { error: errorMessage(err) }
   }
-  return { messages: pages.toReversed().flat() }
+  return { messages: pages.toReversed().flat(), sourceEmpty }
 }

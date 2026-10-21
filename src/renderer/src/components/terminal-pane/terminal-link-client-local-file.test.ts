@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -78,6 +79,10 @@ describe('a link to this computer printed in a paired-server terminal', () => {
         access: { kind: 'user-file' }
       })
     )
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-feat', {
+      providesInitialSurface: true,
+      executionHostId: 'runtime:env-1'
+    })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/Users/me/notes.md',

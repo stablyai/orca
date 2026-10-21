@@ -37,6 +37,7 @@ export function useSettingsPageEffects(
     setMountedSectionIds,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
+    setSettingsHostChoice,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     setPendingNavRequestTick,
@@ -189,6 +190,9 @@ export function useSettingsPageEffects(
         )
       }
     }
+    if (settingsNavigationTarget.hostScope) {
+      setSettingsHostChoice(settingsNavigationTarget.hostScope)
+    }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     setHighlightedSettingsTargetId(
@@ -230,6 +234,7 @@ export function useSettingsPageEffects(
     setPendingNavRequestTick,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
+    setSettingsHostChoice,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     settings,

@@ -48,7 +48,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => ownerRuntime.environmentId
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => ownerRuntime.environmentId
 }))
 
 vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
@@ -196,6 +196,7 @@ describe('SourceControlEntryContextMenu', () => {
       connectionId: null,
       runtimeEnvironmentId: 'env-2',
       ownerUnresolved: false,
+      workspace: { workspaceId: 'worktree-1' },
       command: 'zed'
     })
   })

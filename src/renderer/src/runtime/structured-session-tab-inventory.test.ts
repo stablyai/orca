@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { refreshLocalStructuredSessionTabs } from './local-structured-session-tabs-sync'
+import { refreshLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/inventory-refresh'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { readStructuredSessionTabInventory } from './structured-session-tab-inventory'
 
-vi.mock('./local-structured-session-tabs-sync', () => ({
+vi.mock('./local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))

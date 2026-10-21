@@ -125,13 +125,14 @@ export function commitAgentSessionProcessIdentity(
 }
 
 /**
- * The new runtime proved it resumed the expected provider handle. Only now does the session have
- * a writer.
+ * The new runtime's process owns the session: only now does it have a writer. `link` is the
+ * provider handle when the acquire already held it; one the provider answers with later is recorded
+ * through `recordAgentSessionProviderHandle`, and until then the lease names no proven link.
  */
 export function proveAgentSessionOwner(args: {
   record: AgentSessionRecord
   fence: number
-  link: AgentSessionProviderHandleLink
+  link?: AgentSessionProviderHandleLink
   now: number
   leaseTtlMs: number
 }): AgentSessionRecord {
@@ -146,18 +147,18 @@ export function proveAgentSessionOwner(args: {
       reason: 'spawnIdentityMismatch'
     })
   }
-  if (!agentSessionProviderHandleBelongsTo(args.link.handle, record.provider)) {
+  const { link } = args
+  if (link && !agentSessionProviderHandleBelongsTo(link.handle, record.provider)) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
-  if (args.link.mintedAtFence !== args.fence) {
+  if (link && link.mintedAtFence !== args.fence) {
     throw new Error('agent_session_provider_handle_stale_fence')
   }
-  const providerHandleChain = appendAgentSessionProviderHandleLink(
-    record.providerHandleChain,
-    args.link
-  )
+  const providerHandleChain = link
+    ? appendAgentSessionProviderHandleLink(record.providerHandleChain, link)
+    : record.providerHandleChain
   const head = providerHandleChain.at(-1)
-  if (!head) {
+  if (link && !head) {
     throw new Error('agent_session_provider_handle_invalid')
   }
   return {
@@ -166,7 +167,7 @@ export function proveAgentSessionOwner(args: {
     lease: {
       ...record.lease,
       handoffStage: null,
-      provenHandleLinkId: head.linkId,
+      provenHandleLinkId: link && head ? head.linkId : null,
       claimStatus: 'live',
       leaseDeadlineAt: args.now + args.leaseTtlMs,
       lastRenewedAt: args.now,

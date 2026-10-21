@@ -1,6 +1,9 @@
 import { getSecretStore } from '../../shared/secret-store'
 import { readCredentialFileProtection } from '../credential-file-protection'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import {
+  classifyUnenvelopedCredential,
+  type SecretAtRestProtection
+} from '../../shared/secret-at-rest-protection'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -23,7 +26,7 @@ function ensureOrcaDir(): void {
   }
 }
 
-function getOpenAiKeyPath(): string {
+export function getOpenAiKeyPath(): string {
   return join(getOrcaDir(), OPENAI_SPEECH_TOKEN_FILE)
 }
 
@@ -47,6 +50,22 @@ export function hasOpenAiSpeechApiKey(): boolean {
   // Why: Settings and model-state refresh call this on startup; checking file
   // existence avoids a decrypt that triggers macOS keychain prompts.
   return existsSync(getOpenAiKeyPath())
+}
+
+/**
+ * Whether the stored key decrypts on this host. Why orcad needs it: a key the desktop sealed with
+ * Electron's safeStorage exists on disk but orcad's own secret store cannot open it.
+ */
+export function canReadOpenAiSpeechApiKey(): boolean {
+  if (!hasOpenAiSpeechApiKey()) {
+    return false
+  }
+  try {
+    readOpenAiSpeechApiKey()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** How the stored speech key sits on disk, or null when none is stored. */
@@ -94,11 +113,31 @@ export function readOpenAiSpeechApiKey(): string {
       return cachedOpenAiSpeechApiKey
     }
     cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
-      ? getSecretStore().decryptString(raw)
-      : raw.toString('utf8')
+      ? decryptOrLegacyPlaintext(raw)
+      : plaintextOnly(raw)
     return cachedOpenAiSpeechApiKey
   } catch {
     throw new Error('OpenAI API key could not be decrypted')
+  }
+}
+
+// Why: with no sealing here, sealed bytes are another store's ciphertext, never a usable key.
+function plaintextOnly(raw: Buffer): string {
+  if (classifyUnenvelopedCredential(raw) !== 'plaintext') {
+    throw new Error('sealed by another secret store')
+  }
+  return raw.toString('utf8')
+}
+
+// Why: a key saved before sealing became available stays plaintext until it is migrated or re-saved.
+function decryptOrLegacyPlaintext(raw: Buffer): string {
+  try {
+    return getSecretStore().decryptString(raw)
+  } catch (error) {
+    if (classifyUnenvelopedCredential(raw) === 'plaintext') {
+      return raw.toString('utf8')
+    }
+    throw error
   }
 }
 

@@ -3,7 +3,7 @@ import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
-import type { IPtyProvider } from '../../../providers/types'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import {
@@ -14,6 +14,8 @@ import {
   type ResolvedPtyHost
 } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
+import { publishSyntheticExit, stopLegacyRelayBridgedPty } from '../runtime/kill'
+import { PtyExitProof, PtyRetirementWithoutProof } from '../../../pty-exit-proof'
 
 export type PtyKillIpcDeps = {
   store?: Store
@@ -80,16 +82,14 @@ async function stopRendererOwnedPtyProcess(
   deps: PtyKillIpcDeps,
   args: { id: string; keepHistory?: boolean }
 ): Promise<void> {
-  const {
-    store,
-    runtime,
-    getLocalPtyProviderStartupPromise,
-    shutdownProviderAndDetectExit,
-    rememberSyntheticKillExit,
-    sendPtyExitToRenderer
-  } = deps
+  const { store, runtime, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
   runtime?.markPtyStopRequested?.(args.id)
   const connectionId = getPtySshConnectionId(args.id)
+  const bridgedStop = stopLegacyRelayBridgedPty(args.id, connectionId, args.keepHistory === true)
+  if (bridgedStop) {
+    await bridgedStop
+    return
+  }
   // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(args.id))
   if (startupPromise) {
@@ -100,41 +100,34 @@ async function stopRendererOwnedPtyProcess(
     // Why: detached SSH PTYs intentionally keep ownership after their
     // provider is unregistered; hydrated app-scoped ids can also arrive
     // before ownership is rebuilt. Tombstone instead of falling back local.
-    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-    runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
-    runtime?.onPtyExit(args.id, -1, incarnationId)
-    rememberSyntheticKillExit(args.id, incarnationId)
-    sendPtyExitToRenderer({
-      id: args.id,
-      code: -1,
-      ...(incarnationId ? { incarnationId } : {})
-    })
+    const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
+    const incarnationId = finishPtyShutdown(args.id, connectionId, store, unproven)
+    publishSyntheticExit(deps, args.id, -1, incarnationId, unproven)
     return
   }
   const shutdownProvider = provider ?? getProviderForPty(args.id)
-  let providerExitObserved = false
+  const stoppingIncarnationId = ptyIncarnationById.get(args.id)
+  let proof: PtyExitProof
   try {
-    providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+    const providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
       immediate: true,
       keepHistory: args.keepHistory ?? false
     })
+    proof = PtyExitProof.from(
+      providerExitObserved ? 'exit-observed' : 'shutdown-acknowledged',
+      stoppingIncarnationId
+    )
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {
       // Why: a failed shutdown can leave the local daemon's process alive; keep ownership so a retry can reach it.
       throw err
     }
-    /* session already dead — cleanup below handles the rest */
+    proof = PtyExitProof.from('absent', stoppingIncarnationId)
   }
   // Why: some shutdown paths do not emit onExit through the provider listener.
   // Explicit cleanup is idempotent and covers already-dead PTYs.
-  const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-  if (!providerExitObserved) {
-    runtime?.onPtyExit(args.id, -1, incarnationId)
-    rememberSyntheticKillExit(args.id, incarnationId)
-    sendPtyExitToRenderer({
-      id: args.id,
-      code: -1,
-      ...(incarnationId ? { incarnationId } : {})
-    })
+  const incarnationId = finishPtyShutdown(args.id, connectionId, store, proof)
+  if (proof.source !== 'exit-observed') {
+    publishSyntheticExit(deps, args.id, -1, incarnationId, proof)
   }
 }

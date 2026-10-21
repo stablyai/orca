@@ -5,10 +5,10 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(async () => {})
 }))
 
-vi.mock('./ssh/ssh-target-registry', () => ({
+vi.mock('./ssh/targets/ssh-target-registry', () => ({
   connectRegisteredSshTarget: mocks.connect
 }))
-vi.mock('./ipc/ssh', () => ({
+vi.mock('./ipc/ssh/ssh', () => ({
   getSshConnectionStore: () => ({
     upsertRuntimeOwnedTarget: (runtimeId: string) => ({
       id: `runtime-ssh-${runtimeId}`,
@@ -19,7 +19,7 @@ vi.mock('./ipc/ssh', () => ({
     })
   })
 }))
-vi.mock('./ipc/ssh-session-teardown', () => ({
+vi.mock('./ipc/ssh/ssh-session-teardown', () => ({
   disconnectRegisteredSshTarget: vi.fn(),
   removeRegisteredSshTarget: mocks.remove
 }))

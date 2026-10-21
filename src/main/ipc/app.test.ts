@@ -13,7 +13,8 @@ const {
   showOpenDialogMock,
   trustFloatingWorkspaceDirectoryMock,
   registerRendererShutdownCheckpointHandlerMock,
-  registerMacKeyboardLayoutChangeNotificationsMock
+  registerMacKeyboardLayoutChangeNotificationsMock,
+  prepareWindowsAdministratorRestartMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -25,7 +26,8 @@ const {
   showOpenDialogMock: vi.fn(),
   trustFloatingWorkspaceDirectoryMock: vi.fn(),
   registerRendererShutdownCheckpointHandlerMock: vi.fn(),
-  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn()
+  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn(),
+  prepareWindowsAdministratorRestartMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -103,6 +105,10 @@ vi.mock('../app-relaunch', async (importOriginal) => ({
   relaunchApp: relaunchAppMock
 }))
 
+vi.mock('../windows/windows-administrator-restart', () => ({
+  prepareWindowsAdministratorRestart: prepareWindowsAdministratorRestartMock
+}))
+
 vi.mock('./floating-workspace-directory', () => ({
   ensureDefaultFloatingWorkspacePath: vi.fn(),
   trustFloatingWorkspaceDirectory: trustFloatingWorkspaceDirectoryMock,
@@ -118,7 +124,6 @@ vi.mock('./macos-keyboard-layout-change-notifications', () => ({
 }))
 
 const windowsProbes = vi.hoisted(() => ({
-  isWslAvailable: vi.fn(() => true),
   isWslAvailableAsync: vi.fn(async () => true),
   listWslDistros: vi.fn(() => ['Ubuntu']),
   listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
@@ -127,7 +132,6 @@ const windowsProbes = vi.hoisted(() => ({
 }))
 
 vi.mock('../wsl', () => ({
-  isWslAvailable: windowsProbes.isWslAvailable,
   isWslAvailableAsync: windowsProbes.isWslAvailableAsync,
   listWslDistros: windowsProbes.listWslDistros,
   listWslDistrosAsync: windowsProbes.listWslDistrosAsync
@@ -156,6 +160,7 @@ describe('registerAppHandlers', () => {
     destroySystemTrayMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
+    prepareWindowsAdministratorRestartMock.mockReset()
     showOpenDialogMock.mockReset()
     trustFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
@@ -178,8 +183,49 @@ describe('registerAppHandlers', () => {
 
     registerAppHandlers(store as never)
 
-    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store)
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(
+      store,
+      undefined,
+      undefined
+    )
     expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
+  })
+
+  it('checkpoints before scheduling the native administrator restart and quits normally', async () => {
+    const plan = { execPath: 'C:\\Orca\\resources\\bin\\orca.exe', args: ['restart'] }
+    prepareWindowsAdministratorRestartMock.mockReturnValue(plan)
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler never reads the store.
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+    const pending = Promise.resolve(handlers.get('app:restartAsAdministrator')?.(null))
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).not.toHaveBeenCalled()
+    finishCleanup()
+    await pending
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).toHaveBeenCalledWith('windows-administrator', undefined, plan)
+    expect(appQuitMock).toHaveBeenCalledOnce()
+    expect(appExitMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the desktop open if the native restart is unavailable', async () => {
+    prepareWindowsAdministratorRestartMock.mockImplementation(() => {
+      throw new Error('Unavailable')
+    })
+    const onBeforeRelaunch = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this handler never reads the store.
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+    await expect(handlers.get('app:restartAsAdministrator')?.(null)).rejects.toThrow('Unavailable')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
+    expect(relaunchAppMock).not.toHaveBeenCalled()
+    expect(appQuitMock).not.toHaveBeenCalled()
   })
 
   it('marks relaunch as expected shutdown before exiting', async () => {
@@ -227,6 +273,37 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('runs exit-only cleanup after pre-relaunch cleanup on relaunch, never on restart', async () => {
+    let finishExitCleanup!: () => void
+    const onBeforeRelaunch = vi.fn()
+    const onBeforeRelaunchExit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishExitCleanup = resolve
+        })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: relaunch and restart never read the store.
+    registerAppHandlers({} as never, { onBeforeRelaunch, onBeforeRelaunchExit })
+
+    await handlers.get('app:restart')?.(null)
+    await vi.advanceTimersByTimeAsync(150)
+    expect(onBeforeRelaunchExit).not.toHaveBeenCalled()
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onBeforeRelaunchExit).toHaveBeenCalledOnce()
+    expect(onBeforeRelaunch.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      onBeforeRelaunchExit.mock.invocationCallOrder[0]
+    )
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    finishExitCleanup()
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
     expect(appExitMock).toHaveBeenCalledWith(0)
   })
 
@@ -433,7 +510,6 @@ describe('registerAppHandlers', () => {
     expect(windowsProbes.isWslAvailableAsync).toHaveBeenCalledTimes(1)
     expect(windowsProbes.listWslDistrosAsync).toHaveBeenCalledTimes(1)
     expect(windowsProbes.isPwshAvailableAsync).toHaveBeenCalledTimes(1)
-    expect(windowsProbes.isWslAvailable).not.toHaveBeenCalled()
     expect(windowsProbes.listWslDistros).not.toHaveBeenCalled()
     expect(windowsProbes.isPwshAvailable).not.toHaveBeenCalled()
   })

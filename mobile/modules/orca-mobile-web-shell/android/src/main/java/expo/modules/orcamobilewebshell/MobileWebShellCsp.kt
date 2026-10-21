@@ -36,7 +36,7 @@ internal val MOBILE_WEB_SHELL_CSP = listOf(
   //
   // `http:` stays out: it reaches no image TLS cannot serve, and a cleartext image is readable and
   // replaceable in flight by anything on the path.
-  "img-src 'self' data: https:",
+  "img-src 'self' data: blob: https:",
   "font-src 'none'",
   // The origin is one read-only directory behind the manifest map, so 'self' reaches nothing the
   // page cannot already read, and the bootstrap page reads ./manifest.json through it. This is the

@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
@@ -87,7 +87,8 @@ export function resolveWorktreeHostConnection(
   }
   const environmentId =
     environmentIdOverride === undefined
-      ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      ? // Why: the phase only reads SSH state; a twin reads the direct connection.
+        runtimeEnvironmentIdUnlessTwin(state, worktreeId)
       : environmentIdOverride
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)

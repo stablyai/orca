@@ -7,21 +7,14 @@ export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
   lineage: WorktreeLineage | null
 }
 
-/** The fields a lineage edge is scoped by. Split out so create-time callers — which have a
- *  projected child, not a real Worktree — can check the same rule the projection enforces. */
-export type WorktreeLineageBoundary = Pick<Worktree, 'repoId' | 'hostId' | 'projectId'>
+/** The execution host is the only lineage boundary. */
+export type WorktreeLineageBoundary = Pick<Worktree, 'hostId'>
 
 export function sharesWorktreeLineageBoundary(
   child: WorktreeLineageBoundary,
   parent: WorktreeLineageBoundary
 ): boolean {
-  return (
-    child.repoId === parent.repoId &&
-    (child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId) &&
-    (child.projectId === undefined ||
-      parent.projectId === undefined ||
-      child.projectId === parent.projectId)
-  )
+  return child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId
 }
 
 export function sharesResolvedWorktreeLineageBoundary(child: Worktree, parent: Worktree): boolean {
@@ -43,20 +36,19 @@ export function isValidResolvedWorktreeLineageEdge(
   )
 }
 
-export function getCyclicWorktreeLineageChildIds(
-  lineageByChildId: ReadonlyMap<string, WorktreeLineage>
-): Set<string> {
-  const processed = new Set<string>()
-  const cyclic = new Set<string>()
+/** The children on a cycle of a child-to-parent map, whatever the keys are. */
+export function getCyclicLineageChildKeys<Key>(parentByChild: ReadonlyMap<Key, Key>): Set<Key> {
+  const processed = new Set<Key>()
+  const cyclic = new Set<Key>()
 
-  for (const childId of lineageByChildId.keys()) {
+  for (const childId of parentByChild.keys()) {
     if (processed.has(childId)) {
       continue
     }
-    const path: string[] = []
-    const pathIndexById = new Map<string, number>()
-    let currentId: string | undefined = childId
-    while (currentId && lineageByChildId.has(currentId) && !processed.has(currentId)) {
+    const path: Key[] = []
+    const pathIndexById = new Map<Key, number>()
+    let currentId: Key | undefined = childId
+    while (currentId !== undefined && parentByChild.has(currentId) && !processed.has(currentId)) {
       const cycleStart = pathIndexById.get(currentId)
       if (cycleStart !== undefined) {
         for (let index = cycleStart; index < path.length; index += 1) {
@@ -66,7 +58,7 @@ export function getCyclicWorktreeLineageChildIds(
       }
       pathIndexById.set(currentId, path.length)
       path.push(currentId)
-      currentId = lineageByChildId.get(currentId)?.parentWorktreeId
+      currentId = parentByChild.get(currentId)
     }
     for (const id of path) {
       processed.add(id)
@@ -76,44 +68,89 @@ export function getCyclicWorktreeLineageChildIds(
   return cyclic
 }
 
+export function getCyclicWorktreeLineageChildIds(
+  lineageByChildId: ReadonlyMap<string, WorktreeLineage>
+): Set<string> {
+  return getCyclicLineageChildKeys(
+    new Map([...lineageByChildId].map(([childId, lineage]) => [childId, lineage.parentWorktreeId]))
+  )
+}
+
+export function getConnectedWorktreeLineageIds(
+  seedIds: readonly string[],
+  lineageById: Readonly<Record<string, WorktreeLineage>>
+): Set<string> {
+  const childrenByParentId = new Map<string, string[]>()
+  for (const [childId, lineage] of Object.entries(lineageById)) {
+    const children = childrenByParentId.get(lineage.parentWorktreeId) ?? []
+    children.push(childId)
+    childrenByParentId.set(lineage.parentWorktreeId, children)
+  }
+  const connected = new Set(seedIds)
+  const pending = [...connected]
+  for (const id of pending) {
+    for (const adjacent of [
+      lineageById[id]?.parentWorktreeId,
+      ...(childrenByParentId.get(id) ?? [])
+    ]) {
+      if (adjacent && !connected.has(adjacent)) {
+        connected.add(adjacent)
+        pending.push(adjacent)
+      }
+    }
+  }
+  return connected
+}
+
 export function projectResolvedWorktreeLineage<T extends Worktree>(
   worktrees: readonly T[],
-  lineageById: Readonly<Record<string, WorktreeLineage>>
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  knownPeers: readonly Worktree[] = []
 ): WorktreeWithResolvedLineage<T>[] {
-  const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
-  const validLineageByChildId = new Map<string, WorktreeLineage>()
-  const childIdsByParentId = new Map<string, string[]>()
+  const allWorktrees: readonly Worktree[] = [...worktrees, ...knownPeers]
+  const indicesById = new Map<string, number[]>()
+  allWorktrees.forEach((worktree, index) => {
+    const indices = indicesById.get(worktree.id) ?? []
+    indices.push(index)
+    indicesById.set(worktree.id, indices)
+  })
+  const validLineageByChildIndex = new Map<number, WorktreeLineage>()
+  const parentIndexByChildIndex = new Map<number, number>()
+  const childIdsByParentIndex = new Map<number, string[]>()
 
-  for (const child of worktrees) {
-    const childId = child.id
-    const lineage = lineageById[childId]
+  allWorktrees.forEach((child, childIndex) => {
+    const lineage = lineageById[child.id]
     if (!lineage) {
-      continue
+      return
     }
-    const parent = worktreeById.get(lineage.parentWorktreeId)
-    if (!parent || !isValidResolvedWorktreeLineageEdge(child, parent, lineage)) {
-      continue
+    const parentIndices = (indicesById.get(lineage.parentWorktreeId) ?? []).filter((index) =>
+      isValidResolvedWorktreeLineageEdge(child, allWorktrees[index], lineage)
+    )
+    // A locator can exist on several hosts. An ambiguous parent must not be selected by row order.
+    if (parentIndices.length !== 1) {
+      return
     }
-    validLineageByChildId.set(childId, lineage)
+    validLineageByChildIndex.set(childIndex, lineage)
+    parentIndexByChildIndex.set(childIndex, parentIndices[0])
+  })
+
+  for (const index of getCyclicLineageChildKeys(parentIndexByChildIndex)) {
+    validLineageByChildIndex.delete(index)
+    parentIndexByChildIndex.delete(index)
   }
 
-  const cyclicChildIds = getCyclicWorktreeLineageChildIds(validLineageByChildId)
-  for (const childId of cyclicChildIds) {
-    validLineageByChildId.delete(childId)
+  for (const [childIndex, parentIndex] of parentIndexByChildIndex) {
+    const children = childIdsByParentIndex.get(parentIndex) ?? []
+    children.push(allWorktrees[childIndex].id)
+    childIdsByParentIndex.set(parentIndex, children)
   }
 
-  for (const [childId, lineage] of validLineageByChildId) {
-    const children = childIdsByParentId.get(lineage.parentWorktreeId) ?? []
-    children.push(childId)
-    childIdsByParentId.set(lineage.parentWorktreeId, children)
-  }
-
-  return worktrees.map((worktree) => {
-    const lineage = validLineageByChildId.get(worktree.id) ?? null
+  return worktrees.map((worktree, index) => {
+    const lineage = validLineageByChildIndex.get(index) ?? null
     return {
       ...worktree,
       parentWorktreeId: lineage?.parentWorktreeId ?? null,
-      childWorktreeIds: childIdsByParentId.get(worktree.id) ?? [],
+      childWorktreeIds: childIdsByParentIndex.get(index) ?? [],
       lineage
     }
   })

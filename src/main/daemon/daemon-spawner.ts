@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import type { PtyProcessCeilingState } from './pty-process-ceiling-state'
+import type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
 import {
   constants,
   copyFileSync,
@@ -39,6 +39,8 @@ export type DaemonPidFile = {
 
 export type DaemonProcessHandle = {
   mode?: 'degraded-new-pty-fallback'
+  /** Fresh terminals stay off this daemon until a new incarnation replaces it. */
+  quarantine?: 'host-image-severed'
   /** Set when the launcher kept a daemon some earlier app launch forked, rather than forking one. */
   adopted?: true
   releaseAdoptionLease?(): void
@@ -57,6 +59,8 @@ export type DaemonSpawnerOptions = {
   launcher: DaemonLauncher
   /** Test seam; production uses the default window. */
   respawnThrottle?: DaemonRespawnThrottle
+  /** Why here: restart reuses this spawner, so the launch policy's recycle choice survives it. */
+  staleDaemonRecycleVersion?: string | null
 }
 
 export class DaemonSpawner {
@@ -67,9 +71,11 @@ export class DaemonSpawner {
   private tokenPath: string
   private pidPath: string
   private respawnThrottle: DaemonRespawnThrottle
+  readonly staleDaemonRecycleVersion: string | null
 
   constructor(opts: DaemonSpawnerOptions) {
     this.runtimeDir = opts.runtimeDir
+    this.staleDaemonRecycleVersion = opts.staleDaemonRecycleVersion ?? null
     this.launcher = opts.launcher
     this.respawnThrottle = opts.respawnThrottle ?? new DaemonRespawnThrottle()
     this.socketPath = getDaemonSocketPath(this.runtimeDir)

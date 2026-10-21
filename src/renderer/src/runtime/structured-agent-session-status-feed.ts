@@ -12,10 +12,8 @@ import {
   type AgentSessionStatusSnapshot
 } from '../../../shared/agent-session-status-snapshot-fold'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import {
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
-} from './runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionStatus } from './structured-agent-session-client'
 
 export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
@@ -23,6 +21,7 @@ export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getNamingActive: (sessionId: string) => boolean | null
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
   subscribe: (listener: () => void) => () => void
 }
@@ -40,6 +39,7 @@ export function structuredAgentSessionStatusFeedKey(target: RuntimeClientTarget)
 
 function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let snapshot: StructuredAgentSessionStatusSnapshot = new Map()
+  let namingActiveSessionIds: Set<string> | null = null
   const confirmedSessions = new Set<string>()
   const listeners = new Set<() => void>()
   const activations = new Set<symbol>()
@@ -60,6 +60,9 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
       reconnectAttempt = 0
+      if (event.namingActiveSessionIds !== undefined) {
+        namingActiveSessionIds = new Set(event.namingActiveSessionIds)
+      }
       for (const session of event.sessions) {
         confirmedSessions.add(session.sessionId)
       }
@@ -108,6 +111,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       return
     }
     generation += 1
+    namingActiveSessionIds = null
     confirmedSessions.clear()
     revokeSnapshotOwnership()
     emit()
@@ -182,6 +186,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     reconnectAttempt = 0
     // Teardown only runs once nothing is activated, so re-confirmation is the next
     // subscribe's job and there is no mounted reader left to notify.
+    namingActiveSessionIds = null
     confirmedSessions.clear()
   }
 
@@ -200,6 +205,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     },
     getSnapshot: () => snapshot,
+    getNamingActive: (sessionId) => namingActiveSessionIds?.has(sessionId) ?? null,
     getSessionObservation: (sessionId) =>
       confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',
     subscribe: (listener) => {

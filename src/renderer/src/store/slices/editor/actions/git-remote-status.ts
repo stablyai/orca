@@ -1,7 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { tryResolveGitOperationTarget } from './git-operation-target'
-import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import { areUpstreamStatusesEqual } from '../git/git-status-reconciliation'
 

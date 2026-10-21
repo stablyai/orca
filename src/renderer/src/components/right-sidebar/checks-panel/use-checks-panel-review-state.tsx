@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache-identity'
-import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   readChecksPanelGitStatusSnapshot,
@@ -28,7 +28,7 @@ import {
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../../shared/source-control-ai'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
 
 export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {

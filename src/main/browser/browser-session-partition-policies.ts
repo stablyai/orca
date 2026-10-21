@@ -17,6 +17,7 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from './browser-webauthn-access'
 import { noticeDocPreviewDownloadBlocked } from './doc-preview-download-block-notice'
+import { isRemoteCliDrivenGuest } from './desktop-browser-bridge/remote-cli-driven-workspaces'
 
 // Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
 const configuredPartitions = new Set<string>()
@@ -48,15 +49,26 @@ function configureBrowserSessionUserAgentPolicy(sess: Session, installExceptions
   )
 }
 
+// Why: an SSH host scripting a page must not read the desktop clipboard through it.
+function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
+  return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+}
+
 /** Drop only the installer memo; retired-session guards remain fail-closed. */
 export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
   configuredPartitions.delete(partition)
 }
 const handleWillDownload = (
-  _event: Electron.Event,
+  event: Electron.Event,
   item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
+  // Why: a host-driven page could otherwise write a host-chosen file into this desktop's Downloads.
+  if (isRemoteCliDrivenGuest(webContents.id)) {
+    event.preventDefault()
+    console.info('[desktop-browser-bridge] refused a download from a page an SSH host drives')
+    return
+  }
   browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
 }
 
@@ -159,7 +171,21 @@ export async function installBrowserSessionPartitionPolicies(
         )
         return
       }
-      const allowed = isAutoGrantedBrowserSessionPermission(permission)
+      if (
+        permission === 'openExternal' &&
+        browserManager.requestExternalAppLaunch(
+          webContents,
+          'externalURL' in details ? details.externalURL : undefined,
+          () => resolvePermissionNoticeUrl(webContents, details) || null
+        )
+      ) {
+        // Why: Orca launches the app itself after the user says yes, so Chromium's own launch stays denied.
+        callback(false)
+        return
+      }
+      const allowed =
+        isAutoGrantedBrowserSessionPermission(permission) &&
+        !deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)
       if (!allowed) {
         const rawUrl = resolvePermissionNoticeUrl(webContents, details)
         browserManager.notifyPermissionDenied({
@@ -170,7 +196,10 @@ export async function installBrowserSessionPartitionPolicies(
       }
       callback(allowed)
     })
-    sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+    sess.setPermissionCheckHandler((webContents, permission, _origin, details) => {
+      if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
+        return false
+      }
       if (permission === 'media') {
         return hasSystemMediaAccess(details?.mediaType)
       }

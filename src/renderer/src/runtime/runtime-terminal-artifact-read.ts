@@ -1,7 +1,8 @@
 import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { RuntimeReadableFileContent } from './runtime-file-client-types'
-import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 /** Reads a host file outside every workspace through the grant its host issued for it. */

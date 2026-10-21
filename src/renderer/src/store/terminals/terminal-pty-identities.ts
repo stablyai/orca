@@ -1,24 +1,5 @@
-import type { AppState } from '../types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveDirectSshTerminalWorkspaceKeys } from '../slices/direct-ssh-terminal-workspace-scope'
-
-export function resolveDirectSshTerminalKeys(state: AppState, targetId: string): Set<string> {
-  return resolveDirectSshTerminalWorkspaceKeys(
-    {
-      targetId,
-      catalogRevision: 0,
-      repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
-      projectGroups: state.projectGroups,
-      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-    },
-    state.tabsByWorktree,
-    state.lastKnownRelayPtyIdByTabId
-  )
-}
 
 export function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
   if (value === true) {

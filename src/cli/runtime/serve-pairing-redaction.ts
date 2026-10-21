@@ -1,3 +1,4 @@
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type { superviseForegroundServe } from './serve-update-supervisor'
 import { createInterface } from 'node:readline'
 
@@ -61,11 +62,11 @@ export type ServeSpawnChild = Parameters<typeof superviseForegroundServe>[0]['sp
 
 /** Pipes the child's stdout through the redactor; stdio slots other than stdout are kept. */
 export function redactingSpawn(spawn: ServeSpawnChild): ServeSpawnChild {
-  return (program, args, options) => {
-    const stdio: Parameters<ServeSpawnChild>[2]['stdio'] = Array.isArray(options.stdio)
-      ? options.stdio.map((slot, index) => (index === 1 ? 'pipe' : slot))
+  return (spec) => {
+    const stdio: ProcessSpec['stdio'] = Array.isArray(spec.stdio)
+      ? spec.stdio.map((slot, index) => (index === 1 ? 'pipe' : slot))
       : ['inherit', 'pipe', 'inherit']
-    const child = spawn(program, args, { ...options, stdio })
+    const child = spawn({ ...spec, stdio })
     if (child.stdout) {
       // Why: a closed log pipe must not crash the supervisor; the server keeps running.
       child.stdout.on('error', () => undefined)

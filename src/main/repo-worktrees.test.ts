@@ -236,6 +236,28 @@ describe('repo-worktrees', () => {
       ).rejects.toThrow(WorktreeCatalogUnavailableError)
       expect(listWorktreesMock).not.toHaveBeenCalled()
     })
+
+    // #18272: `[]` made hosted review report a live remote worktree as not belonging to its repo.
+    it('reports an unserved ssh host as unavailable from the graph listing, never as empty', async () => {
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toThrow(
+        'SSH connection "host-a" is not connected'
+      )
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toBeInstanceOf(
+        WorktreeCatalogUnavailableError
+      )
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
+
+    it('reports a runtime-owned row as unavailable from the graph listing, never as empty', async () => {
+      await expect(
+        listRepoWorktreeGraph({
+          ...sshOnlyRepo,
+          executionHostId: 'runtime:env-7',
+          connectionId: 'nested-target'
+        })
+      ).rejects.toThrow('host runtime:env-7 is not reachable from this process')
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
   })
 
   it('treats Windows repo root casing differences as the same local root', () => {

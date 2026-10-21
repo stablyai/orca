@@ -1,12 +1,12 @@
 import { pasteTerminalText } from './terminal-bracketed-paste'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield,
-  type TerminalPasteExecutionResult,
-  type TerminalPasteRuntime,
-  type TerminalPasteSource,
-  type TerminalPasteTextOptions
-} from './terminal-paste-coordinator'
+import { executeTerminalPastePlan } from './terminal-paste-executor'
+import { planTerminalPasteWithYield } from './terminal-paste-coordinator'
+import type {
+  TerminalPasteExecutionResult,
+  TerminalPasteRuntime,
+  TerminalPasteSource,
+  TerminalPasteTextOptions
+} from './terminal-paste-model'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 
 type PasteTextIntoTerminalPaneArgs = {

@@ -125,7 +125,7 @@ describe('mobile transcript tool result paging', () => {
         renderer = create(createElement(Harness, { client }))
       })
 
-      const windowed = foldMobileNativeChatMessages(current().messages)
+      const windowed = foldMobileNativeChatMessages(current().messages, 'claude')
       expect(pairOutputs(windowed)).toEqual([
         ['silent-2047', 'late named output'],
         [undefined, 'output A'],
@@ -137,7 +137,7 @@ describe('mobile transcript tool result paging', () => {
         transcriptOffset: 800,
         blocks: [{ output: 'output A' }, { output: 'output B', isError: true }]
       })
-      expect(foldMobileNativeChatMessages(windowed)).toEqual(windowed)
+      expect(foldMobileNativeChatMessages(windowed, 'claude')).toEqual(windowed)
       expect(current().messages).toEqual(tail)
       expect(current().messages.every((row) => !Object.hasOwn(row, 'unpairedToolResults'))).toBe(
         true
@@ -147,19 +147,23 @@ describe('mobile transcript tool result paging', () => {
         current().loadEarlier()
         await Promise.resolve()
       })
-      expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
-        agent: 'claude',
-        sessionId: 'remote-session',
-        limit: hasCursor ? 60 : 100,
-        ...(hasCursor ? { beforeOffset: 700 } : {})
-      })
+      expect(sendRequest).toHaveBeenCalledWith(
+        'nativeChat.readSession',
+        {
+          agent: 'claude',
+          sessionId: 'remote-session',
+          limit: hasCursor ? 60 : 100,
+          ...(hasCursor ? { beforeOffset: 700 } : {})
+        },
+        expect.objectContaining({ budgetSpansConnect: true })
+      )
       expect(current().messages.map((row) => row.id)).toEqual([
         'prompt',
         'older-calls',
         'backlog',
         'source-results'
       ])
-      const whole = foldMobileNativeChatMessages(current().messages)
+      const whole = foldMobileNativeChatMessages(current().messages, 'claude')
       expect(pairOutputs(whole)).toEqual([
         ['outside-a', 'output A'],
         ['outside-b', 'output B'],
@@ -167,12 +171,12 @@ describe('mobile transcript tool result paging', () => {
       ])
       expect(whole.some((row) => row.role === 'tool')).toBe(false)
       expect(nativeChatTurnMembership(whole).turnKeys).toEqual(['prompt', 'prompt'])
-      expect(foldMobileNativeChatMessages(whole)).toEqual(whole)
+      expect(foldMobileNativeChatMessages(whole, 'claude')).toEqual(whole)
 
       await act(async () => {
         emit({ type: 'snapshot', messages: structuredClone(tail), hasMore: true })
       })
-      expect(foldMobileNativeChatMessages(current().messages)).toEqual(whole)
+      expect(foldMobileNativeChatMessages(current().messages, 'claude')).toEqual(whole)
       expect(current().hasMore).toBe(false)
       expect(current().messages.every((row) => !Object.hasOwn(row, 'unpairedToolResults'))).toBe(
         true

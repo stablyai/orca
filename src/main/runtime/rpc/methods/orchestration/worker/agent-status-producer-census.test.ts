@@ -41,6 +41,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { projectFleetWorkerPage } from './worker-observation'
+import type { HostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 
 const PANE_KEY = 'tab-census:leaf-census'
 const TERMINAL_HANDLE = 'term_census'
@@ -119,7 +120,7 @@ function censusStore() {
     ],
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] as object), ...meta }
       return metaById[id]
     },
@@ -245,7 +246,6 @@ describe('agent status identity across every producer and consumer path', () => 
     try {
       installMainWindowAgentStatusListeners({
         window: window as never,
-        maybeAutoRenameBranchOnFirstWork: () => {},
         onRecordAgentState: () => {}
       })
       for (const listener of listeners) {

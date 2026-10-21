@@ -96,6 +96,8 @@ describe('release ref trust with case-twin names', () => {
   })
 
   it('checks out the vetted SHA shallowly without mirroring case-twin refs again', async () => {
+    expect(macCheckout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
+    expect(macCheckout.with['persist-credentials']).toBe(false)
     const checkout = join(directory, 'checkout')
     const env = { ...identity, ...macCheckout.env }
     await git(['init', checkout], env)

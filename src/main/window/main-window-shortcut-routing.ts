@@ -20,7 +20,7 @@ import type { Store } from '../persistence'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
-import { isMacAppPasteInput } from './main-window-visual-lifecycle'
+import { isMacAppPasteInput } from './mac-app-paste-input'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle

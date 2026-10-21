@@ -32,7 +32,7 @@ vi.mock('@/store', () => ({
   })
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
-vi.mock('@/runtime/runtime-file-client', () => ({ statRuntimePath: runtime.stat }))
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: runtime.stat }))
 vi.mock('@/lib/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,

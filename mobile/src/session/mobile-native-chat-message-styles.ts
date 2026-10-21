@@ -2,6 +2,13 @@ import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const TEXT_SIZE = 17
+/** Chat prose reads larger than the Markdown renderer's compact base. */
+export const CHAT_PROSE_SCALE = 1.25
+
+/** Pinch-zoomed type keeps its leading, so zoomed lines never overlap. */
+export function scaledType(size: number, fontScale: number, leading = 6) {
+  return { fontSize: size * fontScale, lineHeight: (size + leading) * fontScale }
+}
 export const MONO_SIZE = 12
 
 export const styles = StyleSheet.create({
@@ -23,21 +30,8 @@ export const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
-  userText: {
-    color: colors.bgBase,
-    fontSize: TEXT_SIZE,
-    lineHeight: TEXT_SIZE + 6,
-    fontWeight: '500'
-  },
-  contextBoundary: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    paddingTop: spacing.sm
-  },
   hostNotice: {
-    color: colors.textMuted,
-    fontSize: TEXT_SIZE,
-    lineHeight: TEXT_SIZE + 6
+    color: colors.textMuted
   },
   reasoning: {
     opacity: 0.7,
@@ -75,91 +69,25 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
-  toolRun: {
-    marginTop: spacing.xs
-  },
-  toolRunHeader: {
+  meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
-  },
-  toolRunToggle: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolRunCount: {
-    color: colors.statusGreen,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    fontWeight: '700'
-  },
-  toolRunLabel: {
-    flex: 1,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE
-  },
-  toolRunActive: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolRunActiveLabel: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  toolRunBody: {
-    paddingLeft: spacing.sm,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    marginTop: spacing.xs
-  },
-  toolLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolName: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE + 1,
-    fontWeight: '600'
-  },
-  toolPreview: {
-    flex: 1,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE
-  },
-  toolPreviewLink: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
-  },
-  toolDetail: {
-    paddingLeft: spacing.lg,
-    paddingBottom: spacing.xs,
     gap: spacing.xs
   },
-  mono: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    lineHeight: MONO_SIZE + 5
+  unsentNotice: {
+    maxWidth: '88%',
+    marginTop: spacing.xs,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
   },
-  toolResult: {
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.md
+  showFull: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs
   },
-  toolResultError: {
-    backgroundColor: colors.diffDeletedBg
+  showFullText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   imageRef: {
     color: colors.textSecondary,
@@ -172,29 +100,5 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
-  },
-  diff: {
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden'
-  },
-  diffLine: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    lineHeight: MONO_SIZE + 5,
-    paddingHorizontal: spacing.sm
-  },
-  diffAdd: {
-    color: colors.gitDecorationAdded,
-    backgroundColor: colors.diffAddedBg
-  },
-  diffDel: {
-    color: colors.gitDecorationDeleted,
-    backgroundColor: colors.diffDeletedBg
-  },
-  diffMeta: {
-    color: colors.textMuted
   }
 })

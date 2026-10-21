@@ -1,10 +1,9 @@
 import { useAppStore } from '@/store'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -27,20 +26,19 @@ export function createNewTerminalTab(
     void createWebRuntimeSessionTerminal({
       worktreeId: activeWorktreeId,
       environmentId: runtimeEnvironmentId,
-      command: shellOverride,
+      shell: shellOverride,
       ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
     })
     return
   }
-  const newTab = state.createTab(
-    activeWorktreeId,
-    undefined,
-    shellOverride,
-    options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
-  )
+  const tabId = createBrowserUuid()
+  state.createTab(activeWorktreeId, undefined, shellOverride, {
+    id: tabId,
+    ...(options?.startupCwd ? { startupCwd: options.startupCwd } : {})
+  })
   state.setActiveTabType('terminal', activeWorktreeId)
   // Why: without a saved order the tab bar falls back to terminals-first, so
   // persist the current visual order with the new terminal last.
-  persistAgentLaunchTabOrder(activeWorktreeId, newTab.id)
+  persistAgentLaunchTabOrder(activeWorktreeId, tabId)
 }

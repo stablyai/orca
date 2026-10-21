@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { getAppPtyId } from '../provider/registry'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
 import { snapshotCodexPaneHomeRoutes, codexReattachedHomeRouteField } from '../host-env/codex-home'

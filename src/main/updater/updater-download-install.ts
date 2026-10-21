@@ -9,6 +9,7 @@ import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
 import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
+import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 
 /** Coordinates renderer-facing download/install actions and their duplicate guards. */
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
@@ -100,17 +101,28 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     beginMacUpdateDownload()
     // Why: setup can take seconds before progress emits; surface acceptance now so the action never looks inert.
     this.sendStatus({ state: 'downloading', percent: 0, version })
-    this.getAutoUpdater()
-      .downloadUpdate()
-      .catch((err) => {
-        this.downloadInFlight = false
-        const message = String(err?.message ?? err)
-        if (localBuildDownload) {
-          this.sendLocalBuildErrorAndRestore(message)
-        } else {
-          this.sendErrorStatus(message)
-        }
-      })
+    const startDownload = (): void => {
+      this.getAutoUpdater()
+        .downloadUpdate()
+        .catch((err) => {
+          this.downloadInFlight = false
+          const message = String(err?.message ?? err)
+          if (localBuildDownload) {
+            this.sendLocalBuildErrorAndRestore(message)
+          } else {
+            this.sendErrorStatus(message)
+          }
+        })
+    }
+    // Why before the download: Squirrel stages as soon as it ends, unless staging waits for install.
+    const preparingStaging = this.isMacStagingDeferredToInstall()
+      ? null
+      : prepareThisProcessShipItStaging()
+    if (preparingStaging) {
+      void preparingStaging.then(startDownload)
+    } else {
+      startDownload()
+    }
   }
 
   protected isQuittingForUpdate(): boolean {

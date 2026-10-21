@@ -19,6 +19,7 @@ import {
   resolveWorkspaceAgentDetectionHost,
   type WorkspaceAgentDetectionStore
 } from './workspace-agent-detection'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 
 const { detectInstalledMock, refreshMock } = vi.hoisted(() => ({
   detectInstalledMock: vi.fn(),
@@ -138,6 +139,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
   })
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
+    _resetWslCachesForTests()
   })
 
   it('keeps the host default for a workspace no repo row owns', () => {
@@ -172,6 +174,16 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
   })
 
   it('probes inside the distro of a WSL-share workspace with no saved runtime', () => {
+    const s = store({ repos: [repo({ id: 'r1', path: WSL_REPO_PATH })] })
+    expect(resolveFor(s, `r1::${WSL_REPO_PATH}`)).toEqual({
+      kind: 'local',
+      context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
+    })
+  })
+
+  // A `\\wsl$` path proves its distro exists, and the cached list can be stale.
+  it("trusts a WSL-share workspace's distro over a stale cached list", () => {
+    _setWslCachesForTests({ available: true, distros: ['Debian'] })
     const s = store({ repos: [repo({ id: 'r1', path: WSL_REPO_PATH })] })
     expect(resolveFor(s, `r1::${WSL_REPO_PATH}`)).toEqual({
       kind: 'local',
@@ -233,6 +245,24 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
     expect(resolveFor(s, folderWorkspaceKey('f1'))).toEqual({
       kind: 'local',
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
+    })
+  })
+  // The agent list reads the folder's own host, as main does; only launches also read its group's.
+  it("keeps a folder's repo runtime when only its group names another host", () => {
+    _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+    const s = store({
+      repos: [
+        repo({ id: 'r1', path: 'C:\\src\\r1', executionHostId: 'local', projectGroupId: 'g1' })
+      ],
+      projects: [project('p1', ['r1'], { kind: 'wsl', distro: 'Ubuntu' })],
+      projectGroups: [{ ...GROUP, executionHostId: 'runtime:paired' }],
+      folderWorkspaces: [{ ...FOLDER, folderPath: 'C:\\work' }]
+    })
+    expect(resolveFor(s, folderWorkspaceKey('f1'))).toMatchObject({
+      kind: 'local',
+      context: {
+        projectRuntime: { status: 'resolved', runtime: { kind: 'wsl', distro: 'Ubuntu' } }
+      }
     })
   })
   it('refuses a folder whose candidate repos live on different SSH hosts', () => {

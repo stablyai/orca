@@ -28,6 +28,7 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
   'settings.task-hydration': {
     'lifecycle-settings-task-hydration-fulfilled': 'identical',
     'matrix-settings.task-hydration-linear.status-1': 'result-absent-settlement',
+    'matrix-settings.task-hydration-jira.status-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-preflight.check-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-settings.get-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-status.get-1': 'result-absent-settlement',
@@ -72,12 +73,12 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-project-repo-slugs': 'identical'
   },
   'tasks.provider-load': {
-    'matrix-tasks.provider-load-github.countworkitems-1': 'params-undefined',
-    'matrix-tasks.provider-load-github.listworkitems-1': 'params-undefined',
-    'matrix-tasks.provider-load-linear.listteams-1': 'params-undefined',
-    'matrix-tasks.provider-load-linear.status-1': 'params-undefined',
-    'matrix-tasks.provider-load-settings.update-1': 'params-undefined',
-    'tk-provider-load': 'params-undefined'
+    'matrix-tasks.provider-load-github.countworkitems-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-github.listworkitems-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-linear.listteams-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-linear.status-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-settings.update-1': 'result-absent-settlement',
+    'tk-provider-load': 'identical'
   },
   'tasks.route-repo-list': {
     'matrix-tasks.route-repo-list-repo.list-1': 'result-absent-settlement',

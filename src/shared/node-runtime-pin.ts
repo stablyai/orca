@@ -61,7 +61,7 @@ export type NodeRuntimeAsset = {
 // @generated-begin by config/scripts/update-node-runtime-pin.mjs
 export const NODE_RUNTIME_PIN: NodeRuntimePin = {
   version: '24.21.0',
-  electron: '43.7.5',
+  electron: '43.7.8',
   napi: 10,
   headers: {
     file: 'node-v24.21.0-headers.tar.gz',

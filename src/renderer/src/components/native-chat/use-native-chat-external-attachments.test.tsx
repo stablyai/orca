@@ -36,6 +36,7 @@ import { useNativeChatExternalAttachments } from './use-native-chat-external-att
 import type { NativeChatPendingAttachmentChips } from './native-chat-session-attachment-drop'
 import type { AgentSessionAttachmentPathUploadResult } from '../../../../shared/agent-session-attachments'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import type { NativeChatStructuredAttachmentSession } from './native-chat-attachment-upload'
 
 type HookApi = ReturnType<typeof useNativeChatExternalAttachments>
 
@@ -48,11 +49,12 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 function noPendingChips(): NativeChatPendingAttachmentChips {
+  let id = 0
   return {
-    begin: vi.fn(() => null),
-    resolve: vi.fn(),
+    begin: vi.fn(() => String(++id)),
+    resolve: vi.fn(() => true),
     drop: vi.fn(() => true),
-    attachReferences: vi.fn()
+    attachReferences: vi.fn(() => true)
   }
 }
 
@@ -67,7 +69,7 @@ function Probe({
 }: {
   disabled: boolean
   structuredWorktreeId?: string
-  structuredSession?: { sessionId: string; runtimeEnvironmentId: string | null }
+  structuredSession?: NativeChatStructuredAttachmentSession
   attachResolvedPaths: (paths: string[]) => void
   pendingChips: NativeChatPendingAttachmentChips
   setNotice: (notice: string | null) => void
@@ -95,7 +97,7 @@ let root: Root | null = null
 async function renderProbe(args: {
   disabled?: boolean
   structuredWorktreeId?: string
-  structuredSession?: { sessionId: string; runtimeEnvironmentId: string | null }
+  structuredSession?: NativeChatStructuredAttachmentSession
   attachResolvedPaths: (paths: string[]) => void
   pendingChips?: NativeChatPendingAttachmentChips
   setNotice?: (notice: string | null) => void
@@ -159,6 +161,30 @@ afterEach(() => {
 })
 
 describe('useNativeChatExternalAttachments', () => {
+  it('keeps a failed paired chat from issuing an upload and says how to retry', async () => {
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const notice = 'Codex chat could not open. Use Retry in the chat, then attach the files again.'
+    const probe = await renderProbe({
+      structuredWorktreeId: 'folder-1',
+      structuredSession: {
+        sessionId: 'codex-1',
+        runtimeEnvironmentId: 'server-1',
+        sessionPending: true,
+        sessionPendingNotice: notice
+      },
+      attachResolvedPaths,
+      setNotice
+    })
+    await act(async () => {
+      await probe.latest().captureExternalDrop()(['/local/a.txt'])
+    })
+    expect(setNotice).toHaveBeenCalledWith(notice)
+    expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+    expect(mocks.uploadNativeChatSessionAttachmentPaths).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
   it('attaches local worktree paths unchanged', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
     const attachResolvedPaths = vi.fn()
@@ -171,7 +197,8 @@ describe('useNativeChatExternalAttachments', () => {
       access: { kind: 'user-file' }
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'], undefined, {
-      destinationIsCurrent: expect.any(Function)
+      destinationIsCurrent: expect.any(Function),
+      operation: expect.any(Object)
     })
   })
 
@@ -215,7 +242,7 @@ describe('useNativeChatExternalAttachments', () => {
     expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith(
       ['/external/a.png', '/external/c.png'],
       undefined,
-      { destinationIsCurrent: expect.any(Function) }
+      { destinationIsCurrent: expect.any(Function), operation: expect.any(Object) }
     )
     expect(mocks.stat).toHaveBeenCalledTimes(3)
   })
@@ -365,9 +392,9 @@ describe('useNativeChatExternalAttachments', () => {
           begun.push(name ?? '')
           return `chip-${begun.length}`
         }),
-        resolve: vi.fn(),
+        resolve: vi.fn(() => true),
         drop: vi.fn((id: string) => !removed.has(id)),
-        attachReferences: vi.fn()
+        attachReferences: vi.fn(() => true)
       }
     }
 
@@ -425,30 +452,45 @@ describe('useNativeChatExternalAttachments', () => {
       expect(chips.resolve).toHaveBeenCalledExactlyOnceWith(
         'chip-1',
         '/srv/agent-session-attachments/u1/shot.png',
-        null
+        null,
+        undefined
       )
       expect(chips.drop).not.toHaveBeenCalled()
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [{ id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }],
+        undefined
+      )
       // The client never reads its own disk for these paths: the server stores the bytes.
       expect(mocks.stat).not.toHaveBeenCalled()
     })
 
-    it('refuses a captured drop if its destination changed before preparation finished', async () => {
+    it.each([null, 'env-1'])('fences captured results for %s', async (runtimeEnvironmentId) => {
       const chips = trackingChips()
+      const attachResolvedPaths = vi.fn()
+      const setNotice = vi.fn()
       const probe = await renderProbe({
         structuredWorktreeId: 'worktree-1',
-        structuredSession: session,
-        attachResolvedPaths: vi.fn(),
+        structuredSession: { ...session, runtimeEnvironmentId },
+        attachResolvedPaths,
+        setNotice,
         pendingChips: chips
       })
       let current = true
       const deliver = probe.latest().captureExternalDrop(() => current)
+      expect(deliver.preparationConsumer).toBe(runtimeEnvironmentId ? 'agent' : 'local-chat')
       current = false
       await act(async () => deliver(['/Users/me/notes.md']))
       expect(chips.begun).toEqual([])
       expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+      expect(attachResolvedPaths).not.toHaveBeenCalled()
+      expect(setNotice).toHaveBeenCalledWith(
+        'This workspace changed hosts while attaching — drop the files again.'
+      )
+      await probe.setDisabled(true)
+      setNotice.mockClear()
+      await act(async () => deliver(['/Users/me/notes.md']))
+      expect(setNotice).not.toHaveBeenCalled()
+      expect(attachResolvedPaths).not.toHaveBeenCalled()
     })
 
     it('discards uploaded files if the captured drop destination changed during upload', async () => {
@@ -492,9 +534,10 @@ describe('useNativeChatExternalAttachments', () => {
           uploaded([['/Users/me/notes.md', '/srv/agent-session-attachments/u1/notes.md']])
         )
       )
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [{ id: 'chip-1', path: '/srv/agent-session-attachments/u1/notes.md' }],
+        undefined
+      )
     })
 
     it('keeps each file operation ID through reference settlement, including removed chips', async () => {
@@ -520,10 +563,13 @@ describe('useNativeChatExternalAttachments', () => {
         )
       )
 
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/report.pdf' },
-        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [
+          { id: 'chip-1', path: '/srv/agent-session-attachments/u1/report.pdf' },
+          { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
+        ],
+        undefined
+      )
     })
 
     it('names, in one notice, each file that did not attach', async () => {
@@ -549,9 +595,10 @@ describe('useNativeChatExternalAttachments', () => {
       )
 
       expect(chips.drop).toHaveBeenCalledWith('chip-1')
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [{ id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }],
+        undefined
+      )
       // The cause, the size limit here, rides in the same notice.
       expect(notices).toEqual([
         "Couldn't attach huge.mov. 'huge.mov' is 60 MB, over the 50 MB chat attachment limit."
@@ -618,7 +665,8 @@ describe('useNativeChatExternalAttachments', () => {
       expect(mocks.resolveNativeChatAttachmentOwnerForWorktree).toHaveBeenCalled()
       expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
       expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'], undefined, {
-        destinationIsCurrent: expect.any(Function)
+        destinationIsCurrent: expect.any(Function),
+        operation: expect.any(Object)
       })
     })
   })

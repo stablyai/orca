@@ -35,8 +35,8 @@ import {
   type RemoteRuntimeSubscription
 } from '../../shared/remote-runtime-client'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-session-id'
-import { shellEscape } from '../ssh/ssh-connection-utils'
-import { materializeOrcadArtifact } from '../ssh/orcad-artifact-materializer'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { materializeOrcadArtifact } from './orcad-artifact-materializer'
 import {
   hostServerTarget,
   installPackagedOrcadSlotForTests,
@@ -201,7 +201,10 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
         'utf8'
       )
     )
-    writeFileSync(fakeCli, `#!/bin/sh\nexec ${shellEscape(runtime)} ${shellEscape(script)} "$@"\n`)
+    writeFileSync(
+      fakeCli,
+      `#!/bin/sh\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
+    )
     chmodSync(fakeCli, 0o700)
     const sessionId = randomUUID()
     const scenarioPath = join(root, 'scenario.json')

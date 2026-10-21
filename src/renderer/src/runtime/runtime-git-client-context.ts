@@ -7,7 +7,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }

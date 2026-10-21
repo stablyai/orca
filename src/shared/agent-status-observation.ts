@@ -14,7 +14,7 @@ import { createNonSecureContextUuid } from './non-secure-context-uuid'
 export const AGENT_STATUS_OBSERVATION_ORIGINS = [
   /** Provider hook event (loopback HTTP or relayed), run through a provider normalizer. */
   'hook',
-  /** OSC 9999 structured payload parsed out of PTY bytes. Canonical payload, no provider normalizer. */
+  /** In-band status parsed out of PTY bytes: OSC 9999 payloads or OSC 7501 program status. */
   'osc',
   /** Inferred from a terminal title. The weakest evidence Orca acts on. */
   'title',
