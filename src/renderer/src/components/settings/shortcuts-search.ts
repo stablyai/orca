@@ -38,23 +38,27 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
+/** Builds localized command search entries while retaining English lookup keywords. */
+function buildShortcutDefinitionSearchEntries() {
+  return KEYBINDING_DEFINITIONS.map((item) => ({
+    actionId: item.id,
+    searchEntry: {
+      title: translateKeybindingTitle(item),
+      description: translate(
+        'auto.components.settings.shortcuts.search.groupShortcut',
+        '{{value0}} shortcut',
+        { value0: translateKeybindingGroupTitle(item.group) }
+      ),
+      keywords: [item.title, item.group, ...item.searchKeywords]
+    }
+  }))
+}
+
 const getShortcutDefinitionSearchEntries = createLocalizedCatalog(
-  /** Refreshes translated search labels after locale changes while retaining English aliases. */
-  () =>
-    KEYBINDING_DEFINITIONS.map((item) => ({
-      actionId: item.id,
-      searchEntry: {
-        title: translateKeybindingTitle(item),
-        description: translate(
-          'auto.components.settings.shortcuts.search.groupShortcut',
-          '{{value0}} shortcut',
-          { value0: translateKeybindingGroupTitle(item.group) }
-        ),
-        keywords: [item.title, item.group, ...item.searchKeywords]
-      }
-    }))
+  buildShortcutDefinitionSearchEntries
 )
 
+/** Omits unavailable browser and simulator actions from the localized Settings search index. */
 export function getShortcutsPaneSearchEntries(options?: {
   includeManagedBrowser?: boolean
   includeMobileEmulator?: boolean

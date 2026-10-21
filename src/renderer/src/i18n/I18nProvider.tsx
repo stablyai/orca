@@ -29,10 +29,10 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
   }, [pluginLanguagePacks])
 
   useEffect(() => {
-    const applyDocumentLang =
-      /** Syncs the document language so CSS casing follows the active locale's Turkish I rules. */ (): void => {
-        document.documentElement.lang = getIntlLocale()
-      }
+    /** Syncs the document language so CSS casing follows the active locale's Turkish I rules. */
+    function applyDocumentLang(): void {
+      document.documentElement.lang = getIntlLocale()
+    }
     applyDocumentLang()
     i18n.on('languageChanged', applyDocumentLang)
     return () => {
