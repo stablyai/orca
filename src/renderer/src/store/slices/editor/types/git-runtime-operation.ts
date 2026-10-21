@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
 export type GitRuntimeOperationOptions = {
   /** The worktree owner's transport; absent resolves it from the worktree's rows. */

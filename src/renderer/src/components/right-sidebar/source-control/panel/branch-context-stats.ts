@@ -1,5 +1,5 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { translate } from '@/i18n/i18n'
 
 function formatAheadOfTitle(count: number, ref: string): string {

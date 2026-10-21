@@ -1,4 +1,5 @@
 /** The device half of the media verbs: the picker it runs, the bytes it moves, the file it deletes. */
+import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { splitBridgeReply } from '../mobile-web-shell/bridge/bridge-reply-chunking'
 import {
@@ -8,7 +9,9 @@ import {
 } from '../mobile-web-shell/bridge/bridge-caps'
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
+  BRIDGE_MEDIA_NAME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
+  mediaNameResultSchema,
   mediaPickResultSchema,
   mediaReadResultSchema
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
@@ -52,7 +55,16 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
 }
 
 function bytesOf(length: number): Uint8Array {
-  return Uint8Array.from({ length }, (_, index) => index % 251)
+  // A fixed stream exposes shifted offsets and reordered chunks without a short repeating pattern.
+  let state = 0x9e3779b9
+  const bytes = new Uint8Array(length)
+  for (let index = 0; index < length; index += 1) {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    bytes[index] = state >>> 24
+  }
+  return bytes
 }
 
 type Harness = {
@@ -365,7 +377,7 @@ describe('reading chunks', () => {
     const total = 1_000_000
     const { probe, handle } = await staged(total)
     const source = bytesOf(total)
-    const collected: number[] = []
+    const collected = new Uint8Array(total)
     let offset = 0
     let reads = 0
     for (;;) {
@@ -378,16 +390,16 @@ describe('reading chunks', () => {
       )
       reads += 1
       const bytes = atob(chunk.base64)
-      for (let index = 0; index < bytes.length; index += 1) {
-        collected.push(bytes.codePointAt(index) ?? 0)
-      }
+      collected.set(Buffer.from(bytes, 'latin1'), offset)
       offset += bytes.length
+      expect(chunk.eof).toBe(offset === total)
       if (chunk.eof) {
         break
       }
     }
     expect(reads).toBe(Math.ceil(total / BRIDGE_MEDIA_READ_MAX_BYTES))
-    expect(collected).toEqual([...source])
+    expect(offset).toBe(total)
+    expect(Buffer.compare(collected, source)).toBe(0)
   })
 
   it('answers exactly the bytes a short read asked for, at the offset it asked for', async () => {
@@ -458,6 +470,66 @@ describe('reading chunks', () => {
     await expect(
       probe.serve('native.media.read', { handle, offset: 64, length: 16 })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_range')
+  })
+})
+
+describe('naming', () => {
+  async function pickOne(probe: Harness, source: 'library' | 'files'): Promise<string> {
+    const result = mediaPickResultSchema.parse(
+      await probe.serve('native.media.pick', { source, multiple: false })
+    )
+    return result.items[0]?.handle ?? ''
+  }
+
+  it("answers the document picker's name for a file, never on the picked item itself", async () => {
+    const probe = harness({
+      launchFiles: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf', name: 'auth-spec.pdf' }]
+        })
+    })
+    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(10))
+    const result = mediaPickResultSchema.parse(
+      await probe.serve('native.media.pick', { source: 'files', multiple: false })
+    )
+    expect(result.items[0]).not.toHaveProperty('name')
+    await expect(
+      probe.serve('native.media.name', { handle: result.items[0]?.handle ?? '' })
+    ).resolves.toEqual({ name: 'auth-spec.pdf' })
+  })
+
+  it('answers null where the picker reported no name', async () => {
+    const probe = harness()
+    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
+    const handle = await pickOne(probe, 'library')
+    await expect(probe.serve('native.media.name', { handle })).resolves.toEqual({ name: null })
+  })
+
+  it('keeps the extension of a name too long for the verb', async () => {
+    const long = `${'a'.repeat(400)}.pdf`
+    const probe = harness({
+      launchFiles: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf', name: long }]
+        })
+    })
+    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(4))
+    const handle = await pickOne(probe, 'files')
+    const { name } = mediaNameResultSchema.parse(await probe.serve('native.media.name', { handle }))
+    expect(name).toHaveLength(BRIDGE_MEDIA_NAME_MAX_CHARS)
+    expect(name?.endsWith('.pdf')).toBe(true)
+  })
+
+  it('refuses a handle the page already released', async () => {
+    const probe = harness()
+    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
+    const handle = await pickOne(probe, 'library')
+    await probe.serve('native.media.release', { handle })
+    await expect(probe.serve('native.media.name', { handle })).rejects.toSatisfy(
+      (error) => refusalOf(error) === 'native_media_handle_unknown'
+    )
   })
 })
 

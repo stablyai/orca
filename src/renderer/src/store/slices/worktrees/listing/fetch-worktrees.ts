@@ -1,4 +1,4 @@
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type {
   DirectSshWorktreeFetchOptions,
   WorktreeFetchOptions,
@@ -130,7 +130,7 @@ export function createFetchWorktrees(
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
       if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
-        await refreshRemoteWorktreeLineageBestEffort(runtimeTargetForOwnerHostId(hostId), set, get)
+        await refreshRemoteWorktreeLineageBestEffort(ipcOrRuntimeTargetForHostId(hostId), set, get)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
     } catch (err) {

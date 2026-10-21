@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { runtimeTargetForOwnerHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type {
@@ -42,7 +42,7 @@ export function getWorktreeCreationIndeterminate(request: WorktreeCreationReques
   }
   // Why: progress follows the host the workspace is created on, not the focused one.
   const target = request.executionHostId
-    ? runtimeTargetForOwnerHostId(request.executionHostId)
+    ? ipcOrRuntimeTargetForHostId(request.executionHostId)
     : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
   return target?.kind !== 'local'
 }

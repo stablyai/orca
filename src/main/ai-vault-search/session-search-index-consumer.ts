@@ -1,3 +1,4 @@
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import {
   registerTranscriptConsumer,
   type TranscriptConsumer,
@@ -9,6 +10,35 @@ import {
 import { fileIdentity } from './session-search-file-cursor'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
 import type { SessionSearchStore } from './session-search-store'
+
+// File-read assumptions are checked by session-search-transcript-dependencies.test.ts.
+export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
+  claude: true,
+  qoder: true,
+  codebuddy: true,
+  codex: false, // session_index.jsonl supplies titles.
+  gemini: true,
+  copilot: true,
+  cursor: false, // Sibling chat metadata enriches the transcript.
+  antigravity: false, // Workspace history enriches the transcript separately.
+  opencode: false, // SQLite or a separate message directory.
+  opencode2: false,
+  zcode: false,
+  grok: false, // chat_history.jsonl supplies messages.
+  hermes: true,
+  rovo: false, // session_context.json supplies messages.
+  openclaw: true,
+  pi: true,
+  omp: true,
+  'prime-agent': true,
+  droid: true,
+  cline: false, // A .messages.json sidecar supplies messages.
+  devin: false, // sessions.db supplies metadata.
+  kimi: false, // agents/main/wire.jsonl supplies messages.
+  muse: true,
+  jcode: true,
+  kiro: false // A .jsonl sidecar supplies messages.
+} satisfies Record<AiVaultAgent, boolean>
 
 /**
  * The search index as a consumer of the transcript reader.
@@ -29,6 +59,14 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
+    if (
+      start.mode === 'replace' &&
+      SELF_CONTAINED_TRANSCRIPT_AGENTS[candidate.agent] &&
+      (candidate.file.sidecar === undefined || candidate.file.sidecar === 'none') &&
+      this.store.coversTranscript(candidate)
+    ) {
+      return null
+    }
     if (start.mode === 'append') {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
@@ -83,6 +121,12 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   }
 
   finish(outcome: TranscriptReadOutcome): void {
+    if (outcome.cancelled) {
+      // Leaves the row as it was, which already says what the next pass owes;
+      // counting it as a failure would hold a healthy file out after three cancels.
+      this.write.discard()
+      return
+    }
     const { candidate } = this.start
     let committed = false
     try {

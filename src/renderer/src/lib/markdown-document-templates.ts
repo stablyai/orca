@@ -1,11 +1,9 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import {
-  readRuntimeDirectory,
-  readRuntimeFileContent,
-  runtimePathExists
-} from '@/runtime/runtime-file-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { basename, joinPath, normalizeRelativePath } from './path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'

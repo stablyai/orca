@@ -137,6 +137,19 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).toContain('host folder not selected')
   })
 
+  // Regression: a path left filled from an earlier pick on an SSH or paired host still browses.
+  it('opens the host browser for a filled path that Windows did not hand over', () => {
+    const remote = {
+      step: 'server-path' as const,
+      isRuntimeEnvironmentActive: true,
+      activeRuntimeEnvironmentId: 'env-1',
+      serverPath: '/home/me/app'
+    }
+    const browser = 'Navigate to a directory and click Select to choose it.'
+    expect(renderStepContent(remote)).toContain(browser)
+    expect(renderStepContent({ ...remote, serverPathPrefilled: true })).not.toContain(browser)
+  })
+
   it('offers host browsing for remote clone destinations', () => {
     const html = renderStepContent({
       step: 'clone',

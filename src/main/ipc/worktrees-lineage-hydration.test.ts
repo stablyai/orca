@@ -4,6 +4,10 @@ import type { Worktree } from '../../shared/worktree/types'
 import { listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -100,10 +104,12 @@ describe('registerWorktreeHandlers', () => {
       [childId]: { instanceId: 'child-instance' }
     }
     store.getWorktreeMeta.mockImplementation((id: string) => metaById[id])
-    store.setWorktreeMeta.mockImplementation((id: string, updates: Partial<WorktreeMeta>) => ({
-      ...metaById[id],
-      ...updates
-    }))
+    store.setWorktreeMeta.mockImplementation(
+      ({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => ({
+        ...metaById[id],
+        ...updates
+      })
+    )
     store.getAllWorktreeLineage.mockReturnValue({
       [childId]: {
         worktreeId: childId,
@@ -279,7 +285,7 @@ describe('registerWorktreeHandlers', () => {
     await handlers['worktrees:list'](null, { repoId: 'repo-ssh' })
 
     expect(store.setWorktreeMeta).not.toHaveBeenCalledWith(
-      'repo-ssh::/remote/missing-parent',
+      hostWorktreeTarget({ id: 'repo-ssh::/remote/missing-parent', hostId: 'local' }),
       expect.objectContaining({ instanceId: expect.any(String) })
     )
   })

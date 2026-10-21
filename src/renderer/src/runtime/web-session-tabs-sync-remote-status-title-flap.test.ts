@@ -224,12 +224,18 @@ function seedPairedClientStore(): TestStore {
     },
     worktreesByRepo: {
       repo1: [
-        makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+        // The paired server owns this workspace, so its titles stay the window's to apply.
+        makeWorktree({
+          id: WT,
+          repoId: 'repo1',
+          path: '/path/wt1',
+          runtimeOwnerEnvironmentId: ENV
+        }),
         makeWorktree({ id: LOCAL_WT, repoId: 'repo1', path: '/path/local-wt' })
       ]
     },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -511,6 +517,30 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const entry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
       expect(entry?.state).toBe('blocked')
       expect(entry?.interactivePrompt).toBe('Allow Bash(rm -rf)?')
+    })
+
+    it('keeps live client status over a restored, unconfirmed host block', () => {
+      const store = seedPairedClientStore()
+      replayClientOscWorking(store, T0 + 500)
+
+      // Host clock ahead of the client: only the unconfirmed flag can keep this row out.
+      const restoredAt = T0 + 60_000
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion: 2,
+          hostNow: restoredAt,
+          includeAgentStatus: true,
+          agentStatusOverrides: {
+            state: 'blocked',
+            prompt: 'Allow Bash(rm -rf)?',
+            restoredUnconfirmed: true
+          }
+        }),
+        T0 + 1_000
+      )
+
+      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
     })
 
     it('adopts host monitoring metadata without replacing client-owned byte status', () => {

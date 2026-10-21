@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { IPtyProvider } from '../../../providers/types'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { getCwdFromRuntimeController, resizePtyFromRuntimeController } from '../runtime/operations'
 import { deletePtyOwnership, setPtyOwnership } from './ownership-state'
 import {

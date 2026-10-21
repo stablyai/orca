@@ -44,17 +44,9 @@ export class AtomicSnapshotWriter {
     }
     this.writeRequested = true
     this.pendingSerialize = serialize
-    if (this.pendingWrite) {
-      return this.pendingWrite
-    }
-    const run = this.drainWrites()
-    const tracked = run.finally(() => {
-      if (this.pendingWrite === tracked) {
-        this.pendingWrite = null
-      }
-    })
-    this.pendingWrite = tracked
-    return tracked
+    // Why safe: drainWrites awaits before its finally can clear pendingWrite, so this assignment lands first.
+    this.pendingWrite ??= this.drainWrites()
+    return this.pendingWrite
   }
 
   writeSync(serialize: () => string): void {
@@ -155,22 +147,27 @@ export class AtomicSnapshotWriter {
   }
 
   private async drainWrites(): Promise<void> {
-    await this.staleTempCleanup
-    let firstError: unknown = null
-    while (this.writeRequested && !this.closed) {
-      this.writeRequested = false
-      const serialize = this.pendingSerialize!
-      try {
-        await this.writeToDiskAsync(serialize)
-      } catch (error) {
-        firstError ??= error
-        if (!this.writeRequested) {
-          throw error
+    try {
+      await this.staleTempCleanup
+      let firstError: unknown = null
+      while (this.writeRequested && !this.closed) {
+        this.writeRequested = false
+        const serialize = this.pendingSerialize!
+        try {
+          await this.writeToDiskAsync(serialize)
+        } catch (error) {
+          firstError ??= error
+          if (!this.writeRequested) {
+            throw error
+          }
         }
       }
-    }
-    if (firstError) {
-      throw firstError
+      if (firstError) {
+        throw firstError
+      }
+    } finally {
+      // Why: clear in the same tick the loop saw no request left, so a later write() starts a new drain.
+      this.pendingWrite = null
     }
   }
 

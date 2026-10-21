@@ -17,6 +17,7 @@ export function NativeChatPacedMarkdown({
   return (
     <NativeChatMarkdown
       {...props}
+      rowKey={rowKey}
       content={paced.text}
       streaming={streaming || paced.revealing}
       growing={paced.revealing}

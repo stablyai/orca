@@ -33,9 +33,7 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 vi.mock('./repository-github-account', async (importOriginal) => ({
   ...(await importOriginal<typeof RepositoryGitHubAccountModule>()),

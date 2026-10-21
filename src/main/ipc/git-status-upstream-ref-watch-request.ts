@@ -1,6 +1,7 @@
 import type { Store } from '../persistence'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRepo,
@@ -15,10 +16,6 @@ export type GitStatusUpstreamRefWatchRequest = GitStatusRefBindingRequest
 
 const UPSTREAM_REF_RESOLUTION_TIMEOUT_MS = 15_000
 
-function boundedSignal(signal: AbortSignal): AbortSignal {
-  return AbortSignal.any([signal, AbortSignal.timeout(UPSTREAM_REF_RESOLUTION_TIMEOUT_MS)])
-}
-
 export function applyGitStatusUpstreamRefWatchRequest(
   store: Store,
   args: GitStatusUpstreamRefWatchRequest
@@ -27,7 +24,7 @@ export function applyGitStatusUpstreamRefWatchRequest(
     if (!args.branch || !args.upstreamName) {
       return undefined
     }
-    const signal = boundedSignal(bindingSignal)
+    const signal = abortSignalWithTimeout(bindingSignal, UPSTREAM_REF_RESOLUTION_TIMEOUT_MS)
     requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
 
     const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)

@@ -2,11 +2,10 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import { getDiskBaselineSignature } from './diff-content-signature'
-import { getRuntimeFileReadScope } from '@/runtime/runtime-file-client'
+import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
@@ -26,6 +25,9 @@ import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-works
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { applyEditorFileLoadFailure } from './editor-deleted-file-reload'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -44,25 +46,6 @@ type UseEditorPanelFileContentLoaderParams = {
   openFilesRef: MutableRefObject<OpenFile[]>
   outstandingFileReadsRef: MutableRefObject<Record<string, number>>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
-}
-
-// Why: a clean load re-baselines what this tab's future edits are based on; a
-// dirty tab keeps its baseline (its draft still derives from the older content
-// the signature was taken over). Best-effort metadata — a failure here must
-// not convert an already-delivered load into an error view, hence the guard.
-function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
-  if (result.isBinary || result.loadError || result.csvPreview) {
-    return
-  }
-  try {
-    const state = useAppStore.getState()
-    const loadedFile = state.openFiles.find((file) => file.id === id)
-    if (loadedFile && !loadedFile.isDirty) {
-      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
-    }
-  } catch (err) {
-    console.warn('[editor] failed to stamp disk baseline', err)
-  }
 }
 
 function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
@@ -185,7 +168,12 @@ export function useEditorPanelFileContentLoader({
               await reownRestoredFile(route, runtimeEnvironmentId ?? null)
               return
             }
-            if (runtimeEnvironmentId && !route && !restoredOpenFile.terminalArtifactGrantId) {
+            if (
+              runtimeEnvironmentId &&
+              !route &&
+              !restoredOpenFile.terminalArtifactGrantId &&
+              !chatScratchFileAddress(filePath)
+            ) {
               throw new Error('External local files are not available for remote workspaces.')
             }
             if (!externalSshOwnerId) {
@@ -226,7 +214,8 @@ export function useEditorPanelFileContentLoader({
               expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
               includeLocalLogMetadata: isLiveTailLogTab,
               access,
-              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId
+              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId,
+              pageOversizedBinary: true
             },
             allowPagedPreview
           )
@@ -276,15 +265,20 @@ export function useEditorPanelFileContentLoader({
         // classifiers downstream must see the token, not only its rendering (#21041).
         const loadErrorCode =
           !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
-        setFileContents((prev) => ({
-          ...prev,
-          [id]: {
-            content: '',
-            isBinary: false,
-            loadError: message,
-            ...(loadErrorCode ? { loadErrorCode } : {})
-          }
-        }))
+        const failure: FileContent = {
+          content: '',
+          isBinary: false,
+          loadError: message,
+          ...(loadErrorCode ? { loadErrorCode } : {})
+        }
+        applyEditorFileLoadFailure({
+          error: err,
+          fileId: id,
+          filePath,
+          tabs: openFilesRef.current,
+          failure,
+          setFileContents
+        })
       } finally {
         if (outstandingFileReadsRef.current[id] === generation) {
           delete outstandingFileReadsRef.current[id]

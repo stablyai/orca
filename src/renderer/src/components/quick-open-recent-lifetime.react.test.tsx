@@ -12,7 +12,7 @@ import {
   makeRemoteWorktree
 } from './quick-open-file-list-test-harness'
 
-vi.mock('@/runtime/runtime-file-client', async () => {
+vi.mock('@/runtime/runtime-file-search-client', async () => {
   const mocks = await import('./__mocks__/quick-open-runtime-file-client')
   return {
     listRuntimeFiles: mocks.listRuntimeFilesMock,

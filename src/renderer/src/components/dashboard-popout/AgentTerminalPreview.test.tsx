@@ -286,12 +286,20 @@ describe('AgentTerminalPreview', () => {
     expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
-  it('does not install the IME native-text forwarder off macOS', async () => {
+  it('does not install the IME native-text forwarder on Windows', async () => {
+    platformState.value = 'win32'
     render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     await waitFor(() => expect(terminalHarness.instances[0]!.customKeyHandler).not.toBeNull())
     expect(imeHarness.forwarders).toHaveLength(0)
     expect(imeHarness.trackers).toHaveLength(0)
+  })
+
+  // fcitx4 delivers a single-character pick as the Space/digit keypress's text (#28213).
+  it('installs the IME native-text forwarder on desktop Linux', async () => {
+    platformState.value = 'linux'
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
   })
 
   // The bridge omitted this dependency entirely, so every Preview

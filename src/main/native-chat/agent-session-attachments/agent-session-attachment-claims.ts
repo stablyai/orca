@@ -2,8 +2,9 @@
 // host transaction that makes it durable, and the sweep may delete only an upload nobody claims:
 // both are synchronous statements on the host's one journal connection, so exactly one wins.
 
-import { existsSync, readdirSync } from 'node:fs'
+import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
@@ -87,6 +88,8 @@ export type AgentSessionAttachmentClaim = {
   /** A client's own new message: every upload of this host's store it names must still be stored,
    *  or the whole message is refused. The host's own writes (a /clear carry, a draft it sends) never refuse. */
   required: boolean
+  /** The body this one replaces: uploads it already named are claimed best effort, never required. */
+  previous?: AgentJournalMessageItem
   now: number
 }
 
@@ -105,20 +108,21 @@ export function claimAgentSessionAttachmentsInTransaction(
   if (uploadIds.size === 0) {
     return
   }
-  if (claim.required) {
-    if (
-      [...uploadIds].some(
-        (uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId)
-      )
-    ) {
-      throw new AgentSessionAttachmentExpiredError()
-    }
-    insertClaims(db, uploadIds, claim.sessionId, claim.now)
+  const kept = claim.previous
+    ? agentSessionAttachmentReferences(root, claim.previous)
+    : new Set<string>()
+  const required = claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
+  if (required.some((uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId))) {
+    throw new AgentSessionAttachmentExpiredError()
+  }
+  insertClaims(db, required, claim.sessionId, claim.now)
+  const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
+  if (bestEffort.length === 0) {
     return
   }
   db.exec(`SAVEPOINT ${CLAIM_SAVEPOINT}`)
   try {
-    insertClaims(db, uploadIds, claim.sessionId, claim.now)
+    insertClaims(db, bestEffort, claim.sessionId, claim.now)
     db.exec(`RELEASE ${CLAIM_SAVEPOINT}`)
   } catch (error) {
     db.exec(`ROLLBACK TO ${CLAIM_SAVEPOINT}`)
@@ -193,7 +197,18 @@ export function pruneAgentSessionAttachmentClaims(
   let removed = 0
   for (const { uploadId, sessionId } of rows) {
     const chatGone = facts.recordedSessionIds !== null && !facts.recordedSessionIds.has(sessionId)
-    if (chatGone || !existsSync(join(facts.root, uploadId))) {
+    let uploadGone = chatGone
+    try {
+      if (!chatGone) {
+        lstatSync(join(facts.root, uploadId))
+      }
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+      uploadGone = true
+    }
+    if (uploadGone) {
       removed += Number(remove.run(uploadId, sessionId).changes)
     }
   }

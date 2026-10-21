@@ -5,7 +5,8 @@ import {
   acquired,
   adapterFor,
   fakeClaude,
-  identityFor
+  identityFor,
+  claudeOpened
 } from './claude-structured-session-test-support'
 
 /** Verbatim rows from Claude Code 2.1.280's list_models: `default` is the CLI's own
@@ -127,19 +128,17 @@ describe('Claude model before the first turn', () => {
 
     // The settings read follows `started`; what it shows is persisted as the later report.
     const reported = events.find((event) => event.type === 'options-reported')
-    expect(reported).toMatchObject({ reportedOptions: { model: 'haiku' } })
+    expect(reported).toMatchObject({ reportedOptions: { model: 'claude-haiku-4-5-20251001' } })
   })
 
   it('shows the applied effort but never persists it as the session options', async () => {
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(startedWithoutATurn(SETTINGS.noOverride), {}, events)
 
-    const started = events.find((event) => event.type === 'started')
-    expect(started).toMatchObject({ reportedOptions: { model: 'opus[1m]' } })
+    const started = await claudeOpened(adapter, 'session-1')
+    expect(started.reportedOptions).not.toHaveProperty('model')
     // Saved, it would be restored on every reopen past a later settings.json change.
-    expect(started?.type === 'started' ? started.reportedOptions : null).not.toHaveProperty(
-      'effort'
-    )
+    expect(started.reportedOptions).not.toHaveProperty('effort')
     const reported = events.find((event) => event.type === 'options-reported')
     expect(
       reported?.type === 'options-reported' ? reported.reportedOptions : null
@@ -174,8 +173,8 @@ describe('Claude model before the first turn', () => {
     })
 
     // `started` is persisted as the session's options; opus's effort must not ride along onto haiku.
-    const started = events.find((event) => event.type === 'started')
-    expect(started).toMatchObject({ reportedOptions: { model: 'haiku' } })
-    expect(started?.type === 'started' ? started.reportedOptions.effort : null).toBeUndefined()
+    const started = await claudeOpened(adapter, 'session-1')
+    expect(started.reportedOptions).not.toHaveProperty('model')
+    expect(started.reportedOptions.effort).toBeUndefined()
   })
 })

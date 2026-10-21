@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -16,6 +17,7 @@ type LaneState = Pick<
   | 'folderWorkspaces'
   | 'projects'
   | 'repos'
+  | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
 >
@@ -28,8 +30,23 @@ function laneState(args?: {
   terminalWindowsWslDistro?: string | null
   projectWslDistro?: string
   localWindowsRuntimeDefault?: { kind: 'wsl'; distro: string | null }
+  wslHost?: { environmentId: string; distro: string }
 }): LaneState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lane reads only the fields set here.
   return {
+    runtimeEnvironments: args?.wslHost
+      ? [
+          {
+            id: args.wslHost.environmentId,
+            orcadDeployment: {
+              kind: 'wsl',
+              distro: args.wslHost.distro,
+              localPort: 41000,
+              remotePort: 41001
+            }
+          }
+        ]
+      : [],
     folderWorkspaces: args?.folderPath ? [{ id: 'fw1', folderPath: args.folderPath }] : [],
     settings: {
       activeRuntimeEnvironmentId: args?.activeRuntimeEnvironmentId ?? null,
@@ -229,6 +246,25 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
         ptyId: 'remote:env-owner@@term-1'
       })
     ).toBe('env:env-owner')
+  })
+
+  it('keys a WSL host pane to its distro lane, which the desktop selection feeds', () => {
+    const state = laneState({
+      wslHost: { environmentId: 'wsl:Ubuntu', distro: 'Ubuntu' }
+    })
+    expect(
+      resolveCodexPaneSelectionLaneKey({
+        state,
+        tab: HOST_TAB,
+        ptyId: toRemoteRuntimePtyId('term-1', 'wsl:Ubuntu')
+      })
+    ).toBe(getCodexSelectionLaneKey({ runtime: 'wsl', wslDistro: 'Ubuntu' }))
+    expect(
+      getCodexAccountSwitchLaneMatcher({
+        owner: { kind: 'local' },
+        target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
+      })('wsl:Ubuntu')
+    ).toBe(true)
   })
 
   it('never gives an owner-less remote pane the focused server, as inspection does not', () => {

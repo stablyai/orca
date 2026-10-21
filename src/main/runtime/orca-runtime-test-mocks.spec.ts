@@ -29,7 +29,6 @@ export const REVIEW_HEAD_FETCH_TIMEOUT_MS = importedValues.exportedREVIEW_HEAD_F
 export const RUNTIME_GRAPH_RELOAD_TIMEOUT_MS =
   importedValues.exportedRUNTIME_GRAPH_RELOAD_TIMEOUT_MS
 export const RecentPtyOutputBuffer = importedValues.exportedRecentPtyOutputBuffer
-export const RpcDispatcher = importedValues.exportedRpcDispatcher
 export const RuntimeBrowserCommands = importedValues.exportedRuntimeBrowserCommands
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   importedValues.exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
@@ -38,7 +37,6 @@ export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_CHUNK_MAX_BYTES
 export const TERMINAL_INPUT_MAX_BYTES = importedValues.exportedTERMINAL_INPUT_MAX_BYTES
 export const TERMINAL_INPUT_TOO_LARGE_ERROR = importedValues.exportedTERMINAL_INPUT_TOO_LARGE_ERROR
-export const TERMINAL_METHODS = importedValues.exportedTERMINAL_METHODS
 export const TUI_AGENT_CONFIG = importedValues.exportedTUI_AGENT_CONFIG
 export const WATCHER_REMOVAL_DRAIN_BUDGET_MS =
   importedValues.exportedWATCHER_REMOVAL_DRAIN_BUDGET_MS
@@ -222,6 +220,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -256,7 +255,7 @@ export type {
 export type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 export type { FolderWorkspace } from '../../shared/folder-workspace-types'
 export type { GitUsernameModule }
-export type { IPtyProvider } from '../providers/types'
+export type { IPtyProvider } from '../providers/pty-provider-contract'
 export type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 export type { ProjectGroup } from '../../shared/project-group-types'
 export type { RpcRequest } from './rpc/core'

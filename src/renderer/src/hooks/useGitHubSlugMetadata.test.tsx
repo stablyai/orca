@@ -14,9 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   listAssignableUsersBySlug: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 const roots: Root[] = []
 

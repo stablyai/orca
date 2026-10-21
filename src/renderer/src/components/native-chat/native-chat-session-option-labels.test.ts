@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import {
   nativeChatModelPillLabel,
-  nativeChatOptionsPillLabel,
+  nativeChatOptionValuesLabel,
   nativeChatSessionChoiceLabel
 } from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
@@ -76,7 +76,7 @@ describe('nativeChatSessionChoiceLabel for speed', () => {
   })
 })
 
-describe('nativeChatOptionsPillLabel', () => {
+describe('nativeChatOptionValuesLabel', () => {
   function speedDescriptor(currentValue: string): SessionOptionDescriptor {
     return {
       id: 'serviceTier',
@@ -97,7 +97,7 @@ describe('nativeChatOptionsPillLabel', () => {
   }
 
   it('names a faster tier and leaves Standard out, as Fast off was', () => {
-    expect(nativeChatOptionsPillLabel([speedDescriptor('ultrafast')])).toBe('Ultrafast')
-    expect(nativeChatOptionsPillLabel([speedDescriptor('default')])).toBe('Options')
+    expect(nativeChatOptionValuesLabel([speedDescriptor('ultrafast')])).toBe('Ultrafast')
+    expect(nativeChatOptionValuesLabel([speedDescriptor('default')])).toBe('')
   })
 })

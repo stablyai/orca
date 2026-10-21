@@ -35,4 +35,14 @@ describe('routeAddRepoBrowse', () => {
     expect(actions.browseLocal).not.toHaveBeenCalled()
     expect(actions.browseRuntime).not.toHaveBeenCalled()
   })
+
+  it('opens the Windows folder picker for a WSL host instead of the in-app browser', () => {
+    const actions = { browseLocal: vi.fn(), browseRuntime: vi.fn(), browseWslHost: vi.fn() }
+
+    routeAddRepoBrowse(parseExecutionHostId('runtime:wsl%3AUbuntu'), actions)
+
+    expect(actions.browseWslHost).toHaveBeenCalledOnce()
+    expect(actions.browseRuntime).not.toHaveBeenCalled()
+    expect(actions.browseLocal).not.toHaveBeenCalled()
+  })
 })

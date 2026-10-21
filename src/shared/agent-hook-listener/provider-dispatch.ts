@@ -13,7 +13,7 @@ import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
-import { normalizeCodexEvent } from './providers/codex-events'
+import { codexHookEventForEndedTurn, normalizeCodexEvent } from './providers/codex-events'
 import { normalizeGeminiEvent } from './providers/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor-events'
@@ -36,6 +36,8 @@ export type ProviderDispatchResult = {
   resolvedPromptText: string
   promptInteractionKey?: string
   hasTranscriptPromptEvidence: boolean
+  /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
+  eventName: unknown
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -50,8 +52,11 @@ export function normalizeProviderEvent(input: {
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
 }): ProviderDispatchResult {
-  const { state, source, eventName, promptText, paneKey, hookPayload, envelope, extractedPrompt } =
-    input
+  const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
+  const eventName =
+    source === 'codex'
+      ? codexHookEventForEndedTurn(state, paneKey, input.eventName, hookPayload)
+      : input.eventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
@@ -213,5 +218,11 @@ export function normalizeProviderEvent(input: {
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
 
-  return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }
+  return {
+    payload,
+    resolvedPromptText,
+    promptInteractionKey,
+    hasTranscriptPromptEvidence,
+    eventName
+  }
 }

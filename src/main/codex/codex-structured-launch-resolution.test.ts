@@ -1,4 +1,7 @@
-import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import {
+  createCodexStructuredLaunchResolver,
+  TEST_SPAWN_TOKEN
+} from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,9 +10,11 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+} from '../native-chat/native-chat-visuals-delivery'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)
@@ -55,7 +60,6 @@ function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' },
   resolveLaunchArgs?: () => string[]
 ) {
   return createCodexStructuredLaunchResolver({
@@ -63,8 +67,7 @@ function resolverFor(
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
-    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
-    resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
+    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? [])
   })
 }
 
@@ -91,7 +94,6 @@ describe('codex structured launch resolution', () => {
         }),
         undefined,
         undefined,
-        { codex: '' },
         () => args
       )
       await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
@@ -165,10 +167,14 @@ describe('codex structured launch resolution', () => {
       cwd: '/repos/workspace-1',
       codexHome: '/home/work/.codex',
       resumeThreadId: null,
-      // Every launch now carries a posture; neither one is left for config.toml to decide.
-      permissionPolicy: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
+      // Every launch carries a posture; none is left for config.toml to decide. No mode asks.
+      permissionPolicy: {
+        approvalPolicy: 'on-request',
+        sandbox: 'workspace-write',
+        approvalsReviewer: 'user'
+      },
       env: { CODEX_HOME: '/home/work/.codex' },
-      envToDelete: [NATIVE_CHAT_VISUALS_DIR_ENV]
+      envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
     })
   })
 
@@ -251,38 +257,37 @@ describe('codex structured launch resolution', () => {
   })
 
   // app-server owns the permission posture on the thread RPC, not process flags.
-  it('resolves the bypass posture as app-server thread policy', async () => {
-    const launch = await resolverFor(record(), undefined, undefined, {
-      codex: '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'
-    })({ identity: IDENTITY })
+  it.each([
+    [
+      'ask',
+      { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'user' }
+    ],
+    [
+      'auto',
+      { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'auto_review' }
+    ],
+    [
+      'full-access',
+      { approvalPolicy: 'never', sandbox: 'danger-full-access', approvalsReviewer: 'user' }
+    ]
+  ] as const)('opens a %s chat with its thread policy', async (permissionMode, policy) => {
+    const launch = await resolverFor(record())({
+      identity: IDENTITY,
+      spawnToken: TEST_SPAWN_TOKEN,
+      permissionMode
+    })
 
     expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual({
-      approvalPolicy: 'never',
-      sandbox: 'danger-full-access'
-    })
+    expect(launch.permissionPolicy).toEqual(policy)
   })
 
-  it('bypasses approvals for a profile that never opened Agent settings', async () => {
-    const launch = await resolverFor(record(), undefined, undefined, {})({ identity: IDENTITY })
+  // The chat's mode replaces Agent Permissions: a Yolo terminal setting grants a chat nothing.
+  it('ignores the bypass flag the agent Arguments carry', async () => {
+    const launch = await resolverFor(record(), undefined, undefined, () => [
+      '--dangerously-bypass-approvals-and-sandbox'
+    ])({ identity: IDENTITY, spawnToken: TEST_SPAWN_TOKEN, permissionMode: 'ask' })
 
-    expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual({
-      approvalPolicy: 'never',
-      sandbox: 'danger-full-access'
-    })
-  })
-
-  // Stated, not omitted: app-server resolves an absent field through the mirrored config.toml,
-  // so a Manual session on a home carrying `approval_policy = "never"` never prompted at all.
-  it('states the approval posture under Manual', async () => {
-    const launch = await resolverFor(record())({ identity: IDENTITY })
-
-    expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual({
-      approvalPolicy: 'on-request',
-      sandbox: 'workspace-write'
-    })
+    expect(launch.permissionPolicy).toMatchObject({ approvalPolicy: 'on-request' })
   })
 
   // A thread opened on the configured default and then given a turn on the saved model reads to

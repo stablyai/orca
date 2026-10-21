@@ -1,5 +1,6 @@
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
@@ -12,8 +13,41 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
+import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  constructor(opts: DaemonPtyAdapterOptions) {
+    super(opts)
+    // Registered after the base listener, which marks the sessions awaiting recovery first.
+    this.client.onDisconnected(() => this.recoverAfterEndpointLoss())
+  }
+
+  async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {
+    if (!this.client.isConnected()) {
+      return { state: 'unverifiable' }
+    }
+    try {
+      const health = await this.client.request<unknown>('asyncIoHealth', undefined, 7_000)
+      if (
+        health &&
+        typeof health === 'object' &&
+        'state' in health &&
+        (health.state === 'healthy' || health.state === 'stalled') &&
+        'pendingMs' in health &&
+        typeof health.pendingMs === 'number' &&
+        Number.isFinite(health.pendingMs) &&
+        health.pendingMs >= 0
+      ) {
+        return { state: health.state, pendingMs: health.pendingMs }
+      }
+    } catch (error) {
+      if (isUnknownRequestTypeError(error)) {
+        return { state: 'unsupported' }
+      }
+    }
+    return { state: 'unverifiable' }
+  }
+
   async getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
     if (!this.client.isConnected()) {
       return 'unknown'

@@ -16,11 +16,8 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath
 } from '@/lib/local-preflight-context'
-import {
-  discoverRuntimeCommitMessageModels,
-  getRuntimeGitScope,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
+import { getRuntimeGitScope, type RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type {
   AgentSessionModelCatalogResult,

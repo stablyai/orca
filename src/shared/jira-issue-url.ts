@@ -22,7 +22,7 @@ export function parseJiraIssueUrl(value: string): ParsedJiraIssueUrl | null {
   ) {
     return null
   }
-  const match = url.pathname.match(/^(.*)\/browse\/([^/]+)$/)
+  const match = url.pathname.match(/^(.*)\/browse\/([^/]+)$/i)
   if (!match || !JIRA_ISSUE_KEY_PATTERN.test(match[2])) {
     return null
   }

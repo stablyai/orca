@@ -26,7 +26,6 @@ import {
 import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
-import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
@@ -35,7 +34,8 @@ import {
   getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -135,10 +135,10 @@ export function FileExplorerRowContextMenu({
   const revealOwner = useAppStore((s) =>
     getWorkspaceFileRevealOwner(s, s.activeWorktreeId, {
       connectionId,
-      runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(s, s.activeWorktreeId)
+      runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, s.activeWorktreeId)
     })
   )
-  const revealBlocked = isLocalPathOpenBlocked(revealOwner)
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -162,7 +162,10 @@ export function FileExplorerRowContextMenu({
     const state = useAppStore.getState()
     const owner = getWorkspaceFileRevealOwner(state, activeWorktreeId, {
       connectionId,
-      runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+      runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+        state,
+        activeWorktreeId
+      )
     })
     void openFileInDefaultApp(node, owner)
   }, [activeWorktreeId, connectionId, node])

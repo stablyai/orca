@@ -150,6 +150,7 @@ test('the staging deploy identity declares exactly its enumerated grants', () =>
     'google_cloud_run_v2_service_iam_member.github_staging_relay_deploy_director_developer',
     'google_iam_workload_identity_pool_provider.github_staging_relay_deploy',
     'google_project_iam_member.github_staging_relay_deploy_compute_viewer',
+    'google_project_iam_member.github_staging_relay_deploy_logging_viewer',
     'google_service_account.github_staging_relay_deploy',
     'google_service_account_iam_member.github_staging_relay_deploy_auth_runtime_user',
     'google_service_account_iam_member.github_staging_relay_deploy_workload_identity_user',
@@ -189,7 +190,7 @@ test('the staging deploy identity declares exactly its enumerated grants', () =>
   const projectRoles = declaredFamilies()
     .filter((family) => family.startsWith('google_project_iam_member.'))
     .map((family) => block('google_project_iam_member', family.split('.')[1]).match(/role\s*=\s*"([^"]+)"/)[1])
-  assert.deepEqual(projectRoles, ['roles/compute.viewer'])
+  assert.deepEqual(projectRoles, ['roles/compute.viewer', 'roles/logging.viewer'])
   assert.doesNotMatch(identity, /roles\/artifactregistry\.writer/)
   assert.doesNotMatch(identity, /"roles\/(?:owner|editor|viewer)"/)
 })

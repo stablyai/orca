@@ -82,7 +82,7 @@ vi.mock('node:fs/promises', async () => {
         streaming = true
         stream.once('end', () => (streaming = false))
         stream.once('close', () => (streaming = false))
-        stream.on('data', (chunk: Buffer) => {
+        stream.on('data', (chunk) => {
           read.bytes += chunk.length
         })
         return stream

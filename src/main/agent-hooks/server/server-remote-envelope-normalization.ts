@@ -4,6 +4,10 @@ import {
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  readClaudeSettledRequests,
+  type ClaudeSettledRequest
+} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
   paneKey: string
@@ -22,6 +26,7 @@ export type RemoteAgentStatusEnvelope = {
   grokPromptBoundary?: unknown
   compactTrigger?: unknown
   toolUseId?: string
+  claudeSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -47,6 +52,7 @@ export type RemoteEnvelopeFields = {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -62,6 +68,8 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudeSettledRequests?: unknown
+  isReplay?: boolean
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -99,6 +107,11 @@ export function normalizeRemoteEnvelopeFields(envelope: {
     toolUseId:
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
+        : undefined,
+    // Why replay only: a live hook carries its own settlement, so the list matters only after a gap.
+    claudeSettledRequests:
+      source === 'claude' && envelope.isReplay === true
+        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
         : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0

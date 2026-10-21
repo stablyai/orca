@@ -1,7 +1,7 @@
 import {
   parsePtyProcessCeilingState,
   type PtyProcessCeilingState
-} from './pty-process-ceiling-state'
+} from '../../shared/pty-process-ceiling-state'
 export type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null

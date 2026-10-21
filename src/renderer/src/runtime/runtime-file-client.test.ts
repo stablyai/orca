@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   deleteRuntimePath,
-  getRuntimeFileReadScope,
   readRuntimeDirectory,
-  readRuntimeFileContent,
-  readRuntimeFilePreview,
   renameRuntimePath,
-  writeRuntimeFile,
-  type RuntimeReadableFileContent
-} from './runtime-file-client'
+  writeRuntimeFile
+} from './runtime-file-mutation-client'
+import { getRuntimeFileReadScope } from './runtime-file-routing'
+import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
+import type { RuntimeReadableFileContent } from './runtime-file-client-types'
 import {
   fsReadFile,
   fsWriteFile,
@@ -206,18 +205,29 @@ describe('runtime file client', () => {
   })
 
   it('rejects truncated remote reads instead of returning partial editable content', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        worktree: 'id:wt-1',
-        relativePath: 'large.log',
-        content: 'partial',
-        truncated: true,
-        byteLength: 524_288
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        args.method === 'files.read'
+          ? {
+              id: 'rpc-1',
+              ok: true,
+              result: {
+                worktree: 'id:wt-1',
+                relativePath: 'large.log',
+                content: 'partial',
+                truncated: true,
+                byteLength: 524_288
+              },
+              _meta: { runtimeId: 'remote-runtime' }
+            }
+          : {
+              id: 'rpc-2',
+              ok: false,
+              error: { code: 'method_not_found', message: `Unknown method: ${args.method}` },
+              _meta: { runtimeId: 'remote-runtime' }
+            }
+      )
+    )
 
     await expect(
       readRuntimeFileContent({
@@ -226,7 +236,7 @@ describe('runtime file client', () => {
         relativePath: 'large.log',
         worktreeId: 'wt-1'
       })
-    ).rejects.toThrow('Remote file is too large to open in the editor')
+    ).rejects.toThrow('Update the server to open it')
   })
 
   it('falls back to files.readPreview when a remote binary file is opened', async () => {

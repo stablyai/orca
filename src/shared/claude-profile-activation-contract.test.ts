@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { CLAUDE_SIGN_IN_RUNTIME_CAPABILITY, RUNTIME_CAPABILITIES } from './protocol-version'
+import { CLAUDE_SIGN_IN_RUNTIME_CAPABILITY } from './account-runtime-capabilities'
+import { RUNTIME_CAPABILITIES } from './protocol-version'
 import {
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand

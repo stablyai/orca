@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission,
@@ -27,6 +27,11 @@ function root(): string {
   roots.push(path)
   return path
 }
+
+beforeEach(() => {
+  // Occupied owner fixtures need real rename retries, but no elapsed backoff.
+  vi.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -388,7 +393,6 @@ describe('profile state owner reclamation', () => {
         throw Object.assign(new Error('scanner holds directory'), { code: 'EPERM' })
       })
       .mockImplementation(rename)
-    vi.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
     try {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const admission = acquireProfileStateRuntimeAdmission(path)

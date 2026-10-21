@@ -3,12 +3,19 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-catalog-route'
+import { resolveWorktreeOperationRouteResultForHost } from '@/lib/worktree-operation-route'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+  findFolderWorkspaceOwner,
+  getExplicitRuntimeEnvironmentIdForFolderWorkspace
+} from '@/lib/folder-workspace-runtime-owner'
+import {
+  findIndexedProjectGroupOwner,
+  hasIndexedDetectedWorktree
+} from '@/lib/worktree-runtime-owner-index'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 
 /**
  * Who holds a workspace's terminals right now, in the same three-verdict vocabulary the renderer
@@ -64,16 +71,54 @@ export function resolveWorkspaceTerminalHostAuthority(
   if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'none'
   }
-  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(state, worktreeId))) {
-    return 'live'
+  const selectedHost =
+    state.activeWorktreeId === worktreeId
+      ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
+      : null
+  const scope = parseWorkspaceKey(worktreeId)
+  if (!selectedHost && scope?.type === 'folder') {
+    const folderId = scope.folderWorkspaceId
+    const owner = findFolderWorkspaceOwner(state, folderId)
+    if (!owner && state.folderWorkspaces?.some((folder) => folder.id === folderId)) {
+      return 'unverifiable'
+    }
+    if (
+      owner &&
+      !owner.executionHostId &&
+      !owner.connectionId &&
+      state.projectGroups?.some((group) => group.id === owner.projectGroupId) &&
+      !findIndexedProjectGroupOwner(state.projectGroups, owner.projectGroupId)
+    ) {
+      return 'unverifiable'
+    }
+    const environmentId =
+      getExplicitRuntimeEnvironmentIdForFolderWorkspace(state, folderId) ??
+      getPairedWebClientEnvironmentId(state)
+    // Folder workspaces were never host-replaced, so direct SSH keeps `none`.
+    return isWebRuntimeSessionActive(environmentId) ? 'live' : 'none'
   }
-  const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
-  if (host?.kind === 'runtime') {
-    // A runtime host we could not name (rival detected publications, unhydrated catalog) is unasked.
+  const resolution = selectedHost
+    ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, selectedHost.id)
+    : resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+  if (
+    resolution.kind === 'ambiguous' ||
+    (resolution.kind === 'missing' &&
+      hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId))
+  ) {
     return 'unverifiable'
   }
-  if (host?.kind === 'ssh' && parseWorkspaceKey(worktreeId)?.type !== 'folder') {
-    // Folder workspaces were never host-replaced, so they keep `none`.
+  const route = resolution.kind === 'resolved' ? resolution.route : null
+  // A focused runtime routes legacy operations; only owner evidence grants terminal authority.
+  if (
+    isWebRuntimeSessionActive(route?.runtimeEnvironmentId ?? getPairedWebClientEnvironmentId(state))
+  ) {
+    return 'live'
+  }
+  const host = parseExecutionHostId(route?.executionHostId)
+  if (host?.kind === 'runtime') {
+    return 'unverifiable'
+  }
+  if (host?.kind === 'ssh' && scope?.type !== 'folder') {
     return resolveDirectSshAuthority(state, host.targetId)
   }
   // Local, or outside the host's replace scope: this client is the execution host and its own rows are

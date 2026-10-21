@@ -7,24 +7,20 @@ import {
 } from '../../../../shared/task-source-context'
 import {
   getRepoExecutionHostId,
-  normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
-import { callRuntimeRpc, RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
 import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
 import {
   runtimeTargetForOwnerEnvironment,
-  runtimeTargetForOwnerHostId,
-  type RuntimeClientTarget
+  ipcOrRuntimeTargetForHostId
 } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { workItemsCacheKey } from './cache-identity'
-import {
-  findRepoForGitHubOwner,
-  getGitHubFocusedRepoOwnerHostId,
-  getRuntimeRepoTarget
-} from './repository-routing'
+import { findRepoForGitHubOwner, getRuntimeRepoTarget } from './repository-routing'
 
 export type GitHubWorkItemRequestContext = {
   repoId: string
@@ -92,36 +88,45 @@ export function getWorkItemsCacheKeyForOwner(
   repoPath?: string
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
-  return workItemsCacheKey(
-    repoId,
-    limit,
-    query,
-    repo ? getGitHubFocusedRepoOwnerHostId(state.settings ?? null, repo) : undefined
-  )
+  // Why canonical: an SSH row may carry only connectionId, and an unstamped row is local, not focus.
+  return workItemsCacheKey(repoId, limit, query, repo ? getRepoExecutionHostId(repo) : undefined)
 }
 
 export function getGitHubWorkItemSourceHostId(
-  state: AppState,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): ExecutionHostId | undefined {
   if (sourceContext?.provider === 'github') {
     return sourceContext.hostId
   }
-  return repo
-    ? (normalizeExecutionHostId(getGitHubFocusedRepoOwnerHostId(state.settings, repo)) ?? undefined)
-    : undefined
+  return repo ? getRepoExecutionHostId(repo) : undefined
+}
+
+/** The host whose row a fetch read, never the focused server: items carry it to their actions. */
+export function getGitHubWorkItemRowHostId(
+  state: Partial<Pick<AppState, 'repos'>>,
+  repoId: string,
+  repoPath: string,
+  sourceContext?: TaskSourceContext | null
+): ExecutionHostId | undefined {
+  const sourceHostId = sourceContext?.provider === 'github' ? sourceContext.hostId : undefined
+  const rows = state.repos?.filter((entry) => entry.id === repoId) ?? []
+  // Why not by id alone: a twin would resolve to whichever row is listed first.
+  const row =
+    rows.find((entry) => getRepoExecutionHostId(entry) === sourceHostId) ??
+    rows.find((entry) => entry.path === repoPath) ??
+    (rows.length === 1 ? rows[0] : undefined)
+  return row ? getRepoExecutionHostId(row) : sourceHostId
 }
 
 export function getGitHubWorkItemSourceCacheScope(
-  state: AppState,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): string | undefined {
   if (sourceContext?.provider === 'github') {
     return getTaskSourceCacheScope(sourceContext)
   }
-  return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
+  return getGitHubWorkItemSourceHostId(repo, sourceContext)
 }
 
 export function getGitHubRepoSourceSettings(
@@ -154,7 +159,7 @@ export function getGitHubSourceTarget(
     )
   }
   return (
-    (repo ? runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+    (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
   )
 }
 

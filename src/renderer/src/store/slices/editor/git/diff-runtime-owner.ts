@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 
 export function resolveDiffRuntimeEnvironmentId(
   state: AppState,
@@ -10,5 +10,6 @@ export function resolveDiffRuntimeEnvironmentId(
     return explicitRuntimeEnvironmentId
   }
   // Why: route diffs by explicit worktree owner; null forces LOCAL, undefined would inherit the focused runtime → wrong host (#6957, #8484).
-  return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null
+  // Why: a diff only reads, so a twin shows this app's copy, never the focused server's.
+  return runtimeEnvironmentIdUnlessTwin(state, worktreeId)
 }

@@ -6,6 +6,10 @@ import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-meth
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
+  'ui.getJiraQuickFilters',
+  'ui.setJiraQuickFilters',
+  'ui.getJiraSavedFilters',
+  'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
   'agentTeams.prepareLaunch',
@@ -151,6 +155,14 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
+  'ssh.connect',
+  'ssh.getState',
+  'ssh.listRemovedTargetLabels',
+  'ssh.listTargetSummaries',
+  'ssh.listTargets',
+  // A targeted status is the server's own, so a server workspace gates on what that server supports.
+  'status.get',
   'session.tabs.activate',
   'session.tabs.close',
   'session.tabs.closeLifecycle',

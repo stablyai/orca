@@ -1,15 +1,15 @@
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
-const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
+const MAX_PENDING_WEB_WRITE_CODE_UNITS = 1_000_000
 const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
 
 export function createTerminalWebViewPendingMessages() {
   let pending: TerminalWebViewCommand[] = []
-  let pendingWriteBytes = 0
+  let pendingWriteCodeUnits = 0
   let pendingWriteCount = 0
 
   const resetCounters = () => {
-    pendingWriteBytes = 0
+    pendingWriteCodeUnits = 0
     pendingWriteCount = 0
   }
 
@@ -24,10 +24,10 @@ export function createTerminalWebViewPendingMessages() {
       return
     }
 
-    pendingWriteBytes += msg.data.length
+    pendingWriteCodeUnits += msg.data.length
     pendingWriteCount += 1
     while (
-      pendingWriteBytes > MAX_PENDING_WEB_WRITE_BYTES ||
+      pendingWriteCodeUnits > MAX_PENDING_WEB_WRITE_CODE_UNITS ||
       pendingWriteCount > MAX_PENDING_WEB_WRITE_MESSAGES
     ) {
       const dropIndex = pending.findIndex((candidate) => candidate.type === 'write')
@@ -37,7 +37,7 @@ export function createTerminalWebViewPendingMessages() {
       }
       const [dropped] = pending.splice(dropIndex, 1)
       if (dropped?.type === 'write') {
-        pendingWriteBytes = Math.max(0, pendingWriteBytes - dropped.data.length)
+        pendingWriteCodeUnits = Math.max(0, pendingWriteCodeUnits - dropped.data.length)
         pendingWriteCount = Math.max(0, pendingWriteCount - 1)
       }
     }

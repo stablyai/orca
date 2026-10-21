@@ -17,7 +17,6 @@ import { translate } from '@/i18n/i18n'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 
 export function DeleteNestedWorktreesDialog({
   target,
@@ -78,7 +77,6 @@ export function DeleteNestedWorktreesDialog({
       return row ? [row] : []
     })
     state.markWorktreesDeleting(nestedRows)
-    const commitFocus = prepareActiveWorktreeFocusAfterDelete(state.activeWorktreeId ?? target.id)
     try {
       const result = await state.removeWorktree(target, true, { approvedNestedWorktrees: plan })
       if (!result.ok) {
@@ -110,7 +108,6 @@ export function DeleteNestedWorktreesDialog({
     } finally {
       try {
         await useAppStore.getState().fetchAllWorktrees()
-        commitFocus()
       } catch (failure) {
         toast.error(
           translate('worktree.nestedRemoval.refreshFailed', 'Could not refresh the workspace list'),

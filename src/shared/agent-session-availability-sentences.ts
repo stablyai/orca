@@ -35,7 +35,8 @@ export function notSignedInSentence(
       : surface === 'rejection' &&
           context.messageSubmitted !== false &&
           signIn?.agent !== 'claude' &&
-          signIn?.agent !== 'codex'
+          signIn?.agent !== 'codex' &&
+          signIn?.agent !== 'antigravity'
         ? say(signIn ? 'thenSendAgain' : 'signInThenSend')
         : undefined
   const detail = fact.detail?.audience === 'person' ? fact.detail.text : undefined

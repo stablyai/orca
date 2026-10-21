@@ -41,6 +41,7 @@ import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -82,6 +83,7 @@ export default function BrowserTab({
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onDuplicate,
   onTogglePin,
   dragData,
@@ -99,6 +101,7 @@ export default function BrowserTab({
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onDuplicate?: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
@@ -296,12 +299,19 @@ export default function BrowserTab({
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             <PanelRightClose className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
+            {translate(
+              'auto.components.tab.bar.BrowserTab.9dd880bd56',
+              'Close All Tabs To The Right'
+            )}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
             <PanelLeftClose className="size-3.5" />
-            {translate('components.tab.bar.BrowserTab.closeTabsToLeft', 'Close Tabs To The Left')}
+            {translate(
+              'components.tab.bar.BrowserTab.closeTabsToLeft',
+              'Close All Tabs To The Left'
+            )}
           </DropdownMenuItem>
+          <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}

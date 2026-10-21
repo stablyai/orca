@@ -63,6 +63,11 @@ export const bottomDrawerStyles = StyleSheet.create({
   staticContentFill: {
     flex: 1
   },
+  // Lets the drag wrapper give up height to the sheet's max, so its ScrollView scrolls.
+  scrollFrame: {
+    flexShrink: 1,
+    minHeight: 0
+  },
   bottomExtension: {
     position: 'absolute',
     bottom: -500,

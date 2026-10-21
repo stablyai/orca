@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { importExternalPathsToRuntime } from './runtime-file-client'
+import { importExternalPathsToRuntime } from './runtime-file-import-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
   fsImportExternalPaths,
@@ -115,7 +115,8 @@ describe('runtime file client', () => {
     })
 
     expect(fsStageExternalPathsForRuntimeUpload).toHaveBeenCalledWith({
-      sourcePaths: ['/Users/me/assets']
+      sourcePaths: ['/Users/me/assets'],
+      nameExtensionlessImages: undefined
     })
     const transportCalls = runtimeEnvironmentTransportCall.mock.calls.map(([args]) => args)
     expect(transportCalls.map((args) => args.method)).toEqual([

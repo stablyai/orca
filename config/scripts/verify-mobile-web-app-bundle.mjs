@@ -50,30 +50,29 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
  * A chunk is emitted per distinct set of importers, not per route, so a route's marginal cost is
  * what it fails to share rather than what it weighs. Re-measured on this head by building
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
- * fitted to. The spread it shows is 1 to 10: `pr` and `web` add one script each, `session` adds ten.
+ * fitted to. The spread it shows is 1 to 11: `pr` adds one script, `tasks` adds eleven.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 74 scripts at 16 routes.
+ * swept tree reads 78 scripts at 15 routes, with theme tokens in the entry.
  *
  * This table is the fence's only input, so a route added to the tree stales it and the pins beside
  * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
  */
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 7],
-  ['./h/[hostId]/accounts.tsx', 9],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 14],
-  ['./h/[hostId]/edit.tsx', 19],
+  ['./h/[hostId]/[...page].tsx', 6],
+  ['./h/[hostId]/accounts.tsx', 10],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
+  ['./h/[hostId]/edit.tsx', 20],
   ['./h/[hostId]/files/[worktreeId].tsx', 24],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
   ['./h/[hostId]/history/[worktreeId].tsx', 34],
-  ['./h/[hostId]/index.tsx', 39],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 40],
-  ['./h/[hostId]/review/[worktreeId].tsx', 48],
-  ['./h/[hostId]/session/[worktreeId].tsx', 58],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 63],
-  ['./h/[hostId]/tasks.tsx', 71],
-  ['./h/[hostId]/web.tsx', 72],
-  ['./h/_layout.tsx', 74]
+  ['./h/[hostId]/index.tsx', 42],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 43],
+  ['./h/[hostId]/review/[worktreeId].tsx', 50],
+  ['./h/[hostId]/session/[worktreeId].tsx', 60],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 64],
+  ['./h/[hostId]/tasks.tsx', 75],
+  ['./h/_layout.tsx', 78]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -87,13 +86,13 @@ export const MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD = sweptScripts
  * How far above the measurement the envelope sits, and the only slack a refactor gets.
  *
  * Measured, not chosen, and per head rather than cumulative: at 8, 10, 12 and 14 routes the head
- * that wrote the old `4r + 16` read 32, 43, 61 and 69, the head that first swept these prefixes
- * read 34, 44, 57 and 65, and this one reads 33, 43, 56 and 64. So one head has moved the count by
- * as much as four at a fixed route count with no route added (61 to 57), and the step that dropped
- * the page's second Zod moved it by one everywhere. Four is that worst step, which is what a shared
- * importer set moving between heads costs. Summing the steps instead would grow this number every
- * head and loosen the fence for free. A refactor inside four keeps building; anything past it
- * re-measures the sweep.
+ * that wrote the old `4r + 16` read 32, 43, 61 and 69, and one refactor with no route added moved
+ * the 12-route prefix by four (61 to 57). Four is the worst step a refactor alone has cost. The
+ * sweep before this branch read 34, 40, 58 and 71 and this head reads 34, 40, 59 and 75: four at
+ * 14 routes, from main's own drift plus the server-workspace modules this head adds. A head
+ * between them read 77 there, six past that sweep, and re-measured rather than fitting inside the
+ * margin, which is what a step past four is meant to force.
+ * Summing the steps instead would grow this number every head and loosen the fence for free.
  */
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN = 4
 
@@ -191,7 +190,7 @@ export async function readMobileWebBundleMaxAssets() {
  * shells return null for a manifest over MOBILE_WEB_BUNDLE_MAX_ASSETS rather than dropping the
  * extra assets, so a route count that pushes the chunk envelope plus images plus the document past
  * it would pass this build and fail on the device with nothing to read. At today's 42 images that
- * is 29 routes, inside what Phase C adds, which is why this is a build failure and not a comment.
+ * is 28 routes, inside what Phase C adds, which is why this is a build failure and not a comment.
  * The envelope grants the worst swept route to each one past the sweep, so re-measuring a tree
  * whose routes share more moves that crossing out again.
  */

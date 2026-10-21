@@ -17,6 +17,7 @@ import {
   readNativeChatAttachmentCache,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -35,7 +36,11 @@ const intake = vi.hoisted(() => {
     pick: vi.fn()
   }
 })
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ tabsByWorktree: {} }) } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((select: () => unknown) => select(), {
+    getState: () => ({ tabsByWorktree: {} })
+  })
+}))
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
@@ -47,8 +52,14 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: electron.getPathForFile }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
+}))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
 
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 
@@ -70,6 +81,7 @@ function ComposerBody({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: draft,
     allowWithoutTarget: true,
+    imageReferences: true,
     caret: 0,
     disabled,
     isComposing: () => false,
@@ -94,6 +106,7 @@ function ComposerBody({
       <div>
         <NativeChatPromptEditor
           scopeKey={draft}
+          imageRow={attachments.imageAttachments.map(({ id }) => id)}
           inputRef={textareaRef}
           initialValue="untouched draft"
           disabled={false}
@@ -102,10 +115,11 @@ function ComposerBody({
           onSelect={() => {}}
         />
       </div>
-      {attachments.imageAttachments.map((attachment) => (
+      {attachments.imageAttachments.map((attachment, index) => (
         <NativeChatImageAttachmentPreview
           key={attachment.id}
           attachment={attachment}
+          number={index + 1}
           onRemove={() => {}}
         />
       ))}
@@ -313,7 +327,8 @@ describe('native chat composer drop scoping', () => {
       '/repro/second.png'
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(target.textContent).toBe('untouched draft')
+    // Each image gets a chip at the caret, numbered by its thumbnail.
+    expect(target.textContent).toBe('Image #1 Image #2 untouched draft')
 
     view.unmount()
     const returned = render(<ComposerProbe pane="chat-b" />)

@@ -1,5 +1,6 @@
 import type { AppState } from './types'
-import type { HostRoute, RuntimeClientTarget } from '../runtime/runtime-client-target'
+import type { HostRoute } from '../runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import {
   getRuntimeEnvironmentRevision,
@@ -12,7 +13,7 @@ import {
 } from './slices/runtime-environment-ssh'
 import { getLocalSshTargetConnectionGeneration } from './slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status'
-import { getRuntimeTargetHostId } from './runtime-target-host'
+import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
 
 /**
  * Who answered: pairing, runtime incarnation (connection generation) and, for an SSH place, that

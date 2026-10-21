@@ -10,7 +10,7 @@ import { useAttachmentDropState } from '../hooks/composer-state/attachment-drop-
 import type { ProjectGroup } from '../../../shared/project-group-types'
 
 const uploads = vi.hoisted(() => ({ importPaths: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: uploads.importPaths
 }))
 

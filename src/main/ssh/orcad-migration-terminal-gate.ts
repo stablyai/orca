@@ -1,13 +1,26 @@
 /**
  * The dormant migration's terminal gate: a relay PTY cannot move into orcad, so the source must
- * prove that every terminal it ever leased on the target has exited. Loss of contact is never
- * exit: a census that cannot answer, or a lease nothing can account for, blocks as `unverifiable`.
+ * prove that every terminal it ever leased on the target has exited, or (COMPAT legacy-relay-bridge)
+ * leave the ones that may still run to the bridge. Loss of contact is never exit: a census that
+ * cannot answer, or a lease nothing can account for, never reads as `exited`.
  */
 import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
+import { PtyExitProof } from '../pty-exit-proof'
 
 export type OrcadMigrationTerminalVerdict =
   | { verdict: 'exited'; provenPtyIds: string[] }
+  /**
+   * COMPAT(legacy-relay-bridge, revisit 2027-01-15): relay terminals may still run, and the host
+   * converts anyway. Converting stops nothing; src/main/ssh/legacy-relay/ keeps serving
+   * these leases' panes from the old relay until each terminal exits.
+   */
+  | {
+      verdict: 'bridged'
+      relayVerdict: 'live' | 'unverifiable'
+      bridgedPtyIds: string[]
+      hostTerminals: number
+    }
   | {
       verdict: 'live' | 'unverifiable'
       ptyIds: string[]
@@ -71,9 +84,9 @@ async function hostWideVerdict(
     return { verdict: 'exited', provenPtyIds: leases.map((lease) => lease.ptyId) }
   }
   return {
-    verdict: hostProof.verdict,
-    ptyIds: [],
-    reason: "the host's relays still run or may run terminals",
+    verdict: 'bridged',
+    relayVerdict: hostProof.verdict,
+    bridgedPtyIds: leases.filter((lease) => lease.state !== 'terminated').map((l) => l.ptyId),
     hostTerminals: hostProof.count
   }
 }
@@ -83,13 +96,18 @@ async function hostWideVerdict(
  * run under another desktop's target or session and stopping this target's terminals can't end them.
  */
 export function terminalsRunElsewhere(proof: OrcadMigrationTerminalVerdict): boolean {
-  return proof.verdict !== 'exited' && proof.ptyIds.length === 0 && (proof.hostTerminals ?? 0) > 0
+  return (
+    (proof.verdict === 'live' || proof.verdict === 'unverifiable') &&
+    proof.ptyIds.length === 0 &&
+    (proof.hostTerminals ?? 0) > 0
+  )
 }
 
 /**
- * Whoever acts on an exited proof (a conversion or a move) marks the
- * detached and expired leases it covers terminated, so later checks stop reading them as running
- * or unverifiable and the next connect can convert.
+ * Whoever acts on an exited proof (a conversion or a move) marks every lease it covers terminated,
+ * so later checks stop reading them as running or unverifiable and the next connect can convert.
+ * Attached ones too (#29083): only a host-wide census proves exit, and with no relay left on the
+ * host an `attached` row is one an older build never got to detach.
  */
 export function retireProvenExitedLeases(
   store: Pick<Store, 'getSshRemotePtyLeases' | 'markSshRemotePtyLease'>,
@@ -100,9 +118,10 @@ export function retireProvenExitedLeases(
     return
   }
   const proven = new Set(proof.provenPtyIds)
+  const census = PtyExitProof.from('host-census', undefined)
   for (const lease of store.getSshRemotePtyLeases(targetId)) {
-    if ((lease.state === 'detached' || lease.state === 'expired') && proven.has(lease.ptyId)) {
-      store.markSshRemotePtyLease(targetId, lease.ptyId, 'terminated')
+    if (lease.state !== 'terminated' && proven.has(lease.ptyId)) {
+      store.markSshRemotePtyLease(targetId, lease.ptyId, census)
     }
   }
 }
@@ -116,11 +135,13 @@ export function confirmOrcadMigrationTerminalsUnderFence(
   targetId: string,
   proof: OrcadMigrationTerminalVerdict
 ): OrcadMigrationTerminalVerdict {
-  if (proof.verdict !== 'exited') {
+  if (proof.verdict !== 'exited' && proof.verdict !== 'bridged') {
     return proof
   }
-  const proven = new Set(proof.provenPtyIds)
-  const leases = store.getSshRemotePtyLeases(targetId)
+  const proven = new Set(proof.verdict === 'exited' ? proof.provenPtyIds : [])
+  // COMPAT(legacy-relay-bridge): a lease the bridge holds is accounted for, never a new terminal.
+  const bridged = new Set(proof.verdict === 'bridged' ? proof.bridgedPtyIds : [])
+  const leases = store.getSshRemotePtyLeases(targetId).filter((lease) => !bridged.has(lease.ptyId))
   const live = leases.filter(isLiveSshPtyLease)
   if (live.length > 0) {
     return refuse('live', live, 'a terminal started on this host before the fence took hold')

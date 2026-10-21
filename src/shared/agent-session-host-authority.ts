@@ -116,6 +116,8 @@ export type RuntimeEnsureAgentSessionRequest =
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
       spawnIntent?: SpawnIntent
+      /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
+      accountEnv?: Record<string, string>
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -137,6 +139,8 @@ export type RuntimeCreateAgentSessionRequest = {
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'
+  /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
+  accountEnv?: Record<string, string>
 }
 
 export type RuntimeCreateAgentSessionResult = {
@@ -145,6 +149,7 @@ export type RuntimeCreateAgentSessionResult = {
 }
 
 export type RuntimeAgentSessionRpcCaller = {
+  terminalImageViewerSupported?: boolean
   clientId?: string
   clientKind?: 'mobile' | 'runtime'
   signal?: AbortSignal

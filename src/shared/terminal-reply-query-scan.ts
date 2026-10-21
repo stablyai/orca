@@ -35,7 +35,7 @@ export const EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE: TerminalReplyQueryScanState 
  * an arm without its withdraw would leave the client subscribed for a TUI that already
  * retired the subscription, and fish rearms/withdraws on every prompt.
  */
-function isReplayableCsi(sequence: string): boolean {
+export function isReplayableCsi(sequence: string): boolean {
   if (DEVICE_ATTRIBUTES_QUERY_RE.test(sequence)) {
     return true
   }

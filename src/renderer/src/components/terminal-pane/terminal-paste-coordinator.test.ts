@@ -8,19 +8,21 @@ import {
 } from './terminal-bracketed-paste'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import {
-  chunkTerminalPastePlan,
   createTerminalPastePayload,
-  executeTerminalPastePlan,
-  getTerminalPasteOperationTimeoutMs,
-  iterateTerminalPastePlanChunks,
   planTerminalPaste,
-  planTerminalPasteWithYield,
-  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
-  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS,
-  type TerminalPasteRuntime,
-  type TerminalPasteTarget
+  planTerminalPasteWithYield
 } from './terminal-paste-coordinator'
+import {
+  executeTerminalPastePlan,
+  getTerminalPasteOperationTimeoutMs
+} from './terminal-paste-executor'
+import {
+  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
+  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
+} from './terminal-paste-limits'
+import type { TerminalPasteRuntime, TerminalPasteTarget } from './terminal-paste-model'
 
 const textEncoder = new TextEncoder()
 

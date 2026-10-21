@@ -12,20 +12,31 @@ export type AgentAvailabilityUpdateQueueOptions = {
   enabled: boolean
 }
 
+export function createAgentSettingsUpdateQueue(): (
+  options: Pick<
+    AgentAvailabilityUpdateQueueOptions,
+    'getSettings' | 'fallbackSettings' | 'updateSettings'
+  > & {
+    buildUpdate: (settings: GlobalSettings) => Partial<GlobalSettings>
+  }
+) => Promise<void> {
+  let pendingUpdate: Promise<unknown> = Promise.resolve()
+  return ({ getSettings, fallbackSettings, updateSettings, buildUpdate }) => {
+    // Serialize replacement writes against the reconciled store.
+    pendingUpdate = pendingUpdate
+      .catch(() => {})
+      .then(() => updateSettings(buildUpdate(getSettings() ?? fallbackSettings)))
+    return pendingUpdate.then(() => undefined)
+  }
+}
+
 export function createAgentAvailabilityUpdateQueue(): (
   options: AgentAvailabilityUpdateQueueOptions
 ) => Promise<void> {
-  let pendingUpdate: Promise<unknown> = Promise.resolve()
-
-  return ({ getSettings, fallbackSettings, updateSettings, agentId, enabled }) => {
-    // Why: serialize full-array replacements so each write sees the reconciled store.
-    pendingUpdate = pendingUpdate
-      .catch(() => {})
-      .then(() =>
-        updateSettings(
-          buildAgentAvailabilitySettingsUpdate(getSettings() ?? fallbackSettings, agentId, enabled)
-        )
-      )
-    return pendingUpdate.then(() => undefined)
-  }
+  const enqueue = createAgentSettingsUpdateQueue()
+  return ({ agentId, enabled, ...options }) =>
+    enqueue({
+      ...options,
+      buildUpdate: (settings) => buildAgentAvailabilitySettingsUpdate(settings, agentId, enabled)
+    })
 }

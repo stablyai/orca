@@ -71,6 +71,11 @@ vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
 }))
 
+// Naming failure has its own tests; its hooks need a real React dispatcher.
+vi.mock('./use-native-chat-naming-failure', () => ({
+  useNativeChatNamingFailure: () => null
+}))
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: {},
@@ -264,6 +269,7 @@ async function renderSortableTab({
   const module = await import('./SortableTab')
   return module.default({
     tab: makeTerminalTab() as never,
+    agent: null,
     unifiedTabId: 'terminal-tab-1',
     groupId: 'group-1',
     tabCount: 1,

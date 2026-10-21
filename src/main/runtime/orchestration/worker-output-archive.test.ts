@@ -99,6 +99,7 @@ describe('worker output archive WSL routing', () => {
       wslDistro: 'Ubuntu',
       limit: expect.any(Number)
     })
+    expect(runtime.readTerminal).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       kind: 'transcript_pin',
       status: 'captured',
@@ -143,7 +144,11 @@ describe('worker output archive WSL routing', () => {
       status: 'captured',
       content: {
         lines: ['remote worker terminal fallback'],
-        fallbackReason: 'remote_capability_unavailable'
+        fallbackReason: 'remote_capability_unavailable',
+        warnings: expect.arrayContaining([
+          'The terminal read did not identify an authoritative screen; available terminal output was preserved.',
+          'Terminal wrap information was unavailable; capability masking used complete lines.'
+        ])
       }
     })
   })

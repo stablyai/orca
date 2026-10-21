@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-limits'
 
 const mocks = vi.hoisted(() => ({
   pasteTerminalText: vi.fn(),

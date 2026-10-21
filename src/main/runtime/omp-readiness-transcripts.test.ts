@@ -265,7 +265,6 @@ describe('OpenCode captured worker composer', () => {
     ['opencode-2-0-21-timed-natural-load-enter-dropped', 'opencode2'],
     ['opencode-2-0-14-timed-cold-standalone', 'opencode2']
   ]
-  const OPENCODE_1_RUNS = RUNS.filter(([name]) => name.startsWith('opencode-1-'))
   const AGENT_ROW = /\u00b7 \S/
   const BOX_BOTTOM_LEFT = '\u2579'
 
@@ -346,30 +345,22 @@ describe('OpenCode captured worker composer', () => {
     })
 
     it.each(RUNS)(
-      '%s: the worker-start lane settles once the box and the agent row are both painted',
+      '%s: worker-start waits for the box and agent row after the bare-name tui-idle wait',
       async (name, agent) => {
         const { settledAt, composer, boxRead, agentRowRead } = await replay(name, agent)
         await expect(composer).resolves.toMatchObject({ satisfied: true })
-        // OpenCode 1 paints the row inside the box's frame, so the box read is the later one there.
         expect(settledAt.composer).toBe(Math.max(boxRead, agentRowRead))
+        expect(settledAt.tuiIdle).not.toBeNull()
+        expect(settledAt.tuiIdle!).toBeLessThan(boxRead)
+        if (name.startsWith('opencode-1-')) {
+          // OpenCode 1 paints the row inside the box's frame, so the box read is the later one.
+          expect(settledAt.composer).toBe(boxRead)
+        }
+        if (name === 'opencode-2-0-21-timed-natural-load-enter-dropped') {
+          expect(settledAt.composer).toBeGreaterThan(boxRead)
+        }
       }
     )
-
-    it.each(OPENCODE_1_RUNS)(
-      '%s: OpenCode 1 paints the agent row with the box, so it waits no longer than before',
-      async (name, agent) => {
-        const { settledAt, boxRead } = await replay(name, agent)
-        expect(settledAt.composer).toBe(boxRead)
-      }
-    )
-
-    it('never settles on the box while a slow agent list leaves the row unpainted', async () => {
-      const { settledAt, boxRead } = await replay(
-        'opencode-2-0-21-timed-natural-load-enter-dropped',
-        'opencode2'
-      )
-      expect(settledAt.composer).toBeGreaterThan(boxRead)
-    })
 
     it('takes the box after the grace in a pane too narrow for the agent row', async () => {
       const name = 'opencode-2-0-21-timed-narrow-pane'
@@ -386,15 +377,6 @@ describe('OpenCode captured worker composer', () => {
       // The recorder pasted at the grace and pressed Enter after it, and OpenCode took it.
       expect(promptSentAtMs!).toBeGreaterThan(settledAt.composerMs!)
     })
-
-    it.each(RUNS)(
-      '%s: the bare-name tui-idle wait main used would have settled before the box',
-      async (name, agent) => {
-        const { settledAt, boxRead } = await replay(name, agent)
-        expect(settledAt.tuiIdle).not.toBeNull()
-        expect(settledAt.tuiIdle!).toBeLessThan(boxRead)
-      }
-    )
   })
 })
 

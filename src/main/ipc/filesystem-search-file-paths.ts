@@ -1,7 +1,7 @@
 import { getQuickOpenRgOutputMode } from '../../shared/quick-open-ripgrep-output-mode'
 import { RipgrepFilenameDecoder } from '../../shared/ripgrep-filename-decoder'
 import { sep } from 'node:path'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 import {
   buildExcludePathPrefixes,
@@ -39,7 +39,7 @@ export type QuickOpenFilePathSearchResult = {
 
 export async function searchQuickOpenFilePaths(
   rootPath: string,
-  store: Store,
+  store: RuntimeStore,
   args: {
     includeIgnored?: boolean
     followSymlinks?: boolean

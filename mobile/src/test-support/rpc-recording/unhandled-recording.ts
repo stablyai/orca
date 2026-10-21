@@ -17,7 +17,8 @@ export function recordUnhandledRejections(
     active = false
     process.removeAllListeners('unhandledRejection')
     for (const listener of previous) {
-      process.on('unhandledRejection', listener)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: raw listeners handle this event; preserve their wrappers so once listeners still fire once.
+      process.on('unhandledRejection', listener as NodeJS.UnhandledRejectionListener)
     }
   }
 }

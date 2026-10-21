@@ -21,7 +21,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.environmentIdFor
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: mocks.environmentIdFor
 }))
 
 import { revealStructuredSession } from './activate-ai-vault-structured-session'

@@ -68,9 +68,13 @@ export async function resolveStructuredCodexAccountHomePath(
 
 export function resolveStructuredCodexAccountKind(
   home: string,
-  settings: Pick<
-    GlobalSettings,
-    'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<
+      GlobalSettings,
+      | 'codexManagedAccounts'
+      | 'activeCodexManagedAccountId'
+      | 'activeCodexManagedAccountIdsByRuntime'
+    >
   >
 ): AgentSessionAccountKind | undefined {
   const same = (other: string): boolean =>

@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 

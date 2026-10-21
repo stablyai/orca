@@ -7,17 +7,12 @@ import { reconcileReadoptedSshRepoRows } from '../slices/superseded-ssh-repo-row
 import type { SshRepoReconciliation } from '../slices/superseded-ssh-repo-rows'
 import { reconcileReadoptedSshWorktreesByRepo } from '../slices/readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { RepoSlice } from './repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
-import {
-  mergeProjectHostSetupCompatibility,
-  projectCompatibilityFromRepos
-} from '../projects/project-compatibility-core'
 
 export type FetchedRepoCatalog = {
   repos: readonly Repo[]
@@ -118,13 +113,6 @@ export function reconcileReadoptedSshWorktreeState(
     detectedWorktreesByRepo,
     sortEpoch: worktreesByRepo === state.worktreesByRepo ? state.sortEpoch : state.sortEpoch + 1
   }
-}
-
-export function projectCompatibilityForReconciledRepos(
-  repos: readonly Repo[],
-  fetched: ProjectHostSetupProjection
-): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  return mergeProjectHostSetupCompatibility(projectCompatibilityFromRepos(repos), fetched)
 }
 
 export function filterTrustedOrcaHooksToValidRepos(

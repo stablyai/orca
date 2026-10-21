@@ -7,7 +7,7 @@ import { useFileSearchPanel } from './useFileSearchPanel'
 import type { SearchResult } from '../../../../shared/code-search-types'
 
 const { search } = vi.hoisted(() => ({ search: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', () => ({ searchRuntimeFiles: search }))
+vi.mock('@/runtime/runtime-file-search-client', () => ({ searchRuntimeFiles: search }))
 const initial = useAppStore.getInitialState()
 const initialView: { view: 'files' | 'search' } = { view: 'search' }
 const empty: SearchResult = { files: [], totalMatches: 0, truncated: false }

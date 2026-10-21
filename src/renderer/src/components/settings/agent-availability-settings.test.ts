@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat-providers'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
@@ -7,6 +8,19 @@ import {
 } from './agent-availability-settings'
 
 describe('agent availability settings', () => {
+  it('displays native installation defaults while preserving explicit choices', () => {
+    expect(isNativeChatProviderDisplayedOn({}, 'claude', [])).toBe(true)
+    expect(isNativeChatProviderDisplayedOn({}, 'grok', [])).toBe(false)
+    expect(isNativeChatProviderDisplayedOn({}, 'grok', null)).toBe(false)
+    expect(isNativeChatProviderDisplayedOn({}, 'grok', ['grok'])).toBe(true)
+    expect(
+      isNativeChatProviderDisplayedOn({ nativeChatProviders: { grok: true } }, 'grok', [])
+    ).toBe(true)
+    expect(
+      isNativeChatProviderDisplayedOn({ nativeChatProviders: { grok: false } }, 'grok', ['grok'])
+    ).toBe(false)
+  })
+
   it('normalizes duplicates and unknown ids before applying a request', () => {
     expect(
       buildAgentAvailabilitySettingsUpdate(

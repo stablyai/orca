@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { renameRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { renameRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import {
   beginEditorPathMove,
@@ -11,10 +12,8 @@ import {
 } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from '@/lib/open-editor-move-owner'
 import { documentFolderAccess } from '@/lib/local-file-access'
 
 let moveOperationCounter = 0
@@ -41,11 +40,9 @@ export async function executeOpenEditorPathMove(args: {
   // Host-scoped: the same abs path on another host (2nd SSH connection, local vs
   // runtime) is a distinct file the rename never touched — keep it out of the move.
   const moveState = useAppStore.getState()
-  const initiatingHostId = getExecutionHostIdForWorktree(moveState, worktreeId)
+  const owner = editorMoveOwnerFromContext(context, worktreeId)
   const affected = moveState.openFiles.filter(
-    (f) =>
-      isPathInsideOrEqual(fromPath, f.filePath) &&
-      getExecutionHostIdForWorktree(moveState, f.worktreeId) === initiatingHostId
+    (f) => isPathInsideOrEqual(fromPath, f.filePath) && isOpenFileOnMoveOwner(moveState, f, owner)
   )
 
   // Suppress the move ROOT (prefix-matched) per scope, always including the
@@ -56,7 +53,7 @@ export async function executeOpenEditorPathMove(args: {
   const addScope = (wtId: string, owner: string | null): void => {
     scopes.set(`${wtId}::${owner ?? 'local'}`, { worktreeId: wtId, owner })
   }
-  addScope(worktreeId, getRuntimeEnvironmentIdForWorktree(moveState, worktreeId))
+  addScope(worktreeId, runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(moveState, worktreeId))
   for (const f of affected) {
     addScope(f.worktreeId, f.runtimeEnvironmentId?.trim() || null)
   }
@@ -107,6 +104,7 @@ export async function executeOpenEditorPathMove(args: {
       toPath,
       worktreePath,
       worktreeId,
+      owner,
       moveOperationId: operationId
     })
     if (!rekeyResult.ok) {

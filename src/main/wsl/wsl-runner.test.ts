@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('../wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 vi.mock('./wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
@@ -244,7 +247,7 @@ describe('guest cwd', () => {
     // The contract is that the GUEST path never becomes wsl.exe's Windows cwd,
     // not that there is no cwd: inheriting one is its own bug (#16463).
     expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).not.toBe('/home/u/repo')
-    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toEqual(expect.any(String))
+    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toEqual('C:\\Windows')
     expect(lastArgv()).toContain('/home/u/repo')
     expect(lastArgv()).toContain('sh')
   })

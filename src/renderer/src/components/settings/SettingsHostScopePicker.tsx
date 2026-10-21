@@ -8,10 +8,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import {
-  runtimeTargetEnvironmentId,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { SettingsHostScope } from './settings-host-scope'
 
 const LOCAL_VALUE = 'local'

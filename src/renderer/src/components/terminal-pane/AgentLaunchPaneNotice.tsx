@@ -7,7 +7,7 @@ import { agentLaunchPaneNoticeText } from './agent-launch-pane-notice-text'
 
 /**
  * What a pane an agent launch laid out shows when its agent is not running in it. Not dismissable:
- * it is the pane's state, read again from the launch record on every mount, not a passing error.
+ * it is the pane's state for this session, not a passing error.
  */
 export function AgentLaunchPaneNotice({
   refusal,

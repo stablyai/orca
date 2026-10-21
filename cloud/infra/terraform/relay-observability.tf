@@ -1748,6 +1748,74 @@ resource "google_monitoring_alert_policy" "relay_cell_reserve_dead_man_tripped" 
   depends_on = [google_logging_metric.relay_cell_reserve_dead_man_tripped]
 }
 
+# The reserve watch workflow logs this from its runner (resource global) when a watch is refused or
+# a flip back did not land in write mode: either can leave a cell in reserve unwatched.
+resource "google_logging_metric" "relay_reserve_watch_alarm" {
+  project     = var.project_id
+  name        = "orca_relay_reserve_watch_alarm"
+  description = "Reserve watch runs that were refused or whose flip back to db did not land, so the cell may be in reserve mode with nothing watching it."
+  filter      = "resource.type=\"global\" AND logName=\"projects/${var.project_id}/logs/orca-relay-reserve-watch\" AND jsonPayload.event=\"orca_relay_reserve_watch_alarm\""
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+    kind    = "EXTRACT(jsonPayload.kind)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+
+    labels {
+      key         = "kind"
+      value_type  = "STRING"
+      description = "refused or flip-back-failed."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_reserve_watch_alarm" {
+  project               = var.project_id
+  display_name          = "Orca Relay: reserve cell may be unwatched"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "A reserve watch was refused or its flip back did not land"
+
+    condition_threshold {
+      filter          = "resource.type=\"global\" AND metric.type=\"logging.googleapis.com/user/orca_relay_reserve_watch_alarm\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A write-mode `Operate Relay Production Reserve Watch` run was refused (a rollout held the Cloud SQL rollout lease, the lease was unreadable, bad inputs, or the cell never reported reserve within 10 minutes) or its flip back to db did not land (no ID token, a failed login, or a cell that does not answer). The cell may be in reserve mode with nothing watching it. Read the cell's `runtime-status`; if its switch file says reserve, either rerun the watch or run `cloud-operate-relay-production-cell-flags.yml` with `admitMode=db` for that cell, using the break-glass inputs the failed run printed if the cell does not answer."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_reserve_watch_alarm]
+}
+
 # host-session-registry.ts: a flip back closed a control it could not re-register (4409), after 20 refusals.
 resource "google_logging_metric" "relay_cell_reregistration_gave_up" {
   project     = var.project_id

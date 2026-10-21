@@ -57,7 +57,7 @@ describe('RuntimeFileCommands', () => {
           absolutePath: expectedPath
         }
       })
-      expect(resolveAuthorizedPathMock).toHaveBeenCalledWith(expectedPath, expect.anything())
+      expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe(expectedPath)
     })
 
     it('does not translate UNC-style paths as WSL POSIX paths', async () => {

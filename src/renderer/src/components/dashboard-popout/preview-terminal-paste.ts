@@ -1,9 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield
-} from '@/components/terminal-pane/terminal-paste-coordinator'
+import { executeTerminalPastePlan } from '@/components/terminal-pane/terminal-paste-executor'
+import { planTerminalPasteWithYield } from '@/components/terminal-pane/terminal-paste-coordinator'
 import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/terminal-paste-runtime'
 import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/terminal-paste-limits'
 import { pasteTerminalText } from '@/components/terminal-pane/terminal-bracketed-paste'

@@ -57,8 +57,7 @@ function exitBeforeProof(): Promise<void> {
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
-    cause: 'unexpected-exit',
-    startupUnproven: true
+    cause: 'unexpected-exit'
   })
 }
 
@@ -118,6 +117,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: () => new Promise(() => {}),
       acquire: vi.fn(async ({ fence, spawnToken }) => {
         const child = {
           process: {
@@ -133,8 +133,7 @@ beforeEach(async () => {
             mintedAtFence: fence,
             observedAt: NOW
           },
-          acquisitionGeneration: `generation-${++generation}`,
-          providerChildPhase: 'starting' as const
+          acquisitionGeneration: `generation-${++generation}`
         }
         if (exitOnStart) {
           // Asked for on the lane while the start step runs, so it lands before the handover.
@@ -144,8 +143,7 @@ beforeEach(async () => {
             fence,
             acquisitionGeneration: child.acquisitionGeneration,
             reason: EXIT_REASON,
-            cause: 'unexpected-exit',
-            startupUnproven: true
+            cause: 'unexpected-exit'
           })
         }
         return child

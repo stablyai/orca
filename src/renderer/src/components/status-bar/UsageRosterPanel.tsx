@@ -180,6 +180,9 @@ export function UsageRow({
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
         ) : null}
       </div>
+      {state.detail ? (
+        <span className="pl-[30px] text-[11px] text-muted-foreground">{state.detail}</span>
+      ) : null}
       {hasUsage && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => (

@@ -69,6 +69,7 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
     resumeExpiresAt: this.resumeExpiry
   })
   getFailure = () => this.failure
+  readonly probeAfterBackground = vi.fn()
 }
 
 export class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {

@@ -146,8 +146,7 @@ function mount({
         containerRef,
         webviewRef,
         setBrowserOverlayViewport: vi.fn(),
-        browserAnnotationsLength: 0,
-        setBrowserAnnotationTrayOpen: vi.fn()
+        browserAnnotationsLength: 0
       }),
     { initialProps: { target: id }, ...(strict ? { wrapper: strictWrapper } : {}) }
   )

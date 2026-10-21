@@ -1,3 +1,5 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getWorkspaceJiraIssueKey } from '../../../../../shared/jira-review-title'
 import { useCallback } from 'react'
 import type { PullRequestGenerationOutcome } from '../create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../pull-request-generation-request-outcome'
@@ -5,9 +7,9 @@ import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   generateRuntimePullRequestFields,
-  cancelRuntimeGeneratePullRequestFields,
-  type RuntimeGeneratePullRequestFieldsOverrides
-} from '@/runtime/runtime-git-client'
+  cancelRuntimeGeneratePullRequestFields
+} from '@/runtime/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import { stripBaseRef } from '../create-pull-request-base-ref-normalization'
@@ -88,6 +90,15 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         worktreeId: activeWorktreeId,
         worktreePath: activeWorktreePath,
         connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        jiraIssueKey:
+          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          activeWorktreeId
+            ? getWorkspaceJiraIssueKey(
+                useAppStore
+                  .getState()
+                  .getKnownWorktreeById(activeWorktreeId, getRepoExecutionHostId(repo))
+              )
+            : null,
         requestId,
         repoId: repo.id,
         branch,

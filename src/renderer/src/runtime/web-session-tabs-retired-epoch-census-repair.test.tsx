@@ -6,10 +6,9 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const mocks = vi.hoisted(() => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn()
+  ownerEnvironmentIdForWorkspace: vi.fn()
 }))
 
 vi.mock('./use-runtime-session-mirror-environment-key', () => ({
@@ -18,13 +17,10 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
     resubscribeSignal: ''
   })
 }))
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
-})
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
 vi.mock('./web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: async (_state: unknown, snapshot: unknown) =>
     snapshot
@@ -32,10 +28,8 @@ vi.mock('./web-session-terminal-orphan-recovery', () => ({
 
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import {
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  useWebSessionTabsSync
-} from './web-session-tabs-sync'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 
 /**
  * #21928: a paired host mints `headless:` epochs for one worktree between renderer frames, so the
@@ -134,7 +128,7 @@ describe('a renderer publisher returning after a headless epoch', () => {
       result: { snapshots: [] },
       _meta: { runtimeId: 'runtime-a' }
     }
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV_A)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV_A)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }

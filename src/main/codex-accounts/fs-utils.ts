@@ -40,7 +40,7 @@ export function writeFileAtomically(
           rmSync(retryTmpPath, { force: true })
         }
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // a failed grant is not actionable; re-throw the original EPERM
       }
     }
     throw error

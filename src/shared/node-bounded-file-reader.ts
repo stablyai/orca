@@ -20,7 +20,11 @@ export type BoundedNodeFileRead = {
   stats: Stats
 }
 
-type NodeFileReadOptions = { regularFileOnly?: boolean; signal?: AbortSignal }
+type NodeFileReadOptions = {
+  regularFileOnly?: boolean
+  signal?: AbortSignal
+  window?: { offset: number; length?: number }
+}
 
 function validateSize(size: number, maxBytes: number): void {
   if (!Number.isSafeInteger(size) || size < 0) {
@@ -67,6 +71,34 @@ export async function readNodeFileHandleWithinLimit(
   options.signal?.throwIfAborted()
   if (options.regularFileOnly && !stats.isFile()) {
     throw new Error('Expected a regular file')
+  }
+  if (options.window) {
+    validateSize(stats.size, Number.MAX_SAFE_INTEGER)
+    const { offset, length = stats.size - options.window.offset } = options.window
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 0
+    ) {
+      throw new RangeError('File read window must contain non-negative safe integers')
+    }
+    validateSize(length, maxBytes)
+    if (offset > stats.size || length > stats.size - offset) {
+      throw new Error('File is smaller than the requested window')
+    }
+    const buffer = Buffer.allocUnsafe(length)
+    let read = 0
+    while (read < length) {
+      options.signal?.throwIfAborted()
+      const { bytesRead } = await handle.read(buffer, read, length - read, offset + read)
+      options.signal?.throwIfAborted()
+      if (bytesRead === 0) {
+        throw new Error('File is smaller than the requested window')
+      }
+      read += bytesRead
+    }
+    return { buffer, stats }
   }
   validateSize(stats.size, maxBytes)
 

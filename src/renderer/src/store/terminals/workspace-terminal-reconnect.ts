@@ -117,6 +117,7 @@ export function createWorkspaceTerminalReconnectActions(
         return
       }
       set({
+        // Only each row's ptyId changes, a field the frame merge leaves to the window.
         ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
         ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
         workspaceSessionReady: true,

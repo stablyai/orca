@@ -83,7 +83,7 @@ import { useShellStackPop } from './use-shell-stack-pop'
 
 type Harness = {
   pop: () => BridgeNavigateBackOutcome
-  /** A second `MobileWebShellScreen` over the same native stack, which `/h/a/web` makes reachable. */
+  /** A second `MobileWebShellScreen` over the same native stack, as a pushed route mounts one. */
   mountSecondShell: () => void
   /** The second shell's own pop, through whichever instance is mounted when it is called. */
   secondPop: () => BridgeNavigateBackOutcome
@@ -233,8 +233,8 @@ describe('a page that asks to go back twice in one batch', () => {
 /**
  * One native stack, so one pending pop.
  *
- * `MobileWebShellScreen` mounts at both `app/h/[hostId]/index.tsx` and `app/h/[hostId]/web.tsx`,
- * and `/h/a/web` is deep-linkable over `/h/a`, so two shells can be mounted over one stack. A latch
+ * Every host route file mounts `MobileWebShellScreen`, and a pushed route (`/h/a/files/w` over
+ * `/h/a`) leaves both mounted, so two shells can be mounted over one stack. A latch
  * per screen leaves each of them holding its own and two frames still unwind two screens.
  */
 describe('two shells over one stack', () => {

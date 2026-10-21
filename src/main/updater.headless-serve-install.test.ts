@@ -116,6 +116,11 @@ vi.mock('./update-install-exit-watchdog', () => ({
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+const prepareShipItStagingMock = vi.hoisted(() => vi.fn((): Promise<void> | null => null))
+vi.mock('./updater/shipit-leftover-recovery', () => ({
+  prepareThisProcessShipItStaging: prepareShipItStagingMock
+}))
+
 vi.mock('./serve-update-handoff', () => ({
   failServeUpdateHandoff: failServeUpdateHandoffMock,
   getServeUpdateHandoffFailure: vi.fn(() => null),
@@ -144,6 +149,7 @@ describe('headless serve update install handoff', () => {
     requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
     failServeUpdateHandoffMock.mockReset()
     armUpdateInstallExitWatchdogMock.mockReset()
+    prepareShipItStagingMock.mockReset().mockReturnValue(null)
     resetHandlers()
   })
 
@@ -342,6 +348,54 @@ describe('headless serve update install handoff', () => {
       'paired-clients-disconnected',
       'in-process-pty-cleanup'
     ])
+  })
+
+  it('clears leftover ShipIt state on macOS right before its deferred staging, not at download', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    try {
+      const lifecycle: string[] = []
+      prepareShipItStagingMock.mockImplementation(() => {
+        lifecycle.push('shipit-staging-prepared')
+        return Promise.resolve()
+      })
+      requestServeUpdateHandoffMock.mockImplementation(() => {
+        lifecycle.push('handoff-persisted')
+        return true
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+      autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+        lifecycle.push('native-quit-and-install')
+      })
+      const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
+        await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      expect(prepareShipItStagingMock).not.toHaveBeenCalled()
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(lifecycle).toEqual([
+        'handoff-persisted',
+        'shipit-staging-prepared',
+        'native-quit-and-install'
+      ])
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('keeps the serving owner intact when the supervisor handoff cannot be persisted', async () => {

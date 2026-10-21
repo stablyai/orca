@@ -361,7 +361,7 @@ describe('detachTerminalPaneToTab', () => {
     expect(store.reorderUnifiedTabs).toHaveBeenCalledWith(
       TARGET_GROUP_ID,
       [EXISTING_TAB_1, 'tab-detached', EXISTING_TAB_2],
-      { recordInteraction: false }
+      { recordInteraction: false, layoutOwnerHandled: false }
     )
   })
 

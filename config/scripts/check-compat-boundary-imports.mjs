@@ -4,17 +4,24 @@ import { collectProcessHostSources } from './check-process-host-imports.mjs'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
-// Code kept only for old clients, servers or profiles. Each folder is reached through its
-// `index` and only from the listed importers, so deleting the folder plus those import lines
-// removes the path.
+// Code kept only for old clients, servers or profiles. Each folder is reached only through its
+// listed entry modules and only from the listed importers, so deleting the folder plus those
+// import lines removes the path.
 export const COMPAT_FOLDERS = [
-  // The RPC handler wiring joins in PR 6 step 6c.
-  { folder: 'src/shared/workspace-layout/old-client', importers: [] },
+  {
+    folder: 'src/shared/workspace-layout/old-client',
+    entries: ['old-client-session-tab-rows', 'old-client-session-tabs-projection'],
+    importers: [
+      'src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts',
+      'src/main/runtime/terminal/surface/terminal-surface-index.ts'
+    ]
+  },
   {
     folder: 'src/main/remote-layout-snapshot',
+    entries: ['remote-layout-snapshot-persistence', 'remote-layout-snapshot-recorder'],
     importers: [
-      'src/main/ipc/runtime-environments.ts',
-      'src/main/ipc/runtime-environment-removal-cleanup.ts',
+      'src/main/ipc/runtime-environments/runtime-environments.ts',
+      'src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts',
       'src/main/persistence/loading-store/store-domain-composition.ts'
     ]
   }
@@ -33,7 +40,11 @@ function importTarget(file, specifier) {
   return alias ? `src/renderer/src/${normalized.slice(alias.length)}` : null
 }
 
-export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
+export function assessCompatBoundaryImports(
+  sources,
+  folders = COMPAT_FOLDERS,
+  specifiersFor = collectModuleSpecifiers
+) {
   const violations = []
   const folderNames = folders.map(({ folder }) => path.posix.basename(folder))
   for (const [file, contents] of sources) {
@@ -44,7 +55,7 @@ export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
     ) {
       continue
     }
-    for (const specifier of collectModuleSpecifiers(file, contents)) {
+    for (const specifier of specifiersFor(file, contents)) {
       const target = importTarget(file, specifier)?.replace(/\.[cm]?[jt]sx?$/, '')
       const compat = folders.find(
         ({ folder }) => target === folder || target?.startsWith(`${folder}/`)
@@ -52,8 +63,10 @@ export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
       if (!compat || file.startsWith(`${compat.folder}/`)) {
         continue
       }
-      if (target !== compat.folder && target !== `${compat.folder}/index`) {
-        violations.push(`${file}: import ${compat.folder} through its index, not ${specifier}`)
+      if (!compat.entries.some((entry) => target === `${compat.folder}/${entry}`)) {
+        violations.push(
+          `${file}: import ${compat.folder} through ${compat.entries.join(', ')}, not ${specifier}`
+        )
       } else if (!compat.importers.includes(file) && !isTestOnlySourcePath(file)) {
         violations.push(
           `${file}: only ${compat.importers.join(', ') || 'no file'} may import ${compat.folder}`
@@ -64,8 +77,12 @@ export function assessCompatBoundaryImports(sources, folders = COMPAT_FOLDERS) {
   return violations.sort()
 }
 
-export function main(root) {
-  const violations = assessCompatBoundaryImports(collectProcessHostSources(root))
+export function main(root, sharedSources, specifiersFor = collectModuleSpecifiers) {
+  const violations = assessCompatBoundaryImports(
+    sharedSources ?? collectProcessHostSources(root),
+    COMPAT_FOLDERS,
+    specifiersFor
+  )
   if (violations.length > 0) {
     console.error(`[compat-boundary-imports]\n${violations.join('\n')}`)
     return 1

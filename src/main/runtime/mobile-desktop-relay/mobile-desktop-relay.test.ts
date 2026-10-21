@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime-passthrough-socket'
@@ -55,6 +56,7 @@ function relayWithPhone(
 ) {
   const syncCalls: unknown[] = []
   const server = { capable: true }
+  const desktop: { nativeChatDefault: boolean } = { nativeChatDefault: true }
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
       environments: [],
@@ -76,7 +78,10 @@ function relayWithPhone(
       syncCalls.push(params)
       return syncResponse()
     },
-    onEnvironmentRetired: () => () => {}
+    hostsBrowserPage: () => false,
+    onEnvironmentRetired: () => () => {},
+    onStatusChanged: () => () => {},
+    watchChanges: () => ({ close: () => {}, current: () => true })
   }
   const relay = new MobileDesktopRelay({
     hosts,
@@ -84,7 +89,8 @@ function relayWithPhone(
       { phoneKey: 'phone-1', name: 'iPhone via Mac' },
       { phoneKey: 'phone-2', name: 'iPad via Mac' }
     ],
-    allocateStreamId: () => 1
+    allocateStreamId: () => 1,
+    nativeChatDefault: () => desktop.nativeChatDefault
   })
   const replies: string[] = []
   let capabilities: readonly string[] = ['cap.a']
@@ -102,12 +108,55 @@ function relayWithPhone(
     replies,
     syncCalls,
     server,
+    desktop,
     setCapabilities: (next: string[]) => (capabilities = next)
   }
 }
 
 describe('MobileDesktopRelay', () => {
-  it('signs in with exactly the phone capabilities and mirrors its updates without a second answer', async () => {
+  it("stamps the desktop's chat default onto relayed launches only", async () => {
+    sockets.length = 0
+    const { relay, phone, desktop } = relayWithPhone()
+    const frame = (id: string, method: string, params: Record<string, unknown>) =>
+      JSON.stringify({ id, deviceToken: 'desktop-token', method, params })
+    const target = { kind: 'existing', worktree: 'id:wt-1' }
+    // A phone-supplied value never wins over the desktop's own setting.
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'l1', method: 'agent.launch' },
+      frame('l1', 'agent.launch', { agent: 'claude', target, nativeChatDefault: false })
+    )
+    await vi.waitFor(() => expect(sockets[0]?.sent.length).toBe(1))
+    desktop.nativeChatDefault = false
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'l2', method: 'agent.launchReplay' },
+      frame('l2', 'agent.launchReplay', { agent: 'claude', target, operationId: 'op' })
+    )
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'l3', method: 'terminal.list' },
+      frame('l3', 'terminal.list', { worktree: 'id:wt-1' })
+    )
+    await vi.waitFor(() => expect(sockets[0]?.sent.length).toBe(3))
+    const sent = sockets[0]!.sent
+      .map((text) => JSON.parse(text))
+      .sort((a, b) => a.id.localeCompare(b.id))
+    expect(sent[0].params).toEqual({ agent: 'claude', target, nativeChatDefault: true })
+    expect(sent[1].params).toEqual({
+      agent: 'claude',
+      target,
+      operationId: 'op',
+      nativeChatDefault: false
+    })
+    expect(sent[2].params).toEqual({ worktree: 'id:wt-1' })
+    relay.dispose()
+  })
+
+  it('signs in with the phone capabilities plus browser tab listing, and mirrors its updates without a second answer', async () => {
     sockets.length = 0
     const { relay, phone, replies, setCapabilities } = relayWithPhone()
     relay.forward(
@@ -123,7 +172,7 @@ describe('MobileDesktopRelay', () => {
       '{"id":"r2","method":"terminal.list"}'
     )
     await vi.waitFor(() => expect(sockets.map((socket) => socket.sent.length)).toEqual([1, 1]))
-    expect(sockets[0]!.capabilities).toEqual(['cap.a'])
+    expect(sockets[0]!.capabilities).toEqual(['cap.a', BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY])
 
     setCapabilities(['cap.b'])
     const update = JSON.stringify({
@@ -139,7 +188,7 @@ describe('MobileDesktopRelay', () => {
       const mirrored = JSON.parse(socket.sent[1]!)
       expect(mirrored).toMatchObject({
         method: 'runtime.clientCapabilities.update',
-        params: { clientCapabilities: ['cap.b'] }
+        params: { clientCapabilities: ['cap.b', BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY] }
       })
       expect(mirrored.id).not.toBe('caps')
       expect(mirrored.deviceToken).toBeUndefined()

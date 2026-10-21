@@ -8,14 +8,21 @@
 // Nothing here is saved, nothing outlives one deadline, and nothing is ever sent twice: a send makes
 // one request, and whatever its answer, nothing sends it again.
 
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionFirstMessage } from '../../../../shared/structured-agent-session-create'
 import {
   agentSessionUnconfirmedSendParts,
   agentSessionWriteNotDoneParts
 } from '../../../../shared/agent-session-refusal-notice'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  structuredAgentSessionReadCoversSend,
+  structuredAgentSessionSettledSends
+} from '../../../../shared/structured-agent-session-send-settlement'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   attemptStructuredAgentSessionSend,
   forgetStructuredAgentSessionFence,
@@ -73,7 +80,7 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
   if (outcome.kind === 'not-sent') {
     handBack(current, outcome.parts)
   } else if (outcome.evidence.kind === 'recorded') {
-    settleRecorded(current, outcome.submission, 'reply')
+    settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
   } else if (outcome.evidence.kind === 'not-recorded') {
     handBack(current, refusedSendParts(outcome.evidence.failure))
   } else {
@@ -120,7 +127,7 @@ export type StructuredAgentSessionCreateSend = StructuredAgentSessionSent & {
   message: StructuredAgentSessionFirstMessage
   settle: (
     result:
-      | { kind: 'recorded'; submission: AgentJournalSubmission }
+      | { kind: 'recorded'; submission: AgentJournalSubmission; cursor?: AgentJournalCursor }
       | { kind: 'refused'; failure?: AgentSessionWriteFailure }
       | { kind: 'unconfirmed' }
   ) => void
@@ -195,7 +202,7 @@ export function reserveStructuredAgentSessionSend(
             return
           }
           if (result.kind === 'recorded') {
-            settleRecorded(pending, result.submission, 'reply')
+            settleRecorded(pending, result.submission, 'reply', result.cursor)
           } else {
             handBack(
               pending,
@@ -219,29 +226,25 @@ export function reserveStructuredAgentSessionSend(
   }
 }
 
-/**
- * Settles sends from the host's published state: a row under the message's id, a hand-off of a card
- * under it, or a card under it. Whichever of this and the send's own reply comes first decides.
- */
+/** Settles sends from the host's published state; see `structuredAgentSessionSettledSends`. */
 export function settleStructuredAgentSessionSendsFromJournal(
   sessionId: string,
   submissions: readonly AgentJournalSubmission[],
-  queuedMessageIds: readonly string[]
+  queuedMessageIds: readonly string[],
+  cursor?: AgentJournalCursor | null
 ): void {
   const entries = getStructuredAgentSessionPendingSends(sessionId)
   if (entries.length === 0) {
     return
   }
-  const cards = new Set(queuedMessageIds)
-  for (const submission of submissions) {
-    if (submission.queuedMessageId !== undefined) {
-      cards.add(submission.queuedMessageId)
-    }
-  }
-  const rows = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
+  const { cards, recorded } = structuredAgentSessionSettledSends(submissions, queuedMessageIds)
   for (const entry of entries) {
-    const submission = rows.get(entry.clientMessageId)
-    if (cards.has(entry.clientMessageId)) {
+    const submission = recorded.get(entry.clientMessageId)
+    if (
+      cards.has(entry.clientMessageId) ||
+      (entry.phase === 'recorded' &&
+        structuredAgentSessionReadCoversSend(cursor, entry.recordedCursor))
+    ) {
       finish(entry, 'recorded')
     } else if (submission) {
       settleRecorded(entry, submission, 'journal')

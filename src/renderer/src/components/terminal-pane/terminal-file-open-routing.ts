@@ -1,11 +1,10 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
-import { detectLanguage } from '@/lib/language-detect'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { canClientOsOpenWorkspaceFile } from '@/lib/workspace-file-host-routing'
-import { isMissingRuntimePathError } from '@/runtime/runtime-file-client'
+import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
@@ -18,8 +17,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
+  toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import {
@@ -28,6 +26,10 @@ import {
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
+import { cancelPendingEditorLineRevealFrames } from '@/store/slices/editor/focus/editor-focus-reveal'
+import { showOpenInGroupRefusedToast } from './terminal-file-open-in-group-toast'
+import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 
 export {
   getTerminalFileContext,
@@ -54,6 +56,10 @@ type TerminalFileOpenDeps = {
   terminalHandle?: string | null
   /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
   onOpenFailure?: (failure: FileOpenFailure) => void
+  /** The tab that owns the link; editor opens place themselves relative to its group. */
+  sourceTabId?: string | null
+  /** "Open in this group": pins the source tab's group at activation, or refuses. */
+  openInSourceGroup?: boolean
 }
 
 export function isHtmlFilePath(filePath: string): boolean {
@@ -84,33 +90,6 @@ export function shouldOpenTerminalFileWithSystemDefault(fileContext: TerminalFil
 }
 
 let latestOpenDetectedFilePathRequestId = 0
-let pendingEditorRevealFrameIds: number[] = []
-
-function cancelPendingEditorRevealFrames(): void {
-  if (typeof cancelAnimationFrame === 'function') {
-    for (const frameId of pendingEditorRevealFrameIds) {
-      cancelAnimationFrame(frameId)
-    }
-  }
-  pendingEditorRevealFrameIds = []
-}
-
-function schedulePendingEditorReveal(callback: () => void): void {
-  cancelPendingEditorRevealFrames()
-  const firstFrameId = requestAnimationFrame(() => {
-    pendingEditorRevealFrameIds = pendingEditorRevealFrameIds.filter(
-      (frameId) => frameId !== firstFrameId
-    )
-    const secondFrameId = requestAnimationFrame(() => {
-      pendingEditorRevealFrameIds = pendingEditorRevealFrameIds.filter(
-        (frameId) => frameId !== secondFrameId
-      )
-      callback()
-    })
-    pendingEditorRevealFrameIds.push(secondFrameId)
-  })
-  pendingEditorRevealFrameIds.push(firstFrameId)
-}
 
 export function openDetectedFilePath(
   filePath: string,
@@ -126,11 +105,30 @@ export function openDetectedFilePath(
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
   )
   const requestId = ++latestOpenDetectedFilePathRequestId
-  cancelPendingEditorRevealFrames()
+  cancelPendingEditorLineRevealFrames()
+  // Why: capture at activation; focus may move while the host resolves the path.
+  const linkIntent = captureEditorOpenLinkIntent(
+    useAppStore.getState(),
+    deps.worktreeId,
+    deps.sourceTabId,
+    { explicitSourceGroup: deps.openInSourceGroup === true }
+  )
+  const explicitGroupRequest = deps.openInSourceGroup === true
+  // Why: an explicit group request never substitutes a browser, system app, or download.
+  const refuseExplicitNonEditorRoute = (): boolean => {
+    if (!explicitGroupRequest) {
+      return false
+    }
+    if (requestId === latestOpenDetectedFilePathRequestId) {
+      showOpenInGroupRefusedToast(mappedFilePath)
+    }
+    return true
+  }
 
   void (async () => {
     let statResult
     let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
     let hostWorkspaceFile: HostWorkspaceFile | null = null
     let hostGrantId: string | null = null
     let clientLocal = false
@@ -149,6 +147,9 @@ export function openDetectedFilePath(
         fileContext
       )
       if (worktreeRootLink) {
+        if (refuseExplicitNonEditorRoute()) {
+          return
+        }
         // Why: root workspace switching must work for SSH/runtime paths without
         // local auth/stat, while still coalescing provider + fallback clicks.
         await Promise.resolve()
@@ -218,6 +219,9 @@ export function openDetectedFilePath(
     }
 
     if (statResult.isDirectory) {
+      if (refuseExplicitNonEditorRoute()) {
+        return
+      }
       if (canOpenWithSystemDefault) {
         await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
       }
@@ -236,6 +240,10 @@ export function openDetectedFilePath(
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (isHtmlFilePath(mappedFilePath) && hostGrantId === null) {
       if (canOpenWithSystemDefault) {
+        // Why: Orca's browser has no group placement in v1.
+        if (refuseExplicitNonEditorRoute()) {
+          return
+        }
         openHtmlFileInBrowser(mappedFilePath, worktreeId, clientLocal)
         return
       }
@@ -243,6 +251,9 @@ export function openDetectedFilePath(
       // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
       const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
       if (plan.status === 'doc-preview') {
+        if (refuseExplicitNonEditorRoute()) {
+          return
+        }
         activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
         openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
         return
@@ -251,7 +262,12 @@ export function openDetectedFilePath(
 
     const store = useAppStore.getState()
     let targetWorktreeId = worktreeId
-    let targetExecutionHostId: ExecutionHostId | undefined = hostWorkspaceFile?.executionHostId
+    const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
+    let targetExecutionHostId =
+      hostWorkspaceFile?.executionHostId ??
+      (runtimeOwnerId
+        ? toRuntimeExecutionHostId(runtimeOwnerId)
+        : getConnectionExecutionHostId(fileContext.connectionId))
     let relativePath = mappedFilePath
     if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
       const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
@@ -268,11 +284,7 @@ export function openDetectedFilePath(
       )
     ) {
       // Why: early resolution is only needed to avoid an existing sibling-tab collision.
-      const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
-      const executionHostId = runtimeOwnerId
-        ? toRuntimeExecutionHostId(runtimeOwnerId)
-        : getConnectionExecutionHostId(fileContext.connectionId)
-      const siblingRoute = findWorkspaceFileRoute(store, executionHostId, mappedFilePath)
+      const siblingRoute = findWorkspaceFileRoute(store, targetExecutionHostId, mappedFilePath)
       if (siblingRoute) {
         targetWorktreeId = siblingRoute.worktreeId
         targetExecutionHostId = siblingRoute.executionHostId
@@ -280,23 +292,29 @@ export function openDetectedFilePath(
       }
     }
 
+    if (
+      explicitGroupRequest &&
+      !isExplicitEditorScopeKept(linkIntent, targetWorktreeId, targetExecutionHostId, clientLocal)
+    ) {
+      // Why: refuse before activating the destination or touching editor state.
+      refuseExplicitNonEditorRoute()
+      return
+    }
+
     if (targetWorktreeId) {
       // Why: the route may name a folder-workspace key, and the same worktree id can exist
       // on several hosts — dispatch by workspace shape and keep the resolved host.
       activateAndRevealWorkspace(targetWorktreeId, {
         providesInitialSurface: true,
-        ...(targetExecutionHostId ? { executionHostId: targetExecutionHostId } : {})
+        executionHostId: targetExecutionHostId
       })
     }
 
-    const language = detectLanguage(mappedFilePath)
-    store.openFile(
+    const opened = openLinkedFileInEditor(
       {
         filePath: mappedFilePath,
         relativePath,
         worktreeId: targetWorktreeId || '',
-        language,
-        mode: 'edit',
         runtimeEnvironmentId: clientLocal ? null : runtimeEnvironmentId,
         // Why: a tab's owner must match its workspace's to be editable; this one is this computer's.
         ...(clientLocal && targetWorktreeId === worktreeId ? { readOnly: true } : {}),
@@ -310,32 +328,12 @@ export function openDetectedFilePath(
           ? { externalSshTargetId: fileContext.connectionId }
           : {})
       },
-      { forceContentReload: true }
+      linkIntent,
+      { line, column },
+      () => requestId === latestOpenDetectedFilePathRequestId
     )
-
-    if (line !== null) {
-      const openedStore = useAppStore.getState()
-      // Why: scope the reveal to the opened editor tab id so owner-qualified tabs
-      // across local/SSH/runtime contexts get it instead of an ambiguous path key.
-      const fileId = openedStore.activeFileIdByWorktree[targetWorktreeId] ?? mappedFilePath
-      if (language === 'markdown') {
-        // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
-        openedStore.setMarkdownViewMode(fileId, 'source')
-      }
-      const targetColumn = column ?? 1
-      store.setPendingEditorReveal(null)
-      schedulePendingEditorReveal(() => {
-        if (requestId !== latestOpenDetectedFilePathRequestId) {
-          return
-        }
-        store.setPendingEditorReveal({
-          filePath: mappedFilePath,
-          fileId,
-          line,
-          column: targetColumn,
-          matchLength: 0
-        })
-      })
+    if (!opened) {
+      refuseExplicitNonEditorRoute()
     }
   })()
 }

@@ -2,6 +2,7 @@ name: Computer-use e2e
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
@@ -10,6 +11,7 @@ on:
       - 'config/scripts/build-native-for-platform.test.mjs'
       - 'config/scripts/pnpm-cli-invocation.mjs'
       - 'config/scripts/build-windows-cli-launcher.mjs'
+      - 'config/scripts/windows-rust-executable-build.mjs'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
@@ -30,6 +32,14 @@ on:
       - 'config/build-plugins/**'
       - 'src/main/daemon/**'
       - '!src/main/daemon/**/*.test.ts'
+      - '!src/main/daemon/daemon-init-dependency-mocks.ts'
+      - '!src/main/daemon/daemon-init-test-harness.ts'
+      - '!src/main/daemon/daemon-init-fresh-import.ts'
+      - '!src/main/daemon/daemon-init-mock-types.ts'
+      - '!src/main/daemon/serialize-grid-roundtrip.ts'
+      - '!src/main/daemon/mock-descendant-sweep.ts'
+      - '!src/main/daemon/daemon-host-relocation.test-fixture.ts'
+      - '!src/main/daemon/daemon-endpoint-reachability-test-harness.ts'
       - 'src/main/providers/local-pty-provider.ts'
       - 'src/main/providers/windows-shell-args.ts'
       - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
@@ -60,7 +70,7 @@ concurrency:
 
 jobs:
   native-smoke:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     permissions:
       contents: read
     strategy:
@@ -136,6 +146,7 @@ jobs:
   # Hosted macOS runners cannot receive persistent Accessibility/Screen Recording
   # grants. Keep the real native build/owner-loss checks on every trigger instead.
   mac-native-owner-smoke:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: macos-15
     permissions:
       contents: read

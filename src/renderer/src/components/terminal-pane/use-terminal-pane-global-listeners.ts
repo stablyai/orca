@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'

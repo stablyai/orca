@@ -1,6 +1,7 @@
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { subscribeViaWatcherProcess, type WatcherProcessCallback } from './parcel-watcher-process'
+import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import type { WatcherProcessCallback } from './parcel-watcher-process-subscription'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'

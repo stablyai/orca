@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
@@ -9,15 +10,16 @@ import { computeVisibleWorktrees } from '../../visible-worktrees'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../workspace-creator-visibility'
+} from '../../../../../../shared/workspace-creator-visibility'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
   getStructuredChatWorktreeIds
 } from '../../visible-worktree-activity-inputs'
-import type { SortBy } from '../../smart-sort'
+import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
+import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 
@@ -75,10 +77,30 @@ export function useVisibleSidebarWorktrees(args: {
     getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
   )
 
-  const recomputedVisibleWorktrees = useMemo(() => {
+  // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
+  const worktreeIdsWithLiveAgent = useMemo(() => {
     // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
     // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
+    return showSleepingWorkspaces
+      ? EMPTY_WORKTREE_ID_SET
+      : getWorktreeIdsWithLiveAgent(
+          useAppStore.getState().agentStatusByPaneKey,
+          tabsByWorktree,
+          agentStatusNow
+        )
+  }, [agentStatusEpoch, agentStatusNow, showSleepingWorkspaces, tabsByWorktree])
+  const sleepingSweepExemptWorktreeIds = useSleepingSweepRetention({
+    enabled: !showSleepingWorkspaces,
+    worktreesByRepo,
+    tabsByWorktree,
+    ptyIdsByTabId,
+    browserTabsByWorktree,
+    worktreeIdsWithLiveAgent,
+    worktreeIdsWithStructuredChat
+  })
+
+  const recomputedVisibleWorktrees = useMemo(() => {
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
@@ -86,14 +108,8 @@ export function useVisibleSidebarWorktrees(args: {
       ptyIdsByTabId,
       browserTabsByWorktree,
       worktreeIdsWithStructuredChat,
-      // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
-      worktreeIdsWithLiveAgent: showSleepingWorkspaces
-        ? EMPTY_WORKTREE_ID_SET
-        : getWorktreeIdsWithLiveAgent(
-            useAppStore.getState().agentStatusByPaneKey,
-            tabsByWorktree,
-            agentStatusNow
-          ),
+      worktreeIdsWithLiveAgent,
+      sleepingSweepExemptWorktreeIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -107,14 +123,16 @@ export function useVisibleSidebarWorktrees(args: {
       defaultHostId,
       worktreeLineageById,
       preserveLineageParentOrder: sortBy === 'manual',
+      // Switch point: the stamp sort ranks by host identity (use-sort-order.ts).
+      sortedByHostIdentity: ORCA_SIDEBAR_INPUTS_IS_MAIN,
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
         : undefined
     })
   }, [
     args.agentSendTargetWorktreeId,
-    agentStatusEpoch,
-    agentStatusNow,
+    worktreeIdsWithLiveAgent,
+    sleepingSweepExemptWorktreeIds,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,

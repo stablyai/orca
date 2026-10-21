@@ -27,6 +27,10 @@ export type MockWebContents = {
     isDestroyed: () => boolean
     isCrashed: () => boolean
     focus: Mock<() => void>
+    // Why: defaults to an offscreen page; 'webview' opts a test into guest-direct key input.
+    getType: Mock<() => string>
+    sendInputEvent: Mock<(event: Electron.KeyboardInputEvent) => void>
+    setIgnoreMenuShortcuts: Mock<(ignore: boolean) => void>
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
     reloadIgnoringCache: Mock<() => void>
@@ -75,6 +79,9 @@ export function createMockWebContents(): MockWebContents {
       isDestroyed: () => destroyed,
       isCrashed: () => false,
       focus: vi.fn(),
+      getType: vi.fn(() => 'window'),
+      sendInputEvent: vi.fn(),
+      setIgnoreMenuShortcuts: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),

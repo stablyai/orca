@@ -8,7 +8,7 @@ import {
   resolveStructuredAgentSessionOwner,
   executionHostIdForStructuredTarget
 } from '@/runtime/structured-agent-session-owner'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AgentMessageSender } from '../../../../shared/agent-session-message-source'
 import type { Tab } from '../../../../shared/tab-types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'

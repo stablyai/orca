@@ -11,7 +11,7 @@ import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 
 vi.mock('./preflight-command-exec', () => ({ isCommandOnPath: vi.fn() }))
-vi.mock('./local-agent-install-dir-detection', () => ({
+vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: () => new Set()
 }))
 vi.mock('./preflight-wsl-agent-detection', () => ({

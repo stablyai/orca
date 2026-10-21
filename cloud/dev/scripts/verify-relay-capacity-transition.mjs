@@ -420,14 +420,17 @@ export async function verifyCapacityTransition(config, overrides = {}) {
   if (health.ok !== true || health.connectionCapacityProtocol !== CAPACITY_PROTOCOL) {
     throw new Error('director is not capacity-protocol compatible')
   }
-  const deadline = now() + config.timeoutMs
-  // A paced drain can refill the runtime until its window ends, so the quiet must outlast it.
-  // Each poll waits a full interval, so consecutive samples bound the quiet time from below.
-  const requiredRestartSafeSamples =
-    Math.max(Math.ceil((config.paceWindowMs ?? 0) / POLL_INTERVAL_MS) + 1, 2)
+  const startedAt = now()
+  const deadline = startedAt + config.timeoutMs
+  // A paced drain can refill the runtime until its window ends, so the second of two consecutive
+  // quiet samples must be taken at or after that end. This runs after the cell accepted the drain,
+  // so the cell's window ends no later than this one.
+  const paceWindowEndsAt = startedAt + (config.paceWindowMs ?? 0)
   let restartSafeSamples = 0
   let lastObservation = { runtimeAvailable: false }
   for (;;) {
+    // Before the read, so a sample taken inside the window cannot pass.
+    const sampledAt = now()
     const runtime = await cellRuntime(fetchImpl, config, token)
     lastObservation = { runtimeAvailable: runtime !== null }
     if ((runtime === null) === (config.runtime === 'unavailable')) {
@@ -469,7 +472,7 @@ export async function verifyCapacityTransition(config, overrides = {}) {
       if (
         matches &&
         (config.activity !== 'restart-safe' ||
-          restartSafeSamples + 1 >= requiredRestartSafeSamples)
+          (restartSafeSamples >= 1 && sampledAt >= paceWindowEndsAt))
       ) {
         return {
           cellId: status.cellId,
@@ -491,15 +494,16 @@ export async function verifyCapacityTransition(config, overrides = {}) {
       restartSafeSamples = 0
     }
     if (config.activity === 'restart-safe') {
+      const paceWindowRemainingMs = Math.max(paceWindowEndsAt - sampledAt, 0)
       lastObservation = {
         ...lastObservation,
         restartSafeSamples,
-        requiredRestartSafeSamples
+        paceWindowRemainingMs
       }
       progress({
         event: 'relay_capacity_transition_restart_progress',
         restartSafeSamples,
-        requiredRestartSafeSamples,
+        paceWindowRemainingMs,
         totalConnections: lastObservation.runtime?.totalConnections ?? null,
         preAuthConnections: lastObservation.runtime?.preAuthConnections ?? null,
         runtimeAvailable: lastObservation.runtimeAvailable,

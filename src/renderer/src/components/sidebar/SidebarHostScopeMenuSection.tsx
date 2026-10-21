@@ -10,16 +10,13 @@ import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
 } from '../../../../shared/ui-chrome-types'
-import {
-  expandEquivalentExecutionHostIds,
-  pickerExecutionHosts
-} from '../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
 import {
   getCheckedHostRows,
-  getSidebarHostHealthLabel,
-  toggleVisibleHostRow,
-  type SidebarHostOption
-} from './sidebar-host-options'
+  toggleAllVisibleHosts,
+  toggleVisibleHostRow
+} from '../../../../shared/workspace-view/workspace-host-visibility'
+import { getSidebarHostHealthLabel, type SidebarHostOption } from './sidebar-host-options'
 import { translate } from '@/i18n/i18n'
 
 type SidebarHostScopeMenuSectionProps = {
@@ -32,7 +29,7 @@ type SidebarHostScopeMenuSectionProps = {
 }
 
 function getHostMetadata(host: SidebarHostOption): string {
-  const healthLabel = getSidebarHostHealthLabel(host.health)
+  const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason)
   if (host.kind === 'local') {
     return host.detail
   }
@@ -80,13 +77,11 @@ export function SidebarHostScopeMenuSection({
   )
 
   const toggleAllHosts = (): void => {
-    if (!allVisible) {
+    const next = toggleAllVisibleHosts(hostOptions, visibleWorkspaceHostIds)
+    if (next === null) {
       setWorkspaceHostScope(ALL_EXECUTION_HOSTS_SCOPE)
-      return
-    }
-    const firstHost = hostRows[0]
-    if (firstHost) {
-      setVisibleWorkspaceHostIds(expandEquivalentExecutionHostIds(hostOptions, [firstHost.id]))
+    } else if (next) {
+      setVisibleWorkspaceHostIds(next)
     }
   }
 

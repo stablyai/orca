@@ -1,4 +1,16 @@
-import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
+import { isTerminalLeafId } from '../stable-pane-id'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../terminal-tab-types'
+
+/** The pane a rootless layout names: its active leaf, else its only bound leaf. */
+export function resolveRootlessTerminalLayoutLeafId(
+  snapshot: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
+): string | null {
+  if (snapshot.activeLeafId && isTerminalLeafId(snapshot.activeLeafId)) {
+    return snapshot.activeLeafId
+  }
+  const boundLeafIds = Object.keys(snapshot.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
+  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
+}
 
 export function collectLayoutLeafIdsInOrder(
   node: TerminalPaneLayoutNode | null | undefined
@@ -108,6 +120,9 @@ function equalizeWeight(
     : 1
 }
 
+/** A ratio this close to an even split is saved as none, as the desktop window saves it. */
+export const SPLIT_RATIO_TOLERANCE = 0.005
+
 /** Same-axis panes get equal shares, so three side by side become thirds, as the window does. */
 export function equalizeLayout(node: TerminalPaneLayoutNode): TerminalPaneLayoutNode {
   if (node.type === 'leaf') {
@@ -115,9 +130,13 @@ export function equalizeLayout(node: TerminalPaneLayoutNode): TerminalPaneLayout
   }
   const first = equalizeWeight(node.first, node.direction)
   const second = equalizeWeight(node.second, node.direction)
+  const { ratio: _ratio, ...split } = node
+  const ratio = first / (first + second)
   return {
-    ...node,
-    ratio: first / (first + second),
+    ...split,
+    ...(Math.abs(ratio - 0.5) > SPLIT_RATIO_TOLERANCE
+      ? { ratio: Math.round(ratio * 1000) / 1000 }
+      : {}),
     first: equalizeLayout(node.first),
     second: equalizeLayout(node.second)
   }

@@ -30,9 +30,7 @@ type MockStoreState = {
   setRuntimePaneTitle: ReturnType<typeof vi.fn>
   clearRuntimePaneTitle: ReturnType<typeof vi.fn>
   updateTabTitle: ReturnType<typeof vi.fn>
-  markWorktreeUnread: ReturnType<typeof vi.fn>
-  markTerminalTabUnread: ReturnType<typeof vi.fn>
-  markTerminalPaneUnread: ReturnType<typeof vi.fn>
+  markTerminalBell: ReturnType<typeof vi.fn>
   setCacheTimerStartedAt: ReturnType<typeof vi.fn>
   observeTerminalGitHubPullRequestLink: ReturnType<typeof vi.fn>
   agentStatusByPaneKey: Record<string, { state: string; prompt: string; agentType?: string }>
@@ -63,11 +61,7 @@ vi.mock('@/lib/terminal-theme', () => ({
   getSystemPrefersDark: () => true
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState
-  }
-}))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => mockStoreState } }))
 
 function createMockStoreState(): MockStoreState {
   return {
@@ -84,9 +78,7 @@ function createMockStoreState(): MockStoreState {
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabTitle: vi.fn(),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
     agentStatusByPaneKey: {}
@@ -215,9 +207,11 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('build finished\x07')
     flushSideEffects()
 
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
-    expect(mockStoreState.markTerminalPaneUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      paneKey: PANE_KEY
+    })
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
@@ -232,20 +226,6 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('marks the exact pane unread when experimental terminal attention is enabled', async () => {
-    mockStoreState.settings = {
-      ...mockStoreState.settings,
-      experimentalTerminalAttention: true
-    }
-    const { dispose } = await startWatcher()
-
-    emit('\x07')
-    flushSideEffects()
-
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY, 'terminal-bell')
-    dispose()
-  })
-
   it('does not treat an OSC-terminator BEL as a bell, even split across chunks', async () => {
     const { dispose } = await startWatcher()
 
@@ -254,8 +234,7 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
     dispose()
   })
@@ -343,7 +322,11 @@ describe('startParkedTerminalByteWatcher', () => {
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 8)
 
     // The bell still marks unread immediately; only the OS notification yields.
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      paneKey: PANE_KEY
+    })
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       WORKTREE_ID,
@@ -527,8 +510,7 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('final teardown flush\x07')
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-    expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
@@ -537,7 +519,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
     emit('\x07')
     flushSideEffects()
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledTimes(1)
 
     dispose()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
@@ -545,7 +527,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
     emit('\x07')
     flushSideEffects()
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(mockStoreState.markTerminalBell).toHaveBeenCalledTimes(1)
 
     // Idempotent: a second dispose must not throw or clobber another watcher.
     dispose()
@@ -670,14 +652,8 @@ describe('startParkedTerminalByteWatcher', () => {
       mockStoreState.updateTabTitle.mockImplementation((...args: unknown[]) => {
         calls.push(['updateTabTitle', ...args])
       })
-      mockStoreState.markWorktreeUnread.mockImplementation((...args: unknown[]) => {
-        calls.push(['markWorktreeUnread', ...args])
-      })
-      mockStoreState.markTerminalTabUnread.mockImplementation((...args: unknown[]) => {
-        calls.push(['markTerminalTabUnread', ...args])
-      })
-      mockStoreState.markTerminalPaneUnread.mockImplementation((...args: unknown[]) => {
-        calls.push(['markTerminalPaneUnread', ...args])
+      mockStoreState.markTerminalBell.mockImplementation((...args: unknown[]) => {
+        calls.push(['markTerminalBell', ...args])
       })
       mockStoreState.setCacheTimerStartedAt.mockImplementation((key: unknown, at: unknown) => {
         calls.push(['setCacheTimerStartedAt', key, typeof at === 'number' ? '<ts>' : at])
@@ -696,8 +672,7 @@ describe('startParkedTerminalByteWatcher', () => {
       flushSideEffects()
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
-      expect(mockStoreState.markTerminalTabUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       dispose()
     })
@@ -767,7 +742,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(getSideEffectSnapshot).toHaveBeenCalledWith(PTY_ID)
       expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
       expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(TAB_ID, IDLE_TITLE)
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       dispose()
@@ -779,8 +754,11 @@ describe('startParkedTerminalByteWatcher', () => {
 
       await dispatchFacts([{ kind: 'bell' }])
 
-      expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
+      expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
+        worktreeId: WORKTREE_ID,
+        tabId: TAB_ID,
+        paneKey: PANE_KEY
+      })
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
@@ -849,7 +827,7 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(PANE_KEY, null)
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       dispose()
     })
 
@@ -868,7 +846,7 @@ describe('startParkedTerminalByteWatcher', () => {
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
       expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
       dispose()
@@ -961,7 +939,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
       await dispatchFacts([{ kind: 'bell' }])
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
     })
 

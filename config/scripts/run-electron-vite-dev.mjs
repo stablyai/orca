@@ -23,6 +23,12 @@ import {
   isDevBundleInUse,
   selectStaleDevBundleDirs
 } from './dev-electron-bundle-cache.mjs'
+import { startDevStorageReclaim } from './dev-storage-reclaim.mjs'
+import {
+  captureDevWebClientInputs,
+  isDevWebClientFresh,
+  recordDevWebClientInputs
+} from './dev-web-client-freshness.mjs'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
@@ -493,44 +499,6 @@ function getDevWebClientIndexPath() {
   return path.join(repoRoot, 'out', 'web', 'web-index.html')
 }
 
-function latestMtimeMs(targetPath) {
-  const stat = (() => {
-    try {
-      return statSync(targetPath)
-    } catch {
-      return null
-    }
-  })()
-  if (!stat) {
-    return 0
-  }
-  if (!stat.isDirectory()) {
-    return stat.mtimeMs
-  }
-  let latest = stat.mtimeMs
-  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
-      continue
-    }
-    latest = Math.max(latest, latestMtimeMs(path.join(targetPath, entry.name)))
-  }
-  return latest
-}
-
-function isDevWebClientFresh() {
-  const outputMtime = getMtimeMs(getDevWebClientIndexPath())
-  if (outputMtime === 0) {
-    return false
-  }
-  const sourceMtime = Math.max(
-    latestMtimeMs(path.join(repoRoot, 'vite.web.config.ts')),
-    latestMtimeMs(path.join(repoRoot, 'src', 'renderer')),
-    latestMtimeMs(path.join(repoRoot, 'src', 'shared')),
-    latestMtimeMs(path.join(repoRoot, 'src', 'preload', 'api-types.ts'))
-  )
-  return sourceMtime <= outputMtime
-}
-
 function prepareDevWebClient() {
   if (process.env.ORCA_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
     return
@@ -543,9 +511,10 @@ function prepareDevWebClient() {
     )
     return
   }
-  if (isDevWebClientFresh()) {
+  if (isDevWebClientFresh(repoRoot)) {
     return
   }
+  const inputs = captureDevWebClientInputs(repoRoot)
   console.error('[orca-dev] Building web client for pairing...')
   execFileSync(
     process.execPath,
@@ -556,6 +525,7 @@ function prepareDevWebClient() {
       env: process.env
     }
   )
+  recordDevWebClientInputs(repoRoot, inputs)
 }
 
 // Why: every `pn dev` should be attachable from agent-browser/playwright-cli
@@ -654,6 +624,12 @@ const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   // dev runner its own process group lets Ctrl+C kill the whole tree on macOS
   // instead of leaving the Electron app alive after the terminal exits.
   detached: process.platform !== 'win32'
+})
+
+child.once('spawn', () => {
+  if (!isHelpOrVersion) {
+    startDevStorageReclaim({ repoRoot })
+  }
 })
 
 let isShuttingDown = false

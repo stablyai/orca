@@ -42,7 +42,7 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          pnpm run build:relay
+          pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:web-from-renderer
       - name: Run both mixed-version directions
@@ -86,7 +86,7 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          pnpm run build:relay
+          pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:cli
           pnpm run build:web-from-renderer

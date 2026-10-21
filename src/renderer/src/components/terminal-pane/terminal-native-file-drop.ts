@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { translate } from '@/i18n/i18n'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
 import {
@@ -148,7 +148,7 @@ async function uploadRuntimeDropPaths(
       },
       args.dataPaths,
       destinationDir,
-      { assertCurrent: args.assertCurrent }
+      { assertCurrent: args.assertCurrent, nameExtensionlessImages: true }
     )
     const imported = results.filter((result) => result.status === 'imported')
     const importedPaths = imported.map((result) =>

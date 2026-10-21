@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { withoutWslMovedRepos } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import {
   getRepoExecutionHostId,
@@ -32,6 +33,7 @@ import {
   withUnregisteredRemovalCheckouts,
   type PendingWorktreeRemovals
 } from '../../../worktree-removal-listing'
+import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
 
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
 
@@ -67,7 +69,8 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
   const { store } = context
 
   ipcMain.handle('worktrees:listAll', async () => {
-    const repos = store.getRepos()
+    // A repo the WSL host owns is listed by the host; this build must not scan its old path.
+    const repos = withoutWslMovedRepos(store.getRepos())
     const legacyMetadata =
       typeof store.getAllWorktreeMetaForHost === 'function' ? undefined : store.getAllWorktreeMeta()
     const metadataByHost = new Map<ExecutionHostId, Record<string, WorktreeMeta>>()
@@ -126,7 +129,10 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         }
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         const metadata = metadataForRepo(repo)
-        const rows = await withUnregisteredRemovalCheckouts(repo.id, scan.gitWorktrees)
+        const rows = await withUnregisteredRemovalCheckouts(
+          repo.id,
+          withoutInFlightWorktreeCreates(repo.id, scan.gitWorktrees)
+        )
         const worktrees = buildDetectedGitWorktrees(store, repo, rows, metadata)
           .filter((worktree) => worktree.visible)
           .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
@@ -194,7 +200,10 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       const metadata = allMeta ?? readAllWorktreeMetaForRepo(store, repo)
-      const rows = await withUnregisteredRemovalCheckouts(repo.id, scan.gitWorktrees)
+      const rows = await withUnregisteredRemovalCheckouts(
+        repo.id,
+        withoutInFlightWorktreeCreates(repo.id, scan.gitWorktrees)
+      )
       const worktrees = buildDetectedGitWorktrees(store, repo, rows, metadata)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))

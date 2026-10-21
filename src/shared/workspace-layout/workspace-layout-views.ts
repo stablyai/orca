@@ -4,6 +4,7 @@
 
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView } from './workspace-layout-beside'
+import { holdsEditorFileId } from './workspace-layout-editor-tab-file'
 import type { WorkspaceLayout } from './workspace-layout-model'
 
 /** The one workspace window of an app instance. */
@@ -131,9 +132,7 @@ export function resolveWorkspaceSelection(
         : (workspace.groups[0]?.id ?? null),
     groups,
     panes,
-    activeFileId: workspace.editorFiles?.some((file) => file.filePath === activeFileId)
-      ? (activeFileId ?? null)
-      : null,
+    activeFileId: activeFileId && holdsEditorFileId(workspace, activeFileId) ? activeFileId : null,
     activeBrowserTabId: workspace.browserTabs?.some((tab) => tab.id === activeBrowserTabId)
       ? (activeBrowserTabId ?? null)
       : null

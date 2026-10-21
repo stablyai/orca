@@ -57,7 +57,6 @@ export function createTerminalTabNavigationActions(
     setActiveTab: (tabId) => {
       let tabOwnerWorktreeId: string | null = null
       set((s) => {
-        // Why: clear bells only for visible tabs; background bells must persist.
         tabOwnerWorktreeId = resolveActiveTabOwnerWorktreeId(
           s.tabsByWorktree,
           s.activeWorktreeId,
@@ -65,15 +64,6 @@ export function createTerminalTabNavigationActions(
         )
         const isActiveWorktreeTab =
           tabOwnerWorktreeId !== null && ownsGlobalSelection(s, tabOwnerWorktreeId)
-        const nextUnreadTerminalTabs =
-          isActiveWorktreeTab && s.unreadTerminalTabs[tabId]
-            ? (() => {
-                const copy = { ...s.unreadTerminalTabs }
-                delete copy[tabId]
-                return copy
-              })()
-            : s.unreadTerminalTabs
-        // Why: activeTabId marks the visible tab, so background bells remain unread.
         return {
           activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
           // Why: a redundant activation must not reallocate this map — Terminal's
@@ -83,8 +73,7 @@ export function createTerminalTabNavigationActions(
           activeTabIdByWorktree:
             tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
               ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
-              : s.activeTabIdByWorktree,
-          unreadTerminalTabs: nextUnreadTerminalTabs
+              : s.activeTabIdByWorktree
         }
       })
       const state = get()

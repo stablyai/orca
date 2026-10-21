@@ -7,7 +7,6 @@ import {
   resolveWorktreeOperationRouteForHost
 } from '@/lib/worktree-operation-route'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
@@ -35,8 +34,6 @@ export function runWorktreeDeleteWithToast(
 ): Promise<boolean> {
   const worktreeId = target.id
   const removeWorktree = useAppStore.getState().removeWorktree
-  const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-  const focusSuccessor = options.focusSuccessorOnDelete !== false
 
   const removeOptions = {
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
@@ -78,6 +75,7 @@ export function runWorktreeDeleteWithToast(
           withViewAction: true
         }),
       worktreeId,
+      executionHostId: target.executionHostId,
       worktreeName,
       nestedRemovalTarget: route && !route.runtimeEnvironmentId ? target : undefined,
       onNestedDeleted: () => options.onForceDeleted?.(target)
@@ -94,7 +92,6 @@ export function runWorktreeDeleteWithToast(
     failedTitle?: string
     withViewAction?: boolean
   }): void => {
-    const commitRetryFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
     const viewAction = retry.withViewAction
       ? {
           action: {
@@ -137,7 +134,6 @@ export function runWorktreeDeleteWithToast(
           failed(result.error)
           return
         }
-        commitRetryFocus()
         // "A retry started from this toast completed the delete" — callers hang their bookkeeping
         // off it, so without this a batch or Space-panel delete keeps listing what it removed.
         options.onForceDeleted?.(target)
@@ -162,9 +158,6 @@ export function runWorktreeDeleteWithToast(
               ? { runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId }
               : {})
           })
-        }
-        if (focusSuccessor) {
-          commitFocus()
         }
         return true
       }

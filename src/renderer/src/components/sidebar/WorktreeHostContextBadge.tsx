@@ -16,13 +16,15 @@ import { cn } from '@/lib/utils'
  */
 export function WorktreeHostContextBadge({
   label,
-  className
+  className,
+  title
 }: {
   label: string
   className?: string
+  title?: string
 }): React.JSX.Element {
   return (
-    <Badge variant="hostContext" className={cn('max-w-[7rem]', className)}>
+    <Badge variant="hostContext" className={cn('max-w-[7rem]', className)} title={title}>
       <span className="truncate">{label}</span>
     </Badge>
   )

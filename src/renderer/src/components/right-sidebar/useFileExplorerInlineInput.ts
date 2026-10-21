@@ -9,7 +9,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
+import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner

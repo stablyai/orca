@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
 import {
@@ -211,7 +211,8 @@ describe('work runs with an edit in their turn', () => {
         added: 1,
         removed: 1,
         truncated: false,
-        target: { messageId: 'a', editKey: 'Diff:0', fileIndex: 0 }
+        target: { messageId: 'a', editKey: 'Diff:0', fileIndex: 0 },
+        edits: []
       }
     ],
     added: 1,

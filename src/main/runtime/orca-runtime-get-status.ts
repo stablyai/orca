@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithGetRuntimeId } from './orca-runtime-get-runtime-id'
+import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
@@ -6,7 +6,11 @@ import {
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
 import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
+import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
+import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
+import { advertisedOrcadMigrationBlobCapabilities } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { RuntimeCapability } from '../../shared/protocol-version'
+import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -47,9 +51,14 @@ import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wa
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
 import { getManagedServerActions } from './managed-server-actions-registry'
+import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
+import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
+import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
+import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
+  getUsageRateLimits(): unknown
   getRecordedTerminalSleepHandles(
     ptyIds: Iterable<string>,
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
@@ -67,7 +76,7 @@ function supportsDurableTerminalPromptDelivery(): boolean {
   }
 }
 
-export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -106,7 +115,10 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
         (process.env.ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY !== '1' ||
           capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
         (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
-          supportsDurableTerminalPromptDelivery())
+          supportsDurableTerminalPromptDelivery()) &&
+        // Why: only a host with its own usage poller reads keys saved through these methods.
+        (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY ||
+          statusHost.getUsageRateLimits() !== null)
     )
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
@@ -117,6 +129,13 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     if (isBrowserIdentityModeStoreInitialized()) {
       capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
     }
+    // Why not static: only the orcad inside a distro can receive that distro's projects.
+    if (servesLocalWslMigrationSource()) {
+      capabilities.push(ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY)
+    }
+    // Why not static: a blob kind is advertised only once this build installs it, since an
+    // unadvertised kind is refused by the sender rather than staged and silently never applied.
+    capabilities.push(...advertisedOrcadMigrationBlobCapabilities())
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).
@@ -126,6 +145,10 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     if (getManagedServerActions()) {
       capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
     }
+    if (isDesktopBrowserBridgeHostEnabled()) {
+      capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
+    }
+    capabilities.push(...darkSwitchRuntimeCapabilities())
     // Why not a static capability: dev trees and `orca serve` installs may carry no
     // out/mobile-web, and advertising a bundle this install cannot produce would promise a
     // download that only ever answers mobile_web_bundle_unavailable.
@@ -219,7 +242,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
     const statusHost = this.asRuntimeStatusHost()
     const events: RuntimeClientEvent[] = []
-    const sleepStates = [...this.terminalSleepStateByWorktreeId.values()].sort((a, b) =>
+    const sleepStates = [...this.terminalSleepStateByHostWorktree.values()].sort((a, b) =>
       a.worktreeId.localeCompare(b.worktreeId)
     )
     for (const state of sleepStates) {
@@ -280,23 +303,31 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     return { tabId, worktreeId: pty.worktreeId }
   }
 
-  protected notifyWorktreesChanged(
+  notifyWorktreesChanged(
     repoId: string,
-    options?: { invalidateGitScans?: boolean; sortOrderOnly?: boolean }
+    options?: {
+      invalidateGitScans?: boolean
+      sortOrderOnly?: boolean
+      sortOrders?: WorktreeSortOrderUpdate[]
+    }
   ): void {
     // Headless hosts invalidate here unless only metadata changed.
     if (options?.invalidateGitScans !== false) {
       runWorktreeChangeInvalidators(repoId)
     }
     if (options) {
-      this.notifier?.worktreesChanged(repoId, undefined, options)
+      const { sortOrders: _sortOrders, ...notifierOptions } = options
+      this.notifier?.worktreesChanged(repoId, undefined, notifierOptions)
     } else {
       this.notifier?.worktreesChanged(repoId)
     }
     this.emitClientEvent({
       type: 'worktreesChanged',
       repoId,
-      ...(options?.sortOrderOnly === true ? { sortOrderOnly: true } : {})
+      ...(options?.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+      ...(options?.sortOrderOnly === true && options.sortOrders
+        ? { sortOrders: options.sortOrders }
+        : {})
     })
   }
 

@@ -11,7 +11,8 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true
+  experimentalNativeChat: true,
+  nativeChatProviders: { grok: true, opencode: true, omp: true, pi: true, gemini: true }
 } as const
 
 const REGISTERED_AGENTS = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
@@ -51,6 +52,15 @@ describe('a worker for a registered native-chat agent', () => {
       mode: 'terminal',
       reason: 'structured_unsupported_on_host'
     })
+  })
+
+  it('starts a terminal worker for an agent whose chat provider the user turned off', () => {
+    expect(
+      decideWorkerStartMode({
+        params: { agent: 'grok' },
+        settings: { ...STRUCTURED_PREFERENCE, nativeChatProviders: { grok: false } }
+      })
+    ).toMatchObject({ mode: 'terminal', reason: 'user_default' })
   })
 
   it('starts an agent with no native chat as a terminal worker', () => {

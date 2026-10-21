@@ -37,7 +37,7 @@ function decodeMountInfoPath(value: string): string {
   )
 }
 
-function isFuseMountPoint(mountInfo: string, mountPoint: string): boolean {
+export function isFuseMountPoint(mountInfo: string, mountPoint: string): boolean {
   return mountInfo.split('\n').some((line) => {
     const [mountFields, fsFields] = line.split(' - ')
     const point = mountFields?.split(' ')[4]

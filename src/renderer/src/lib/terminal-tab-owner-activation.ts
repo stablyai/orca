@@ -1,9 +1,7 @@
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  activateWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 
 /**
@@ -19,7 +17,7 @@ export function activateTerminalTabOnOwner(
   leafId: string | null
 ): void {
   const state = useAppStore.getState()
-  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const environmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return
   }

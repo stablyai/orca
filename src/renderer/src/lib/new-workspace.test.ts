@@ -73,7 +73,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess,
+  inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: mockSendRuntimePtyInputVerified
 }))
 
@@ -96,11 +98,17 @@ vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
 import {
   canUseIssueCommandForLinkedItemProvider,
   ensureAgentStartupInTerminal,
+  getLinkedWorkItemProvider,
   getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl
 } from './new-workspace'
 import { resetAgentStartupDelayedDeliveryForTests } from './agent-startup-delayed-delivery'
+import { getLinkedWorkItemProvider as directGetLinkedWorkItemProvider } from './linked-work-item-provider'
+
+it('keeps linked item provider selection available through the workspace module', () => {
+  expect(getLinkedWorkItemProvider).toBe(directGetLinkedWorkItemProvider)
+})
 
 describe('linked-item issue commands', () => {
   it('keeps Jira and Linear sentinel numbers out of repository issue templates', () => {

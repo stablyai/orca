@@ -214,6 +214,7 @@ export function useMobileSessionTerminalSubscription(
               seq,
               hostCols,
               hostRows,
+              displayMode: typeof data.displayMode === 'string' ? data.displayMode : null,
               sentViewport: sentViewport ?? null,
               budget: viewportResubscribeBudgetRef.current,
               diagnostics,

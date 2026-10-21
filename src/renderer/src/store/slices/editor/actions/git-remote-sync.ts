@@ -8,7 +8,7 @@ import {
   pullRuntimeGit,
   pushRuntimeGit,
   rebaseRuntimeGitFromBase
-} from '@/runtime/runtime-git-client'
+} from '@/runtime/runtime-git-sync-client'
 import {
   markSyncPushStageError,
   resolveRemoteOperationErrorMessage

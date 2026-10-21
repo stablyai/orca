@@ -16,7 +16,8 @@ import {
   searchLegacyQuickOpenInventory,
   validateLegacyQuickOpenRecentCandidates
 } from './runtime-legacy-quick-open-inventory'
-import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const QUICK_OPEN_REMOTE_UPDATE_REQUIRED_MESSAGE =

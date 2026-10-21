@@ -34,6 +34,16 @@ export function selectCommandPage(
     }
   }
   if (command.pageHostGeneration < page.generation) {
+    const previous = page.records.get(command.commandSequence)
+    if (
+      command.command.type === 'switchProfile' &&
+      previous?.result?.status === 'completed' &&
+      previous.event.pageHostGeneration === command.pageHostGeneration &&
+      previous.event.commandId === command.commandId &&
+      commandsMatch(previous.event, command)
+    ) {
+      return { page, commit: () => {} }
+    }
     throw new Error('browser_host_page_generation_stale')
   }
   if (command.pageHostGeneration === page.generation) {
@@ -88,6 +98,12 @@ function commandsMatch(
   if (first.command.type !== second.command.type) {
     return false
   }
+  if (first.command.type === 'switchProfile' && second.command.type === 'switchProfile') {
+    return (
+      first.command.nextPageHostGeneration === second.command.nextPageHostGeneration &&
+      JSON.stringify(first.command.profile) === JSON.stringify(second.command.profile)
+    )
+  }
   if (first.command.type === 'navigate' && second.command.type === 'navigate') {
     return first.command.url === second.command.url
   }
@@ -121,6 +137,13 @@ export function assertNewPageCommand(
   page: PageState,
   command: BrowserClientHostCommandEvent
 ): void {
+  const active = [...page.records.values()].filter((record) => record.status !== 'settled')
+  if (
+    active.some((record) => record.event.command.type === 'switchProfile') ||
+    (command.command.type === 'switchProfile' && active.length > 0)
+  ) {
+    throw new Error('browser_host_profile_switch_pending')
+  }
   if (page.nextSequence === 1 && command.command.type === 'navigate') {
     throw new Error('browser_host_command_create_required')
   }
@@ -169,6 +192,9 @@ export function recordBrowserClientPageCommandResult(
   command: BrowserClientHostCommandEvent['command'],
   result: BrowserClientHostCommandResult
 ): void {
+  if (command.type === 'switchProfile' && result.status === 'completed') {
+    page.generation = command.nextPageHostGeneration
+  }
   if (isBrowserClientPageBootstrapCommand(command)) {
     page.created = result.status === 'completed'
     page.createFailed = !page.created

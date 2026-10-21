@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
-import { isSubagentGroupBlock } from '../../shared/native-chat-types'
+import { isSubagentBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
@@ -100,7 +100,7 @@ async function stoppingChild(reportsOutcome: boolean) {
   const rosters = async () =>
     (await hosted.rows()).flatMap((row) =>
       row.body.kind === 'message'
-        ? row.body.blocks.filter(isSubagentGroupBlock).map((group) => ({ row, group }))
+        ? row.body.blocks.filter(isSubagentBlock).map((block) => ({ row, block }))
         : []
     )
   const original = (await rosters())[0]
@@ -125,7 +125,7 @@ describe('Grok child outcome during a full host Stop', () => {
     await vi.advanceTimersByTimeAsync(TURN_ANSWER_AFTER_STOP_MS)
     expect(fixture.closeAt).toEqual([STOP_AT + TURN_ANSWER_AFTER_STOP_MS])
     expect((await fixture.turns()).at(-1)).toMatchObject({ state: 'interrupted' })
-    expect((await fixture.rosters())[0].group.agents[0].state).toBe('working')
+    expect((await fixture.rosters())[0].block.state).toBe('working')
     expect(fixture.childWork.views()).toMatchObject([
       { membership: 'live', providerId: 'subagent-1' }
     ])
@@ -133,18 +133,16 @@ describe('Grok child outcome during a full host Stop', () => {
     const [cancelled] = await fixture.rosters()
     expect(cancelled.row.itemId).toBe(fixture.original.row.itemId)
     expect(cancelled.row.turnScope).toEqual(fixture.original.row.turnScope)
-    expect(cancelled.group.agents).toEqual([
-      {
-        ...fixture.original.group.agents[0],
-        state: 'stopped',
-        settledAt: STOP_AT + 233
-      }
-    ])
+    expect(cancelled.block).toEqual({
+      ...fixture.original.block,
+      state: 'stopped',
+      settledAt: STOP_AT + 233
+    })
     await vi.advanceTimersByTimeAsync(EXIT_AFTER_STOP_MS - 233)
     expect(fixture.childWork.views()).toMatchObject([
       { membership: 'settled', outcome: 'cancelled' }
     ])
-    expect((await fixture.rosters())[0].group).toEqual(cancelled.group)
+    expect((await fixture.rosters())[0].block).toEqual(cancelled.block)
     const settled = await fixture.rows()
     fixture.agent.notify(fixture.finished.method, fixture.finished.params)
     expect(await fixture.rows()).toEqual(settled)
@@ -158,11 +156,13 @@ describe('Grok child outcome during a full host Stop', () => {
     expect(fixture.childWork.views()).toMatchObject([{ membership: 'settled', outcome: 'unknown' }])
     expect(unavailable.row.itemId).toBe(fixture.original.row.itemId)
     // Contact was lost when the session ended, a moment the host observed.
-    expect(unavailable.group.agents).toEqual([
-      { ...fixture.original.group.agents[0], state: 'unverifiable', settledAt: expect.any(Number) }
-    ])
+    expect(unavailable.block).toEqual({
+      ...fixture.original.block,
+      state: 'unverifiable',
+      settledAt: expect.any(Number)
+    })
     fixture.agent.notify(fixture.finished.method, fixture.finished.params)
-    expect((await fixture.rosters())[0].group).toEqual(unavailable.group)
+    expect((await fixture.rosters())[0].block).toEqual(unavailable.block)
     await fixture.host.close(SESSION, 'user-close')
   })
 })

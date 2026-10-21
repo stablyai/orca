@@ -2,7 +2,7 @@
 
 import { Editor } from '@tiptap/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { toast } from 'sonner'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
@@ -13,7 +13,7 @@ import {
   type RichMarkdownImageRuntimeContext
 } from './rich-markdown-image-context'
 
-vi.mock('@/runtime/runtime-file-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
+vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -25,7 +25,7 @@ vi.mock('@/store', () => ({
     }))
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({}))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
 
 type ImportResult = Awaited<ReturnType<typeof importExternalPathsToRuntime>>

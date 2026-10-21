@@ -255,5 +255,5 @@ export function replaceStoredTokenWithDeviceKey(
 
 function isSessionOnlyBrowser(): boolean {
   const support = readWebDeviceKeySupport()
-  return support !== null && support !== 'persistent'
+  return support === 'session-no-ed25519'
 }

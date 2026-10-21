@@ -15,11 +15,9 @@ import {
   findIndexedWorktreeOwner,
   findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
-import {
-  runtimeTargetForExecutionHostId,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
@@ -107,5 +105,5 @@ export function getActiveWorkspaceOwnerTarget(
     return null
   }
   const hostId = getResolvedExecutionHostIdForWorktree(state, state.activeWorktreeId)
-  return hostId ? runtimeTargetForExecutionHostId(hostId) : null
+  return hostId ? runtimeRpcTargetForAuthorityKey(hostId) : null
 }

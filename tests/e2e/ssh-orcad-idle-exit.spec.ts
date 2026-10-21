@@ -5,6 +5,8 @@
  *    reconnects and the server is running again with that record consumed.
  * 2. Killed, then a reboot: a killed server comes back on the next call and adopts the daemon
  *    that kept its terminal; once both are gone, the next connect starts fresh.
+ * 3. A new desktop on the same build finds the server it would deploy recorded active but gone
+ *    (#27284): its first connect starts it instead of failing on the stale record.
  *
  * Docker only. `ORCA_E2E_ORCAD_CONVERT_TEMPLATE` names the linux-x64-glibc orcad build, and the
  * client forwards a short test-only quiet period to the server it launches.
@@ -288,6 +290,51 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
       await session.close(app)
     }
     await session.dispose()
+    cleanupDockerSshHostTarget(target)
+  }
+})
+
+test('a new desktop on the same build starts a server that was killed with its daemon', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
+  test.skip(
+    HOST !== 'docker' || !TEMPLATE_SOURCE,
+    `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
+  )
+  test.setTimeout(10 * 60_000)
+  const target = startDockerSshHostTarget(testInfo)
+  const env = { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! }
+  const deployer = createRestartSession(testInfo, env)
+  // Its own profile: it has never registered this host, so its connect runs the deploy.
+  const newcomer = createRestartSession(testInfo, env)
+  let app: ElectronApplication | null = null
+  let appSession = deployer
+  try {
+    const first = await deployer.launch()
+    app = first.app
+    await waitForSessionReady(first.page)
+    await connectManagedHost(first.page, target)
+    await deployer.close(app)
+    app = null
+
+    // Killed outside Orca, as after a reboot: the activation record still names the slot.
+    execDockerSshHostTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
+    await expect.poll(() => runningOrcadPids(target), { timeout: 60_000 }).toEqual([])
+
+    appSession = newcomer
+    const second = await newcomer.launch()
+    app = second.app
+    await waitForSessionReady(second.page)
+    const { environmentId } = await connectManagedHost(second.page, target)
+    expect(runningOrcadPids(target)).toHaveLength(1)
+    expect(await callEnvironment(second.page, environmentId, 'terminal.list', {})).toMatchObject({
+      ok: true
+    })
+  } finally {
+    if (app) {
+      await appSession.close(app)
+    }
+    await deployer.dispose()
+    await newcomer.dispose()
     cleanupDockerSshHostTarget(target)
   }
 })

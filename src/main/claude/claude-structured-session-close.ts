@@ -43,6 +43,7 @@ export function claudeAcquisitionCleanupError(
     : new AgentSessionAcquisitionExitUnprovenError(cause)
 }
 
+/** An unproven exit keeps the acquisition so a later stop can still prove its root gone. */
 export async function resolveClaudeAcquisitionError(input: {
   error: unknown
   sessionId: string
@@ -50,6 +51,7 @@ export async function resolveClaudeAcquisitionError(input: {
   attempt: ClaudeAcquisitionAttempt
   translator: ClaudeJournalTranslator | null
   prompts: ClaudePromptRegistry
+  releaseAcquisition: () => void
 }): Promise<unknown> {
   let acquisitionError = input.error
   if (input.sessions.get(input.sessionId)?.connection !== input.attempt.connection) {
@@ -63,6 +65,9 @@ export async function resolveClaudeAcquisitionError(input: {
     } else if (!closed) {
       acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
     }
+  }
+  if (!(acquisitionError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+    input.releaseAcquisition()
   }
   return acquisitionError
 }
@@ -119,12 +124,8 @@ async function finalizeClaudePublishedSession(
     rootExitVerdict = cleanupError
   }
   // Queues the session's ending for the host's child records; the adapter delivers it after close.
-  // A proven close stopped what still ran: on POSIX the whole tree was seen gone; on Windows Claude
-  // left after its stdin ended, or taskkill reported its tree terminated. Any other end, like an
-  // exit of the session's own, leaves how it ended unknown.
-  if (connectionClosed === true) {
-    session.childWork.stopLive()
-  }
+  // Even a proven close is Orca losing contact, not a Stop the CLI accepted: what still ran ends
+  // with no outcome anyone reported.
   session.childWork.clear()
   session.backgroundTasks.clear()
   // The exit is proven, so the session ends now. Saving its resume point is bookkeeping that
@@ -151,8 +152,7 @@ async function finalizeClaudePublishedSession(
       cause: 'requested-close',
       fence: session.fence,
       acquisitionGeneration: session.acquisitionGeneration,
-      observedAt: Date.now(),
-      ...(session.startup.answered ? {} : { startupUnanswered: true as const })
+      observedAt: Date.now()
     }
     try {
       try {
@@ -288,6 +288,10 @@ export async function closeClaudeSession(input: {
     )
     // Why: cancellation must preserve the same actionable verdict as published-session close.
     if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+      // A proved-dead attempt cannot remain the owner blocking the next start.
+      if (attempt) {
+        input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
+      }
       throw cleanupError
     }
     return false

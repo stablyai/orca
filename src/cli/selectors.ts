@@ -11,7 +11,8 @@ import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
 import {
   getCallerExecutionHostId,
   resolveCallerPaneWorktreeSelector,
-  selectEnclosingWorktreeOnHost
+  selectEnclosingWorktreeSelectionOnHost,
+  type HostScopedWorktreeSelection
 } from './caller-host-worktree-selection'
 
 export type BrowserCliTarget = {
@@ -105,6 +106,13 @@ export async function resolveCurrentWorktreeSelector(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
+  return (await resolveCurrentWorktreeSelection(cwd, client)).selector
+}
+
+export async function resolveCurrentWorktreeSelection(
+  cwd: string,
+  client: RuntimeClient
+): Promise<HostScopedWorktreeSelection> {
   assertLocalCwdWorktreeSelector('current', client)
 
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
@@ -114,18 +122,18 @@ export async function resolveCurrentWorktreeSelector(
   // even from nested subdirectories. Resolve to the concrete runtime row here:
   // duplicate repo registrations can expose the same Git worktree path, and a
   // path selector would throw selector_ambiguous after losing the repo id.
-  const selector = selectEnclosingWorktreeOnHost(
+  const selection = selectEnclosingWorktreeSelectionOnHost(
     worktrees.result.worktrees,
     cwd,
     getCallerExecutionHostId()
   )
-  if (!selector) {
+  if (!selection) {
     throw new RuntimeClientError(
       'selector_not_found',
       `No Orca-managed worktree contains the current directory: ${resolvePath(cwd)}`
     )
   }
-  return selector
+  return selection
 }
 
 export async function getOptionalWorktreeSelector(

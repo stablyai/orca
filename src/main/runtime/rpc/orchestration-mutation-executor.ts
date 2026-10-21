@@ -19,12 +19,6 @@ import {
   shouldObserveCompletedMutation
 } from './orchestration-mutation-receipt'
 
-export {
-  readMutationReplayNudge,
-  readWorkerDoneReplayNudge,
-  stripMutationReplayNudge
-} from './orchestration-mutation-receipt'
-
 export type DurableMutationInvocation = {
   identity: {
     callerFingerprint: string

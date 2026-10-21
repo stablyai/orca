@@ -38,6 +38,7 @@ export {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
@@ -49,6 +50,7 @@ export {
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
+  formatAutomationRunsPage,
   formatAutomationShow
 } from './automation-format'
 export type { AutomationListPayload, AutomationShowPayload } from './automation-format'

@@ -1,9 +1,8 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
-import type { OrcaRuntimeService } from './orca-runtime'
-import { killAllProcessesForWorktree } from './worktree-teardown'
+import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
 
 const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 
@@ -60,7 +59,7 @@ function hostFence(
 }
 
 type MissingWorktreeTerminalReconciliationDeps = {
-  runtime: OrcaRuntimeService
+  runtime: WorktreeTeardownRuntime
   getLocalProvider: () => IPtyProvider | null
   onPtyStopped?: (ptyId: string) => void
 }

@@ -3,12 +3,12 @@ import type { OpenFile } from '../types/open-file'
 import { mayShareEditorBackingFile } from '../file-ids/editor-file-ids'
 import { findWorktreeById } from '../../worktree-helpers'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import {
   deleteRuntimePath,
-  deleteRuntimeRelativePath,
-  statRuntimePath
-} from '@/runtime/runtime-file-client'
+  deleteRuntimeRelativePath
+} from '@/runtime/runtime-file-mutation-client'
+import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 
 export function deleteUntouchedUntitledFile(getState: () => AppState, file: OpenFile): void {
   const hasRetainedView = () =>

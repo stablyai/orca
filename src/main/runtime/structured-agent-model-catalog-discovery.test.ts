@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import { registeredModelCatalogDiscovery } from './structured-agent-model-catalog-wiring'
 import { acpModelCatalogDiscovery } from './structured-agent-model-catalog-discovery'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
@@ -33,7 +34,8 @@ function context(): StructuredAgentModelCatalogContext {
     deps: { stateDirectory: '/state' } as StructuredAgentModelCatalogContext['deps'],
     environment: {
       resolveBaseEnvironment: unused,
-      resolveAgentEnvironment: unused
+      resolveAgentEnvironment: unused,
+      refreshAfterMissingProgram: unused
     }
   }
 }
@@ -62,10 +64,10 @@ describe('the model catalog contract on every registration', () => {
       (registration) => registration.modelCatalog(context()).kind === 'probe'
     ).map((registration) => registration.definition.agent)
     expect(Object.keys(probes).sort()).toEqual([...listing].sort())
-    // Every agent registered today but OMP lists its models without a session.
+    // Every agent registered today but Antigravity lists its models before a chat.
     expect(listing.sort()).toEqual(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map((registration) => registration.definition.agent)
-        .filter((agent) => agent !== 'omp')
+        .filter((agent) => agent !== 'antigravity')
         .sort()
     )
   })
@@ -78,6 +80,15 @@ describe('the model catalog contract on every registration', () => {
     // Codex's `model/list` names it. Grok's session-free `currentModelId` can differ from what a
     // session runs, so Grok, like the rest, learns it from a chat with no pick.
     expect([...listingNamesConfiguredModel].sort()).toEqual(['codex'])
+  })
+
+  // OpenCode 2.x and OMP list in a session opened in the chat's folder, which a prewarm does not have.
+  it('marks the agents whose listing runs in a chat folder', () => {
+    const { listsInChatFolder } = registeredModelCatalogDiscovery(
+      STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+      context()
+    )
+    expect([...listsInChatFolder].sort()).toEqual(['omp', 'opencode', 'opencode2'])
   })
 
   it('maps an ACP agent with no session-free listing to an unavailable registration', () => {
@@ -117,7 +128,8 @@ describe('the model catalog contract on every registration', () => {
       } as StructuredAgentModelCatalogContext['deps'],
       environment: {
         resolveBaseEnvironment: env,
-        resolveAgentEnvironment: env
+        resolveAgentEnvironment: env,
+        refreshAfterMissingProgram: async () => {}
       }
     })
     const variables = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', grok: 'GROK_HOME' }
@@ -128,4 +140,52 @@ describe('the model catalog contract on every registration', () => {
     }
     rmSync(rig, { recursive: true, force: true })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'rereads the environment once, as a launch does, for a program installed since it was read',
+    async () => {
+      const rig = mkdtempSync(join(tmpdir(), 'orca-catalog-installed-'))
+      // Names only the reread PATH has, so nothing on the machine running the test answers.
+      const installed = (agent: string): string => `${agent}-installed-${process.pid}`
+      const agents = {
+        claude: 'CLAUDE_CONFIG_DIR',
+        codex: 'CODEX_HOME',
+        grok: 'GROK_HOME',
+        pi: 'PI_CODING_AGENT_DIR'
+      }
+      for (const agent of Object.keys(agents)) {
+        writeFileSync(join(rig, installed(agent)), '#!/bin/sh\nexit 1\n')
+        chmodSync(join(rig, installed(agent)), 0o755)
+      }
+      let served = '/usr/bin'
+      const env = async () => ({ PATH: served, HOME: join(rig, 'home') })
+      const refresh = vi.fn(async () => {
+        served = rig
+      })
+      const settings = { agentCmdOverrides: { grok: installed('grok'), pi: installed('pi') } }
+      const { probes } = registeredModelCatalogDiscovery(STRUCTURED_AGENT_RUNTIME_REGISTRATIONS, {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a probe reads only the command, env and auth resolvers given here.
+        deps: {
+          stateDirectory: '/state',
+          resolveClaudeCommand: (options) => resolveCliCommand(installed('claude'), options),
+          resolveCodexCommand: (options) => resolveCliCommand(installed('codex'), options),
+          resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
+          resolveAgentCommandSettings: () => settings
+        } as StructuredAgentModelCatalogContext['deps'],
+        environment: {
+          resolveBaseEnvironment: env,
+          resolveAgentEnvironment: env,
+          refreshAfterMissingProgram: refresh
+        }
+      })
+      for (const [agent, variable] of Object.entries(agents)) {
+        served = '/usr/bin'
+        spawned.commands.length = 0
+        await expect(probes[agent]!({ variable, path: join(rig, 'home') })).rejects.toThrow()
+        expect(spawned.commands, agent).toEqual([join(rig, installed(agent))])
+      }
+      expect(refresh).toHaveBeenCalledTimes(4)
+      rmSync(rig, { recursive: true, force: true })
+    }
+  )
 })

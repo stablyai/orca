@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -44,7 +53,7 @@ function workspaceTokenPath(workspaceId: string): string {
 }
 
 function writeMultiWorkspaceFiles(
-  workspaces: { id: string; token: string | Buffer }[],
+  workspaces: { id: string; token: string | Buffer; credentialRevision?: number }[],
   selectedWorkspaceId: string
 ): void {
   const orcaDir = join(tempHome, '.orca')
@@ -60,7 +69,8 @@ function writeMultiWorkspaceFiles(
         organizationId: workspace.id,
         organizationName: workspace.id,
         displayName: 'Ada',
-        email: 'ada@example.com'
+        email: 'ada@example.com',
+        credentialRevision: workspace.credentialRevision
       }))
     }),
     { encoding: 'utf-8' }
@@ -416,5 +426,141 @@ describe('Linear client workspace storage', () => {
     })
 
     expect(() => linear.getClients('bad')).toThrow('Could not decrypt')
+  })
+})
+
+describe('Linear workspace file cross-process visibility', () => {
+  it('reloads rotated workspace tokens without decrypting them during status reads', async () => {
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+    const path = workspaceTokenPath('ws-alpha')
+    utimesSync(path, 1_700_000_000, 1_700_000_000)
+    const decrypt = vi.fn((value: Buffer) => value.toString('utf-8'))
+    const fixture = fixtures.get('token-alpha')
+    if (!fixture) {
+      throw new Error('Expected Linear fixture')
+    }
+    fixtures.set('token-bravo', fixture)
+    const linear = await loadClientModule({ encryptionAvailable: true, decryptString: decrypt })
+    expect(linear.getStatus().connected).toBe(true)
+    expect(decrypt).not.toHaveBeenCalled()
+    const captured = linear.getClients('ws-alpha')[0]
+    linear.getClients('ws-alpha')
+    expect(decrypt).toHaveBeenCalledOnce()
+
+    writeFileSync(`${path}.replacement`, 'token-bravo')
+    utimesSync(`${path}.replacement`, 1_700_000_000, 1_700_000_000)
+    renameSync(`${path}.replacement`, path)
+    expect(linear.getStatus().connected).toBe(true)
+    expect(decrypt).toHaveBeenCalledOnce()
+    expect(linear.getClients('ws-alpha')[0]?.apiKey).toBe('token-bravo')
+    expect(captured?.apiKey).toBe('token-alpha')
+    expect(decrypt).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['remove', 'empty'])(
+    'observes an externally %s workspace token and restoration',
+    async (mode) => {
+      writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+      const linear = await loadClientModule()
+      expect(linear.getClients('ws-alpha')).toHaveLength(1)
+      const path = workspaceTokenPath('ws-alpha')
+      if (mode === 'remove') {
+        rmSync(path)
+      } else {
+        writeFileSync(path, '')
+      }
+      expect(linear.getStatus().connected).toBe(false)
+      expect(linear.getClients('ws-alpha')).toEqual([])
+      writeFileSync(path, 'token-alpha')
+      expect(linear.getStatus().connected).toBe(true)
+      expect(linear.getClients('ws-alpha')).toHaveLength(1)
+    }
+  )
+
+  it('recovers a token that appears after metadata was first read without it', async () => {
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+    const path = workspaceTokenPath('ws-alpha')
+    rmSync(path)
+    const linear = await loadClientModule()
+    expect(linear.getStatus().connected).toBe(false)
+    writeFileSync(path, 'token-alpha')
+    expect(linear.getStatus().connected).toBe(true)
+    expect(linear.getClients('ws-alpha')).toHaveLength(1)
+  })
+
+  it('refreshes legacy Linear credentials when another process replaces or removes the token', async () => {
+    writeLegacyLinearFiles('token-alpha', {
+      displayName: 'Ada',
+      email: 'ada@example.com',
+      organizationName: 'Alpha'
+    })
+    const linear = await loadClientModule()
+    expect(linear.getClients('legacy')[0]?.apiKey).toBe('token-alpha')
+    const path = join(tempHome, '.orca', 'linear-token.enc')
+    writeFileSync(path, 'token-beta')
+    expect(linear.getClients('legacy')[0]?.apiKey).toBe('token-beta')
+    rmSync(path)
+    expect(linear.getStatus().connected).toBe(false)
+    expect(linear.getClients('legacy')).toEqual([])
+  })
+
+  it('preserves external credential revisions and captured request deadlines', async () => {
+    writeMultiWorkspaceFiles(
+      [{ id: 'ws-alpha', token: 'token-alpha', credentialRevision: 3 }],
+      'ws-alpha'
+    )
+    // A revision update must change metadata even within one filesystem clock tick.
+    utimesSync(join(tempHome, '.orca', 'linear-workspaces.json'), 1, 1)
+    const linear = await loadClientModule()
+    const signal = new AbortController().signal
+    const captured = linear.getClients('ws-alpha', signal)[0]
+    expect(captured?.workspace.credentialRevision).toBe(3)
+
+    writeMultiWorkspaceFiles(
+      [{ id: 'ws-alpha', token: 'token-alpha', credentialRevision: 4 }],
+      'ws-alpha'
+    )
+
+    expect(linear.getStatus().workspaces?.[0]?.credentialRevision).toBe(4)
+    const current = linear.getClients('ws-alpha', signal)[0]
+    expect(current?.workspace.credentialRevision).toBe(4)
+    expect(linearClientMock).toHaveBeenLastCalledWith({ apiKey: 'token-alpha', signal })
+    expect(captured?.workspace.credentialRevision).toBe(3)
+    expect(captured?.apiKey).toBe('token-alpha')
+  })
+
+  it('observes a disconnect written by another process', async () => {
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ connected: true })
+    writeMultiWorkspaceFiles([], '')
+    expect(linear.getStatus()).toMatchObject({ connected: false, workspaces: [] })
+  })
+  it('picks up a workspace connected by another Orca process', async () => {
+    // ~/.orca is shared by every Orca process on the machine, so a load-once
+    // cache would report "not connected" until this process restarted.
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ connected: false })
+
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+
+    expect(linear.getStatus()).toMatchObject({
+      connected: true,
+      activeWorkspaceId: 'ws-alpha'
+    })
+  })
+
+  it('follows the selected workspace changing underneath it', async () => {
+    const workspaces = [
+      { id: 'ws-alpha', token: 'token-alpha' },
+      { id: 'ws-beta', token: 'token-beta' }
+    ]
+    writeMultiWorkspaceFiles(workspaces, 'ws-alpha')
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ selectedWorkspaceId: 'ws-alpha' })
+
+    writeMultiWorkspaceFiles(workspaces, 'ws-beta')
+
+    expect(linear.getStatus()).toMatchObject({ selectedWorkspaceId: 'ws-beta' })
   })
 })

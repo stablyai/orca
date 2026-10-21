@@ -1,9 +1,11 @@
 import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
-import { isSameAgentProcess } from '../shared/agent-process-presence'
+import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -35,6 +37,14 @@ export function applyRelayHookEvent(
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  if (
+    previous &&
+    !previous.providerSessionOnly &&
+    sameAgentStatusTerminalOwner(previous, incoming) &&
+    hasOtherAgentProcessOwner(previous.agentPresence, incoming.payload.agentType ?? 'unknown')
+  ) {
+    return undefined
+  }
   const cancellation = reconcileRelayClaudeCancel(host.state, previous, incoming, source)
   if (cancellation.hold) {
     return previous
@@ -71,8 +81,18 @@ export function applyRelayHookEvent(
   ) {
     return undefined
   }
+  const claudeSettledRequests = retainClaudeSettledRequests(
+    host.metadata.get(event.paneKey)?.claudeSettledRequests,
+    previous,
+    event
+  )
   host.metadata.delete(event.paneKey)
-  host.metadata.set(event.paneKey, { source, env, version })
+  host.metadata.set(event.paneKey, {
+    source,
+    env,
+    version,
+    ...(claudeSettledRequests ? { claudeSettledRequests } : {})
+  })
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

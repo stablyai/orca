@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
@@ -117,6 +118,7 @@ export class ProfilePreferences {
             }
           }
           runtime.state.settings = restoredSettings
+          retireAtRestCommandSettings(updateKeys)
         }
       }
     })

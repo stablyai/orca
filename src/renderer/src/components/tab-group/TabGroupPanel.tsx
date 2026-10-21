@@ -1,30 +1,25 @@
 import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
 import { useAppStore } from '../../store'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
+import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
+import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
+import { cn } from '@/lib/utils'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -111,8 +106,10 @@ export default function TabGroupPanel({
         return undefined
       }
       const unregisterBody = registerTabGroupBody(groupId, node)
+      const stopGridSizeReport = observeTabGroupBodyGridSize(node)
       return () => {
         unregisterBody()
+        stopGridSizeReport()
         setBodyDropRef(null)
       }
     },
@@ -138,6 +135,7 @@ export default function TabGroupPanel({
             : null
       }
       groupId={groupId}
+      onCloseSplitPane={hasSplitGroups ? commands.closeGroup : undefined}
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
@@ -243,12 +241,11 @@ export default function TabGroupPanel({
     />
   )
 
-  const menuButtonClassName =
-    'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  // Why: focused-only so quick commands and Close split pane stay with the active pane and unfocused strips stay compact.
-  const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
-    isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
-  }`
+  // Why: only width changes the toolbar footprint; focusing a pane must never reflow its tabs.
+  const actionChromeClassName = cn(
+    'ml-1.5 flex shrink-0 items-center gap-0.5 transition-opacity duration-150',
+    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
+  )
   return (
     <div
       // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in light) doesn't paint a near-white strip by the resize handle; only the bottom border changes on focus.
@@ -275,7 +272,7 @@ export default function TabGroupPanel({
           strip, and a mounted second strip would register duplicate sortables in the drag scope. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="h-[32px] shrink-0 border-b border-border bg-card"
+          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
@@ -295,57 +292,17 @@ export default function TabGroupPanel({
             ) : null}
             <div className="min-w-0 flex-1 h-full">{tabBar}</div>
             <div
-              className="ml-1.5 flex shrink-0 items-center gap-0.5"
+              className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
-              <div className={focusedActionChromeClassName}>
-                {isFocused ? (
-                  <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
-                ) : null}
-                {isFocused && hasSplitGroups ? (
-                  <Tooltip>
-                    <DropdownMenu modal={false}>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            aria-label={translate(
-                              'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                              'Pane Actions'
-                            )}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                            }}
-                            className={menuButtonClassName}
-                          >
-                            <Ellipsis className="size-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                      </TooltipTrigger>
-                      <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => {
-                            commands.closeGroup()
-                          }}
-                        >
-                          <X className="size-4" />
-                          {translate(
-                            'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-                            'Close split pane'
-                          )}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      {translate(
-                        'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                        'Pane Actions'
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </div>
+              <TabBarQuickCommandsButton
+                worktreeId={worktreeId}
+                groupId={groupId}
+                isFocused={isFocused}
+              />
+              {hasSplitGroups ? (
+                <TabGroupPaneActionsMenu isFocused={isFocused} onCloseGroup={commands.closeGroup} />
+              ) : null}
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (

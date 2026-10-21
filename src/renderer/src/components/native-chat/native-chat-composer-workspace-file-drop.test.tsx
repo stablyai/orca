@@ -16,6 +16,7 @@ import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
@@ -52,7 +53,8 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
 vi.mock('./NativeChatComposerActions', () => ({
@@ -122,6 +124,7 @@ function ComposerProbe({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: `pane:${workspaceId}`,
     allowWithoutTarget: structured,
+    imageReferences: structured,
     caret,
     disabled,
     isComposing: imeEnterGesture.isComposing,
@@ -439,7 +442,7 @@ describe('native chat workspace file drops', () => {
 
     const image = screen.getByText('/remote/repo/image.png')
     expect(image.getAttribute('data-connection-id')).toBe('ssh-1')
-    expect(screen.getByTestId('draft').textContent).toBe('')
+    expect(screen.getByTestId('draft').textContent).toMatch(/^\[Image\]\(orca-image:[\w-]+\) $/)
   })
 
   it('supports PTY-owned and folder-workspace paths with the same ownership gate', () => {

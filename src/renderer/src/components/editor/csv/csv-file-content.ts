@@ -1,5 +1,5 @@
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import {
   statRuntimeReadTarget,
   type RuntimeFileSnapshot

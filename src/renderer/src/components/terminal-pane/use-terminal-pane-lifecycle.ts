@@ -17,30 +17,6 @@ import { useTerminalPaneMountLifecycle } from './use-terminal-pane-mount-lifecyc
 import { useTerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
-export {
-  applyTerminalScrollbackRowsToMountedPanes,
-  clearQueuedInitialCwdAfterFirstPane,
-  createQueuedStartupConsumer,
-  getPreviousVisibleForTerminalPane,
-  isTerminalPaneVisibilityResume,
-  mapRestoredPaneTitlesByPaneId,
-  paneOwnsQueuedStartup,
-  replayLayoutWithOneShotParkIntent,
-  resolvePaneLinkCwd,
-  resolvePaneSeedCwd,
-  resolveQueuedInitialCwd,
-  recordRuntimeCreatedTerminalPaneSplit,
-  shouldDetachPaneTransportOnUnmount,
-  terminalSelectionExceedsPrimaryLimit,
-  splitPaneWithOneShotStartup
-} from './terminal-pane-lifecycle-primitives'
-export {
-  applyTerminalPaneCloseRequest,
-  retireMountedTerminalPaneSurface,
-  suppressIntentionalPaneCloseExit
-} from './terminal-pane-lifecycle-close'
-export type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
-
 /** Coordinates mount, visibility, and live appearance effects for terminal panes. */
 export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): void {
   const refs = useTerminalPaneLifecycleRefs()

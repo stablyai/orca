@@ -32,7 +32,6 @@ import {
   recordProcessGoneCrash
 } from './main-window-lifecycle-flags'
 import { presentGpuFallbackRecoveredLaunchPrompt } from './gpu-lifecycle'
-import { maybeAutoRenameBranchOnFirstWorkFromHook } from './branch-rename-hook'
 import {
   resumeSyntheticTitleSpinnerTimer,
   stopSyntheticTitleSpinnerTimer
@@ -95,13 +94,13 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       state.isQuitting = false
       clearExpectedRendererReload()
     },
-    onRendererProcessGone: (details, webContentsId) => {
+    onRendererProcessGone: (details, webContentsId, liveness) => {
       recordProcessGoneCrash(
         'renderer',
         'renderer',
         details.reason,
         details.exitCode ?? null,
-        { processType: 'renderer' },
+        { processType: 'renderer', ...liveness },
         webContentsId
       )
       // Why: launch-failed only says a spawn failed; the probe's errno (EAGAIN = process limit) names the cause.
@@ -203,7 +202,6 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('restore', () => setTrayAttention(false))
   installMainWindowAgentStatusListeners({
     window,
-    maybeAutoRenameBranchOnFirstWork: maybeAutoRenameBranchOnFirstWorkFromHook,
     onRecordAgentState: (agentType, status) =>
       recordCoalescedCrashBreadcrumb({
         name: 'agent_state_changed',

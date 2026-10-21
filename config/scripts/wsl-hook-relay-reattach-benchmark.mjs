@@ -280,7 +280,7 @@ async function main() {
   const bundlePath = join(bundleDir, 'wsl-agent-hook-relay.js')
   const versionPath = join(bundleDir, '.version')
   if (!existsSync(bundlePath) || !existsSync(versionPath)) {
-    await run(process.execPath, [join('config', 'scripts', 'build-relay.mjs')], {
+    await run(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
       cwd: process.cwd()
     })
   }

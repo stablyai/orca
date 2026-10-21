@@ -5,9 +5,7 @@ import {
 } from './ephemeral-vm-workspace-target'
 import type { ProjectHostSetupResult } from '../../../shared/project-types'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  assertRuntimeEnvironmentCapability: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ assertRuntimeEnvironmentCapability: vi.fn() }))
 
 import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
 

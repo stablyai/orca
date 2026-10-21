@@ -8,6 +8,7 @@ import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { useAppStore } from '@/store'
 import { forgetAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
+import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
 
 export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent): void {
   const { worktreeId, tabId, leafId, verdict } = event
@@ -16,6 +17,10 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
   // Only a pane its tab says a launch laid out: a verdict never touches anything else.
   if (tab?.agentLaunchPane?.leafId !== leafId) {
     return
+  }
+  if (verdict.kind !== 'proceed') {
+    // Reported before the pane's spawn returns: its prompt is never pasted.
+    settleAgentLaunchPaneStart(tabId, leafId, null)
   }
   switch (verdict.kind) {
     case 'proceed':
@@ -32,7 +37,7 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
         state.setTabAgentLaunchPane(tabId, undefined)
         return
       }
-      // Final for this pane, for the tab's life: no later spawn needs the launch record.
+      // Final for this pane for this session.
       state.setTabAgentLaunchPane(tabId, { ...tab.agentLaunchPane, outcome: verdict })
       return
     }

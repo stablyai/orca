@@ -199,7 +199,7 @@ export async function refreshNativeChatRestartOffer(): Promise<void> {
   await readNativeChatRestartOffer()
 }
 
-/** The status bar entry and a toast's Show: re-read, then open only over rows, since the dialog
+/** The status bar entry and the toast's action: re-read, then open only over rows, since the dialog
  *  draws nothing without them. Opening a chat from it is read-only and keeps the offer. */
 export async function reopenNativeChatRestartOffer(): Promise<void> {
   // Mid-resume the host's answer is already on its way; a re-read racing it could undo it.

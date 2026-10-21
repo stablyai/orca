@@ -11,7 +11,11 @@ import {
   callerProfileCases,
   type AgentLaunchCallerProfile
 } from './agent-launch-caller-profiles-test-harness'
-import { createLaunchFunnelStore, resetLaunchFunnelStore } from './agent-launch-funnel-test-harness'
+import {
+  createLaunchFunnelStore,
+  queuedStartupCommand,
+  resetLaunchFunnelStore
+} from './agent-launch-funnel-test-harness'
 
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
 const store = createLaunchFunnelStore()
@@ -28,12 +32,12 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => nul
 vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => mockExecutionHostId(),
-  getRuntimeEnvironmentIdForWorktree: () => 'web-runtime'
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => 'web-runtime'
 }))
 vi.mock('@/lib/launch-agent-web-host-tab', () => ({
   launchAgentInWebHostTab: mockLaunchAgentInWebHostTab
@@ -270,10 +274,7 @@ describe('agent launch caller routing', () => {
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(store.createTab).toHaveBeenCalledOnce()
     expect(store.createTab.mock.calls[0]?.slice(0, 2)).toEqual(['wt-1', 'group-1'])
-    expect(store.queueTabStartupCommand).toHaveBeenCalledOnce()
-    expect(store.queueTabStartupCommand.mock.calls[0]?.[1]?.command).toBe(
-      "claude '--model' 'sonnet'"
-    )
+    expect(queuedStartupCommand(store)).toBe("claude '--model' 'sonnet'")
     // The typed prompt goes to that terminal once, and the caller hears it arrived.
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: true,
@@ -339,7 +340,6 @@ describe('agent launch caller routing', () => {
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' })
     expect(store.createTab).not.toHaveBeenCalled()
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
   })
 
   it('aborts a host-published open when beforeSurfaceOpen refuses', async () => {

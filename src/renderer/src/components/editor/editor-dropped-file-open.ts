@@ -4,15 +4,11 @@ import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-lin
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
-import {
-  importExternalPathsToRuntime,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
-import {
-  runtimeTargetEnvironmentId,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-client-target'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
@@ -157,7 +153,7 @@ async function openEditorFileDropPaths(
         fileContext,
         [...paths],
         destinationDir,
-        { ensureDestinationDir: true }
+        { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
       if (!editorGroupStillExists(destination)) {
         return

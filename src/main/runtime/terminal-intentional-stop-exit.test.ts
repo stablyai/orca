@@ -17,8 +17,9 @@ import {
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { createPtyIpcSession } from '../ipc/pty/session'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { OrcaRuntimeService } from './orca-runtime'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   INCARNATION_ID,
   LEAF_ID,
@@ -84,9 +85,7 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
   })
   ptyOwnership.set(PTY_ID, 'local')
   ptyIncarnationById.set(PTY_ID, INCARNATION_ID)
-  let emitProviderExit:
-    | ((payload: { id: string; code: number; incarnationId?: string }) => void)
-    | undefined
+  let emitProviderExit: Parameters<IPtyProvider['onExit']>[0] | undefined
   const provider = {
     onData: () => () => {},
     onExit: (listener: typeof emitProviderExit) => {
@@ -124,6 +123,14 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     deps,
     emitProviderExit: (incarnationId: string) =>
       emitProviderExit?.({ id: PTY_ID, code: 0, incarnationId }),
+    /** The exit main synthesizes for each session when it restarts the daemon. */
+    emitDaemonRestartExit: (replacedByRestart?: true) =>
+      emitProviderExit?.({
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        ...(replacedByRestart ? { replacedByRestart } : {})
+      }),
     boundPtyId: () =>
       store.getWorkspaceSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID] ?? null,
     tabIds: () => (store.getWorkspaceSession().tabsByWorktree[WORKTREE_ID] ?? []).map((t) => t.id),
@@ -207,6 +214,30 @@ describe('intentional stops keep the pane through the exit', () => {
         preserveRendererBinding: true,
         replacedByRestart: true
       }
+    ])
+  })
+
+  it('keeps the pane when main restarts the daemon under it', () => {
+    const harness = createHarness()
+
+    harness.emitDaemonRestartExit(true)
+
+    expect(harness.tabIds()).toEqual([TAB_ID])
+    expect(harness.boundPtyId()).toBe(PTY_ID)
+    expect(harness.rendererExits()).toEqual([
+      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, replacedByRestart: true }
+    ])
+  })
+
+  it('retires the pane on a daemon-wide exit that no restart claims', () => {
+    const harness = createHarness()
+
+    harness.emitDaemonRestartExit()
+
+    // Switch-on, main keeps the pane as the window does on a -1 no host confirmed (lost contact).
+    expect(harness.boundPtyId()).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? PTY_ID : null)
+    expect(harness.rendererExits()).toEqual([
+      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID }
     ])
   })
 

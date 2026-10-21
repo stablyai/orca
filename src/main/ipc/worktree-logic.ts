@@ -21,14 +21,6 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
 }
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export {
-  computeBranchName,
-  getConfiguredBranchPrefix,
-  computeValidatedBranchName
-} from './worktree-branch-name'
-export { mergeWorktree } from './worktree-metadata-merge'
-export { areWorktreePathsEqual } from './worktree-path-comparison'
-
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
  * Strips unsafe characters and collapses runs of special chars to a single hyphen.
@@ -66,14 +58,6 @@ function containsEmoji(input: string): boolean {
     input
   )
 }
-
-export {
-  resolveWorktreeCreateDisplayName,
-  resolveWorktreeCreateDisplayNameRequest,
-  resolveWorktreeCreateDisplayNameMeta,
-  sanitizeWorktreeDisplayName,
-  shouldSetDisplayName
-} from './worktree-display-name'
 
 /**
  * Ensure a target path is within the workspace directory (prevent path traversal).

@@ -30,7 +30,8 @@ child.on('message', (message) => {
     child.send({ type: 'request', id: 1, operation: 'scan', options: { limit: 5 } })
     return
   }
-  if (!message || message.id !== 1) {
+  // Progress frames share the request id; only the result or error answers it.
+  if (!message || message.id !== 1 || (message.type !== 'result' && message.type !== 'error')) {
     return
   }
   const sessions = message.type === 'result' ? message.value.result.sessions : []

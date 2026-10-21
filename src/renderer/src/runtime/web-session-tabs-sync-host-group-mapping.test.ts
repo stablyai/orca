@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import {
-  applyWebSessionTabsSnapshot,
-  resolveHostSessionGroupIdForWebSessionTab
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionGroupIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
 import {
   ENV,
   LEAF_ID,

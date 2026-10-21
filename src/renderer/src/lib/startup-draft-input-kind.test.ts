@@ -22,10 +22,6 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null
-}))
-
 vi.mock('./agent-draft-readiness', () => ({
   waitForAgentDraftInputReady: async () => true
 }))

@@ -86,6 +86,87 @@ afterEach(async () => {
 })
 
 describe('memoized WSL session indexes under a stalled mount', () => {
+  it('shares one cold Codex index read across a concurrent parser batch', async () => {
+    const handles: ReturnType<typeof servingHandle>[] = []
+    mocks.open.mockImplementation(async () => {
+      const handle = servingHandle(
+        `${JSON.stringify({ id: SESSION_ID, thread_name: 'Shared title' })}\n`
+      )
+      handles.push(handle)
+      return handle
+    })
+
+    const titles = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)
+      )
+    )
+
+    expect(titles).toEqual(Array.from({ length: 8 }, () => 'Shared title'))
+    expect(mocks.stat).toHaveBeenCalledTimes(1)
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+    expect(handles).toHaveLength(1)
+    expect(handles[0].close).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps concurrent Codex homes separate even when their file signatures match', async () => {
+    const otherHome = `${CODEX_HOME}-other`
+    mocks.open.mockImplementation(async (path: string) =>
+      servingHandle(
+        `${JSON.stringify({
+          id: SESSION_ID,
+          thread_name: path.includes('-other') ? 'Other home' : 'First home'
+        })}\n`
+      )
+    )
+
+    const titles = await Promise.all(
+      [CODEX_HOME, otherHome].flatMap((home) =>
+        Array.from({ length: 8 }, () =>
+          readCodexSessionIndexTitle(CODEX_SESSION_FILE, home, SESSION_ID)
+        )
+      )
+    )
+
+    expect(titles).toEqual([
+      ...Array.from({ length: 8 }, () => 'First home'),
+      ...Array.from({ length: 8 }, () => 'Other home')
+    ])
+    expect(mocks.open).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares one changed Codex index read and preserves later title updates', async () => {
+    mocks.open.mockImplementation(async () =>
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Original title' })}\n`)
+    )
+    expect(await readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)).toBe(
+      'Original title'
+    )
+    mocks.open.mockClear()
+    mocks.stat.mockResolvedValue({ ...INDEX_STATS, mtimeMs: 8 })
+    mocks.open.mockImplementation(async () =>
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Updated title' })}\n`)
+    )
+
+    const titles = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)
+      )
+    )
+
+    expect(titles).toEqual(Array.from({ length: 8 }, () => 'Updated title'))
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+
+    mocks.stat.mockResolvedValue({ ...INDEX_STATS, mtimeMs: 9 })
+    mocks.open.mockImplementation(async () =>
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Latest title' })}\n`)
+    )
+    expect(await readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)).toBe(
+      'Latest title'
+    )
+    expect(mocks.open).toHaveBeenCalledTimes(2)
+  })
+
   it('evicts the Codex title index instead of pinning "no titles"', async () => {
     mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
     const refused = readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)

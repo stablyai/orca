@@ -1,4 +1,4 @@
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { buildAnyShellStdoutFence } from '../../shared/posix-stdout-fence'
 
 const COMMAND_ONLY_SHELLS = new Set(['sh', 'dash', 'csh', 'tcsh'])
@@ -17,7 +17,7 @@ export function buildSshLoginShellCommand(shell: string, command: string): SshLo
   // Why inside the login shell: both sshd's shell and this one read startup files that can print.
   const fence = buildAnyShellStdoutFence(command, 'SSH_LOGIN')
   return {
-    command: `${shellEscape(shell)} ${mode} ${shellEscape(fence.command)}`,
+    command: `${quotePosixShell(shell)} ${mode} ${quotePosixShell(fence.command)}`,
     readStdout: fence.readStdout
   }
 }

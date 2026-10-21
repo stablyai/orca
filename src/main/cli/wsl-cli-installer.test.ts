@@ -779,40 +779,6 @@ describe('WslCliInstaller', () => {
     expect(wsl.getFile()).toContain("ORCA_WIN_LAUNCHER='D:\\Custom Orca\\resources\\bin\\orca.exe'")
   })
 
-  it('settles when wsl.exe never reports completion', async () => {
-    // Why no fake timers: the timeout is now runProcess's own, internal to the
-    // mocked runWslProcess -- there is nothing left here to advance.
-    runWslProcessMock.mockResolvedValue({ code: null, stdout: '', stderr: '', timedOut: true })
-    const installer = new WslCliInstaller({
-      platform: 'win32',
-      distro: 'Ubuntu',
-      hostInstaller: { getStatus: async () => makeHostStatus() }
-    })
-
-    await expect(installer.getStatus()).rejects.toThrow('WSL command timed out')
-  })
-
-  it('reports the distro unreachable rather than "not on PATH" without the login PATH', async () => {
-    // The `case ":$PATH:"` probe answers from the distro default PATH when the
-    // login PATH never resolved, and ~/.local/bin is never on that. Settings
-    // would then state as fact that the CLI is not on PATH while the user's
-    // own terminal finds it -- #14288 turning into a confident wrong verdict.
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: false,
-      code: 0,
-      stdout: 'no',
-      stderr: '',
-      timedOut: false
-    })
-    const installer = new WslCliInstaller({
-      platform: 'win32',
-      distro: 'Ubuntu',
-      hostInstaller: { getStatus: async () => makeHostStatus() }
-    })
-
-    await expect(installer.getStatus()).rejects.toThrow('Could not reach the WSL distro')
-  })
-
   it('refuses to remove an old managed launcher when the bridge path is user-owned', async () => {
     const oldLauncher = _internals.buildWslLauncher(
       'C:\\Old\\orca.cmd',

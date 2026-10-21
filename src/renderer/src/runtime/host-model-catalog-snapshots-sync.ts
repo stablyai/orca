@@ -21,7 +21,7 @@ import {
   subscribeLocalRuntimeCapabilitiesKnown
 } from './local-runtime-capabilities'
 import { localStructuredChatsInUse } from './local-structured-chats'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
 
 // The settings that change which account (or binary) a new chat lists under, as the host reads them.

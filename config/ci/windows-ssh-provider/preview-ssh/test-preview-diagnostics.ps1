@@ -38,22 +38,52 @@ try {
 function Assert-IsolatedWindowsSshCi([string]$Arch){if($script:refuseCapabilityHost){throw 'Injected host refusal'}}
 function Assert-WindowsSshGlobalServerDormant([string]$Server){$script:globalChecks++;if($script:globalChecks -eq $script:refuseGlobalCheck){throw 'Injected global server refusal'}}
 function Assert-WindowsSshStockShell {$script:shellChecks++;if($script:shellChecks -eq $script:refuseShellCheck){throw 'Injected shell refusal'}}
-function Get-WindowsCapability([switch]$Online,[string]$Name){$script:capabilityQueries++;return @{State=$script:capabilityState}}
-function Add-WindowsCapability([switch]$Online,[string]$Name){$script:capabilityAdds++;if($script:failCapabilityInstall){throw 'Injected capability install failure'}}
+function Assert-CapabilityCommand([switch]$Online,[string]$Name,[string]$LogPath,[object]$ErrorAction,[string]$Operation){
+  if(-not $Online -or $Name -ne 'OpenSSH.Server~~~~0.0.1.0' -or $ErrorAction -ne 'Stop' -or [IO.Path]::GetDirectoryName($LogPath) -ne $script:capabilityLogs -or [IO.Path]::GetFileName($LogPath) -notlike "inbox-capability-$Operation-*.log"){throw 'Capability command changed its online identity, error handling or receipt log boundary'}
+  $script:capabilityLogPaths.Add($LogPath)
+  [IO.File]::WriteAllText($LogPath,"$Operation fixture")
+}
+function Get-WindowsCapability([switch]$Online,[string]$Name,[string]$LogPath,[object]$ErrorAction){
+  $script:capabilityQueries++;Assert-CapabilityCommand -Online:$Online -Name $Name -LogPath $LogPath -ErrorAction $ErrorAction -Operation 'query'
+  if($script:failCapabilityQuery){Write-Error 'Injected capability query failure' -ErrorAction $ErrorAction}
+  return @{State=$script:capabilityState}
+}
+function Add-WindowsCapability([switch]$Online,[string]$Name,[string]$LogPath,[object]$ErrorAction){
+  $script:capabilityAdds++;Assert-CapabilityCommand -Online:$Online -Name $Name -LogPath $LogPath -ErrorAction $ErrorAction -Operation 'install'
+  if($script:activeCapabilityReceipt){
+    $script:installObservedReceipt=Get-Content -LiteralPath $script:activeCapabilityReceipt -Raw | ConvertFrom-Json
+    if($script:installObservedReceipt.inboxCapabilityInitialState -ne 'NotPresent' -or $script:installObservedReceipt.inboxCapabilityOperations[0].status -ne 'passed' -or $script:installObservedReceipt.inboxCapabilityOperations[1].status -ne 'running'){throw 'Initial capability state was not durably recorded before installation'}
+  }
+  if($script:failCapabilityInstall){Write-Error 'Injected capability install failure' -ErrorAction $ErrorAction}
+  return @{Path='C:\';Online=$true;RestartNeeded=$script:capabilityRestartNeeded}
+}
 function Reset-CapabilityControl([string]$State){
   $script:capabilityState=$State;$script:capabilityQueries=0;$script:capabilityAdds=0
   $script:globalChecks=0;$script:shellChecks=0;$script:refuseGlobalCheck=0;$script:refuseShellCheck=0
-  $script:refuseCapabilityHost=$false;$script:failCapabilityInstall=$false
+  $script:refuseCapabilityHost=$false;$script:failCapabilityInstall=$false;$script:failCapabilityQuery=$false
+  $script:activeCapabilityReceipt=$null;$script:installObservedReceipt=$null;$script:capabilityRestartNeeded=$false
   $script:capabilityStages=[Collections.Generic.List[string]]::new()
+  $script:capabilityLogPaths=[Collections.Generic.List[string]]::new()
 }
+$script:capabilityLogs=Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
+try {
 foreach($state in @('Installed','NotPresent')){
   Reset-CapabilityControl $state
   $capabilityReport=@{}
-  Install-WindowsInboxSshCapability 'x64' $capabilityReport {param($name) $script:capabilityStages.Add($name)}
+  Install-WindowsInboxSshCapability 'x64' $capabilityReport {param($name) $script:capabilityStages.Add($name)} $script:capabilityLogs
   $expectedAdds=if($state -eq 'Installed'){0}else{1}
-  if($capabilityReport.inboxCapabilityInitialState -ne $state -or $script:capabilityAdds -ne $expectedAdds -or $script:globalChecks -ne 2 -or $script:shellChecks -ne 2 -or ($script:capabilityStages -join ',') -ne 'inbox-capability-start,inbox-capability-complete'){throw 'Shared capability preparation did not preserve the install and guard boundaries'}
+  $expectedStages=@('inbox-capability-start','inbox-capability-query-start','inbox-capability-query-finished')
+  if($expectedAdds){$expectedStages+=@('inbox-capability-install-start','inbox-capability-install-finished')}
+  $expectedStages+=@('inbox-capability-guards-start','inbox-capability-complete')
+  if($capabilityReport.inboxCapabilityInitialState -ne $state -or $script:capabilityQueries -ne 1 -or $script:capabilityAdds -ne $expectedAdds -or $script:globalChecks -ne 2 -or $script:shellChecks -ne 2 -or ($script:capabilityStages -join ',') -ne ($expectedStages -join ',')){throw 'Shared capability preparation did not preserve the install and guard boundaries'}
+  if($capabilityReport.inboxCapabilityOperations.Count -ne 1+$expectedAdds){throw 'Capability operations missing'}
+  foreach($operation in $capabilityReport.inboxCapabilityOperations){
+    if($operation.status -ne 'passed' -or $operation.elapsedMs -isnot [long] -or $operation.elapsedMs -lt 0 -or -not [IO.File]::Exists((Join-Path $script:capabilityLogs $operation.log))){throw 'Capability operation did not retain its timing, verdict or diagnostic log'}
+  }
+  if($expectedAdds -and ($capabilityReport.inboxCapabilityInstallResult.online -ne $true -or $capabilityReport.inboxCapabilityInstallResult.path -ne 'C:\' -or $capabilityReport.inboxCapabilityInstallResult.restartNeeded -ne $false)){throw 'Capability install result omitted'}
+  if(-not $expectedAdds -and $capabilityReport.ContainsKey('inboxCapabilityInstallResult')){throw 'Installed capability invented an install result'}
 }
-foreach($fault in @('host','global-before','shell-before','global-after','shell-after','install')){
+foreach($fault in @('host','global-before','shell-before','global-after','shell-after','query','install')){
   Reset-CapabilityControl 'NotPresent'
   switch($fault){
     'host' {$script:refuseCapabilityHost=$true}
@@ -61,26 +91,45 @@ foreach($fault in @('host','global-before','shell-before','global-after','shell-
     'shell-before' {$script:refuseShellCheck=1}
     'global-after' {$script:refuseGlobalCheck=2}
     'shell-after' {$script:refuseShellCheck=2}
+    'query' {$script:failCapabilityQuery=$true}
     'install' {$script:failCapabilityInstall=$true}
   }
   $rejected=$false
-  try {Install-WindowsInboxSshCapability 'x64' @{} {param($name) $script:capabilityStages.Add($name)}} catch {$rejected=$true}
+  $faultReport=@{}
+  try {Install-WindowsInboxSshCapability 'x64' $faultReport {param($name) $script:capabilityStages.Add($name)} $script:capabilityLogs} catch {$rejected=$true}
   if(-not $rejected -or $script:capabilityStages.Contains('inbox-capability-complete')){throw "Capability fault did not fail closed: $fault"}
   if($fault -in @('host','global-before','shell-before') -and $script:capabilityAdds){throw 'Capability mutation preceded its host guards'}
+  if($fault -eq 'query' -and $script:capabilityAdds){throw 'Failed query proceeded to installation'}
+  if($fault -in @('query','install') -and ($faultReport.inboxCapabilityOperations[-1].status -ne 'failed' -or $faultReport.inboxCapabilityOperations[-1].elapsedMs -isnot [long])){throw 'Failed servicing operation lost its verdict or duration'}
 }
+Reset-CapabilityControl 'NotPresent'
+foreach($invocation in 1..2){Install-WindowsInboxSshCapability 'x64' @{} {param($name) $script:capabilityStages.Add($name)} $script:capabilityLogs}
+if($script:capabilityLogPaths.Count -ne 4 -or ($script:capabilityLogPaths | Select-Object -Unique).Count -ne 4){throw 'Separate servicing operations or invocations reused a diagnostic log'}
+} finally {Remove-Item -LiteralPath $script:capabilityLogs -Recurse -Force -ErrorAction SilentlyContinue}
 $capabilityRoot=Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
 try {
   New-Item -ItemType Directory -Path $capabilityRoot | Out-Null
   $capabilityReceipt=Join-Path $capabilityRoot 'capability.json'
+  $script:capabilityLogs=$capabilityRoot
   Reset-CapabilityControl 'Installed'
   Initialize-WindowsInboxSshCapability 'x64' $capabilityReceipt
   $completed=Get-Content -LiteralPath $capabilityReceipt -Raw | ConvertFrom-Json
-  if($completed.status -ne 'passed' -or $completed.inboxCapabilityInitialState -ne 'Installed'){throw 'Capability success receipt missing its observed initial state'}
-  Reset-CapabilityControl 'NotPresent';$script:failCapabilityInstall=$true
+  if($completed.status -ne 'passed' -or $completed.inboxCapabilityInitialState -ne 'Installed' -or $completed.preparationMode -ne 'overlap'){throw 'Capability success receipt missing its observed initial state or default mode'}
+  Reset-CapabilityControl 'NotPresent';$script:capabilityLogs=$capabilityRoot;$script:activeCapabilityReceipt=$capabilityReceipt;$script:capabilityRestartNeeded=$true
+  Initialize-WindowsInboxSshCapability 'x64' $capabilityReceipt 'serial'
+  $installed=Get-Content -LiteralPath $capabilityReceipt -Raw | ConvertFrom-Json
+  if($installed.status -ne 'passed' -or $installed.preparationMode -ne 'serial' -or $installed.inboxCapabilityInstallResult.restartNeeded -ne $true -or -not $script:installObservedReceipt){throw 'Serial preparation lost its mode, restart result or pre-install receipt'}
+  Reset-CapabilityControl 'NotPresent';$script:activeCapabilityReceipt=$capabilityReceipt;$script:failCapabilityInstall=$true
   $rejected=$false
   try {Initialize-WindowsInboxSshCapability 'x64' $capabilityReceipt} catch {$rejected=$true}
   $failed=Get-Content -LiteralPath $capabilityReceipt -Raw | ConvertFrom-Json
   if(-not $rejected -or $failed.status -ne 'failed' -or $failed.inboxCapabilityInitialState -ne 'NotPresent' -or $failed.error -ne 'Injected capability install failure'){throw 'Failed capability preparation masqueraded as a passing receipt'}
+  if($failed.inboxCapabilityOperations[-1].status -ne 'failed' -or -not $failed.stages.stage.Contains('inbox-capability-install-finished')){throw 'Failed preparation omitted its servicing result'}
+  Reset-CapabilityControl 'NotPresent';$script:failCapabilityQuery=$true
+  $rejected=$false
+  try {Initialize-WindowsInboxSshCapability 'x64' $capabilityReceipt} catch {$rejected=$true}
+  $failedQuery=Get-Content -LiteralPath $capabilityReceipt -Raw | ConvertFrom-Json
+  if(-not $rejected -or $failedQuery.status -ne 'failed' -or $failedQuery.inboxCapabilityOperations[0].status -ne 'failed' -or $failedQuery.inboxCapabilityOperations.Count -ne 1 -or $script:capabilityAdds -or $failedQuery.inboxCapabilityInitialState){throw 'Failed query receipt invented a capability state or proceeded to installation'}
 } finally {Remove-Item -LiteralPath $capabilityRoot -Recurse -Force -ErrorAction SilentlyContinue}
 & {
   param($ProofAst)

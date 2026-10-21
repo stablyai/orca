@@ -1,6 +1,6 @@
-import { accessSync, constants, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
+import { dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime/types'
@@ -17,6 +17,7 @@ import {
   resolveServeServiceManager,
   type ServeServiceSpec
 } from '../runtime/serve-service-unit'
+import { resolveServiceCommand } from '../runtime/serve-app-launcher'
 
 type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
 
@@ -54,58 +55,6 @@ function requireManager(platform: NodeJS.Platform): void {
       '`orca serve service` is not available on Windows yet. Run `orca serve` under a service wrapper of your own.'
     )
   }
-}
-
-function isVersionScopedDir(dir: string, userData: string): boolean {
-  const inside = relative(userData, dir)
-  return (
-    inside === '' ||
-    (!inside.startsWith('..') && !isAbsolute(inside)) ||
-    dir.includes('orcad-artifacts') ||
-    dir.includes('/.mount_')
-  )
-}
-
-/** The stable launcher on PATH: a version-specific executable would vanish with the next update. */
-export function resolveServiceCommand(
-  explicit: string | null,
-  deps: Pick<ServeServiceDeps, 'platform' | 'env'>
-): string {
-  const isExecutable = (path: string): boolean => {
-    try {
-      accessSync(path, constants.X_OK)
-      return true
-    } catch {
-      return false
-    }
-  }
-  if (explicit) {
-    if (!isAbsolute(explicit) || !isExecutable(explicit)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `--command must be an absolute path to an executable: ${explicit}`
-      )
-    }
-    return explicit
-  }
-  // Why only orca-ide on Linux: a bare `orca` there is often GNOME's screen reader.
-  const names = deps.platform === 'linux' ? ['orca-ide'] : ['orca']
-  const userData = resolveLaunchUserDataPath(deps.env)
-  for (const dir of (deps.env.PATH ?? '').split(delimiter).filter(isAbsolute)) {
-    // Why skip: launchers under the profile or a mounted AppImage point at one version's files.
-    if (isVersionScopedDir(dir, userData)) {
-      continue
-    }
-    for (const name of names) {
-      if (isExecutable(join(dir, name))) {
-        return join(dir, name)
-      }
-    }
-  }
-  throw new RuntimeClientError(
-    'cli_not_found',
-    'Could not find the `orca` command on PATH. Install it from Orca Settings, or pass --command <absolute path>.'
-  )
 }
 
 function serviceSpec(

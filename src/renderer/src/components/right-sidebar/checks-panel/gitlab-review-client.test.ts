@@ -47,7 +47,8 @@ describe('GitLab checks-panel provider adapter', () => {
       repoId: 'repo-1',
       repoOwnerExecutionHostId: 'ssh:devbox',
       iid: 17,
-      type: 'mr'
+      type: 'mr',
+      includeReviewDetails: false
     })
     expect(gl.resolveMRDiscussion).toHaveBeenCalledOnce()
   })
@@ -64,7 +65,12 @@ describe('GitLab checks-panel provider adapter', () => {
     expect(runtime.call).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'owner-runtime' },
       'gitlab.workItemDetails',
-      expect.objectContaining({ repo: 'id:repo-1', iid: 17, type: 'mr' }),
+      expect.objectContaining({
+        repo: 'id:repo-1',
+        iid: 17,
+        type: 'mr',
+        includeReviewDetails: false
+      }),
       { timeoutMs: 30_000 }
     )
   })

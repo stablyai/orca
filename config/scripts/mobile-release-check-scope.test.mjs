@@ -90,19 +90,27 @@ it('gates Ruby independently and retains mobile static validation', () => {
     'Setup Ruby and fastlane',
     'Test iOS release version resolution',
     'Test TestFlight lane arguments',
-    'Smoke-check the Fastfile'
+    'Smoke-check the Fastfile',
+    'Smoke-check CocoaPods'
   ])
   for (const step of gated) {
     expect(step.if).toBe("steps.ruby-scope.outputs.should_run != 'false'")
   }
-  for (const name of ['Typecheck', 'Typecheck tests (ratchet)', 'Lint', 'Check formatting']) {
+  for (const name of [
+    'Lint mobile imports with mobile dependencies installed',
+    'Typecheck',
+    'Typecheck tests (ratchet)',
+    'Lint',
+    'Check formatting'
+  ]) {
     expect(steps.find((step) => step.name === name)?.if).toBeUndefined()
     expect(steps.some((step) => step.name === name)).toBe(true)
   }
   for (const file of [
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-release-check-scope.test.mjs',
-    'config/scripts/pr-code-change-scope.mjs'
+    'config/scripts/pr-code-change-scope.mjs',
+    'config/scripts/pr-package-test-paths.mjs'
   ]) {
     expect(workflow.on.pull_request.paths.some((pattern) => matchesGlob(file, pattern))).toBe(true)
   }
@@ -137,6 +145,7 @@ function fixture(detectorStep = detector) {
   for (const file of [
     'package.json',
     'config/scripts/pr-code-change-scope.mjs',
+    'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-test-change-scope.mjs'

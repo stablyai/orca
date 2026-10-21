@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import type { FileContent } from './editor-panel-content-types'
@@ -13,8 +13,8 @@ import {
 } from './useEditorPanelFileContentLoader'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeFileClient>()),
+vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 

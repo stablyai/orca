@@ -23,6 +23,8 @@ import {
 import { listHostQualifiedDetectedWorktrees } from './host-qualified-worktree-listing'
 import { findExactRepoOwner, isCapturedRepoCurrent } from './worktree-host-ownership'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restoring-sessions/invalid-workspace-layout-purge'
 
 export const DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS = 30_000
 
@@ -113,6 +115,9 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
           isCapturedRepoCurrent(store, repo) &&
           (!connectionId || (authority !== undefined && isCurrentSshProviderAuthority(authority)))
       )
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        dropWorkspacesTheListingInvalidates(store, result)
+      }
       return result && !('providerAbortStatus' in result)
         ? result
         : {

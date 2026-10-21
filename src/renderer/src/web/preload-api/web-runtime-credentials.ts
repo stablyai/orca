@@ -37,7 +37,7 @@ export function webRuntimeCredentialFor(
     throw new Error('No runtime endpoint is stored for this web client.')
   }
   const support = readWebDeviceKeySupport()
-  if (!support) {
+  if (!support || support === 'token-insecure-origin') {
     return tokenOnlyCredentialSource(endpoint.deviceToken)
   }
   keyStore ??=

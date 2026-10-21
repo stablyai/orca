@@ -81,6 +81,9 @@ export function parseRelayLoadArguments(argv) {
     values.get('--duration-seconds') ?? 900
   ) * 1000
   const splices = integer('--splices', 0)
+  const resumePhones = integer('--resume-phones', 0)
+  const resumeIntervalMs = integer('--resume-interval-seconds', 20) * 1000
+  const resumeHoldMs = integer('--resume-hold-seconds', 10) * 1000
   const spliceRampMs = integer('--splice-ramp-seconds', 0) * 1000
   const slowReaderSplices = integer('--slow-reader-splices', 0)
   const wedgedReaderSplices = integer('--wedged-reader-splices', 0)
@@ -112,6 +115,12 @@ export function parseRelayLoadArguments(argv) {
   if (controls < 1 || controls > 10_000) throw new Error('--controls must be between 1 and 10000')
   if (rebindProbes > controls) throw new Error('--rebind-probes cannot exceed --controls')
   if (splices > controls) throw new Error('--splices cannot exceed --controls')
+  if (splices + resumePhones > controls) {
+    throw new Error('--splices plus --resume-phones cannot exceed --controls')
+  }
+  if (resumePhones > 0 && resumeIntervalMs < 1_000) {
+    throw new Error('--resume-interval-seconds must be at least 1')
+  }
   if (shardCount > 1 && capacityHardCap !== undefined) {
     if (!values.has('--aggregate-controls') || !values.has('--aggregate-splices')) {
       throw new Error('capacity-bound sharding requires explicit aggregate controls and splices')
@@ -320,6 +329,9 @@ export function parseRelayLoadArguments(argv) {
     aggregateReaderBytes,
     signingKeyFile: values.get('--signing-key-file'),
     splices,
+    resumePhones,
+    resumeIntervalMs,
+    resumeHoldMs,
     spliceRampMs,
     splicePayloadBytes,
     slowReaderSplices,
@@ -345,6 +357,14 @@ export function relayLoadSpliceIndexes(config) {
   return Array.from(
     { length: config.splices },
     (_, localIndex) => localIndex * config.shardCount + config.shardIndex
+  )
+}
+
+// Resume phones ride the controls after the splice controls, so the two never share a peer.
+export function relayLoadResumePhoneIndexes(config) {
+  return Array.from(
+    { length: config.resumePhones },
+    (_, localIndex) => (config.splices + localIndex) * config.shardCount + config.shardIndex
   )
 }
 

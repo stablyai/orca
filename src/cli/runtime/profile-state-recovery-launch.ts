@@ -12,11 +12,12 @@ import {
   resolveAppRoot,
   resolveForegroundOrcaExecutable,
   stripElectronRunAsNode
-} from './launch'
+} from './orca-app-executable'
 import { RuntimeClientError } from './types'
+import { canStartOrcaServer } from './serve-app-launcher'
 
 export function canLaunchProfileStateRecovery(): boolean {
-  return process.env.ELECTRON_RUN_AS_NODE === '1' || !!process.env.ORCA_APP_EXECUTABLE?.trim()
+  return canStartOrcaServer(process.env)
 }
 
 export async function launchProfileStateRecovery(

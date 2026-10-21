@@ -4,6 +4,14 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -26,7 +34,7 @@ describe('generated agent tab titles', () => {
     vi.useRealTimers()
   })
 
-  it('stays disabled by default when agent prompts arrive', () => {
+  it('stays disabled by default when agent prompts arrive', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, false)
@@ -36,12 +44,13 @@ describe('generated agent tab titles', () => {
       prompt: 'Refactor the auth middleware',
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBeUndefined()
     expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBeUndefined()
   })
 
-  it('generates one stable title from the first known agent prompt when enabled', () => {
+  it('generates one stable title from the first known agent prompt when enabled', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -51,11 +60,13 @@ describe('generated agent tab titles', () => {
       prompt: 'Can you please refactor the auth middleware to use JWT tokens?',
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
     store.getState().setAgentStatus(makePaneKey(tabId, LEAF_ID), {
       state: 'working',
       prompt: 'Replace this with a later task name',
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Refactor the auth middleware to use JWT'
@@ -65,7 +76,7 @@ describe('generated agent tab titles', () => {
     )
   })
 
-  it('replaces a raw dispatch preamble title when orchestration display metadata arrives', () => {
+  it('replaces a raw dispatch preamble title when orchestration display metadata arrives', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -83,6 +94,7 @@ orca orchestration send --to term_parent
 Implement the detailed worker instructions that should not be the short label`,
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Implement the detailed worker'
@@ -96,6 +108,7 @@ Implement the detailed worker instructions that should not be the short label`,
         displayName: 'Better worker label'
       }
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Better worker label'
@@ -105,7 +118,7 @@ Implement the detailed worker instructions that should not be the short label`,
     )
   })
 
-  it('does not replace with sticky orchestration when a new non-dispatch prompt arrives', () => {
+  it('does not replace with sticky orchestration when a new non-dispatch prompt arrives', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -124,6 +137,7 @@ Implement the detailed worker instructions that should not be the short label`
       prompt: dispatchPrompt,
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
     store.getState().setRuntimeAgentOrchestrationByPaneKey({
       [paneKey]: {
         taskId: 'task-1',
@@ -132,6 +146,7 @@ Implement the detailed worker instructions that should not be the short label`
         displayName: 'Better worker label'
       }
     })
+    await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Better worker label'
     )
@@ -143,13 +158,14 @@ Implement the detailed worker instructions that should not be the short label`
       prompt: 'Refactor the auth middleware to use JWT tokens for session recovery',
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Better worker label'
     )
   })
 
-  it('generates from a new non-dispatch prompt when sticky orchestration remains but no title exists', () => {
+  it('generates from a new non-dispatch prompt when sticky orchestration remains but no title exists', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -165,6 +181,7 @@ Your task ID is: task-1
 Old dispatch task that already finished`,
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
     store.getState().setRuntimeAgentOrchestrationByPaneKey({
       [paneKey]: {
         taskId: 'task-1',
@@ -173,6 +190,7 @@ Old dispatch task that already finished`,
         displayName: 'Stale worker label'
       }
     })
+    await layoutApplyTestTransport.settle()
     // Clear any title set during the dispatch turn so the next non-dispatch
     // prompt is a pure first-write with sticky orchestration still present.
     const tabs = store.getState().tabsByWorktree[WORKTREE_ID]
@@ -196,6 +214,7 @@ Old dispatch task that already finished`,
       prompt: 'Can you please refactor the auth middleware to use JWT tokens?',
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Refactor the auth middleware to use JWT'
@@ -205,7 +224,7 @@ Old dispatch task that already finished`,
     )
   })
 
-  it('does not re-pin sticky task A labels onto a later dispatch task B preamble', () => {
+  it('does not re-pin sticky task A labels onto a later dispatch task B preamble', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -220,6 +239,7 @@ Your task ID is: task-a
 Implement task A worker instructions that should not stick`,
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
     store.getState().setRuntimeAgentOrchestrationByPaneKey({
       [paneKey]: {
         taskId: 'task-a',
@@ -228,6 +248,7 @@ Implement task A worker instructions that should not stick`,
         displayName: 'Worker A label'
       }
     })
+    await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe('Worker A label')
 
     store.getState().setAgentStatus(paneKey, {
@@ -239,13 +260,14 @@ Your task ID is: task-b
 Implement task B worker instructions for the next dispatch`,
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Implement task B worker instructions'
     )
   })
 
-  it('does not force-replace titles when sticky orchestration updates after a non-dispatch prompt', () => {
+  it('does not force-replace titles when sticky orchestration updates after a non-dispatch prompt', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -256,6 +278,7 @@ Implement task B worker instructions for the next dispatch`,
       prompt: 'Can you please refactor the auth middleware to use JWT tokens?',
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Refactor the auth middleware to use JWT'
     )
@@ -268,13 +291,14 @@ Implement task B worker instructions for the next dispatch`,
         displayName: 'Stale orchestration label'
       }
     })
+    await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
       'Refactor the auth middleware to use JWT'
     )
   })
 
-  it('does not trim the full paste-sized prompt before generating an optional title', () => {
+  it('does not trim the full paste-sized prompt before generating an optional title', async () => {
     vi.useFakeTimers()
     const trimSpy = vi.spyOn(String.prototype, 'trim')
     const store = createTestStore()
@@ -286,6 +310,7 @@ Implement task B worker instructions for the next dispatch`,
       prompt,
       agentType: 'codex'
     })
+    await layoutApplyTestTransport.settle()
 
     const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
     expect(tab.generatedTitle).toBe('Fix the flaky status tests large pasted')
@@ -296,7 +321,7 @@ Implement task B worker instructions for the next dispatch`,
     ).toBe(false)
   })
 
-  it('keeps manual rename precedence over generated and live titles', () => {
+  it('keeps manual rename precedence over generated and live titles', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
@@ -306,15 +331,18 @@ Implement task B worker instructions for the next dispatch`,
       prompt: 'Fix the flaky status tests',
       agentType: 'claude'
     })
+    await layoutApplyTestTransport.settle()
     store.getState().updateTabTitle(tabId, 'Claude working')
+    await layoutApplyTestTransport.settle()
     store.getState().setTabCustomTitle(tabId, 'Status tests')
+    await layoutApplyTestTransport.settle()
 
     const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
     expect(resolveTerminalTabTitle(tab, true)).toBe('Status tests')
     expect(tab.generatedTitle).toBe('Fix the flaky status tests')
   })
 
-  it('does not generate a title for quick command labeled tabs', () => {
+  it('does not generate a title for quick command labeled tabs', async () => {
     vi.useFakeTimers()
     const store = createTestStore()
     seedStore(store, {
@@ -335,6 +363,7 @@ Implement task B worker instructions for the next dispatch`,
       prompt: 'Fix the flaky status tests',
       agentType: 'claude'
     })
+    await layoutApplyTestTransport.settle()
 
     const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
     expect(tab.generatedTitle).toBeUndefined()

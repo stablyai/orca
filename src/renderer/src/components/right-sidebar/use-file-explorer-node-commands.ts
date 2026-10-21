@@ -5,8 +5,8 @@ import { useAppStore } from '@/store'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   buildAddProjectFromFolderModalData,
@@ -118,7 +118,10 @@ export function useFileExplorerNodeCommands({
       const state = useAppStore.getState()
       const owner = getWorkspaceFileRevealOwner(state, activeWorktreeId, {
         connectionId: activeRepo?.connectionId ?? null,
-        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+        runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+          state,
+          activeWorktreeId
+        )
       })
       if (isLocalPathOpenBlocked(owner)) {
         showLocalPathOpenBlockedToast()

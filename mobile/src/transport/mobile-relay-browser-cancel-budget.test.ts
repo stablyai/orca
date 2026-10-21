@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RuntimeBrowserScreencastController } from '../../../src/main/runtime/runtime-browser-screencast-controller'
-import type { RuntimeBrowserCommands } from '../../../src/main/runtime/orca-runtime-browser'
 import type { BrowserScreencastResult } from '../../../src/shared/runtime-types'
+import type { RpcBinarySender } from '../../../src/main/runtime/rpc/rpc-binary-sender'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import type { RpcResponse } from './types'
 
@@ -14,7 +14,7 @@ describe('relay browser cancellation resource budget', () => {
     let stopped = false
     let frameSends = 0
     let frameBytes = 0
-    let sendBinary: (bytes: Uint8Array) => boolean | void = () => false
+    let sendBinary: RpcBinarySender = () => false
     let hostRun: Promise<void> | undefined
     const methods: string[] = []
     const cleanup = (id: string): void => {
@@ -23,24 +23,36 @@ describe('relay browser cancellation resource budget', () => {
       void release?.()
     }
     const host = new RuntimeBrowserScreencastController({
-      getCommands: () =>
-        ({
-          browserScreencast: async (_params, stream) => {
-            sendBinary = stream.sendBinary
-            return {
+      getCommands: () => ({
+        browserScreencast: async (_params, stream) => {
+          sendBinary = stream.sendBinary
+          return {
+            subscriptionId: 'server-stream',
+            ready: {
+              type: 'ready',
               subscriptionId: 'server-stream',
-              ready: { type: 'ready', subscriptionId: 'server-stream', browserPageId: 'page' },
-              session: {
-                done: done.promise,
-                stop: () => {
-                  stopped = true
-                  done.resolve()
-                }
+              browserPageId: 'page',
+              format: 'jpeg',
+              tab: {
+                browserPageId: 'page',
+                index: 0,
+                url: 'about:blank',
+                title: 'Browser',
+                active: true
+              }
+            },
+            session: {
+              done: done.promise,
+              stop: () => {
+                stopped = true
+                done.resolve()
               },
-              flushPendingFrame: () => {}
-            }
+              updateViewport: async () => {}
+            },
+            flushPendingFrame: () => {}
           }
-        }) as RuntimeBrowserCommands,
+        }
+      }),
       registerSubscriptionCleanup: (id, release) => subscriptions.set(id, release),
       cleanupSubscription: cleanup,
       getDriver: () => ({ kind: 'idle' }),

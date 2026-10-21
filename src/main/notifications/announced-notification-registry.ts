@@ -18,7 +18,7 @@ import {
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 
-type AnnouncedNotification = { id: string; origin?: StructuredAttentionOrigin }
+export type AnnouncedNotification = { id: string; origin?: StructuredAttentionOrigin }
 
 export type AnnouncedNotificationRegistry = {
   record: (paneKey: string, notificationId: string, origin?: StructuredAttentionOrigin) => void

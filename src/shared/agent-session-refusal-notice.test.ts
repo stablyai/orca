@@ -46,7 +46,8 @@ const WRITES: AgentSessionWriteKind[] = [
   'command',
   'clear',
   'compact',
-  'goal'
+  'goal',
+  'queued-edit'
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 
@@ -96,7 +97,8 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   command: 'notDoneCommand',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal'
+  goal: 'notDoneGoal',
+  'queued-edit': 'notDoneQueuedEdit'
 }
 
 function codeOf(failure: AgentSessionWriteFailure): string {
@@ -393,7 +395,10 @@ describe('the notice for every reason a host names', () => {
             words.action === 'goElsewhere' ||
             words.action === 'updateOrca'
         )
-        expect(retryNow, cell).toBe(words.cause === 'historyUnavailable')
+        // A card's Cancel that was not saved names its step: its notice has no Retry beside it.
+        expect(retryNow, cell).toBe(
+          words.cause === 'historyUnavailable' || words.cause === 'cancelNotSaved'
+        )
       }
     }
   })
@@ -451,12 +456,21 @@ describe('the notice for every reason a host names', () => {
       }
       const notDone = parts.filter((part) => typeof part === 'string' && part.startsWith('notDone'))
       const answeredAway = write === 'answer' && parts.includes('questionChanged')
+      // "...so your answer was not sent" is that sentence's own.
+      const ownerStopped =
+        write === 'answer' &&
+        parts.some(
+          (part) => typeof part === 'object' && 'surface' in part && part.surface === 'answer'
+        )
       const unsupported =
         failure.code === 'structured_agent_session_unsupported' &&
         failure.details?.reason !== 'hostUnsupported' &&
         write !== 'read-history'
       const saysNotDone =
-        write === 'read-history' && failure.code === 'agent_session_journal_unreadable'
+        write === 'read-history' &&
+        (failure.code === 'agent_session_journal_unreadable' ||
+          (failure.code === 'agent_session_identity_required' &&
+            failure.details?.reason === 'transcriptUnreadable'))
       // "Run /clear when it's done" already says the command has yet to happen.
       const clearWhileWorking = (
         [
@@ -466,8 +480,20 @@ describe('the notice for every reason a host names', () => {
           'compactAfterAnswer'
         ] as const
       ).some((sentence) => parts.includes(sentence))
+      // "Couldn't stop Codex." and the card's own words already say the Cancel did not happen.
+      const stopFailed =
+        write === 'stop' &&
+        failure.code === 'agent_session_operation_invalid' &&
+        (failure.details?.reason === 'stopFailed' || failure.details?.reason === 'cancelNotSaved')
       expect(notDone, cell).toEqual(
-        answeredAway || unsupported || saysNotDone || clearWhileWorking ? [] : [NOT_DONE[write]]
+        answeredAway ||
+          ownerStopped ||
+          unsupported ||
+          saysNotDone ||
+          clearWhileWorking ||
+          stopFailed
+          ? []
+          : [NOT_DONE[write]]
       )
     }
   })
@@ -536,6 +562,19 @@ describe('the notice for every reason a host names', () => {
     expect(
       agentSessionRefusalNotice({ code, message: HOST_TEXT, details: { reason } }, write)
     ).toBe(expected)
+  })
+})
+
+describe('an answer to a prompt whose agent stopped', () => {
+  it('names the agent the client knows, on the phone and on desktop alike', () => {
+    const refusal = {
+      code: 'agent_session_operation_invalid' as const,
+      message: HOST_TEXT,
+      details: { reason: 'promptOwnerEnded' as const }
+    }
+    expect(agentSessionRefusalNotice(refusal, 'answer', { agentName: 'Codex' })).toBe(
+      'Codex has stopped, so your answer was not sent. Send a message to continue.'
+    )
   })
 })
 

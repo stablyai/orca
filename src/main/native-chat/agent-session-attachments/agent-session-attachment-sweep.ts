@@ -1,8 +1,9 @@
 // When a stored attachment may go, re-derived on every sweep from the disk and the claim table.
 //
 // - A part file nobody is writing (the uploader crashed or vanished) goes after an hour.
-// - An upload no message ever claimed goes after a day: its chip was removed or its draft
-//   abandoned. The sweep first marks it in the same database the claims live in, and only if no
+// - An upload no message ever claimed goes after 30 days: its chip was removed or its draft
+//   abandoned. A draft names its image by this path, so the window is how long an unsent draft
+//   keeps it. The sweep first marks it in the same database the claims live in, and only if no
 //   claim exists; a send that names it afterwards is refused instead of losing its file.
 // - A claimed upload stays while any chat holding it has a record. The host never deletes a chat
 //   today, so that is as long as its transcript.
@@ -10,6 +11,7 @@
 
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
 import {
   finishUploadSweep,
@@ -21,7 +23,7 @@ import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-r
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
 export const ABANDONED_PART_MAX_AGE_MS = 60 * 60 * 1000
-export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
   /** The host's journal connection, or null when it cannot take writes (closed, or written by a
@@ -30,6 +32,8 @@ export type AgentSessionAttachmentSweepFacts = {
   /** Every chat this host holds a record for; null while that list is incomplete (records still
    *  owed their import), when no chat's claims can be judged orphaned. */
   recordedSessionIds: () => Pick<ReadonlySet<string>, 'has'> | null
+  /** After each removal attempt, before the database work that may throw. */
+  onUploadRemoved?: (uploadDir: string) => void
 }
 
 export type AgentSessionAttachmentSweepResult = { removed: string[] }
@@ -42,8 +46,12 @@ export async function sweepAgentSessionAttachments(
   const removed: string[] = []
   // Read again at every statement: the host may close the connection while the sweep awaits disk.
   const { database } = facts
+  const remove = async (uploadDir: string): Promise<void> => {
+    await removeQuietly(uploadDir)
+    facts.onUploadRemoved?.(uploadDir)
+  }
   for (const uploadId of withDatabase(database, listUploadsBeingSwept) ?? []) {
-    await removeQuietly(join(store.rootDir, uploadId))
+    await remove(join(store.rootDir, uploadId))
     withDatabase(database, (db) => finishUploadSweep(db, uploadId))
   }
   for (const uploadId of await listDirectories(store.rootDir)) {
@@ -51,13 +59,13 @@ export async function sweepAgentSessionAttachments(
       continue
     }
     const uploadDir = join(store.rootDir, uploadId)
-    const stored = (await listEntries(uploadDir)).some(
+    const stored = (await readdir(uploadDir)).some(
       (entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE
     )
     const ageMs = now - (await modifiedAt(uploadDir))
     if (!stored) {
       if (ageMs > ABANDONED_PART_MAX_AGE_MS) {
-        await removeQuietly(uploadDir)
+        await remove(uploadDir)
         removed.push(uploadDir)
       }
       continue
@@ -69,7 +77,7 @@ export async function sweepAgentSessionAttachments(
     ) {
       continue
     }
-    await removeQuietly(uploadDir)
+    await remove(uploadDir)
     withDatabase(database, (db) => finishUploadSweep(db, uploadId))
     removed.push(uploadDir)
   }
@@ -90,20 +98,15 @@ function withDatabase<T>(
   return db ? run(db) : undefined
 }
 
-async function listEntries(dir: string): Promise<string[]> {
-  try {
-    return await readdir(dir)
-  } catch {
-    return []
-  }
-}
-
 async function listDirectories(dir: string): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true })
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
-  } catch {
-    return []
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return []
+    }
+    throw error
   }
 }
 

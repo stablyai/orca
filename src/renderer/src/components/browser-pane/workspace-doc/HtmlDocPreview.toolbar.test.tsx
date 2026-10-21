@@ -7,6 +7,7 @@
 import { act } from 'react'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type * as WebviewRegistryModule from '../host-guest/webview-registry'
+import type * as DocPreviewArtifactShareModule from './doc-preview-artifact-share'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -22,24 +23,46 @@ const clipboard = vi.hoisted(() => ({ writes: [] as string[] }))
 const grabCalls: { browserPageId: string; enabled: boolean }[] = []
 const osOpens: string[] = []
 
-vi.mock('@/lib/doc-preview-grants', () => ({
-  buildDocPreviewGrantRequest: () => ({
+const grants = vi.hoisted(() => {
+  const mintedLocation = {
     owner: {
       kind: 'runtime' as const,
       environmentId: 'env-1',
       worktreeSelector: 'id:wt-1',
       worktreeRoot: '/repo'
     },
+    requestBase: '/repo',
     root: '/repo',
-    entryRelativePath: ENTRY_RELATIVE_PATH
-  }),
+    entryRelativePath: 'docs/reports/index.html'
+  }
+  const shareControlCalls: unknown[][] = []
+  return { mintedLocation, requestLocation: mintedLocation, shareControlCalls }
+})
+
+vi.mock('@/lib/doc-preview-grants', () => ({
+  buildDocPreviewGrantRequest: () => grants.requestLocation,
+  // The real cache keeps the first mint's handle for the tab, whatever a later request says.
   ensureDocPreviewGrant: () =>
     Promise.resolve({
       grantId: GRANT_ID,
-      url: `orca-preview://${GRANT_ID}/${ENTRY_RELATIVE_PATH}`
+      url: `orca-preview://${GRANT_ID}/${ENTRY_RELATIVE_PATH}`,
+      location: grants.mintedLocation
     }),
   releaseDocPreviewGrant: () => undefined
 }))
+
+vi.mock('./doc-preview-artifact-share', async (importOriginal) => {
+  const actual = await importOriginal<typeof DocPreviewArtifactShareModule>()
+  return {
+    ...actual,
+    buildDocPreviewShareControl: (
+      ...args: Parameters<typeof actual.buildDocPreviewShareControl>
+    ) => {
+      grants.shareControlCalls.push(args)
+      return actual.buildDocPreviewShareControl(...args)
+    }
+  }
+})
 
 vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
   ...(await importOriginal<typeof WebviewRegistryModule>()),
@@ -274,6 +297,27 @@ describe('HtmlDocPreview browser chrome', () => {
     await act(async () => root.unmount())
     mounted = false
     expect(hasLiveBrowserGuest('preview-1')).toBe(false)
+  })
+
+  // Why: Share must read and key from the host the grant was minted for, not the one selected now.
+  it('shares through the minted grant even after the workspace resolves to another host', async () => {
+    grants.shareControlCalls.length = 0
+    await renderPreview(container, root)
+    expect(grants.shareControlCalls.at(-1)).toEqual([ABSOLUTE_PATH, grants.mintedLocation])
+    expect(button(container, 'Share as artifact')).not.toBeNull()
+
+    grants.requestLocation = {
+      ...grants.mintedLocation,
+      owner: { ...grants.mintedLocation.owner, environmentId: 'env-2' }
+    }
+    storeState.settings = { activeRuntimeEnvironmentId: 'env-2' }
+    try {
+      await renderPreview(container, root)
+      expect(grants.shareControlCalls.at(-1)).toEqual([ABSOLUTE_PATH, grants.mintedLocation])
+    } finally {
+      grants.requestLocation = grants.mintedLocation
+      storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    }
   })
 
   it('identifies the document by its workspace path and owning machine', async () => {

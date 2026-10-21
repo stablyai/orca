@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import type {

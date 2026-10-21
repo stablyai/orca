@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 
 const PAGE: BrowserClientPageRendererIdentity = {
@@ -81,8 +81,9 @@ describe('browser client page retained registry', () => {
     expect(webview.getAttribute('src')).toBe('about:blank')
     expect(webview.getAttribute('partition')).toBe(PAGE.partition)
     expect(webview.getAttribute('webpreferences')).toBe(
-      ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE
+      ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE
     )
+    expect(webview.getAttribute('webpreferences')).toContain('transparent=false')
     expect(webview.hasAttribute('allowpopups')).toBe(false)
     expect(webview.parentElement?.parentElement?.parentElement).toBe(document.body)
     expect(webview.isConnected).toBe(true)

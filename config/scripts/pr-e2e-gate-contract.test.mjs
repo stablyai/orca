@@ -27,16 +27,16 @@ describe('restart-survival E2E routing', () => {
   // Every file below carries behavior the restart spec is the only test that exercises end to end.
   it.each([
     'src/main/runtime/orca-runtime.ts',
-    'src/main/runtime/orca-runtime-browser.ts',
+    'src/main/runtime/browser/browser-commands.ts',
     'src/main/runtime/client-hosted-page-reconciliation-window.ts',
     'src/main/runtime/runtime-browser-client-page-adoption.ts',
     'src/main/runtime/runtime-browser-client-page-recovery.ts',
-    'src/main/runtime/browser-host-client-page-adoption.ts',
-    'src/main/runtime/browser-host-page-reconciliation-orchestration.ts',
+    'src/main/runtime/browser-host/browser-host-client-page-adoption.ts',
+    'src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.ts',
     'src/main/runtime/rpc/methods/browser-client-host.ts',
     'src/main/browser/browser-client-host-authority-replacement-wait.ts',
     'src/main/browser/paired-runtime-browser-client-host-composition.ts',
-    'src/renderer/src/runtime/web-session-tabs-sync.ts',
+    'src/renderer/src/runtime/web-session-tabs-sync/snapshot-api.ts',
     'src/renderer/src/runtime/host-session-snapshot-authority.ts',
     'src/renderer/src/runtime/restored-client-hosted-browser-host-attach.ts',
     'src/renderer/src/store/slices/runtime-status.ts',
@@ -44,6 +44,9 @@ describe('restart-survival E2E routing', () => {
     'src/shared/browser-client-host-protocol.ts'
   ])('routes %s', (path) => {
     expect(restartSurvivalRoute.matches(path)).toBe(true)
+    if (path === 'src/main/runtime/browser/browser-commands.ts') {
+      expect(existsSync(join(projectDir, path))).toBe(true)
+    }
   })
 
   // The pattern is deliberately not "anything under src": routing every PR at a two-Electron spec
@@ -53,7 +56,12 @@ describe('restart-survival E2E routing', () => {
     'src/renderer/src/components/tab-bar/BrowserTab.tsx',
     'src/main/terminal/pty-manager.ts',
     // The status/types entries name whole files, not a suffix any longer name may end with.
-    'src/shared/computer-use-runtime-types.ts'
+    'src/shared/computer-use-runtime-types.ts',
+    'src/main/runtime/browser/browser-commands.test.ts',
+    'src/main/runtime/browser/browser-commands.test-fixture.ts',
+    'src/main/runtime/browser/browser-commands.fixture.ts',
+    'src/main/runtime/browser/browser-commands-extra.ts',
+    'src/main/runtime/browser/browser-navigation.ts'
   ])('does not route %s', (path) => {
     expect(restartSurvivalRoute.matches(path)).toBe(false)
   })
@@ -129,8 +137,9 @@ describe('PR E2E gate contract', () => {
       'src/main/daemon/daemon-pty-spawn-result.ts',
       'src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts',
       'src/renderer/src/components/terminal-pane/terminal-error-accumulation.ts',
-      'src/renderer/src/runtime/web-runtime-session.ts',
-      'src/renderer/src/runtime/web-session-tabs-sync.ts',
+      'src/renderer/src/runtime/web-runtime-terminal-creation.ts',
+      'src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts',
+      'src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts',
       'src/renderer/src/runtime/web-session-terminal-orphan-recovery.ts',
       'src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption.ts',
       'src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts',
@@ -201,8 +210,8 @@ describe('PR E2E gate contract', () => {
       'src/renderer/src/lib/pane-manager/terminal-ime-anchor.ts',
       'src/shared/terminal-unicode-provider.ts',
       // The xterm fork owns the helper textarea the IME attaches to; no file here says "ime".
-      'config/patches/@xterm__xterm@6.1.0-beta.287.patch',
-      'config/patches/xterm-src/browser/Terminal.ts',
+      'config/patches/@xterm__xterm@6.1.0-beta.304.patch',
+      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.304.src.patch',
       // The harness is source too: breaking the runner or a probe is how the lane goes blind.
       'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
       'config/scripts/terminal-ime-engagement-receipt.mjs',
@@ -226,6 +235,36 @@ describe('PR E2E gate contract', () => {
     ]) {
       expect(hasNativeImeSourceChange([file]), file).toBe(false)
     }
+  })
+
+  it('routes only core xterm patches to both IME lanes across version updates', () => {
+    for (const file of [
+      'config/patches/@xterm__xterm@6.1.0-beta.304.patch',
+      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.304.src.patch',
+      'config/patches/@xterm__xterm@7.0.0.patch',
+      'config/patches/xterm-src/@xterm__xterm@7.0.0.src.patch'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(hasNativeImeSourceChange([file]), file).toBe(true)
+      expect(specs, file).toContain('tests/e2e/terminal-ime-exact-byte.spec.ts')
+      expect(specs, file).toContain('tests/e2e/terminal-ibus-hangul-native.spec.ts')
+    }
+    for (const file of [
+      'config/patches/i18next-cli@1.74.2.patch',
+      'config/patches/node-pty@1.1.0.patch',
+      'config/patches/monaco-editor@0.55.1.patch',
+      'config/patches/@xterm__addon-webgl@0.20.0-beta.300.patch',
+      'config/patches/xterm-src/@xterm__addon-search@0.17.0-beta.301.src.patch',
+      'config/patches/xterm-upstream.json',
+      'config/patches/@xterm__xterm@7.0.0.patch.bak'
+    ]) {
+      expect(hasNativeImeSourceChange([file]), file).toBe(false)
+      expect(selectPrE2eSpecs([file]), file).toEqual([])
+    }
+    const corePatch = 'config/patches/@xterm__xterm@6.1.0-beta.304.patch'
+    const mixedChanges = ['config/patches/i18next-cli@1.74.2.patch', corePatch]
+    expect(hasNativeImeSourceChange(mixedChanges)).toBe(true)
+    expect(selectPrE2eSpecs(mixedChanges)).toEqual(selectPrE2eSpecs([corePatch]))
   })
 
   it('keeps the native IME spec out of the lane that would silently skip it', () => {

@@ -2,12 +2,55 @@ allowBuilds:
   esbuild: true
 
 minimumReleaseAge: 4320
+# Latest requested releases are still within the three-day delay; exempt only these versions.
+minimumReleaseAgeExclude:
+  - '@oxfmt/binding-android-arm-eabi@0.73.0'
+  - '@oxfmt/binding-android-arm64@0.73.0'
+  - '@oxfmt/binding-darwin-arm64@0.73.0'
+  - '@oxfmt/binding-darwin-x64@0.73.0'
+  - '@oxfmt/binding-freebsd-x64@0.73.0'
+  - '@oxfmt/binding-linux-arm-gnueabihf@0.73.0'
+  - '@oxfmt/binding-linux-arm-musleabihf@0.73.0'
+  - '@oxfmt/binding-linux-arm64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-arm64-musl@0.73.0'
+  - '@oxfmt/binding-linux-ppc64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-riscv64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-riscv64-musl@0.73.0'
+  - '@oxfmt/binding-linux-s390x-gnu@0.73.0'
+  - '@oxfmt/binding-linux-x64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-x64-musl@0.73.0'
+  - '@oxfmt/binding-openharmony-arm64@0.73.0'
+  - '@oxfmt/binding-win32-arm64-msvc@0.73.0'
+  - '@oxfmt/binding-win32-ia32-msvc@0.73.0'
+  - '@oxfmt/binding-win32-x64-msvc@0.73.0'
+  - '@oxlint/binding-android-arm-eabi@1.88.0'
+  - '@oxlint/binding-android-arm64@1.88.0'
+  - '@oxlint/binding-darwin-arm64@1.88.0'
+  - '@oxlint/binding-darwin-x64@1.88.0'
+  - '@oxlint/binding-freebsd-x64@1.88.0'
+  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
+  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
+  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
+  - '@oxlint/binding-linux-arm64-musl@1.88.0'
+  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
+  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-musl@1.88.0'
+  - '@oxlint/binding-openharmony-arm64@1.88.0'
+  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
+  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
+  - '@oxlint/binding-win32-x64-msvc@1.88.0'
+  - oxfmt@0.73.0
+  - oxlint@1.88.0
 
 overrides:
-  brace-expansion@>=1.0.0 <1.1.21: 1.1.21
-  brace-expansion@>=5.0.0 <5.0.12: 5.0.12
-  dompurify@>=3.4.13 <3.4.16: 3.4.16
+  # Mermaid 11 still requests KaTeX 0.16; the security fix starts at 0.18.2.
+  katex@>=0.11.0 <0.18.2: 0.18.10
+  # xcode still requests uuid 7; buffer bounds checks were fixed in 11.1.1.
   xcode>uuid: 11.1.1
+  # Expo Router still requests query-string 7 and its vulnerable URI decoder.
   query-string: 9.5.1
 
 patchedDependencies:

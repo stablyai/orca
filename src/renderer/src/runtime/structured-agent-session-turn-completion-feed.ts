@@ -13,10 +13,8 @@
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttentionEdge } from '../../../shared/agent-session-attention'
 import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import {
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
-} from './runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionTurnCompletions } from './structured-agent-session-client'
 
 export type StructuredAgentSessionTurnCompletionListener = (edge: AgentSessionAttentionEdge) => void
