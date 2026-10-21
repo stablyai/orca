@@ -90,6 +90,8 @@ export async function importExternalPathsToRuntime(
 
   await ensureRuntimeDirectory(context, destinationDir, importSession)
   await ensureRuntimeDropStagingIgnored(context, destinationDir, importSession)
+  // The ignore step swallows a stale session; re-check before results that never reach the host.
+  importSession.assertCurrent()
 
   for (const source of staged.sources) {
     if (source.status !== 'staged') {

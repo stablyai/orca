@@ -174,6 +174,6 @@ export async function ensureRuntimeDropStagingIgnored(
       15_000
     )
   } catch {
-    // The upload that follows re-checks the session, so a stale host still fails there.
+    // The caller re-checks the session right after, so a stale host still fails there.
   }
 }

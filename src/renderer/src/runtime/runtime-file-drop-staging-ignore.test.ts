@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { importExternalPathsToRuntime } from './runtime-file-import-client'
 import {
   fsStageExternalPathsForRuntimeUpload,
@@ -179,6 +179,33 @@ describe('drop staging ignore file', () => {
         params: expect.objectContaining({ relativePath: '.orca/drops/.gitignore', content: '*\n' })
       }
     ])
+  })
+
+  // Why: the ignore step swallows its own errors, and a drop with nothing staged never re-checks.
+  it('reports a host that went stale during the ignore step even when nothing was staged', async () => {
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [{ sourcePath: '/Users/me/link.png', status: 'skipped', reason: 'symlink' }]
+    })
+    let stale = false
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce(statResponse('stat-orca-hit'))
+      .mockResolvedValueOnce(statResponse('stat-drops-hit'))
+      .mockResolvedValueOnce(notFoundResponse('stat-ignore-miss'))
+      .mockImplementationOnce(async () => {
+        stale = true
+        return okResponse('write-ignore')
+      })
+    const assertCurrent = vi.fn(() => {
+      if (stale) {
+        throw new Error('runtime owner generation changed')
+      }
+    })
+
+    await expect(
+      importExternalPathsToRuntime(CONTEXT, ['/Users/me/link.png'], '/remote/repo/.orca/drops', {
+        assertCurrent
+      })
+    ).rejects.toThrow('runtime owner generation changed')
   })
 
   it('never writes an ignore file into a folder the user picked', async () => {
