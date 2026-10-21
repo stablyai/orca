@@ -17,6 +17,10 @@ import {
 import { disableMsbuildFileTrackingOnWindows } from '../windows/msbuild-file-tracking.mjs'
 import { warnAboutNodeModulesAboveSharedStore } from '../../node-resolution/ancestor-modules/store-ancestor-node-modules.mjs'
 import {
+  continuePostinstallWithoutElectron,
+  exitWhenElectronCannotStart
+} from './electron-postinstall-fallbacks.mjs'
+import {
   isSharedNativePackage,
   nodePtyBuildArtifactPaths,
   resolveNativePackageDir
@@ -87,6 +91,9 @@ let modulesToRebuild = onlyModules
 
 warnAboutNodeModulesAboveSharedStore(projectDir)
 ensureElectronPackageInstalled()
+if (!isCrossHostRebuild && osPlatform() === 'linux' && electronPackageIsUsable()) {
+  exitWhenElectronCannotStart(getElectronExecutablePath())
+}
 restoreNodePtyWindowsConptyRuntime()
 
 const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
@@ -381,18 +388,6 @@ function runElectronPackageBinaryInstall() {
       `config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs exited with status ${result.status}`
     )
   }
-}
-
-function continuePostinstallWithoutElectron() {
-  if (!isPostinstall() || process.env.ORCA_STRICT_ELECTRON_INSTALL === '1') {
-    return false
-  }
-  console.error(
-    '[rebuild] Continuing postinstall because Electron binary installation failed. ' +
-      'Electron-consuming package scripts and release jobs run ' +
-      'config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron before launching Electron.'
-  )
-  return true
 }
 
 function repairElectronPathFile() {
