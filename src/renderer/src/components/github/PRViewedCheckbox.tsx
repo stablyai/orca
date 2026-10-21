@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
+/** Isolates viewed-state toggles from file-row clicks and blocks duplicate changes while pending. */
 export function PRViewedCheckbox({
   checked,
   pending,
@@ -25,7 +26,12 @@ export function PRViewedCheckbox({
           aria-label={translate(
             'auto.components.GitHubItemDialog.2d89a38d9d',
             '{{value0}} {{value1}} as viewed',
-            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
+            {
+              value0: checked
+                ? translate('auto.components.GitHubItemDialog.unmarkVerb', 'Unmark')
+                : translate('auto.components.GitHubItemDialog.markVerb', 'Mark'),
+              value1: filePath
+            }
           )}
           disabled={pending}
           onClick={(event) => {

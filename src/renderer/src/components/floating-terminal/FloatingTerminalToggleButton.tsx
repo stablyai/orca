@@ -56,6 +56,7 @@ function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
       }
 }
 
+/** Keeps a draggable workspace toggle with persisted placement and closed-workspace activity cues. */
 export function FloatingTerminalToggleButton({
   open,
   onToggle
@@ -254,7 +255,18 @@ export function FloatingTerminalToggleButton({
           {translate(
             'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
             '{{value0}} floating workspace ({{value1}})',
-            { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }
+            {
+              value0: open
+                ? translate(
+                    'auto.components.floating.terminal.FloatingTerminalToggleButton.minimizeVerb',
+                    'Minimize'
+                  )
+                : translate(
+                    'auto.components.floating.terminal.FloatingTerminalToggleButton.showVerb',
+                    'Show'
+                  ),
+              value1: shortcutLabel
+            }
           )}
         </TooltipContent>
       </Tooltip>

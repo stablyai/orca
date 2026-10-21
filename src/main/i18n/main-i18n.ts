@@ -17,6 +17,16 @@ let initialized = false
 let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 const registeredPluginLanguages = new Set<string>()
 
+/** Defers the Chinese catalog until the main process requests that locale. */
+function loadChineseCatalog(): Promise<{ default: Record<string, unknown> }> {
+  return import('../../renderer/src/i18n/locales/zh.json')
+}
+
+/** Defers the Turkish catalog until the main process requests that locale. */
+function loadTurkishCatalog(): Promise<{ default: Record<string, unknown> }> {
+  return import('../../renderer/src/i18n/locales/tr.json')
+}
+
 // Why: main-process callers pass English fallbacks to translateMain(), so the
 // main bundle does not need to parse any locale catalog at cold start. Only
 // non-English users pay for their selected catalog, after i18n is awaited.
@@ -28,7 +38,8 @@ const LAZY_LOCALE_LOADERS: Record<
   fr: () => import('../../renderer/src/i18n/locales/fr.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),
   ko: () => import('../../renderer/src/i18n/locales/ko.json'),
-  zh: () => import('../../renderer/src/i18n/locales/zh.json')
+  zh: loadChineseCatalog,
+  tr: loadTurkishCatalog
 }
 
 const lazyLocaleBackend: BackendModule = {

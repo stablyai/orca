@@ -3,6 +3,10 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import {
+  translateKeybindingGroupTitle,
+  translateKeybindingTitle
+} from '@/i18n/keybinding-catalog-labels'
 
 export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
@@ -34,21 +38,27 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   })
 )
 
-const getShortcutDefinitionSearchEntries = createLocalizedCatalog(() =>
-  KEYBINDING_DEFINITIONS.map((item) => ({
+/** Builds localized command search entries while retaining English lookup keywords. */
+function buildShortcutDefinitionSearchEntries() {
+  return KEYBINDING_DEFINITIONS.map((item) => ({
     actionId: item.id,
     searchEntry: {
-      title: item.title,
+      title: translateKeybindingTitle(item),
       description: translate(
         'auto.components.settings.shortcuts.search.groupShortcut',
         '{{value0}} shortcut',
-        { value0: item.group }
+        { value0: translateKeybindingGroupTitle(item.group) }
       ),
-      keywords: [...item.searchKeywords]
+      keywords: [item.title, item.group, ...item.searchKeywords]
     }
   }))
+}
+
+const getShortcutDefinitionSearchEntries = createLocalizedCatalog(
+  buildShortcutDefinitionSearchEntries
 )
 
+/** Omits unavailable browser and simulator actions from the localized Settings search index. */
 export function getShortcutsPaneSearchEntries(options?: {
   includeManagedBrowser?: boolean
   includeMobileEmulator?: boolean

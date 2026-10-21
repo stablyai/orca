@@ -8,7 +8,8 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
-  UI_LANGUAGE_SYSTEM
+  UI_LANGUAGE_SYSTEM,
+  UI_LANGUAGE_TURKISH
 } from './ui-language'
 
 describe('ui-locale', () => {
@@ -17,6 +18,15 @@ describe('ui-locale', () => {
     expect(normalizeSupportedUiLocale('zh-CN')).toBe('zh')
     expect(normalizeSupportedUiLocale('zh-Hans')).toBe('zh')
     expect(normalizeSupportedUiLocale('zh-SG')).toBe('zh')
+  })
+
+  it('normalizes Turkish locale prefixes', () => {
+    expect(normalizeSupportedUiLocale('tr-TR')).toBe('tr')
+    expect(normalizeSupportedUiLocale('tr')).toBe('tr')
+  })
+
+  it('resolves explicit Turkish independently of system locale', () => {
+    expect(resolveUiLocale(UI_LANGUAGE_TURKISH, 'en-US')).toBe('tr')
   })
 
   it('falls back unsupported locales to English', () => {
@@ -66,5 +76,6 @@ describe('ui-locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'ja-JP')).toBe('ja')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'es-MX')).toBe('es')
     expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'fr-FR')).toBe('fr')
+    expect(resolveUiLocale(UI_LANGUAGE_SYSTEM, 'tr-TR')).toBe('tr')
   })
 })

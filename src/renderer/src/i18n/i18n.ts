@@ -16,7 +16,17 @@ import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plu
 
 export const i18n: I18nInstance = i18next.createInstance()
 
-// Why: only the English catalog is bundled eagerly. The other four locales add
+/** Defers the Chinese catalog until the renderer requests that locale. */
+function loadChineseCatalog(): Promise<{ default: Record<string, unknown> }> {
+  return import('./locales/zh.json')
+}
+
+/** Defers the Turkish catalog until the renderer requests that locale. */
+function loadTurkishCatalog(): Promise<{ default: Record<string, unknown> }> {
+  return import('./locales/tr.json')
+}
+
+// Why: only the English catalog is bundled eagerly. The other locales add
 // ~2MB to the renderer's startup chunk (parsed on every launch) even though the
 // app always boots in English and only switches after the persisted UI language
 // loads. A lazy backend fetches each non-English catalog on demand, so any
@@ -30,7 +40,8 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   fr: () => import('./locales/fr.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
-  zh: () => import('./locales/zh.json')
+  zh: loadChineseCatalog,
+  tr: loadTurkishCatalog
 }
 
 const lazyLocaleBackend: BackendModule = {
