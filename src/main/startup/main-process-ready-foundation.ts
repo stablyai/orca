@@ -42,7 +42,10 @@ import { installMediaPreviewProtocolHandler } from '../media/media-preview-proto
 import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
-import { initializeBrowserExtensionSupport } from '../browser/extensions/browser-extension-startup'
+import {
+  initializeBrowserExtensionSupport,
+  switchBrowserExtensionSupport
+} from '../browser/extensions/browser-extension-startup'
 import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
@@ -239,6 +242,9 @@ export async function initializeReadyFoundation(): Promise<void> {
           settings.terminalWindowsPowerShellImplementation
         )
       }
+    }
+    if ('experimentalBrowserExtensions' in updates) {
+      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
     }
     if ('showMenuBarIcon' in updates) {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.

@@ -1,4 +1,7 @@
-import { installBrowserSessionHeadersReceived } from '../browser-session-request-decisions'
+import {
+  installBrowserSessionHeadersReceived,
+  removeBrowserSessionHeadersReceived
+} from '../browser-session-request-decisions'
 import {
   setBrowserSessionWebRequestObserver,
   type ObservedWebRequestDetails,
@@ -222,6 +225,7 @@ function forward(
 }
 
 const observedSessions = new WeakSet<Electron.Session>()
+const watchedSessions = new WeakSet<Electron.Session>()
 const OBSERVE_ALL = { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
 
 /** The events Orca does not otherwise handle, installed once a webRequest extension loads. */
@@ -249,8 +253,25 @@ export function observeBrowserExtensionWebRequests(session: Electron.Session): v
       observeRemainingEvents(session)
     }
   }
-  session.extensions.on('extension-ready', (_event, extension) => maybeObserve(extension))
+  if (!watchedSessions.has(session)) {
+    watchedSessions.add(session)
+    session.extensions.on('extension-ready', (_event, extension) => maybeObserve(extension))
+  }
   session.extensions.getAllExtensions().forEach(maybeObserve)
+}
+
+/** Extensions turned off: hand the session's request path back to Orca's own handlers alone. */
+export function stopObservingBrowserExtensionWebRequests(session: Electron.Session): void {
+  removeBrowserSessionHeadersReceived(session)
+  if (!observedSessions.delete(session)) {
+    return
+  }
+  const { webRequest } = session
+  webRequest.onSendHeaders(null)
+  webRequest.onResponseStarted(null)
+  webRequest.onBeforeRedirect(null)
+  webRequest.onCompleted(null)
+  webRequest.onErrorOccurred(null)
 }
 
 export function installBrowserExtensionWebRequestForwarding(): void {

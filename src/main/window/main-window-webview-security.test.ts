@@ -6,8 +6,7 @@ const mocks = vi.hoisted(() => ({
   installNavigationPolicy: vi.fn(),
   isAllowedPartition: vi.fn(),
   attachRouteGuest: vi.fn(),
-  registerPluginGuard: vi.fn(),
-  extensionProfileForPartition: vi.fn((): unknown => null)
+  registerPluginGuard: vi.fn()
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -31,8 +30,7 @@ vi.mock('../browser/local-ssh-browser-partitions', () => ({
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
 }))
 vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
-  getBrowserExtensionSessionForProfile: () => null,
-  getBrowserExtensionProfileForPartition: mocks.extensionProfileForPartition
+  getBrowserExtensionSessionForProfile: () => null
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
@@ -118,7 +116,7 @@ describe('main window webview security', () => {
       partition: 'persist:orca-browser',
       contextIsolation: true,
       nodeIntegration: false,
-      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInSubFrames: true,
       sandbox: true,
       webSecurity: true
     })
@@ -126,22 +124,20 @@ describe('main window webview security', () => {
     expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
   })
 
-  it('runs preloads in subframes only for a profile whose session runs extensions', () => {
+  it('runs preloads in subframes of every local profile tab, so extensions switched on later reach it', () => {
     const { handlers } = installOnFakeWindow()
     mocks.isAllowedPartition.mockReturnValue(true)
-    mocks.extensionProfileForPartition.mockReturnValueOnce({ id: 'default' })
-    const attach = (partition: string): Record<string, unknown> => {
-      const preferences: Record<string, unknown> = { partition, nodeIntegrationInSubFrames: true }
-      handlers['will-attach-webview']?.(
-        { preventDefault: vi.fn() } as never,
-        preferences as never,
-        { src: 'https://example.com' } as never
-      )
-      return preferences
+    const preferences: Record<string, unknown> = {
+      partition: 'persist:orca-browser-work',
+      nodeIntegrationInSubFrames: false
     }
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      { src: 'https://example.com' } as never
+    )
 
-    expect(attach('persist:orca-browser').nodeIntegrationInSubFrames).toBe(true)
-    expect(attach('persist:orca-browser-no-extensions').nodeIntegrationInSubFrames).toBe(false)
+    expect(preferences.nodeIntegrationInSubFrames).toBe(true)
   })
 })
 

@@ -110,7 +110,7 @@ const headersReceivedSessions = new WeakSet<Electron.Session>()
 
 /**
  * The session's one onHeadersReceived, installed on first need (an extension that observes
- * webRequest, or content blocking that acts on responses) and kept for the session's life.
+ * webRequest, or content blocking that acts on responses) and removed when extensions turn off.
  */
 export function installBrowserSessionHeadersReceived(session: Electron.Session): void {
   if (headersReceivedSessions.has(session)) {
@@ -130,4 +130,11 @@ export function installBrowserSessionHeadersReceived(session: Electron.Session):
       callback(response ?? {})
     }
   )
+}
+
+/** Every response otherwise waits on main, so drop the handler once nothing needs it. */
+export function removeBrowserSessionHeadersReceived(session: Electron.Session): void {
+  if (headersReceivedSessions.delete(session)) {
+    session.webRequest.onHeadersReceived(null)
+  }
 }

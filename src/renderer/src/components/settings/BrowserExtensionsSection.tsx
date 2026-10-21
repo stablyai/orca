@@ -248,14 +248,6 @@ export function BrowserExtensionsSection({
         disabled={!active || busyId !== null}
         onFinished={() => setRevision((value) => value + 1)}
       />
-      {result && !active ? (
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'settings.browser.extensions.restartRequired',
-            'Restart Orca to turn on browser extensions.'
-          )}
-        </p>
-      ) : null}
       {active && result.extensions.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {translate(

@@ -132,7 +132,7 @@ export async function installBrowserExtensionFromWebStore(
   renderer: Electron.WebContents
 ): Promise<BrowserExtensionWebStoreInstallResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { status: 'failed', error: 'Restart Orca to turn on browser extensions' }
+    return { status: 'failed', error: 'Turn on browser extensions in Settings › Experimental' }
   }
   const extensionId = parseChromeWebStoreExtensionInput(input)
   if (!extensionId) {

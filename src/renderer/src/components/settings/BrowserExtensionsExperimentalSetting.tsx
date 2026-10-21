@@ -31,7 +31,7 @@ export function BrowserExtensionsExperimentalSetting({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.browserExtensions.copy',
-              'Adds Settings › Browser › Extensions for local browser profiles. Takes effect after you restart Orca.'
+              'Adds Settings › Browser › Extensions for local browser profiles.'
             )}
           </p>
         </div>

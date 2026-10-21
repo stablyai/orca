@@ -76,6 +76,7 @@ const { requestBrowserExtensionInstallPrompt } = await import('./browser-extensi
 const { checkForBrowserExtensionUpdates, reviewHeldBrowserExtensionUpdate } =
   await import('./browser-extension-webstore-updater')
 const held = await import('./browser-extension-held-updates')
+const { setBrowserExtensionSupportEnabled } = await import('./browser-extension-support')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prompt is mocked, so the renderer is only passed through.
 const renderer = {} as Electron.WebContents
@@ -92,12 +93,19 @@ writeFileSync(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  setBrowserExtensionSupportEnabled(true)
   held.forgetHeldBrowserExtensionUpdate(ID)
   mocks.accepted = true
   mocks.stagedVersion = '2.0'
 })
 
 describe('store updates that ask for more', () => {
+  it('checks nothing while extensions are switched off', async () => {
+    setBrowserExtensionSupportEnabled(false)
+    await checkForBrowserExtensionUpdates()
+    expect(install.stageWebStoreExtension).not.toHaveBeenCalled()
+  })
+
   it('applies an update whose additions carry no warning', async () => {
     mocks.stagedAccess = {
       permissions: ['alarms', 'offscreen', 'storage', 'tabs'],

@@ -506,7 +506,6 @@
         "loadError": "Could not start: {{error}}",
         "profileDescription": "Extensions turned on here run in tabs that use the {{profile}} profile.",
         "loadUnpacked": "Load unpacked…",
-        "restartRequired": "Restart Orca to turn on browser extensions.",
         "empty": "No extensions installed. Add one from the Chrome Web Store above.",
         "title": "Extensions",
         "description": "Chrome extensions for the selected local browser profile.",
@@ -8075,7 +8074,7 @@
             "modePopout": "Pop-out"
           },
           "browserExtensions": {
-            "copy": "Adds Settings › Browser › Extensions for local browser profiles. Takes effect after you restart Orca.",
+            "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
           }
         },

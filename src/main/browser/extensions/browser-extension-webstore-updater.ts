@@ -14,6 +14,7 @@ import {
 } from './browser-extension-held-updates'
 import { requestBrowserExtensionInstallPrompt } from './browser-extension-install-prompt'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
+import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
 import { readBrowserExtensionIconDataUrl } from './browser-extension-manifest'
 import {
   samePermissionSummary,
@@ -255,7 +256,7 @@ export async function reviewHeldBrowserExtensionUpdate(
 let checking = false
 
 export async function checkForBrowserExtensionUpdates(): Promise<void> {
-  if (checking) {
+  if (checking || !isBrowserExtensionSupportEnabled()) {
     return
   }
   checking = true

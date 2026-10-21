@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
         ) => registrationListeners.delete(listener)
       },
       registerPreloadScript: vi.fn(),
+      unregisterPreloadScript: vi.fn(),
       getStoragePath: () => null,
       clearStorageData: vi.fn(async () => {}),
       extensions: {
@@ -171,6 +172,29 @@ describe('browser extension session loader', () => {
     mocks.prepared.hasWorker = false
   })
 
+  it('waits for the worker to register again after an unload, even with unchanged scripts', async () => {
+    mocks.prepared.hasWorker = true
+    mocks.emitWorkerStart.mockClear()
+    mocks.session.clearStorageData.mockClear()
+    loader.unloadBrowserExtensionFromProfile('default', ID)
+    let settled = false
+    const loading = loader
+      .loadBrowserExtensionIntoProfile('default', installed, 'reload')
+      .then(() => (settled = true))
+    await vi.waitFor(() => expect(mocks.registrationListeners.size).toBe(1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+    expect(mocks.emitWorkerStart).not.toHaveBeenCalled()
+    expect(mocks.session.clearStorageData).not.toHaveBeenCalled()
+
+    for (const listener of mocks.registrationListeners) {
+      listener({}, { scope: `chrome-extension://${ID}/` })
+    }
+    await loading
+    expect(mocks.emitWorkerStart).toHaveBeenCalled()
+    mocks.prepared.hasWorker = false
+  })
+
   it('keeps the last load failure for Settings and clears it on the next good load', async () => {
     loader.unloadBrowserExtensionFromProfile('default', ID)
     mocks.session.extensions.loadExtension.mockRejectedValueOnce(
@@ -185,5 +209,36 @@ describe('browser extension session loader', () => {
 
     await loader.loadBrowserExtensionIntoProfile('default', installed)
     expect(getBrowserExtensionLoadFailure('default', ID)).toBeNull()
+  })
+})
+
+describe('switching the experimental setting while Orca runs', () => {
+  const profile = {
+    id: 'default',
+    scope: 'default' as const,
+    partition: 'persist:orca-browser',
+    label: 'Default',
+    source: null
+  }
+
+  it('off unloads every extension and its preload; on wires the profile again', async () => {
+    setBrowserExtensionSupportEnabled(true)
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    await loader.loadBrowserExtensionIntoProfile('default', installed)
+    expect(mocks.loaded.size).toBe(1)
+
+    setBrowserExtensionSupportEnabled(false)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    expect(mocks.loaded.size).toBe(0)
+    expect(mocks.session.unregisterPreloadScript).toHaveBeenCalledWith(
+      'orca-browser-extension-frame'
+    )
+    expect(loader.getBrowserExtensionSessionForProfile('default')).toBeNull()
+
+    mocks.session.registerPreloadScript.mockClear()
+    setBrowserExtensionSupportEnabled(true)
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    expect(mocks.session.registerPreloadScript).toHaveBeenCalledOnce()
+    expect(loader.getBrowserExtensionSessionForProfile('default')).toBe(mocks.session)
   })
 })

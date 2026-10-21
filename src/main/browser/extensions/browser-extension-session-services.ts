@@ -17,8 +17,12 @@ import {
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
 import {
   installBrowserExtensionWebRequestForwarding,
-  observeBrowserExtensionWebRequests
+  observeBrowserExtensionWebRequests,
+  stopObservingBrowserExtensionWebRequests
 } from './browser-extension-web-request'
+
+// Why once: a session outlives the experimental setting being switched off and on again.
+const servedSessions = new WeakSet<Electron.Session>()
 
 // Why below startup's 3s wait: a worker that never answers must not use the whole budget alone.
 const CONTENT_SCRIPT_RESTORE_TIMEOUT_MS = 2_500
@@ -50,10 +54,14 @@ export function installBrowserExtensionSessionServices(): void {
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
       attachBrowserExtensionDnr(sess, profileId, enabledExtensionIds)
-      sess.extensions.on('extension-unloaded', (_event, extension) =>
-        forgetBrowserExtensionContentScriptRestore(sess, extension.id)
-      )
+      if (!servedSessions.has(sess)) {
+        servedSessions.add(sess)
+        sess.extensions.on('extension-unloaded', (_event, extension) =>
+          forgetBrowserExtensionContentScriptRestore(sess, extension.id)
+        )
+      }
     },
+    detached: stopObservingBrowserExtensionWebRequests,
     loaded: async (sess, profileId, extension) => {
       await Promise.all([
         restoreBrowserExtensionContentScripts(

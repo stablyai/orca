@@ -109,17 +109,18 @@ function sweepRunningWorkers(sess: Electron.Session, state: HostSessionState): v
   }
 }
 
-/** Called once per local browser-profile session by the session loader. */
-export function attachBrowserExtensionApiHostToSession(
-  sess: Electron.Session,
-  browserProfileId: string
-): void {
-  if (getHostSessionState(sess)) {
+const listenedSessions = new WeakSet<Electron.Session>()
+
+// Why once per session, reading state at event time: the session outlives its host state when
+// extensions are switched off and on, and a second set of listeners would act twice.
+function listenToSession(sess: Electron.Session): void {
+  if (listenedSessions.has(sess)) {
     return
   }
-  const state = ensureHostSessionState(sess, browserProfileId)
+  listenedSessions.add(sess)
   sess.serviceWorkers.on('running-status-changed', ({ versionId, runningStatus }) => {
-    if (getHostSessionState(sess) !== state) {
+    const state = getHostSessionState(sess)
+    if (!state) {
       return
     }
     if (runningStatus === 'starting' || runningStatus === 'running') {
@@ -138,14 +139,31 @@ export function attachBrowserExtensionApiHostToSession(
       }
     }
   })
+  sess.extensions.on('extension-ready', () => {
+    const state = getHostSessionState(sess)
+    if (state) {
+      sweepRunningWorkers(sess, state)
+    }
+  })
+  sess.extensions.on('extension-unloaded', (_event, extension) =>
+    forgetExtensionContexts(sess, extension.id)
+  )
+}
+
+/** Called by the session loader whenever a local browser-profile session starts running extensions. */
+export function attachBrowserExtensionApiHostToSession(
+  sess: Electron.Session,
+  browserProfileId: string
+): void {
+  if (getHostSessionState(sess)) {
+    return
+  }
+  const state = ensureHostSessionState(sess, browserProfileId)
+  listenToSession(sess)
   sess.protocol.handle(BROWSER_EXTENSION_API_SCHEME, (request) =>
     getHostSessionState(sess) === state
       ? handleBrowserExtensionWorkerRequest(sess, state, request)
       : Promise.resolve(new Response(null, { status: 403 }))
-  )
-  sess.extensions.on('extension-ready', () => sweepRunningWorkers(sess, state))
-  sess.extensions.on('extension-unloaded', (_event, extension) =>
-    forgetExtensionContexts(sess, extension.id)
   )
   sweepRunningWorkers(sess, state)
 }

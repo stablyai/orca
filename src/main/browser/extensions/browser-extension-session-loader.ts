@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
 import type { InstalledBrowserExtension } from '../../../shared/browser-extension-types'
-import { getChromeExtensionOrigin } from '../../../shared/browser-extension-url'
 import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
 import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
@@ -25,9 +24,13 @@ import {
 } from './browser-extension-load-errors'
 import {
   prepareBrowserExtensionDirectory,
-  type BrowserExtensionLoadSource,
-  type PreparedBrowserExtensionDirectory
+  type BrowserExtensionLoadSource
 } from './browser-extension-load-directory'
+import {
+  refreshWorkerRegistration,
+  removeBrowserExtensionFromSession,
+  whenWorkerRegistered
+} from './browser-extension-worker-registration'
 
 type ProfileSessionState = {
   profile: BrowserSessionProfile
@@ -44,6 +47,8 @@ export type BrowserExtensionSessionHooks = {
     profileId: string,
     extension: Electron.Extension
   ) => Promise<void>
+  /** Extensions turned off: undo what `attached` added to the request path. */
+  detached: (sess: Electron.Session) => void
 }
 
 let sessionHooks: BrowserExtensionSessionHooks | null = null
@@ -53,6 +58,7 @@ export function setBrowserExtensionSessionHooks(hooks: BrowserExtensionSessionHo
 }
 
 const PRELOAD_FILE_NAME = 'browser-extension-preload.js'
+const PRELOAD_ID = 'orca-browser-extension-frame'
 const stateByProfileId = new Map<string, ProfileSessionState>()
 const preloadedSessions = new WeakSet<Electron.Session>()
 
@@ -60,7 +66,6 @@ function registerExtensionPreload(sess: Electron.Session): void {
   if (preloadedSessions.has(sess)) {
     return
   }
-  preloadedSessions.add(sess)
   // Why the parent too: this module can land in out/main/chunks, one level below the preload entry.
   const filePath = [
     join(__dirname, PRELOAD_FILE_NAME),
@@ -74,57 +79,14 @@ function registerExtensionPreload(sess: Electron.Session): void {
   }
   // Why frame only: a service-worker preload crashes the renderer during GC (electron#52310).
   // Workers load Orca's API shim through the background wrapper instead.
-  sess.registerPreloadScript({ id: 'orca-browser-extension-frame', type: 'frame', filePath })
+  sess.registerPreloadScript({ id: PRELOAD_ID, type: 'frame', filePath })
+  preloadedSessions.add(sess)
 }
 
-/**
- * Chromium keeps running a worker's cached scripts until the extension version changes, so a new
- * wrapper or shim would never run. Dropping the registration makes the load register it afresh.
- * Returns whether it did, i.e. whether the load will register the worker.
- */
-async function refreshWorkerRegistration(
-  sess: Electron.Session,
-  profileId: string,
-  prepared: PreparedBrowserExtensionDirectory
-): Promise<boolean> {
-  const { extensionId, workerSignature } = prepared
-  const states = getBrowserExtensionProfileStateStore()
-  if (workerSignature && states.read(profileId, extensionId).workerSignature === workerSignature) {
-    return false
+function unregisterExtensionPreload(sess: Electron.Session): void {
+  if (preloadedSessions.delete(sess)) {
+    sess.unregisterPreloadScript(PRELOAD_ID)
   }
-  await sess.clearStorageData({
-    origin: getChromeExtensionOrigin(extensionId),
-    storages: ['serviceworkers']
-  })
-  if (workerSignature) {
-    states.update(profileId, extensionId, (state) => ({ ...state, workerSignature }))
-  }
-  return true
-}
-
-const WORKER_REGISTRATION_WAIT_MS = 10_000
-
-/**
- * loadExtension resolves before Chromium has registered the worker, and until it has, every start
- * fails ("Failed to start service worker."). The load waits so Orca's lifecycle events and
- * restored tabs start a worker that exists. Listen before loading: registration can finish first.
- */
-function whenWorkerRegistered(sess: Electron.Session, extensionId: string): Promise<void> {
-  const scope = `${getChromeExtensionOrigin(extensionId)}/`
-  return new Promise((resolve) => {
-    const done = (): void => {
-      clearTimeout(timer)
-      sess.serviceWorkers.removeListener('registration-completed', onRegistered)
-      resolve()
-    }
-    const onRegistered = (_event: Electron.Event, details: { scope: string }): void => {
-      if (details.scope === scope) {
-        done()
-      }
-    }
-    const timer = setTimeout(done, WORKER_REGISTRATION_WAIT_MS)
-    sess.serviceWorkers.on('registration-completed', onRegistered)
-  })
 }
 
 async function loadIntoSession(
@@ -151,9 +113,11 @@ async function loadIntoSession(
     (await refreshWorkerRegistration(sess, profileId, prepared)) && prepared.hasWorker
       ? whenWorkerRegistered(sess, prepared.extensionId)
       : null
-  const result = await sess.extensions.loadExtension(prepared.directory, { allowFileAccess: false })
+  const result = await sess.extensions.loadExtension(prepared.directory, {
+    allowFileAccess: false
+  })
   if (result.id !== prepared.extensionId) {
-    sess.extensions.removeExtension(result.id)
+    removeBrowserExtensionFromSession(sess, result.id)
     throw new Error('Extension id changed since it was added; remove it and add it again')
   }
   await registered
@@ -216,6 +180,18 @@ export function attachBrowserExtensionsToProfileSession(
   stateByProfileId.set(profile.id, { profile, session: sess, loading })
 }
 
+/** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
+async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
+  forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
+  await state.loading
+  for (const extension of state.session.extensions.getAllExtensions()) {
+    removeBrowserExtensionFromSession(state.session, extension.id)
+  }
+  forgetBrowserExtensionContexts(state.session)
+  unregisterExtensionPreload(state.session)
+  sessionHooks?.detached(state.session)
+}
+
 /** Profile delete: unload everything so a retired session keeps no extension running. */
 export async function detachBrowserExtensionsFromProfileSession(
   profile: BrowserSessionProfile
@@ -228,12 +204,14 @@ export async function detachBrowserExtensionsFromProfileSession(
   getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
   getBrowserExtensionSyncStorageStore().forgetProfile(profile.id)
   getBrowserExtensionDnrStore().forgetProfile(profile.id)
-  forgetBrowserExtensionLoadFailures({ profileId: profile.id })
-  await state.loading
-  for (const extension of state.session.extensions.getAllExtensions()) {
-    state.session.extensions.removeExtension(extension.id)
-  }
-  forgetBrowserExtensionContexts(state.session)
+  await unloadProfileSession(state)
+}
+
+/** The experimental setting turned off: every profile drops its extensions until it turns on. */
+export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<void> {
+  const states = [...stateByProfileId.values()]
+  stateByProfileId.clear()
+  await Promise.all(states.map(unloadProfileSession))
 }
 
 /** One profile session's startup loads, restore hooks included. */
@@ -313,7 +291,7 @@ export function unloadBrowserExtensionFromProfile(profileId: string, extensionId
   clearBrowserExtensionLoadFailure(profileId, extensionId)
   const sess = stateByProfileId.get(profileId)?.session
   if (sess?.extensions.getExtension(extensionId)) {
-    sess.extensions.removeExtension(extensionId)
+    removeBrowserExtensionFromSession(sess, extensionId)
   }
 }
 

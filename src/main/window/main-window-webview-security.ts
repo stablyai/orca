@@ -23,10 +23,7 @@ import { isDocPreviewSession } from '../browser/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
-import {
-  getBrowserExtensionProfileForPartition,
-  getBrowserExtensionSessionForProfile
-} from '../browser/extensions/browser-extension-session-loader'
+import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -103,11 +100,11 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
     webPreferences.nodeIntegration = false
-    // Why subframes in extension profiles: a framed extension page needs Orca's extension preload.
-    // Sandboxed and without Node, the flag only runs the same preloads per frame; the close guard
-    // keeps to the top frame and the extension preload acts only in chrome-extension:// frames.
-    webPreferences.nodeIntegrationInSubFrames =
-      isProfilePartition && getBrowserExtensionProfileForPartition(partition) !== null
+    // Why every local profile: a framed extension page needs Orca's extension preload, and
+    // extensions can be switched on after the tab opens. Sandboxed and without Node, the flag only
+    // runs the same preloads per frame; the close guard keeps to the top frame and the extension
+    // preload, registered only while extensions run, acts only in chrome-extension:// frames.
+    webPreferences.nodeIntegrationInSubFrames = isProfilePartition
     webPreferences.enableBlinkFeatures = ''
     webPreferences.disableBlinkFeatures = ''
     webPreferences.webSecurity = true

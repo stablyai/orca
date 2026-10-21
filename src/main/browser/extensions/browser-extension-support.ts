@@ -1,5 +1,5 @@
-// Why read once: loaded extensions, preloads and IPC wiring are not torn down live, so the
-// experimental setting takes effect on the next launch.
+// Why a live flag: the experimental setting turns extensions on and off without a restart, so
+// every entry point asks at call time.
 let supportEnabled = false
 
 export function setBrowserExtensionSupportEnabled(enabled: boolean): void {

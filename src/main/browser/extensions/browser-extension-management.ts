@@ -44,7 +44,7 @@ import { notifyChromeWebStoreUninstalled } from './browser-extension-webstore-ev
 
 async function settle(action: () => Promise<void>): Promise<BrowserExtensionActionResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { ok: false, error: 'Restart Orca to turn on browser extensions' }
+    return { ok: false, error: 'Turn on browser extensions in Settings › Experimental' }
   }
   try {
     await action()
