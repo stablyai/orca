@@ -3,7 +3,11 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { parseAskFromStatus, resolveNativeChatAsk } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../src/shared/native-chat-agent-support'
-import { detectAgentPermission, parseApprovalFromStatus } from './mobile-native-chat-permission'
+import {
+  detectAgentPermission,
+  parseApprovalFromStatus,
+  parseOmpPlanReviewFromStatus
+} from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
 
 export type MobileNativeChatPrompts = {
@@ -11,6 +15,25 @@ export type MobileNativeChatPrompts = {
   question: ReturnType<typeof parseAgentQuestion>
   detectedAsk: ReturnType<typeof parseAskFromStatus>
   ask: ReturnType<typeof parseAskFromStatus>
+}
+
+/** Agent-emitted envelopes carry exact options, so they win over the text heuristic. */
+function resolveStatusPermission(status: AgentStatusEntry): MobileNativeChatPrompts['permission'] {
+  const planReview = parseOmpPlanReviewFromStatus(status.interactivePrompt)
+  if (planReview) {
+    return planReview
+  }
+  if (resolveNativeChatTranscriptAgent(status.agentType) === 'opencode') {
+    return parseApprovalFromStatus(status.interactivePrompt, status.agentType)
+  }
+  return (
+    detectAgentPermission({
+      state: status.state,
+      lastAssistantMessage: status.lastAssistantMessage,
+      toolName: status.toolName,
+      toolInput: status.toolInput
+    }) ?? parseApprovalFromStatus(status.interactivePrompt, status.agentType)
+  )
 }
 
 /** Derives the prompt cards shown above the composer. */
@@ -24,21 +47,10 @@ export function useMobileNativeChatPrompts(args: {
 }): MobileNativeChatPrompts {
   const { enabled, status, messages, transcriptLoading } = args
   const blocked = status?.state === 'waiting' || status?.state === 'blocked'
-  const openCode = resolveNativeChatTranscriptAgent(status?.agentType) === 'opencode'
   // Both permission paths sit inside the paused gate: an approval envelope can
   // outlive its answer (the host keeps it sticky), so only a waiting/blocked
   // agent may surface it — never a working or done one (STA-3144).
-  const permission =
-    blocked && status
-      ? openCode
-        ? parseApprovalFromStatus(status.interactivePrompt, status.agentType)
-        : (detectAgentPermission({
-            state: status.state,
-            lastAssistantMessage: status.lastAssistantMessage,
-            toolName: status.toolName,
-            toolInput: status.toolInput
-          }) ?? parseApprovalFromStatus(status.interactivePrompt, status.agentType))
-      : null
+  const permission = blocked && status ? resolveStatusPermission(status) : null
   const question =
     blocked && status && !permission ? parseAgentQuestion(status.lastAssistantMessage ?? '') : null
   const askFromStatus = useMemo(
