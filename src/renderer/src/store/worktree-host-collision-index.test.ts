@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
+import { getWorktreeOnHostFromState } from './selectors'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeMap,
@@ -89,5 +90,28 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
     expect(getIndexedWorktreeMap(worktreesByRepo).get(SHARED_ID)).toBe(
       buildWorktreeByIdIndex(worktreesByRepo).get(SHARED_ID)
     )
+  })
+})
+
+describe('getWorktreeOnHostFromState fails closed on an unqualified collision', () => {
+  const colliding = { worktreesByRepo: byRepo(localRow, sshRow) }
+
+  it('returns undefined when host is omitted and two hosts share the id', () => {
+    expect(getWorktreeOnHostFromState(colliding, SHARED_ID, undefined)).toBeUndefined()
+  })
+
+  it('returns the ssh row when that host is named', () => {
+    expect(getWorktreeOnHostFromState(colliding, SHARED_ID, 'ssh:build-box')).toBe(sshRow)
+  })
+
+  it('returns the single row when host is omitted and the id is unambiguous', () => {
+    const single = { worktreesByRepo: byRepo(localRow) }
+    expect(getWorktreeOnHostFromState(single, SHARED_ID, undefined)).toBe(localRow)
+  })
+
+  it('returns undefined when no row exists', () => {
+    expect(
+      getWorktreeOnHostFromState({ worktreesByRepo: {} }, SHARED_ID, undefined)
+    ).toBeUndefined()
   })
 })

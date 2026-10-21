@@ -35,8 +35,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const state = useAppStore.getState()
   // Why (STA-4343): the id-keyed map keeps one row per `repoId::path`, so a caller
   // acting on a specific sidebar row has to name that row's host — otherwise
-  // deleting the SSH row destroys the local checkout at the same path. A caller
-  // that names no host keeps the old first-wins behaviour.
+  // deleting the SSH row destroys the local checkout at the same path. An
+  // unqualified collision fail-closes here instead of first-wins.
   const target = getWorktreeOnHostFromState(state, worktreeId, options.expectedHostId) ?? null
   const instanceChanged =
     Object.hasOwn(options, 'expectedInstanceId') &&
