@@ -435,6 +435,10 @@
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+    },
+    "shortcuts": {
+      "terminalFirstWithSearch": "Terminal first, Orca search",
+      "terminalFirstWithSearchDescription": "Search active pane opens Orca search. Other shortcuts keep Terminal first behavior."
     }
   },
   "menu": {

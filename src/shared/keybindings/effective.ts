@@ -3,6 +3,7 @@ import type {
   KeybindingDefinition,
   KeybindingMatchOptions,
   KeybindingOverrides,
+  ResolvedTerminalShortcutPolicy,
   TerminalShortcutPolicy
 } from './types'
 import { DEFINITIONS_BY_ID, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
@@ -73,6 +74,18 @@ export function normalizeTerminalShortcutPolicy(
   return policy === 'terminal-first' ? 'terminal-first' : 'orca-first'
 }
 
+export function resolveTerminalShortcutPolicy(
+  settings?: {
+    terminalShortcutPolicy?: TerminalShortcutPolicy
+    terminalSearchShortcutInTerminalFirst?: boolean
+  } | null
+): ResolvedTerminalShortcutPolicy {
+  const policy = normalizeTerminalShortcutPolicy(settings?.terminalShortcutPolicy)
+  return policy === 'terminal-first' && settings?.terminalSearchShortcutInTerminalFirst !== false
+    ? 'terminal-first-with-search'
+    : policy
+}
+
 const TUI_CONFLICT_ACTIONS = new Set<KeybindingActionId>([
   'terminal.search',
   'terminal.clear',
@@ -104,7 +117,16 @@ export function keybindingIsActiveInContext(
     return true
   }
   // Why: Orca-first keeps app shortcuts inside terminals; terminal-first is the escape hatch for shells and TUIs.
-  if (normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first') {
+  if (
+    options.terminalShortcutPolicy !== 'terminal-first' &&
+    options.terminalShortcutPolicy !== 'terminal-first-with-search'
+  ) {
+    return true
+  }
+  if (
+    definition.id === 'terminal.search' &&
+    options.terminalShortcutPolicy === 'terminal-first-with-search'
+  ) {
     return true
   }
   return isKeybindingAllowedInTerminal(definition)

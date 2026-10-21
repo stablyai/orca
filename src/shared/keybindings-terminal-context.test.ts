@@ -3,10 +3,83 @@ import { describe, expect, it } from 'vitest'
 import {
   getEffectiveKeybindingsForAction,
   keybindingMatchesAction,
+  resolveTerminalShortcutPolicy,
   matchKeybindingDigitIndex
 } from './keybindings'
 
 describe('keybindings', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'allows only search through the terminal-first exception on %s',
+    (platform) => {
+      const options = {
+        context: 'terminal',
+        terminalShortcutPolicy: resolveTerminalShortcutPolicy({
+          terminalShortcutPolicy: 'terminal-first'
+        })
+      } as const
+      const search = {
+        key: 'f',
+        code: 'KeyF',
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: false,
+        shift: false
+      }
+      expect(keybindingMatchesAction('terminal.search', search, platform, undefined, options)).toBe(
+        true
+      )
+      expect(
+        keybindingMatchesAction(
+          'terminal.search',
+          { ...search, shift: true },
+          platform,
+          { 'terminal.search': ['Mod+Shift+F'] },
+          options
+        )
+      ).toBe(true)
+      expect(
+        keybindingMatchesAction(
+          'terminal.search',
+          search,
+          platform,
+          { 'terminal.search': [] },
+          options
+        )
+      ).toBe(false)
+      for (const action of [
+        'terminal.clear',
+        'terminal.closePane',
+        'tab.newTerminal',
+        'worktree.history.back'
+      ] as const) {
+        expect(
+          keybindingMatchesAction(action, search, platform, { [action]: ['Mod+F'] }, options)
+        ).toBe(false)
+      }
+      expect(
+        keybindingMatchesAction('terminal.search', search, platform, undefined, {
+          ...options,
+          terminalShortcutPolicy: resolveTerminalShortcutPolicy({
+            terminalShortcutPolicy: 'terminal-first',
+            terminalSearchShortcutInTerminalFirst: false
+          })
+        })
+      ).toBe(false)
+    }
+  )
+
+  it('restores the legacy search default and leaves Orca-first unchanged', () => {
+    expect(resolveTerminalShortcutPolicy()).toBe('orca-first')
+    expect(resolveTerminalShortcutPolicy({ terminalShortcutPolicy: 'terminal-first' })).toBe(
+      'terminal-first-with-search'
+    )
+    expect(
+      resolveTerminalShortcutPolicy({
+        terminalShortcutPolicy: 'orca-first',
+        terminalSearchShortcutInTerminalFirst: true
+      })
+    ).toBe('orca-first')
+  })
   it('keeps Orca-first terminal context backward compatible', () => {
     const ctrlP = {
       key: 'p',

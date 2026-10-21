@@ -1,3 +1,4 @@
+import { resolveTerminalShortcutPolicy } from '../../../../shared/keybindings'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
@@ -223,7 +224,7 @@ export function AgentTerminalPreview({
           keybindings: useAppStore.getState().keybindings,
           terminalInput: terminalInputRef.current,
           getKittyKeyboardFlags: () => kittyKeyboardModes.flags,
-          terminalShortcutPolicy: settingsRef.current?.terminalShortcutPolicy
+          terminalShortcutPolicy: resolveTerminalShortcutPolicy(settingsRef.current)
         })
       })
     }

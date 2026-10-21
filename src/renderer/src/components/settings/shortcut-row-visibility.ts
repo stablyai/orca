@@ -2,7 +2,7 @@ import {
   getEffectiveKeybindingsForDefinition,
   type KeybindingActionId,
   type KeybindingOverrides,
-  type TerminalShortcutPolicy
+  type ResolvedTerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { hasOwnBindingOverride } from './keybinding-override-edits'
 import type { ShortcutGroup } from './shortcut-groups'
@@ -20,7 +20,7 @@ export function buildShortcutRowVisibility(options: {
   groups: ShortcutGroup[]
   keybindings: KeybindingOverrides
   conflictByAction: Map<KeybindingActionId, string[]>
-  terminalShortcutPolicy: TerminalShortcutPolicy
+  terminalShortcutPolicy: ResolvedTerminalShortcutPolicy
   platform: NodeJS.Platform
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean

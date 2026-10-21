@@ -679,6 +679,28 @@ describe('Store', () => {
     expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
   })
 
+  it('persists the terminal search exception separately from terminal-first', async () => {
+    const store = await createStore()
+    expect(store.getSettings().terminalSearchShortcutInTerminalFirst).toBe(true)
+    store.updateSettings({
+      terminalShortcutPolicy: 'terminal-first',
+      terminalSearchShortcutInTerminalFirst: true
+    })
+    expect(store.getSettings().terminalShortcutPolicy).toBe('terminal-first')
+    expect(store.getSettings().terminalSearchShortcutInTerminalFirst).toBe(true)
+    store.flush()
+    await store.waitForPendingWrite()
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().terminalShortcutPolicy).toBe('terminal-first')
+    expect(reloaded.getSettings().terminalSearchShortcutInTerminalFirst).toBe(true)
+    reloaded.updateSettings({ terminalSearchShortcutInTerminalFirst: false })
+    reloaded.flush()
+    await reloaded.waitForPendingWrite()
+    const optedOut = await createStore()
+    expect(optedOut.getSettings().terminalShortcutPolicy).toBe('terminal-first')
+    expect(optedOut.getSettings().terminalSearchShortcutInTerminalFirst).toBe(false)
+  })
+
   it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {
     const workspaceSession = {
       activeRepoId: 'r1',

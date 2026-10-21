@@ -157,6 +157,8 @@ export function normalizeLoadedGlobalSettings(
     terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
       parsed.settings?.terminalShortcutPolicy
     ),
+    terminalSearchShortcutInTerminalFirst:
+      parsed.settings?.terminalSearchShortcutInTerminalFirst !== false,
     disabledTuiAgents: migratedDisabledTuiAgents,
     ...migratedAgentYoloDefaults,
     claudeAgentTeamsDefaultDisabledMigrated: true,

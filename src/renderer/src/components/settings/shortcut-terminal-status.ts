@@ -3,7 +3,7 @@ import {
   isKeybindingPotentialTerminalConflict,
   keybindingIsActiveInContext,
   type KeybindingDefinition,
-  type TerminalShortcutPolicy
+  type ResolvedTerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 
@@ -18,7 +18,7 @@ export type ShortcutTerminalStatus = {
 
 export function getShortcutTerminalStatus(
   definition: KeybindingDefinition,
-  terminalShortcutPolicy: TerminalShortcutPolicy,
+  terminalShortcutPolicy: ResolvedTerminalShortcutPolicy,
   hasEffectiveBinding: boolean
 ): ShortcutTerminalStatus | undefined {
   if (!hasEffectiveBinding) {

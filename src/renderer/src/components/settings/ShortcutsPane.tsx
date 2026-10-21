@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import {
+  resolveTerminalShortcutPolicy,
   findKeybindingConflictsForDefinitions,
   formatKeybindingList,
   getEffectiveKeybindingsForDefinition,
@@ -51,8 +52,8 @@ const platform: NodeJS.Platform = isMac
 export function ShortcutsPane(): React.JSX.Element {
   useTranslation()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const terminalShortcutPolicy = useAppStore(
-    (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
+  const terminalShortcutPolicy = useAppStore((state) =>
+    resolveTerminalShortcutPolicy(state.settings)
   )
   const updateSettings = useAppStore((state) => state.updateSettings)
   const keybindings = useAppStore((state) => state.keybindings)

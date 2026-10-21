@@ -190,6 +190,10 @@ export function updateSettings(
       updates.terminalShortcutPolicy
     )
   }
+  if ('terminalSearchShortcutInTerminalFirst' in updates) {
+    sanitizedUpdates.terminalSearchShortcutInTerminalFirst =
+      updates.terminalSearchShortcutInTerminalFirst === true
+  }
   if ('sourceControlGroupOrder' in updates) {
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
       updates.sourceControlGroupOrder

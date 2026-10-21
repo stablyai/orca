@@ -6,7 +6,7 @@ import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import type {
   KeybindingOverrides,
   KeybindingPlatform,
-  TerminalShortcutPolicy
+  ResolvedTerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
@@ -52,7 +52,7 @@ type RuntimeOptions = {
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
   paneKittyKeyboardModesRef?: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   keybindings?: KeybindingOverrides
-  terminalShortcutPolicy: TerminalShortcutPolicy
+  terminalShortcutPolicy: ResolvedTerminalShortcutPolicy
 }
 
 export function createTerminalKeyboardRuntime(options: RuntimeOptions) {

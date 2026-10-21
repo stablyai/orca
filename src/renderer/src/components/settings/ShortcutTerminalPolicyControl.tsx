@@ -1,5 +1,8 @@
 import React from 'react'
-import type { TerminalShortcutPolicy } from '../../../../shared/keybindings'
+import type {
+  ResolvedTerminalShortcutPolicy,
+  TerminalShortcutPolicy
+} from '../../../../shared/keybindings'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow } from './SettingsFormControls'
@@ -10,10 +13,11 @@ export function ShortcutTerminalPolicyControl({
   keywords,
   updateSettings
 }: {
-  terminalShortcutPolicy: TerminalShortcutPolicy
+  terminalShortcutPolicy: ResolvedTerminalShortcutPolicy
   keywords?: string[]
   updateSettings: (updates: {
     terminalShortcutPolicy?: TerminalShortcutPolicy
+    terminalSearchShortcutInTerminalFirst?: boolean
   }) => Promise<void> | void
 }): React.JSX.Element {
   return (
@@ -42,13 +46,21 @@ export function ShortcutTerminalPolicyControl({
         control={
           <Select
             value={terminalShortcutPolicy}
-            onValueChange={(value) =>
+            onValueChange={(value) => {
+              if (
+                value !== 'orca-first' &&
+                value !== 'terminal-first' &&
+                value !== 'terminal-first-with-search'
+              ) {
+                return
+              }
               void updateSettings({
-                terminalShortcutPolicy: value as TerminalShortcutPolicy
+                terminalShortcutPolicy: value === 'orca-first' ? 'orca-first' : 'terminal-first',
+                terminalSearchShortcutInTerminalFirst: value === 'terminal-first-with-search'
               })
-            }
+            }}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-64">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -64,10 +76,24 @@ export function ShortcutTerminalPolicyControl({
                   'Terminal first'
                 )}
               </SelectItem>
+              <SelectItem value="terminal-first-with-search">
+                {translate(
+                  'settings.shortcuts.terminalFirstWithSearch',
+                  'Terminal first, Orca search'
+                )}
+              </SelectItem>
             </SelectContent>
           </Select>
         }
       />
+      {terminalShortcutPolicy === 'terminal-first-with-search' ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'settings.shortcuts.terminalFirstWithSearchDescription',
+            'Search active pane opens Orca search. Other shortcuts keep Terminal first behavior.'
+          )}
+        </p>
+      ) : null}
     </SearchableSetting>
   )
 }

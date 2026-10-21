@@ -20,6 +20,7 @@ import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
+  KeybindingMatchOptions,
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
@@ -58,7 +59,7 @@ export type AppShortcutState = {
   openFloatingWorkspaceMaximized: () => void
   pluginCommands: ReturnType<typeof usePluginCommands>
   setFloatingTerminalOpen: (open: boolean) => void
-  terminalShortcutPolicy: NonNullable<AppStoreState['settings']>['terminalShortcutPolicy']
+  terminalShortcutPolicy: KeybindingMatchOptions['terminalShortcutPolicy']
   workspaceChromeActive: boolean
 }
 

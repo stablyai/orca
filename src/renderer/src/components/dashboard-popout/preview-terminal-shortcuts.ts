@@ -6,10 +6,9 @@ import {
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import type { OptionKeyLocationState } from '@/lib/keyboard-layout/option-key-location-state'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import {
-  normalizeTerminalShortcutPolicy,
-  type KeybindingOverrides,
-  type TerminalShortcutPolicy
+import type {
+  KeybindingOverrides,
+  ResolvedTerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 
 export type PreviewShortcutContext = {
@@ -23,7 +22,7 @@ export type PreviewShortcutContext = {
   /** Live kitty-protocol flags mirrored from this pty's output. */
   getKittyKeyboardFlags: () => number
   /** The user's policy for chords shared with shells and TUIs. */
-  terminalShortcutPolicy: TerminalShortcutPolicy | null | undefined
+  terminalShortcutPolicy: ResolvedTerminalShortcutPolicy | null | undefined
 }
 
 /**
@@ -54,7 +53,7 @@ export function resolvePreviewShortcutAction(
     () => hostPlatform === 'win32',
     // Why: without it a terminal-first user's remapped tab.close chord — Ctrl+W
     // is a shell word-kill — reaches the shell in the pane but is swallowed here.
-    normalizeTerminalShortcutPolicy(context.terminalShortcutPolicy),
+    context.terminalShortcutPolicy ?? 'orca-first',
     () => context.terminalInput?.ctrlEnterCsiU === true
   )
 }

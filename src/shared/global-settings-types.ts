@@ -281,6 +281,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   ctrlTabOrderMode?: CtrlTabOrderMode
   /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
   terminalShortcutPolicy?: TerminalShortcutPolicy
+  /** Missing means enabled to restore search for existing terminal-first profiles. */
+  terminalSearchShortcutInTerminalFirst?: boolean
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
