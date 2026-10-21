@@ -212,8 +212,11 @@ export default function BrowserAddressBar({
     }
     inputRef.current?.select()
     openedAtRef.current = Date.now()
-    setOpen(true)
-  }, [inputRef])
+    // Why: an empty bar is a blank tab, whose New Tab page already lists what the dropdown would.
+    if (value !== '') {
+      setOpen(true)
+    }
+  }, [inputRef, value])
 
   const handleBlur = useCallback(() => {
     // Why: delay close so that clicking a suggestion item registers before

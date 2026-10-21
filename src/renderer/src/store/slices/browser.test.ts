@@ -311,6 +311,25 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBeNull()
   })
 
+  it('puts a removed history page back as it was on Undo, unless a revisit already re-created it', () => {
+    const store = createTestStore()
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
+    const [visited] = store.getState().browserUrlHistory
+
+    const removed = store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
+    expect(removed).toBe(visited)
+    expect(store.getState().browserUrlHistory).toEqual([])
+    store.getState().restoreBrowserHistoryEntry(removed!)
+    expect(store.getState().browserUrlHistory).toEqual([visited])
+
+    store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
+    const revisited = store.getState().browserUrlHistory
+    store.getState().restoreBrowserHistoryEntry(removed!)
+    expect(store.getState().browserUrlHistory).toBe(revisited)
+  })
+
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {

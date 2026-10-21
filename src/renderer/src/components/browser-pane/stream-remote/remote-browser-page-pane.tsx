@@ -421,6 +421,7 @@ export function RemoteBrowserPagePane({
         runtimeTarget={runtimeTarget}
         onReload={() => void runRemoteNavigation('browser.reload')}
         onGoto={(url) => void runRemoteNavigation('browser.goto', url)}
+        onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
