@@ -15,8 +15,7 @@ import { ActivityThreadCollapseContext } from '@/components/activity/activity-th
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redirect'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useChromeAppearanceStyle } from '@/hooks/use-chrome-appearance-style'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
@@ -93,11 +92,7 @@ function Sidebar({
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
-  const systemPrefersDark = useSystemPrefersDark()
-  const leftSidebarStyle = useMemo(
-    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
-    [settings, systemPrefersDark]
-  ) as React.CSSProperties | undefined
+  const leftSidebarStyle = useChromeAppearanceStyle()
   const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,

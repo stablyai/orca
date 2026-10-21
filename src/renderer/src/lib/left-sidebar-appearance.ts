@@ -110,7 +110,11 @@ function resolveTintedSurfaceVariables(
   const tintOpacity = normalizeLeftSidebarTintOpacity(settings.leftSidebarTintOpacity)
   const tintPercent = Number((tintOpacity * 100).toFixed(2))
   const background = `color-mix(in srgb, ${tintColor} ${tintPercent}%, var(--background))`
-  return buildSurfaceVariables({ background, foreground: 'var(--foreground)' })
+  return {
+    ...buildSurfaceVariables({ background, foreground: 'var(--foreground)' }),
+    // Why: tab strips and titlebars paint with --card; lift it off the tint like match-terminal does.
+    '--card': `color-mix(in srgb, var(--foreground) 4%, ${background})`
+  }
 }
 
 export function resolveLeftSidebarStyleVariables(

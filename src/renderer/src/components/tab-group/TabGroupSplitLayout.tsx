@@ -1,6 +1,7 @@
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
+import { useChromeAppearanceStyle } from '@/hooks/use-chrome-appearance-style'
 
 /** The main workspace surface: the shared drag scope and group tree under main-window chrome
  *  (drag strip, left seam border). Hosts with their own chrome compose the two parts directly. */
@@ -15,6 +16,7 @@ export default function TabGroupSplitLayout({
   focusedGroupId?: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
+  const chromeAppearanceStyle = useChromeAppearanceStyle()
   return (
     <WorkspaceTabDragLayer worktreeId={worktreeId} enabled={isWorktreeActive}>
       {({ isTabDragActive, hoveredTabInsertion, setDragRootNode }) => (
@@ -38,7 +40,11 @@ export default function TabGroupSplitLayout({
           ref={setDragRootNode}
           className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
         >
-          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
+          <div
+            className="h-[4px] shrink-0 bg-card"
+            style={chromeAppearanceStyle}
+            data-terminal-focus-release-surface="true"
+          />
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <TabGroupSplitNodeTree
               layout={layout}
