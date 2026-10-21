@@ -3,6 +3,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
+import { installXtermWriteBufferFlushRepair } from './xterm-write-buffer-flush-repair'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
@@ -46,6 +47,8 @@ export function createPaneDOM(
   }
 
   const terminal = new Terminal(terminalOpts)
+  // Why first: every later resize must flush only unparsed chunks (see xterm-write-buffer-flush-repair.ts).
+  installXtermWriteBufferFlushRepair(terminal)
   // Why: a synchronous throw inside any link provider's provideLinks (notably
   // xterm web-links' LinkComputer raising RangeError on a pathological wrapped
   // line) escapes to window.onerror and gets the renderer killed. Guard every
