@@ -1,15 +1,21 @@
-import { View, Text, Pressable } from 'react-native'
+import { View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, Folder, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
-import { StatusDot } from '../components/StatusDot'
+import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import { styles } from './mobile-session-styles'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
-import { useResponsiveLayout } from '../layout/responsive-layout'
+import type { SessionTitleCard } from './use-session-title-card'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
-export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionHeader({
+  controller,
+  details
+}: {
+  controller: MobileSessionController
+  details: SessionTitleCard
+}) {
   const {
     hostId,
     isFolderWorkspaceRoute,
@@ -27,15 +33,14 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     showHeaderMoreButton
   } = controller
   const revealSidebar = useHostSidebarReveal()
-  // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
-  const tabsInTopBar = useResponsiveLayout().isLandscapePhone && hasTabs
+  const tabsInTopBar = details.besideTabs
   const tabStrip = hasTabs ? (
     <MobileSessionTabStrip controller={controller} inTopBar={tabsInTopBar} />
   ) : null
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>
-      <View style={styles.sessionTopBar}>
+      <View ref={details.barRef} onLayout={details.onAnchorLayout} style={styles.sessionTopBar}>
         {revealSidebar ? (
           <MobileSessionHeaderIconButton
             accessibilityLabel="Show sidebar"
@@ -49,29 +54,18 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
           onPress={requestLeaveSession}
         />
 
-        <View
-          style={[styles.sessionTitleBlock, tabsInTopBar && styles.sessionTitleBlockBesideTabs]}
-        >
-          <Text style={styles.sessionTitle} numberOfLines={1}>
-            {worktreeName || 'Terminal'}
-          </Text>
-          <Pressable
-            style={styles.sessionMetaRow}
-            disabled={!showConnectionRetry}
-            onPress={() => {
-              if (hostId && forceReconnectHost) {
-                void forceReconnectHost(hostId)
-              }
-            }}
-            accessibilityRole={showConnectionRetry ? 'button' : undefined}
-            accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
-          >
-            <StatusDot state={connState} />
-            <Text style={styles.sessionMetaText} numberOfLines={1}>
-              {terminalSummary}
-            </Text>
-          </Pressable>
-        </View>
+        <MobileSessionTitleBlock
+          title={worktreeName || 'Terminal'}
+          connState={connState}
+          details={details}
+          meta={terminalSummary}
+          showConnectionRetry={showConnectionRetry}
+          onRetry={() => {
+            if (hostId && forceReconnectHost) {
+              void forceReconnectHost(hostId)
+            }
+          }}
+        />
         {tabsInTopBar ? tabStrip : null}
         {!isFloatingWorkspaceRoute && (
           <MobileSessionHeaderIconButton

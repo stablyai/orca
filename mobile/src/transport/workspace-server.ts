@@ -21,23 +21,30 @@ export function useWorkspaceServer(args: {
   executionHost: ExecutionHostId | undefined
 }): {
   routeHost: ExecutionHostId | undefined | null
-  server: { client: RpcClient | null; state: ConnectionState; gates: HostStatusGates } | null
+  server: {
+    client: RpcClient | null
+    state: ConnectionState
+    name: string | null
+    gates: HostStatusGates
+  } | null
 } {
   const { client, connState, desktopCapabilities, executionHost } = args
   const routeHost = workspaceRouteExecutionHost(client, desktopCapabilities, executionHost)
   const serverClient = client && routeHost ? scopeRpcClientToExecutionHost(client, routeHost) : null
   // The same feed the host list reads, so the desktop is not polled twice.
   const hosts = useRelayHosts(routeHost ? client : null)
+  const selectedHost = hosts?.find((entry) => entry.hostId === routeHost)
   const state =
-    connState === 'connected' && routeHost && hosts
-      ? serverConnState(hosts.find((entry) => entry.hostId === routeHost))
-      : connState
+    connState === 'connected' && routeHost && hosts ? serverConnState(selectedHost) : connState
   // No hostId: the desktop's recorded version and descriptor must not take the server's. The
   // server's own state, so its restart under a connected desktop re-reads what it supports.
   const gates = useHostStatusGates({ hostId: undefined, client: serverClient, connState: state })
   return {
     routeHost,
-    server: routeHost === undefined ? null : { client: serverClient, state, gates }
+    server:
+      routeHost === undefined
+        ? null
+        : { client: serverClient, state, name: selectedHost?.label ?? null, gates }
   }
 }
 

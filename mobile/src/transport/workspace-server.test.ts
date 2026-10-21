@@ -33,12 +33,13 @@ describe('useWorkspaceServer', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked route and gates never call the client.
     const client = {} as RpcClient
     function Probe(): null {
-      useWorkspaceServer({
+      const { server } = useWorkspaceServer({
         client,
         connState: 'connected',
         desktopCapabilities: [],
         executionHost: HOST
       })
+      expect(server?.name).toBe('Server')
       return null
     }
     feed.hosts = [server('ready')]

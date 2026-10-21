@@ -5,7 +5,7 @@ import type { ConnectionState } from './types'
 
 // Provided by `WorkspaceRoute` for a server's workspace (client null until reachable); absent otherwise.
 export const WorkspaceServerContext = createContext<
-  { client: RpcClient | null; state: ConnectionState } | undefined
+  { client: RpcClient | null; state: ConnectionState; name?: string | null } | undefined
 >(undefined)
 
 /** `useHostClient` for a workspace screen: its calls run where the workspace does. */

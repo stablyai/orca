@@ -23,6 +23,9 @@ type Params = {
 
 export type LiveWorktreeName = {
   name: string
+  /** Where the worktree lives on its host; null until the host's record arrives. */
+  path: string | null
+  hostId: string | null
   /** What the host last proved about this worktree still existing — see the bounce in
    *  use-missing-worktree-bounce.ts. */
   resolution: WorktreeShowResolution
@@ -38,10 +41,12 @@ export function useLiveWorktreeName({
   // fail forever and keep the 3s fallback poll alive; its title is fixed.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const routeNameHint = routeName?.trim() ?? ''
-  const [worktreeName, setWorktreeName] = useState(() => ({
-    worktreeId,
-    name: routeNameHint
-  }))
+  const [worktreeName, setWorktreeName] = useState<{
+    worktreeId: string
+    name: string
+    path?: string | null
+    hostId?: string | null
+  }>(() => ({ worktreeId, name: routeNameHint }))
   // Why: keyed by id so a verdict about the previous route can never survive into the next one.
   const [resolved, setResolved] = useState<{
     worktreeId: string
@@ -122,10 +127,15 @@ export function useLiveWorktreeName({
           const worktree = accepted.value
           const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
+            const path = worktree?.path || null
+            const hostId = worktree?.hostId ?? null
             setWorktreeName((current) =>
-              current.worktreeId === worktreeId && current.name === liveName
+              current.worktreeId === worktreeId &&
+              current.name === liveName &&
+              current.path === path &&
+              current.hostId === hostId
                 ? current
-                : { worktreeId, name: liveName }
+                : { worktreeId, name: liveName, path, hostId }
             )
           }
           hasSuccessfulRefresh = true
@@ -201,10 +211,12 @@ export function useLiveWorktreeName({
 
   if (isFloatingWorkspace) {
     // The sentinel has no worktree record to resolve, so nothing is ever proven about it.
-    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown' }
+    return { name: FLOATING_WORKSPACE_TITLE, path: null, hostId: 'local', resolution: 'unknown' }
   }
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
+    path: worktreeName.worktreeId === worktreeId ? (worktreeName.path ?? null) : null,
+    hostId: worktreeName.worktreeId === worktreeId ? (worktreeName.hostId ?? null) : null,
     resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
   }
 }
