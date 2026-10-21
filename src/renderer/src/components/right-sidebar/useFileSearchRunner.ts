@@ -18,6 +18,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import type { SearchResult } from '../../../../shared/code-search-types'
+import type { FileSearchResultsQuery } from '@/store/slices/editor/types/file-search-worktree-state'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -28,6 +29,7 @@ type UpdateSearchState = (updates: {
   loading?: boolean
   results?: SearchResult | null
   resultOwner?: FileSearchResultOwner | null
+  resultsQuery?: FileSearchResultsQuery | null
 }) => void
 
 type UseFileSearchRunnerArgs = {
@@ -145,6 +147,12 @@ export function useFileSearchRunner({
             }
             return
           }
+          const resultsQuery: FileSearchResultsQuery = {
+            query,
+            caseSensitive: activeSearchState?.caseSensitive ?? false,
+            wholeWord: activeSearchState?.wholeWord ?? false,
+            useRegex: activeSearchState?.useRegex ?? false
+          }
           const results = await searchRuntimeFiles(
             {
               target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
@@ -153,11 +161,8 @@ export function useFileSearchRunner({
               connectionId
             },
             {
-              query,
+              ...resultsQuery,
               rootPath: worktreePath,
-              caseSensitive: activeSearchState?.caseSensitive ?? false,
-              wholeWord: activeSearchState?.wholeWord ?? false,
-              useRegex: activeSearchState?.useRegex ?? false,
               includePattern: activeSearchState?.includePattern || undefined,
               excludePattern: activeSearchState?.excludePattern || undefined,
               maxResults: SEARCH_MAX_RESULTS
@@ -165,7 +170,7 @@ export function useFileSearchRunner({
             controller.signal
           )
           if (latestSearchIdRef.current === searchId) {
-            updateActiveSearchState({ results, resultOwner })
+            updateActiveSearchState({ results, resultOwner, resultsQuery })
           }
         } catch (err) {
           if (controller.signal.aborted) {
