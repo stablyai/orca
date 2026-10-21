@@ -1,0 +1,12 @@
+{
+  "manifestVersion": 1,
+  "id": "docker-machines",
+  "publisher": "orca-e2e",
+  "name": "Docker machines",
+  "version": "1.0.0",
+  "description": "E2E machine provider: each machine is a Docker SSH host container.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": { "vmRecipes": [{ "path": "recipes/docker-machines.json" }] },
+  "capabilities": []
+}

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 2,
+  "id": "docker-machines",
+  "name": "Docker machines",
+  "machines": { "command": ["$orca-node", "$plugin/bin/docker-machine-provider.mjs"] }
+}
