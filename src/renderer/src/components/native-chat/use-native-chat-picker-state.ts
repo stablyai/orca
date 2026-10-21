@@ -63,6 +63,8 @@ export function useNativeChatPickerState(args: {
   disabled: boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
   sessionSkills?: readonly NativeChatSessionSkill[]
+  /** Each opening of the `/` or `$` menu, so a resting chat's list can be brought up to date. */
+  onPickerOpened?: () => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -78,6 +80,7 @@ export function useNativeChatPickerState(args: {
     recalledFromHistory,
     disabled,
     sessionSkills,
+    onPickerOpened,
     textareaRef,
     setDraft,
     setCaret,
@@ -149,8 +152,9 @@ export function useNativeChatPickerState(args: {
     if (lastOpenKeyRef.current !== openKey) {
       lastOpenKeyRef.current = openKey
       emitNativeChatPickerOpened({ agent, prefix: autocomplete.prefix })
+      onPickerOpened?.()
     }
-  }, [agent, autocomplete, dismissalContext])
+  }, [agent, autocomplete, dismissalContext, onPickerOpened])
 
   const commitCompletion = useCallback(
     (result: { draft: string; caret: number }) => {
@@ -173,7 +177,7 @@ export function useNativeChatPickerState(args: {
       const result = applyPickerSuggestion(draft, caret, item)
       if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
         const from = result.caret - result.insertedToken.length - 1
-        textareaRef.current.insertSkill(from, caret, result.insertedToken)
+        textareaRef.current.insertSkill(from, caret, result.insertedToken, item.path)
       }
       commitCompletion(result)
       skillOriginRef.current = item.kind === 'skill' ? result.insertedToken : null

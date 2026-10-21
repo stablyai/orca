@@ -5,6 +5,7 @@
 // binding it was first published with stands, so any later bind (a window's own spawn, an adopt)
 // ends it. Keys are never reused.
 
+import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
 import type {
   PaneStartStatus,
   PublishedWorkspaceLayout
@@ -103,4 +104,10 @@ export function withPaneStartFacts(
         : tab
     )
   }
+}
+
+/** A start that threw: held when a newer build's terminal service may still run it, else failed. */
+export function paneStartFailure(error: unknown): PaneStartFact {
+  const reason = error instanceof Error ? error.message : String(error)
+  return { status: reason === NEWER_DAEMON_HOLD_ERROR ? 'held' : 'failed', reason }
 }

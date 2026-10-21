@@ -51,9 +51,11 @@ describe('orcadLaunchCommand', () => {
 
   it('truncates the readiness file, so a stale line cannot be activated on', () => {
     const command = orcadLaunchCommand(posix, SPEC)
-    const truncate = command.indexOf(`: > '${SPEC.remoteInstallDir}/${ORCAD_READINESS_FILENAME}'`)
+    const cd = command.indexOf(`cd '${SPEC.remoteInstallDir}'`)
+    const truncate = command.indexOf(`: > '${ORCAD_READINESS_FILENAME}'`)
     const launch = command.indexOf('nohup')
-    expect(truncate).toBeGreaterThan(-1)
+    expect(cd).toBeGreaterThan(-1)
+    expect(truncate).toBeGreaterThan(cd)
     expect(truncate).toBeLessThan(launch)
   })
 

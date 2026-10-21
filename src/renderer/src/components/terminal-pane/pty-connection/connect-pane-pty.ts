@@ -68,8 +68,6 @@ export function connectPanePty(
   )
   session.connectFrame = null
   session.connectFallbackTimer = null
-  session.startupGridSettleHandle = null
-  session.startupGridSettledForConnect = false
   session.connectStarted = false
   session.unregisterBacklogRecovery = null
   session.unregisterDocumentVisibilityRecovery = null

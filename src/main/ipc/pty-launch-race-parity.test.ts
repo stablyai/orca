@@ -6,6 +6,7 @@ import { ptySizes } from './pty/delivery/visibility-state'
 import { clearProviderPtyState } from './pty/provider/state-cleanup'
 import * as paneSpawnReservations from './pty/pane/spawn-reservation'
 import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../runtime/worktree-terminals-sleeping-error'
+import { RestoredPaneStarter } from '../runtime/terminal/recovery/restored-pane-start'
 import {
   LAUNCH_RACE_LANES,
   createLaunchRaceRuntime,
@@ -76,12 +77,6 @@ describe('launch race parity, both spawn lanes', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
 
   describe('who owns the pane', () => {
-    // C6 picks one: the window joins before its setup and checks nothing; the host joins after and verifies.
-    const JOINED_UNVERIFIED_WINNER: Record<LaunchRaceLane, 'reattach' | 'refused'> = {
-      ipc: 'reattach',
-      runtime: 'refused'
-    }
-    const JOINER_PREPARES_ITS_OWN_LAUNCH: Record<LaunchRaceLane, number> = { ipc: 0, runtime: 1 }
     it.each(LAUNCH_RACE_LANES)(
       '%s lane: a spawn arriving while a window spawn is starting the pane joins it',
       async (lane) => {
@@ -113,17 +108,15 @@ describe('launch race parity, both spawn lanes', () => {
         onTestFinished(() => joinPaneSpawn.mockRestore())
         const joiner = lanes.spawn[lane]({ ...pane.args, command: 'claude' })
         if (lane === 'runtime') {
-          // Runtime preflight does filesystem work before it can join the reserved pane.
+          // Both lanes join before any fresh launch preparation.
           await vi.waitFor(() => expect(joinPaneSpawn).toHaveBeenCalledOnce())
         }
         finishSpawn()
 
         await expect(winner).resolves.toMatchObject({ id: 'pty-join-winner' })
-        await (JOINED_UNVERIFIED_WINNER[lane] === 'reattach'
-          ? expect(joiner).resolves.toMatchObject({ id: 'pty-join-winner', isReattach: true })
-          : expect(joiner).rejects.toThrow('terminal_pane_owner_unknown'))
+        await expect(joiner).resolves.toMatchObject({ id: 'pty-join-winner' })
         expect(spawn).toHaveBeenCalledOnce()
-        expect(auth.prepareClaudeAuth).toHaveBeenCalledTimes(JOINER_PREPARES_ITS_OWN_LAUNCH[lane])
+        expect(auth.prepareClaudeAuth).not.toHaveBeenCalled()
       }
     )
 
@@ -186,6 +179,54 @@ describe('launch race parity, both spawn lanes', () => {
       await expect(mount).resolves.toMatchObject({ id: 'pty-user-mount' })
       expect(spawn).toHaveBeenCalledOnce()
     })
+  })
+
+  // C1b: a desktop window's restore, a phone's first view and a CLI send of one restored pane.
+  it('starts a restored pane once for a window restore, a client first view and a CLI send', async () => {
+    const pane = launchRacePane('race-three-starters', '73737373-7373-4373-8373-737373737373')
+    let finishSpawn!: () => void
+    const spawn = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSpawn = () => resolve({ id: 'pty-restored' })
+          })
+      )
+      .mockRejectedValue(new Error('second_terminal_started'))
+    installDaemonTestProvider({ spawn })
+    const lanes = registerLaunchRaceLanes({
+      handlers,
+      mainWindow,
+      runtime: createLaunchRaceRuntime()
+    })
+    // The pane main holds: bound to the terminal that binds it, live once registered.
+    let bound: string | undefined
+    const window = lanes.spawn.ipc(pane.args).then((reply) => {
+      bound = reply.id
+      return reply
+    })
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    const joinPaneSpawn = vi.spyOn(paneSpawnReservations, 'joinPaneSpawn')
+    onTestFinished(() => joinPaneSpawn.mockRestore())
+    const starter = new RestoredPaneStarter({
+      boundPtyId: () => bound,
+      isLive: (ptyId) => ptyId === bound,
+      start: async () => (await lanes.spawn.runtime(pane.args)).id
+    })
+    const restored = { worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId }
+    const firstView = starter.ensureStarted(restored)
+    const cliSend = starter.ensureStarted(restored)
+    await vi.waitFor(() => expect(joinPaneSpawn).toHaveBeenCalled())
+    finishSpawn()
+
+    await expect(window).resolves.toMatchObject({ id: 'pty-restored' })
+    await expect(Promise.all([firstView, cliSend])).resolves.toEqual([
+      'pty-restored',
+      'pty-restored'
+    ])
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(mintedFor(pane.worktreeId)).toEqual([])
   })
 
   describe('cleanup when a start fails', () => {
@@ -353,7 +394,7 @@ describe('launch race parity, both spawn lanes', () => {
           immediate: true,
           expectedIncarnationId: 'inc-1'
         })
-        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(ptyId, 'inc-1')
+        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(ptyId, 'inc-1', undefined)
       }
     )
 
@@ -384,7 +425,11 @@ describe('launch race parity, both spawn lanes', () => {
         await (EXITED_DURING_REGISTRATION[lane] === 'resolves'
           ? expect(spawn).resolves.toMatchObject({ id: ptyId, incarnationId: 'inc-exited' })
           : expect(spawn).rejects.toThrow('agent_session_exited_during_start'))
-        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(ptyId, 'inc-exited')
+        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(
+          ptyId,
+          'inc-exited',
+          undefined
+        )
         expect(runtime.noteTerminalSpawnCommit).not.toHaveBeenCalled()
         expect(runtime.reflowHeadlessTerminalToPtyGrid).not.toHaveBeenCalled()
       }

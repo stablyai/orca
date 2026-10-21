@@ -38,6 +38,7 @@ export async function runClaudeListing(
     site: string
     cwd?: string
     signal?: AbortSignal
+    isCurrent?: () => boolean
   }
 ): Promise<string> {
   // Same pin rule as the session spawn: naming the CLI's default dir would move
@@ -46,8 +47,11 @@ export async function runClaudeListing(
     ...base,
     ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
   }))
-  const run = (args: readonly string[]) =>
-    (deps.runListing ?? runAgentModelCatalogListing)(
+  const run = (args: readonly string[]) => {
+    if (request.isCurrent && !request.isCurrent()) {
+      throw new Error('Listing context retired')
+    }
+    return (deps.runListing ?? runAgentModelCatalogListing)(
       {
         command,
         args: [...args],
@@ -56,6 +60,7 @@ export async function runClaudeListing(
       },
       { site: request.site, inheritedEnv: env, signal: request.signal }
     )
+  }
   const result = await runClaudeBackgroundAttempts({
     agentId: 'claude',
     run: (strictMcp) =>

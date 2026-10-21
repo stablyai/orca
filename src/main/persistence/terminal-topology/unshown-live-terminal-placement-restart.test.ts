@@ -108,6 +108,24 @@ describe('main shows a live terminal no pane shows, at startup with no window', 
     })
   })
 
+  it('a bind by main’s pass raises the pane’s binding generation by exactly one', async () => {
+    const store = await openStore((window) => window.addTab(WORKTREE, TAB, LEAF))
+    const before = store.getPtyBindingGeneration('local', LEAF) ?? 0
+
+    await placeOn(store, [livePty('pty-agent', { tabId: TAB, paneKey: `${TAB}:${LEAF}` })])
+
+    expect(store.getPtyBindingGeneration('local', LEAF)).toBe(before + 1)
+    // A command that changes no binding (a rename) leaves it as it is.
+    await store.applyLayoutCommand({
+      type: 'renameTab',
+      workspace: WORKTREE,
+      tabId: TAB,
+      kind: 'custom',
+      title: 'x'
+    })
+    expect(store.getPtyBindingGeneration('local', LEAF)).toBe(before + 1)
+  })
+
   it('shows a terminal no pane ever named in a new tab bound to it, kept across a restart', async () => {
     const store = await openStore((window) => window.addTab(WORKTREE, TAB, LEAF))
 

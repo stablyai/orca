@@ -1,97 +1,129 @@
 import type { StateCreator } from 'zustand'
-import type { OpenFile } from './slices/editor/types/open-file'
 import {
   editorBufferMirrorMismatch,
-  editorBufferRecordFromFile,
   reconcileEditorBufferMembership,
-  type EditorBufferRecords
+  type EditorBufferState
 } from './slices/editor/buffers/editor-buffer-record'
-
-type EditorBufferState = {
-  openFiles: OpenFile[]
-  editorBuffers: EditorBufferRecords
-}
+import {
+  editorBufferIdOfView,
+  editorBufferViewIndexMismatch,
+  reconcileEditorBufferViewIndex,
+  type EditorBufferViewIndex
+} from './slices/editor/buffers/editor-buffer-views'
 
 /**
- * Ties editor buffer records to `openFiles` membership inside the same write, so open, hydrate,
- * close and teardown never need their own record bookkeeping. Slice writes must route the six
- * buffer fields through the record; dev and test builds throw when a tab mirror drifts from it.
+ * Ties editor buffer records and their view index to `openFiles` membership inside the same
+ * write: a new tab joins (or seeds) its record and a record with no view left is dropped. Field
+ * writes go through the record (`writeEditorBuffer`); with `checkInvariant` a write that drifts
+ * a view from its record throws.
  */
 function reconcileEditorBuffers<TState extends EditorBufferState>(
   state: TState,
   write: TState | Partial<TState>,
-  adoptMirrorDrift: boolean
+  checkInvariant: boolean
 ): TState | Partial<TState> {
   const openFiles = write.openFiles ?? state.openFiles
   const records = write.editorBuffers ?? state.editorBuffers
+  const drafts = write.editorDrafts ?? state.editorDrafts
   if (openFiles === state.openFiles && records === state.editorBuffers) {
+    // Why only drafts: this runs per keystroke, and nothing else about the views changed.
+    if (checkInvariant && drafts !== state.editorDrafts) {
+      assertEditorBufferDraftsAgree({ ...state, ...write }, drafts)
+    }
     return write
   }
-  let next = reconcileEditorBufferMembership(records, openFiles)
-  for (const file of openFiles) {
-    const field = editorBufferMirrorMismatch(file, next[file.id])
-    if (field === null) {
-      continue
-    }
-    // Why adopt outside dev: a missed writer must keep main's behaviour, not revert the tab.
-    if (!adoptMirrorDrift && import.meta.env.DEV) {
-      throw new Error(
-        `Editor buffer mirror "${field}" of ${file.id} was written without its record`
-      )
-    }
-    next = next === records ? { ...records } : next
-    next[file.id] = editorBufferRecordFromFile(file)
+  const index = reconcileEditorBufferViewIndex(
+    {
+      editorBufferIdOf: write.editorBufferIdOf ?? state.editorBufferIdOf,
+      editorBufferViews: write.editorBufferViews ?? state.editorBufferViews
+    },
+    openFiles
+  )
+  const next = reconcileEditorBufferMembership(records, openFiles, index)
+  if (checkInvariant) {
+    assertEditorBufferInvariant({ openFiles, editorBuffers: next, editorDrafts: drafts, ...index })
   }
-  return next === records ? write : { ...write, editorBuffers: next }
+  const indexChanged =
+    index.editorBufferIdOf !== state.editorBufferIdOf ||
+    index.editorBufferViews !== state.editorBufferViews
+  if (next === records && !indexChanged) {
+    return write
+  }
+  return {
+    ...write,
+    editorBuffers: next,
+    ...(indexChanged ? index : {})
+  }
 }
 
-export function assertEditorBufferInvariant(state: EditorBufferState): void {
-  const ids = new Set(state.openFiles.map((file) => file.id))
-  const recordIds = Object.keys(state.editorBuffers)
-  if (recordIds.length !== ids.size || recordIds.some((id) => !ids.has(id))) {
+/** Every view of a shared record holds the same `editorDrafts` entry. */
+export function assertEditorBufferDraftsAgree(
+  index: EditorBufferViewIndex,
+  drafts: Readonly<Record<string, string>> | undefined
+): void {
+  for (const viewIds of Object.values(index.editorBufferViews)) {
+    const [first, ...rest] = viewIds
+    const differing = rest.find((id) => !Object.is(drafts?.[first], drafts?.[id]))
+    if (differing !== undefined) {
+      throw new Error(`Editor draft of ${differing} differs from another view of its record`)
+    }
+  }
+}
+
+/**
+ * Against the index: every view's record exists, every record has a view, and every view of a
+ * record holds the same mirror fields and the same `editorDrafts` entry.
+ */
+export function assertEditorBufferRecordsMatchViews(state: EditorBufferState): void {
+  const recordIds = new Set(state.openFiles.map((file) => editorBufferIdOfView(state, file.id)))
+  const keys = Object.keys(state.editorBuffers)
+  if (keys.length !== recordIds.size || keys.some((id) => !recordIds.has(id))) {
     throw new Error('Editor buffer records are not keyed by the open editor tabs')
   }
   for (const file of state.openFiles) {
-    const field = editorBufferMirrorMismatch(file, state.editorBuffers[file.id])
+    const record = state.editorBuffers[editorBufferIdOfView(state, file.id)]
+    const field = editorBufferMirrorMismatch(file, record)
     if (field !== null) {
       throw new Error(`Editor buffer mirror "${field}" of ${file.id} differs from its record`)
     }
   }
+  assertEditorBufferDraftsAgree(state, state.editorDrafts)
+}
+
+/** The index matches the open tabs, and the records match the index. */
+export function assertEditorBufferInvariant(state: EditorBufferState): void {
+  const indexMismatch = editorBufferViewIndexMismatch(state, state.openFiles)
+  if (indexMismatch !== null) {
+    throw new Error(indexMismatch)
+  }
+  assertEditorBufferRecordsMatchViews(state)
 }
 
 export function withEditorBufferRecords<TState extends EditorBufferState>(
-  createState: StateCreator<TState, [], []>
+  createState: StateCreator<TState, [], []>,
+  checkInvariant: boolean = import.meta.env.DEV
 ): StateCreator<TState, [], []> {
   return (set, get, api) => {
-    // Why external writes adopt: `useAppStore.setState` is the fixture/seed path, like hydrate.
-    const wrap = (write: typeof set, adoptMirrorDrift: boolean): typeof set => {
+    const wrap = (write: typeof set): typeof set => {
       const wrapped = (
         partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
         replace?: boolean
       ): void => {
-        const before = get()
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards the caller's own partial/replace pair; with replace=true the updater still yields a full state.
         ;(write as (next: (state: TState) => TState | Partial<TState>, replace?: boolean) => void)(
           (state) =>
             reconcileEditorBuffers(
               state,
               typeof partial === 'function' ? partial(state) : partial,
-              adoptMirrorDrift
+              checkInvariant
             ),
           replace
         )
-        const after = get()
-        if (
-          import.meta.env.DEV &&
-          (after.openFiles !== before.openFiles || after.editorBuffers !== before.editorBuffers)
-        ) {
-          assertEditorBufferInvariant(after)
-        }
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one implementation serves both zustand setState overloads.
       return wrapped as typeof set
     }
-    api.setState = wrap(api.setState, true)
-    return createState(wrap(set, false), get, api)
+    api.setState = wrap(api.setState)
+    return createState(wrap(set), get, api)
   }
 }

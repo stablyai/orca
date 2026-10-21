@@ -6,6 +6,7 @@ import {
   stubTooltip
 } from './tab-bar-windows-shell-launch-render-stubs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -462,7 +463,13 @@ describe('TabBar context menu wiring', () => {
     ;(sortable[0].props.onTogglePin as () => void)()
     await layoutApplyTestTransport.settle()
 
-    expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    // A layout-owner build has main unpin it (tab-bar-layout-owner-props.test.ts); main's frame
+    // draws the unpin, so the window does not unpin it itself.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(unpinTabMock).not.toHaveBeenCalled()
+    } else {
+      expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    }
     expect(pinTabMock).not.toHaveBeenCalled()
   })
 

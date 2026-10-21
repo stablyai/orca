@@ -12,7 +12,7 @@ export async function openStructuredAgentSessionProviderChild(
       sessionId: string,
       child: StructuredAgentSessionProviderChildIdentity,
       error: unknown,
-      openMs?: number
+      openMs: number
     ) => Promise<void>
   },
   sessionId: string,

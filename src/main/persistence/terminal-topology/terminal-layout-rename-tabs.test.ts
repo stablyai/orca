@@ -137,4 +137,28 @@ describe('Store.applyTabRenames (layout.apply renameTabs)', () => {
     expect(refused.map(({ code }) => code)).toEqual(['tab_not_found'])
     expect(store.getWorkspaceSession()).toBe(before)
   })
+  it('keeps a tab’s first generated title unless a rename replaces it', async () => {
+    const { store, directory } = await storeWithTabs(1)
+    await store.applyTabRenames([
+      { hostId: 'local', renames: [rename(FIXTURE_GIT_WORKTREE_ID, 'tab-0', 'First prompt')] }
+    ])
+
+    const second = rename(FIXTURE_GIT_WORKTREE_ID, 'tab-0', 'Second prompt')
+    expect(await store.applyTabRenames([{ hostId: 'local', renames: [second] }])).toEqual([
+      { rename: second, code: 'generated_title_kept' }
+    ])
+    expect(generatedTitles(store)[0]).toEqual(['tab-0', 'First prompt'])
+
+    const replacing: CommandOf<'renameTab'> = {
+      type: 'renameTab',
+      workspace: FIXTURE_GIT_WORKTREE_ID,
+      tabId: 'tab-0',
+      kind: 'generated',
+      title: 'Replaced title',
+      replaceExisting: true
+    }
+    expect(await store.applyTabRenames([{ hostId: 'local', renames: [replacing] }])).toEqual([])
+    const reopened = await reopenTopologyStore(store, directory)
+    expect(generatedTitles(reopened)[0]).toEqual(['tab-0', 'Replaced title'])
+  })
 })

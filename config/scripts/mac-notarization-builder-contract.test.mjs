@@ -67,7 +67,9 @@ describe('macOS build workflow policy', () => {
       const job = Object.values(workflow(channel).jobs).find((job) =>
         job.steps?.some((step) => step.with?.command?.includes('electron-builder --config'))
       )
-      expect(job['runs-on']).toBe('blacksmith-6vcpu-macos-15')
+      expect(job['runs-on']).toBe(
+        channel === 'adhoc' ? 'blacksmith-12vcpu-macos-15' : 'blacksmith-6vcpu-macos-15'
+      )
       const step = job.steps.find((step) =>
         step.with?.command?.includes('electron-builder --config')
       )

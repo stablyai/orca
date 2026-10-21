@@ -316,6 +316,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/home/me/repo',
         events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+        resync: true,
         connectionId: 'conn-1'
       })
     )
@@ -375,6 +376,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      resync: true,
       connectionId: 'conn-1'
     })
 
@@ -447,6 +449,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/home/me/repo',
         events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+        resync: true,
         connectionId: 'conn-1'
       })
     }
@@ -577,6 +580,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
       events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      resync: true,
       connectionId: 'conn-1'
     })
     const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void

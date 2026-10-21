@@ -14,6 +14,7 @@ export { makePaneKey } from '../../shared/stable-pane-id'
 export { randomUUID } from 'node:crypto'
 export {
   admitStablePaneAdoption,
+  materializedStablePaneReply,
   allocateTerminalPaneIdentity
 } from './runtime-terminal-pane-identity'
 export {

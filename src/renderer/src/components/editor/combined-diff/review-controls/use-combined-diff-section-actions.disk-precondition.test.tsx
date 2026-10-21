@@ -6,6 +6,7 @@ import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline
 import type { DiffSection } from '../../diff-section-types'
 import type { OpenFile } from '@/store/slices/editor'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
+import { getStoredTextDiffResult } from '../../large-diff-section-content'
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))
 
@@ -96,19 +97,16 @@ it('guards section saves, marks a refusal as a section conflict, and overwrites 
   expect(mocks.writeRuntimeFile.mock.calls[2]?.[4]).toBeUndefined()
 })
 
-it('treats an empty loaded file as a known version', async () => {
-  const empty: DiffSection = {
-    ...section(),
-    diffResult: {
-      kind: 'text',
-      originalContent: 'old',
-      modifiedContent: '',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    }
-  }
-  const sections = [empty]
-  const { result } = renderHook(() =>
+const LIMITED: DiffSection['largeDiffRenderLimit'] = {
+  limited: true,
+  reason: 'character-count',
+  lineCounts: null,
+  characterCount: 7_000_000,
+  limits: { maxLinesPerSide: 120_000, maxCombinedCharacters: 6_000_000 }
+}
+
+function renderSave(sections: DiffSection[], setSections = vi.fn()) {
+  return renderHook(() =>
     useCombinedDiffSectionActions({
       activeGroupId: undefined,
       branchCompare: null,
@@ -121,15 +119,45 @@ it('treats an empty loaded file as a known version', async () => {
       sections,
       sectionsRef: { current: sections },
       setSectionHeights: vi.fn(),
-      setSections: vi.fn()
+      setSections
     })
-  )
+  ).result
+}
+
+// Why limited: a huge paste into an empty file trips the live render limit without pruning the load.
+it('treats an empty loaded file as a known version, even after a huge paste', async () => {
+  const empty: DiffSection = {
+    ...section(),
+    diffResult: {
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: '',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    },
+    largeDiffRenderLimit: LIMITED
+  }
+  const result = renderSave([empty])
   mocks.writeRuntimeFile.mockResolvedValueOnce({ ok: true })
   await act(() => result.current.handleSectionSaveRef.current(0))
   expect(mocks.writeRuntimeFile.mock.calls[0]?.[4]).toEqual({
     expectedSignature: getDiskBaselineSignature(''),
     allowMissing: false
   })
+})
+
+it('refuses to guess a version for a load whose bodies were pruned', async () => {
+  const loaded = section().diffResult
+  const pruned: DiffSection = {
+    ...section(),
+    diffResult: loaded && getStoredTextDiffResult(loaded, LIMITED),
+    largeDiffRenderLimit: LIMITED
+  }
+  const setSections = vi.fn()
+  const result = renderSave([pruned], setSections)
+  await act(() => result.current.handleSectionSaveRef.current(0))
+  expect(mocks.writeRuntimeFile).not.toHaveBeenCalled()
+  expect(setSections.mock.calls[0]?.[0]([pruned])).toEqual([{ ...pruned, saveConflict: true }])
 })
 
 it('serializes overlapping saves of one section and never clobbers newer edits', async () => {

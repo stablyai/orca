@@ -48,7 +48,8 @@ export function scheduleLocalCapacityRetry(
         if (root?.listeners.has(listener.id) && !listener.isDestroyed()) {
           listener.send('fs:changed', {
             worktreePath: root.rootPath,
-            events: [{ kind: 'overflow', absolutePath: root.rootPath }]
+            events: [{ kind: 'overflow', absolutePath: root.rootPath }],
+            resync: true
           } satisfies FsChangedPayload)
         }
       })

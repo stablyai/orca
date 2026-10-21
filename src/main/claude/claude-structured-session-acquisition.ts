@@ -18,6 +18,7 @@ import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
+import { observeClaudeExecutionModel } from './claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from './claude-structured-session-options'
 import { createClaudeSessionPublication } from './claude-structured-session-publication'
 import {
@@ -80,7 +81,6 @@ export async function acquireClaudeSession({
         ? liveSession.backgroundTasks.goalBackgroundWork
         : 'unverifiable'
   )
-
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -91,23 +91,10 @@ export async function acquireClaudeSession({
       }
       return
     }
+    const modelChanged =
+      liveSession && init?.model ? observeClaudeExecutionModel(liveSession, init.model) : false
     if (init) {
       initProof.resolve(init)
-      // Every turn opens with an init frame naming the model the CLI is actually
-      // running; set_model answers success for a model it never resolves, so this
-      // report is the session's only adoption evidence.
-      if (liveSession && init.model) {
-        if (liveSession.reusableOptions.get('model') !== init.model) {
-          liveSession.reusableOptions.delete('model')
-          liveSession.reusableOptions.delete('effort')
-          liveSession.reusableOptions.delete('fastMode')
-        }
-        if (liveSession.optionMutationSequence === 0) {
-          liveSession.reusableOptions.set('model', init.model)
-        }
-        liveSession.reportedOptions.model = init.model
-        liveSession.reportedModelMutation = liveSession.optionMutationSequence
-      }
       if (liveSession) {
         liveSession.capabilities = readClaudeCapabilities(liveSession.capabilities, init.message)
       }
@@ -140,7 +127,16 @@ export async function acquireClaudeSession({
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
     const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
-    callbacks.deliver(attempt, sessionId, () =>
+    callbacks.deliver(attempt, sessionId, () => {
+      if (modelChanged && liveSession && init?.model) {
+        callbacks.emit(liveSession, input.events, {
+          type: 'options-reported',
+          sessionId,
+          fence: liveSession.fence,
+          acquisitionGeneration: liveSession.acquisitionGeneration,
+          reportedOptions: { model: init.model }
+        })
+      }
       callbacks.emit(liveSession, input.events, {
         type: 'message',
         sessionId,
@@ -151,7 +147,7 @@ export async function acquireClaudeSession({
         ...(startedSend ? { startedSend } : {}),
         ...observedAt
       })
-    )
+    })
     for (const settle of settlements) {
       settle()
     }
@@ -249,6 +245,7 @@ export async function acquireClaudeSession({
       turnEndLeafUuid: launch.resumeLeafUuid,
       fence: input.fence,
       continuesChain: launch.continuesChain,
+      ...(launch.forkedFromKey ? { forkedFromKey: launch.forkedFromKey } : {}),
       prompts,
       translator,
       events: input.events,

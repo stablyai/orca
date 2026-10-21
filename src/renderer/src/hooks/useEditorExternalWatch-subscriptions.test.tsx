@@ -215,7 +215,8 @@ describe('useEditorExternalWatch subscriptions', () => {
       expect(subscriptionState.handleFsChanged).toHaveBeenCalledWith(
         {
           worktreePath: '/runtime/repo',
-          events: [{ kind: 'overflow', absolutePath: '/runtime/repo' }]
+          events: [{ kind: 'overflow', absolutePath: '/runtime/repo' }],
+          resync: true
         },
         'runtime-1'
       )

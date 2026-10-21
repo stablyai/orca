@@ -254,14 +254,14 @@ export function NativeChatPromptEditor({
                 to: promptTextPosition(doc, to ?? 0)
               })
             },
-            insertSkill: (from, to, token) => {
+            insertSkill: (from, to, token, path) => {
               const { doc } = editor.state
               const range = { from: promptTextPosition(doc, from), to: promptTextPosition(doc, to) }
               editor.view.dispatch(closeHistory(editor.state.tr))
               editor
                 .chain()
                 .insertContentAt(range, [
-                  { type: 'nativeChatSkill', attrs: { token } },
+                  { type: 'nativeChatSkill', attrs: { token, path: path ?? '' } },
                   { type: 'text', text: ' ' }
                 ])
                 .run()

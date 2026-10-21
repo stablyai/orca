@@ -3,6 +3,10 @@ name: Dev Channel Windows Publish
 on:
   workflow_call:
     inputs:
+      wait_for_mac_job:
+        description: Prefetch artifacts, then wait for this run's macOS job to succeed
+        type: string
+        default: ''
       channel:
         description: Dev channel whose live release receives the staged artifacts
         required: true
@@ -24,8 +28,8 @@ jobs:
   publish-win:
     if: github.repository == 'stablyai/orca'
     environment: adhoc-mac-build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 165
     env:
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
@@ -60,6 +64,27 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Wait for successful macOS publication
+        if: inputs.wait_for_mac_job != ''
+        uses: actions/github-script@v8
+        env:
+          MAC_JOB: ${{ inputs.wait_for_mac_job }}
+        with:
+          script: |
+            const deadline = Date.now() + 150 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const mac = jobs.find(job => job.name === process.env.MAC_JOB)
+              if (mac?.status === 'completed') {
+                if (mac.conclusion !== 'success') throw new Error('macOS publication did not succeed')
+                return
+              }
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for macOS publication')
 
       - name: Mint dev channel repo token
         id: app_token

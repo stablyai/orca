@@ -5,7 +5,8 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/cross-plat
 import type { FileContent } from './editor-panel-content-types'
 
 // Node's fs message names the syscall and the path; IPC and runtime RPC both carry it verbatim.
-const MISSING_FILE_MESSAGE = /ENOENT: no such file or directory, \w+ '([^']+)'/
+// Greedy to the last quote: file names may contain apostrophes.
+const MISSING_FILE_MESSAGE = /ENOENT: no such file or directory, \w+ '(.+)'/
 
 /** True only when the failure names this exact file as missing — never a worktree or host lookup. */
 export function isPathSpecificMissingFileError(error: unknown, filePath: string): boolean {

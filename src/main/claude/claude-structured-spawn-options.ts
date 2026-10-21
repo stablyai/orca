@@ -1,4 +1,4 @@
-// Saved choices seed the CLI launch; message choices are applied again before input.
+// Saved choices seed the CLI launch; changed message choices apply before input.
 
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
@@ -88,11 +88,18 @@ export function claudeStructuredSpawnOptions(input: {
 
 /** The published session takes on what its child was launched with. */
 export function adoptClaudeStructuredSpawnOptions(
-  session: Pick<ClaudeSession, 'translator' | 'launchedModel' | 'fastModeAtStart'>,
+  session: Pick<
+    ClaudeSession,
+    'translator' | 'launchedModel' | 'fastModeAtStart' | 'appliedInputOptions'
+  >,
   spawn: Pick<ClaudeStructuredSpawnOptions, 'options' | 'fastModeAtStart'>
 ): void {
   session.launchedModel = spawn.options.get('model') ?? null
   session.fastModeAtStart = spawn.fastModeAtStart
+  const fastMode = spawn.options.get('fastMode')
+  if (fastMode !== undefined && !spawn.fastModeAtStart) {
+    session.appliedInputOptions.set('fastMode', fastMode)
+  }
   const model = spawn.options.get('model')
   if (model !== undefined) {
     session.translator?.modelWritten(model)

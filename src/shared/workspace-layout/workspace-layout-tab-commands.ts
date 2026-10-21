@@ -183,13 +183,14 @@ export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renam
   if (command.kind === 'aiVault') {
     return updateTab(model, command.workspace, { ...tab, aiVaultTitle: command.title })
   }
-  return updateTab(
-    model,
-    command.workspace,
-    command.kind === 'custom'
-      ? { ...tab, customTitle: command.title }
-      : { ...tab, generatedTitle: command.title }
-  )
+  if (command.kind === 'custom') {
+    return updateTab(model, command.workspace, { ...tab, customTitle: command.title })
+  }
+  // As the window's own generated titles: an agent's later prompt does not rename the tab.
+  if (tab.generatedTitle?.trim() && !command.replaceExisting) {
+    return refuse('generated_title_kept')
+  }
+  return updateTab(model, command.workspace, { ...tab, generatedTitle: command.title })
 }
 
 export function setTabProps(

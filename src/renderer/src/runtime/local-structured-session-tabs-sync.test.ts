@@ -112,6 +112,7 @@ function createSnapshot(): WebSessionTabsSyncState {
       }
     },
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: { [TERMINAL_ID]: ['pty-1'] },
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: { [WORKTREE_ID]: [TERMINAL_ID, STRUCTURED_ID] },

@@ -311,7 +311,6 @@ function createAgentSessionRecord(
       leaseDeadlineAt: reservation.now + reservation.leaseTtlMs,
       lastRenewedAt: reservation.now,
       handoffOperationId: reservation.handoffOperationId,
-      journalCheckpoint: null,
       claimKeyId: reservation.claimKeyId,
       claimStatus: 'reserved',
       unreconciled: false,

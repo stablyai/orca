@@ -8,8 +8,6 @@ import {
 export type RemoteWatcherEventBatchOptions = {
   rootPath: string
   deliver: (events: FsChangeEvent[]) => void
-  leadingMs: number
-  intervalMs: number
   maxEvents: number
 }
 
@@ -72,8 +70,6 @@ function coalesceRemoteEvents(raw: FsChangeEvent[], rootPath: string): FsChangeE
 export function createRemoteWatcherEventBatch({
   rootPath,
   deliver,
-  leadingMs,
-  intervalMs,
   maxEvents
 }: RemoteWatcherEventBatchOptions): RemoteWatcherEventBatch {
   let buffered: FsChangeEvent[] = []
@@ -109,10 +105,7 @@ export function createRemoteWatcherEventBatch({
     if (timer) {
       return
     }
-    timer = setTimeout(
-      flush,
-      watchBatchFlushDelayMs(Date.now(), lastFlushAt, leadingMs, intervalMs)
-    )
+    timer = setTimeout(flush, watchBatchFlushDelayMs(Date.now(), lastFlushAt))
   }
 
   return {

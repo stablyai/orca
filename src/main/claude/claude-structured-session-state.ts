@@ -170,6 +170,8 @@ export type ClaudeSession = {
   appliedOptions?: { model?: string; effort?: string }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
+  /** Mutation at which the provider last reported its Fast routing state. */
+  fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
@@ -178,8 +180,8 @@ export type ClaudeSession = {
   reportedModelMutation: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
-  /** Value-bound execution evidence, revoked before any possible write. */
-  reusableOptions: Map<string, string>
+  /** Inputs carried by launch or accepted controls, independent of provider reports. */
+  appliedInputOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
   /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */

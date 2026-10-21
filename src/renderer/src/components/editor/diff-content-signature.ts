@@ -9,6 +9,3 @@ export function getDiffContentSignature(content: string): string {
   }
   return (hash >>> 0).toString(16)
 }
-
-// Why shared: the writer that refuses a stale save hashes disk with this same function.
-export { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'

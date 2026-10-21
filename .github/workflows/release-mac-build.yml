@@ -39,6 +39,7 @@ jobs:
     if: inputs.qualification_only
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: ${{ github.sha }}

@@ -177,7 +177,7 @@ export function useNativeChatQueuedEditImageIntake(
   const ownerRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
   const attachOwner = useOsFileDropOwner(ownerRef, {
-    consumer: 'agent',
+    consumer: (destination) => destination?.preparationConsumer ?? 'agent',
     sequence,
     canAccept: () => !disabled,
     captureDestination: () => captureExternalDrop(),

@@ -53,10 +53,10 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected mergeMobileSessionTabGroups(
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],
-    terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
+    tabs: readonly RuntimeMobileSessionSnapshotTab[],
     activeTab: RuntimeMobileSessionTerminalTab | null
   ): RuntimeMobileSessionTabGroup[] {
-    return mergeMobileSessionTabGroups(worktreeId, groups, terminalTabs, activeTab)
+    return mergeMobileSessionTabGroups(worktreeId, groups, tabs, activeTab)
   }
 
   protected buildHeadlessMobileSessionTabGroups(

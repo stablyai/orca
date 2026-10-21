@@ -4,9 +4,11 @@
 
 import {
   LayoutApplyParams,
+  LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
 } from '../../../../shared/rpc-contract/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../shared/rpc-contract/workspace-layout-held-panes-params'
 import type { WorkspaceLayoutStreamFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { getAppEnvironment } from '../../../../shared/app-environment'
@@ -101,5 +103,30 @@ export const LAYOUT_APPLY_METHODS = [
     permission: 'workspace',
     params: LayoutApplyParams,
     handler: async (params, { runtime }) => runtime.applyLayoutCommand(params.command)
+  }),
+  // A paired desktop's Reopen of held panes; main's frames, not the reply, show them start.
+  defineMethod({
+    name: 'layout.reopenHeldPanes',
+    permission: 'workspace',
+    params: LayoutReopenHeldPanesParams,
+    handler: async (params, { runtime }) => runtime.reopenHeldTerminalPanes(params.panes)
+  })
+]
+
+/** A paired desktop's view of this server's workspaces, so a CLI or phone file opens in the group it
+ *  shows. Registered with layout.apply: only a server advertising `layout.intents.v1` takes it. */
+export const LAYOUT_VIEW_REPORT_METHODS = [
+  defineMethod({
+    name: 'layout.reportView',
+    permission: 'workspace',
+    params: LayoutReportViewParams,
+    handler: async (params, { runtime, connectionId, signal }) => {
+      // A report outlives the call, so it needs a connection whose close drops it (as sidebarInputs.reportView).
+      if (connectionId === undefined || signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      runtime.reportClientView(connectionId, params.activeGroupByWorkspace, params.refresh === true)
+      return { ok: true }
+    }
   })
 ]

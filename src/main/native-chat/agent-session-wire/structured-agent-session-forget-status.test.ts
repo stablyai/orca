@@ -84,7 +84,6 @@ function ownerRecord(): AgentSessionRecord {
       leaseDeadlineAt: 100,
       lastRenewedAt: 1,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'fixture-key',
       claimStatus: 'live',
       unreconciled: false,

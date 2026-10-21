@@ -41,7 +41,6 @@ let currentRig: QueuedMessageTestRig | undefined
 const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
 beforeEach(() => observationClock.start())
 let host: QueuedMessageTestRig['host']
-let store: QueuedMessageTestRig['store']
 let dispatch: QueuedMessageTestRig['dispatch']
 
 beforeEach(async () => {
@@ -49,7 +48,7 @@ beforeEach(async () => {
   // A Stop ends the agent's session, so the next send starts a child that resumes the thread.
   rig = await createQueuedMessageTestRig({ restartable: true })
   currentRig = rig
-  ;({ host, store, dispatch } = rig)
+  ;({ host, dispatch } = rig)
 })
 
 afterEach(async () => {
@@ -736,25 +735,6 @@ describe('/clear', () => {
     }
     expect(await drafts(replacementId)).toEqual([{ messageId: draftId, state: 'returned' }])
     expect(await rig.queuePause(replacementId)).toBeNull()
-  })
-
-  it('a clear an older build left prepared holds no draft: it drains when the turn settles', async () => {
-    const working = await workingSend()
-    const queued = await send('behind the clear', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    await store.setConversationCommand(SESSION, 1, {
-      command: 'clear',
-      runtimeFence: 1,
-      operationId: hostTestOperationId(),
-      callerKey: CALLER.callerKey,
-      phase: 'prepared',
-      state: 'unknown'
-    })
-    await settleAccepted(working, 'a')
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
   it('a clear with no drafts keeps the existing conversation open', async () => {

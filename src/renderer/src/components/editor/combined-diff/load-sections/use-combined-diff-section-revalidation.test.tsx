@@ -53,17 +53,31 @@ afterEach(cleanup)
 
 it('re-reads every loaded and in-flight section of a mounted review when its workspace catches up', () => {
   const requestSectionReload = renderReview()
-  dispatch({ worktreePath: '/repo', events: [{ kind: 'overflow', absolutePath: '/repo' }] })
+  dispatch({
+    worktreePath: '/repo',
+    events: [{ kind: 'overflow', absolutePath: '/repo' }],
+    resync: true
+  })
   expect(requestSectionReload.mock.calls).toEqual([[0], [2], [3]])
 })
 
-it('ignores other workspaces, other hosts and ordinary path events', () => {
+it('ignores other workspaces, other hosts, path events and storm overflows', () => {
   const requestSectionReload = renderReview()
-  dispatch({ worktreePath: '/other', events: [{ kind: 'overflow', absolutePath: '/other' }] })
-  dispatch(
-    { worktreePath: '/repo', events: [{ kind: 'overflow', absolutePath: '/repo' }] },
-    'env-1'
-  )
-  dispatch({ worktreePath: '/repo', events: [{ kind: 'update', absolutePath: '/repo/a.ts' }] })
+  const resync = (worktreePath: string): FsChangedPayload => ({
+    worktreePath,
+    events: [{ kind: 'overflow', absolutePath: worktreePath }],
+    resync: true
+  })
+  dispatch(resync('/other'))
+  dispatch(resync('/repo'), 'env-1')
+  dispatch({
+    worktreePath: '/repo',
+    events: [{ kind: 'update', absolutePath: '/repo/a.ts' }]
+  })
+  // Why: a storm overflow only refreshes git status; re-reading every section per flush would fan out.
+  dispatch({
+    worktreePath: '/repo',
+    events: [{ kind: 'overflow', absolutePath: '/repo' }]
+  })
   expect(requestSectionReload).not.toHaveBeenCalled()
 })

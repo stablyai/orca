@@ -1,6 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { placeUnshownLiveTerminalsAtStartup } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
+import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 import { is } from '@electron-toolkit/utils'
 import {
   getCanonicalUserDataPath,
@@ -160,7 +160,7 @@ async function launchServeMode(
   await runtime.reconcileLegacyWorkerTerminals()
   // Switch point: main shows live terminals no pane shows, before any client attaches.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    await placeUnshownLiveTerminalsAtStartup(runtime)
+    await placeUnshownLiveTerminalsBestEffort(runtime)
   }
   // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
   if (state.headlessBrowserDisplayAvailable) {

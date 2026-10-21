@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
@@ -328,15 +329,14 @@ it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (d
 
   const compat = workflow.jobs.linux_glibc217_compat
   expect(compat.needs).toBe('changes')
-  // Only the floor builds orcad, so only it waits for the page.
-  expect(compat.if).toContain(
-    floor.if.slice(0, -3).replace(" && needs.mobile_web_bundle.result == 'success'", '')
-  )
+  expect(compat.if).toContain(floor.if.slice(0, -3))
   expect(compat.if).toContain("needs.changes.outputs.native_compatibility != 'false'")
   expect(compat.if).toContain(
     "github.event_name != 'pull_request' || inputs.build_template || inputs.ref != ''"
   )
-  expect(compat['runs-on']).toBe('ubuntu-22.04')
+  expect(runInNewContext(compat['runs-on'].slice(3, -2), { inputs: { fast_runners: false } })).toBe(
+    'ubuntu-22.04'
+  )
   const run = compat.steps.map((step) => step.run ?? '').join('\n')
   expect(run).toMatch(/quay\.io\/pypa\/manylinux2014_x86_64@sha256:[0-9a-f]{64} /)
   expect(run).toContain('--slot=linux-x64-glibc217 --print-runtime')

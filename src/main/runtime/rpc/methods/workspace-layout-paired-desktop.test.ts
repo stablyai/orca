@@ -5,14 +5,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
-import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../../../shared/workspace-layout/layout-intents-capability'
+import {
+  LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+  LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+} from '../../../../shared/workspace-layout/layout-intents-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcCallerScope } from '../rpc-caller-scope'
 
 const PAIRED_DESKTOP: RpcCallerScope = { kind: 'runtime-paired', grants: [] }
 const PHONE: RpcCallerScope = { kind: 'mobile' }
-const LAYOUT_METHODS = ['layout.subscribe', 'layout.unsubscribe', 'layout.apply'] as const
+const LAYOUT_METHODS = [
+  'layout.subscribe',
+  'layout.unsubscribe',
+  'layout.apply',
+  'layout.reopenHeldPanes',
+  'layout.reportView'
+] as const
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -51,13 +60,17 @@ afterEach(() => {
 describe('the layout intents capability', () => {
   it('is advertised only by a layout-owner build', async () => {
     const on = await switchedBuild(true)
-    expect(new on.OrcaRuntimeService().getStatus().capabilities).toContain(
-      LAYOUT_INTENTS_RUNTIME_CAPABILITY
+    expect(new on.OrcaRuntimeService().getStatus().capabilities).toEqual(
+      expect.arrayContaining([
+        LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+        LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+      ])
     )
     const off = await switchedBuild(false)
-    expect(new off.OrcaRuntimeService().getStatus().capabilities).not.toContain(
-      LAYOUT_INTENTS_RUNTIME_CAPABILITY
-    )
+    const offCapabilities = new off.OrcaRuntimeService().getStatus().capabilities
+    expect(offCapabilities).not.toContain(LAYOUT_INTENTS_RUNTIME_CAPABILITY)
+    expect(offCapabilities).not.toContain(LAYOUT_REOPEN_HELD_PANES_CAPABILITY)
+    expect(off.ALL_RPC_METHODS.map((method) => method.name)).not.toContain('layout.reopenHeldPanes')
   })
 
   it('comes with the layout methods registered', async () => {
@@ -74,7 +87,9 @@ describe('layout methods on a layout-owner server', () => {
   it.each([
     ['layout.subscribe', 'method_not_supported'],
     ['layout.unsubscribe', 'invalid_argument'],
-    ['layout.apply', 'invalid_argument']
+    ['layout.apply', 'invalid_argument'],
+    ['layout.reopenHeldPanes', 'invalid_argument'],
+    ['layout.reportView', 'invalid_argument']
   ] as const)('admits a paired desktop and refuses a phone: %s', async (method, nextCheck) => {
     const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
     const dispatcher = new RpcDispatcher({ runtime: new OrcaRuntimeService() })
@@ -105,6 +120,74 @@ describe('layout methods on a layout-owner server', () => {
     expect(unsubscribed.ok).toBe(true)
     await done
     expect(frames.at(-1)?.type).toBe('end')
+  })
+})
+
+describe('layout.reportView', () => {
+  const DESKTOP = {
+    callerScope: PAIRED_DESKTOP,
+    connectionId: 'desktop-1',
+    clientKind: 'runtime' as const
+  }
+
+  it("records the desktop's groups under its connection", async () => {
+    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
+    const runtime = new OrcaRuntimeService()
+    const reported = vi.spyOn(runtime, 'reportClientView')
+    const dispatcher = new RpcDispatcher({ runtime })
+    const reply = await dispatcher.dispatch(
+      request('layout.reportView', { activeGroupByWorkspace: { 'wt-1': 'g2', 'wt-2': null } }),
+      DESKTOP
+    )
+    expect(reply.ok).toBe(true)
+    expect(reported).toHaveBeenCalledWith('desktop-1', { 'wt-1': 'g2', 'wt-2': null }, false)
+  })
+
+  it('passes a refresh on as one', async () => {
+    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
+    const runtime = new OrcaRuntimeService()
+    const reported = vi.spyOn(runtime, 'reportClientView')
+    const reply = await new RpcDispatcher({ runtime }).dispatch(
+      request('layout.reportView', { activeGroupByWorkspace: { 'wt-1': 'g2' }, refresh: true }),
+      DESKTOP
+    )
+    expect(reply.ok).toBe(true)
+    expect(reported).toHaveBeenCalledWith('desktop-1', { 'wt-1': 'g2' }, true)
+  })
+
+  it('refuses a caller with no connection to tie the report to', async () => {
+    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
+    const runtime = new OrcaRuntimeService()
+    const reported = vi.spyOn(runtime, 'reportClientView')
+    const reply = await new RpcDispatcher({ runtime }).dispatch(
+      request('layout.reportView', { activeGroupByWorkspace: { 'wt-1': 'g2' } }),
+      { callerScope: PAIRED_DESKTOP, clientKind: 'runtime' }
+    )
+    expect(reply.ok).toBe(false)
+    expect(reported).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{}],
+    [{ activeGroupByWorkspace: { 'wt-1': 7 } }],
+    [{ activeGroupByWorkspace: { 'wt-1': '' } }],
+    [{ activeGroupByWorkspace: ['g1'] }],
+    [{ activeGroupByWorkspace: {}, refresh: false }]
+  ])('refuses params it cannot read: %j', async (params) => {
+    const { OrcaRuntimeService, RpcDispatcher } = await switchedBuild(true)
+    const runtime = new OrcaRuntimeService()
+    const reported = vi.spyOn(runtime, 'reportClientView')
+    const reply = await new RpcDispatcher({ runtime }).dispatch(
+      request('layout.reportView', params),
+      DESKTOP
+    )
+    expect(errorCode(reply)).toBe('invalid_argument')
+    expect(reported).not.toHaveBeenCalled()
+  })
+
+  it('is not registered by a window-owned build', async () => {
+    const { ALL_RPC_METHODS } = await switchedBuild(false)
+    expect(ALL_RPC_METHODS.map((method) => method.name)).not.toContain('layout.reportView')
   })
 })
 

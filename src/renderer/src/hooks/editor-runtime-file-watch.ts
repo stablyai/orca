@@ -58,7 +58,8 @@ export function subscribeEditorRuntimeFileWatch(
         if (resync) {
           onPayload({
             worktreePath: target.worktreePath,
-            events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            resync: true
           })
         }
       })

@@ -1,3 +1,4 @@
+import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
@@ -97,6 +98,21 @@ export class StructuredAgentSessionClientDelivery {
     }
     const record = store.getRecord(sessionId)
     return record ? adapter.atRestCommands?.read(record) : undefined
+  }
+
+  /** As `readCommands`, but a scan this read starts or finds running gets a short while to land,
+   *  for a client that asks once per menu and never hears a later change. */
+  async readCommandsSettled(sessionId: string) {
+    const { adapter, store } = this.deps()
+    const live = adapter.readCommands?.(sessionId)
+    const record = store.getRecord(sessionId)
+    if (live !== undefined || !record) {
+      return live
+    }
+    const commands = adapter.atRestCommands?.settled
+      ? await adapter.atRestCommands.settled(record, AT_REST_COMMANDS_READ_BUDGET_MS)
+      : adapter.atRestCommands?.read(record)
+    return adapter.readCommands?.(sessionId) ?? commands
   }
 
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)

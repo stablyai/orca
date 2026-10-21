@@ -164,6 +164,21 @@ describe('WorkspaceLayoutStream', () => {
     expect(events.at(-1)).toEqual({ type: 'removed', key: FOLDER_KEY, seq: events[0]!.seq! + 1 })
   })
 
+  it("publishes nothing for a pane's grid, which is main's own record", async () => {
+    const { stream, write } = setup()
+    const { events } = subscribeEvents(stream)
+    const session = localDesktopSession()
+    const [tabId, layout] = Object.entries(session.terminalLayoutsByTabId).find(
+      ([, candidate]) => candidate.root?.type === 'leaf'
+    )!
+    const leafId = layout.root!.type === 'leaf' ? layout.root!.leafId : ''
+    layout.lastGridsByLeafId = { [leafId]: { cols: 91, rows: 33 } }
+    write(LOCAL_EXECUTION_HOST_ID, session)
+    await flush()
+    expect(session.terminalLayoutsByTabId[tabId]?.lastGridsByLeafId).toBeDefined()
+    expect(events).toEqual([])
+  })
+
   it('numbers each change frame, so a reply can name the frame holding its write', async () => {
     const { stream, write } = setup()
     const { events, subscription: first } = subscribeEvents(stream)

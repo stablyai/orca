@@ -85,7 +85,8 @@ describe('native filesystem watcher capacity recovery', () => {
     await vi.waitFor(() =>
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/tmp/native-capacity-root',
-        events: [{ kind: 'overflow', absolutePath: '/tmp/native-capacity-root' }]
+        events: [{ kind: 'overflow', absolutePath: '/tmp/native-capacity-root' }],
+        resync: true
       })
     )
 

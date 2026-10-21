@@ -30,13 +30,17 @@ const currentBindingStore = (): BrowserRoutePartitionBindingStore =>
 
 const bindingStore = {
   get: (partition: string): string | null => currentBindingStore().get(partition),
-  set: (partition: string, fingerprint: string, storageScope: string): readonly string[] =>
-    currentBindingStore().set(partition, fingerprint, storageScope),
+  set: (
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[] => currentBindingStore().set(partition, fingerprint, storageScope, alias),
   touch: (partition: string): void => currentBindingStore().touch(partition),
   findPartitionByFingerprint: (fingerprint: string): string | null =>
     currentBindingStore().findPartitionByFingerprint(fingerprint),
-  rebind: (partition: string, fingerprint: string, storageScope: string): void =>
-    currentBindingStore().rebind(partition, fingerprint, storageScope)
+  rebind: (partition: string, fingerprint: string, storageScope: string, alias?: string): void =>
+    currentBindingStore().rebind(partition, fingerprint, storageScope, alias)
 }
 
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({

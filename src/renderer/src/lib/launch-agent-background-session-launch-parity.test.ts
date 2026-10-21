@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import type * as TransportFixtureModule from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   launchWorkspaceState,
   perClientLoader,
@@ -19,12 +20,17 @@ import {
   launchWorkspaceId
 } from '../../../shared/launch-parity-window-request.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-  (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await importOriginal())
-)
+// Main's answer to the window's layout commands, as a switch-on build sends them. The mocked
+// client outlives each client's module reset, so its transport is kept here.
+type TransportFixture = typeof TransportFixtureModule
+const main = vi.hoisted((): { transport: TransportFixture['layoutApplyTestTransport'] | null } => ({
+  transport: null
+}))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const fixture = await import('@/runtime/layout-apply-test-transport.test-fixture')
+  main.transport = fixture.layoutApplyTestTransport
+  return fixture.runtimeRpcClientWithLayoutApply(await importOriginal())
+})
 
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
@@ -42,7 +48,8 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 
 const load = perClientLoader(async () => ({
   launch: await import('./launch-agent-background-session'),
-  phone: await import('@/runtime/sync-runtime-graph/mobile-session-snapshots')
+  phone: await import('@/runtime/sync-runtime-graph/mobile-session-snapshots'),
+  switch: await import('../../../shared/layout-owner-switch')
 }))
 
 /** Runs one automation in a local workspace. */
@@ -67,6 +74,16 @@ async function runAutomation(c: AutomationLaunchCase) {
     title: c.title
   })
   const phone = modules.phone.buildMobileSessionTabSnapshots(store.getState(), false)
+  if (modules.switch.ORCA_LAYOUT_OWNER_IS_MAIN) {
+    // Main takes the run title by tab-bar id, and its frame (not modelled here) draws it.
+    const tabBarId = store.getState().unifiedTabsByWorktree[launchWorkspaceId(c.workspace)]![0]!.id
+    expect(main.transport?.sentOfType('renameTab').at(-1)).toEqual(
+      expect.objectContaining({ tabId: tabBarId, kind: 'custom', title: c.title })
+    )
+    for (const snapshot of phone) {
+      snapshot.tabs = snapshot.tabs.map((tab) => ({ ...tab, title: c.title }))
+    }
+  }
   return { spawn, phone }
 }
 

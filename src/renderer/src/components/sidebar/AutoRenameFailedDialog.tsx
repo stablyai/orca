@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertCircle, Check, Copy } from 'lucide-react'
 import {
   Dialog,
@@ -21,20 +21,69 @@ type AutoRenameFailedDialogProps = {
   error: string
 }
 
+export function AutoRenameFailedDialog({
+  worktreeId,
+  worktreeName,
+  ...props
+}: AutoRenameFailedDialogProps): React.JSX.Element {
+  const readFullOutput = useCallback(
+    () => window.api.worktrees.getBranchRenameFailureOutput({ worktreeId }),
+    [worktreeId]
+  )
+  return (
+    <NameGenerationFailedDialog
+      {...props}
+      title={translate(
+        'auto.components.sidebar.AutoRenameFailedDialog.ca3b225195',
+        'Branch auto-name failed'
+      )}
+      description={
+        <>
+          {translate(
+            'auto.components.sidebar.AutoRenameFailedDialog.ff62a18580',
+            "Orca couldn't generate a branch name for"
+          )}{' '}
+          <span className="font-medium text-foreground">{worktreeName}</span>{' '}
+          {translate(
+            'auto.components.sidebar.AutoRenameFailedDialog.3afcad0497',
+            'from the first agent message.'
+          )}
+        </>
+      }
+      readFullOutput={readFullOutput}
+    />
+  )
+}
+
+type NameGenerationFailedDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  description: ReactNode
+  /** The published failure message, shown when no full output is available. */
+  error: string
+  /** Full CLI output still held in memory; null falls back to `error`. Keep it stable. */
+  readFullOutput: () => Promise<string | null>
+  /** A footer action beside Close, such as running the generation again. */
+  action?: ReactNode
+}
+
 /**
- * Modal that surfaces the auto-rename generation failure. It shows the full
+ * Modal that surfaces a name-generation failure. It shows the full
  * CLI output when main still holds it (in-memory, lost on restart), falling
- * back to the persisted excerpt — either can run many lines, so it gets a
+ * back to the published excerpt — either can run many lines, so it gets a
  * dedicated scrollable surface rather than a tooltip — see the sibling
  * AddRemoteHostDialog pattern.
  */
-export function AutoRenameFailedDialog({
+export function NameGenerationFailedDialog({
   open,
   onOpenChange,
-  worktreeId,
-  worktreeName,
-  error
-}: AutoRenameFailedDialogProps): React.JSX.Element {
+  title,
+  description,
+  error,
+  readFullOutput,
+  action
+}: NameGenerationFailedDialogProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const [fullOutput, setFullOutput] = useState<string | null>(null)
   const copiedResetTimerRef = useRef<number | null>(null)
@@ -53,8 +102,7 @@ export function AutoRenameFailedDialog({
     }
     let stale = false
     setFullOutput(null)
-    window.api.worktrees
-      .getBranchRenameFailureOutput({ worktreeId })
+    readFullOutput()
       .then((output) => {
         if (!stale) {
           setFullOutput(output)
@@ -68,7 +116,7 @@ export function AutoRenameFailedDialog({
     return () => {
       stale = true
     }
-  }, [error, open, worktreeId])
+  }, [error, open, readFullOutput])
 
   const detailText = fullOutput ?? error
 
@@ -97,23 +145,10 @@ export function AutoRenameFailedDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertCircle className="size-4 shrink-0" />
-            {translate(
-              'auto.components.sidebar.AutoRenameFailedDialog.ca3b225195',
-              'Branch auto-name failed'
-            )}
+            {title}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          {translate(
-            'auto.components.sidebar.AutoRenameFailedDialog.ff62a18580',
-            "Orca couldn't generate a branch name for"
-          )}{' '}
-          <span className="font-medium text-foreground">{worktreeName}</span>{' '}
-          {translate(
-            'auto.components.sidebar.AutoRenameFailedDialog.3afcad0497',
-            'from the first agent message.'
-          )}
-        </p>
+        <p className="text-sm text-muted-foreground">{description}</p>
         {/* Why: agent-CLI output is literal and often multi-line, so render it
             verbatim (mono, wrapped) inside a height-capped scroll region.
             min-w-0 keeps an unbroken token from widening this grid column. */}
@@ -155,6 +190,7 @@ export function AutoRenameFailedDialog({
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
           </Button>
+          {action}
         </DialogFooter>
       </DialogContent>
     </Dialog>

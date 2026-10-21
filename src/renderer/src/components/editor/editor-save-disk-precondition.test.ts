@@ -519,7 +519,7 @@ describe('editor saves through a remote host without the guarded write (client c
           'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' })]
         }
       })
-      store.getState().openFile({
+      const fileId = store.getState().openFile({
         filePath: '/remote/repo/file.ts',
         relativePath: 'file.ts',
         worktreeId: 'wt-1',
@@ -527,15 +527,13 @@ describe('editor saves through a remote host without the guarded write (client c
         language: 'typescript',
         mode: 'edit'
       })
-      store
-        .getState()
-        .setLastKnownDiskSignature('/remote/repo/file.ts', getDiskBaselineSignature('original'))
-      store.getState().setEditorDraft('/remote/repo/file.ts', 'edited')
-      store.getState().markFileDirty('/remote/repo/file.ts', true)
+      store.getState().setLastKnownDiskSignature(fileId, getDiskBaselineSignature('original'))
+      store.getState().setEditorDraft(fileId, 'edited')
+      store.getState().markFileDirty(fileId, true)
 
       const cleanup = attachEditorAutosaveController(store)
       try {
-        const save = requestEditorFileSave({ fileId: '/remote/repo/file.ts' })
+        const save = requestEditorFileSave({ fileId })
         await (written ? save : expect(save).rejects.toThrow(/changed on disk/))
         const methods = runtimeCall.mock.calls.map(([args]) => args.method)
         expect(mocks.readRuntimeFileContent).toHaveBeenCalled()

@@ -70,6 +70,7 @@ function resyncOf(target: TestWatchTarget): [unknown, string | null, TestWatchTa
     {
       worktreePath: target.worktreePath,
       events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+      resync: true,
       connectionId: target.connectionId
     },
     target.runtimeEnvironmentId,

@@ -75,6 +75,15 @@ describe('applyEditorFileLoadFailure', () => {
     expect(setExternalMutation).not.toHaveBeenCalled()
   })
 
+  it('matches a path containing an apostrophe', () => {
+    expect(
+      isPathSpecificMissingFileError(
+        new Error("ENOENT: no such file or directory, open '/repo/it's.md'"),
+        "/repo/it's.md"
+      )
+    ).toBe(true)
+  })
+
   it('matches the path regardless of separator spelling', () => {
     expect(
       isPathSpecificMissingFileError(

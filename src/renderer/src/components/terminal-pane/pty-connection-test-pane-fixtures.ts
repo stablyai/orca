@@ -26,6 +26,7 @@ export type ConnectCallbacks = {
 }
 
 export type MockTransport = {
+  retryRecovery?: () => boolean
   attach: ReturnType<typeof vi.fn>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (

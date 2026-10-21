@@ -86,6 +86,9 @@ function loadLeaf(
     ...(stored.titlesByLeafId?.[leafId] !== undefined
       ? { title: stored.titlesByLeafId[leafId] }
       : {}),
+    ...(stored.lastGridsByLeafId?.[leafId] !== undefined
+      ? { lastGrid: stored.lastGridsByLeafId[leafId] }
+      : {}),
     ...(sleeping
       ? { sleeping: omitStoredFields(sleeping, ['paneKey', 'tabId', 'worktreeId']) }
       : {})

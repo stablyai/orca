@@ -19,6 +19,7 @@ import { isTerminalClose, keptOnWriteFailure } from './terminal-close-write-fail
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { moveTabAcrossPartitions } from './cross-partition-tab-move'
 import { writeRestorable } from './restorable-write'
+import { raisingBindingGenerations } from './layout-command-binding-generations'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 import {
   repairDuplicatePtyPanesMutation,
@@ -35,7 +36,11 @@ function writingOnly<T>(
 
 type LayoutCommandRuntime = Pick<
   StoreRuntimeState,
-  'runDurableMutation' | 'state' | 'dirtyProfileStateDomains' | 'writesFrozen'
+  | 'runDurableMutation'
+  | 'state'
+  | 'dirtyProfileStateDomains'
+  | 'writesFrozen'
+  | 'ptyBindingGenerations'
 >
 
 const layoutCommandPersistenceContext = Symbol('LayoutCommandPersistence')
@@ -65,17 +70,21 @@ export class LayoutCommandPersistence {
   ): Promise<LayoutApplyOutcome> {
     const context = this[layoutCommandPersistenceContext]
     const resolved = hostIds.length > 0 ? hostIds.map(resolveHostId) : [resolveHostId()]
+    const commit = raisingBindingGenerations(
+      context.runtime,
+      resolved,
+      (hostId) => context.sessions.getWorkspaceSession(hostId),
+      applyLayout(resolved, command, topologyCommitContext(context))
+    )
     // Switch point: a terminal close stands once applied, as the switch-off window shows it.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)) {
       return keptOnWriteFailure(
         (mutate) => context.runtime.runDurableMutation(mutate),
-        writingOnly(resolved, applyLayout(resolved, command, topologyCommitContext(context))),
+        writingOnly(resolved, commit),
         context.writeLater
       )
     }
-    return context.runtime.runDurableMutation(
-      writingOnly(resolved, applyLayout(resolved, command, topologyCommitContext(context)))
-    )
+    return context.runtime.runDurableMutation(writingOnly(resolved, commit))
   }
 
   /** `renameTabs`: each partition's renames in one durable write of all; resolves those refused. */

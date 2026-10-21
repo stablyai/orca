@@ -64,7 +64,8 @@ function requestTerminalClose(): { land: () => void } {
 
 function floatingNote({ isDirty, isPinned }: { isDirty: boolean; isPinned: boolean }): Tab {
   useAppStore.setState({
-    openFiles: [makeOpenFile({ id: 'note', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, isDirty })]
+    openFiles: [makeOpenFile({ id: 'note', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, isDirty })],
+    editorBuffers: {}
   })
   return { ...terminalTab, id: 'unified-note', entityId: 'note', contentType: 'editor', isPinned }
 }

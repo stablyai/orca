@@ -180,15 +180,19 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         tabOrder: []
       }
     ]
-    const groupId = priorGroups.some((group) => group.id === existing?.activeGroupId)
-      ? existing!.activeGroupId!
-      : priorGroups[0]!.id
+    // Why: the window can list the chat before main restores its row; keep the place it gave it.
+    const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
+    const groupId =
+      listingGroupId ??
+      (priorGroups.some((group) => group.id === existing?.activeGroupId)
+        ? existing!.activeGroupId!
+        : priorGroups[0]!.id)
     const tabGroups = priorGroups.map((group) =>
       group.id === groupId
         ? {
             ...group,
             activeTabId: input.activate ? id : group.activeTabId,
-            tabOrder: [...group.tabOrder, id]
+            tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
           }
         : group
     )

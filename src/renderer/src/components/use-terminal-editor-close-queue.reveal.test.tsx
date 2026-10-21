@@ -17,6 +17,8 @@ vi.mock('../store', () => ({
     // "Don't Save" closes through the store, beside the controller's own projection.
     getState: () => ({
       ...store,
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       setActiveWorktree,
       markFileDirty: vi.fn(),
       clearEditorDraft: vi.fn(),

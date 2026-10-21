@@ -60,6 +60,7 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
     const rejectedRegistration = registerPersistedPtySpawn(
       ctx.deps.runtime,
       ctx.deps.store,
+      ctx.pendingRegistrationClaim,
       ctx.result.id,
       args.worktreeId,
       null,
@@ -85,7 +86,11 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
           throw error
         }
       })
-      ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
+      ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+        ctx.result.id,
+        ctx.result.incarnationId,
+        ctx.pendingRegistrationClaim
+      )
       ctx.pendingRegistrationPtyId = null
       ctx.exitedBeforeRegistration = true
       // The renderer drains this incarnation's buffered output and exit without publishing it live.
@@ -99,7 +104,8 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
   } else if (ctx.pendingRegistrationPtyId) {
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(
       ctx.pendingRegistrationPtyId,
-      ctx.result.incarnationId
+      ctx.result.incarnationId,
+      ctx.pendingRegistrationClaim
     )
     ctx.pendingRegistrationPtyId = null
   }

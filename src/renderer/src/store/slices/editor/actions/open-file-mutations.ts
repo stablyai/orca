@@ -8,7 +8,11 @@ import {
   previewEditorTabsOf,
   recordPromotedEditorTabsInLayoutOwner
 } from '../tabs/editor-tab-layout-owner'
-import { writeEditorBuffer } from '../buffers/editor-buffer-record'
+import {
+  editorBufferOf,
+  updateEditorBuffer,
+  writeEditorBuffer
+} from '../buffers/editor-buffer-record'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 
 function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -85,6 +89,7 @@ export function createOpenFileMutations(
         if (file.readOnly === true || file.csvPreviewOnly === true) {
           return s
         }
+        const buffer = editorBufferOf(s.editorBuffers, file)
         const needsPreviewClear = dirty && file.isPreview
         // Why: a clean tab holds no draft of the disk text; a kept one could later restore stale
         // text into a shared model. A draft that differs from disk (whitespace a Markdown view
@@ -93,9 +98,9 @@ export function createOpenFileMutations(
         const dropDraft =
           !dirty &&
           draft !== undefined &&
-          (file.lastKnownDiskSignature === undefined ||
-            getDiskBaselineSignature(draft) === file.lastKnownDiskSignature)
-        if (file.isDirty === dirty && !needsPreviewClear && !dropDraft) {
+          (buffer.lastKnownDiskSignature === undefined ||
+            getDiskBaselineSignature(draft) === buffer.lastKnownDiskSignature)
+        if (buffer.isDirty === dirty && !needsPreviewClear && !dropDraft) {
           return s
         }
         if (ORCA_LAYOUT_OWNER_IS_MAIN && needsPreviewClear) {
@@ -132,55 +137,23 @@ export function createOpenFileMutations(
     },
 
     setExternalMutation: (fileId, mutation) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file) {
-          return s
-        }
-        const next = mutation ?? undefined
-        if (file.externalMutation === next) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { externalMutation: next })
-      }),
+      set((s) => updateEditorBuffer(s, fileId, { externalMutation: mutation ?? undefined })),
 
     setLastKnownDiskSignature: (fileId, signature) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file || file.lastKnownDiskSignature === signature) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })
-      }),
+      set((s) => updateEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })),
 
     clearPendingDiskBaselineVerification: (fileId) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file?.pendingDiskBaselineVerification) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { pendingDiskBaselineVerification: undefined })
-      }),
+      get().setPendingDiskBaselineVerification(fileId, false),
 
     setPendingDiskBaselineVerification: (fileId, value) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        const next = value || undefined
-        if (!file || file.pendingDiskBaselineVerification === next) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { pendingDiskBaselineVerification: next })
-      }),
+      set((s) =>
+        updateEditorBuffer(s, fileId, { pendingDiskBaselineVerification: value || undefined })
+      ),
 
     setPendingLiveDiskVerification: (fileId, value) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        const next = value || undefined
-        if (!file || file.pendingLiveDiskVerification === next) {
-          return s
-        }
-        return writeEditorBuffer(s, fileId, { pendingLiveDiskVerification: next })
-      }),
+      set((s) =>
+        updateEditorBuffer(s, fileId, { pendingLiveDiskVerification: value || undefined })
+      ),
 
     clearSelfMoveEcho: (fileId) =>
       set((s) => {

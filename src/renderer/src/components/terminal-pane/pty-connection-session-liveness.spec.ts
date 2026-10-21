@@ -469,6 +469,55 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
     })
 
+    it.each([false, true])(
+      'preserves an exhausted pane until explicit Retry and clears only the current owner error (fresh: %s)',
+      async (fresh) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport()
+        transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
+          opts.callbacks?.onError?.('terminal_pane_owner_changed')
+          return undefined
+        })
+        transportFactoryQueue.push(transport)
+        const deps = fresh ? createDeps() : seedUnverifiableRestoredPane()
+        const cleared = vi.fn()
+        deps.onPtyErrorClearedRef = { current: cleared }
+
+        connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+        await flushAsyncTicks()
+
+        expect(transport.connect).toHaveBeenCalledTimes(1)
+        expect(deps.onPtyErrorRef.current).toHaveBeenCalledExactlyOnceWith(
+          2,
+          'terminal_pane_owner_changed'
+        )
+        expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+        expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+        if (!fresh) {
+          expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+            [LEAF_2]: 'unverifiable-pty'
+          })
+        }
+        const stale = transport.connect.mock.calls[0]?.[0].callbacks
+        transport.connect.mockImplementation(async ({ callbacks }) => {
+          callbacks?.onError?.('unrelated diagnostic')
+          callbacks?.onConnect?.()
+          return { id: 'unverifiable-pty', isReattach: true }
+        })
+        expect(transport.retryRecovery?.()).toBe(true)
+        await flushAsyncTicks()
+        expect(transport.connect).toHaveBeenCalledTimes(2)
+        expect(transport.disconnect).not.toHaveBeenCalled()
+        expect(cleared).toHaveBeenCalledExactlyOnceWith(2, 'terminal_pane_owner_changed')
+        stale?.onError?.('terminal_pane_owner_changed')
+        expect(
+          deps.onPtyErrorRef.current.mock.calls.filter(
+            ([, message]) => message === 'terminal_pane_owner_changed'
+          )
+        ).toHaveLength(1)
+      }
+    )
+
     describe('terminal input liveness IPC gating (perf)', () => {
       // Why (perf regression guard): listSessions() is a renderer→main→daemon round-trip; terminal input must never trigger it.
       async function connectActivePaneWithInput(): Promise<{

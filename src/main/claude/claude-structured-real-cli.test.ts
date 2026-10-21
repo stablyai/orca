@@ -582,7 +582,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         const second = events.length
         await expect(
           send('real-cli-stop-2', 'Reply with the single word ok.')
-        ).resolves.toMatchObject({ state: 'admitted' })
+        ).resolves.toMatchObject({
+          state: 'admitted'
+        })
         await expect(result(second)).resolves.toMatchObject({ subtype: 'success' })
       } finally {
         await adapter.closeAll()

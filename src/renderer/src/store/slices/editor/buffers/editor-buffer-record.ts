@@ -1,4 +1,9 @@
 import type { OpenFile } from '../types/open-file'
+import {
+  editorBufferIdOfView,
+  editorBufferViewIds,
+  type EditorBufferViewIndex
+} from './editor-buffer-views'
 
 /**
  * Source of truth for a tab's buffer state, keyed by `OpenFile.id`. The same fields on
@@ -15,6 +20,12 @@ export type EditorBufferRecord = Pick<
 >
 
 export type EditorBufferRecords = Record<string, EditorBufferRecord>
+
+/** What a buffer write replaces. */
+export type EditorBufferWrite = { openFiles: OpenFile[]; editorBuffers: EditorBufferRecords }
+
+export type EditorBufferState = EditorBufferWrite &
+  EditorBufferViewIndex & { editorDrafts?: Record<string, string> }
 
 export const EDITOR_BUFFER_FIELDS = [
   'isDirty',
@@ -48,47 +59,68 @@ export function editorBufferMirrorMismatch(
   return EDITOR_BUFFER_FIELDS.find((field) => !Object.is(file[field], record[field])) ?? null
 }
 
-/** Patches `file`'s record; callers spread the same patch onto the tab in the same update. */
-export function patchEditorBuffer(
-  records: EditorBufferRecords,
-  file: OpenFile,
-  patch: Partial<EditorBufferRecord>
-): EditorBufferRecords {
-  return {
-    ...records,
-    [file.id]: { ...editorBufferOf(records, file), ...patch }
-  }
-}
-
-/** Writes `patch` to one file's record and its tab mirror in one update. */
+/** Writes `patch` to the file's record and every view's mirror in one update; `tabPatch` lands on `fileId` only. */
 export function writeEditorBuffer(
-  state: { openFiles: OpenFile[]; editorBuffers: EditorBufferRecords },
+  state: EditorBufferState,
   fileId: string,
   patch: Partial<EditorBufferRecord>,
   tabPatch?: Partial<OpenFile>
-): { openFiles: OpenFile[]; editorBuffers: EditorBufferRecords } {
+): EditorBufferWrite {
+  const recordId = editorBufferIdOfView(state, fileId)
+  const viewIds = new Set(editorBufferViewIds(state, recordId))
+  viewIds.add(fileId)
   let editorBuffers = state.editorBuffers
   const openFiles = state.openFiles.map((file) => {
-    if (file.id !== fileId) {
+    if (!viewIds.has(file.id)) {
       return file
     }
-    editorBuffers = patchEditorBuffer(editorBuffers, file, patch)
-    return { ...file, ...tabPatch, ...patch }
+    if (editorBuffers === state.editorBuffers) {
+      editorBuffers = {
+        ...editorBuffers,
+        [recordId]: { ...(editorBuffers[recordId] ?? editorBufferRecordFromFile(file)), ...patch }
+      }
+    }
+    return file.id === fileId ? { ...file, ...tabPatch, ...patch } : { ...file, ...patch }
   })
   return { openFiles, editorBuffers }
 }
 
-/** (Re)creates records for tabs whose buffer state comes from outside the store, e.g. a host snapshot. */
-export function createEditorBuffers(
-  records: EditorBufferRecords,
-  files: readonly OpenFile[]
-): EditorBufferRecords {
-  if (files.length === 0) {
-    return records
+/** Writes `patch` through the file's record; returns `state` itself when the record already holds it. */
+export function updateEditorBuffer<TState extends EditorBufferState>(
+  state: TState,
+  fileId: string,
+  patch: Partial<EditorBufferRecord>
+): TState | EditorBufferWrite {
+  const file = state.openFiles.find((candidate) => candidate.id === fileId)
+  if (!file) {
+    return state
   }
-  const next = { ...records }
-  for (const file of files) {
-    next[file.id] = editorBufferRecordFromFile(file)
+  const record = editorBufferOf(state.editorBuffers, file)
+  const changes = EDITOR_BUFFER_FIELDS.some(
+    (field) => Object.hasOwn(patch, field) && !Object.is(record[field], patch[field])
+  )
+  return changes ? writeEditorBuffer(state, fileId, patch) : state
+}
+
+/** A host-mirrored tab carries the host's buffer state, so its record adopts it in the same write. */
+export function adoptMirroredEditorBuffers(
+  records: EditorBufferRecords,
+  openFiles: readonly OpenFile[],
+  index: EditorBufferViewIndex
+): EditorBufferRecords {
+  let next = records
+  for (const file of openFiles) {
+    const recordId = editorBufferIdOfView(index, file.id)
+    const record = records[recordId]
+    if (
+      file.mirroredFromRuntimeSession !== true ||
+      !record ||
+      editorBufferMirrorMismatch(file, record) === null
+    ) {
+      continue
+    }
+    next = next === records ? { ...records } : next
+    next[recordId] = editorBufferRecordFromFile(file)
   }
   return next
 }
@@ -118,18 +150,20 @@ export function rekeyEditorBuffers(
   return next
 }
 
-/** Keeps records keyed exactly by the open tabs: seeds new tabs, drops closed ones. */
+/** Keeps one record per record id of the open tabs: seeds a record from its first view, drops ones with no view. */
 export function reconcileEditorBufferMembership(
   records: EditorBufferRecords,
-  openFiles: readonly OpenFile[]
+  openFiles: readonly OpenFile[],
+  index: EditorBufferViewIndex
 ): EditorBufferRecords {
   let next = records
   const ids = new Set<string>()
   for (const file of openFiles) {
-    ids.add(file.id)
-    if (!Object.hasOwn(next, file.id)) {
+    const recordId = editorBufferIdOfView(index, file.id)
+    ids.add(recordId)
+    if (!Object.hasOwn(next, recordId)) {
       next = next === records ? { ...records } : next
-      next[file.id] = editorBufferRecordFromFile(file)
+      next[recordId] = editorBufferRecordFromFile(file)
     }
   }
   for (const id of Object.keys(next)) {

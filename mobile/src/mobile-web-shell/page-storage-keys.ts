@@ -45,7 +45,9 @@ export const PAGE_STORAGE_KEY_PREFIXES = [
   /** `orca:nativeChatTabs:<hostId>:<worktreeId>`: which tabs of one workspace show the chat. */
   'orca:nativeChatTabs:',
   /** `orca:terminalLiveInputDisabled:<hostId>:<worktreeId>`: the handles typing goes around. */
-  'orca:terminalLiveInputDisabled:'
+  'orca:terminalLiveInputDisabled:',
+  /** Unsent command drafts, scoped to a host and workspace. */
+  'orca:terminalDrafts:'
 ] as const
 
 /** Long enough for a host's pinned ids, and far short of what a quota refuses. */
@@ -98,9 +100,13 @@ export function pageRouteWorkspace(
   }
 }
 
-const WORKSPACE_KEY_PREFIXES = ['orca:nativeChatTabs:', 'orca:terminalLiveInputDisabled:'] as const
+const WORKSPACE_KEY_PREFIXES = [
+  'orca:nativeChatTabs:',
+  'orca:terminalLiveInputDisabled:',
+  'orca:terminalDrafts:'
+] as const
 
-/** Both workspace-scoped keys are built the same way, so the shape is written once. */
+/** Workspace-scoped keys are built the same way, so the shape is written once. */
 function workspaceScopedKey(prefix: string, hostId: string, worktreeId: string): string {
   return `${prefix}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
 }

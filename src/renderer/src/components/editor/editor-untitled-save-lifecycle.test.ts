@@ -12,7 +12,7 @@ import {
 } from './editor-autosave-controller-test-fixture'
 import { discardEditorFileChangesAndClose } from './discard-editor-file-changes'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
 const storeHolder = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
 

@@ -26,54 +26,101 @@ type RegisteredRepoValidationResult =
   | { kind: 'ok'; repo: Repo }
   | { kind: 'denied'; reason: PRRefreshValidationDenialReason; message: string }
 
+/** A registered-repo lookup: the caller's path and id, plus the host it believes owns the row. */
+type RegisteredRepoQuery = {
+  repoPath: string
+  repoId?: string | null
+  /** Picks between twins (one id on two hosts); a lone row's own fields still win (they may be stale). */
+  hostHint?: Parameters<typeof getRepoExecutionHostId>[0] | null
+  sourceContext?: TaskSourceContext | null
+}
+
 function validateRegisteredRepo(
-  args: string | GitHubRepoScopedArgs,
-  store: Store,
-  repos = store.getRepos()
+  query: RegisteredRepoQuery,
+  repos: readonly Repo[]
 ): RegisteredRepoValidationResult {
-  const repoPath = typeof args === 'string' ? args : args.repoPath
-  const repoId = typeof args === 'string' ? undefined : args.repoId
-  const resolvedRepoPath = resolve(repoPath)
-  const repo = repos.find((candidate) =>
-    repoId ? candidate.id === repoId : resolve(candidate.path) === resolvedRepoPath
-  )
-  if (!repo) {
+  const { repoId, sourceContext } = query
+  const resolvedRepoPath = resolve(query.repoPath)
+  const idRows = repoId ? repos.filter((candidate) => candidate.id === repoId) : []
+  if (repoId && idRows.length === 0) {
     return {
       kind: 'denied',
       reason: 'unknown-repo',
       message: 'Access denied: unknown repository path'
     }
   }
-  if (repoId && resolve(repo.path) !== resolvedRepoPath) {
-    return {
-      kind: 'denied',
-      reason: 'repo-path-mismatch',
-      message: 'Access denied: repository path does not match repo id'
-    }
+  // Why id and path together: a twin's rows share the id, so the first id match can be the other host.
+  const pathRows = (repoId ? idRows : repos).filter(
+    (candidate) => resolve(candidate.path) === resolvedRepoPath
+  )
+  if (pathRows.length === 0) {
+    return repoId
+      ? {
+          kind: 'denied',
+          reason: 'repo-path-mismatch',
+          message: 'Access denied: repository path does not match repo id'
+        }
+      : {
+          kind: 'denied',
+          reason: 'unknown-repo',
+          message: 'Access denied: unknown repository path'
+        }
   }
-  if (
-    typeof args !== 'string' &&
-    args.sourceContext?.provider === 'github' &&
-    args.sourceContext.hostId !== getRepoExecutionHostId(repo)
-  ) {
-    return {
-      kind: 'denied',
-      reason: 'host-mismatch',
-      message: 'Access denied: GitHub source host does not match repository host'
-    }
+  if (sourceContext?.provider === 'github') {
+    const repo = pathRows.find(
+      (candidate) => getRepoExecutionHostId(candidate) === sourceContext.hostId
+    )
+    return repo
+      ? { kind: 'ok', repo }
+      : {
+          kind: 'denied',
+          reason: 'host-mismatch',
+          message: 'Access denied: GitHub source host does not match repository host'
+        }
   }
+  const hintHostId = query.hostHint ? getRepoExecutionHostId(query.hostHint) : null
+  const repo =
+    (hintHostId
+      ? pathRows.find((candidate) => getRepoExecutionHostId(candidate) === hintHostId)
+      : undefined) ?? pathRows[0]
   return { kind: 'ok', repo }
+}
+
+function registeredRepoQuery(args: string | GitHubRepoScopedArgs): RegisteredRepoQuery {
+  return typeof args === 'string'
+    ? { repoPath: args }
+    : { repoPath: args.repoPath, repoId: args.repoId, sourceContext: args.sourceContext }
+}
+
+function prRefreshCandidateQuery(candidate: GitHubPRRefreshCandidate): RegisteredRepoQuery {
+  return {
+    repoPath: candidate.repoPath,
+    repoId: candidate.repoId,
+    hostHint: { connectionId: candidate.connectionId, executionHostId: candidate.executionHostId }
+  }
+}
+
+function assertRegisteredRepo(query: RegisteredRepoQuery, store: Store): Repo {
+  const result = validateRegisteredRepo(query, store.getRepos())
+  if (result.kind === 'denied') {
+    throw new Error(result.message)
+  }
+  return result.repo
 }
 
 export function assertRegisteredGitHubRepo(
   args: string | GitHubRepoScopedArgs,
   store: Store
 ): Repo {
-  const result = validateRegisteredRepo(args, store)
-  if (result.kind === 'denied') {
-    throw new Error(result.message)
-  }
-  return result.repo
+  return assertRegisteredRepo(registeredRepoQuery(args), store)
+}
+
+/** A manual PR refresh resolves its twin the way the automatic queue does. */
+export function assertRegisteredPRRefreshCandidateRepo(
+  candidate: GitHubPRRefreshCandidate,
+  store: Store
+): Repo {
+  return assertRegisteredRepo(prRefreshCandidateQuery(candidate), store)
 }
 
 /** Pure: a project is still registered at the candidate's path on its execution host (the queue key's identity). */
@@ -129,7 +176,7 @@ export function validateAutomaticPRRefreshCandidate(
 ):
   | { kind: 'ok'; candidate: GitHubPRRefreshCandidate }
   | { kind: 'skipped'; result: Extract<GitHubPRRefreshEnqueueResult, { kind: 'skipped' }> } {
-  const result = validateRegisteredRepo(candidate, store, repos)
+  const result = validateRegisteredRepo(prRefreshCandidateQuery(candidate), repos)
   if (result.kind === 'denied') {
     const skippedReason = notePRRefreshValidationDenial({
       repoId: candidate.repoId,

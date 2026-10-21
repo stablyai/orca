@@ -844,7 +844,7 @@ describe('a close that stops the child and then a wind-down step fails', () => {
   )
 })
 
-describe('a compaction or rewind an earlier child left prepared', () => {
+describe('a rewind an earlier child left prepared', () => {
   async function leftPrepared(prepare: (fence: number) => Promise<unknown>): Promise<void> {
     await host.close(SESSION, 'evict')
     await prepare(store.getRecord(SESSION)!.lease.runtimeFence)
@@ -852,25 +852,6 @@ describe('a compaction or rewind an earlier child left prepared', () => {
     await host.flushAllStreamedEvents()
     await startHost()
   }
-
-  it("ignores an older build's interrupted compaction, so a send is accepted and delivered (R16)", async () => {
-    await leftPrepared((fence) =>
-      store.setConversationCommand(SESSION, fence, {
-        command: 'compact',
-        runtimeFence: fence,
-        operationId: 'compact-op',
-        callerKey: 'client-1',
-        phase: 'prepared',
-        state: 'unknown'
-      })
-    )
-
-    const id = await accept('after the compaction')
-
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    // Nothing settles the record: it belongs to a child this host no longer runs.
-    expect(store.getRecord(SESSION)?.conversationCommand).toMatchObject({ phase: 'prepared' })
-  })
 
   it('completes a rewind the provider already applied at open, so a send is accepted (R16)', async () => {
     await leftPrepared((fence) =>

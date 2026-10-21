@@ -678,7 +678,8 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     expect(subscribeParcelWatcher).toHaveBeenCalledTimes(2)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/tmp/repo',
-      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }],
+      resync: true
     })
   })
 

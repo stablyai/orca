@@ -1,6 +1,5 @@
-import { isDeepStrictEqual } from 'node:util'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
 import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
@@ -16,6 +15,7 @@ import {
   type UnstartedPaneKept
 } from '../terminal-topology/unstarted-pane-withdraw'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
+import { durabilityOnlyBindingResult, isDurabilityOnlyMatch } from './pty-binding-durability-only'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
 import { applyPtyBinding } from './pty-binding-session-update'
 import {
@@ -60,6 +60,15 @@ type PtyBindingPersistenceOperationsRuntime = Pick<
   | 'ptyBindingGenerations'
 >
 
+function markPtyBindingSessionDirty(
+  runtime: Pick<StoreRuntimeState, 'dirtyProfileStateDomains'>,
+  hostId: ReturnType<typeof resolveHostId>
+): void {
+  runtime.dirtyProfileStateDomains?.add(
+    hostId === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
+  )
+}
+
 export type PersistPtyBindingArgs = {
   worktreeId: string
   tabId: string
@@ -102,10 +111,14 @@ export class PtyBindingPersistenceOperations {
     this[ptyBindingPersistenceOperationsContext] = { runtime, sessions }
   }
 
-  /** Clears a stopped process's binding, keeping the pane; fenced on the id, which is dead in any incarnation. */
+  /**
+   * Clears a stopped process's binding, keeping the pane; fenced on the id, which is dead in any
+   * incarnation. `fence.incarnationId` narrows that to one process, for an absence answer.
+   */
   async retirePtyBinding(
     binding: Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId'>,
-    hostId?: string | null
+    hostId?: string | null,
+    fence?: { incarnationId: string | undefined }
   ): Promise<boolean> {
     const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolved = resolveHostId(hostId)
@@ -118,9 +131,7 @@ export class PtyBindingPersistenceOperations {
           [resolved]: session
         }
       }
-      runtime.dirtyProfileStateDomains?.add(
-        resolved === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
-      )
+      markPtyBindingSessionDirty(runtime, resolved)
     }
     return runtime.runDurableMutation(() => {
       const session = sessions.getWorkspaceSession(resolved)
@@ -130,6 +141,13 @@ export class PtyBindingPersistenceOperations {
         return { value: true, persist: 'if-dirty' }
       }
       if (currentId !== binding.ptyId) {
+        return { value: false, persist: false }
+      }
+      if (
+        fence &&
+        session.terminalPtyIncarnationsByPaneKey?.[makePaneKey(binding.tabId, binding.leafId)] !==
+          fence.incarnationId
+      ) {
         return { value: false, persist: false }
       }
       if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {
@@ -200,8 +218,15 @@ export class PtyBindingPersistenceOperations {
         span.setEligibility(verdict)
         if (verdict.eligible) {
           outcome = 'fast_lane'
+          span.setPath('durable_match')
           return { value: true, persist: false }
         }
+        if (isDurabilityOnlyMatch(verdict)) {
+          span.setPath('durability_only')
+          markPtyBindingSessionDirty(runtime, resolvedHostId)
+          return durabilityOnlyBindingResult(resolvedHostId)
+        }
+        span.setPath('mutation')
         // After the fast lane, so a no-op rebind skips the scan.
         reportPtyBindingOwnerConflict(span, args, resolvedHostId, partitions)
         return {
@@ -286,28 +311,10 @@ function writePtyBinding(
     }
     applyPtyBinding(args, session, bindingWorktreeId, paneKey)
     bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
-    runtime.dirtyProfileStateDomains?.add(
-      resolvedHostId === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
-    )
+    markPtyBindingSessionDirty(runtime, resolvedHostId)
     const boundSession = cloneWorkspaceSessionState(session)
     return () => {
       const current = sessions.getWorkspaceSession(resolvedHostId)
-      const ownerState = (value: WorkspaceSessionState) => {
-        const tab = value.tabsByWorktree[bindingWorktreeId]?.find((tab) => tab.id === args.tabId)
-        return {
-          createdAt: tab?.createdAt,
-          generation: tab?.generation,
-          worktreeId: tab?.worktreeId,
-          ptyId: isTerminalLeafId(args.leafId)
-            ? value.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
-            : tab?.ptyId,
-          incarnation: value.terminalPtyIncarnationsByPaneKey?.[paneKey]
-        }
-      }
-      // Presentation edits do not replace the binding that must be rolled back.
-      if (!isDeepStrictEqual(ownerState(current), ownerState(boundSession))) {
-        return
-      }
       const rolledBack = rollbackFailedPtyBinding(
         sessionBeforeBinding,
         boundSession,

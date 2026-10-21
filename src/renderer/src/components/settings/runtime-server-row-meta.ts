@@ -17,7 +17,7 @@ export function getRuntimeServerRoute(
     targets.find((target) => target.id === targetId)?.label ?? targetId
   const deployment = getOrcadSshDeployment(environment)
   if (deployment) {
-    // Why not the host: the row's title already says "Orca on <host>".
+    // Why not the host: the row's title already names it.
     return translate('auto.components.settings.serverList.overYourSsh', 'Over your SSH connection')
   }
   if (environment.sshAccess) {

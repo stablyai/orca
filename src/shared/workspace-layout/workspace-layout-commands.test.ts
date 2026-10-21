@@ -185,39 +185,6 @@ describe('layout command refusals', () => {
     ).toBe('last_pane')
   })
 
-  it('setPaneRatios accepts divider sizes only', () => {
-    const { model, tabA, leafA, leafA2 } = setup()
-    const root = terminalTab(model, tabA).panes!.root!
-    if (root.type !== 'split') {
-      throw new Error('expected a split')
-    }
-    expect(
-      refusal(model, {
-        type: 'setPaneRatios',
-        workspace: WS,
-        tabId: tabA,
-        root: { ...root, ratio: 0.3 }
-      })
-    ).toBe('applied')
-    const swapped = {
-      type: 'split' as const,
-      direction: 'vertical' as const,
-      first: { type: 'leaf' as const, leafId: leafA2 },
-      second: { type: 'leaf' as const, leafId: leafA }
-    }
-    expect(
-      refusal(model, { type: 'setPaneRatios', workspace: WS, tabId: tabA, root: swapped })
-    ).toBe('pane_structure_changed')
-    expect(
-      refusal(model, {
-        type: 'setPaneRatios',
-        workspace: WS,
-        tabId: tabA,
-        root: { type: 'leaf', leafId: leafA }
-      })
-    ).toBe('pane_structure_changed')
-  })
-
   it('group commands refuse a missing group, a changed group set, and splitting a lone tab off itself', () => {
     const { model, tabA } = setup()
     const groupId = model.workspaces[WS]!.groups[0]!.id

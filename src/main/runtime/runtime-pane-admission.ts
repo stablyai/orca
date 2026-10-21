@@ -1,3 +1,4 @@
+import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import type {
   TerminalPaneAdmission,
@@ -6,7 +7,7 @@ import type {
 import type { LayoutRefusalCode } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { PaneStartStatuses } from './pane-start-statuses'
+import { paneStartFailure, type PaneStartStatuses } from './pane-start-statuses'
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>
@@ -118,7 +119,7 @@ export async function startInAdmittedPane<T>(
   try {
     return { outcome, result: await start(outcome) }
   } catch (error) {
-    if (outcome === 'admitted' && !keepOnFailure) {
+    if (outcome === 'admitted' && !keepOnFailure && !(error instanceof PaneOwnerContentionError)) {
       await withdrawAdmittedPane(store, admission, hostId)
     }
     throw error
@@ -136,6 +137,9 @@ export async function spawnInAdmittedPane(
   { startStatus, ...args }: AdmittedSpawnArgs & PaneStartArgs
 ): ReturnType<Spawn> {
   const { groupId: _groupId, afterTabId: _afterTabId, ...spawnArgs } = args
+  if (args.paneSpawnOperation?.mustExist) {
+    return controller.spawn!(spawnArgs)
+  }
   const { outcome, result } = await startInAdmittedPane(
     store,
     admissionFor(args),
@@ -157,10 +161,7 @@ export async function spawnInAdmittedPane(
         sink.clear(paneKey)
         return started
       } catch (error) {
-        sink.set(paneKey, {
-          status: 'failed',
-          reason: error instanceof Error ? error.message : String(error)
-        })
+        sink.set(paneKey, paneStartFailure(error))
         throw error
       }
     },

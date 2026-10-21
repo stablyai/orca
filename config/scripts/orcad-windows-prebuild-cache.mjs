@@ -25,6 +25,9 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'config/patches/node-pty@1.1.0.patch',
   'src/shared/node-runtime-pin.ts',
   'config/scripts/build-orcad-prebuilds.mjs',
+  'config/scripts/orcad-prebuild-node-gyp.mjs',
+  'config/scripts/initialize-windows-native-toolchain.mjs',
+  'config/scripts/capture-windows-native-environment.cmd',
   'config/scripts/orcad-prebuild-slot-contents.mjs',
   'config/scripts/orcad-windows-prebuild-cache.mjs',
   'config/scripts/node-pty-job-ownership.cjs',
@@ -46,7 +49,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'src/packages/process-host/src/process-spec.ts',
   'src/packages/process-host/src/windows-command-line.ts',
   'src/packages/process-host/src/windows-cmd-shim-resolution.ts',
-  'src/packages/process-host/src/windows-system-binary.ts'
+  'src/packages/process-host/src/windows-system-binary.ts',
+  'src/packages/process-host/src/windows-tree-kill.ts'
 ]
 
 function windowsSlot(platform, arch) {

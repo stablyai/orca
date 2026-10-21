@@ -1,0 +1,98 @@
+name: Adhoc qualified server template
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  cache:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    outputs:
+      key: ${{ steps.identity.outputs.key }}
+      hit: ${{ steps.validate.outputs.valid }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+      - name: Checkout the workflow policy
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .build/workflow-policy
+          sparse-checkout: .github
+          persist-credentials: false
+      # The CLI embeds its source commit; tree equality alone cannot identify its bytes.
+      - name: Identify today's exact source tree
+        id: identity
+        shell: bash
+        run: echo "key=orcad-qualified-template-v1-$(git -C .build/workflow-policy rev-parse HEAD:.github)-$(git rev-parse HEAD)-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v5
+        id: restore
+        continue-on-error: true
+        with:
+          path: out/orcad-template
+          key: ${{ steps.identity.outputs.key }}
+      - name: Validate the restored template
+        id: validate
+        if: steps.restore.outputs.cache-hit == 'true' && steps.restore.outcome == 'success'
+        shell: bash
+        run: |
+          if node -e "require('./config/dark-build-switches.cjs').assertNotDarkBuild(['out/orcad-template']); require('./config/scripts/verify-packaged-orcad-template.cjs').verifyPackagedOrcadTemplate('out')"; then
+            echo 'valid=true' >> "$GITHUB_OUTPUT"
+          else
+            rm -rf out/orcad-template
+            echo '::warning::Cached template failed validation; qualifying a fresh build.'
+          fi
+      - name: Reuse the qualified template in this run
+        if: steps.validate.outputs.valid == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-template
+          path: out/orcad-template/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  qualify:
+    permissions:
+      contents: read
+      actions: read
+    needs: cache
+    if: needs.cache.outputs.hit != 'true'
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ inputs.ref }}
+      build_template: true
+      fast_runners: true
+
+  save:
+    needs: [cache, qualify]
+    if: needs.qualify.result == 'success'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+      # Only the full successful qualification can produce a reusable cache entry.
+      - uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: out/orcad-template
+          key: ${{ needs.cache.outputs.key }}

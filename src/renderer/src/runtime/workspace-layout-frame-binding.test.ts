@@ -222,6 +222,22 @@ describe('a frame that changes only panes’ terminal bindings', () => {
     sync.close()
   })
 
+  // A status says a bound pane's terminal is not live yet; the window keeps the id to restore by.
+  it('rebuilds nothing for a frame that only gives a bound pane a status', async () => {
+    const { store, sync, first, send } = await boot()
+    const before = store.getState().terminalLayoutsByTabId['tab-shell']
+    const sleeping = structuredClone(first)
+    const pane = sleeping.tabs.find((tab) => tab.entityId === 'tab-shell')!.terminal!.panes[0]!
+    expect(pane.ptyId).toBeDefined()
+    pane.status = 'sleeping'
+
+    await send(sleeping)
+
+    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
+    expect(store.getState().terminalLayoutsByTabId['tab-shell']).toBe(before)
+    sync.close()
+  })
+
   it('builds only its workspace, from the store’s view, for a frame that also renames', async () => {
     const { store, sync, first, send } = await boot()
     const renamed = rebound(first, 'tab-shell', leaf(1), 'pty-fresh')

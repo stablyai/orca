@@ -1,13 +1,15 @@
 name: WSL orcad E2E
 
 # WSL via orcad (step C10) on real WSL2 distros: a GitHub-hosted windows-2025 runner imports a
-# pinned Ubuntu 24.04 rootfs twice (systemd off and on) and runs
+# pinned Ubuntu 24.04 rootfs twice (systemd off and on), plus Debian 12 and Fedora 41 (systemd off,
+# rootfs exported from their container images), and runs
 # src/main/wsl/wsl-orcad-real-distro-lane.test.ts against both: deploy and launch, the wsl.exe
 # stdio bridge, runtime RPC, liveness recovery, holder survival, structured chat and teardown. Not a required check.
 # Hosted WSL2 was proven in #27783: WSL 2.7.14, import 13-18 s, cold boot 8-14 s.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    # This lane drives host RPC, not UI; pr.yml owns mobile bundle/render checks.
     paths:
       - 'src/main/wsl/**'
       - 'src/main/runtime/**'
@@ -20,11 +22,8 @@ on:
       - 'src/main/orcad/**'
       - 'src/main/server/**'
       - 'src/main/persistence/**'
-      - 'mobile/src/**'
       - 'src/main/ipc/*wsl*'
       - 'src/shared/**'
-      - 'src/renderer/src/components/native-chat/**'
-      - 'src/renderer/src/lib/*agent-session*'
       - 'config/scripts/*orcad*'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -53,7 +52,6 @@ env:
   WSL_MSI_URL: https://github.com/microsoft/WSL/releases/download/3.0.1/wsl.3.0.1.0.x64.msi
   WSL_MSI_SHA256: 28b1a0d013640a2ac95898ea705fa186e5b4ff767a1c1b49257161bc106599c6
   PLAIN_DISTRO: orca-lane-plain
-  SYSTEMD_DISTRO: orca-lane-systemd
 
 jobs:
   # The distro is linux-x64-glibc; its node-pty slot only builds on Linux, and nothing else is needed.
@@ -84,14 +82,66 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # Container images ship no systemd, so these families run the systemd-off distro only.
+  container-rootfs:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    name: Export ${{ matrix.family }} rootfs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: debian-12
+            image: debian:12
+          - family: fedora-41
+            image: fedora:41
+    steps:
+      - name: Export the image filesystem
+        run: |
+          docker pull --platform linux/amd64 '${{ matrix.image }}'
+          echo "digest: $(docker image inspect --format '{{index .RepoDigests 0}}' '${{ matrix.image }}')"
+          id="$(docker create --platform linux/amd64 '${{ matrix.image }}')"
+          mkdir -p rootfs
+          docker export "$id" > rootfs/rootfs.tar
+          docker rm "$id" >/dev/null
+          ls -l rootfs/rootfs.tar
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wsl-orcad-rootfs-${{ matrix.family }}
+          path: rootfs/rootfs.tar
+          retention-days: 1
+          if-no-files-found: error
+
   wsl2:
-    name: WSL2 distros (systemd off and on)
-    needs: template
+    name: ${{ matrix.name }}
+    needs: [template, container-rootfs]
     runs-on: windows-2025
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: WSL2 distros (systemd off and on)
+            family: ubuntu-24.04
+            container: false
+            systemd-distro: orca-lane-systemd
+            install: command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)
+          - name: WSL2 distro (debian-12)
+            family: debian-12
+            container: true
+            systemd-distro: ''
+            install: apt-get update -qq && apt-get install -y -qq git procps
+          - name: WSL2 distro (fedora-41)
+            family: fedora-41
+            container: true
+            systemd-distro: ''
+            install: dnf -y -q install git procps-ng shadow-utils util-linux findutils tar gzip
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_WSL_ORCAD_LANE_RECEIPTS: ${{ github.workspace }}\test-results\wsl-orcad-lane
+      SYSTEMD_DISTRO: ${{ matrix.systemd-distro }}
+      ORCA_WSL_ORCAD_LANE_SYSTEMD_DISTRO: ${{ matrix.systemd-distro }}
     defaults:
       run:
         shell: pwsh
@@ -162,24 +212,36 @@ jobs:
           if ([version]$match.Groups[1].Value -lt [version]'3.0.1') { throw "WSL $($match.Groups[1].Value) is older than 3.0.1" }
       - name: Restore the pinned rootfs
         id: rootfs-cache
+        if: ${{ !matrix.container }}
         uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/wsl-rootfs
           key: wsl-orcad-rootfs-${{ env.ROOTFS_SHA256 }}
+      - uses: actions/download-artifact@v8
+        if: ${{ matrix.container }}
+        with:
+          name: wsl-orcad-rootfs-${{ matrix.family }}
+          path: ${{ runner.temp }}/wsl-rootfs
       # Runs beside the dependency install; the lane waits for it below.
-      - name: Import both distros as WSL2
+      - name: Import the distros as WSL2
         id: import
         background: true
         timeout-minutes: 10
         run: |
           $cache = Join-Path $env:RUNNER_TEMP 'wsl-rootfs'
           New-Item -ItemType Directory -Force $cache | Out-Null
-          $rootfs = Join-Path $cache 'ubuntu.wsl'
-          if (-not (Test-Path $rootfs)) { Invoke-WebRequest $env:ROOTFS_URL -OutFile $rootfs }
-          if ((Get-FileHash $rootfs -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:ROOTFS_SHA256) {
-            Remove-Item $rootfs; throw 'rootfs checksum mismatch'
+          if ('${{ matrix.container }}' -eq 'true') {
+            $rootfs = Join-Path $cache 'rootfs.tar'
+          } else {
+            $rootfs = Join-Path $cache 'ubuntu.wsl'
+            if (-not (Test-Path $rootfs)) { Invoke-WebRequest $env:ROOTFS_URL -OutFile $rootfs }
+            if ((Get-FileHash $rootfs -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:ROOTFS_SHA256) {
+              Remove-Item $rootfs; throw 'rootfs checksum mismatch'
+            }
           }
-          foreach ($d in @(@{ Name = $env:PLAIN_DISTRO; Systemd = 'false' }, @{ Name = $env:SYSTEMD_DISTRO; Systemd = 'true' })) {
+          $distros = @(@{ Name = $env:PLAIN_DISTRO; Systemd = 'false' })
+          if ($env:SYSTEMD_DISTRO) { $distros += @{ Name = $env:SYSTEMD_DISTRO; Systemd = 'true' } }
+          foreach ($d in $distros) {
             $sw = [Diagnostics.Stopwatch]::StartNew()
             # No WSL1 fallback: the lane exists to prove WSL2.
             wsl.exe --import $d.Name (Join-Path $env:RUNNER_TEMP $d.Name) $rootfs --version 2
@@ -187,10 +249,12 @@ jobs:
             "$($d.Name) import_ms=$($sw.ElapsedMilliseconds)"
             if (-not ((wsl.exe --list --verbose) -match "$($d.Name)\s+\S+\s+2\s*$")) { throw "$($d.Name) is not a WSL2 distro" }
             # A non-root default user, as on a real install; git for the lane's repo.
-            $setup = "set -e; id orca >/dev/null 2>&1 || useradd -m -s /bin/bash orca; " +
+            # The env exports go to the file a login bash reads first; Fedora's skel ships .bash_profile.
+            $setup = "set -e; ${{ matrix.install }}; id orca >/dev/null 2>&1 || useradd -m -s /bin/bash orca; " +
               "printf '[boot]\nsystemd=$($d.Systemd)\n[user]\ndefault=orca\n' > /etc/wsl.conf; " +
-              "printf 'export ORCA_BACKGROUND_LAUNCH=1\nexport USERPROFILE=`$HOME\nexport APPDATA=`$HOME/.config\nexport LOCALAPPDATA=`$HOME/.local/share\nexport XDG_CONFIG_HOME=`$HOME/.config\nexport XDG_DATA_HOME=`$HOME/.local/share\nexport XDG_CACHE_HOME=`$HOME/.cache\nexport XDG_STATE_HOME=`$HOME/.local/state\nexport CLAUDE_CONFIG_DIR=`$HOME/.claude\nexport CODEX_HOME=`$HOME/.codex\n' >> /home/orca/.profile; " +
-              "command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)"
+              "rc=/home/orca/.profile; for f in /home/orca/.bash_profile /home/orca/.bash_login; do " +
+              "if [ -f `$f ]; then rc=`$f; break; fi; done; " +
+              "printf 'export ORCA_BACKGROUND_LAUNCH=1\nexport USERPROFILE=`$HOME\nexport APPDATA=`$HOME/.config\nexport LOCALAPPDATA=`$HOME/.local/share\nexport XDG_CONFIG_HOME=`$HOME/.config\nexport XDG_DATA_HOME=`$HOME/.local/share\nexport XDG_CACHE_HOME=`$HOME/.cache\nexport XDG_STATE_HOME=`$HOME/.local/state\nexport CLAUDE_CONFIG_DIR=`$HOME/.claude\nexport CODEX_HOME=`$HOME/.codex\n' >> `$rc"
             wsl.exe -d $d.Name -u root --exec sh -c $setup
             if ($LASTEXITCODE -ne 0) { throw "provisioning $($d.Name) failed: $LASTEXITCODE" }
             wsl.exe --terminate $d.Name
@@ -211,7 +275,7 @@ jobs:
       - wait: import
       # Saved even when the lane fails; the import step verified its checksum.
       - name: Save the pinned rootfs
-        if: steps.rootfs-cache.outputs.cache-hit != 'true'
+        if: ${{ !matrix.container && steps.rootfs-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v5
         with:
           path: ${{ runner.temp }}/wsl-rootfs
@@ -275,7 +339,7 @@ jobs:
         run: |
           $out = $env:ORCA_WSL_ORCAD_LANE_RECEIPTS
           New-Item -ItemType Directory -Force $out | Out-Null
-          foreach ($d in @($env:PLAIN_DISTRO, $env:SYSTEMD_DISTRO)) {
+          foreach ($d in @($env:PLAIN_DISTRO, $env:SYSTEMD_DISTRO) | Where-Object { $_ }) {
             wsl.exe -d $d --exec sh -c 'for f in $(find "$HOME/.orca-remote" -name "*.log*" -type f 2>/dev/null); do echo "=== $f"; tail -n 400 "$f"; done' > (Join-Path $out "$d-orcad-logs.txt") 2>&1
           }
           wsl.exe --list --verbose
@@ -283,7 +347,7 @@ jobs:
         if: always()
         run: |
           $dir = $env:ORCA_WSL_ORCAD_LANE_RECEIPTS
-          $lines = @("### WSL orcad lane — $env:ImageOS $env:ImageVersion", '')
+          $lines = @("### WSL orcad lane (${{ matrix.family }}) — $env:ImageOS $env:ImageVersion", '')
           foreach ($phase in 'launch', 'survive') {
             $file = Join-Path $dir "$phase.json"
             if (Test-Path $file) { $lines += "#### $phase", '```json', (Get-Content $file -Raw), '```' }
@@ -292,7 +356,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: wsl-orcad-lane-receipts
+          name: wsl-orcad-lane-receipts-${{ matrix.family }}
           path: test-results/wsl-orcad-lane/
           retention-days: 7
           if-no-files-found: ignore

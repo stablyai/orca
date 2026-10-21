@@ -1,6 +1,7 @@
-// Each pane's binding generation (`LayoutLeaf.ptyGeneration`): it rises on each pty bind
-// (`persistPtyBinding` past its fast lane), retire and rollback of that pane in this process, a
-// same-id respawn included. Layout commands that move or drop a pane do not bump it. In memory
+// Each pane's binding generation (`LayoutLeaf.ptyGeneration`): it rises on every pty bind, layout-
+// command binds included (`persistPtyBinding` past its fast lane, a command that changes a pane's
+// ptyId), retire and rollback of that pane in this process, a same-id respawn included. Layout
+// commands that move or drop a pane do not bump it. In memory
 // only; layout-owner builds only.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'

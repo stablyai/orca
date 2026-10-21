@@ -11,6 +11,9 @@ import type {
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -115,6 +118,14 @@ type WindowListing = 'pane-without-terminal' | 'no-new-pane'
 
 function setup(listing: WindowListing) {
   let session = persistedSession()
+  // The Store tells its write listeners after each write, as main's terminal list relies on.
+  const written = new Set<(hostId: string | null) => void>()
+  const write = (next: WorkspaceSessionState): void => {
+    session = next
+    for (const listener of written) {
+      listener('local')
+    }
+  }
   const repo = {
     id: REPO_ID,
     path: '/workspace',
@@ -127,8 +138,21 @@ function setup(listing: WindowListing) {
       getRepos: () => [repo],
       getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
       getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => ['local'],
+      onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+        written.add(listener)
+        return () => written.delete(listener)
+      },
       setWorkspaceSession: (next: WorkspaceSessionState) => {
-        session = next
+        write(next)
+      },
+      // Main's own layout close, as the Store applies it.
+      applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly ExecutionHostId[]) => {
+        const change = applyCommandToSession(hostIds[0]!, session, command)
+        if (change.session) {
+          write(change.session)
+        }
+        return change.value
       },
       persistPtyBinding: () => true,
       flushOrThrow: () => undefined
@@ -149,7 +173,7 @@ function setup(listing: WindowListing) {
     // The real spawn writes the new pane's binding into main's session; the fake does the same.
     spawn: vi.fn(async (args: { tabId?: string; leafId?: string }) => {
       const layout = session.terminalLayoutsByTabId[args.tabId!]!
-      session = {
+      write({
         ...session,
         terminalLayoutsByTabId: {
           ...session.terminalLayoutsByTabId,
@@ -158,7 +182,7 @@ function setup(listing: WindowListing) {
             ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [args.leafId!]: SPLIT_PTY_ID }
           }
         }
-      }
+      })
       return { id: SPLIT_PTY_ID }
     }),
     write: () => true,
@@ -218,13 +242,13 @@ function setup(listing: WindowListing) {
   const dropPane = (leafId: string): void => {
     const layout = session.terminalLayoutsByTabId[TAB_ID]!
     const { [leafId]: _dropped, ...ptyIdsByLeafId } = layout.ptyIdsByLeafId ?? {}
-    session = {
+    write({
       ...session,
       terminalLayoutsByTabId: {
         ...session.terminalLayoutsByTabId,
         [TAB_ID]: { ...layout, root: sourceLayout().root, ptyIdsByLeafId }
       }
-    }
+    })
   }
   return { runtime, handle, dropPane }
 }

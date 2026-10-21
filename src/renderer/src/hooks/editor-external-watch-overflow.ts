@@ -79,12 +79,15 @@ type EditTabProbe = {
 }
 
 /**
- * An overflow (or a switch-back catch-up) names no paths, so every tab of the workspace may be stale.
- * Clean tabs reload unless disk proves the file gone; dirty tabs get the restored-tab disk check.
+ * An overflow names no paths, so every clean tab of the workspace reloads.
+ * A resync (the watch was down) also probes clean edit tabs for deletion and gives dirty tabs the restored-tab
+ * disk check; an event-storm overflow skips both so it never pauses autosave or fans out per-tab probes.
  */
-export function reconcileEditorTabsAfterOverflow(target: OverflowTarget): void {
-  // Why: unmounted combined-diff tabs get no per-path reload, so drop their cached bodies before a remount replays them.
-  forgetCombinedDiffViewBodiesForWorktree(target.worktreeId)
+export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync: boolean): void {
+  if (resync) {
+    // Why: unmounted combined-diff tabs get no per-path reload, so drop their cached bodies before a remount replays them.
+    forgetCombinedDiffViewBodiesForWorktree(target.worktreeId)
+  }
   const state = useAppStore.getState()
   const probes: EditTabProbe[] = []
   for (const file of state.openFiles) {
@@ -96,6 +99,9 @@ export function reconcileEditorTabsAfterOverflow(target: OverflowTarget): void {
       continue
     }
     if (file.isDirty) {
+      if (!resync) {
+        continue
+      }
       // Why: a dirty tab is never reloaded; the restored-tab scan shows the changed-on-disk banner if disk moved.
       // Mirrors the scan's eligibility so it always resolves the flag.
       if (
@@ -115,7 +121,9 @@ export function reconcileEditorTabsAfterOverflow(target: OverflowTarget): void {
       runtimeEnvironmentId: target.runtimeEnvironmentId ?? null,
       ...getLocalWindowsWslAliasOption(target)
     }
-    if (file.mode !== 'edit') {
+    if (file.mode !== 'edit' || !resync) {
+      // Why: this reload is newer than any pending resync probe for the tab.
+      probeGenerationByFileId.delete(file.id)
       if (file.externalMutation) {
         state.setExternalMutation(file.id, null)
       }

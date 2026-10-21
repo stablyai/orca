@@ -246,6 +246,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Worker threads the account services start: CLI probes off the event loop, Claude account setup.
   { filename: 'worker-thread-child-process-entry.js' },
   { filename: 'claude-profile-setup-worker-entry.js' },
+  // Dictation's worker thread; it loads the recognizer `orca serve` names (#31174).
+  { filename: 'stt-worker.js' },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

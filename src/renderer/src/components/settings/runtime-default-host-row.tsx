@@ -14,7 +14,7 @@ type RuntimeDefaultHostRowProps = {
   onValueChange: (value: string) => void
 }
 
-/** "New projects open on": the default host for project creation, always in view. */
+/** "New projects open on": the default host for project creation. */
 export function RuntimeDefaultHostRow({
   allowLocalRuntime,
   activeValue,

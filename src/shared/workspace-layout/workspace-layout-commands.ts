@@ -35,6 +35,8 @@ import {
   movePane,
   movePaneToNewTab,
   renamePane,
+  setPaneGrid,
+  releasePaneTerminal,
   setPaneRatios,
   splitPane
 } from './workspace-layout-pane-commands'
@@ -60,12 +62,13 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
 
 /** A `renameTabs` as the `renameTab` each of its titles is. */
 export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
-  return command.renames.map(({ workspace, tabId, title }) => ({
+  return command.renames.map(({ workspace, tabId, title, replaceExisting }) => ({
     type: 'renameTab',
     workspace,
     tabId,
     kind: command.kind,
-    title
+    title,
+    ...(replaceExisting ? { replaceExisting } : {})
   }))
 }
 
@@ -125,6 +128,10 @@ function applyCommand(
       return renameTab(model, command)
     case 'renamePane':
       return renamePane(model, command)
+    case 'setPaneGrid':
+      return setPaneGrid(model, command)
+    case 'releasePaneTerminal':
+      return releasePaneTerminal(model, command)
     case 'setTabProps':
       return setTabProps(model, command)
     case 'setChatPane':

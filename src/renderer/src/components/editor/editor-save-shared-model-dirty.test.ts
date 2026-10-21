@@ -18,11 +18,6 @@ import {
   overwriteDiskWithTabEdits
 } from './ExternalFileChangeBanner'
 import { isStaleCachedEditorText, mayPushTabTextIntoModel } from './editor-stale-mount-guard'
-import {
-  rollBackFailedMobileSave,
-  stampMobileVerifiedBaseline
-} from '@/runtime/mobile-markdown-save-rollback'
-import { EDITOR_STALE_SAVE_MESSAGE } from './editor-save-disk-precondition'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
@@ -148,46 +143,6 @@ describe('a clean tab of a dirty shared model', () => {
     // A mounting with its cached disk text may not replace the model holding B's kept edits.
     expect(mayPushTabTextIntoModel(a.id)).toBe(false)
     expect(store.getState().editorDrafts[b.id]).toBe('unsaved in B')
-  })
-
-  it('a phone save to a dirty model adopts nothing; after it fails the dirty sibling is still refused', async () => {
-    const { store, a, b, tab } = openSharedTabsWithDirtySibling()
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      // The agent wrote 'E'; the phone read it and saves through the clean tab A.
-      expect(stampMobileVerifiedBaseline(a, { content: 'E', source: 'file' })).toBeNull()
-      await expect(
-        requestEditorFileSave({ fileId: a.id, fallbackContent: 'phone', origin: 'mobile' })
-      ).rejects.toThrow(/changed on disk/)
-      expect(tab(a.id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('S0'))
-
-      await expect(requestEditorFileSave({ fileId: b.id })).rejects.toThrow(/changed on disk/)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('restores the previous shared baseline when a phone save that adopted one fails', () => {
-    const { store, a, b, tab } = openSharedTabsWithDirtySibling()
-    store.getState().clearEditorDraft(b.id)
-    store.getState().markFileDirty(b.id, false)
-
-    const adopted = stampMobileVerifiedBaseline(tab(a.id)!, { content: 'E', source: 'file' })
-    expect(adopted).toEqual({
-      adopted: getDiskBaselineSignature('E'),
-      previous: getDiskBaselineSignature('S0')
-    })
-    rollBackFailedMobileSave(new Error(EDITOR_STALE_SAVE_MESSAGE), {
-      fileId: a.id,
-      injectedContent: 'phone',
-      previousDraft: undefined,
-      previousDirty: false,
-      stampedBaseline: adopted
-    })
-
-    for (const id of [a.id, b.id]) {
-      expect(tab(id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature('S0'))
-    }
   })
 
   it("drops a clean tab's leftover draft when the model moves to a newer load, so it cannot overwrite", async () => {

@@ -10,8 +10,11 @@ import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 export const COMPAT_FOLDERS = [
   {
     folder: 'src/shared/workspace-layout/old-client',
-    entries: ['old-client-session-tab-rows'],
-    importers: ['src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts']
+    entries: ['old-client-session-tab-rows', 'old-client-session-tabs-projection'],
+    importers: [
+      'src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts',
+      'src/main/runtime/terminal/surface/terminal-surface-index.ts'
+    ]
   },
   {
     folder: 'src/main/remote-layout-snapshot',

@@ -6,15 +6,46 @@ import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs as BuildHeadl
 import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods } from './renderer-session-terminal-rescue'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { OrcaRuntimeWithSyncWindowGraph } from '../session-graph/session-window-graph'
+import {
+  mainTerminalSurfaces,
+  type MainTerminalSurfacesHost
+} from '../terminal/surface/main-terminal-surfaces'
+import type { WorkspaceLayoutReads } from '../workspace-layout-stream'
 import type {
   RuntimeMobileSessionTabsResult,
-  RuntimeSyncedTab
+  RuntimeSyncedTab,
+  RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
 import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import type { PaneStartStatuses } from '../pane-start-statuses'
 
 export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
+  abstract get workspaceLayoutReads(): WorkspaceLayoutReads
+  declare protected readonly paneStartStatuses: PaneStartStatuses | null
+
+  /** Layout-owner builds: the window's graph with main's own panes for what main owns. */
+  protected withMainSurfaces(
+    windowId: number,
+    graph: RuntimeSyncWindowGraph
+  ): RuntimeSyncWindowGraph {
+    const host = (): MainTerminalSurfacesHost => ({
+      store: () => this.store,
+      reads: () => this.workspaceLayoutReads,
+      homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
+      registered: (ptyId) => this.ptysById.has(ptyId),
+      // Certified exit only: a dropped relay leaves records disconnected but unverifiable.
+      exited: (ptyId) => this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited',
+      paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
+      readyGraphPublisher: () => (this.graphStatus === 'ready' ? this.authoritativeWindowId : null),
+      publish: (publisher, next) => {
+        this.syncWindowGraph(publisher, next)
+      }
+    })
+    return mainTerminalSurfaces(this, host).withMainSurfaces(windowId, graph)
+  }
+
   protected abstract getAuthoritativeSessionTabsInventoryEpoch(
     ...args: Parameters<
       SessionTabsInventoryPublicationMethods['getAuthoritativeSessionTabsInventoryEpoch']

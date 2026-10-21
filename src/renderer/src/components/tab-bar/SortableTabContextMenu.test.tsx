@@ -9,7 +9,6 @@ import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-s
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 
 const storeMock = vi.hoisted(() => ({
-  dropUnifiedTab: vi.fn(),
   state: {
     keybindings: {},
     unifiedTabsByWorktree: {},
@@ -93,6 +92,14 @@ vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   )
 }))
 
+// The menu's move goes where the tab bar's does; that move's own path is pinned in
+// tab-move-to-pane-column.test.ts and, through main's frame, tab-moves-drawn-from-frames.test.ts.
+const moveMock = vi.hoisted(() => ({ moveTabToNewPaneColumn: vi.fn(() => true) }))
+vi.mock('./tab-move-to-pane-column', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  moveTabToNewPaneColumn: moveMock.moveTabToNewPaneColumn
+}))
+
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) => selector(storeMock.state),
@@ -170,10 +177,9 @@ function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
 }
 
 beforeEach(() => {
-  storeMock.dropUnifiedTab.mockReset()
+  moveMock.moveTabToNewPaneColumn.mockClear()
   storeMock.state = {
     keybindings: {},
-    dropUnifiedTab: storeMock.dropUnifiedTab,
     groupsByWorktree: {
       'wt-1': [
         {
@@ -326,16 +332,16 @@ describe('SortableTabContextMenu', () => {
   })
 
   it('renders split actions and routes directions to the move path', () => {
-    storeMock.dropUnifiedTab.mockReturnValue(true)
     const { container } = renderMenu()
 
     expect(container.textContent).toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal')
 
     act(() => getButton(container, 'Right').click())
-    expect(storeMock.dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
+    expect(moveMock.moveTabToNewPaneColumn).toHaveBeenCalledWith({
+      unifiedTabId: 'tab-1',
       groupId: 'group-1',
-      splitDirection: 'right'
+      direction: 'right'
     })
   })
 

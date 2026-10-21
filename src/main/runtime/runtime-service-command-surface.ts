@@ -72,6 +72,9 @@ export type RuntimeServiceCommandSurface = {
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
   deleteMobileSpeechModel: RuntimeMobileSpeechCatalog['delete']
   configureMobileDictation: RuntimeMobileSpeechCatalog['configure']
+  getOpenAiSpeechKeyStatus: RuntimeMobileSpeechCatalog['openAiKeyStatus']
+  setOpenAiSpeechKey: RuntimeMobileSpeechCatalog['setOpenAiKey']
+  clearOpenAiSpeechKey: RuntimeMobileSpeechCatalog['clearOpenAiKey']
   startMobileDictation: RuntimeMobileDictationController['start']
   feedMobileDictation: RuntimeMobileDictationController['feed']
   finishMobileDictation: RuntimeMobileDictationController['finish']
@@ -179,6 +182,9 @@ export function installRuntimeServiceCommandSurface(
     downloadMobileSpeechModel: speech.download.bind(speech),
     deleteMobileSpeechModel: speech.delete.bind(speech),
     configureMobileDictation: speech.configure.bind(speech),
+    getOpenAiSpeechKeyStatus: speech.openAiKeyStatus.bind(speech),
+    setOpenAiSpeechKey: speech.setOpenAiKey.bind(speech),
+    clearOpenAiSpeechKey: speech.clearOpenAiKey.bind(speech),
     startMobileDictation: dictation.start.bind(dictation),
     feedMobileDictation: dictation.feed.bind(dictation),
     finishMobileDictation: dictation.finish.bind(dictation),
