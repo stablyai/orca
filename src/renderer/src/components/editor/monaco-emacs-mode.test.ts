@@ -23,6 +23,8 @@ class FakeEmacsExtension {
   markListeners: Listener<boolean>[] = []
   startCalls = 0
   disposed = false
+  readableState = ''
+  state = { getReadableState: () => this.readableState }
   constructor(readonly editor: editor.IStandaloneCodeEditor) {
     started.push(this)
   }
@@ -77,7 +79,12 @@ function registeredCommand(key: string): RegisteredCommand | undefined {
   return registerGlobalCommand.mock.calls.find(([name]) => name === key)?.[1]
 }
 
-const noopHooks = { onSave: () => {} }
+const noopHooks = {
+  onSave: () => {},
+  onSplitWindow: () => {},
+  onOtherWindow: () => {},
+  onDeleteWindow: () => {}
+}
 
 beforeEach(() => {
   started.length = 0
@@ -91,14 +98,32 @@ describe('installMonacoEmacsMode', () => {
     expect(extension?.startCalls).toBe(1)
     expect(statusNode.textContent).toBe('')
 
-    extension?.keyListeners.forEach((listener) => listener(' C-x'))
+    const echo = (state: string): void => {
+      if (extension) {
+        extension.readableState = state
+        extension.keyListeners.forEach((listener) => listener(state))
+      }
+    }
+    echo(' C-x')
     expect(statusNode.textContent).toBe('C-x')
 
     extension?.markListeners.forEach((listener) => listener(true))
     expect(statusNode.textContent).toBe('C-x  Mark set')
 
-    extension?.keyListeners.forEach((listener) => listener(''))
+    echo('')
     expect(statusNode.textContent).toBe('Mark set')
+  })
+
+  it('clears a finished prefix from the echo once the key handler has returned', async () => {
+    const statusNode = document.createElement('div')
+    await installMonacoEmacsMode(createFakeEditor().editorInstance, statusNode, noopHooks)
+    const extension = started[0]!
+    // monaco-emacs echoes `C-x` before running `C-x h`, then resets without firing again.
+    extension.readableState = ''
+    extension.keyListeners.forEach((listener) => listener('C-x '))
+    expect(statusNode.textContent).toBe('C-x')
+    await Promise.resolve()
+    expect(statusNode.textContent).toBe('')
   })
 
   it('adjusts the global command table and find-widget rules once across installs', async () => {
@@ -119,6 +144,10 @@ describe('installMonacoEmacsMode', () => {
       'S-C-M--',
       'S-C-z',
       'C-x C-s',
+      'C-x Digit2',
+      'C-x Digit3',
+      'C-x o',
+      'C-x Digit0',
       'C-g'
     ])
     expect(addKeybindingRules).toHaveBeenCalledTimes(1)
@@ -139,9 +168,10 @@ describe('installMonacoEmacsMode', () => {
     const firstController = await installMonacoEmacsMode(
       first.editorInstance,
       document.createElement('div'),
-      { onSave: firstSave }
+      { ...noopHooks, onSave: firstSave }
     )
     await installMonacoEmacsMode(second.editorInstance, document.createElement('div'), {
+      ...noopHooks,
       onSave: secondSave
     })
 
@@ -152,6 +182,32 @@ describe('installMonacoEmacsMode', () => {
     firstController.dispose()
     registeredCommand('C-x C-s')?.run?.(first.editorInstance, null, 1, false)
     expect(firstSave).not.toHaveBeenCalled()
+  })
+
+  it('routes the window commands to the hooks of the editor that received the key', async () => {
+    const { editorInstance } = createFakeEditor()
+    const hooks = {
+      onSave: vi.fn(),
+      onSplitWindow: vi.fn(),
+      onOtherWindow: vi.fn(),
+      onDeleteWindow: vi.fn()
+    }
+    const controller = await installMonacoEmacsMode(
+      editorInstance,
+      document.createElement('div'),
+      hooks
+    )
+    registeredCommand('C-x Digit2')?.run?.(editorInstance, null, 1, false)
+    registeredCommand('C-x Digit3')?.run?.(editorInstance, null, 1, false)
+    registeredCommand('C-x o')?.run?.(editorInstance, null, 1, false)
+    registeredCommand('C-x Digit0')?.run?.(editorInstance, null, 1, false)
+    expect(hooks.onSplitWindow.mock.calls).toEqual([['down'], ['right']])
+    expect(hooks.onOtherWindow).toHaveBeenCalledTimes(1)
+    expect(hooks.onDeleteWindow).toHaveBeenCalledTimes(1)
+
+    controller.dispose()
+    registeredCommand('C-x o')?.run?.(editorInstance, null, 1, false)
+    expect(hooks.onOtherWindow).toHaveBeenCalledTimes(1)
   })
 
   it('makes C-g keyboard-quit and close the find widget', async () => {

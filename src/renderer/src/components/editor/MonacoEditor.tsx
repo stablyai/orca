@@ -27,7 +27,8 @@ import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
 import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
 import { installMonacoVimMode } from './monaco-vim-mode'
-import { installMonacoEmacsMode } from './monaco-emacs-mode'
+import { useMonacoEmacsMode } from './use-monaco-emacs-mode'
+import { EDITOR_VIEW_ATTRIBUTE } from './emacs-window-commands'
 import { VimCheatsheet } from './VimCheatsheet'
 import { isEditorKeybindingsPreset } from '../../../../shared/editor-keybindings-preset'
 import { useEditorKeymapFocusMirror } from './use-editor-keymap-focus-mirror'
@@ -95,9 +96,19 @@ export default function MonacoEditor({
   // Why: hold the throttle timer in a ref so unmount cleanup can cancel a pending write before snapshotting the final scroll position.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeFile = useAppStore((s) => s.closeFile)
-  const propsRef = useRef({ relativePath, language, onSave, onContentChange, fileId, closeFile })
+  const latestProps = {
+    relativePath,
+    language,
+    onSave,
+    onContentChange,
+    fileId,
+    closeFile,
+    worktreeId,
+    viewStateId
+  }
+  const propsRef = useRef(latestProps)
   // Why: assign during render so the ref is current before any handler reads it (a useEffect would leave a one-render stale window).
-  propsRef.current = { relativePath, language, onSave, onContentChange, fileId, closeFile }
+  propsRef.current = latestProps
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
   const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
@@ -239,33 +250,12 @@ export default function MonacoEditor({
     }
   }, [mountedEditor, vimModeEnabled])
 
-  // Same lifecycle as the Vim effect; `C-x C-s` routes to Orca's save like `:w` does.
-  useEffect(() => {
-    const ed = mountedEditor
-    const statusNode = keymapStatusBarRef.current
-    if (!ed || !emacsModeEnabled || !statusNode) {
-      return
-    }
-    let cancelled = false
-    let controller: { dispose: () => void } | null = null
-    void installMonacoEmacsMode(ed, statusNode, {
-      onSave: () => propsRef.current.onSave(ed.getValue())
-    })
-      .then((installed) => {
-        if (cancelled) {
-          installed.dispose()
-        } else {
-          controller = installed
-        }
-      })
-      .catch((error) => {
-        console.error('Failed to enable Emacs keybindings', error)
-      })
-    return () => {
-      cancelled = true
-      controller?.dispose()
-    }
-  }, [mountedEditor, emacsModeEnabled])
+  useMonacoEmacsMode({
+    editor: mountedEditor,
+    enabled: emacsModeEnabled,
+    statusBarRef: keymapStatusBarRef,
+    propsRef
+  })
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -343,7 +333,10 @@ export default function MonacoEditor({
     <div
       ref={editorContainerRef}
       data-orca-file-editor
-      {...{ [EDITOR_KEYMAP_ATTRIBUTE]: emacsModeEnabled ? 'emacs' : undefined }}
+      {...{
+        [EDITOR_KEYMAP_ATTRIBUTE]: emacsModeEnabled ? 'emacs' : undefined,
+        [EDITOR_VIEW_ATTRIBUTE]: viewStateId
+      }}
       // Why: a flex column lets the keymap status bar occupy a real row below the editor instead of
       // overlaying it. autoHeight editors are content-sized (and never show the bar), so they keep
       // the plain block layout.
