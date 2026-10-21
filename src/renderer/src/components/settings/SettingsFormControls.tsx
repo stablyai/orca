@@ -14,7 +14,8 @@ export { ThemePicker } from './TerminalThemePicker'
 
 type SettingsSwitchProps = {
   checked: boolean
-  onChange: () => void
+  /** Radix always passes the next state; zero-arg handlers stay assignable. */
+  onChange: (checked: boolean) => void
   ariaLabel?: string
   ariaLabelledBy?: string
   disabled?: boolean
@@ -84,7 +85,7 @@ type SettingsSwitchRowProps = {
   label: React.ReactNode
   description?: React.ReactNode
   checked: boolean
-  onChange: () => void
+  onChange: (checked: boolean) => void
   className?: string
   ariaLabel?: string
   disabled?: boolean

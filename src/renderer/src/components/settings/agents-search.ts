@@ -2,7 +2,9 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
   getAgentAwakeSearchKeywords,
-  getAgentAwakeTitle
+  getAgentAwakeTitle,
+  getKeepDisplayAwakeDescription,
+  getKeepDisplayAwakeTitle
 } from './agent-awake-copy'
 import {
   getAgentGeneratedTabTitlesDescription,
@@ -28,6 +30,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 
 function buildAgentSettingsKeywords(): string[] {
   const keywords = searchKeywords([
@@ -76,9 +79,12 @@ type AgentsPaneSearchOptions = {
   includeAgentRuntime?: boolean
   includeAgentWorkspaceTrust?: boolean
   includeCodexTerminalServerIsolation?: boolean
+  /** The display toggle renders on macOS only; defaults to the renderer platform. */
+  includeKeepDisplayAwake?: boolean
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+const KEEP_DISPLAY_AWAKE_SEARCH_ENTRY_ID = 'keep-display-awake'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -148,6 +154,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentAwakeSearchKeywords()
   },
   {
+    title: getKeepDisplayAwakeTitle(),
+    id: KEEP_DISPLAY_AWAKE_SEARCH_ENTRY_ID,
+    description: getKeepDisplayAwakeDescription()
+  },
+  {
     title: translate(
       'auto.components.settings.agents.search.agentPermissions',
       'Agent Permissions'
@@ -176,11 +187,15 @@ export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
   includeAgentRuntime = true,
   includeAgentWorkspaceTrust = true,
-  includeCodexTerminalServerIsolation = true
+  includeCodexTerminalServerIsolation = true,
+  includeKeepDisplayAwake = getRendererAppPlatform() === 'darwin'
 }: AgentsPaneSearchOptions = {}) {
   const hiddenIds = new Set<string>()
   if (!includeAgentAwake) {
     hiddenIds.add(AGENT_AWAKE_SEARCH_ENTRY_ID)
+  }
+  if (!includeAgentAwake || !includeKeepDisplayAwake) {
+    hiddenIds.add(KEEP_DISPLAY_AWAKE_SEARCH_ENTRY_ID)
   }
   if (!includeAgentRuntime) {
     hiddenIds.add(AGENT_RUNTIME_SEARCH_ENTRY_ID)
