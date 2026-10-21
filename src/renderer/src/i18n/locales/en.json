@@ -20822,5 +20822,137 @@
       "unavailable": "This workspace is protected or unavailable."
     },
     "rowActions": "Actions for {{name}}"
+  },
+  "wslMove": {
+    "entry": {
+      "hostRow": "Move projects from this distro…",
+      "projectMenu": "Move to {{distro}} host…"
+    },
+    "blockers": {
+      "title": "Before these projects can move",
+      "inProjects": "In {{names}}",
+      "skipOne": "Leave {{name}} out of this move",
+      "skipMany": "Leave these {{n}} projects out of this move"
+    },
+    "title": "Move projects to the {{distro}} host",
+    "loading": "Checking the projects in {{distro}}…",
+    "runningTitle": "Moving to the {{distro}} host",
+    "preview": {
+      "counts": "Projects: {{projects}} · Workspaces: {{workspaces}} · Terminals: {{terminals}} · Chats: {{chats}}",
+      "whatHappens": "Your files stay where they are. Terminals restart in the same folder; their output, shell history and agent conversations are kept.",
+      "projects": "Projects in {{distro}}",
+      "folderBadge": "Folder",
+      "notMoving": "Not moving",
+      "checking": "Checking the selected projects…",
+      "checkAgain": "Check again",
+      "moveOne": "Move 1 project",
+      "moveMany": "Move {{n}} projects",
+      "heldByHost": "Already on the {{distro}} host.",
+      "changed": "Moved earlier, then changed here by an older version of Orca. It is not moved again.",
+      "chatsStay": "Existing chats stay on this computer. New chats in this project start on the WSL host."
+    },
+    "cancel": "Cancel",
+    "progress": {
+      "bytes": "{{sent}} of {{total}}",
+      "tooLate": "Too late to cancel: the host is already switching over. Keep Orca open until it finishes.",
+      "switching": "The switch cannot be cancelled. Keep Orca open until it finishes.",
+      "readOnly": "These projects are read-only while they move. You can cancel until the switch starts.",
+      "cancelUntilSwitch": "You can cancel until the switch starts.",
+      "closeKeepsGoing": "Closing this dialog does not stop the move; it opens again when the move ends.",
+      "cancelling": "Cancelling…",
+      "cancel": "Cancel move"
+    },
+    "result": {
+      "movedTitle": "Moved to the {{distro}} host",
+      "resetTitle": "Nothing was moved",
+      "waitingTitle": "Waiting for the {{distro}} host",
+      "earlierMoveTitle": "An earlier move finished first",
+      "refusedTitle": "Projects not moved",
+      "reloadCheckpointRefused": "Orca could not back up unsaved files, so the window did not reload. Close this dialog, save or close those files, then use Reload now in the notice that stays open.",
+      "reloadVetoed": "Something kept the window from reloading. Close this dialog, save your work, then use Reload now in the notice that stays open.",
+      "reloadFailed": "The window did not reload. Try again.",
+      "moved": "Reload this window to see the projects under the {{distro}} host. Orca backs up unsaved files before it reloads.",
+      "automationsPendingOne": "One automation is off on the host for now. Orca keeps asking the host to turn it back on.",
+      "automationsPendingMany": "{{n}} automations are off on the host for now. Orca keeps asking the host to turn them back on.",
+      "undoHint": "Changed your mind? After the reload, the sidebar lists these projects as “Moved to {{distro}} host”. Choose “Use on this computer again” there to bring them back as they were before the move.",
+      "reset": "The move stopped and everything was put back. The projects work on this computer as before; paused terminals start again when you open them.",
+      "waiting": "The move may have reached the {{distro}} host, but the host is not answering. These projects stay read-only here until it does. Connect the host in Settings, then open this dialog again and start a move: Orca finishes or undoes this one first.",
+      "reloading": "Reloading…",
+      "reload": "Reload now",
+      "close": "Close",
+      "review": "Back to projects",
+      "browserLoginsHostUnknown": "Browser logins were not copied, because Orca could not identify the host’s browser profile. Sign in again in the host’s browser tabs.",
+      "browserLoginsConflict": "Browser logins were not copied, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs.",
+      "browserLoginsNotCopied": "Browser logins were not copied to the host. Sign in again in the host’s browser tabs."
+    },
+    "runtime": {
+      "label": "Project runtime",
+      "description": "This project runs in {{distro}} through this computer. Move it to the {{distro}} host to run it there.",
+      "move": "Move project"
+    },
+    "unfinished": {
+      "one": "One automation moved to the {{distro}} host is still off. Orca keeps asking the host to turn it back on.",
+      "many": "{{n}} automations moved to the {{distro}} host are still off. Orca keeps asking the host to turn them back on."
+    },
+    "refusal": {
+      "previewFailed": "Orca could not check these projects. Try again.",
+      "startFailed": "Orca lost contact with the move. Open this dialog again to see where it stands.",
+      "unavailable": "Moving projects to a WSL host is not available in this window.",
+      "alreadyRunning": "A move into {{distro}} is already running. Wait for it to finish, then try again.",
+      "alreadyInFlightPreview": "A move of {{distro}} is still finishing. Starting this move first finishes or undoes it where Orca can.",
+      "alreadyInFlight": "A move of {{distro}} is still finishing, so this one did not start. Keep the {{distro}} host connected and try again later.",
+      "nothingNew": "These projects are already on the {{distro}} host.",
+      "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
+      "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
+      "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
+      "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
+      "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",
+      "tooLarge": "These projects have too much saved state to move in one step. Move fewer projects at a time.",
+      "pauseFailed": "Orca could not pause the terminals in these projects, so nothing was moved. Paused terminals start again when you open them. Try again.",
+      "scopeChanged": "A project changed while the move was getting ready, so nothing was moved. Check the projects and try again.",
+      "cancelled": "Move cancelled. Nothing was moved.",
+      "finishedEarlierMove": "Orca first finished an earlier move into {{distro}}. Reload the window, then start this move again."
+    },
+    "step": {
+      "preparing": "Preparing",
+      "pausingTerminals": "Pausing terminals",
+      "copying": "Copying",
+      "switching": "Switching",
+      "finishing": "Finishing",
+      "done": "Done"
+    },
+    "blocker": {
+      "agentWorkingOne": "An agent is working or waiting for an answer",
+      "agentWorkingMany": "{{n}} agents are working or waiting for an answer",
+      "processRunningOne": "A terminal is running a program",
+      "processRunningMany": "{{n}} terminals are running a program",
+      "agentNotResumableOne": "An agent cannot be resumed after the move",
+      "agentNotResumableMany": "{{n}} agents cannot be resumed after the move",
+      "unverifiableOne": "Orca cannot check a terminal right now",
+      "unverifiableMany": "Orca cannot check {{n}} terminals right now",
+      "automationRunningOne": "An automation run is active",
+      "automationRunningMany": "{{n}} automation runs are active",
+      "dispatchRunningOne": "An agent task is in progress",
+      "dispatchRunningMany": "{{n}} agent tasks are in progress",
+      "scrollbackTooLargeOne": "A terminal has too much output history to move",
+      "scrollbackTooLargeMany": "{{n}} terminals have too much output history to move"
+    },
+    "blockerHint": {
+      "agentWorking": "Let it finish, or stop it in its terminal, then check again.",
+      "processRunning": "Stop the program (for example a dev server or editor), then check again.",
+      "agentNotResumable": "Exit the agent in its terminal, then check again.",
+      "unverifiable": "Wait a moment, then check again. Nothing is stopped to make the move happen.",
+      "wait": "Wait for it to finish, then check again.",
+      "scrollbackTooLarge": "Clear the terminal output in those terminals, then check again."
+    },
+    "scopeRefused": {
+      "windowsDrive": "Its folder is on a Windows drive, so it stays on this computer.",
+      "mixedLocations": "Some of its folders are outside this distro, so it stays on this computer.",
+      "notLocal": "It already runs on another host.",
+      "other": "It cannot move."
+    },
+    "reloadToast": {
+      "title": "Reload to finish the move"
+    }
   }
 }

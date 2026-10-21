@@ -327,6 +327,7 @@ export function RepositoryPane({
             />
 
             <RepositoryWindowsRuntimeSection
+              repo={repo}
               repoDisplayName={repo.displayName}
               project={project}
               settings={settings}

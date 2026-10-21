@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, TerminalSquare, Trash2 } from 'lucide-react'
+import { FolderInput, Plus, TerminalSquare, Trash2 } from 'lucide-react'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { toast } from 'sonner'
 import {
@@ -29,6 +29,8 @@ import { Button } from '../ui/button'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 import { ServerListRow, ServerRowChip, type ServerRowStatus } from './runtime-server-list-row'
+import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
+import { WslMoveUnfinishedNotice } from '../wsl-move/WslMoveUnfinishedNotice'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
@@ -223,6 +225,14 @@ export function WslHostsSection({
                         {translate('auto.components.settings.wslHosts.connect', 'Connect')}
                       </DropdownMenuItem>
                     ) : null}
+                    {unavailableLabel ? null : (
+                      <DropdownMenuItem
+                        onSelect={() => openWslMoveDialogFor(environment.orcadDeployment.distro)}
+                      >
+                        <FolderInput />
+                        {translate('wslMove.entry.hostRow', 'Move projects from this distro…')}
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       variant="destructive"
                       disabled={connectingId !== null}
@@ -238,6 +248,7 @@ export function WslHostsSection({
           })}
         </div>
       ) : null}
+      {enabled && !serverFilesMissing ? <WslMoveUnfinishedNotice /> : null}
       {removing ? (
         <HostRemoveDialog
           open

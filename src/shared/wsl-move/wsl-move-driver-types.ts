@@ -106,6 +106,8 @@ export type WslMoveResult =
        * dialog must say they are off on the host for now, never hide it.
        */
       automationsPending?: string[]
+      /** Set by the browser-login copy (D1b-7f) when the host's browser starts signed out. */
+      browserLoginsNotCopiedReason?: string
     }
   | WslMoveRefusal
   | {

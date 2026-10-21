@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
+import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
@@ -165,6 +166,7 @@ export function RepoHeaderProjectActionsMenu({
             {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
+        <WslMoveProjectMenuItem repo={repo} />
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />
