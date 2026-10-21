@@ -3,11 +3,13 @@ import { applyFitScale } from './fit-scale'
 import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
+import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 import { reflow } from './reflow'
 import { resumeTerminalDataReplyAuthority } from './query-reply'
 import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
+import { stopSurfaceTouchGestures } from './surface-touch-gestures'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
@@ -88,6 +90,9 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   } else if (msg.type === 'write') {
     write(scope, msg.data!)
   } else if (msg.type === 'clear') {
+    // Why: a cleared terminal must neither keep coasting nor stay drawn at the old row fraction.
+    stopSurfaceTouchGestures(scope)
+    resetSmoothScrollOffset(scope)
     scope.terminalGeneration++
     resetWriteQueue(scope)
     resumeTerminalDataReplyAuthority(scope) // Why: clear drops the replay boundary.

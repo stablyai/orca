@@ -8,6 +8,7 @@ import { scopeStyleToHost } from '../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
 import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import { createSmoothTerminal, createSmoothWebglAddon } from './smooth-viewport-renderer.mjs'
 
 /**
  * The terminal document, mounted in the page instead of in a WebView.
@@ -32,6 +33,15 @@ export type TerminalWebDocument = {
 }
 
 const STYLE_ELEMENT_ID = 'orca-terminal-document-style'
+
+/**
+ * The engine with the sub-row scroll seam the WebView's bundle gives it.
+ *
+ * The page imports xterm itself rather than loading that bundle, so it wraps the same two classes
+ * here; without them its scrollback moves only in whole rows.
+ */
+const SmoothTerminal = createSmoothTerminal(Terminal)
+const SmoothWebglAddon = createSmoothWebglAddon(WebglAddon)
 
 /** The class the host carries, and the prefix every injected rule is held under. */
 const HOST_CLASS = 'orca-terminal-document-host'
@@ -85,7 +95,7 @@ ${prefix} #selection-overlay, ${prefix} #scroll-indicator { position: absolute; 
  */
 function createPageWebglAddon(onFallback: (reason: string) => void) {
   try {
-    return new WebglAddon()
+    return new SmoothWebglAddon()
   } catch (error) {
     onFallback(error instanceof Error ? error.message : String(error))
     return null
@@ -254,7 +264,7 @@ function startPageDocument(
     observeViewport: viewport.observe,
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
-    createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
+    createTerminal: (options) => new SmoothTerminal(options) as unknown as TerminalDocumentTerminal,
     createUnicode11Addon: () => new Unicode11Addon(),
     createWebglAddon: () =>
       createPageWebglAddon((reason) =>

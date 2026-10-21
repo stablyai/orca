@@ -120,6 +120,8 @@ export type TerminalDocumentState = {
   ready: boolean
   /** `normal-buffer-smooth-scroll`: sub-row scroll travel not yet committed to xterm. */
   smoothScrollOffsetY: number
+  /** `normal-buffer-smooth-scroll`: whether the renderer draws that travel as a pixel offset. */
+  pixelScrollActive: boolean
   /** `normal-buffer-smooth-scroll`: scroll travel waiting for the next frame. */
   pendingNormalScrollDeltaY: number
   /** `normal-buffer-smooth-scroll`: the frame request that will apply it, if one is pending. */
@@ -285,6 +287,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     afterDrainCallbacks: [],
     ready: false,
     smoothScrollOffsetY: 0,
+    pixelScrollActive: false,
     pendingNormalScrollDeltaY: 0,
     normalScrollFrameId: null,
     selMenu: null,
@@ -340,6 +343,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
       accumDelta: 0,
       momentumId: null,
       isPinching: false,
+      scrollDragActive: false,
       pinchDist: 0,
       pinchScale: 0,
       pinchSurfX: 0,

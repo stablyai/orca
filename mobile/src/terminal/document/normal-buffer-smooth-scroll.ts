@@ -1,4 +1,5 @@
 import { getCellHeight, getTotalScale } from './cell-metrics'
+import { repositionOverlay } from './selection-overlay'
 import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
@@ -22,7 +23,8 @@ export function canScrollNormalBufferDelta(scope: TerminalDocumentScope, deltaY:
   if (deltaY > 0) {
     return buffer.viewportY < buffer.baseY
   }
-  return buffer.viewportY > 0
+  // Why: at the top row, a grid still shifted up by a fraction has that fraction left to travel.
+  return buffer.viewportY > 0 || (scope.pixelScrollActive && scope.smoothScrollOffsetY < 0)
 }
 
 export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, deltaY: number) {
@@ -33,19 +35,36 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
   if (effectiveCellH <= 0) {
     return false
   }
+  // Why: the renderer answers whether it can draw a sub-row offset (one not created yet cannot).
+  // A change either way restarts from whole rows, so no fraction is kept that nothing draws.
+  const pixelScroll =
+    scope.term.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope)) === true
+  if (pixelScroll !== scope.pixelScrollActive) {
+    scope.pixelScrollActive = pixelScroll
+    scope.smoothScrollOffsetY = 0
+    scope.term.setViewportPixelOffset?.(0)
+  }
   if (!canScrollNormalBufferDelta(scope, deltaY)) {
     resetSmoothScrollOffset(scope)
     return false
   }
   scope.smoothScrollOffsetY -= deltaY
-  const lines = Math.trunc(-scope.smoothScrollOffsetY / effectiveCellH)
+  if (pixelScroll) {
+    // Why: text that moved makes this touch a scroll, not a tap.
+    scope.tapCandidate = null
+  }
+  // Why: the renderer only shifts the grid up, over the rows it draws below the last one, so
+  // xterm's viewport takes the older whole row and the remainder is always a shift up.
+  const lines = pixelScroll
+    ? Math.floor(-scope.smoothScrollOffsetY / effectiveCellH)
+    : Math.trunc(-scope.smoothScrollOffsetY / effectiveCellH)
   if (lines !== 0) {
     const applied = clampNormalScrollLines(scope, lines)
     if (applied !== 0) {
       scope.term.scrollLines(applied)
-      // Why: xterm's renderer is row-based. Buffer touch pixels and only
-      // commit whole rows so TUI canvas layers do not shimmer between
-      // fractional transforms and xterm repaints.
+      // Why: xterm's parser and viewport are row-based. Buffer touch pixels and only commit whole
+      // rows; a renderer that can draws the remainder as a pixel shift, and one that cannot keeps
+      // TUI canvas layers from shimmering between fractional transforms and xterm repaints.
       scope.smoothScrollOffsetY += applied * effectiveCellH
     }
     if (applied !== lines) {
@@ -60,6 +79,16 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
     scope.smoothScrollOffsetY = -limit
   }
   updateScrollIndicator(scope, true)
+  if (pixelScroll) {
+    // Why: the live bottom has no row below it to show, so it rests on whole rows.
+    if (scope.term.buffer.active.viewportY >= scope.term.buffer.active.baseY) {
+      scope.smoothScrollOffsetY = 0
+    }
+    scope.term.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope))
+    if (scope.selMode === 'select') {
+      repositionOverlay(scope)
+    }
+  }
   return true
 }
 
@@ -89,12 +118,18 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
   return true
 }
 
-export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
+/** Drops the travel waiting for the next frame and keeps the offset already drawn. */
+export function cancelPendingNormalScroll(scope: TerminalDocumentScope) {
   scope.pendingNormalScrollDeltaY = 0
   if (scope.normalScrollFrameId !== null) {
     cancelAnimationFrame(scope.normalScrollFrameId)
     scope.normalScrollFrameId = null
   }
+}
+
+export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
+  cancelPendingNormalScroll(scope)
+  scope.term?.setViewportPixelOffset?.(0)
   if (scope.smoothScrollOffsetY === 0) {
     return
   }

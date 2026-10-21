@@ -8,10 +8,11 @@ import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
   applyNormalBufferScrollDelta,
+  cancelPendingNormalScroll,
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from './normal-buffer-smooth-scroll'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { clearLongPress, dispatcherShouldBlockSurface } from './tap-dispatch'
 import {
   applyTextScale,
   MAX_TEXT_SCALE,
@@ -25,6 +26,9 @@ import { attachSurfaceWheelHandler } from './wheel-scroll'
 /** A surface that has already been wired, so a re-mount does not stack handlers. */
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
+/** The travel before a pixel-scrolled drag moves the text, in pixels. */
+const PIXEL_SCROLL_DRAG_SLOP = 8
+
 /** The live touch gesture: the last point, the velocity, and the pinch it may be in. */
 export type TerminalTouchState = {
   lastX: number
@@ -34,6 +38,7 @@ export type TerminalTouchState = {
   accumDelta: number
   momentumId: number | null
   isPinching: boolean
+  scrollDragActive: boolean
   pinchDist: number
   pinchScale: number
   pinchSurfX: number
@@ -107,10 +112,18 @@ export function attachSurfaceEventHandlers(
         cancelAnimationFrame(scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
       }
+      // Why: a new touch holds the text where it is drawn, so travel the last one queued is dropped.
+      cancelPendingNormalScroll(scope)
+      if (scope.term) {
+        scope.pixelScrollActive =
+          scope.term.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope)) ===
+          true
+      }
+      scope.touchGesture.scrollDragActive = false
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
         scope.touchGesture.isPinching = true
-        scope.smoothScrollOffsetY = 0
+        resetSmoothScrollOffset(scope)
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mid = pinchMidpoint(scope, touches[0], touches[1])
@@ -182,6 +195,22 @@ export function attachSurfaceEventHandlers(
           updateTransform(scope)
         }
 
+        // Why: pixel scrolling shows every pixel of travel, so a resting finger's jitter would
+        // shake the text; the drag moves it only once the finger has clearly left its start.
+        if (
+          scope.pixelScrollActive &&
+          !shouldRouteScrollToTerminalInput(scope) &&
+          !scope.touchGesture.scrollDragActive
+        ) {
+          if (Math.abs(scope.touchGesture.lastY - y) <= PIXEL_SCROLL_DRAG_SLOP) {
+            scope.touchGesture.lastX = x
+            return
+          }
+          scope.touchGesture.scrollDragActive = true
+          // Why: scrolling owns this touch before the queued paint; it cannot also select or tap.
+          clearLongPress(scope)
+          scope.tapCandidate = null
+        }
         const deltaY = scope.touchGesture.lastY - y
         scope.touchGesture.lastTime = now
         if (shouldRouteScrollToTerminalInput(scope)) {
