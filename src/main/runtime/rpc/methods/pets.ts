@@ -25,11 +25,13 @@ function summarizePet(pet: CustomPet): PetMutationResult['pet'] {
 export const PET_METHODS = [
   defineMethod({
     name: 'pet.list',
+    permission: 'workspace',
     params: null,
     handler: (_params, { runtime }): PetLibrary => describePetLibrary(runtime.getUIState())
   }),
   defineMethod({
     name: 'pet.importBundle',
+    permission: 'workspace',
     params: PetImportBundle,
     handler: async (params, { runtime }): Promise<PetMutationResult> => {
       const importPetBundle = getRuntimeDesktopSurface().importPetBundle
@@ -58,6 +60,7 @@ export const PET_METHODS = [
   }),
   defineMethod({
     name: 'pet.select',
+    permission: 'workspace',
     params: PetSelector,
     handler: (params, { runtime }): PetLibrary => {
       const petId = resolveSelectablePetId(readCustomPets(runtime.getUIState()), params.pet)
@@ -67,6 +70,7 @@ export const PET_METHODS = [
   }),
   defineMethod({
     name: 'pet.rename',
+    permission: 'workspace',
     params: PetRename,
     handler: (params, { runtime }): PetMutationResult => {
       const customPets = readCustomPets(runtime.getUIState())
@@ -80,6 +84,7 @@ export const PET_METHODS = [
   }),
   defineMethod({
     name: 'pet.remove',
+    permission: 'workspace',
     params: PetSelector,
     handler: async (params, { runtime }): Promise<PetMutationResult> => {
       const current = runtime.getUIState()

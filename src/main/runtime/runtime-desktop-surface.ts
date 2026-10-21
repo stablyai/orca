@@ -4,9 +4,8 @@ import type { CustomPet } from '../../shared/pet-types'
 /**
  * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
  *
- * Four sites, all optional by nature: a native notification toast, a lookup of the
- * authoritative renderer window, pet bundle import (its sprite check decodes with
- * nativeImage), and one ipcMain channel used only by the
+ * Three sites, all optional by nature: a native notification toast, a lookup of the
+ * authoritative renderer window, and one ipcMain channel used only by the
  * renderer-backed tab-create fallback. With no renderer that fallback is unreachable —
  * `createTerminal` already takes the background spawn branch when there is no
  * authoritative window (#10333) — so a Node host needs none of them.
