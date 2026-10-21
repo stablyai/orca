@@ -1,6 +1,7 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
+import { antigravityUsageTargetKey } from '../antigravity-usage-runtime'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -13,6 +14,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       return
     }
     const {
+      antigravityTargetKey,
+      antigravityGeneration,
       claudeTarget,
       claudeGeneration,
       claudeProvenance,
@@ -216,6 +219,19 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         }
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
+    const shouldApplyAntigravity =
+      antigravityGeneration === this.antigravityFetchGeneration &&
+      antigravityTargetKey ===
+        antigravityUsageTargetKey(
+          this.antigravityUsageTargetResolver?.() ?? { runtime: 'host', wslDistro: null }
+        )
+    const previousAntigravityRuntime = previousState.antigravity?.usageMetadata?.authProvenance
+    const antigravityRuntime = antigravity.usageMetadata?.authProvenance
+    const antigravityRuntimeChanged = Boolean(
+      previousAntigravityRuntime &&
+      antigravityRuntime &&
+      previousAntigravityRuntime !== antigravityRuntime
+    )
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
     // switch — the Accounts pane would name the new account beside the old
@@ -238,7 +254,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
-    this.trackActiveFailureStreak('antigravity', antigravity)
+    if (shouldApplyAntigravity) {
+      this.trackActiveFailureStreak('antigravity', antigravity)
+    }
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -250,7 +268,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
+      antigravity: !shouldApplyAntigravity
+        ? this.state.antigravity
+        : antigravityRuntimeChanged
+          ? antigravity
+          : this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }
 }

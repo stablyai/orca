@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import type { LocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
 import type {
   InactiveAccountUsage,
   ProviderRateLimits,
@@ -110,6 +111,8 @@ export abstract class RateLimitServiceState {
   protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
+  protected antigravityUsageTargetResolver: (() => LocalAccountRuntimeTarget) | null = null
+  protected antigravityFetchGeneration = 0
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
