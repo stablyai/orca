@@ -37,6 +37,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'claude-profile-setup-worker-entry': resolve(
     'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
   ),
+  'runtime-image-preview-worker-entry': resolve(
+    'src/main/runtime/runtime-image-preview-worker-entry.ts'
+  ),
   'profile-state-backup-worker-entry': resolve(
     'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
   ),
