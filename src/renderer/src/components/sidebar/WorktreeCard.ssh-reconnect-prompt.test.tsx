@@ -40,6 +40,8 @@ vi.mock('@/store', () => {
     removedSshTargetLabels,
     settings: null,
     sshConnectionStates,
+    machineProviders: {},
+    machineEnvironmentProviders: {},
     sshStateByEnvironment,
     sshTargetLabels,
     sshTargetsHydrated: true,

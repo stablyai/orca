@@ -116,6 +116,7 @@ function PopoverContent({
   align = 'center',
   sideOffset = 4,
   wheelScroll = false,
+  surface = 'translucent',
   portalContainer,
   style,
   onWheel,
@@ -125,6 +126,11 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
   wheelScroll?: boolean
+  /**
+   * `opaque` for popovers that open over a dialog's form (the composer pickers): a translucent
+   * surface fading in shows the fields underneath mid-animation, which reads as a double flash.
+   */
+  surface?: 'translucent' | 'opaque'
 }) {
   const handleConsumerWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>): void => {
@@ -173,6 +179,9 @@ function PopoverContent({
         className={cn(
           'z-[60] overflow-hidden rounded-md border border-black/14 bg-[rgba(255,255,255,0.82)] text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-none dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           wheelScroll && 'popover-wheel-scroll',
+          // Why: `bg-popover` alone loses to the arbitrary-value background above.
+          surface === 'opaque' &&
+            'bg-[var(--popover)] data-[state=closed]:fade-out-100 data-[state=open]:fade-in-100 dark:bg-[var(--popover)]',
           className
         )}
         ref={setContentRef}

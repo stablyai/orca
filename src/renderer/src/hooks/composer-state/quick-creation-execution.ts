@@ -10,6 +10,7 @@ type QuickCreationExecutionInput = Pick<
   | 'isSubmissionCancelled'
   | 'linkedGitLabIssue'
   | 'linkedGitLabMR'
+  | 'machineSelection'
   | 'normalizedSparseDirectories'
   | 'onCreated'
   | 'parentWorktreeId'
@@ -44,6 +45,7 @@ import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
+import { buildMachineCreationRequest } from './composer-machine-selection'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -55,6 +57,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
     isSubmissionCancelled,
     linkedGitLabIssue,
     linkedGitLabMR,
+    machineSelection,
     normalizedSparseDirectories,
     onCreated,
     parentWorktreeId,
@@ -160,7 +163,15 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null
 
-      if (activeEphemeralVmRecipeId && selectedWorkspaceTarget.status === 'ready') {
+      const machine =
+        ephemeralVmsEnabled && machineSelection && selectedWorkspaceTarget.status === 'ready'
+          ? buildMachineCreationRequest(machineSelection.selected, {
+              sourceRepoId: repoId,
+              projectId: selectedWorkspaceTarget.target.projectId
+            })
+          : undefined
+
+      if (!machine && activeEphemeralVmRecipeId && selectedWorkspaceTarget.status === 'ready') {
         const selectedRecipe = ephemeralVmRecipes.find(
           (recipe) => recipe.id === activeEphemeralVmRecipeId
         )
@@ -180,9 +191,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
             workspace: {
               kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
               repoId,
-              executionHostId: ephemeralVmRecipe
-                ? 'runtime:pending-ephemeral-vm'
-                : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
+              executionHostId:
+                ephemeralVmRecipe || (machine && !machine.environmentId)
+                  ? 'runtime:pending-ephemeral-vm'
+                  : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
             },
             prompt: quickDraftPrompt ?? quickPrompt,
             promptDelivery
@@ -193,8 +205,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const request = buildQuickCreationRequest({
         repoId,
         ephemeralVmRecipe,
+        machine,
         indeterminateProgress:
-          Boolean(activeEphemeralVmRecipeId) || selectedRepoTarget?.kind === 'environment',
+          Boolean(ephemeralVmRecipe) ||
+          Boolean(machine) ||
+          selectedRepoTarget?.kind === 'environment',
         taskSourceContext,
         linkedWorkItem: submitLinkedWorkItem,
         workspaceRunContext,
@@ -267,6 +282,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       isSubmissionCancelled,
       linkedGitLabIssue,
       linkedGitLabMR,
+      machineSelection,
       normalizedSparseDirectories,
       onCreated,
       parentWorktreeId,

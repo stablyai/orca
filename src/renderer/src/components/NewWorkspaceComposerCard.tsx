@@ -137,6 +137,7 @@ export default function NewWorkspaceComposerCard(
   const shouldShowRunTargetPicker =
     readyProjectHostSetupOptions.length > 0 ||
     ephemeralVmRecipes.length > 0 ||
+    Boolean(props.machineSelection) ||
     needsSetupProjectHostSetupOptions.length > 0
   const sshStatusLabel = selectedRepoSshStatus
     ? getSshStatusLabel(selectedRepoSshStatus)

@@ -10,6 +10,7 @@ import type { ExecutionHostPlatformFact } from '@/lib/execution-host-facts'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreationTargetResolution } from '@/lib/project-host-workspace-target'
+import type { ComposerMachineSelection } from './composer-machine-selection'
 
 export type ComposerRuntimeTargetModel = {
   isProjectGroupTarget: boolean
@@ -56,6 +57,8 @@ export type ComposerRuntimeTargetModel = {
   selectedEphemeralVmRecipeId: string | null
   setSelectedEphemeralVmRecipeId: (recipeId: string | null) => void
   ephemeralVmRecipeError: string | null
+  /** Null while machines are off or the target can't run on one. */
+  machineSelection: ComposerMachineSelection | null
   selectedRepoConnectionId: string | null
   selectedRepoSshState: SshConnectionState | null
   selectedRepoSshStatus: SshConnectionStatus | null

@@ -13,8 +13,8 @@ import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { RepoSlice } from '../repos/repo-state'
-import { ERROR_TOAST_DURATION } from '../repos/repo-state'
+import { ERROR_TOAST_DURATION, type RepoSlice } from '../repos/repo-state'
+import { reportProjectSetupFailure } from './project-setup-failure'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
@@ -37,7 +37,7 @@ export function createProjectHostSetupActions(
   | 'setupProjectClone'
 > {
   return {
-    setupProjectExistingFolder: async (args) => {
+    setupProjectExistingFolder: async (args, options) => {
       try {
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
@@ -93,11 +93,7 @@ export function createProjectHostSetupActions(
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
-          description: message,
-          duration: ERROR_TOAST_DURATION
-        })
+        reportProjectSetupFailure(err, options)
         return null
       }
     },
@@ -252,7 +248,7 @@ export function createProjectHostSetupActions(
       }
     },
 
-    setupProjectClone: async (args) => {
+    setupProjectClone: async (args, options) => {
       try {
         const parsedHost = parseExecutionHostId(args.hostId)
         // Why: an SSH host clones only through its paired server; never fall back to this computer.
@@ -278,21 +274,20 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 10 * 60_000 }
                 )
               ).repo
-        return await get().setupProjectExistingFolder({
-          projectId: args.projectId,
-          hostId: args.hostId,
-          path: repo.path,
-          kind: 'git',
-          displayName: args.displayName,
-          setupMethod: 'cloned'
-        })
+        return await get().setupProjectExistingFolder(
+          {
+            projectId: args.projectId,
+            hostId: args.hostId,
+            path: repo.path,
+            kind: 'git',
+            displayName: args.displayName,
+            setupMethod: 'cloned'
+          },
+          options
+        )
       } catch (err) {
         console.error('Failed to clone project on host:', err)
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
-          description: message,
-          duration: ERROR_TOAST_DURATION
-        })
+        reportProjectSetupFailure(err, options)
         return null
       }
     }

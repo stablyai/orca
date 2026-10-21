@@ -38,6 +38,8 @@ vi.mock('@/store', () => {
     remoteBranchConflictByWorktreeId: {},
     settings: { experimentalNewWorktreeCardStyle: true },
     sshConnectionStates: new Map(),
+    machineProviders: {},
+    machineEnvironmentProviders: {},
     sshTargetLabels: new Map(),
     updateWorktreeMeta,
     workspacePortScan: null,

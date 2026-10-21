@@ -236,6 +236,7 @@ export type WorktreeSlice = {
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
+      machineProgress?: PendingWorktreeCreation['machineProgress']
     }
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this

@@ -38,7 +38,9 @@ export function TerminalRemoteRuntimeReconnectBanner({
   phase,
   onReconnect,
   wslHostUnavailable = null,
-  pairingRefused = false
+  pairingRefused = false,
+  wakingMachineName = null,
+  wakeFailure = null
 }: {
   phase: VisibleRecoveryPhase
   onReconnect: () => void
@@ -46,11 +48,17 @@ export function TerminalRemoteRuntimeReconnectBanner({
   wslHostUnavailable?: WslHostUnavailableReason | null
   /** The pane's managed server refuses this desktop and pairing again over SSH failed. */
   pairingRefused?: boolean
+  /** The pane's machine is waking, which is why it reconnects; named so one place says so. */
+  wakingMachineName?: string | null
+  /** Why waking `wakingMachineName` failed; the button then retries the wake. */
+  wakeFailure?: string | null
 }): React.JSX.Element {
   if (wslHostUnavailable) {
     return <WslHostUnavailableBanner reason={wslHostUnavailable} />
   }
   const retrying = phase !== 'disconnected' && !pairingRefused
+  const waking = retrying && wakingMachineName !== null
+  const wakeFailed = !retrying && wakingMachineName !== null && wakeFailure !== null
 
   return (
     <div
@@ -76,15 +84,29 @@ export function TerminalRemoteRuntimeReconnectBanner({
                   'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.pairingRefusedTitle',
                   'This host no longer accepts this computer'
                 )
-              : retrying
+              : wakeFailed
                 ? translate(
-                    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.retryingTitle',
-                    'Reconnecting to remote runtime'
+                    'auto.lib.machines.machineWakeOnOpen.wakeFailed',
+                    'Couldn’t wake {{name}}',
+                    {
+                      name: wakingMachineName
+                    }
                   )
-                : translate(
-                    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.disconnectedTitle',
-                    'Remote runtime disconnected'
-                  )}
+                : waking
+                  ? translate(
+                      'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.wakingTitle',
+                      'Waking {{name}}…',
+                      { name: wakingMachineName }
+                    )
+                  : retrying
+                    ? translate(
+                        'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.retryingTitle',
+                        'Reconnecting to remote runtime'
+                      )
+                    : translate(
+                        'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.disconnectedTitle',
+                        'Remote runtime disconnected'
+                      )}
           </div>
           <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
             {pairingRefused
@@ -92,23 +114,35 @@ export function TerminalRemoteRuntimeReconnectBanner({
                   'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.pairingRefusedBody',
                   "Orca couldn't pair with it again over SSH. Nothing on the host was stopped. Reconnect to try again."
                 )
-              : retrying
-                ? translate(
-                    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.retryingBody',
-                    'Orca is retrying automatically. This terminal will resume if the connection returns.'
-                  )
-                : translate(
-                    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.disconnectedBody',
-                    'Automatic retries stopped. Reconnect to resume this terminal session.'
-                  )}
+              : wakeFailed
+                ? wakeFailure
+                : waking
+                  ? translate(
+                      'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.wakingBody',
+                      'This terminal resumes once the machine is running.'
+                    )
+                  : retrying
+                    ? translate(
+                        'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.retryingBody',
+                        'Orca is retrying automatically. This terminal will resume if the connection returns.'
+                      )
+                    : translate(
+                        'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.disconnectedBody',
+                        'Automatic retries stopped. Reconnect to resume this terminal session.'
+                      )}
           </div>
         </div>
         {!retrying ? (
           <Button size="sm" onClick={onReconnect}>
-            {translate(
-              'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
-              'Reconnect'
-            )}
+            {wakeFailed
+              ? translate(
+                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.retryWakeButton',
+                  'Retry'
+                )
+              : translate(
+                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
+                  'Reconnect'
+                )}
           </Button>
         ) : null}
       </div>

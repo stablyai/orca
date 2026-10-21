@@ -1190,10 +1190,71 @@
         "settingUpWorkspace": "Configuration de votre espace de travail…",
         "preparingWorkspace": "Préparation de l'espace de travail…",
         "creatingWorktree": "Création du worktree…",
-        "fetchingBaseBranch": "Récupération de la branche de base…"
+        "fetchingBaseBranch": "Récupération de la branche de base…",
+        "startingMachine": "Démarrage de la machine…",
+        "settingUpRepo": "Configuration du dépôt…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} et {{value1}} sont le même serveur associé deux fois. Supprimez-en un dans Paramètres > Serveurs Orca distants."
+      },
+      "machineWorktreeCreation": {
+        "noCloneUrl": "Ce projet n’a pas de dépôt distant à cloner sur la machine.",
+        "cloneFailed": "Impossible de configurer le projet sur la machine."
+      },
+      "machines": {
+        "machineCopy": {
+          "deletesAt": "Supprimée à {{time}}",
+          "cantReach": "Injoignable",
+          "cantReachSeen": "Injoignable · vu il y a {{ago}}",
+          "deletesAtLower": "supprimée à {{time}}",
+          "temporary": "Temporaire",
+          "persistent": "Persistante",
+          "failureSignIn": "Le fournisseur vous demande de vous reconnecter.",
+          "failureNotFound": "Le fournisseur n’a plus cette machine.",
+          "failureQuota": "Le fournisseur n’a plus de place pour d’autres machines.",
+          "failureTimeout": "Le fournisseur n’a pas répondu à temps.",
+          "failureUnsupported": "Le fournisseur ne peut pas faire cela pour cette machine.",
+          "failureCancelled": "L’opération a été annulée.",
+          "failureUnavailable": "Le fournisseur a rencontré un problème."
+        },
+        "machineDisplayState": {
+          "starting": "Démarrage",
+          "running": "En cours",
+          "stopping": "Mise en veille…",
+          "sleeping": "En veille",
+          "archived": "Archivée",
+          "unreachable": "Injoignable",
+          "gone": "Disparue",
+          "error": "Erreur"
+        },
+        "machineWakeOnOpen": {
+          "wakeFailed": "Impossible de réveiller {{name}}",
+          "waking": "Réveil de {{name}}…",
+          "wakeFailedUnknown": "Orca n’a pas pu joindre le fournisseur de la machine."
+        },
+        "machineCreationStages": {
+          "waking": "Réveil…",
+          "connecting": "Connexion…",
+          "cloning": "Clonage…",
+          "fetching": "Récupération de la branche de base…",
+          "creatingWorktree": "Création du worktree…",
+          "startingMachine": "Démarrage de la machine",
+          "settingUpRepo": "Configuration du dépôt",
+          "startingAgent": "Démarrage de l’agent",
+          "openingTerminal": "Ouverture du terminal"
+        },
+        "machineStart": {
+          "readFailed": "Impossible de joindre {{name}}.",
+          "gone": "{{name}} n’existe plus.",
+          "wakeFailed": "Impossible de réveiller {{name}}.",
+          "connectFailed": "Impossible de se connecter à {{name}}.",
+          "noProjectRoot": "Le fournisseur n’a pas indiqué où se trouvent les projets sur {{name}}.",
+          "noServer": "Orca n’a pas pu démarrer son serveur sur {{name}}, nécessaire pour configurer le projet."
+        },
+        "machineProviderActions": {
+          "signInStarted": "Terminez la connexion à {{provider}}, puis revenez à votre nouveau worktree.",
+          "backToComposer": "Revenir au nouveau worktree"
+        }
       }
     },
     "hooks": {
@@ -1925,7 +1986,9 @@
         "addRemoteOrcaServer": "Ajouter un serveur Orca distant",
         "addRemoteOrcaServerHint": "Appairer un autre runtime Orca",
         "hostConnectionFailed": "Échec de la connexion",
-        "defaultBranchUpdateFailed": "Impossible de mettre à jour la branche par défaut du projet. Essayer à nouveau."
+        "defaultBranchUpdateFailed": "Impossible de mettre à jour la branche par défaut du projet. Essayer à nouveau.",
+        "machineFromPlugin": "Machine via un plugin…",
+        "machineFromPluginHint": "Trouver un plugin fournisseur de machines"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Créer un worktree",
@@ -3067,6 +3130,15 @@
             "vmProvisioningTitle": "Provisionnement de la VM",
             "cancelProvisioning": "Annuler",
             "vmProvisioningLogEmpty": "En attente de la sortie de la recette…"
+          },
+          "MachineCreationStatus": {
+            "failedTitle": "Impossible de configurer {{name}}",
+            "title": "Configuration de {{name}}",
+            "machineOn": "{{machine}} sur {{provider}}",
+            "retry": "Réessayer",
+            "removeWorktree": "Supprimer le worktree",
+            "showLog": "Afficher le journal",
+            "logEmpty": "En attente de la sortie du fournisseur…"
           }
         }
       },
@@ -3558,7 +3630,10 @@
             "disconnectedTitle": "Runtime distant déconnecté",
             "retryingBody": "Orca réessaie automatiquement. Ce terminal reprendra si la connexion revient.",
             "disconnectedBody": "Les tentatives automatiques sont interrompues. Reconnectez-vous pour reprendre cette session de terminal.",
-            "reconnectButton": "Reconnecter"
+            "reconnectButton": "Reconnecter",
+            "wakingTitle": "Réveil de {{name}}…",
+            "wakingBody": "Ce terminal reprendra dès que la machine sera en marche.",
+            "retryWakeButton": "Réessayer"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Hôte indisponible",
@@ -14912,6 +14987,23 @@
             "listLabel": "Cibles d'exécution",
             "label": "Exécuter sur",
             "browse": "Parcourir les cibles d'exécution"
+          },
+          "RunTargetMachineRow": {
+            "differentAccount": "Connecté avec un autre compte",
+            "invalidResponse": "A envoyé une réponse non valide",
+            "showFewer": "Afficher moins",
+            "showAll": "Tout afficher ({{count}})",
+            "archived": "Archivées ({{count}})",
+            "signIn": "Se connecter à {{provider}}",
+            "retry": "Réessayer {{provider}}",
+            "showDetails": "Afficher les détails",
+            "noMachines": "Aucune machine",
+            "signInOnServer": "Connexion requise sur {{server}}",
+            "noLocation": "Projet non configuré ici"
+          },
+          "RunTargetRowList": {
+            "sshHosts": "Hôtes SSH",
+            "otherHosts": "Autres hôtes"
           }
         }
       },

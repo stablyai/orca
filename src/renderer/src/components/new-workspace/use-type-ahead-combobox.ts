@@ -14,7 +14,11 @@ import { useWheelScrollable } from './use-wheel-scrollable'
  * - Closing without committing clears the query, or the field is left showing
  *   text that matches nothing while hiding the committed selection.
  */
-export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly string[]): {
+export function useTypeAheadCombobox(
+  deriveRowKeys: (query: string) => readonly string[],
+  /** Armed before the user moves, while nothing is typed: the current choice. */
+  currentKey: string | null = null
+): {
   query: string
   setQuery: (value: string) => void
   open: boolean
@@ -44,9 +48,10 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
   const { ref: listRef, setNode: setListNode } = useWheelScrollable<HTMLDivElement>()
   const listId = React.useId()
 
-  // A stale arm (aimed at an earlier query) falls back to the first row.
+  // A stale arm (aimed at an earlier query) falls back to the current row, else the first.
   const armedKey = armed !== null && armed.query === query ? armed.key : null
-  const armedIndex = Math.max(armedKey === null ? -1 : rowKeys.indexOf(armedKey), 0)
+  const fallbackKey = query === '' ? currentKey : null
+  const armedIndex = Math.max(rowKeys.indexOf(armedKey ?? fallbackKey ?? ''), 0)
   const resolvedKey = rowKeys[armedIndex] ?? null
 
   React.useEffect(() => {

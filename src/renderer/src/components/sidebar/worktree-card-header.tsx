@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, Server, ServerOff, Star, Trash2 } from 'lucide-react'
+import { AlertCircle, Box, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { useMachineForHost } from '@/store/machines'
 import { resolveRepoHeaderColor } from './project-header-color'
 import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
@@ -95,6 +97,11 @@ export function WorktreeCardHeader({
     titleRowIndicators,
     titleWrapper
   } = presentation
+  // Why: a worktree on a provider's machine shows the machine glyph, not a generic server.
+  const onMachine =
+    useMachineForHost(
+      repo?.connectionId ? toSshExecutionHostId(repo.connectionId) : parsedRepoHost?.id
+    ) !== null
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2">
@@ -117,6 +124,7 @@ export function WorktreeCardHeader({
             status={sshStatus}
             targetRemoved={sshTargetRemoved}
             sshOwnerEnvironmentId={sshOwnerEnvironmentId}
+            onMachine={onMachine}
             iconOnly={compactCards || newCardStyle}
             onPointerDown={stopQuickActionPointerPropagation}
           />
@@ -126,7 +134,10 @@ export function WorktreeCardHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 inline-flex items-center">
-                {isRuntimeDisconnected ? (
+                {onMachine ? (
+                  // Why: a machine keeps its glyph in every state; its chip carries the state.
+                  <Box className="size-3 text-muted-foreground" />
+                ) : isRuntimeDisconnected ? (
                   // Passive by design: runtime ("Orca server") hosts have no
                   // renderer-reachable connect API, unlike the SSH glyph above which is
                   // now a control. Don't "fix" the inconsistency by wiring one up.

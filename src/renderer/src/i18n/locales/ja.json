@@ -1086,10 +1086,71 @@
         "settingUpWorkspace": "ワークスペースをセットアップ中…",
         "preparingWorkspace": "ワークスペースを準備中…",
         "creatingWorktree": "ワークツリーを作成中…",
-        "fetchingBaseBranch": "ベースブランチを取得中…"
+        "fetchingBaseBranch": "ベースブランチを取得中…",
+        "startingMachine": "マシンを起動中…",
+        "settingUpRepo": "リポジトリを準備中…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} と {{value1}} は二重にペアリングされた同じサーバーです。[設定] > [リモート Orca サーバー] でどちらかを削除してください。"
+      },
+      "machineWorktreeCreation": {
+        "noCloneUrl": "このプロジェクトにはマシンへクローンできるリモートがありません。",
+        "cloneFailed": "マシンにプロジェクトを準備できませんでした。"
+      },
+      "machines": {
+        "machineCopy": {
+          "deletesAt": "{{time}} に削除",
+          "cantReach": "接続できません",
+          "cantReachSeen": "接続できません · {{ago}}前に確認",
+          "deletesAtLower": "{{time}} に削除",
+          "temporary": "一時",
+          "persistent": "永続",
+          "failureSignIn": "プロバイダーに再度サインインする必要があります。",
+          "failureNotFound": "プロバイダーにこのマシンはもうありません。",
+          "failureQuota": "プロバイダーにこれ以上マシンを作成する余裕がありません。",
+          "failureTimeout": "プロバイダーが時間内に応答しませんでした。",
+          "failureUnsupported": "プロバイダーはこのマシンでその操作を行えません。",
+          "failureCancelled": "キャンセルされました。",
+          "failureUnavailable": "プロバイダーで問題が発生しました。"
+        },
+        "machineDisplayState": {
+          "starting": "起動中",
+          "running": "実行中",
+          "stopping": "スリープ中…",
+          "sleeping": "スリープ中",
+          "archived": "アーカイブ済み",
+          "unreachable": "到達不能",
+          "gone": "削除済み",
+          "error": "エラー"
+        },
+        "machineWakeOnOpen": {
+          "wakeFailed": "{{name}} を起動できませんでした",
+          "waking": "{{name}} を起動中…",
+          "wakeFailedUnknown": "Orca はマシンのプロバイダーに接続できませんでした。"
+        },
+        "machineCreationStages": {
+          "waking": "起動中…",
+          "connecting": "接続中…",
+          "cloning": "クローン中…",
+          "fetching": "ベースブランチを取得中…",
+          "creatingWorktree": "ワークツリーを作成中…",
+          "startingMachine": "マシンを起動",
+          "settingUpRepo": "リポジトリを準備",
+          "startingAgent": "Agent を起動",
+          "openingTerminal": "ターミナルを開く"
+        },
+        "machineStart": {
+          "readFailed": "{{name}} に接続できませんでした。",
+          "gone": "{{name}} は削除されています。",
+          "wakeFailed": "{{name}} を起動できませんでした。",
+          "connectFailed": "{{name}} に接続できませんでした。",
+          "noProjectRoot": "プロバイダーは {{name}} 上のプロジェクトの場所を示しませんでした。",
+          "noServer": "Orca は {{name}} でサーバーを起動できませんでした。プロジェクトの準備にはサーバーが必要です。"
+        },
+        "machineProviderActions": {
+          "signInStarted": "{{provider}} へのサインインを完了してから、新しいワークツリーに戻ってください。",
+          "backToComposer": "新しいワークツリーに戻る"
+        }
       }
     },
     "hooks": {
@@ -1817,7 +1878,9 @@
         "defaultBranchUpdateFailed": "プロジェクトのデフォルトブランチを更新できませんでした。再試行。",
         "setLocation": "プロジェクトの場所を設定する",
         "setLocationOnHost": "プロジェクトの場所を {{host}} に設定します",
-        "setLocationTooltip": "フォルダーを選択するか、このプロジェクトを {{host}} に複製します。"
+        "setLocationTooltip": "フォルダーを選択するか、このプロジェクトを {{host}} に複製します。",
+        "machineFromPlugin": "プラグインのマシン…",
+        "machineFromPluginHint": "マシンプロバイダーのプラグインを探す"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -2959,6 +3022,15 @@
             "vmProvisioningTitle": "VMのプロビジョニング",
             "cancelProvisioning": "キャンセル",
             "vmProvisioningLogEmpty": "レシピの出力を待っています…"
+          },
+          "MachineCreationStatus": {
+            "failedTitle": "{{name}} を準備できませんでした",
+            "title": "{{name}} を準備中",
+            "machineOn": "{{provider}} の {{machine}}",
+            "retry": "再試行",
+            "removeWorktree": "ワークツリーを削除",
+            "showLog": "ログを表示",
+            "logEmpty": "プロバイダーの出力を待っています…"
           }
         }
       },
@@ -3429,7 +3501,10 @@
             "disconnectedTitle": "リモートランタイムが切断されました",
             "retryingBody": "Orca は自動的に再試行します。接続が復元されると、このターミナルが再開されます。",
             "disconnectedBody": "自動再試行が停止しました。このターミナルセッションを再開するには再接続してください。",
-            "reconnectButton": "再接続"
+            "reconnectButton": "再接続",
+            "wakingTitle": "{{name}} を起動中…",
+            "wakingBody": "マシンが起動するとこのターミナルは再開します。",
+            "retryWakeButton": "再試行"
           },
           "TerminalLinkActionPopover": {
             "openLink": "リンクを開く",
@@ -14804,6 +14879,23 @@
             "cloneFromUrl": "URL からクローン",
             "cloneFromUrlHelp": "このリポジトリのクローンを {{host}} に作成します。",
             "saveLocation": "場所を設定する"
+          },
+          "RunTargetMachineRow": {
+            "differentAccount": "別のアカウントでサインイン中",
+            "invalidResponse": "無効な応答が返されました",
+            "showFewer": "表示を減らす",
+            "showAll": "すべて表示 ({{count}})",
+            "archived": "アーカイブ済み ({{count}})",
+            "signIn": "{{provider}} にサインイン",
+            "retry": "{{provider}} を再試行",
+            "showDetails": "詳細を表示",
+            "noMachines": "マシンなし",
+            "signInOnServer": "{{server}} でサインインが必要です",
+            "noLocation": "ここではプロジェクト未設定"
+          },
+          "RunTargetRowList": {
+            "sshHosts": "SSH ホスト",
+            "otherHosts": "その他のホスト"
           }
         }
       },

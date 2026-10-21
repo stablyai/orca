@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "id": "omarchy",
+  "name": "Omarchy",
+  "description": "Containers on the Omarchy box, reached directly over ssh.",
+  "machines": { "command": ["ssh", "-o", "BatchMode=yes", "omarchy", "orca-sandbox"] }
+}

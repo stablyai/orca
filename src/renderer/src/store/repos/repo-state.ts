@@ -28,6 +28,7 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ProjectSetupFailureOptions } from '../projects/project-setup-failure'
 
 export const ERROR_TOAST_DURATION = 60_000
 
@@ -182,7 +183,8 @@ export type RepoSlice = {
     options?: AddRepoPathOptions
   ) => Promise<Repo | null>
   setupProjectExistingFolder: (
-    args: ProjectHostSetupExistingFolderArgs
+    args: ProjectHostSetupExistingFolderArgs,
+    options?: ProjectSetupFailureOptions
   ) => Promise<ProjectHostSetupResult | null>
   createProjectHostSetup: (
     args: ProjectHostSetupCreateArgs
@@ -193,7 +195,10 @@ export type RepoSlice = {
   deleteProjectHostSetup: (
     args: ProjectHostSetupDeleteArgs
   ) => Promise<ProjectHostSetupDeleteResult | null>
-  setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
+  setupProjectClone: (
+    args: ProjectHostSetupCloneArgs,
+    options?: ProjectSetupFailureOptions
+  ) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,

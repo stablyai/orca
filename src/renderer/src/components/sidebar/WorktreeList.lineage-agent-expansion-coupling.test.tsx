@@ -346,6 +346,8 @@ function setAgentLineageState(options: {
     sortEpoch: 0,
     sshConnectedGeneration: 0,
     sshConnectionStates: new Map(),
+    machineProviders: {},
+    machineEnvironmentProviders: {},
     sshTargetLabels: new Map(),
     terminalLayoutsByTabId: {},
     updateRepo: vi.fn(),

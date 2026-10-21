@@ -1086,10 +1086,71 @@
         "settingUpWorkspace": "워크스페이스 설정 중…",
         "preparingWorkspace": "워크스페이스 준비 중…",
         "creatingWorktree": "작업 트리 만드는 중…",
-        "fetchingBaseBranch": "기본 브랜치 가져오는 중…"
+        "fetchingBaseBranch": "기본 브랜치 가져오는 중…",
+        "startingMachine": "머신 시작 중…",
+        "settingUpRepo": "저장소 설정 중…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}}와(과) {{value1}}은(는) 두 번 페어링된 같은 서버입니다. 설정 > 원격 Orca 서버에서 하나를 제거하세요."
+      },
+      "machineWorktreeCreation": {
+        "noCloneUrl": "이 프로젝트에는 머신에 복제할 원격 저장소가 없습니다.",
+        "cloneFailed": "머신에 프로젝트를 설정할 수 없습니다."
+      },
+      "machines": {
+        "machineCopy": {
+          "deletesAt": "{{time}}에 삭제",
+          "cantReach": "연결할 수 없음",
+          "cantReachSeen": "연결할 수 없음 · {{ago}} 전에 확인됨",
+          "deletesAtLower": "{{time}}에 삭제",
+          "temporary": "임시",
+          "persistent": "영구",
+          "failureSignIn": "공급자에 다시 로그인해야 합니다.",
+          "failureNotFound": "공급자에 이 머신이 더 이상 없습니다.",
+          "failureQuota": "공급자에 머신을 더 만들 공간이 없습니다.",
+          "failureTimeout": "공급자가 제시간에 응답하지 않았습니다.",
+          "failureUnsupported": "공급자가 이 머신에서 그 작업을 할 수 없습니다.",
+          "failureCancelled": "취소되었습니다.",
+          "failureUnavailable": "공급자에 문제가 발생했습니다."
+        },
+        "machineDisplayState": {
+          "starting": "시작 중",
+          "running": "실행 중",
+          "stopping": "절전 전환 중…",
+          "sleeping": "절전 중",
+          "archived": "보관됨",
+          "unreachable": "연결 불가",
+          "gone": "사라짐",
+          "error": "오류"
+        },
+        "machineWakeOnOpen": {
+          "wakeFailed": "{{name}}을(를) 깨울 수 없습니다",
+          "waking": "{{name}} 깨우는 중…",
+          "wakeFailedUnknown": "Orca가 머신 공급자에 연결할 수 없습니다."
+        },
+        "machineCreationStages": {
+          "waking": "깨우는 중…",
+          "connecting": "연결 중…",
+          "cloning": "복제 중…",
+          "fetching": "기준 브랜치 가져오는 중…",
+          "creatingWorktree": "워크트리 만드는 중…",
+          "startingMachine": "머신 시작",
+          "settingUpRepo": "저장소 설정",
+          "startingAgent": "에이전트 시작",
+          "openingTerminal": "터미널 여는 중"
+        },
+        "machineStart": {
+          "readFailed": "{{name}}에 연결할 수 없습니다.",
+          "gone": "{{name}}이(가) 사라졌습니다.",
+          "wakeFailed": "{{name}}을(를) 깨울 수 없습니다.",
+          "connectFailed": "{{name}}에 연결할 수 없습니다.",
+          "noProjectRoot": "공급자가 {{name}}에서 프로젝트 위치를 알려 주지 않았습니다.",
+          "noServer": "Orca가 {{name}}에서 서버를 시작할 수 없습니다. 프로젝트를 설정하려면 서버가 필요합니다."
+        },
+        "machineProviderActions": {
+          "signInStarted": "{{provider}} 로그인을 마친 후 새 워크트리로 돌아가세요.",
+          "backToComposer": "새 워크트리로 돌아가기"
+        }
       }
     },
     "hooks": {
@@ -1817,7 +1878,9 @@
         "defaultBranchUpdateFailed": "프로젝트 기본 브랜치를 업데이트할 수 없습니다. 다시 시도해 보세요.",
         "setLocation": "프로젝트 위치 설정",
         "setLocationOnHost": "{{host}}에 프로젝트 위치 설정",
-        "setLocationTooltip": "폴더를 선택하거나 이 프로젝트를 {{host}}에 복제하세요."
+        "setLocationTooltip": "폴더를 선택하거나 이 프로젝트를 {{host}}에 복제하세요.",
+        "machineFromPlugin": "플러그인의 머신…",
+        "machineFromPluginHint": "머신 공급자 플러그인 찾기"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -2959,6 +3022,15 @@
             "vmProvisioningTitle": "VM 프로비저닝",
             "cancelProvisioning": "취소",
             "vmProvisioningLogEmpty": "레시피 출력을 기다리는 중…"
+          },
+          "MachineCreationStatus": {
+            "failedTitle": "{{name}}을(를) 설정할 수 없습니다",
+            "title": "{{name}} 설정 중",
+            "machineOn": "{{provider}}의 {{machine}}",
+            "retry": "다시 시도",
+            "removeWorktree": "워크트리 제거",
+            "showLog": "로그 보기",
+            "logEmpty": "공급자 출력을 기다리는 중…"
           }
         }
       },
@@ -3429,7 +3501,10 @@
             "disconnectedTitle": "원격 런타임 연결 끊김",
             "retryingBody": "Orca가 자동으로 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
             "disconnectedBody": "자동 재시도가 중지되었습니다. 이 터미널 세션을 재개하려면 다시 연결하세요.",
-            "reconnectButton": "다시 연결"
+            "reconnectButton": "다시 연결",
+            "wakingTitle": "{{name}} 깨우는 중…",
+            "wakingBody": "머신이 실행되면 이 터미널이 다시 시작됩니다.",
+            "retryWakeButton": "다시 시도"
           },
           "TerminalLinkActionPopover": {
             "openLink": "링크 열기",
@@ -14804,6 +14879,23 @@
             "cloneFromUrl": "URL에서 복제",
             "cloneFromUrlHelp": "이 저장소를 {{host}}에 복제하세요.",
             "saveLocation": "위치 설정"
+          },
+          "RunTargetMachineRow": {
+            "differentAccount": "다른 계정으로 로그인됨",
+            "invalidResponse": "잘못된 응답을 보냄",
+            "showFewer": "간단히 보기",
+            "showAll": "모두 보기 ({{count}})",
+            "archived": "보관됨 ({{count}})",
+            "signIn": "{{provider}}에 로그인",
+            "retry": "{{provider}} 다시 시도",
+            "showDetails": "세부 정보 보기",
+            "noMachines": "머신 없음",
+            "signInOnServer": "{{server}}에서 로그인 필요",
+            "noLocation": "여기에 프로젝트가 설정되지 않음"
+          },
+          "RunTargetRowList": {
+            "sshHosts": "SSH 호스트",
+            "otherHosts": "기타 호스트"
           }
         }
       },

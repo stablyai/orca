@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "omarchy-machines",
+  "publisher": "orca-samples",
+  "name": "Omarchy machines",
+  "version": "1.0.0",
+  "description": "Example machine provider: containers on an Omarchy box, managed over ssh by orca-sandbox.",
+  "engines": { "orca": ">=1.4.214" },
+  "pluginApi": 1,
+  "contributes": {
+    "vmRecipes": [{ "path": "recipes/omarchy.json" }]
+  }
+}

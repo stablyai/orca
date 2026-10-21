@@ -51,9 +51,8 @@ vi.mock('@/store', () => {
   }
 })
 
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
-}))
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/store/machines', () => ({ useMachineForHost: () => null }))
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,

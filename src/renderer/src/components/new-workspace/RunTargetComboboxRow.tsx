@@ -25,6 +25,7 @@ export function RunTargetRow({
   stacked = false,
   onArm,
   onCommit,
+  status,
   trailing
 }: {
   icon: React.ReactNode
@@ -41,6 +42,8 @@ export function RunTargetRow({
   stacked?: boolean
   onArm: () => void
   onCommit: () => void
+  /** Right of the detail, on the label's baseline. */
+  status?: React.ReactNode
   trailing?: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -59,8 +62,8 @@ export function RunTargetRow({
       className={cn(
         'flex cursor-default gap-2 rounded-sm px-2 text-sm',
         stacked ? 'items-center py-1.5' : 'h-8 items-baseline',
-        armed && 'bg-accent text-accent-foreground',
-        current && !armed && 'bg-accent/60'
+        // Why: only the armed row fills; the current one is marked by weight alone.
+        armed && 'bg-accent text-accent-foreground'
       )}
     >
       {/* Icons are glyphs, not text, so they centre on the row. */}
@@ -98,12 +101,34 @@ export function RunTargetRow({
           />
         </>
       )}
+      {status ? <span className="shrink-0 pl-2.5">{status}</span> : null}
       {trailing}
       {submenu ? (
         <span className={cn('flex shrink-0 items-center pl-1.5', stacked ? 'self-center' : 'h-8')}>
           <ChevronRight className="size-3.5 text-muted-foreground" />
         </span>
       ) : null}
+    </div>
+  )
+}
+
+/** A label over a group of rows; it names the group and is never armed. */
+export function RunTargetGroupHeader({
+  id,
+  label,
+  aside
+}: {
+  id: string
+  label: string
+  aside?: string | null
+}): React.JSX.Element {
+  return (
+    <div
+      id={id}
+      className="flex items-baseline gap-2 px-2 pb-1 pt-2.5 text-2xs font-medium text-muted-foreground"
+    >
+      <span className="truncate">{label}</span>
+      {aside ? <span className="ml-auto shrink-0 truncate font-normal">{aside}</span> : null}
     </div>
   )
 }

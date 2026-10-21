@@ -35,6 +35,8 @@ vi.mock('@/store', () => ({
   }
 }))
 
+vi.mock('@/store/machines', () => ({ hasMachineProviders: () => false }))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree

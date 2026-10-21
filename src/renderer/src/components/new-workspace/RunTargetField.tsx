@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
-import { ChevronDown, Cloud } from 'lucide-react'
+import { Box, ChevronDown, Cloud, Search } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -20,7 +20,8 @@ export default function RunTargetField({
   onOpenRequest,
   onToggle,
   committed,
-  isRecipe,
+  kind,
+  status,
   hostId,
   label,
   detail,
@@ -35,7 +36,10 @@ export default function RunTargetField({
   onOpenRequest: () => void
   onToggle: () => void
   committed: boolean
-  isRecipe: boolean
+  /** What the committed selection is, which picks its glyph. */
+  kind: 'host' | 'recipe' | 'machine'
+  /** A machine's state, beside its detail. */
+  status: React.ReactNode
   hostId: ExecutionHostId | null
   label: string
   detail: string
@@ -56,11 +60,15 @@ export default function RunTargetField({
       >
         <span className="flex w-4 shrink-0 items-center justify-center">
           {committed ? (
-            isRecipe ? (
+            kind === 'machine' ? (
+              <Box className="size-3.5 shrink-0 text-muted-foreground" />
+            ) : kind === 'recipe' ? (
               <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
             ) : hostId ? (
               <HostRowIcon hostId={hostId} />
             ) : null
+          ) : query ? (
+            <Search className="size-3.5 shrink-0 text-muted-foreground" />
           ) : null}
         </span>
         <div className="relative min-w-0 flex-1 overflow-hidden">
@@ -108,6 +116,7 @@ export default function RunTargetField({
                 >
                   {detail}
                 </span>
+                {status}
               </div>
             </div>
           ) : null}

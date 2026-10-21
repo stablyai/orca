@@ -10,6 +10,7 @@ import { useComposerAsyncState } from './async-composer-state'
 import { useComposerProviderRuntimeSync } from './provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './draft-target-sync'
+import { useComposerMachineSelection } from './composer-machine-selection'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -35,7 +36,7 @@ export function useComposerTargetState(
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     workspaceStatuses: composerTargetStore.workspaceStatuses
   })
-  const runtimeTargetSelection = useComposerRuntimeTargetSelection({
+  const runtimeTargetSelectionBase = useComposerRuntimeTargetSelection({
     actionableHostIds: composerTargetStore.actionableHostIds,
     activeRepoId: composerTargetStore.activeRepoId,
     eligibleRepos: composerTargetStore.eligibleRepos,
@@ -56,6 +57,16 @@ export function useComposerTargetState(
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     worktreesByRepo: composerTargetStore.worktreesByRepo
   })
+  const machineSelection = useComposerMachineSelection({
+    enabled:
+      runtimeTargetSelectionBase.ephemeralVmsEnabled &&
+      runtimeTargetSelectionBase.selectedRepoIsGit &&
+      !runtimeTargetSelectionBase.isProjectGroupTarget,
+    projectId: runtimeTargetSelectionBase.selectedProjectId,
+    projectHostSetups: composerTargetStore.projectHostSetups,
+    selectedHostId: runtimeTargetSelectionBase.selectedRepoExecutionHostId
+  })
+  const runtimeTargetSelection = { ...runtimeTargetSelectionBase, machineSelection }
   const initialTargetState = {
     ...initialTargetSeedState,
     repoId: runtimeTargetSelection.resolvedRepoId

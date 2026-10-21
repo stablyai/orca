@@ -293,6 +293,8 @@ function setStatusLaneState(): void {
     sortEpoch: 0,
     sshConnectedGeneration: 0,
     sshConnectionStates: new Map(),
+    machineProviders: {},
+    machineEnvironmentProviders: {},
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},

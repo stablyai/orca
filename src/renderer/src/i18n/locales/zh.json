@@ -1086,10 +1086,71 @@
         "settingUpWorkspace": "正在设置工作区…",
         "preparingWorkspace": "正在准备工作区…",
         "creatingWorktree": "正在创建工作树…",
-        "fetchingBaseBranch": "正在获取基础分支…"
+        "fetchingBaseBranch": "正在获取基础分支…",
+        "startingMachine": "正在启动机器…",
+        "settingUpRepo": "正在设置仓库…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} 和 {{value1}} 是同一台服务器被配对了两次。请在“设置 > 远程 Orca 服务器”中移除其中一个。"
+      },
+      "machineWorktreeCreation": {
+        "noCloneUrl": "此项目没有可克隆到机器上的远程仓库。",
+        "cloneFailed": "无法在机器上设置项目。"
+      },
+      "machines": {
+        "machineCopy": {
+          "deletesAt": "{{time}} 删除",
+          "cantReach": "无法连接",
+          "cantReachSeen": "无法连接 · {{ago}}前可见",
+          "deletesAtLower": "{{time}} 删除",
+          "temporary": "临时",
+          "persistent": "持久",
+          "failureSignIn": "提供方需要你重新登录。",
+          "failureNotFound": "提供方已不再有这台机器。",
+          "failureQuota": "提供方已没有空间容纳更多机器。",
+          "failureTimeout": "提供方未及时响应。",
+          "failureUnsupported": "提供方无法对这台机器执行该操作。",
+          "failureCancelled": "已取消。",
+          "failureUnavailable": "提供方遇到了问题。"
+        },
+        "machineDisplayState": {
+          "starting": "启动中",
+          "running": "运行中",
+          "stopping": "正在休眠…",
+          "sleeping": "休眠中",
+          "archived": "已归档",
+          "unreachable": "无法访问",
+          "gone": "已消失",
+          "error": "错误"
+        },
+        "machineWakeOnOpen": {
+          "wakeFailed": "无法唤醒 {{name}}",
+          "waking": "正在唤醒 {{name}}…",
+          "wakeFailedUnknown": "Orca 无法连接到机器的提供方。"
+        },
+        "machineCreationStages": {
+          "waking": "正在唤醒…",
+          "connecting": "正在连接…",
+          "cloning": "正在克隆…",
+          "fetching": "正在获取基础分支…",
+          "creatingWorktree": "正在创建工作树…",
+          "startingMachine": "启动机器",
+          "settingUpRepo": "设置仓库",
+          "startingAgent": "启动智能体",
+          "openingTerminal": "打开终端"
+        },
+        "machineStart": {
+          "readFailed": "无法连接 {{name}}。",
+          "gone": "{{name}} 已不存在。",
+          "wakeFailed": "无法唤醒 {{name}}。",
+          "connectFailed": "无法连接到 {{name}}。",
+          "noProjectRoot": "提供方未说明 {{name}} 上项目的位置。",
+          "noServer": "Orca 无法在 {{name}} 上启动其服务器，而设置项目需要该服务器。"
+        },
+        "machineProviderActions": {
+          "signInStarted": "完成 {{provider}} 登录后，返回你的新工作树。",
+          "backToComposer": "返回新建工作树"
+        }
       }
     },
     "hooks": {
@@ -1817,7 +1878,9 @@
         "defaultBranchUpdateFailed": "无法更新项目默认分支。再试一次。",
         "setLocation": "设置项目位置",
         "setLocationOnHost": "将项目位置设置为 {{host}}",
-        "setLocationTooltip": "选择一个文件夹或将此项目克隆到 {{host}} 上。"
+        "setLocationTooltip": "选择一个文件夹或将此项目克隆到 {{host}} 上。",
+        "machineFromPlugin": "来自插件的机器…",
+        "machineFromPluginHint": "查找机器提供方插件"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "创建工作树",
@@ -2959,6 +3022,15 @@
             "vmProvisioningTitle": "正在预配虚拟机",
             "cancelProvisioning": "取消",
             "vmProvisioningLogEmpty": "正在等待环境模板输出…"
+          },
+          "MachineCreationStatus": {
+            "failedTitle": "无法设置 {{name}}",
+            "title": "正在设置 {{name}}",
+            "machineOn": "{{provider}} 上的 {{machine}}",
+            "retry": "重试",
+            "removeWorktree": "移除工作树",
+            "showLog": "显示日志",
+            "logEmpty": "正在等待提供方输出…"
           }
         }
       },
@@ -3429,7 +3501,10 @@
             "disconnectedTitle": "远程运行时已断开连接",
             "retryingBody": "Orca 正在自动重试。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
-            "reconnectButton": "重新连接"
+            "reconnectButton": "重新连接",
+            "wakingTitle": "正在唤醒 {{name}}…",
+            "wakingBody": "机器运行后此终端将恢复。",
+            "retryWakeButton": "重试"
           },
           "TerminalLinkActionPopover": {
             "openLink": "打开链接",
@@ -14804,6 +14879,23 @@
             "cloneFromUrl": "从 URL 克隆",
             "cloneFromUrlHelp": "将此存储库克隆到 {{host}} 上。",
             "saveLocation": "设置位置"
+          },
+          "RunTargetMachineRow": {
+            "differentAccount": "已使用其他账号登录",
+            "invalidResponse": "返回了无效的响应",
+            "showFewer": "收起",
+            "showAll": "全部显示（{{count}}）",
+            "archived": "已归档（{{count}}）",
+            "signIn": "登录 {{provider}}",
+            "retry": "重试 {{provider}}",
+            "showDetails": "显示详情",
+            "noMachines": "没有机器",
+            "signInOnServer": "需要在 {{server}} 上登录",
+            "noLocation": "此处未设置项目"
+          },
+          "RunTargetRowList": {
+            "sshHosts": "SSH 主机",
+            "otherHosts": "其他主机"
           }
         }
       },

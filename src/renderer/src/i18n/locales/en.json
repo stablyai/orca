@@ -1284,10 +1284,71 @@
         "settingUpWorkspace": "Setting up your workspace…",
         "preparingWorkspace": "Preparing workspace…",
         "creatingWorktree": "Creating worktree…",
-        "fetchingBaseBranch": "Fetching base branch…"
+        "fetchingBaseBranch": "Fetching base branch…",
+        "startingMachine": "Starting machine…",
+        "settingUpRepo": "Setting up repo…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
+      },
+      "machineWorktreeCreation": {
+        "noCloneUrl": "This project has no remote to clone onto the machine.",
+        "cloneFailed": "Couldn’t set up the project on the machine."
+      },
+      "machines": {
+        "machineCopy": {
+          "deletesAt": "Deletes {{time}}",
+          "cantReach": "Can’t reach",
+          "cantReachSeen": "Can’t reach · seen {{ago}} ago",
+          "deletesAtLower": "deletes {{time}}",
+          "temporary": "Temporary",
+          "persistent": "Persistent",
+          "failureSignIn": "The provider needs you to sign in again.",
+          "failureNotFound": "The provider no longer has this machine.",
+          "failureQuota": "The provider is out of room for more machines.",
+          "failureTimeout": "The provider didn’t answer in time.",
+          "failureUnsupported": "The provider can’t do that for this machine.",
+          "failureCancelled": "It was canceled.",
+          "failureUnavailable": "The provider ran into a problem."
+        },
+        "machineDisplayState": {
+          "starting": "Starting",
+          "running": "Running",
+          "sleeping": "Sleeping",
+          "archived": "Archived",
+          "unreachable": "Unreachable",
+          "gone": "Gone",
+          "stopping": "Sleeping…",
+          "error": "Error"
+        },
+        "machineWakeOnOpen": {
+          "wakeFailed": "Couldn’t wake {{name}}",
+          "waking": "Waking {{name}}…",
+          "wakeFailedUnknown": "Orca couldn’t reach the machine’s provider."
+        },
+        "machineCreationStages": {
+          "waking": "Waking…",
+          "connecting": "Connecting…",
+          "cloning": "Cloning…",
+          "fetching": "Fetching base branch…",
+          "creatingWorktree": "Creating worktree…",
+          "startingMachine": "Starting machine",
+          "settingUpRepo": "Setting up repo",
+          "startingAgent": "Starting agent",
+          "openingTerminal": "Opening terminal"
+        },
+        "machineStart": {
+          "readFailed": "Couldn’t reach {{name}}.",
+          "gone": "{{name}} is gone.",
+          "wakeFailed": "Couldn’t wake {{name}}.",
+          "connectFailed": "Couldn’t connect to {{name}}.",
+          "noProjectRoot": "The provider didn’t say where projects live on {{name}}.",
+          "noServer": "Orca couldn’t start its server on {{name}}, which it needs to set up the project."
+        },
+        "machineProviderActions": {
+          "signInStarted": "Finish signing in to {{provider}}, then go back to your new worktree.",
+          "backToComposer": "Back to new worktree"
+        }
       }
     },
     "hooks": {
@@ -2019,7 +2080,9 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "machineFromPlugin": "Machine from a plugin…",
+        "machineFromPluginHint": "Find a machine provider plugin"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -3205,6 +3268,15 @@
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
+          },
+          "MachineCreationStatus": {
+            "failedTitle": "Couldn’t set up {{name}}",
+            "title": "Setting up {{name}}",
+            "machineOn": "{{machine}} on {{provider}}",
+            "retry": "Retry",
+            "removeWorktree": "Remove worktree",
+            "showLog": "Show log",
+            "logEmpty": "Waiting for provider output…"
           }
         }
       },
@@ -3696,7 +3768,10 @@
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
-            "reconnectButton": "Reconnect"
+            "reconnectButton": "Reconnect",
+            "wakingTitle": "Waking {{name}}…",
+            "wakingBody": "This terminal resumes once the machine is running.",
+            "retryWakeButton": "Retry"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Host unavailable",
@@ -15090,6 +15165,23 @@
             "listLabel": "Run targets",
             "label": "Run on",
             "browse": "Browse run targets"
+          },
+          "RunTargetMachineRow": {
+            "differentAccount": "Signed in as a different account",
+            "invalidResponse": "Sent an invalid response",
+            "showFewer": "Show fewer",
+            "showAll": "Show all ({{count}})",
+            "archived": "Archived ({{count}})",
+            "signIn": "Sign in to {{provider}}",
+            "retry": "Retry {{provider}}",
+            "showDetails": "Show details",
+            "noMachines": "No machines",
+            "signInOnServer": "Needs sign-in on {{server}}",
+            "noLocation": "Project not set up here"
+          },
+          "RunTargetRowList": {
+            "sshHosts": "SSH hosts",
+            "otherHosts": "Other hosts"
           }
         }
       },

@@ -55,6 +55,8 @@ vi.mock('@/store', () => {
     setWorkspacePortScanRefreshing,
     settings,
     sshConnectionStates: new Map(),
+    machineProviders: {},
+    machineEnvironmentProviders: {},
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
     updateWorktreeMeta,

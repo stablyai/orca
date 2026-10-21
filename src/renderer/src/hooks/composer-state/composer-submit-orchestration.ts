@@ -99,6 +99,7 @@ export function useComposerSubmitOrchestration(
     isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
     linkedGitLabIssue: target.workspaceIdentityState.linkedGitLabIssue,
     linkedGitLabMR: target.workspaceIdentityState.linkedGitLabMR,
+    machineSelection: target.runtimeTargetSelection.machineSelection,
     normalizedSparseDirectories: target.derivedComposerState.normalizedSparseDirectories,
     onCreated: target.composerTargetStore.onCreated,
     parentWorktreeId: target.workspaceIdentityState.parentWorktreeId,

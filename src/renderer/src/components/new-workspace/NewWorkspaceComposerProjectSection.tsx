@@ -1,16 +1,20 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { translate } from '@/i18n/i18n'
+import { openMachinePluginSettings } from '@/lib/machines/machine-provider-actions'
+import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
   NewWorkspaceComposerCardProps
 } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
+
+const NO_HOST_OPTIONS: readonly ProjectHostSetupOption[] = []
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -31,6 +35,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
+  | 'machineSelection'
 > & {
   disabled?: boolean
   projectDescriptionId: string
@@ -75,6 +80,7 @@ export function NewWorkspaceComposerProjectSection({
   handleConnectRunTargetHost,
   handleSetLocation,
   ephemeralVmRecipeError,
+  machineSelection = null,
   selectedRepoRequiresConnection,
   selectedRepoConnectionId,
   selectedRepoConnectInProgress,
@@ -83,6 +89,15 @@ export function NewWorkspaceComposerProjectSection({
   connectButtonLabel,
   selectedProjectName
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
+  const machineHostIds = machineSelection?.machineHostIds
+  // Why: a fresh list each render would rebuild every row the picker derives from it.
+  const runTargetHostOptions = useMemo(
+    () =>
+      machineHostIds
+        ? (projectHostSetupOptions ?? []).filter((option) => !machineHostIds.has(option.hostId))
+        : (projectHostSetupOptions ?? NO_HOST_OPTIONS),
+    [machineHostIds, projectHostSetupOptions]
+  )
   return (
     <fieldset disabled={disabled} className="space-y-1">
       <div className="space-y-1">
@@ -150,7 +165,7 @@ export function NewWorkspaceComposerProjectSection({
             {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
           </label>
           <RunTargetCombobox
-            hostOptions={projectHostSetupOptions ?? []}
+            hostOptions={runTargetHostOptions}
             hostValue={selectedProjectHostSetupId ?? null}
             hostExecutionHostId={selectedRepoExecutionHostId}
             onHostChange={handleProjectHostSetupChange}
@@ -161,6 +176,8 @@ export function NewWorkspaceComposerProjectSection({
             onAddRemoteServer={handleAddRemoteServer}
             onConnectHost={handleConnectRunTargetHost}
             onSetLocation={handleSetLocation}
+            machines={machineSelection?.picker}
+            onBrowseMachinePlugins={machineSelection ? openMachinePluginSettings : undefined}
           />
           {ephemeralVmRecipeError ? (
             <p className="whitespace-pre-line text-[11px] text-destructive">

@@ -13,7 +13,7 @@ import {
 import { ProjectOptionDetail, ProjectOptionMark, ProjectOptionRow } from './ProjectComboboxRow'
 import { useRecentProjectIds } from './use-recent-project-ids'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
-import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
+import { COMBOBOX_FIELD_SHELL } from './type-ahead-combobox-styles'
 
 type ProjectComboboxProps = {
   options: readonly NewWorkspaceProjectOption[]
@@ -242,10 +242,8 @@ export default function ProjectCombobox({
           // An opaque surface that zooms without fading resolves it. (`bg-popover`
           // alone loses to the primitive's arbitrary-value background, hence the
           // matching arbitrary form.) Every other caller keeps the blur and fade.
-          className={cn(
-            'flex w-[var(--radix-popover-trigger-width)] min-w-[17rem] flex-col p-0',
-            COMBOBOX_POPOVER_SURFACE
-          )}
+          surface="opaque"
+          className="flex w-[var(--radix-popover-trigger-width)] min-w-[17rem] flex-col"
           // Focus stays in the field — it's the search box — so the popover must
           // not steal it on open, nor yank it back on close after a pick.
           onOpenAutoFocus={(event) => event.preventDefault()}

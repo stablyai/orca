@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, Cloud, Plus, Server } from 'lucide-react'
+import { Box, ChevronDown, Cloud, Plus, Server } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -10,9 +10,6 @@ import {
   RUN_TARGET_ADD_HOST_KEY,
   type EphemeralVmRecipeOption
 } from './run-target-options'
-import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
-
-const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
 
 /** The "Per-Workspace Environment" row and its nested recipe list. */
 export function RecipesSubmenuRow({
@@ -46,7 +43,7 @@ export function RecipesSubmenuRow({
               'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
               'Provision an on-demand environment from a recipe'
             )}
-            armed={armed}
+            armed={armed || open}
             current={selectedRecipeId !== null}
             optionId={optionId}
             submenu
@@ -59,7 +56,8 @@ export function RecipesSubmenuRow({
         side="right"
         align="start"
         sideOffset={6}
-        className={SUBMENU_CONTENT}
+        surface="opaque"
+        className="w-72"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         {/* Why: submenu rows track their own hover — without it they were the
@@ -67,6 +65,7 @@ export function RecipesSubmenuRow({
         <div
           role="listbox"
           aria-label={getEphemeralVmLabel()}
+          className="p-1"
           onMouseLeave={() => setHoveredKey(null)}
         >
           {recipes.map((recipe) => (
@@ -99,7 +98,8 @@ export function AddHostSubmenuRow({
   optionId,
   onArm,
   onAddSshHost,
-  onAddRemoteServer
+  onAddRemoteServer,
+  onBrowseMachinePlugins
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -108,6 +108,8 @@ export function AddHostSubmenuRow({
   onArm: () => void
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
+  /** The one entry point to machine providers, so a first-time user can find them. */
+  onBrowseMachinePlugins?: () => void
 }): React.JSX.Element {
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
   const addHostLabel = translate('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
@@ -127,7 +129,8 @@ export function AddHostSubmenuRow({
           onClick={() => onOpenChange(true)}
           className={cn(
             'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-2 text-sm',
-            armed && 'bg-accent text-accent-foreground'
+            // Why: the row stays lit while its submenu is open, even once the pointer is in it.
+            (armed || open) && 'bg-accent text-accent-foreground'
           )}
         >
           <Plus className="size-3.5 shrink-0 text-muted-foreground" />
@@ -139,12 +142,18 @@ export function AddHostSubmenuRow({
       </PopoverAnchor>
       <PopoverContent
         side="right"
-        align="end"
+        align="start"
         sideOffset={6}
-        className={SUBMENU_CONTENT}
+        surface="opaque"
+        className="w-72"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div role="listbox" aria-label={addHostLabel} onMouseLeave={() => setHoveredKey(null)}>
+        <div
+          role="listbox"
+          aria-label={addHostLabel}
+          className="p-1"
+          onMouseLeave={() => setHoveredKey(null)}
+        >
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -181,6 +190,25 @@ export function AddHostSubmenuRow({
               optionId={undefined}
               onArm={() => setHoveredKey('remote')}
               onCommit={onAddRemoteServer}
+            />
+          ) : null}
+          {onBrowseMachinePlugins ? (
+            <RunTargetRow
+              icon={<Box className="size-3.5 shrink-0 text-muted-foreground" />}
+              label={translate(
+                'auto.components.NewWorkspaceComposerCard.machineFromPlugin',
+                'Machine from a plugin…'
+              )}
+              detail={translate(
+                'auto.components.NewWorkspaceComposerCard.machineFromPluginHint',
+                'Find a machine provider plugin'
+              )}
+              armed={hoveredKey === 'machine-plugin'}
+              current={false}
+              stacked
+              optionId={undefined}
+              onArm={() => setHoveredKey('machine-plugin')}
+              onCommit={onBrowseMachinePlugins}
             />
           ) : null}
         </div>

@@ -576,6 +576,26 @@ describe('repo slice runtime routing', () => {
     })
   })
 
+  it('hands a clone failure to a caller that shows its own, without a toast', async () => {
+    const store = createTestStore()
+    const onError = vi.fn()
+
+    await expect(
+      store.getState().setupProjectClone(
+        {
+          projectId: 'project-1',
+          hostId: 'ssh:ssh-1',
+          url: 'https://github.com/stablyai/orca.git',
+          destination: '/srv'
+        },
+        { onError }
+      )
+    ).resolves.toBeNull()
+
+    expect(onError).toHaveBeenCalledWith('SSH connection "ssh-1" not found or not connected')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it('keeps runtime ownership when a runtime repo is moved between groups', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-move',
