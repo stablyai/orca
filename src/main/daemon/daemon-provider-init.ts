@@ -34,7 +34,13 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { isDaemonRestartInFlight } from './daemon-restart-state'
-import { DaemonSpawner, getDaemonPidPath } from './daemon-spawner'
+import {
+  DaemonSpawner,
+  getDaemonPidPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from './daemon-spawner'
+import { tryInstallLegacyFallbackOnCurrentFailure } from './daemon-legacy-fallback-init'
 import { clearSeveredDaemon, installSeveredDaemonController } from './daemon-host-image-state'
 import {
   createSeveredDaemonController,
@@ -71,8 +77,28 @@ export async function initDaemonPtyProvider(
     )
   })
 
-  // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
-  const info = await newSpawner.ensureRunning()
+  // Why: current startup failure still installs when a legacy daemon has sessions; otherwise the original error propagates and nothing is installed.
+  let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+  try {
+    info = await newSpawner.ensureRunning()
+  } catch (error) {
+    await tryInstallLegacyFallbackOnCurrentFailure({
+      error,
+      signal,
+      runtimeDir,
+      newSpawner,
+      newAdapter: new DaemonPtyAdapter({
+        socketPath: getDaemonSocketPath(runtimeDir),
+        tokenPath: getDaemonTokenPath(runtimeDir),
+        pidPath: getDaemonPidPath(runtimeDir),
+        profileScope: runtimeDir,
+        runtimeDir,
+        packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
+        historyPath: getHistoryDir()
+      })
+    })
+    return
+  }
   // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
@@ -127,6 +153,17 @@ export async function initDaemonPtyProvider(
   try {
     // Why: the launcher's temporary pair closes only after this permanent pair is established, leaving no adoption gap.
     await newAdapter.establishLifecycleLease()
+  } catch (error) {
+    await tryInstallLegacyFallbackOnCurrentFailure({
+      error,
+      signal,
+      runtimeDir,
+      newSpawner,
+      newAdapter
+    })
+    return
+  }
+  try {
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
     // Why beside legacy discovery: older daemons are adopted, newer ones only hold their tabs.
