@@ -168,14 +168,19 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI options', () =
         }
 
         // The production send path: list_models, set_model, apply_flag_settings and get_settings.
-        // `ranOptions` is what the chat records as the picks this message actually ran with.
+        // `ranOptions` carries only what the CLI reported; it names the resolved id, so an alias
+        // pick reports no model and the recorder falls back to the message's own pick.
         const firstTurn = events.length
-        await expect(
-          send('real-cli-options-1', 'Reply with exactly: OK. Do not use any tools.', 1, {
-            model: pick.id,
-            effort: level
-          })
-        ).resolves.toEqual({ state: 'admitted', ranOptions: { model: pick.id, effort: level } })
+        const outcome = await send(
+          'real-cli-options-1',
+          'Reply with exactly: OK. Do not use any tools.',
+          1,
+          { model: pick.id, effort: level }
+        )
+        expect(outcome).toMatchObject({ state: 'admitted', ranOptions: { effort: level } })
+        expect([undefined, pick.id]).toContain(
+          'ranOptions' in outcome ? outcome.ranOptions?.model : undefined
+        )
         expect(await until(() => results(firstTurn).length > 0, 90_000)).toBe(true)
         expect(results(firstTurn)[0]).toMatchObject({ subtype: 'success', is_error: false })
         expect(inits(firstTurn)[0]?.model).toBe(pick.resolvedModel)
