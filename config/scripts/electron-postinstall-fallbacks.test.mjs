@@ -49,5 +49,7 @@ describe('describeMissingElectronLibrary', () => {
     const message = describeMissingElectronLibrary('libatk-1.0.so.0')
     expect(message).toContain('libatk-1.0.so.0 is missing')
     expect(message).toContain('sudo apt-get install -y libgtk-3-0t64 libatk1.0-0t64')
+    // The loader reports one library per run, so the hint must cover the rest, e.g. NSS.
+    expect(message).toContain(' libnss3 libgbm1`')
   })
 })
