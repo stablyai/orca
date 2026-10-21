@@ -184,4 +184,69 @@ describe('dialog state authority (STA-3343)', () => {
     expect(superseded.revert()).toBe(false)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('merged')
   })
+
+  it('holds qualified state only on its canonical repository and releases it on matching search', () => {
+    const ownerRepo = { owner: 'o', repo: 'r', host: 'github.com' }
+    setTaskPageGitHubMutationQueryKey('q')
+    assertTaskPageGitHubDialogStateAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      state: 'closed',
+      ownerRepo
+    })
+    const other = item({ url: 'https://github.com/upstream/r/issues/1' })
+    const enterprise = item({ url: 'https://ghe.example/o/r/issues/1' })
+    expect(
+      applyPendingTaskPageGitHubMutationsToItems([item(), other, enterprise]).map(
+        (row) => row.state
+      )
+    ).toEqual(['closed', 'open', 'open'])
+    adoptQuietSearchFieldsForItem({
+      item: other,
+      serverItem: { ...other, state: 'closed' },
+      sourceScope: null,
+      queryKey: 'q',
+      fetchStartedAtGeneration: getOrCreateQuietRevalidateState('q').dirtyGeneration,
+      patchWorkItem: () => {}
+    })
+    expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', ownerRepo)).toBe(
+      'closed'
+    )
+    adoptQuietSearchFieldsForItem({
+      item: item(),
+      serverItem: item({ state: 'closed' }),
+      sourceScope: null,
+      queryKey: 'q',
+      fetchStartedAtGeneration: getOrCreateQuietRevalidateState('q').dirtyGeneration,
+      patchWorkItem: () => {}
+    })
+    expect(
+      getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', ownerRepo)
+    ).toBeUndefined()
+    expect(applyPendingTaskPageGitHubMutationsToItems([item()])[0]?.state).toBe('open')
+  })
+
+  it('keeps another repository confirmation when an older qualified edit rolls back', () => {
+    const forkRepo = { owner: 'o', repo: 'r', host: 'github.com' }
+    const upstreamRepo = { ...forkRepo, owner: 'upstream' }
+    const forkAuthority = assertTaskPageGitHubDialogStateAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      state: 'closed',
+      ownerRepo: forkRepo
+    })
+    assertTaskPageGitHubDialogStateAuthority({
+      repoId: 'repo-1',
+      itemId: 'issue:1',
+      state: 'closed',
+      ownerRepo: upstreamRepo
+    })
+    expect(forkAuthority.revert()).toBe(false)
+    expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', upstreamRepo)).toBe(
+      'closed'
+    )
+    expect(
+      getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', forkRepo)
+    ).toBeUndefined()
+  })
 })

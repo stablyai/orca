@@ -157,27 +157,6 @@ describe('orca linear CLI handlers', () => {
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
   })
 
-  it('keeps global boolean flags before Linear commands from consuming command tokens', async () => {
-    queueFixtures(callMock, okFixture('req_linear', issueResult()))
-
-    await main(['--json', 'linear', 'issue', 'ENG-123', '--full'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueContext',
-      expect.objectContaining({
-        input: 'ENG-123',
-        include: expect.objectContaining({
-          comments: true,
-          children: true,
-          attachments: true,
-          relations: true,
-          activity: true
-        })
-      }),
-      { timeoutMs: 120_000 }
-    )
-  })
-
   it('passes verified current-context hints without resolving cwd for remote runtimes', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_123'
     process.env.ORCA_WORKTREE_ID = 'repo::/srv/app'
@@ -256,24 +235,6 @@ describe('orca linear CLI handlers', () => {
       query: 'launch',
       limit: 50,
       workspaceId: 'all'
-    })
-  })
-
-  it('keeps boolean flags between Linear and search from consuming the subcommand', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_search', {
-        issues: [],
-        meta: { query: 'auth', workspaceId: undefined, limit: 1, returned: 0, limitReached: false }
-      })
-    )
-
-    await main(['linear', '--json', 'search', 'auth', '--limit', '1'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith('linear.agentSearchIssues', {
-      query: 'auth',
-      limit: 1,
-      workspaceId: undefined
     })
   })
 
@@ -476,6 +437,37 @@ describe('orca linear CLI handlers', () => {
       },
       { timeoutMs: 75_000 }
     )
+  })
+
+  it('edits a comment from stdin and deletes one through the rm alias', async () => {
+    const commentId = '9f3c2a10-1111-4222-8333-444455556666'
+    const stdin = mockStdin(false, ['fixed body'])
+    queueFixtures(
+      callMock,
+      okFixture('req_edit', commentAddResult()),
+      okFixture('req_delete', commentAddResult())
+    )
+
+    try {
+      await main(['linear', 'comment', 'edit', commentId, '--body-file', '-'], '/tmp/repo')
+    } finally {
+      stdin.restore()
+    }
+    await main(['linear', 'comment', 'rm', commentId, '--workspace', 'w', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'linear.commentEdit',
+      { commentId, body: 'fixed body', workspaceId: undefined },
+      { timeoutMs: 75_000 }
+    )
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'linear.commentDelete',
+      { commentId, workspaceId: 'w' },
+      { timeoutMs: 75_000 }
+    )
+    expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Edited comment comment-id on ENG-123.')
   })
 
   it('rejects malformed write ids before dispatch', async () => {

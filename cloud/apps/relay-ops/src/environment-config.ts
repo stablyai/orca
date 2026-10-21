@@ -14,6 +14,8 @@ export type RelayOpsCellConfig = {
   machineType: RelayOpsMachineType
   capacityRequests: number
   databasePoolMax: number
+  // The cell's rendered connectionHardCap; null when Terraform leaves it unset.
+  connectionHardCap: number | null
   configuredAdmission: boolean
 }
 
@@ -74,6 +76,9 @@ export function relayOpsCellsFromTerraform(input: {
           required(body, /\bcapacity_requests\s*=\s*(\d+)/, `${cellId} capacity`)
         ),
         databasePoolMax: Number(/\bdatabase_pool_max\s*=\s*(\d+)/.exec(body)?.[1] ?? 10),
+        connectionHardCap: ((raw) => (raw === undefined ? null : Number(raw)))(
+          /\bconnection_hard_cap\s*=\s*(\d+)/.exec(body)?.[1]
+        ),
         configuredAdmission: configuredAdmission === undefined || configuredAdmission === 'true'
       }
     })

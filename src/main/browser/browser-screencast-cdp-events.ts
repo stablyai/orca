@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import type { WebContents } from 'electron'
+import type { BrowserScreencastFrameMetadata } from '../../shared/browser-screencast-protocol'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { enrichFrameMetadata, readFrameMetadata } from './browser-screencast-frame-metadata'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
@@ -19,6 +20,9 @@ type BrowserScreencastMessageHandlerDeps = {
   scheduleNavigationFrameCapture: () => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
+  /** True when the frame showed the guest at a size the stream must re-emulate for, so it is stale. */
+  observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
+  setDialogOpen: (open: boolean) => void
 }
 
 export function createBrowserScreencastMessageHandler(
@@ -27,6 +31,7 @@ export function createBrowserScreencastMessageHandler(
   const { dbg, options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
   const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
     deps
+  const { setDialogOpen, observeGuestViewSize } = deps
 
   return (_event: unknown, method: string, params: unknown): void => {
     if (isClosed()) {
@@ -38,6 +43,7 @@ export function createBrowserScreencastMessageHandler(
     if (method === 'Page.javascriptDialogOpening') {
       const payload =
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
+      setDialogOpen(true)
       options.onEvent?.({
         type: 'dialog',
         dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
@@ -46,6 +52,7 @@ export function createBrowserScreencastMessageHandler(
       return
     }
     if (method === 'Page.javascriptDialogClosed') {
+      setDialogOpen(false)
       options.onEvent?.({ type: 'dialogClosed' })
       return
     }
@@ -84,7 +91,14 @@ export function createBrowserScreencastMessageHandler(
     }
 
     try {
-      const image = new Uint8Array(Buffer.from(data, 'base64'))
+      const metadata = readFrameMetadata(payload.metadata)
+      if (observeGuestViewSize(metadata)) {
+        ackScreencastFrame(sessionId)
+        return
+      }
+      const decoded = Buffer.from(data, 'base64')
+      const image =
+        decoded.buffer.byteLength === decoded.byteLength ? decoded : new Uint8Array(decoded)
       // Why: image dimension parsing happens for every live frame; share the
       // result between stale-frame rejection and metadata enrichment.
       const imageSize = readBrowserScreencastImageSize(image, options.format)
@@ -99,7 +113,7 @@ export function createBrowserScreencastMessageHandler(
       bumpSnapshotGeneration()
       clearNavigationCaptureTimer()
       queueFrame({
-        metadata: enrichFrameMetadata(readFrameMetadata(payload.metadata), imageSize, options),
+        metadata: enrichFrameMetadata(metadata, imageSize, options),
         image,
         sessionId
       })

@@ -16,6 +16,12 @@ import {
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  movePaneAttention,
+  removePanesAttention
+} from './workspace-attention/subject-attention-transitions'
+import { settleAttentionRemovedBy } from './workspace-attention/attention-removal-follow-up'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime
@@ -31,83 +37,104 @@ export function createAgentStatusAuthorityActions(
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
     retireAgentPaneAuthority: (paneKey, options) => {
+      const retirementId = createBrowserUuid()
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
-      const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
+      const previousRetirement = get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey]
+      const retiredPaneKeys = [
+        ...new Set([
+          ...retireAgentPaneAuthorityAliases(paneKey),
+          ...Object.keys(get().recentlyRetiredAgentStatusPaneKeys).filter(
+            (key) =>
+              typeof previousRetirement === 'string' &&
+              get().recentlyRetiredAgentStatusPaneKeys[key] === previousRetirement
+          )
+        ])
+      ]
       const retiredPaneKeySet = new Set(retiredPaneKeys)
       for (const key of retiredPaneKeys) {
         rendererAgentStatusObservations.forget(key)
       }
       let hadLive = false
-      set((s) => {
-        const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
-        hadLive = retiredLivePaneKeys.length > 0
-        let nextRetentionSuppressedPaneKeys = removePaneKeys(
-          s.retentionSuppressedPaneKeys,
-          retiredPaneKeySet
-        )
-        if (
-          retiredLivePaneKeys.length > 0 &&
-          nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
-        ) {
-          nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
-        }
-        for (const key of retiredLivePaneKeys) {
-          nextRetentionSuppressedPaneKeys[key] = true
-        }
-        return {
-          agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
-          runtimeAgentOrchestrationByPaneKey: removePaneKeys(
-            s.runtimeAgentOrchestrationByPaneKey,
+      settleAttentionRemovedBy(set, get, () =>
+        set((s) => {
+          const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
+          hadLive = retiredLivePaneKeys.length > 0
+          let nextRetentionSuppressedPaneKeys = removePaneKeys(
+            s.retentionSuppressedPaneKeys,
             retiredPaneKeySet
-          ),
-          retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-          sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
-            ? s.sleepingAgentSessionsByPaneKey
-            : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
-          agentLaunchConfigByPaneKey: removePaneKeys(
-            s.agentLaunchConfigByPaneKey,
-            retiredPaneKeySet
-          ),
-          acknowledgedAgentsByPaneKey: removePaneKeys(
-            s.acknowledgedAgentsByPaneKey,
-            retiredPaneKeySet
-          ),
-          activityClearedAtByPaneKey: removePaneKeys(
-            s.activityClearedAtByPaneKey,
-            retiredPaneKeySet
-          ),
-          manuallyUnreadTurnsByPaneKey: removePaneKeys(
-            s.manuallyUnreadTurnsByPaneKey,
-            retiredPaneKeySet
-          ),
-          paneForegroundAgentByPaneKey: removePaneKeys(
-            s.paneForegroundAgentByPaneKey,
-            retiredPaneKeySet
-          ),
-          unreadTerminalPanes: removePaneKeys(s.unreadTerminalPanes, retiredPaneKeySet),
-          unreadAgentCompletionPanes: removePaneKeys(
-            s.unreadAgentCompletionPanes,
-            retiredPaneKeySet
-          ),
-          lastTerminalInputAtByPaneKey: removePaneKeys(
-            s.lastTerminalInputAtByPaneKey,
-            retiredPaneKeySet
-          ),
-          cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
-          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-          recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
-            s.recentlyRetiredAgentStatusPaneKeys,
-            retiredPaneKeys
-          ),
-          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
-        }
-      })
+          )
+          if (
+            retiredLivePaneKeys.length > 0 &&
+            nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
+          ) {
+            nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
+          }
+          for (const key of retiredLivePaneKeys) {
+            nextRetentionSuppressedPaneKeys[key] = true
+          }
+          return {
+            agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
+            runtimeAgentOrchestrationByPaneKey: removePaneKeys(
+              s.runtimeAgentOrchestrationByPaneKey,
+              retiredPaneKeySet
+            ),
+            retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
+            sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
+              ? s.sleepingAgentSessionsByPaneKey
+              : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
+            agentLaunchConfigByPaneKey: removePaneKeys(
+              s.agentLaunchConfigByPaneKey,
+              retiredPaneKeySet
+            ),
+            acknowledgedAgentsByPaneKey: removePaneKeys(
+              s.acknowledgedAgentsByPaneKey,
+              retiredPaneKeySet
+            ),
+            activityClearedAtByPaneKey: removePaneKeys(
+              s.activityClearedAtByPaneKey,
+              retiredPaneKeySet
+            ),
+            manuallyUnreadTurnsByPaneKey: removePaneKeys(
+              s.manuallyUnreadTurnsByPaneKey,
+              retiredPaneKeySet
+            ),
+            paneForegroundAgentByPaneKey: removePaneKeys(
+              s.paneForegroundAgentByPaneKey,
+              retiredPaneKeySet
+            ),
+            ...removePanesAttention(s, retiredPaneKeySet),
+            lastTerminalInputAtByPaneKey: removePaneKeys(
+              s.lastTerminalInputAtByPaneKey,
+              retiredPaneKeySet
+            ),
+            cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
+            retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+            recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
+              s.recentlyRetiredAgentStatusPaneKeys,
+              retiredPaneKeys,
+              s.recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === true ||
+                isRecentlyClosedAgentStatusTab(
+                  s.recentlyClosedAgentStatusTabIds,
+                  getTabIdFromPaneKey(ownerPaneKey)
+                )
+                ? true
+                : retirementId
+            ),
+            agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+            sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+          }
+        })
+      )
       if (hadLive) {
         freshness.scheduleDeferred()
       }
       if (typeof window !== 'undefined') {
-        window.api?.agentStatus?.retirePaneAuthority?.(ownerPaneKey)
+        window.api?.agentStatus?.retirePaneAuthority?.(
+          ownerPaneKey,
+          get().recentlyRetiredAgentStatusPaneKeys[ownerPaneKey] === retirementId
+            ? retirementId
+            : undefined
+        )
       }
     },
 
@@ -210,8 +237,7 @@ export function createAgentStatusAuthorityActions(
         activityClearedAtByPaneKey: movePaneKeyedRecord(s.activityClearedAtByPaneKey, from, to),
         manuallyUnreadTurnsByPaneKey: movePaneKeyedRecord(s.manuallyUnreadTurnsByPaneKey, from, to),
         paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
-        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
+        ...movePaneAttention(s, from, to),
         lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
         cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)

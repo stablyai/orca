@@ -6,6 +6,7 @@ import type {
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { isWorkerStateIn, SETTLEABLE_WORKER_STATES } from '../../worker-report-admission'
 
 export function enqueueFederationRelay(
   this: OrchestrationDb,
@@ -31,7 +32,7 @@ export function enqueueFederationRelay(
   try {
     if (params.settleRemoteOutcome) {
       const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
-      if (!attachment || attachment.state !== 'ready') {
+      if (!attachment || !isWorkerStateIn(SETTLEABLE_WORKER_STATES, attachment.state)) {
         throw new OrchestrationError(
           'dispatch_inactive',
           `Remote Dispatch ${params.dispatchId} is not active.`

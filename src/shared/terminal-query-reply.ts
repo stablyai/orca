@@ -38,6 +38,10 @@ const DECRPM_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y')
 // Kitty keyboard protocol flags report: CSI ? flags u. The `?` distinguishes it
 // from kitty-protocol *keystrokes* (CSI code;mods u), which must stay batched.
 const KITTY_FLAGS_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9]+u')
+// Kitty graphics acknowledgements must bypass user-input activity and debounce.
+const KITTY_GRAPHICS_PREFIX_RE = new RegExp(
+  '^\\u001b_Gi=[0-9]+(?:,p=[0-9]+)?;(?:OK|E[A-Z]+:[^\\u0000-\\u001f]*)\\u001b\\\\'
+)
 // OSC color/title responses: ESC ] Ps ; body ST (ST = BEL or ESC backslash).
 const OSC_RESPONSE_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
@@ -59,6 +63,7 @@ const QUERY_REPLY_PREFIX_RES = [
   WINDOW_SIZE_REPORT_PREFIX_RE,
   DECRPM_PREFIX_RE,
   KITTY_FLAGS_PREFIX_RE,
+  KITTY_GRAPHICS_PREFIX_RE,
   OSC_RESPONSE_PREFIX_RE,
   DCS_RESPONSE_PREFIX_RE
 ] as const

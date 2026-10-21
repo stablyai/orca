@@ -1,0 +1,37 @@
+{
+  "id": "antigravity",
+  "engineVersion": 1,
+  "profile": { "screenProbeBanner": "antigravity cli", "screenSource": "trusted" },
+  "anchors": [
+    {
+      "id": "text_composer",
+      "why": "Without a trusted grid, the folded text tail is all there is; a trailing caret there also belongs to trust, sign-in and model menus, which the named scan rules out.",
+      "when": { "region": "text", "find": { "predicate": "antigravity-text-composer" } },
+      "answer": { "state": "idle" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "composer_ready",
+      "why": "The bottom four rows at an idle composer. The hint row decides: the caret stays painted through a turn and behind the /model picker, but the hint reads `esc to cancel` mid-turn and in the palette, and the picker covers it. The caret row may carry the edit mode (`> Accept-edits mode: ...`), but never other text: menus prefix their highlighted row with `> ` too. Quiet because a submit repaints the composer for a moment mid-turn.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^─{8,}$" },
+          { "regex": "^>$|^>\\s+[a-z][a-z-]*\\s+mode:\\s", "ignoreCase": true },
+          { "regex": "^─{8,}$" },
+          { "regex": "^\\? for shortcuts", "ignoreCase": true }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_not_shown",
+      "why": "A readable screen that is not the idle composer may be a picker, dialog or busy turn, which a name-only title or a quiet process cannot see.",
+      "priority": 100,
+      "when": { "region": "screen" },
+      "answer": { "state": "hold" }
+    }
+  ]
+}

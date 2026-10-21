@@ -43,8 +43,15 @@ describe('browser artifact upload', () => {
       contentType: 'text/html',
       fileName: 'report.html'
     })
-    expect(stat).toHaveBeenCalledWith({ filePath: '/tmp/report.html' })
-    expect(readFile).toHaveBeenCalledWith({ filePath: '/tmp/report.html' })
+    // Why user-file: the user opened this page by URL, so it is shared from where it is.
+    expect(stat).toHaveBeenCalledWith({
+      filePath: '/tmp/report.html',
+      access: { kind: 'user-file' }
+    })
+    expect(readFile).toHaveBeenCalledWith({
+      filePath: '/tmp/report.html',
+      access: { kind: 'user-file' }
+    })
   })
 
   it('rejects oversized and unreadable files before upload', async () => {

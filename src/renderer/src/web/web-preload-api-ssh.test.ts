@@ -63,9 +63,12 @@ describe('web SSH preload API', () => {
 
     expect(partial).toMatchObject({ providerEpoch: 'partial-provider-epoch' })
     expect(partial).not.toHaveProperty('connectionGeneration')
+    // A background connect stays automatic on the host, so it cannot lift a cancelled sign-in.
+    await globals.window.api.ssh.connect({ targetId: 'ssh-1', automatic: true })
     expect(runtimeCalls).toEqual([
       { method: 'ssh.connect', params: { targetId: 'ssh-1' } },
-      { method: 'ssh.getState', params: { targetId: 'ssh-1' } }
+      { method: 'ssh.getState', params: { targetId: 'ssh-1' } },
+      { method: 'ssh.connect', params: { targetId: 'ssh-1', automatic: true } }
     ])
   })
 })

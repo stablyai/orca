@@ -1,5 +1,7 @@
+import { parseTomlTableHeaderPath } from './config-toml-key-path'
 import {
   createTomlLineScanState,
+  getTomlTableHeader,
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
@@ -83,18 +85,54 @@ export function findAllHookTrustBlocks(content: string): (HookTrustBlockRange & 
 }
 
 export function ensureHooksStateParentTable(content: string): string {
-  if (/^[ \t]*\[hooks\.state\][ \t]*(?:#[^\r\n]*)?$/m.test(content)) {
+  const { hasParent, firstChildOffset } = findHooksStateHeaders(content)
+  if (hasParent) {
     return content
   }
   const eol = content.includes('\r\n') ? '\r\n' : '\n'
   const parent = `[hooks.state]${eol}`
-  const hookHeader = /^[ \t]*\[hooks\.state\.(?:"|')/m.exec(content)
-  if (hookHeader) {
-    return `${content.slice(0, hookHeader.index)}${parent}${eol}${content.slice(hookHeader.index)}`
+  if (firstChildOffset !== null) {
+    return `${content.slice(0, firstChildOffset)}${parent}${eol}${content.slice(firstChildOffset)}`
   }
   if (content.length === 0) {
     return parent
   }
   const separator = content.endsWith(`${eol}${eol}`) ? '' : content.endsWith(eol) ? eol : eol + eol
   return `${content}${separator}${parent}`
+}
+
+// Why (#22592): `["hooks"."state"]` is the same table; a bare-only match appended a duplicate.
+function findHooksStateHeaders(content: string): {
+  hasParent: boolean
+  firstChildOffset: number | null
+} {
+  let firstChildOffset: number | null = null
+  let cursor = 0
+  let scanState = createTomlLineScanState()
+  while (cursor < content.length) {
+    const newlineIndex = content.indexOf('\n', cursor)
+    const lineEnd = newlineIndex === -1 ? content.length : newlineIndex
+    const line = content.slice(cursor, lineEnd).replace(/\r$/, '')
+    if (isTomlStructuralLine(scanState)) {
+      const header = getTomlTableHeader(line)
+      const table = header === null ? null : parseTomlTableHeaderPath(header)
+      if (
+        table &&
+        !table.isArray &&
+        table.segments[0] === 'hooks' &&
+        table.segments[1] === 'state'
+      ) {
+        if (table.segments.length === 2) {
+          return { hasParent: true, firstChildOffset }
+        }
+        firstChildOffset ??= cursor
+      }
+    }
+    scanState = updateTomlLineScanState(scanState, line)
+    if (newlineIndex === -1) {
+      break
+    }
+    cursor = newlineIndex + 1
+  }
+  return { hasParent: false, firstChildOffset }
 }

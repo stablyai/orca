@@ -1,7 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Collection } from '../../../../shared/collection-types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { defaultScopeHost } from '../../lib/default-creation-host'
 import type { RepoSlice } from '../repos/repo-state'
 
 export function createCollectionMutationActions(
@@ -11,7 +12,7 @@ export function createCollectionMutationActions(
   return {
     createCollection: async (name) => {
       try {
-        const target = getActiveRuntimeTarget(get().settings)
+        const target = defaultScopeHost(get().settings)
         const collection =
           target.kind === 'local'
             ? await window.api.collections.create({ name })
@@ -36,7 +37,7 @@ export function createCollectionMutationActions(
 
     updateCollection: async (collectionId, updates) => {
       try {
-        const target = getActiveRuntimeTarget(get().settings)
+        const target = defaultScopeHost(get().settings)
         const updated =
           target.kind === 'local'
             ? await window.api.collections.update({ collectionId, updates })
@@ -64,7 +65,7 @@ export function createCollectionMutationActions(
 
     deleteCollection: async (collectionId) => {
       try {
-        const target = getActiveRuntimeTarget(get().settings)
+        const target = defaultScopeHost(get().settings)
         const deleted =
           target.kind === 'local'
             ? await window.api.collections.delete({ collectionId })

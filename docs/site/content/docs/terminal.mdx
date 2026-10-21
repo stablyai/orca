@@ -46,11 +46,70 @@ If you've collected themes in Warp, click **Import themes from Warp** in the ter
 
 Imported themes appear alongside Orca's built-ins in the theme dropdown.
 
+## macOS and Linux shell
+
+By default, local terminal panes on macOS and Linux open your system shell (`$SHELL`) as a **login shell** (`-l`). With the default arguments:
+
+- **zsh** reads `.zshenv`, `.zprofile`, `.zshrc`, and `.zlogin` in order from `$ZDOTDIR`, or your home directory (`~`) if unset. Each user file follows its system counterpart (`zshenv`, `zprofile`, `zshrc`, `zlogin`), usually under `/etc` or `/etc/zsh`.
+- **bash** reads `/etc/profile`, then the first of `~/.bash_profile`, `~/.bash_login`, or `~/.profile` that exists. It does **not** read `~/.bashrc` on its own. If your `PATH` or version-manager setup (nvm, asdf, mise) lives in `~/.bashrc`, source it from that login file, as many distributions' default `~/.profile` or `~/.bash_profile` already do:
+
+  ```bash
+  [ -n "${BASH_VERSION:-}" ] && [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+  ```
+
+  The guard keeps non-bash shells that also read `~/.profile` from loading bash-only setup, even with `set -u` enabled. Add it only if the login file bash reads does not already source `~/.bashrc`.
+
+When Orca uses its bash integration wrapper, it starts bash with `--rcfile` instead of `-l`. The wrapper sources the same login files without separately sourcing `~/.bashrc`; bash itself is not in login mode.
+
+To open a different shell, choose **Custom shell** under [Settings → Terminal → Terminal shell](/docs/settings). Under **Advanced → Custom args**, enter one argument per line to replace the default `-l` for ordinary local panes. An empty list requests no arguments: unwrapped interactive bash then reads `~/.bashrc` instead of the login files. When the terminal daemon is unavailable, Orca's bash or zsh integration can override custom arguments and retain login startup. Agent launches, startup commands, and one-off shell choices do not use this argument setting.
+
 ## Windows shell
 
 The default shell on Windows is configurable between PowerShell, Command Prompt, and WSL under [Settings → Terminal](/docs/settings). WSL is offered automatically when `wsl.exe --status` succeeds. The **+** dropdown on the tab bar also shows a submenu so you can open a one-off tab in any shell without changing your default.
 
 For repos on a WSL filesystem (`\\wsl.localhost\...`), Orca launches through `wsl.exe -d <distro>`. For Windows-path repos opened in WSL, Orca translates the cwd to `/mnt/<drive>/...` and drops you into a login bash.
+
+## Windows administrator mode
+
+Open **Settings → Terminal → Administrator mode** to see whether the Orca app
+is running as **Administrator** or **Standard user**. **Unable to determine**
+means Orca could not read its Windows elevation status. Existing terminals can
+have different permissions from the app.
+
+In the installed Windows app, choose **Restart as administrator**, review the
+confirmation, then approve Windows’ prompt using your usual account. After
+approval, Orca replaces its current local terminal host. This ends that host’s
+terminals and running agents; restored terminal tabs open new administrator
+shells. SSH and WSL permissions remain controlled on their hosts. Terminals on
+retained older hosts keep their original permissions.
+
+If you cancel Windows’ prompt or elevation fails, Orca reopens with its previous
+permissions and retains its terminal sessions.
+
+For a manual launch, finish your local terminal work and exit Orca. Find Orca in
+the Windows Start menu, right-click it, and choose **Run as administrator**.
+If new terminals still have ordinary permissions, use **Settings → Terminal →
+Manage Sessions → Restart daemon**. This ends terminals on the current local
+host; newly opened local shells inherit the administrator app’s permissions.
+The setting’s manual instructions include a direct link to Manage Sessions.
+
+To check a PowerShell terminal’s own permissions, run:
+
+```powershell
+([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+```
+
+`True` means that PowerShell process has administrator permissions.
+
+Administrator mode applies to the whole app. When running `orca` commands in an
+external PowerShell window, run that window with the same administrator mode as
+Orca.
+
+To return to ordinary permissions, finish and close all local terminal sessions,
+exit Orca, and launch it normally. Closing the sessions lets the retained
+terminal host retire after Orca disconnects; leaving sessions running can retain
+an administrator host even after the app exits. The Administrator status offers
+**Standard mode guide** with these steps.
 
 ## Shortcuts
 

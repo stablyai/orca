@@ -1,0 +1,105 @@
+{
+  "purpose": "Actual bundled scanner under a real unreadable sibling directory; no timing claim.",
+  "node": "v24.20.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "baselineRef": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "existingCacheSupplied": true,
+  "exactRecoveryParity": true,
+  "toolingSha256": "cd988e3a182179144fca36e84ea55add44af4a535e82b79a6e6c1a8c7f5588ba",
+  "arms": {
+    "baseline": {
+      "baselineProcessedFiles": 1,
+      "outcome": {
+        "resolved": true,
+        "processedFiles": 0,
+        "sessions": 0
+      },
+      "recoveredProcessedFiles": 1,
+      "bundleSha256": "fc542d7a8463bf1971ed0fd9244ea16ca124614a2bf18dc9af6f5e723399daab",
+      "sourceFingerprints": {
+        "src/main/claude-usage/scanner.ts": {
+          "source": "HEAD",
+          "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+        },
+        "src/main/claude-usage/transcript-file-discovery.ts": {
+          "source": "HEAD",
+          "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+        },
+        "src/main/claude-usage/transcript-record-parser.ts": {
+          "source": "HEAD",
+          "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+        },
+        "src/main/claude-usage/usage-aggregation.ts": {
+          "source": "HEAD",
+          "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+        },
+        "src/main/claude-usage/worktree-attribution.ts": {
+          "source": "HEAD",
+          "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+        }
+      }
+    },
+    "current": {
+      "baselineProcessedFiles": 1,
+      "outcome": {
+        "resolved": false,
+        "code": "EACCES",
+        "message": "EACCES: permission denied, scandir '<fixture-home>/.claude/projects/denied'"
+      },
+      "recoveredProcessedFiles": 1,
+      "bundleSha256": "f535733732624694dcb761b2c07641c9cca999f1d9d90b9478efc7fc4189ac21",
+      "sourceFingerprints": {
+        "src/main/claude-usage/scanner.ts": {
+          "source": "worktree",
+          "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+        },
+        "src/main/claude-usage/transcript-file-discovery.ts": {
+          "source": "worktree",
+          "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+        },
+        "src/main/claude-usage/transcript-projection-integrity.ts": {
+          "source": "worktree",
+          "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+        },
+        "src/main/claude-usage/transcript-record-parser.ts": {
+          "source": "worktree",
+          "sha256": "6598c02e38ea1776ef5ef926ca424dbc5880f27e7ff03b651cf8f60b791996f6"
+        },
+        "src/main/claude-usage/transcript-resume-projection.ts": {
+          "source": "worktree",
+          "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+        },
+        "src/main/claude-usage/transcript-token-checkpoint.ts": {
+          "source": "worktree",
+          "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+        },
+        "src/main/claude-usage/transcript-usage-projection.ts": {
+          "source": "worktree",
+          "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+        },
+        "src/main/claude-usage/usage-aggregation.ts": {
+          "source": "worktree",
+          "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+        },
+        "src/main/claude-usage/worktree-attribution.ts": {
+          "source": "worktree",
+          "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+        },
+        "src/main/usage/jsonl-file-checkpoint.ts": {
+          "source": "worktree",
+          "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+        },
+        "src/main/usage/jsonl-file-snapshot.ts": {
+          "source": "worktree",
+          "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+        },
+        "src/main/usage/jsonl-line-offsets.ts": {
+          "source": "worktree",
+          "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+        }
+      }
+    }
+  }
+}

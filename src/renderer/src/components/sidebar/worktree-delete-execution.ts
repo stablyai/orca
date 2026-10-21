@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -13,7 +14,6 @@ import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
 } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
@@ -48,19 +48,14 @@ export async function runWorktreeDeletesInParallel(
   const uniqueTargets = Array.from(
     new Map(targets.map((target) => [getWorktreeHostIdentity(target), target])).values()
   )
-  // Batch focus is committed once after every target settles.
-  const activeWorktreeIdBefore = useAppStore.getState().activeWorktreeId
-  const commitBatchFocus = activeWorktreeIdBefore
-    ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeIdBefore)
-    : null
-  // Mark all targets up front so the sidebar shows immediate progress.
+  // Mark all targets up front so the sidebar shows progress and no target is picked as the successor.
   useAppStore
     .getState()
     .markWorktreesDeleting(uniqueTargets.map((target) => (target.hostId ? target : target.id)))
-  // Git worktree removal shares repo locks only within one execution host.
+  // Directory dependencies cross repositories, but never execution hosts.
   const groups = new Map<string, (typeof uniqueTargets)[number][]>()
   for (const target of uniqueTargets) {
-    const groupIdentity = composeWorktreeHostIdentity(target.hostId, target.repoId)
+    const groupIdentity = target.hostId ?? LOCAL_EXECUTION_HOST_ID
     const group = groups.get(groupIdentity)
     if (group) {
       group.push(target)
@@ -108,8 +103,22 @@ export async function runWorktreeDeletesInParallel(
       Array.from(groups.values()).map(async (group) => {
         const deletedInGroup: WorktreeRemovalTarget[] = []
         const failedInGroup: (typeof group)[number][] = []
+        const started: [(typeof group)[number], Promise<void>][] = []
+        // Local hosts own per-repo cleanup locks and delete limits; SSH and older paired hosts
+        // still need same-repo serialization here to avoid racing ref locks (#2259).
+        const serialized = (group[0]?.hostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID
         for (const target of group) {
-          await runInWorktreeDeleteTurn(target.id, async () => {
+          const repoTail = serialized
+            ? started.findLast(([earlier]) => earlier.repoId === target.repoId)
+            : undefined
+          const dependencies = started.filter(
+            (entry) => entry === repoTail || isStrictDescendantPath(target.path, entry[0].path)
+          )
+          const settled = runInWorktreeDeleteTurn(target.id, async () => {
+            // Wait inside the operation so unrelated repositories can still start.
+            if (dependencies.length > 0) {
+              await Promise.all(dependencies.map(([, earlier]) => earlier))
+            }
             // A queued target may be recreated while an earlier repo sibling is deleting.
             // Why by host (STA-4343): the id-keyed map keeps ONE row per `repoId::path`,
             // so on a two-host collision it can hand back the other host's row — whose
@@ -133,7 +142,6 @@ export async function runWorktreeDeletesInParallel(
               target.displayName,
               {
                 ...options,
-                focusSuccessorOnDelete: false,
                 suppressPreservedBranchToast: aggregatePreservedBranches,
                 ...(snapshotPruneBatch ? { snapshotPruneBatchId: snapshotPruneBatch.batchId } : {}),
                 onPreservedBranch: (branch) => {
@@ -149,7 +157,9 @@ export async function runWorktreeDeletesInParallel(
               failedInGroup.push(target)
             }
           })
+          started.push([target, settled])
         }
+        await Promise.all(started.map(([, settled]) => settled))
         return deletedInGroup
       })
     )
@@ -170,18 +180,6 @@ export async function runWorktreeDeletesInParallel(
       .flat()
       .map((target) => composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id))
   )
-  // Intermediate focus can spawn a terminal in another target that is still queued.
-  if (activeWorktreeIdBefore) {
-    const state = useAppStore.getState()
-    const activeRow = getWorktreeOnHostFromState(
-      state,
-      activeWorktreeIdBefore,
-      state.activeWorkspaceExecutionHostId ?? undefined
-    )
-    if (!activeRow) {
-      commitBatchFocus?.()
-    }
-  }
   if (aggregatePreservedBranches && preservedBranches.length > 0) {
     const targetOrder = new Map(
       uniqueTargets.map((target, index) => [getWorktreeHostIdentity(target), index])

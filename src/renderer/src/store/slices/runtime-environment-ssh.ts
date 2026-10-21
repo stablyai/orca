@@ -1,9 +1,15 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { SshConnectionState, SshTargetSummary } from '../../../../shared/ssh-types'
-import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
-import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
+import { sshConnectionStatesEqual } from './ssh-connection-state-equality'
+import {
+  collectSshTargetGenerations,
+  sshTargetGenerationsEqual,
+  sshTargetLabelsEqual
+} from './ssh-target-cleanup'
+import { createBoundedGenerationMap } from '../../lib/bounded-generation-map'
 export {
+  selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel,
@@ -73,26 +79,8 @@ const EMPTY_BUCKET: RuntimeEnvironmentSshBucket = {
   targetsHydrated: false
 }
 
-function collectTargetGenerations(targets: SshTargetSummary[]): Map<string, number> {
-  const generations = new Map<string, number>()
-  for (const target of targets) {
-    const generation = sanitizeSshTargetGeneration(target.generation)
-    if (generation !== undefined) {
-      generations.set(target.id, generation)
-    }
-  }
-  return generations
-}
-
-function targetGenerationsEqual(current: Map<string, number>, next: Map<string, number>): boolean {
-  return (
-    current.size === next.size &&
-    [...next].every(([targetId, generation]) => current.get(targetId) === generation)
-  )
-}
-
-const stateGenerationByEnvironment = new Map<string, number>()
-const targetConnectionGenerationByEnvironment = new Map<string, number>()
+const targetConnectionGenerations = createBoundedGenerationMap(4096)
+const stateGenerations = createBoundedGenerationMap(512)
 
 function targetGenerationKey(environmentId: string, targetId: string): string {
   return `${environmentId}\0${targetId}`
@@ -102,31 +90,18 @@ export function getEnvironmentSshTargetConnectionGeneration(
   environmentId: string,
   targetId: string
 ): number {
-  return (
-    targetConnectionGenerationByEnvironment.get(targetGenerationKey(environmentId, targetId)) ?? 0
-  )
+  return targetConnectionGenerations.get(targetGenerationKey(environmentId, targetId))
 }
 
 function advanceEnvironmentSshTargetConnectionGeneration(
   environmentId: string,
   targetId: string
 ): void {
-  const key = targetGenerationKey(environmentId, targetId)
-  targetConnectionGenerationByEnvironment.set(
-    key,
-    getEnvironmentSshTargetConnectionGeneration(environmentId, targetId) + 1
-  )
+  targetConnectionGenerations.advance(targetGenerationKey(environmentId, targetId))
 }
 
 export function getEnvironmentSshStateGeneration(environmentId: string): number {
-  return stateGenerationByEnvironment.get(environmentId) ?? 0
-}
-
-function advanceEnvironmentSshStateGeneration(environmentId: string): void {
-  stateGenerationByEnvironment.set(
-    environmentId,
-    getEnvironmentSshStateGeneration(environmentId) + 1
-  )
+  return stateGenerations.get(environmentId)
 }
 
 function generationIsCurrent(environmentId: string, generation: number | undefined): boolean {
@@ -200,10 +175,10 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
       const connectionStates = new Map(
         Array.from(bucket.connectionStates).filter(([targetId]) => targetIds.has(targetId))
       )
-      const targetGenerations = collectTargetGenerations(targets)
+      const targetGenerations = collectSshTargetGenerations(targets)
       if (
         sshTargetLabelsEqual(bucket.targetLabels, targets) &&
-        targetGenerationsEqual(bucket.targetGenerations, targetGenerations)
+        sshTargetGenerationsEqual(bucket.targetGenerations, targetGenerations)
       ) {
         // Why: an unchanged (even empty) list is still a successful load — the
         // hydration flag must flip on the first fetch of an empty target set.
@@ -237,7 +212,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
 
   markEnvironmentSshStateStale: (environmentId) =>
     set((s) => {
-      advanceEnvironmentSshStateGeneration(environmentId)
+      stateGenerations.advance(environmentId)
       const bucket = s.sshStateByEnvironment.get(environmentId)
       if (
         !bucket ||
@@ -260,7 +235,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
 
   removeEnvironmentSshState: (environmentId) =>
     set((s) => {
-      advanceEnvironmentSshStateGeneration(environmentId)
+      stateGenerations.advance(environmentId)
       if (!s.sshStateByEnvironment.has(environmentId)) {
         return s
       }
@@ -276,7 +251,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
       const next = new Map(s.sshStateByEnvironment)
       for (const id of next.keys()) {
         if (!keep.has(id)) {
-          advanceEnvironmentSshStateGeneration(id)
+          stateGenerations.advance(id)
           next.delete(id)
           changed = true
         }

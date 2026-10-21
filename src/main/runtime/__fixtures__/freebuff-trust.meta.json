@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T08:09:19.020Z",
+  "platform": "darwin",
+  "command": ["freebuff", "--cwd", "/tmp/orca-freebuff-trust"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Freebuff 0.1.2; harmless repository agent file trust prompt, not accepted",
+  "exitCode": 0
+}

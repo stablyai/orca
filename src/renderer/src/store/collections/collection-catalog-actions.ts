@@ -1,13 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Collection } from '../../../../shared/collection-types'
-import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  type RuntimeClientTarget
-} from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
+import { defaultScopeHost } from '../../lib/default-creation-host'
 import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
 import type { RepoSlice } from '../repos/repo-state'
 
 export async function fetchCollectionsForTarget(
@@ -30,14 +28,14 @@ export function createCollectionCatalogActions(
   return {
     fetchCollections: async () => {
       try {
-        const target = getActiveRuntimeTarget(get().settings)
+        const target = defaultScopeHost(get().settings)
         const fence = claimHostCatalogFence(get, 'collections', target)
         const collections = await fetchCollectionsForTarget(target)
         // Why: collections state is replace-not-merge, so beyond the fence the
         // focused host must still be the fetched one or a stale list wins.
         const isFetchCurrent = (): boolean =>
           isHostCatalogFenceCurrent(get, fence) &&
-          getRuntimeTargetHostId(getActiveRuntimeTarget(get().settings)) ===
+          getRuntimeTargetHostId(defaultScopeHost(get().settings)) ===
             getRuntimeTargetHostId(fence.target)
         if (!isFetchCurrent()) {
           return

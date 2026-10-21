@@ -71,6 +71,7 @@ describe('assignment inventory snapshot', () => {
       targetRegistered: 0,
       completedLast24Hours: 0,
       abortedLast24Hours: 0,
+      hostNotArrivedLast24Hours: 0,
       oldestActiveAgeMs: null
     })
 

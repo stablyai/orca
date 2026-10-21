@@ -7,10 +7,12 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { isShellProcess } from '../../../../shared/shell-process-detection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
 import {
   cancelCommandCodeDoneSettle,
@@ -18,6 +20,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
@@ -104,7 +107,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     if (!unchanged) {
       return
     }
-    state.dropAgentStatus(paneKey)
+    if (!isRetainedProgramResult(current)) {
+      state.dropAgentStatus(paneKey)
+    }
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.
@@ -150,6 +155,32 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     settleCommandCodeDone
   )
 
+  // Why: a full-screen agent's nested shells leak 133;D, so make one confirming read (no retry
+  // ladder, unlike the mounted tracker) and retire the process read only on a shell or no answer.
+  const retireForegroundAgentUnlessConfirmed = async (): Promise<void> => {
+    const entry = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]
+    if (!entry?.agent) {
+      return
+    }
+    // Why: a parked pane holds no remote incarnation to fence host evidence with, so it has no answer.
+    const remote = isRemoteExecutionHostPtyId(ptyId)
+    let processName: string | null = null
+    if (!remote) {
+      try {
+        processName = await window.api.pty.confirmForegroundProcess(ptyId)
+      } catch {
+        processName = null
+      }
+    }
+    const state = useAppStore.getState()
+    if (disposed || state.paneForegroundAgentByPaneKey[paneKey] !== entry) {
+      return
+    }
+    if (processName === null || isShellProcess(processName)) {
+      state.setPaneForegroundAgent(paneKey, { agent: null, shellForeground: false })
+    }
+  }
+
   return {
     onCommandFinished: (bestEffortExitCode: number | null): void => {
       if (disposed) {
@@ -158,6 +189,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       // Why: the finished command may have moved HEAD or the index (an agent running
       // `git checkout` in a parked worktree); nudge git UI now instead of waiting for a poll.
       dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
+      void retireForegroundAgentUnlessConfirmed()
       // Why: drop the same-turn status row only for SSH PTYs — exact parity with the mounted
       // path, whose foreground tracker refuses SSH ids and drops un-probed. Local PTYs need
       // pty-connection's process-confirm ladder to tell a leaked nested-shell 133;D from a

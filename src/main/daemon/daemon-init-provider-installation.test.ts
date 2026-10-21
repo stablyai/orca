@@ -47,7 +47,8 @@ vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent()
 vi.mock('./daemon-adoption-telemetry-event', () => moduleFactories.daemonAdoptionTelemetryEvent())
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
-vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('../ipc/pty/provider/registry', () => moduleFactories.ptyProviderRegistry())
+vi.mock('../ipc/pty/provider/listener-lifecycle', () => moduleFactories.ptyListenerLifecycle())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
@@ -89,6 +90,24 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
   })
 
+  it('passes the app version on every platform when the launch policy opts in', async () => {
+    const mod = await importFresh()
+    isPackagedMock.mockReturnValue(true)
+
+    await mod.initDaemonPtyProvider(undefined, { recycleStaleDaemonOnEveryPlatform: true })
+
+    expect(spawnerInstances[0].staleDaemonRecycleVersion).toBe('1.2.3')
+    expect(adapterInstances[0].options.packagedAppVersion).toBe('1.2.3')
+  })
+
+  it('never recycles an unpackaged daemon even when the policy opts in', async () => {
+    const mod = await importFresh()
+
+    await mod.initDaemonPtyProvider(undefined, { recycleStaleDaemonOnEveryPlatform: true })
+
+    expect(adapterInstances[0].options.packagedAppVersion).toBeNull()
+  })
+
   it('uses daemon-owned idle retirement when a fresh launch fails permanent adoption', async () => {
     const mod = await importFresh()
     ensureRunningOverrides.push(async () => ({
@@ -123,26 +142,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
     expect(spawnerInstances[0].shutdown).not.toHaveBeenCalled()
     expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
-  })
-
-  it('prunes seeded Claude live-PTY ids against daemon sessions after init', async () => {
-    const mod = await importFresh()
-    // Why: live-pty-gate is intentionally unmocked — import from the same fresh registry so gate state matches daemon-init's.
-    const gate = await import('../claude-accounts/live-pty-gate')
-    defaultListSessionsSessions.push({ sessionId: 'claude-alive' })
-    gate.seedLiveClaudePtysFromPersistence(['claude-alive', 'claude-dead'])
-    try {
-      await mod.initDaemonPtyProvider()
-
-      expect(gate.hasLiveClaudePtys()).toBe(true)
-
-      gate.markClaudePtyExited('claude-alive')
-      // Why: proves 'claude-dead' was released by the daemon reconcile — the surviving session held the gate alone.
-      expect(gate.hasLiveClaudePtys()).toBe(false)
-    } finally {
-      gate.markClaudePtyExited('claude-alive')
-      gate.markClaudePtyExited('claude-dead')
-    }
   })
 
   it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {

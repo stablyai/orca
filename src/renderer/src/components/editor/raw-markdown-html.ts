@@ -1,21 +1,11 @@
-import { Node, mergeAttributes } from '@tiptap/core'
-import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
+import { createDetailsMatcher, isEditableDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
-import type {
-  RichMarkdownEditorCodec,
-  RichMarkdownSourceKind,
-  RichMarkdownSourceTransport
-} from './rich-markdown-source-transport'
+import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { isReservedRichMarkdownTransportBody } from './rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
-
-function matchInlineHtml(src: string): string | null {
-  const match = src.match(INLINE_HTML_PATTERN)
-  return match?.[0] ?? null
-}
 
 function isEscaped(content: string, index: number): boolean {
   let backslashCount = 0
@@ -46,11 +36,7 @@ function isLineOnlyHtml(line: string): boolean {
 function matchBlockHtml(content: string, start: number): string | null {
   const lineEnd = findLineEnd(content, start)
   const line = content.slice(start, lineEnd)
-  if (!isLineOnlyHtml(line)) {
-    return null
-  }
-
-  return line
+  return isLineOnlyHtml(line) ? line : null
 }
 
 export function encodeRawMarkdownHtmlForRichEditor(
@@ -59,20 +45,28 @@ export function encodeRawMarkdownHtmlForRichEditor(
   { htmlSuperscriptLinks = false }: { htmlSuperscriptLinks?: boolean } = {}
 ): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
+  const matchDetails = createDetailsMatcher(normalizedContent)
+  const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
-  let isLineStart = true
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
+  const nonWhitespace = /\S/g
+  const fencePrefix = /(`{3,}|~{3,})/y
+  let fenceProbe = -1
+  let fenceMatch: RegExpExecArray | null = null
 
   while (index < normalizedContent.length) {
+    const isLineStart = index === 0 || normalizedContent[index - 1] === '\n'
     if (isLineStart) {
-      // Why: only line starts inspect the rest of the line, so slicing the suffix on every
-      // character (one throwaway string per char) is pure waste — compute it here. On a large
-      // doc this drops O(n) suffix allocations from the rich-editor open path (#7056).
-      const lineRest = normalizedContent.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
+      if (index > fenceProbe) {
+        nonWhitespace.lastIndex = index
+        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
+        fencePrefix.lastIndex = fenceProbe
+        fenceMatch = fencePrefix.exec(normalizedContent)
+      }
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
@@ -89,7 +83,6 @@ export function encodeRawMarkdownHtmlForRichEditor(
     if (activeFence) {
       const nextChar = normalizedContent[index]
       result += nextChar
-      isLineStart = nextChar === '\n'
       index += 1
       continue
     }
@@ -123,14 +116,13 @@ export function encodeRawMarkdownHtmlForRichEditor(
       if (closingIndex !== -1) {
         const rawSpan = normalizedContent.slice(index, closingIndex + tickCount)
         result += rawSpan
-        isLineStart = rawSpan.endsWith('\n')
         index = closingIndex + tickCount
         continue
       }
     }
 
     if (isLineStart) {
-      const detailsHtml = matchDetailsHtmlBlock(normalizedContent, index)
+      const detailsHtml = matchDetails(index)
       if (detailsHtml && isEditableDetailsHtmlBlock(detailsHtml)) {
         // Why: <details>/<summary> is an editable rich-mode node; raw passthrough
         // would make toggle blocks reopen as inert HTML instead.
@@ -175,7 +167,11 @@ export function encodeRawMarkdownHtmlForRichEditor(
           continue
         }
       }
-      const inlineHtml = matchInlineHtml(normalizedContent.slice(index))
+      // An unterminated comment cannot match; later tags must still be encoded.
+      const inlineHtml =
+        normalizedContent.startsWith('<!--', index) && index + 4 > lastCommentClose
+          ? null
+          : (normalizedContent.slice(index).match(INLINE_HTML_PATTERN)?.[0] ?? null)
       if (inlineHtml) {
         result += transport.create('inline-html', inlineHtml)
         index += inlineHtml.length
@@ -207,130 +203,8 @@ export function encodeRawMarkdownHtmlForRichEditor(
 
     const nextChar = normalizedContent[index]
     result += nextChar
-    isLineStart = nextChar === '\n'
     index += 1
   }
 
   return result
-}
-
-export function createRichMarkdownLiteral(transport: RichMarkdownSourceTransport) {
-  return createRawSourceNode({
-    name: 'richMarkdownLiteral',
-    kind: 'literal',
-    inline: true,
-    transport,
-    marker: 'data-rich-markdown-literal'
-  })
-}
-
-export function createRawMarkdownHtmlInline(transport: RichMarkdownSourceTransport) {
-  return createRawSourceNode({
-    name: 'rawMarkdownHtmlInline',
-    kind: 'inline-html',
-    inline: true,
-    transport,
-    marker: 'data-raw-markdown-html-inline',
-    className: 'raw-markdown-html-inline'
-  })
-}
-
-function createRawSourceNode({
-  name,
-  kind,
-  inline,
-  transport,
-  marker,
-  className
-}: {
-  name: string
-  kind: RichMarkdownSourceKind
-  inline: boolean
-  transport: RichMarkdownSourceTransport
-  marker: string
-  className?: string
-}) {
-  return Node.create({
-    name,
-    inline,
-    group: inline ? 'inline' : 'block',
-    atom: true,
-    selectable: true,
-
-    addAttributes() {
-      return {
-        value: {
-          default: '',
-          rendered: false
-        }
-      }
-    },
-
-    // Why: converting embedded HTML tags into placeholder tokens before the
-    // markdown parser runs keeps marked's built-in paragraph tokenization intact
-    // while still letting Orca round-trip the raw markup verbatim.
-    markdownTokenName: name,
-    markdownTokenizer: {
-      name,
-      level: inline ? 'inline' : 'block',
-      start: transport.startFor(kind),
-      tokenize(src) {
-        const matched = transport.match(src, kind)
-        if (!matched) {
-          return undefined
-        }
-
-        return {
-          type: name,
-          raw: matched.raw,
-          text: matched.value,
-          block: !inline
-        }
-      }
-    },
-    parseMarkdown: (token, helpers) => {
-      if (token.type !== name) {
-        return []
-      }
-
-      return helpers.createNode(name, {
-        value: typeof token.text === 'string' ? token.text : ''
-      })
-    },
-    renderMarkdown: (node) => (typeof node.attrs?.value === 'string' ? node.attrs.value : ''),
-    renderText: ({ node }) => (typeof node.attrs.value === 'string' ? node.attrs.value : ''),
-
-    parseHTML() {
-      return [
-        {
-          tag: `${inline ? 'span' : 'div'}[${marker}]`,
-          getAttrs: (element: HTMLElement) => ({ value: element.textContent ?? '' })
-        }
-      ]
-    },
-
-    renderHTML({ HTMLAttributes, node }) {
-      const value = typeof node.attrs.value === 'string' ? node.attrs.value : ''
-      return [
-        inline ? 'span' : 'div',
-        mergeAttributes(HTMLAttributes, {
-          [marker]: '',
-          contenteditable: 'false',
-          class: className
-        }),
-        inline ? value : ['pre', value]
-      ]
-    }
-  })
-}
-
-export function createRawMarkdownHtmlBlock(transport: RichMarkdownSourceTransport) {
-  return createRawSourceNode({
-    name: 'rawMarkdownHtmlBlock',
-    kind: 'block-html',
-    inline: false,
-    transport,
-    marker: 'data-raw-markdown-html-block',
-    className: 'raw-markdown-html-block'
-  })
 }

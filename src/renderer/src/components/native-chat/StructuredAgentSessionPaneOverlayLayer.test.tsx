@@ -2,13 +2,14 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from '../tab-group/split-group-dim'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 type MockAppState = {
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
+  activeGroupIdByWorktree: Record<string, string>
   runtimeEnvironmentId: string | null
-  executionHostId: string
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -16,7 +17,9 @@ const mocks = vi.hoisted(() => ({
   store: null as null | { setState: (state: Partial<MockAppState>) => void },
   focusGroup: vi.fn(),
   mountsByTabId: new Map<string, number>(),
-  unmountsByTabId: new Map<string, number>()
+  unmountsByTabId: new Map<string, number>(),
+  groupIdByTabId: new Map<string, string | undefined>(),
+  targetByTabId: new Map<string, unknown>()
 }))
 
 vi.mock('@/store', async () => {
@@ -24,8 +27,8 @@ vi.mock('@/store', async () => {
   const useAppStore = create<MockAppState>(() => ({
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
+    activeGroupIdByWorktree: {},
     runtimeEnvironmentId: null,
-    executionHostId: 'local',
     focusGroup: mocks.focusGroup
   }))
   mocks.store = useAppStore
@@ -33,19 +36,8 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: MockAppState) => state.runtimeEnvironmentId,
-  getExecutionHostIdForWorktree: (state: MockAppState) => state.executionHostId
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: ({
-    activeRuntimeEnvironmentId
-  }: {
-    activeRuntimeEnvironmentId: string | null
-  }) =>
-    activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
-      : { kind: 'local' }
+  getExecutionHostIdForWorktree: (state: MockAppState) =>
+    state.runtimeEnvironmentId ? `runtime:${state.runtimeEnvironmentId}` : 'local'
 }))
 
 vi.mock('./NativeChatView', async () => {
@@ -53,11 +45,19 @@ vi.mock('./NativeChatView', async () => {
   return {
     default: function MockNativeChatView({
       tabId,
-      isVisible
+      groupId,
+      isVisible,
+      isFocusedGroup,
+      target
     }: {
       tabId: string
+      groupId?: string
       isVisible: boolean
+      isFocusedGroup: boolean
+      target: unknown
     }) {
+      mocks.groupIdByTabId.set(tabId, groupId)
+      mocks.targetByTabId.set(tabId, target)
       useEffect(() => {
         mocks.mountsByTabId.set(tabId, (mocks.mountsByTabId.get(tabId) ?? 0) + 1)
         return () => {
@@ -68,6 +68,7 @@ vi.mock('./NativeChatView', async () => {
         <span
           data-chat-tab-id={tabId}
           data-chat-visible={String(isVisible)}
+          data-chat-focused-group={String(isFocusedGroup)}
           data-native-chat-working="true"
         />
       )
@@ -79,6 +80,7 @@ import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPane
 
 const WORKTREE_ID = 'wt-1'
 const GROUP_ID = 'group-1'
+const SECOND_GROUP_ID = 'group-2'
 const FIRST_TAB_ID = 'structured-agent-session-session-1'
 const SECOND_TAB_ID = 'structured-agent-session-session-2'
 
@@ -87,10 +89,30 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     mocks.focusGroup.mockClear()
     mocks.mountsByTabId.clear()
     mocks.unmountsByTabId.clear()
+    mocks.groupIdByTabId.clear()
+    mocks.targetByTabId.clear()
     mocks.store?.setState(createState(FIRST_TAB_ID))
   })
 
   afterEach(cleanup)
+
+  // Two hosts can publish the same workspace id; each tab records which one holds its chat.
+  it('reads each chat from the host recorded on its tab, not its workspace', () => {
+    const state = createState(FIRST_TAB_ID)
+    const [first, second] = state.unifiedTabsByWorktree[WORKTREE_ID]!
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        [WORKTREE_ID]: [{ ...first!, executionHostId: 'runtime:server-1' }, second!]
+      }
+    })
+    render(<StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />)
+
+    expect(mocks.targetByTabId.get(FIRST_TAB_ID)).toEqual({
+      kind: 'environment',
+      environmentId: 'server-1'
+    })
+    expect(mocks.targetByTabId.get(SECOND_TAB_ID)).toEqual({ kind: 'local' })
+  })
 
   it('keeps materialized chat surfaces mounted while activation only swaps visibility', () => {
     const view = render(
@@ -125,6 +147,12 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(mocks.mountsByTabId.get(FIRST_TAB_ID)).toBe(1)
     expect(mocks.mountsByTabId.get(SECOND_TAB_ID)).toBe(1)
     expect(mocks.unmountsByTabId.size).toBe(0)
+    expect(mocks.groupIdByTabId).toEqual(
+      new Map([
+        [FIRST_TAB_ID, GROUP_ID],
+        [SECOND_TAB_ID, GROUP_ID]
+      ])
+    )
   })
 
   it('routes overlay interaction back to the owning split group', () => {
@@ -140,7 +168,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith(WORKTREE_ID, GROUP_ID)
   })
 
-  it('keeps the base z-layer overridable by the working-chat stylesheet rule', () => {
+  it('keeps a working session at the base pane layer', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
@@ -149,10 +177,69 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     )
 
     expect(slot).not.toBeNull()
-    expect(slot?.classList.contains('native-chat-pane-shell')).toBe(true)
+    expect(slot?.hasAttribute('data-retained-pane-host')).toBe(true)
+    expect(slot?.classList.contains('isolate')).toBe(true)
+    expect(slot?.classList.contains('overflow-hidden')).toBe(true)
     expect(slot?.classList.contains('z-10')).toBe(true)
     expect(slot?.style.zIndex).toBe('')
     expect(slot?.querySelector('[data-native-chat-working="true"]')).not.toBeNull()
+  })
+
+  it('marks only the focused split column as the focused group', () => {
+    act(() => {
+      mocks.store?.setState({
+        unifiedTabsByWorktree: {
+          [WORKTREE_ID]: [
+            structuredTab(FIRST_TAB_ID, 'session-1', 0),
+            { ...structuredTab(SECOND_TAB_ID, 'session-2', 1), groupId: SECOND_GROUP_ID }
+          ]
+        },
+        groupsByWorktree: {
+          [WORKTREE_ID]: [
+            createGroup(FIRST_TAB_ID),
+            {
+              id: SECOND_GROUP_ID,
+              worktreeId: WORKTREE_ID,
+              activeTabId: SECOND_TAB_ID,
+              tabOrder: [SECOND_TAB_ID]
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WORKTREE_ID]: SECOND_GROUP_ID }
+      })
+    })
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
+    )
+
+    // Both columns are revealed at once; only the focused one may take the caret.
+    expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatVisible).toBe('true')
+    expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatVisible).toBe('true')
+    expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatFocusedGroup).toBe('false')
+    expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatFocusedGroup).toBe('true')
+    const host = (tabId: string): HTMLElement | null =>
+      chatSurface(view.container, tabId).closest<HTMLElement>('[data-retained-pane-host]')
+    const first = host(FIRST_TAB_ID)
+    const second = host(SECOND_TAB_ID)
+    const dim = String(UNFOCUSED_SPLIT_GROUP_OPACITY)
+    // The unfocused chat takes the same dim as every other unfocused split group, never more.
+    expect(first?.style.opacity).toBe(dim)
+    expect(second?.style.opacity).toBe('1')
+    act(() => mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID } }))
+    expect(first?.style.opacity).toBe('1')
+    expect(second?.style.opacity).toBe(dim)
+  })
+
+  it('marks no column as focused when the focused group id names nothing', () => {
+    act(() => {
+      mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: 'group-removed' } })
+    })
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
+    )
+
+    expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatVisible).toBe('true')
+    expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatFocusedGroup).toBe('false')
   })
 })
 
@@ -165,8 +252,8 @@ function createState(activeTabId: string): MockAppState {
       ]
     },
     groupsByWorktree: { [WORKTREE_ID]: [createGroup(activeTabId)] },
+    activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
     runtimeEnvironmentId: null,
-    executionHostId: 'local',
     focusGroup: mocks.focusGroup
   }
 }

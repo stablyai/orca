@@ -92,7 +92,7 @@ async function createActiveDecoyTab(page: Page, worktreeId: string): Promise<voi
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneCount(page, 1, 30_000)
@@ -116,7 +116,7 @@ async function activateTabWithoutFocus(page: Page, tabId: string): Promise<void>
     if (!store) {
       throw new Error('Store unavailable')
     }
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     store.getState().setActiveTab(tabId)
   }, tabId)
 }

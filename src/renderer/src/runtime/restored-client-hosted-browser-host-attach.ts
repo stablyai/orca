@@ -31,20 +31,24 @@ export async function ensureBrowserClientHostsForRestoredPages(
 }
 
 /**
- * Re-claims hosting duty after the runtime process restarted under a new id.
+ * Re-claims hosting duty when contact with a runtime is (re)established: after it restarted under a
+ * new id, or after an outage.
  *
- * The guests are still alive in this desktop's webviews, but the runtime that placed them is gone
- * and the replacement knows nothing about them. Preparing again drives the host registry down its
- * `replaceAuthority` path, which keeps the guests and re-attaches with a page inventory the new
- * runtime can adopt. Without this nothing observes the id change and the rows are simply lost.
+ * After a restart the guests are still alive in this desktop's webviews, but the replacement runtime
+ * knows nothing about them. Preparing again drives the host registry down its `replaceAuthority`
+ * path, which keeps the guests and re-attaches with a page inventory the new runtime can adopt.
+ * After an outage past the lease grace the host was torn down with its guests; preparing starts a
+ * fresh one, and the runtime's recovery re-places the pages at their last URL. Without this nothing
+ * observes either edge and the rows are simply lost.
  */
-export async function ensureBrowserClientHostForRestartedRuntime(
+export async function ensureBrowserClientHostOnRuntimeContact(
   state: RestoredBrowserHandleSource,
   environmentId: string
 ): Promise<void> {
   if (!hasLiveClientHostedPage(state, environmentId)) {
     return
   }
+  // Why re-prepare: an in-flight preparation began before this contact, so it may have failed.
   await prepareBrowserClientHost(environmentId, true)
 }
 

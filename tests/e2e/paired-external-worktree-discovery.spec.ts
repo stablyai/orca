@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { gitExecFileAsync } from '../../src/main/git/runner'
 import { listWorktreesStrict } from '../../src/main/git/worktree'
-import { areWorktreePathsEqual } from '../../src/main/ipc/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../src/main/git/worktree-path-comparison'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,

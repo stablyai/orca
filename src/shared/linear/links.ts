@@ -70,7 +70,7 @@ export type LinearIssueLinkUpdates = {
   linkedLinearIssueOrganizationUrlKey: string | null
 }
 
-const LINEAR_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/
+const LINEAR_IDENTIFIER_PATTERN = /^(?=[A-Za-z0-9_]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9_]*-\d+$/
 
 export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | null {
   const trimmed = input.trim()

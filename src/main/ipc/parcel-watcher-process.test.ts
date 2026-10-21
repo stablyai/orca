@@ -90,7 +90,7 @@ describe('subscribeViaWatcherProcess', () => {
     expect(callback).toHaveBeenCalledWith(null, events)
   })
 
-  it('forwards watcher errors to the callback', async () => {
+  it('retires the failed native subscription before reporting its error', async () => {
     const callback = vi.fn()
     const promise = subscribeViaWatcherProcess('/repo', callback, {})
     const child = currentChild()
@@ -98,6 +98,10 @@ describe('subscribeViaWatcherProcess', () => {
     await promise
 
     child.emit('message', { op: 'watch-error', id, message: 'boom' })
+    expect(callback).not.toHaveBeenCalled()
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    child.emit('exit', 0, null)
+    await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }), [])
   })
 
@@ -126,7 +130,7 @@ describe('subscribeViaWatcherProcess', () => {
     expect(forkMock).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a terminal resubscribe failure separately from recoverable watch errors', async () => {
+  it('reports a resubscribe failure through the terminal hook', async () => {
     const callback = vi.fn()
     const onTerminalError = vi.fn()
     const promise = subscribeViaWatcherProcess('/repo', callback, {}, { onTerminalError })

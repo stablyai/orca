@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -16,6 +17,7 @@ type LaneState = Pick<
   | 'folderWorkspaces'
   | 'projects'
   | 'repos'
+  | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
 >
@@ -28,8 +30,23 @@ function laneState(args?: {
   terminalWindowsWslDistro?: string | null
   projectWslDistro?: string
   localWindowsRuntimeDefault?: { kind: 'wsl'; distro: string | null }
+  wslHost?: { environmentId: string; distro: string }
 }): LaneState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lane reads only the fields set here.
   return {
+    runtimeEnvironments: args?.wslHost
+      ? [
+          {
+            id: args.wslHost.environmentId,
+            orcadDeployment: {
+              kind: 'wsl',
+              distro: args.wslHost.distro,
+              localPort: 41000,
+              remotePort: 41001
+            }
+          }
+        ]
+      : [],
     folderWorkspaces: args?.folderPath ? [{ id: 'fw1', folderPath: args.folderPath }] : [],
     settings: {
       activeRuntimeEnvironmentId: args?.activeRuntimeEnvironmentId ?? null,
@@ -231,14 +248,33 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     ).toBe('env:env-owner')
   })
 
-  it('routes an owner-less remote pane to the active environment, as inspection does', () => {
+  it('keys a WSL host pane to its distro lane, which the desktop selection feeds', () => {
+    const state = laneState({
+      wslHost: { environmentId: 'wsl:Ubuntu', distro: 'Ubuntu' }
+    })
+    expect(
+      resolveCodexPaneSelectionLaneKey({
+        state,
+        tab: HOST_TAB,
+        ptyId: toRemoteRuntimePtyId('term-1', 'wsl:Ubuntu')
+      })
+    ).toBe(getCodexSelectionLaneKey({ runtime: 'wsl', wslDistro: 'Ubuntu' }))
+    expect(
+      getCodexAccountSwitchLaneMatcher({
+        owner: { kind: 'local' },
+        target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
+      })('wsl:Ubuntu')
+    ).toBe(true)
+  })
+
+  it('never gives an owner-less remote pane the focused server, as inspection does not', () => {
     expect(
       resolveCodexPaneSelectionLaneKey({
         state: laneState({ activeRuntimeEnvironmentId: 'env-1' }),
         tab: HOST_TAB,
         ptyId: 'remote:term-1'
       })
-    ).toBe('env:env-1')
+    ).toBe('remote-runtime')
   })
 
   it('keeps an owner-less remote pane off the host lane when no environment is active', () => {
@@ -367,9 +403,10 @@ describe('resolveCodexPaneSelectionLane', () => {
         if (property === 'worktreesByRepo') {
           throw new Error('state read blew up')
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
         return Reflect.get(target, property)
       }
-    }) as LaneState
+    })
     // Why: this call sits outside the scan's per-pane failure guard, so a throw
     // would lose the notice for every pane in the batch, not just this one.
     expect(
@@ -386,14 +423,14 @@ describe('resolveCodexPaneSelectionLane', () => {
 describe('getCodexAccountSwitchLaneMatcher', () => {
   it('scopes a local switch to the runtime slot it wrote', () => {
     const hostSwitch = getCodexAccountSwitchLaneMatcher({
-      settings: null,
+      owner: { kind: 'local' },
       target: { runtime: 'host' }
     })
     expect(hostSwitch('host')).toBe(true)
     expect(hostSwitch('wsl:Ubuntu')).toBe(false)
 
     const ubuntuSwitch = getCodexAccountSwitchLaneMatcher({
-      settings: null,
+      owner: { kind: 'local' },
       target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
     })
     expect(ubuntuSwitch('wsl:Ubuntu')).toBe(true)
@@ -405,7 +442,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
   // matching only `wsl:__default__` would leave those panes stranded, unnoticed.
   it('claims every WSL distro when the change cleared them all', () => {
     const wslDefaultSwitch = getCodexAccountSwitchLaneMatcher({
-      settings: null,
+      owner: { kind: 'local' },
       target: { runtime: 'wsl', wslDistro: null },
       clearsEveryWslDistro: true
     })
@@ -424,7 +461,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
   // would card — and mute — every sibling distro's healthy Codex pane.
   it('keeps a distro-less WSL selection off sibling distro panes', () => {
     const wslDefaultSelect = getCodexAccountSwitchLaneMatcher({
-      settings: null,
+      owner: { kind: 'local' },
       target: { runtime: 'wsl', wslDistro: null }
     })
     expect(wslDefaultSelect('wsl:__default__')).toBe(true)
@@ -437,7 +474,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
   // that slot alone. Without the null-distro condition it would mute them all.
   it('keeps a cleared concrete-distro row off the other distros', () => {
     const ubuntuClear = getCodexAccountSwitchLaneMatcher({
-      settings: null,
+      owner: { kind: 'local' },
       target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
       clearsEveryWslDistro: true
     })
@@ -448,7 +485,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
 
   it('scopes a switch made against a runtime environment to that machine', () => {
     const environmentSwitch = getCodexAccountSwitchLaneMatcher({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      owner: { kind: 'environment', environmentId: 'env-1' },
       target: { runtime: 'host' }
     })
     expect(environmentSwitch('env:env-1')).toBe(true)
@@ -458,7 +495,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
 
   it('never lets a local host switch claim a remote or SSH pane', () => {
     const hostSwitch = getCodexAccountSwitchLaneMatcher({
-      settings: null,
+      owner: { kind: 'local' },
       target: { runtime: 'host' }
     })
     const state = laneState()

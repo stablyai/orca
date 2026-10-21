@@ -1,0 +1,653 @@
+import { describe, expect, it, vi } from 'vitest'
+import { RelayAssignmentStore } from './assignment-store.js'
+import { openInMemoryRelayDatabase } from './database.js'
+import {
+  SHADOW_SEAT_OUTRANK_SKEW_MS,
+  SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
+  ShadowSeatDirectory,
+  startShadowSeatPoller,
+  type SeatFeedCell,
+  type SeatFeedResponse
+} from './shadow-seat-directory.js'
+
+const INCARNATION = '11111111-1111-4111-8111-111111111111'
+const CELLS: SeatFeedCell[] = [
+  {
+    cellId: 'cell-a',
+    cellUrl: 'https://cell-a.example.test',
+    region: 'us-central1',
+    heartbeatExpiresAt: 2_000_000_000_000,
+    requiredForComplete: true
+  },
+  {
+    cellId: 'cell-b',
+    cellUrl: 'https://cell-b.example.test',
+    region: 'asia-east2',
+    heartbeatExpiresAt: 2_000_000_000_000,
+    requiredForComplete: true
+  }
+]
+
+function feed(overrides: Partial<SeatFeedResponse> = {}): SeatFeedResponse {
+  return { v: 1, cellId: 'cell-a', incarnation: INCARNATION, seq: 0, at: 1, ...overrides }
+}
+
+function seat(relayHostId: string, generation = 1) {
+  return { userId: 'user-a', relayHostId, epoch: 3, generation, state: 'active', joinedAt: 1 }
+}
+
+function change(
+  seq: number,
+  kind: string,
+  relayHostId: string,
+  generation = 1,
+  closeCode?: number
+) {
+  return { seq, kind, userId: 'user-a', relayHostId, epoch: 3, generation, closeCode, at: 50 + seq }
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  })
+}
+
+type Responder = (url: URL) => Response | Promise<Response>
+
+function poller(
+  responders: Record<string, Responder>,
+  cells: 'all' | string[] = 'all',
+  listCells: () => Promise<SeatFeedCell[]> = async () => CELLS
+) {
+  let now = 1_000
+  const requests: URL[] = []
+  const identityToken = vi.fn(async () => 'token-1')
+  const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+    const url = new URL(String(input))
+    requests.push(url)
+    const responder = responders[url.hostname.split('.')[0] ?? '']
+    if (!responder) throw new Error('unreachable')
+    return await responder(url)
+  })
+  const started = startShadowSeatPoller(
+    {
+      role: 'director',
+      rehomeAudience: 'https://relay.example.test/rehome',
+      shadowSeatFeedCells: cells
+    },
+    {
+      listCells,
+      fetch: fetchImpl,
+      identityToken,
+      now: () => now,
+      pollMs: 3_600_000,
+      log: () => undefined
+    }
+  )
+  if (!started) throw new Error('poller not started')
+  return {
+    ...started,
+    requests,
+    identityToken,
+    advance: (ms: number) => {
+      now += ms
+    }
+  }
+}
+
+describe('startShadowSeatPoller', () => {
+  it('polls nothing unless a director has cells switched on and the rehome audience', () => {
+    const base = { role: 'director' as const, rehomeAudience: 'https://relay.example.test/rehome' }
+    const options = { listCells: async () => CELLS }
+    expect(startShadowSeatPoller(base, options)).toBeNull()
+    expect(startShadowSeatPoller({ ...base, shadowSeatFeedCells: [] }, options)).toBeNull()
+    expect(
+      startShadowSeatPoller({ ...base, role: 'cell', shadowSeatFeedCells: 'all' }, options)
+    ).toBeNull()
+    expect(
+      startShadowSeatPoller({ role: 'director', shadowSeatFeedCells: 'all' }, options)
+    ).toBeNull()
+  })
+
+  it('takes a full snapshot first, then applies deltas from its cursor', async () => {
+    let call = 0
+    const cell = poller(
+      {
+        'cell-a': () => {
+          call += 1
+          if (call === 1) return json(feed({ seq: 2, full: [seat('host-1'), seat('host-2')] }))
+          return json(
+            feed({
+              seq: 5,
+              changes: [
+                change(3, 'leave', 'host-1', 1, 4001),
+                change(4, 'join', 'host-3'),
+                change(5, 'drain-only', 'host-2')
+              ]
+            })
+          )
+        }
+      },
+      ['cell-a']
+    )
+    await cell.tick()
+    expect(cell.requests[0]?.searchParams.has('since')).toBe(false)
+    expect(cell.directory.seatsOf('user-a', 'host-1')).toHaveLength(1)
+
+    await cell.tick()
+    cell.stop()
+    expect(cell.requests[1]?.searchParams.get('since')).toBe(`${INCARNATION}:2`)
+    expect(cell.directory.seatsOf('user-a', 'host-1')).toEqual([])
+    expect(cell.directory.recentlyLeftOf('user-a', 'host-1', 1_000)).toEqual([
+      { cellId: 'cell-a', epoch: 3, generation: 1, incarnation: INCARNATION, closeCode: 4001, at: 53 }
+    ])
+    expect(cell.directory.seatsOf('user-a', 'host-2')).toMatchObject([{ state: 'drain-only' }])
+    expect(cell.directory.seatsOf('user-a', 'host-3')).toMatchObject([
+      { cellId: 'cell-a', epoch: 3, generation: 1, state: 'active' }
+    ])
+    expect(cell.directory.cellState('cell-a')).toMatchObject({ status: 'live', seq: 5 })
+    expect(cell.identityToken).toHaveBeenCalledTimes(1)
+  })
+
+  it('resyncs from a full snapshot when the cell restarts with a new incarnation', async () => {
+    let call = 0
+    const cell = poller(
+      {
+        'cell-a': () => {
+          call += 1
+          if (call === 1) return json(feed({ seq: 2, full: [seat('host-1'), seat('host-2')] }))
+          return json(
+            feed({ incarnation: 'restarted', seq: 1, full: [seat('host-2', 1)] })
+          )
+        }
+      },
+      ['cell-a']
+    )
+    await cell.tick()
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.seatsOf('user-a', 'host-1')).toEqual([])
+    expect(cell.directory.recentlyLeftOf('user-a', 'host-1', 1_000)).toMatchObject([
+      { cellId: 'cell-a', resync: true }
+    ])
+    expect(cell.directory.since('cell-a')).toBe('restarted:1')
+  })
+
+  it('asks for a full snapshot after a gap in the change sequence', async () => {
+    let call = 0
+    const cell = poller(
+      {
+        'cell-a': () => {
+          call += 1
+          if (call === 1) return json(feed({ seq: 2, full: [seat('host-1')] }))
+          return json(feed({ seq: 9, changes: [change(9, 'join', 'host-9')] }))
+        }
+      },
+      ['cell-a']
+    )
+    await cell.tick()
+    await cell.tick()
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.seatsOf('user-a', 'host-9')).toEqual([])
+    expect(cell.directory.seatsOf('user-a', 'host-1')).toHaveLength(1)
+    expect(cell.requests[2]?.searchParams.has('since')).toBe(false)
+  })
+
+  it('resumes a short page from its last change; an empty page behind the head resyncs', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', feed({ seq: 2, full: [] }), 10)
+    directory.apply(
+      'cell-a',
+      feed({ seq: 10, changes: [change(3, 'join', 'host-3'), change(4, 'join', 'host-4')] }),
+      11
+    )
+    expect(directory.since('cell-a')).toBe(`${INCARNATION}:4`)
+    directory.apply('cell-a', feed({ seq: 10, changes: [] }), 12)
+    expect(directory.since('cell-a')).toBeUndefined()
+    expect(directory.cellState('cell-a')).toMatchObject({ lastFailure: 'cursor_gap' })
+  })
+
+  it('checks the map against the cell seat count, with controls only as a cross-check', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a', 'cell-b'])
+    directory.apply(
+      'cell-a',
+      feed({ seq: 1, counts: { seats: 2, controls: 1 }, full: [seat('host-1'), seat('host-2')] }),
+      10
+    )
+    directory.apply(
+      'cell-b',
+      feed({ cellId: 'cell-b', seq: 1, counts: { seats: 3, controls: 3 }, full: [seat('host-3')] }),
+      10
+    )
+    expect(directory.summary(10)).toMatchObject({
+      seatsMismatchedCells: 1,
+      controlsBelowMapCells: 1
+    })
+  })
+
+  it('returns a drain-only seat to active, and ignores active for an older generation', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', feed({ seq: 1, full: [seat('host-1', 2)] }), 10)
+    directory.apply(
+      'cell-a',
+      feed({
+        seq: 4,
+        changes: [
+          change(2, 'drain-only', 'host-1', 2),
+          change(3, 'active', 'host-1', 2),
+          change(4, 'active', 'host-9', 1)
+        ]
+      }),
+      11
+    )
+    expect(directory.seatsOf('user-a', 'host-1')).toMatchObject([{ state: 'active' }])
+    expect(directory.seatsOf('user-a', 'host-9')).toEqual([])
+    directory.apply(
+      'cell-a',
+      feed({
+        seq: 6,
+        changes: [change(5, 'drain-only', 'host-1', 2), change(6, 'active', 'host-1', 1)]
+      }),
+      12
+    )
+    expect(directory.seatsOf('user-a', 'host-1')).toMatchObject([{ state: 'drain-only' }])
+  })
+
+  it('ignores a leave for an older generation than the seat', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', feed({ seq: 1, full: [seat('host-1', 2)] }), 10)
+    directory.apply('cell-a', feed({ seq: 2, changes: [change(2, 'leave', 'host-1', 1)] }), 11)
+    expect(directory.seatsOf('user-a', 'host-1')).toMatchObject([{ generation: 2 }])
+  })
+
+  it('applies a change only at or above the seat generation', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', feed({ seq: 1, full: [seat('host-1', 2)] }), 10)
+    directory.apply(
+      'cell-a',
+      feed({
+        seq: 3,
+        changes: [change(2, 'join', 'host-1', 1), change(3, 'drain-only', 'host-1', 1)]
+      }),
+      11
+    )
+    expect(directory.seatsOf('user-a', 'host-1')).toMatchObject([
+      { generation: 2, state: 'active' }
+    ])
+    directory.apply(
+      'cell-a',
+      feed({
+        seq: 5,
+        changes: [change(4, 'drain-only', 'host-9'), change(5, 'leave', 'host-1', 3)]
+      }),
+      12
+    )
+    expect(directory.seatsOf('user-a', 'host-1')).toEqual([])
+    expect(directory.seatsOf('user-a', 'host-9')).toEqual([])
+  })
+
+  it('follows a cut page at once within the same poll', async () => {
+    let call = 0
+    const cell = poller(
+      {
+        'cell-a': () => {
+          call += 1
+          if (call === 1) return json(feed({ seq: 0, full: [] }))
+          if (call === 2) {
+            return json(feed({ seq: 1, more: true, changes: [change(1, 'join', 'host-1')] }))
+          }
+          return json(feed({ seq: 2, changes: [change(2, 'join', 'host-2')] }))
+        }
+      },
+      ['cell-a']
+    )
+    await cell.tick()
+    await cell.tick()
+    cell.stop()
+    expect(call).toBe(3)
+    expect(cell.requests[2]?.searchParams.get('since')).toBe(`${INCARNATION}:1`)
+    expect(cell.directory.seatsOf('user-a', 'host-2')).toHaveLength(1)
+  })
+
+  it('keeps seats as unverifiable through timeouts and errors, never as gone', async () => {
+    let call = 0
+    const cell = poller(
+      {
+        'cell-a': () => {
+          call += 1
+          if (call === 1) return json(feed({ seq: 1, full: [seat('host-1')] }))
+          if (call === 2) throw Object.assign(new Error('timed out'), { name: 'TimeoutError' })
+          return json({ error: 'unavailable' }, 503)
+        }
+      },
+      ['cell-a']
+    )
+    await cell.tick()
+    await cell.tick()
+    expect(cell.directory.cellState('cell-a')).toMatchObject({
+      status: 'unverifiable',
+      lastFailure: 'timeout'
+    })
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-a')).toMatchObject({
+      status: 'unverifiable',
+      lastFailure: 'status_503'
+    })
+    expect(cell.directory.seatsOf('user-a', 'host-1')).toHaveLength(1)
+    expect(cell.directory.since('cell-a')).toBe(`${INCARNATION}:1`)
+  })
+
+  it('reads an old cell (404) as no feed, and completes once every cell has answered', async () => {
+    let cellBUp = false
+    const cell = poller({
+      'cell-a': () => json(feed({ seq: 1, full: [] })),
+      'cell-b': () => {
+        if (!cellBUp) throw new Error('connect refused')
+        return new Response('Not Found', { status: 404 })
+      }
+    })
+    await cell.tick()
+    expect(cell.directory.isComplete()).toBe(false)
+    cellBUp = true
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'no-feed' })
+    expect(cell.directory.isComplete()).toBe(true)
+  })
+
+  it('forgets the switches a cell reported once its image no longer has the feed', async () => {
+    let rolledBack = false
+    const cell = poller({
+      'cell-a': () => json(feed({ seq: 1, full: [] })),
+      'cell-b': () =>
+        rolledBack
+          ? new Response('Not Found', { status: 404 })
+          : json(
+              feed({
+                cellId: 'cell-b',
+                seq: 1,
+                full: [],
+                flagsApplied: { generation: 3, flags: { readinessLocal: true } }
+              })
+            )
+    })
+    await cell.tick()
+    expect(cell.directory.cellState('cell-b')?.flagsApplied?.generation).toBe(3)
+    rolledBack = true
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'no-feed' })
+    expect(cell.directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
+  })
+
+  it('keeps a reserve switch through a 404 until a feed says db or the process is replaced', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-b'])
+    const reserve = { generation: 4, flags: { admitMode: 'reserve' } }
+    directory.apply('cell-b', feed({ cellId: 'cell-b', seq: 1, full: [], flagsApplied: reserve }), 10)
+    directory.markNoFeed('cell-b', 20, INCARNATION)
+    expect(directory.cellState('cell-b')?.flagsApplied).toEqual(reserve)
+    directory.markNoFeed('cell-b', 30)
+    expect(directory.cellState('cell-b')?.flagsApplied).toEqual(reserve)
+    // relay_cell_runtime names another process: the one that reported reserve is gone.
+    directory.markNoFeed('cell-b', 40, '33333333-3333-4333-8333-333333333333')
+    expect(directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
+  })
+
+  it('completes without a cell that is dead, empty or isolated', async () => {
+    const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, 'all', async () => [
+      CELLS[0]!,
+      { ...CELLS[1]!, requiredForComplete: false }
+    ])
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'pending' })
+    expect(cell.directory.isComplete()).toBe(true)
+  })
+
+  it('backs off cell-list reads while the database fails', async () => {
+    const listCells = vi.fn(async (): Promise<SeatFeedCell[]> => {
+      throw new Error('pool timeout')
+    })
+    const cell = poller({}, 'all', listCells)
+    for (let second = 0; second < 40; second += 1) {
+      await cell.tick()
+      cell.advance(1_000)
+    }
+    cell.stop()
+    // Retries at +1, +2, +4, +8, +16 s, then at most every 30 s.
+    expect(listCells.mock.calls.length).toBeLessThanOrEqual(7)
+    expect(listCells.mock.calls.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('keeps polling the last cell list while a cell-list read hangs', async () => {
+    let finishRead: (cells: SeatFeedCell[]) => void = () => undefined
+    const listCells = vi
+      .fn<() => Promise<SeatFeedCell[]>>()
+      .mockResolvedValueOnce(CELLS)
+      .mockImplementation(() => new Promise((resolve) => (finishRead = resolve)))
+    const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, ['cell-a'], listCells)
+    await cell.tick()
+    cell.advance(31_000)
+    const round = cell.tick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(listCells).toHaveBeenCalledTimes(2)
+    expect(cell.requests.map((url) => url.hostname)).toEqual([
+      'cell-a.example.test',
+      'cell-a.example.test'
+    ])
+    finishRead(CELLS)
+    await round
+    cell.stop()
+  })
+
+  it('treats a malformed or mislabelled body as unverifiable', async () => {
+    const cell = poller({
+      'cell-a': () => json({ v: 2 }),
+      'cell-b': () => json(feed({ cellId: 'cell-a', full: [] }))
+    })
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-a')).toMatchObject({ lastFailure: 'malformed' })
+    expect(cell.directory.cellState('cell-b')).toMatchObject({ lastFailure: 'cell_id_mismatch' })
+    expect(cell.directory.isComplete()).toBe(false)
+  })
+
+  it('accepts unknown fields and change kinds from a newer cell', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', feed({ seq: 1, full: [seat('host-1')] }), 10)
+    directory.apply('cell-a', feed({ seq: 2, changes: [change(2, 'future-kind', 'host-1')] }), 11)
+    expect(directory.since('cell-a')).toBe(`${INCARNATION}:2`)
+    expect(directory.seatsOf('user-a', 'host-1')).toHaveLength(1)
+  })
+
+  it('polls only the listed cells and drops a cell that leaves the list', async () => {
+    const cell = poller(
+      { 'cell-a': () => json(feed({ seq: 1, full: [seat('host-1')] })) },
+      ['cell-a', 'cell-z']
+    )
+    await cell.tick()
+    cell.stop()
+    expect(cell.requests.map((url) => url.hostname)).toEqual(['cell-a.example.test'])
+    cell.directory.setCells([])
+    expect(cell.directory.seatsOf('user-a', 'host-1')).toEqual([])
+  })
+
+  it('bounds the recently-left memory', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    const hosts = SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS + 10
+    directory.apply(
+      'cell-a',
+      feed({ seq: 1, full: Array.from({ length: hosts }, (_, index) => seat(`host-${index}`)) }),
+      10
+    )
+    directory.apply('cell-a', feed({ incarnation: 'restarted', seq: 1, full: [] }), 20)
+    expect(directory.summary(20).recentlyLeftHosts).toBe(SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS)
+    expect(directory.recentlyLeftOf('user-a', 'host-0', 20)).toEqual([])
+    expect(directory.recentlyLeftOf('user-a', `host-${hosts - 1}`, 20)).toHaveLength(1)
+  })
+})
+
+describe('RelayAssignmentStore.seatFeedCells', () => {
+  it('lists every cell, and requires only live, unisolated cells with capacity', async () => {
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayAssignmentStore(database, () => 100_000, {
+      requireLiveCells: true,
+      heartbeatTtlMs: 45_000
+    })
+    await store.reconcileCells(
+      ['cell-live', 'cell-stale', 'cell-isolated', 'cell-empty', 'cell-nobeat', 'cell-off'].map(
+        (id) => ({
+          id,
+          url: `https://${id}.example.test`,
+          capacityRequests: id === 'cell-empty' ? 0 : 10
+        })
+      )
+    )
+    // Existing-only: no new hosts, but it still seats the ones it has.
+    await database.query(`UPDATE relay_cells SET enabled = 0 WHERE cell_id = ?`, ['cell-off'])
+    for (const [cellId, heartbeatAt] of [
+      ['cell-live', 90_000],
+      ['cell-stale', 10_000],
+      ['cell-isolated', 90_000],
+      ['cell-empty', 90_000],
+      ['cell-off', 90_000]
+    ] as const) {
+      await database.query(
+        `INSERT INTO relay_cell_runtime
+         (cell_id, cell_url, cell_incarnation, started_at, ready, observed_requests,
+          last_heartbeat_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [cellId, `https://${cellId}.example.test`, 'inc', 1, 1, 0, heartbeatAt, heartbeatAt]
+      )
+    }
+    await database.query(
+      `UPDATE relay_cell_admission SET roll_isolated_at = ? WHERE cell_id = ?`,
+      [50_000, 'cell-isolated']
+    )
+
+    const cells = await store.seatFeedCells()
+
+    expect(
+      cells.map((cell) => [cell.cellId, cell.heartbeatExpiresAt, cell.requiredForComplete])
+    ).toEqual([
+      ['cell-empty', 135_000, false],
+      ['cell-isolated', 135_000, false],
+      ['cell-live', 135_000, true],
+      ['cell-nobeat', null, false],
+      ['cell-off', 135_000, true],
+      ['cell-stale', 55_000, false]
+    ])
+  })
+})
+
+describe('ShadowSeatDirectory.placementModeOf', () => {
+  const response = (
+    modes: { admitModeEffective?: 'db' | 'reserve'; admitModeRaw?: 'db' | 'reserve' } = {}
+  ): SeatFeedResponse => ({
+    v: 1,
+    cellId: 'cell-a',
+    incarnation: INCARNATION,
+    seq: 1,
+    at: 0,
+    counts: { seats: 0, controls: 0, bookings: 0, units: 0, ceiling: 500 },
+    intake: { perSec: 100, burst: 20, tokens: 20 },
+    flagsApplied: { generation: 3, flags: { admitMode: 'reserve' } },
+    full: [],
+    ...modes
+  })
+
+  // A tripped cell re-registering still reports reserve as effective; placement reads raw db.
+  it('reads the raw mode when the cell sends it, and the effective mode otherwise', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', response({ admitModeEffective: 'reserve', admitModeRaw: 'db' }), 1_000, 1_000)
+    expect(directory.placementModeOf('cell-a')).toBe('db')
+    expect(directory.admitModeOf('cell-a')).toBe('reserve')
+    directory.apply('cell-a', response({ admitModeEffective: 'reserve' }), 2_000, 2_000)
+    expect(directory.placementModeOf('cell-a')).toBe('reserve')
+  })
+})
+
+describe('ShadowSeatDirectory.onOutranked', () => {
+  const reserve = { generation: 3, flags: { admitMode: 'reserve' } }
+  const db = { generation: 3, flags: { admitMode: 'db' } }
+  const full = (cellId: string, epoch: number, joinedAt: number, flags = reserve, state = 'active') =>
+    feed({
+      cellId,
+      seq: 1,
+      flagsApplied: flags,
+      full: [{ userId: 'user-a', relayHostId: 'host-1', epoch, generation: 1, state, joinedAt }]
+    })
+  const directory = () => {
+    const map = new ShadowSeatDirectory()
+    map.setCells(['cell-a', 'cell-b'])
+    const outranked: unknown[] = []
+    map.onOutranked = (seat) => outranked.push(seat)
+    return { map, outranked }
+  }
+  const halfOpen = {
+    cellId: 'cell-a',
+    userId: 'user-a',
+    relayHostId: 'host-1',
+    epoch: 3,
+    joinedAt: 10,
+    byCellId: 'cell-b'
+  }
+
+  it('reports a reserve seat a later, newer join elsewhere outranks, in either feed order', () => {
+    const first = directory()
+    first.map.apply('cell-a', full('cell-a', 3, 10), 100)
+    first.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    expect(first.outranked).toEqual([halfOpen])
+    const reversed = directory()
+    reversed.map.apply('cell-b', full('cell-b', 4, 2_000), 100)
+    reversed.map.apply('cell-a', full('cell-a', 3, 10), 101)
+    expect(reversed.outranked).toEqual([halfOpen])
+    const justPastSkew = directory()
+    justPastSkew.map.apply('cell-a', full('cell-a', 3, 10), 100)
+    justPastSkew.map.apply('cell-b', full('cell-b', 4, 11 + SHADOW_SEAT_OUTRANK_SKEW_MS), 101)
+    expect(justPastSkew.outranked).toEqual([halfOpen])
+  })
+
+  it('reports a seat once, even when a full resync re-judges its host', () => {
+    const { map, outranked } = directory()
+    map.apply('cell-a', full('cell-a', 3, 10), 100)
+    map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    map.apply('cell-b', { ...full('cell-b', 4, 2_000), incarnation: '22222222-2222-4222-8222-222222222222' }, 102)
+    map.apply('cell-a', { ...full('cell-a', 3, 10), incarnation: '22222222-2222-4222-8222-222222222222' }, 103)
+    expect(outranked).toEqual([halfOpen])
+  })
+
+  it('leaves a database-cell seat, a drain-only seat, a later lower epoch, and a join within the skew', () => {
+    const onDatabaseCell = directory()
+    onDatabaseCell.map.apply('cell-a', full('cell-a', 3, 10, db), 100)
+    onDatabaseCell.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    const drainOnly = directory()
+    drainOnly.map.apply('cell-a', full('cell-a', 3, 10, reserve, 'drain-only'), 100)
+    drainOnly.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    // Answered the old seat from a stale map after the newer join: the row decides that one.
+    const staleSticky = directory()
+    staleSticky.map.apply('cell-a', full('cell-a', 3, 3_000), 100)
+    staleSticky.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    const withinSkew = directory()
+    withinSkew.map.apply('cell-a', full('cell-a', 3, 10), 100)
+    withinSkew.map.apply('cell-b', full('cell-b', 4, 10 + SHADOW_SEAT_OUTRANK_SKEW_MS), 101)
+    expect([onDatabaseCell, drainOnly, staleSticky, withinSkew].map(({ outranked }) => outranked)).toEqual([
+      [],
+      [],
+      [],
+      []
+    ])
+  })
+})

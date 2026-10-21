@@ -20,6 +20,14 @@ describe('PostReadyFlushGate', () => {
     vi.useRealTimers()
   })
 
+  it('flushes synchronously when the marker comes from the line editor', () => {
+    gate = new PostReadyFlushGate(onFlush, true)
+    gate.arm()
+    expect(onFlush).toHaveBeenCalledTimes(1)
+    expect(gate.isPending).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('does not flush immediately when armed', () => {
     gate.arm()
     expect(onFlush).not.toHaveBeenCalled()

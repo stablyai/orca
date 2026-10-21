@@ -9,16 +9,17 @@ import {
   BrowserClientHostCommandResultParams
 } from '../../../../shared/browser-client-host-protocol'
 import { BrowserError } from '../../../browser/browser-error'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { adoptRuntimeBrowserClientPagesFromInventory } from '../../runtime-browser-client-page-adoption'
 import { recoverUnavailableRuntimeBrowserClientPages } from '../../runtime-browser-client-page-recovery'
 import { releaseRuntimeBrowserClientPageRecord } from '../../runtime-browser-client-page-release'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 
-export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
+export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
     name: 'browser.clientHost.attach',
+    permission: 'workspace',
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
@@ -39,6 +40,12 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
       }
 
       const registry = getBrowserHostLeaseRegistry(runtime)
+      // Attach inventory cannot describe pages created or replaced after readiness is published.
+      const pagePlacementsAtAttach = new Map(
+        getRuntimeBrowserPageRegistry(runtime)
+          .listPages()
+          .map((page) => [page.browserPageId, page.placement])
+      )
       const handle = registry.attach({
         browserHostClientId: params.browserHostClientId,
         connectionId,
@@ -127,6 +134,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
           lease: handle.lease,
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
+          pagePlacementsAtAttach,
           notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
           releaseUnrecoverablePage: (page) =>
             releaseRuntimeBrowserClientPageRecord(runtime, page.browserPageId, page.placement),
@@ -157,6 +165,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'browser.clientHost.commandResult',
+    permission: 'workspace',
     params: BrowserClientHostCommandResultParams,
     handler: (
       params,
@@ -189,6 +198,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'browser.clientHost.pageMetadata',
+    permission: 'workspace',
     params: BrowserClientPageMetadataParams,
     handler: (
       params,

@@ -1,0 +1,108 @@
+{
+  "node": "v24.21.0",
+  "electron": "43.7.0",
+  "versions": {
+    "sourcePath": "src/shared/runtime-rpc-call-queue.ts",
+    "baselineSha256": "45921658a10ffeefe0247673227aab643d1b5251d24aa460244fadd5480fc349",
+    "fixedSha256": "6afe6eb8acd9025d227960fafef77ae205a455c7f680b15ad0db5cdfee18c71d",
+    "matchingBaselineRefs": {
+      "origin/main": "77cd61df396f25ec91ee2d5ddcbd1f55aa94f818",
+      "v1.4.198": "e0826956fcfc532f5a1e55b5e081f2e57e553c43"
+    }
+  },
+  "proofSha256": "af64f8b55f070d4a863ff6b8f456d518d977cc06400bdbbbba60eb2c5a455aa2",
+  "reports": [
+    {
+      "candidate": false,
+      "case": "active-and-cancelled",
+      "lane": "foreground",
+      "activeRetainedUntilSettlement": true,
+      "cancelledReleasedBeforeActiveFinishes": true
+    },
+    {
+      "candidate": false,
+      "case": "synchronous-failure",
+      "lane": "foreground",
+      "retainedWhileOtherCallActive": 1,
+      "retainedAfterIdle": 0
+    },
+    {
+      "candidate": false,
+      "case": "active-and-cancelled",
+      "lane": "background",
+      "activeRetainedUntilSettlement": true,
+      "cancelledReleasedBeforeActiveFinishes": true
+    },
+    {
+      "candidate": false,
+      "case": "synchronous-failure",
+      "lane": "background",
+      "retainedWhileOtherCallActive": 1,
+      "retainedAfterIdle": 0
+    },
+    {
+      "candidate": false,
+      "case": "rolling-background-traffic",
+      "completedForegroundPayloads": 8,
+      "completedBackgroundCalls": 70,
+      "foregroundPayloadsStillRetained": 8,
+      "retainedAfterIdle": 0,
+      "everyBackgroundCallCompletes": true
+    },
+    {
+      "candidate": false,
+      "case": "ordering-compaction-and-cancellation",
+      "completed": 134,
+      "cancelled": 6,
+      "foregroundBeforeBackground": true,
+      "fifoWithinEachLane": true,
+      "finalQueueCount": 0
+    },
+    {
+      "candidate": true,
+      "case": "active-and-cancelled",
+      "lane": "foreground",
+      "activeRetainedUntilSettlement": true,
+      "cancelledReleasedBeforeActiveFinishes": true
+    },
+    {
+      "candidate": true,
+      "case": "synchronous-failure",
+      "lane": "foreground",
+      "retainedWhileOtherCallActive": 0,
+      "retainedAfterIdle": 0
+    },
+    {
+      "candidate": true,
+      "case": "active-and-cancelled",
+      "lane": "background",
+      "activeRetainedUntilSettlement": true,
+      "cancelledReleasedBeforeActiveFinishes": true
+    },
+    {
+      "candidate": true,
+      "case": "synchronous-failure",
+      "lane": "background",
+      "retainedWhileOtherCallActive": 0,
+      "retainedAfterIdle": 0
+    },
+    {
+      "candidate": true,
+      "case": "rolling-background-traffic",
+      "completedForegroundPayloads": 8,
+      "completedBackgroundCalls": 70,
+      "foregroundPayloadsStillRetained": 0,
+      "retainedAfterIdle": 0,
+      "everyBackgroundCallCompletes": true
+    },
+    {
+      "candidate": true,
+      "case": "ordering-compaction-and-cancellation",
+      "completed": 134,
+      "cancelled": 6,
+      "foregroundBeforeBackground": true,
+      "fifoWithinEachLane": true,
+      "finalQueueCount": 0
+    }
+  ]
+}

@@ -29,7 +29,6 @@ import type {
   UsageValues,
   WorktreeMemory
 } from '../../shared/process-stats-types'
-import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
@@ -43,6 +42,7 @@ import {
   readMemoryHistory,
   resolveWorktreeMemoryNames,
   sweepStaleMemoryHistory,
+  type MemorySnapshotStore,
   type WorktreeMemoryBucket
 } from './memory-snapshot-buckets'
 import {
@@ -52,7 +52,7 @@ import {
   snapshotCommitFields
 } from './memory-snapshot-values'
 
-export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
+export type { MemorySnapshotStore } from './memory-snapshot-buckets'
 
 // ─── Module state ───────────────────────────────────────────────────
 

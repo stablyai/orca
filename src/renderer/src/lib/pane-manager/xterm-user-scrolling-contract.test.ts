@@ -1,6 +1,6 @@
 /**
- * Contract test for xterm's native user-scrolling ownership (vendored
- * 6.1.0-beta.303; @xterm/headless shares BufferService with @xterm/xterm).
+ * Contract test for xterm's native user-scrolling ownership.
+ * @xterm/headless shares BufferService with @xterm/xterm.
  *
  * Orca's live PTY write path performs NO scroll-intent enforcement — it
  * relies on xterm core keeping a scrolled-up viewport stable and following
@@ -49,13 +49,13 @@ async function pinnedScrollbackTerminal(): Promise<TerminalWithBufferService> {
     scrollback: 1000,
     allowProposedApi: true
   }) as TerminalWithBufferService
-  await writeLines(term, 100, 'before')
+  await write(term, Array.from({ length: 100 }, (_, index) => `before${index}\r\n`).join(''))
   term.scrollLines(-30)
   markTerminalPinnedViewport(term)
   return term
 }
 
-describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () => {
+describe('xterm native user-scrolling contract', () => {
   it('builds headless and renderer xterm from the same upstream commit', () => {
     // The shared code is BufferService/BufferLine, so what has to match is the source
     // both were built from, not the version string. Upstream bumps each package only

@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react'
 import type {
   ChangelogData,
   LinuxPackageInstallRecovery,
@@ -85,6 +86,24 @@ export function UpdateCardStateContent({
     return <UpdateErrorCardContent {...errorCard} onClose={onCollapse} />
   }
   if (status.state === 'downloaded') {
+    if (status.installing) {
+      return (
+        <div className="flex flex-col gap-3 p-4" aria-busy="true">
+          <div className="flex items-center gap-2">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <h3 className="text-sm font-semibold">
+              {translate('updates.installBlock.preparingTitle', 'Preparing your update')}
+            </h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {translate(
+              'updates.installBlock.preparingSummary',
+              'Checking running Orca instances before restarting.'
+            )}
+          </p>
+        </div>
+      )
+    }
     return hasStartedDownload ? (
       <div className="p-4">
         <p className="text-sm">

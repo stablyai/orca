@@ -18,12 +18,8 @@ function placement(
     physicalIdentity: `physical-${name}`,
     topology: 'canonical-copy',
     status: 'outdated',
-    installedReleaseRevision: 1,
-    installedAppVersion: '1.0.0',
-    currentReleaseRevision: 2,
     currentPackageDigest: 'current',
-    currentAppVersion: '2.0.0',
-    observedPackageDigest: 'old',
+    lockSource: 'stablyai/orca',
     errorCategory: null,
     ...overrides
   }
@@ -33,7 +29,12 @@ describe('groupSkillFreshness', () => {
   it('marks an eligible outdated skill as update-available with one location', () => {
     const groups = groupSkillFreshness([placement('orca-cli')], ['orca-cli'])
     expect(groups).toHaveLength(1)
-    expect(groups[0]).toMatchObject({ name: 'orca-cli', status: 'update-available' })
+    expect(groups[0]).toMatchObject({
+      name: 'orca-cli',
+      status: 'update-available',
+      orcaOwned: true,
+      lockSource: 'stablyai/orca'
+    })
     expect(groups[0]?.locations).toEqual([
       {
         id: expect.any(String),
@@ -42,6 +43,27 @@ describe('groupSkillFreshness', () => {
         participatesInGlobalFreshness: true
       }
     ])
+  })
+
+  it('sorts Orca-owned skills first, then by name', () => {
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', { lockSource: 'acme/agent-skills' }),
+        placement('linear-tickets', { lockSource: null }),
+        placement('orchestration'),
+        placement('orca-cli', { lockSource: 'https://github.com/StablyAI/orca.git' })
+      ],
+      ['computer-use', 'linear-tickets', 'orca-cli', 'orchestration']
+    )
+    expect(groups.map((group) => [group.name, group.orcaOwned])).toEqual([
+      ['orca-cli', true],
+      ['orchestration', true],
+      ['computer-use', false],
+      ['linear-tickets', false]
+    ])
+    expect(groups.find((group) => group.name === 'computer-use')?.lockSource).toBe(
+      'acme/agent-skills'
+    )
   })
 
   it('hides skills whose every copy is current', () => {
@@ -56,21 +78,19 @@ describe('groupSkillFreshness', () => {
   })
 
   it('keeps a plugin-managed copy of a same-named skill out of the list', () => {
-    // Why: the vendor owns that copy, so it is not drift the user can act on —
-    // reporting it put permanent amber on any ordinary plugin install.
+    // Why: without a list of past releases a differing plugin copy cannot be told from
+    // another vendor's skill, and Orca never writes there.
     const groups = groupSkillFreshness(
-      [placement('dataviz', { status: 'unrecognized', topology: 'plugin-cache' })],
+      [placement('dataviz', { status: 'outdated', topology: 'plugin-cache' })],
       []
     )
     expect(groups).toEqual([])
   })
 
   it('lists a skill whose only fault cannot be fixed by the update, so Details explains it', () => {
-    // Why: these turn the setup-rail badge amber and its Details opens this list. Omitting
-    // them left that list headlined "all up to date" over nothing, contradicting the badge.
     const groups = groupSkillFreshness(
       [
-        placement('dataviz', { status: 'unrecognized', topology: 'independent-copy' }),
+        placement('dataviz', { topology: 'independent-copy' }),
         placement('linear-tickets', { status: 'inaccessible' })
       ],
       []
@@ -79,11 +99,13 @@ describe('groupSkillFreshness', () => {
       {
         name: 'dataviz',
         status: 'cannot-update',
+        orcaOwned: true,
+        lockSource: 'stablyai/orca',
         locations: [
           {
             id: expect.any(String),
             path: '/home/.agents/skills/dataviz',
-            chip: 'unrecognized',
+            chip: 'duplicate',
             participatesInGlobalFreshness: true
           }
         ]
@@ -91,6 +113,8 @@ describe('groupSkillFreshness', () => {
       {
         name: 'linear-tickets',
         status: 'cannot-update',
+        orcaOwned: true,
+        lockSource: 'stablyai/orca',
         locations: [
           {
             id: expect.any(String),
@@ -103,21 +127,6 @@ describe('groupSkillFreshness', () => {
     ])
   })
 
-  it('lists an edited canonical copy, which is what an update would overwrite', () => {
-    const groups = groupSkillFreshness([placement('orchestration', { status: 'unrecognized' })], [])
-    expect(groups).toHaveLength(1)
-    expect(groups[0]?.status).toBe('cannot-update')
-    expect(groups[0]?.locations[0]?.chip).toBe('unrecognized')
-  })
-
-  it('raises no row for a copy that is ahead of this build', () => {
-    // Why: 'newer-known' is recognized official content — the updater's own install
-    // or a newer release's bytes. The badge stays green for it, so a row here would
-    // recreate the badge/dialog disagreement #11128 removed, from the other side.
-    const groups = groupSkillFreshness([placement('orchestration', { status: 'newer-known' })], [])
-    expect(groups).toEqual([])
-  })
-
   it('groups a blocked skill and flags the culprit location, not the main copy', () => {
     const groups = groupSkillFreshness(
       [
@@ -125,15 +134,14 @@ describe('groupSkillFreshness', () => {
         placement('orchestration', {
           rootId: 'home-claude',
           unresolvedPath: '/home/.claude/skills/orchestration',
-          status: 'unrecognized',
-          topology: 'independent-copy'
+          topology: 'external-link'
         })
       ],
       []
     )
     expect(groups).toHaveLength(1)
     expect(groups[0]?.status).toBe('cannot-update')
-    // Why: the out-of-date main copy is bare; only the poisoning copy carries a chip.
+    // Why: the out-of-date main copy is bare; only the blocking copy carries a chip.
     expect(groups[0]?.locations).toEqual([
       {
         id: expect.any(String),
@@ -144,15 +152,13 @@ describe('groupSkillFreshness', () => {
       {
         id: expect.any(String),
         path: '/home/.claude/skills/orchestration',
-        chip: 'unrecognized',
+        chip: 'external-link',
         participatesInGlobalFreshness: true
       }
     ])
   })
 
   it('blocks a skill whose only outdated copy is an unreachable duplicate', () => {
-    // Why: the global command reports "already up to date" here, so the group must
-    // read as skipped with the duplicate flagged rather than promising an update.
     const groups = groupSkillFreshness(
       [
         placement('orchestration', { status: 'current' }),
@@ -182,7 +188,7 @@ describe('groupSkillFreshness', () => {
     ])
   })
 
-  it('ranks a read failure over ownership, ownership over byte status, and maps every topology', () => {
+  it('ranks a read failure over topology and maps every topology', () => {
     const chipFor = (overrides: Partial<SkillFreshnessInstallation>): string | null =>
       groupSkillFreshness(
         [placement('s', { status: 'outdated' }), placement('s', overrides)],
@@ -192,9 +198,6 @@ describe('groupSkillFreshness', () => {
       unresolvedPath: `/culprit/${path}`,
       ...rest
     })
-    expect(chipFor(at('a', { status: 'unrecognized', topology: 'independent-copy' }))).toBe(
-      'unrecognized'
-    )
     expect(chipFor(at('b', { status: 'inaccessible', topology: 'read-only' }))).toBe('inaccessible')
     expect(chipFor(at('c', { topology: 'independent-copy' }))).toBe('duplicate')
     expect(chipFor(at('d', { topology: 'external-link' }))).toBe('external-link')
@@ -203,30 +206,13 @@ describe('groupSkillFreshness', () => {
     expect(chipFor(at('g', { topology: 'repo-scope' }))).toBe('in-a-repo')
     expect(chipFor(at('h', { topology: 'plugin-cache' }))).toBe('plugin-cache')
     expect(chipFor(at('i', { status: 'current', topology: 'provider-alias' }))).toBe('current')
-    // Why: a bare chip is what the reason copy reads as "behind, and a reinstall fixes
-    // it". A copy that is ahead must be told apart, or that advice rolls it back.
-    expect(chipFor(at('k', { status: 'newer-known', topology: 'canonical-copy' }))).toBe('newer')
-    expect(chipFor(at('j', { status: 'unrecognized', topology: 'plugin-cache' }))).toBe(
-      'plugin-cache'
-    )
-    // Ownership outranks byte status: a project copy whose bytes match nothing known is
-    // the repo's content, not the user's drift, so it must not read "may be modified".
-    expect(chipFor(at('l', { status: 'unrecognized', topology: 'repo-scope' }))).toBe('in-a-repo')
-    // But a read failure outranks ownership, or that same rule would hide a real fault.
+    expect(chipFor(at('k', { status: 'outdated', topology: 'provider-alias' }))).toBeNull()
     expect(chipFor(at('m', { status: 'inaccessible', topology: 'repo-scope' }))).toBe(
       'inaccessible'
     )
   })
 
   it('raises no group when every finding is project-owned', () => {
-    // Orca's updater only passes --global, so a project copy has no remedy; a row here
-    // would claim Orca considered an update it could never perform.
-    expect(
-      groupSkillFreshness(
-        [placement('computer-use', { status: 'unrecognized', topology: 'repo-scope' })],
-        []
-      )
-    ).toEqual([])
     expect(
       groupSkillFreshness(
         [placement('computer-use', { status: 'outdated', topology: 'repo-scope' })],
@@ -240,7 +226,7 @@ describe('groupSkillFreshness', () => {
       [
         placement('computer-use', { status: 'outdated', topology: 'read-only' }),
         placement('computer-use', {
-          status: 'unrecognized',
+          status: 'outdated',
           topology: 'repo-scope',
           unresolvedPath: '/home/projects/work/.agents/skills/computer-use'
         })
@@ -252,10 +238,7 @@ describe('groupSkillFreshness', () => {
     expect(groups[0]?.locations.map((location) => location.chip)).toContain('in-a-repo')
   })
 
-  it('marks only the project copy as one the global update never judged', () => {
-    // Why the flag rather than the chip: the skip sentence reads this to keep a listed-only
-    // copy from explaining a skip it had no part in, and a plugin copy — which does earn
-    // groups of its own — has to stay on the judged side of that line.
+  it('marks project and plugin copies as ones the global update never judged', () => {
     const groups = groupSkillFreshness(
       [
         placement('computer-use', { status: 'outdated', topology: 'read-only' }),
@@ -265,7 +248,7 @@ describe('groupSkillFreshness', () => {
           unresolvedPath: '/home/.claude/plugins/cache/pack/skills/computer-use'
         }),
         placement('computer-use', {
-          status: 'unrecognized',
+          status: 'outdated',
           topology: 'repo-scope',
           unresolvedPath: '/home/projects/work/.agents/skills/computer-use'
         })
@@ -280,7 +263,7 @@ describe('groupSkillFreshness', () => {
       ])
     ).toEqual([
       ['read-only', true],
-      ['plugin-cache', true],
+      ['plugin-cache', false],
       ['in-a-repo', false]
     ])
   })

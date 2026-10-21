@@ -52,6 +52,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -409,7 +410,7 @@ describe('AgentBrowserBridge', () => {
               ''
             )
           }
-          return { kill: vi.fn() }
+          return createFakeAgentBrowserChild({ kill: vi.fn() })
         }
       )
 

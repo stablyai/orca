@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   orchestrationMutationRecoveryError,
-  renderCommand
+  renderCommand,
+  renderResolvedOrchestrationCommand
 } from './orchestration-mutation-recovery'
 import { RuntimeClientError } from './runtime-client'
 
@@ -45,7 +46,7 @@ describe('orchestration mutation recovery', () => {
     )
     expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
       'Run orca orchestration worker-show --dispatch dispatch_1 --json before retrying.',
-      'After inspecting the Dispatch, if keyed recovery is still needed, run orca orchestration worker-start --task task_1 --retry-request request_1. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.'
+      'After inspecting the Dispatch, if keyed recovery is still needed, run orca orchestration worker-start --task task_1 --retry-request request_1 from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.'
     ])
   })
 
@@ -121,7 +122,7 @@ describe('orchestration mutation recovery', () => {
 
     expect((result.data as { nextSteps?: string[] }).nextSteps).toEqual([
       'Run orca-dev orchestration worker-show --dispatch dispatch_3 --json before retrying.',
-      "After inspecting the Dispatch, if keyed recovery is still needed, run orca-dev orchestration worker-start --task 'task 3' --comment 'literal $(do-not-run)' --retry-request request_3. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate."
+      "After inspecting the Dispatch, if keyed recovery is still needed, run orca-dev orchestration worker-start --task 'task 3' --comment 'literal $(do-not-run)' --retry-request request_3 from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate."
     ])
     expect(result.message).toContain("'literal $(do-not-run)'")
   })
@@ -212,6 +213,19 @@ describe('orchestration mutation recovery', () => {
     )
   })
 
+  it('shell-quotes a configured Windows executable when resolving portable recovery commands', () => {
+    expect(
+      renderResolvedOrchestrationCommand(
+        'orca orchestration worker-show --dispatch ctx_1 --json',
+        'C:\\Program Files\\Orca\\orca-ide.cmd',
+        'win32',
+        { ComSpec: 'C:\\Windows\\System32\\cmd.exe' }
+      )
+    ).toBe(
+      '"C:\\Program Files\\Orca\\orca-ide.cmd" "orchestration" "worker-show" "--dispatch" "ctx_1" "--json"'
+    )
+  })
+
   it('keeps PowerShell and POSIX recovery guidance literal', () => {
     expect(
       renderCommand(['orca', 'literal "quoted" $HOME'], 'win32', {
@@ -299,5 +313,20 @@ describe('orchestration mutation recovery', () => {
     })
     expect(result.data).not.toHaveProperty('originalCommand')
     expect((result.data as { recovery: object }).recovery).not.toHaveProperty('retryCommand')
+  })
+
+  // Pins the outcome-unknown codes (round-2 S5): only these get recovery guidance.
+  it.each([
+    ['runtime_unavailable', true],
+    ['remote_runtime_unavailable', true],
+    ['runtime_timeout', true],
+    ['invalid_runtime_response', true],
+    ['runtime_manually_disconnected', false],
+    ['remote_runtime_timeout', false],
+    ['runtime_rpc_queue_overloaded', false],
+    ['invalid_argument', false]
+  ])('treats %s as an unknown mutation outcome: %s', (code, unknown) => {
+    const error = new RuntimeClientError(code, 'failed', { orchestrationRequestId: 'request-1' })
+    expect(orchestrationMutationRecoveryError(error) !== error).toBe(unknown)
   })
 })

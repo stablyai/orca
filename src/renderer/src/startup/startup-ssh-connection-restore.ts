@@ -60,7 +60,7 @@ export async function restoreSshConnectionsForStartup(args: {
   for (const { targetId } of backgroundTargets) {
     void reconnectSshTargetForRendererStartup({
       targetId,
-      connect: (id) => window.api.ssh.connect({ targetId: id }),
+      connect: (id) => window.api.ssh.connect({ targetId: id, automatic: true }),
       publishState: (id, state) => {
         publishSshConnectionState(id, state)
         if (state.status === 'connected') {
@@ -86,7 +86,7 @@ export async function restoreSshConnectionsForStartup(args: {
           const result = await reconnectSshTargetForRendererStartup({
             targetId,
             timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
-            connect: (id) => window.api.ssh.connect({ targetId: id }),
+            connect: (id) => window.api.ssh.connect({ targetId: id, automatic: true }),
             publishState: publishSshConnectionState,
             onFailure: (id, error) => {
               console.warn(`SSH auto-reconnect failed for ${id}:`, error)

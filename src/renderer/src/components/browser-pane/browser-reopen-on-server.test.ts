@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   createWebRuntimeSessionBrowserTab: vi.fn(async (_args: Record<string, unknown>) => true)
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createWebRuntimeSessionBrowserTab
 }))
 
@@ -50,18 +50,5 @@ describe('reopenBrowserPageOnServer', () => {
       placementPreference: 'server',
       focusOnCreate: true
     })
-  })
-
-  it('never closes or mutates the client-hosted page it escapes from', async () => {
-    mocks.createWebRuntimeSessionBrowserTab.mockClear()
-
-    await reopenBrowserPageOnServer({
-      environmentId: 'env-1',
-      worktreeId: 'wt-1',
-      lastCommittedUrl: 'https://example.com/app'
-    })
-
-    expect(mocks.createWebRuntimeSessionBrowserTab.mock.calls[0]?.[0]).not.toHaveProperty('page')
-    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenCalledOnce()
   })
 })

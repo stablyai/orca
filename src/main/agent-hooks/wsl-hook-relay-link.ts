@@ -13,6 +13,11 @@ export type WslRelayLinkOptions = {
   child: ChildProcessWithoutNullStreams
   distro: string
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  bindInterruptReconciliation?: (
+    mux: SshChannelMultiplexer,
+    connectionId: string,
+    isCurrent: () => boolean
+  ) => () => void
   warn: (message: string) => void
   /** Called exactly once when the link dies — from EITHER a mux dispose
    *  (protocol error, keepalive timeout) or the child exiting. A mux death
@@ -24,6 +29,8 @@ export type WslRelayLinkOptions = {
 export function wireWslRelayLink(options: WslRelayLinkOptions): void {
   const { mux, child, distro, ingest, warn, onDead } = options
   const connectionId = wslHookRelayConnectionId(distro)
+  let dead = false
+  const unbindInterrupt = options.bindInterruptReconciliation?.(mux, connectionId, () => !dead)
 
   mux.onNotification((method, params) => {
     if (method !== AGENT_HOOK_NOTIFICATION_METHOD) {
@@ -43,12 +50,12 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
     ingest(params, connectionId)
   })
 
-  let dead = false
   const die = (reason: string): void => {
     if (dead) {
       return
     }
     dead = true
+    unbindInterrupt?.()
     mux.dispose()
     child.kill()
     onDead(reason)

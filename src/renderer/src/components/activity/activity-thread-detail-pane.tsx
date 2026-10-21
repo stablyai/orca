@@ -1,7 +1,6 @@
 import React from 'react'
 import { MessageSquareText, TerminalSquare } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { EventRepoBadge, ThreadAgentStateIndicator } from './activity-thread-controls'
@@ -45,7 +44,7 @@ export function ActivityThreadDetailPane({
                 <span className="inline-flex shrink-0 items-start gap-1">
                   <ThreadAgentStateIndicator thread={selectedThread} />
                   <span className="inline-flex shrink-0 pt-[3px]">
-                    <AgentIcon agent={agentTypeToIconAgent(selectedThread.agentType)} size={16} />
+                    <AgentTypeIcon agentType={selectedThread.agentType} size={16} />
                   </span>
                 </span>
                 <h2 className="line-clamp-3 break-words text-sm font-semibold leading-snug">

@@ -1,19 +1,9 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { connect } from 'node:net'
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
-import { loadOrCreateTlsCertificate } from '../tls-certificate'
-
-// Why: disable TLS verification for self-signed certs in tests.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-
-function makeTls() {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'ws-transport-test-'))
-  return loadOrCreateTlsCertificate(userDataPath)
-}
+import { rejectNodeWebSocketOverCapacity } from './node-websocket-lifecycle'
 
 function heartbeatLifecycle(transport: WebSocketTransport) {
   return transport as unknown as {
@@ -51,29 +41,24 @@ describe('WebSocketTransport', () => {
     handler?: (msg: string, reply: (response: string) => void) => void,
     options: { preAuthTimeoutMs?: number } = {}
   ) {
-    const tls = makeTls()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       // Why: random "free" ports can still collide before listen() binds.
       // Port 0 lets the OS reserve an available port atomically.
       port: 0,
-      tlsCert: tls.cert,
-      tlsKey: tls.key,
       preAuthTimeoutMs: options.preAuthTimeoutMs
     })
     if (handler) {
       transport.onMessage(handler)
     }
     transports.push(transport)
-    return { transport, tls }
+    return { transport }
   }
 
   function connectWs(target: number | WebSocketTransport): Promise<WebSocket> {
     const port = typeof target === 'number' ? target : target.resolvedPort
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`wss://127.0.0.1:${port}`, {
-        rejectUnauthorized: false
-      })
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`)
       ws.once('open', () => resolve(ws))
       ws.once('error', reject)
     })
@@ -87,13 +72,6 @@ describe('WebSocketTransport', () => {
       ws.send(message)
     })
   }
-
-  it('starts and stops cleanly', async () => {
-    const { transport } = await createTransport()
-
-    await transport.start()
-    await transport.stop()
-  })
 
   it('arms heartbeat only while accepted connections exist', async () => {
     const { transport } = await createTransport()
@@ -440,9 +418,7 @@ describe('WebSocketTransport', () => {
 
     vi.useFakeTimers()
     try {
-      ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
-        serverSocket!
-      )
+      rejectNodeWebSocketOverCapacity(serverSocket!)
       vi.advanceTimersByTime(1_000)
     } finally {
       vi.useRealTimers()
@@ -460,6 +436,24 @@ describe('WebSocketTransport', () => {
     await transport.start()
 
     await transport.stop()
+  })
+
+  it('stops while an HTTP client holds an unanswered request open', async () => {
+    const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    transports.push(transport)
+    await transport.start()
+    const socket = connect(transport.resolvedPort, '127.0.0.1')
+    await new Promise<void>((resolve) => socket.once('connect', () => resolve()))
+    socket.on('error', () => {})
+    // Why: the server's automatic 100 Continue proves the request is parsed and in flight.
+    const continued = new Promise<void>((resolve) => socket.once('data', () => resolve()))
+    socket.write(
+      'POST /unanswered HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 1\r\nExpect: 100-continue\r\n\r\n'
+    )
+    await continued
+
+    await transport.stop()
+    socket.destroy()
   })
 
   it('is safe to stop without starting', async () => {
@@ -495,12 +489,9 @@ describe('WebSocketTransport', () => {
 
     // Why: second transport requests the same port, which is now occupied.
     // It should silently fall back to an OS-assigned port instead of throwing.
-    const tls = makeTls()
     const second = new WebSocketTransport({
       host: '127.0.0.1',
-      port: occupiedPort,
-      tlsCert: tls.cert,
-      tlsKey: tls.key
+      port: occupiedPort
     })
     transports.push(second)
 
@@ -514,12 +505,9 @@ describe('WebSocketTransport', () => {
   })
 
   it('falls back to OS-assigned port when preferred port is reserved', async () => {
-    const tls = makeTls()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
-      port: 6769,
-      tlsCert: tls.cert,
-      tlsKey: tls.key
+      port: 6769
     })
     transports.push(transport)
 
@@ -561,12 +549,9 @@ describe('WebSocketTransport', () => {
     // ticks without a pong should cause terminate() to fire and free the
     // slot. Verifying via the server's connection-close handler, which
     // is what frees up the MAX_WS_CONNECTIONS budget in production.
-    const tls = makeTls()
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       port: 0,
-      tlsCert: tls.cert,
-      tlsKey: tls.key,
       heartbeatIntervalMs: 50
     })
     transport.onMessage(() => {})
@@ -734,6 +719,28 @@ describe('WebSocketTransport', () => {
         )
 
       await expect(transport.start()).rejects.toThrow('open EACCES')
+    })
+
+    it('tries the deterministic ladder before an OS-assigned port (#15490)', async () => {
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: 6768,
+        fallbackPort: 62944,
+        fallbackLadder: [6769, 6770, 6771]
+      })
+      transports.push(transport)
+      const attempted: number[] = []
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      withListen.tryListen = async (port: number) => {
+        attempted.push(port)
+        if (port !== 6770) {
+          throw Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' })
+        }
+      }
+
+      await transport.start()
+      expect(attempted).toEqual([62944, 6768, 6769, 6770])
+      expect(transport.persistedFallbackFailed).toBe(true)
     })
 
     it('retries the persisted fallback port before an OS-assigned one', async () => {

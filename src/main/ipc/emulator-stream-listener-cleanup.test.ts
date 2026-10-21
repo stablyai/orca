@@ -66,20 +66,6 @@ describe('emulator frame stream listener cleanup', () => {
       expect(owner.listenerCount('destroyed')).toBe(0)
     }
   })
-
-  it('still tears down via the destroyed event when the window closes without a stop', () => {
-    registerEmulatorFrameStreamHandlers()
-    const start = handlers.get('emulator:frameStreamStart')!
-    const owner = makeOwner()
-
-    start({ sender: owner }, { streamUrl: 'http://127.0.0.1:0/stream' })
-    expect(owner.listenerCount('destroyed')).toBe(1)
-
-    owner.emit('destroyed')
-    // `.once` self-removes after firing; the handler's stop path removes it too
-    // (idempotent), so no listener survives the window close.
-    expect(owner.listenerCount('destroyed')).toBe(0)
-  })
 })
 
 describe('emulator video stream listener cleanup', () => {

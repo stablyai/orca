@@ -13,15 +13,20 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { aiVaultWorktreeCompactPath } from './ai-vault-session-worktree-affordances'
 
 export {
+  aiVaultResumeInSessionWorkspaceLabel,
+  aiVaultSessionWorkspaceHeading,
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeJumpTooltip,
   aiVaultWorktreeStatusLabel,
   canJumpToAiVaultSessionWorktree,
+  isAiVaultFolderWorkspaceId,
   isAiVaultSessionInCurrentWorktree,
   shouldShowAiVaultSessionWorktreeLine,
   shouldShowAiVaultWorktreeStatusBadge
@@ -45,6 +50,29 @@ type WorktreeCandidate = {
   // Precomputed so a 500-session scan doesn't re-normalize ~500 roots per session.
   ownsNormalizedCwd: (normalizedCwd: string) => boolean
   normalizedPathLength: number
+}
+
+/**
+ * Every workspace that owns sessions by cwd: git worktrees, and folder workspaces as their usual
+ * `folder:` rows. Git rows go first so a git worktree keeps an equal-path tie (the sort is stable).
+ */
+export function aiVaultSessionOwnerWorkspaces(
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly FolderWorkspace[]
+): readonly Worktree[] {
+  return folderWorkspaces.length === 0
+    ? worktrees
+    : [...worktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)]
+}
+
+export function useAiVaultSessionOwnerWorkspaces(
+  worktrees: readonly Worktree[],
+  { folderWorkspaces }: { folderWorkspaces: readonly FolderWorkspace[] }
+): readonly Worktree[] {
+  return useMemo(
+    () => aiVaultSessionOwnerWorkspaces(worktrees, folderWorkspaces),
+    [folderWorkspaces, worktrees]
+  )
 }
 
 export function resolveAiVaultSessionWorktreeInfo({

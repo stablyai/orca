@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { MobileRelayStatus } from '../../shared/mobile-relay-status'
+import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
@@ -74,12 +74,12 @@ export const mobileApi = {
   isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
     ipcRenderer.invoke('mobile:isWebSocketReady'),
 
-  getRelayStatus: (): Promise<{ status: MobileRelayStatus }> =>
+  getRelayStatus: (): Promise<MobileRelayStatusDetail> =>
     ipcRenderer.invoke('mobile:getRelayStatus'),
 
-  onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, status: MobileRelayStatus) =>
-      callback(status)
+  onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, detail: MobileRelayStatusDetail) =>
+      callback(detail)
     ipcRenderer.on('mobile:relayStatusChanged', listener)
     return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
   },

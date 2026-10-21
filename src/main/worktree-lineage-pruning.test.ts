@@ -4,6 +4,10 @@ import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/linea
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { pruneLineageForMissingRepoWorktrees } from './worktree-lineage-pruning'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../shared/worktree/host-qualified-identity'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -47,9 +51,12 @@ function createStore(
     getAllWorktreeLineage: () => worktreeLineageById,
     getAllWorkspaceLineage: () => workspaceLineageByChildKey,
     getWorktreeMeta: (id: string) => metaById[id],
-    removeWorktreeLineage: vi.fn((id: string) => delete worktreeLineageById[id]),
-    removeWorkspaceLineage: vi.fn((key: string) => delete workspaceLineageByChildKey[key]),
-    setWorktreeMeta: vi.fn((id: string, updates: Partial<WorktreeMeta>) => {
+    // Mirrors the store: removing a worktree's lineage also drops its workspace lineage.
+    removeWorktreeLineage: vi.fn(({ id }: HostWorktreeTarget) => {
+      delete worktreeLineageById[id]
+      delete workspaceLineageByChildKey[worktreeWorkspaceKey(id)]
+    }),
+    setWorktreeMeta: vi.fn(({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       metaById[id] = { ...metaById[id], ...updates }
       return metaById[id]
     })
@@ -81,7 +88,6 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     )
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(worktreeLineageById[childId]).toBe(edge)
   })
@@ -126,7 +132,6 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     )
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(worktreeLineageById[childId]).toBe(edge)
     expect(workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toBeDefined()
@@ -148,7 +153,6 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     pruneLineageForMissingRepoWorktrees(store as never, repo, [])
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(worktreeLineageById[childId]).toBe(edge)
     expect(workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toBe(workspaceEdge)
@@ -197,13 +201,24 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
       { preservedMetadataCandidateIds: new Set([liveParentId, liveChildId]) }
     )
 
-    expect(store.removeWorktreeLineage).toHaveBeenCalledWith(missingChildId)
-    expect(store.removeWorktreeLineage).not.toHaveBeenCalledWith(liveChildId)
-    expect(store.removeWorkspaceLineage).toHaveBeenCalledWith(worktreeWorkspaceKey(missingChildId))
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith(missingParentId, {
-      instanceId: expect.any(String)
-    })
-    expect(store.setWorktreeMeta).not.toHaveBeenCalledWith(liveParentId, expect.anything())
+    expect(store.removeWorktreeLineage).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: missingChildId, hostId: 'local' })
+    )
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: liveChildId, hostId: 'local' })
+    )
+    expect(workspaceLineageByChildKey[worktreeWorkspaceKey(missingChildId)]).toBeUndefined()
+    expect(workspaceLineageByChildKey[worktreeWorkspaceKey(liveChildId)]).toBeDefined()
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: missingParentId, hostId: 'local' }),
+      {
+        instanceId: expect.any(String)
+      }
+    )
+    expect(store.setWorktreeMeta).not.toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: liveParentId, hostId: 'local' }),
+      expect.anything()
+    )
     expect(metaById[missingParentId].instanceId).not.toBe(
       missingParentEdge.parentWorktreeInstanceId
     )

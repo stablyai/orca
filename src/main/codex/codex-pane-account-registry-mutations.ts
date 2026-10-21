@@ -137,12 +137,7 @@ function recordsEqual(
   return (
     left?.selectionKey === right.selectionKey &&
     left.accountId === right.accountId &&
-    left.homeRoute === right.homeRoute &&
-    left.shellStartupHomeOverride?.home === right.shellStartupHomeOverride?.home &&
-    left.shellStartupHomeOverride?.shell === right.shellStartupHomeOverride?.shell &&
-    left.shellStartupHomeOverride?.configHome === right.shellStartupHomeOverride?.configHome &&
-    left.shellStartupHomeOverride?.codexHome === right.shellStartupHomeOverride?.codexHome &&
-    left.environmentHomeOverride?.codexHome === right.environmentHomeOverride?.codexHome
+    left.homeRoute === right.homeRoute
   )
 }
 

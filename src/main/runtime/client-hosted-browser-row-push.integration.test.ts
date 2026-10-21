@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 

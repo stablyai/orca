@@ -2,9 +2,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
-import { getIcaclsExePath } from '../win32-utils'
+import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import {
+  loadWindowsSecurity,
+  WINDOWS_FILE_READ_EXECUTE,
+  type WindowsSecurity
+} from '../../shared/windows-security-addon'
 import {
   probeWindowsInstallDirAcl,
   resetWindowsInstallDirAclProbeForTest
@@ -17,12 +21,8 @@ import {
 import { resetWindowsInstallDirAclRepairForTest } from './windows-install-dir-package-acl-repair'
 
 /**
- * The other half of the ACL proof: the unit tests fake icacls, and this one runs
- * the real binary against a real poisoned tree on a real Windows box.
- *
- * Both are needed. `icacls <file> /grant "*S-1-15-2-2:(OI)(CI)(RX)"` exits 0 and
- * prints "Failed processing 0 files" while writing no ACE at all — a model of
- * icacls cannot catch that, and it is the exact mistake that leaves the app dead.
+ * The other half of the ACL proof: the unit tests fake the grant, and this one runs the real
+ * in-process grant against a real poisoned tree on a real Windows box, reading the result back.
  *
  * Runs only on win32; skipped elsewhere.
  */
@@ -30,69 +30,72 @@ const describeOnWindows = process.platform === 'win32' ? describe : describe.ski
 
 /** An unresolvable AppContainer SID, the shape the field hosts carry. */
 const ORPHAN_SID =
-  '*S-1-15-2-1111111111-2222222222-3333333333-4444444444-5555555555-6666666666-7777777777'
-const RESTRICTED_PACKAGES_NAME = /ALL RESTRICTED APPLICATION PACKAGES/i
+  'S-1-15-2-1111111111-2222222222-3333333333-1234567890-2345678901-3456789012-4012345678'
+const RESTRICTED_SID = 'S-1-15-2-2'
+const READ_EXECUTE = WINDOWS_FILE_READ_EXECUTE
+const FULL_CONTROL = 0x1f01ff
+const INHERITED_ACE = 0x10
 
-async function icacls(...args: string[]): Promise<{ code: number | null; out: string }> {
-  const result = await runProcess({ program: getIcaclsExePath(), args, timeoutMs: 30_000 })
-  return { code: result.code, out: `${result.stdout}\n${result.stderr}` }
+function requireSecurity(): WindowsSecurity {
+  const loaded = loadWindowsSecurity()
+  if ('error' in loaded) {
+    throw new Error(`the windows-security addon must load on a Windows test host: ${loaded.error}`)
+  }
+  return loaded
 }
 
-/** Explicit DACL, inheritance off: what a shipped module carries, and why a root grant alone is not enough. */
-async function createProtectedFile(path: string): Promise<void> {
-  writeFileSync(path, 'binary')
-  await icacls(path, '/inheritance:d')
-}
-
-describeOnWindows('install-dir package ACL repair against the real icacls', () => {
+describeOnWindows('install-dir package ACL repair against real DACLs', () => {
+  let addon: WindowsSecurity['addon']
+  let userSid: string
   let installDir: string
   let userDataPath: string
   let moduleFile: string
-  let trapFile: string
+  let nestedFile: string
 
-  beforeAll(async () => {
+  /** Explicit DACL, inheritance off: what a shipped module carries, and why a root grant alone is not enough. */
+  function createProtectedFile(path: string): void {
+    writeFileSync(path, 'binary')
+    addon.setDaclSddl(
+      path,
+      `D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;${userSid})(A;;0x1200a9;;;${ORPHAN_SID})`
+    )
+  }
+
+  beforeAll(() => {
+    ;({ addon, userSid } = requireSecurity())
     installDir = mkdtempSync(join(tmpdir(), 'orca-acl-live-'))
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-live-ud-'))
     mkdirSync(join(installDir, 'resources'), { recursive: true })
     moduleFile = join(installDir, 'ffmpeg.dll')
-    trapFile = join(installDir, 'resources', 'trap.dll')
-    await createProtectedFile(moduleFile)
-    await createProtectedFile(trapFile)
-    // Poison: an orphan package ACE on the tree and on the module, no well-known grant.
-    await icacls(installDir, '/grant', `${ORPHAN_SID}:(OI)(CI)(RX)`)
-    await icacls(moduleFile, '/grant', `${ORPHAN_SID}:(RX)`)
-    await icacls(trapFile, '/grant', `${ORPHAN_SID}:(RX)`)
+    nestedFile = join(installDir, 'resources', 'nested.dll')
+    createProtectedFile(moduleFile)
+    createProtectedFile(nestedFile)
+    // Poison: an orphan package ACE on the tree, no well-known package grant anywhere.
+    addon.grantAccess(installDir, ORPHAN_SID, WINDOWS_FILE_READ_EXECUTE, {
+      inheritable: true,
+      replace: false
+    })
   })
 
   afterAll(() => {
-    // Why removeTreeSync: two icacls.exe children just rewrote DACLs on this tree, so a
-    // raw rmSync races handles Windows has not released and throws EPERM after the
-    // assertions already passed.
+    // Why removeTreeSync: the DACL rewrites just touched this tree, so a raw rmSync can race
+    // handles Windows has not released and throw EPERM after the assertions already passed.
     removeTreeSync(installDir)
     removeTreeSync(userDataPath)
   })
 
-  function probeVerdict(): Promise<Record<string, unknown>> {
+  function probeVerdict(): Promise<CrashReportBreadcrumbData> {
     resetWindowsInstallDirAclProbeForTest()
     return new Promise((resolve) => {
       probeWindowsInstallDirAcl({
         installDir,
         recordBreadcrumb: () => undefined,
-        onDone: (data) => resolve(data as Record<string, unknown>)
+        onDone: resolve
       })
     })
   }
 
-  // The trap, pinned against the real binary: this is the form that looks like it worked.
-  it('confirms an inheritance-flagged grant silently writes nothing to a file', async () => {
-    const flagged = await icacls(trapFile, '/grant', '*S-1-15-2-2:(OI)(CI)(RX)')
-    expect(flagged.code).toBe(0)
-    expect(flagged.out).toMatch(/Failed processing 0 files?/i)
-    const after = await icacls(trapFile)
-    expect(after.out).not.toMatch(RESTRICTED_PACKAGES_NAME)
-  })
-
-  it('repairs the tree before the window, and the grant lands on the module file', async () => {
+  it('repairs the tree before the window, and the grant lands on each module file', async () => {
     expect((await probeVerdict()).matchesPoisonSignature).toBe(true)
 
     resetWindowsInstallDirAclRecoveryForTest()
@@ -100,25 +103,37 @@ describeOnWindows('install-dir package ACL repair against the real icacls', () =
     // The state a launch that died mid-repair leaves behind.
     writeInstallDirAclPoisonMarker(userDataPath, installDir, '1.4.196')
 
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     const mode = await repairKnownPoisonedInstallDirBeforeWindow({
       installDir,
       userDataPath,
       appVersion: '1.4.196',
       recordBreadcrumb: () => undefined
     })
-    console.log(`[live-acl] blocking repair ${mode} in ${Date.now() - startedAt}ms`)
+    console.log(
+      `[live-acl] blocking repair ${mode} in ${(performance.now() - startedAt).toFixed(1)}ms`
+    )
     expect(mode).toBe('repaired')
 
-    // A directory grant is not enough: the file carries its own DACL.
-    expect((await icacls(moduleFile)).out).toMatch(RESTRICTED_PACKAGES_NAME)
-    // The /T pass must also reach a NESTED protected file — the shape app.asar.unpacked
-    // and node_modules actually have.
-    expect((await icacls(trapFile)).out).toMatch(RESTRICTED_PACKAGES_NAME)
-    // And the (OI)(CI) root grant exists so files a later update writes inherit it.
+    // A directory grant is not enough: each protected file needs its own explicit, flagless ACE —
+    // the root one, and a NESTED one, the shape app.asar.unpacked and node_modules have.
+    const allow = (sid: string, mask: number, flags = 0) =>
+      expect.objectContaining({ type: 0, flags, mask, sid })
+    for (const file of [moduleFile, nestedFile]) {
+      const aces = addon.getDaclAces(file)?.aces
+      expect(aces).toContainEqual(allow(RESTRICTED_SID, READ_EXECUTE))
+      // Additive: SYSTEM, Administrators, the user and the orphan all survive.
+      for (const sid of ['S-1-5-18', 'S-1-5-32-544', userSid]) {
+        expect(aces).toContainEqual(allow(sid, FULL_CONTROL))
+      }
+      expect(aces).toContainEqual(allow(ORPHAN_SID, READ_EXECUTE))
+    }
+    // And the inheritable root grant exists so files a later update writes inherit it.
     const updateFile = join(installDir, 'resources', 'added-by-update.dll')
     writeFileSync(updateFile, 'binary')
-    expect((await icacls(updateFile)).out).toMatch(RESTRICTED_PACKAGES_NAME)
+    expect(addon.getDaclAces(updateFile)?.aces).toContainEqual(
+      allow(RESTRICTED_SID, READ_EXECUTE, INHERITED_ACE)
+    )
     expect((await probeVerdict()).matchesPoisonSignature).toBe(false)
   })
 })

@@ -1,5 +1,7 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import type { AppState } from '@/store'
+import { useAppStore } from '@/store'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefDetails
@@ -12,7 +14,6 @@ import {
 type CreatePullRequestBaseRefDiscoveryOptions = {
   open: boolean
   repoId: string
-  settings: AppState['settings']
   base: string
   baseQuery: string
   setBase: Dispatch<SetStateAction<string>>
@@ -24,7 +25,6 @@ type CreatePullRequestBaseRefDiscoveryOptions = {
 export function useCreatePullRequestBaseRefDiscovery({
   open,
   repoId,
-  settings,
   base,
   baseQuery,
   setBase,
@@ -36,6 +36,11 @@ export function useCreatePullRequestBaseRefDiscovery({
   // previous repo's default branch would silently suppress the stacked-PR lookup.
   const [repoDefault, setRepoDefault] = useState<{ repoId: string; baseRef: string } | null>(null)
   const repoDefaultBaseRef = repoDefault?.repoId === repoId ? repoDefault.baseRef : null
+  // Why: refs live on the repo's own host, not the focused one.
+  const repoHostId = useAppStore((s) => {
+    const repo = findRepoForHost(s.repos, repoId, { settings: s.settings })
+    return repo ? getRepoExecutionHostId(repo) : null
+  })
 
   // Why: resolved separately from eligibility's defaultBaseRef, which reports the
   // worktree's own base. Consumers that need "is this the repo's default branch?"
@@ -43,11 +48,11 @@ export function useCreatePullRequestBaseRefDiscovery({
   useEffect(() => {
     // Why: the repo default doesn't move while a repo stays open, so skip the probe
     // once it is known — on a remote runtime it is an RPC round-trip per composer open.
-    if (!open || repoDefaultBaseRef) {
+    if (!open || repoDefaultBaseRef || !repoHostId) {
       return
     }
     let stale = false
-    void getRuntimeRepoBaseRefDefault(settings, repoId)
+    void getRuntimeRepoBaseRefDefault(repoHostId, repoId)
       .then((result) => {
         if (!stale && result.defaultBaseRef) {
           setRepoDefault({ repoId, baseRef: stripBaseRef(result.defaultBaseRef) })
@@ -57,7 +62,7 @@ export function useCreatePullRequestBaseRefDiscovery({
     return () => {
       stale = true
     }
-  }, [open, repoDefaultBaseRef, repoId, settings])
+  }, [open, repoDefaultBaseRef, repoHostId, repoId])
 
   useEffect(() => {
     if (!open || base || !repoDefaultBaseRef) {
@@ -67,7 +72,7 @@ export function useCreatePullRequestBaseRefDiscovery({
   }, [base, open, repoDefaultBaseRef, setBase])
 
   useEffect(() => {
-    if (!open || baseQuery.trim().length < 2) {
+    if (!open || !repoHostId || baseQuery.trim().length < 2) {
       setBaseResults([])
       setBaseSearchPending(false)
       setBaseSearchError(null)
@@ -76,7 +81,7 @@ export function useCreatePullRequestBaseRefDiscovery({
     let stale = false
     setBaseSearchPending(true)
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefDetails(settings, repoId, baseQuery.trim(), 20)
+      void searchRuntimeRepoBaseRefDetails(repoHostId, repoId, baseQuery.trim(), 20)
         .then((results) => {
           if (!stale) {
             setBaseResults(normalizeCreateReviewBaseSearchResults(results))
@@ -99,7 +104,15 @@ export function useCreatePullRequestBaseRefDiscovery({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [baseQuery, open, repoId, settings, setBaseResults, setBaseSearchError, setBaseSearchPending])
+  }, [
+    baseQuery,
+    open,
+    repoHostId,
+    repoId,
+    setBaseResults,
+    setBaseSearchError,
+    setBaseSearchPending
+  ])
 
   return repoDefaultBaseRef
 }

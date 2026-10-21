@@ -1,4 +1,5 @@
 import { errors } from '@stablyai/playwright-test'
+import { encodePaletteIdentity } from '../../src/renderer/src/lib/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -382,19 +383,45 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         worktreeId: seeded.sharedWorktreeId
       }
     )
+    const remoteBrowserIdentity = encodePaletteIdentity([
+      'browser-page',
+      remoteHostId,
+      seeded.sharedWorktreeId,
+      seeded.remoteWorkspaceId,
+      seeded.remotePageId
+    ])
+    const localBrowserIdentity = encodePaletteIdentity([
+      'browser-page',
+      'local',
+      seeded.sharedWorktreeId,
+      'browser-local',
+      'page-local'
+    ])
+    const remoteSimulatorIdentity = encodePaletteIdentity([
+      'simulator-tab',
+      remoteHostId,
+      seeded.sharedWorktreeId,
+      'simulator-remote'
+    ])
+    const localSimulatorIdentity = encodePaletteIdentity([
+      'simulator-tab',
+      'local',
+      seeded.sharedWorktreeId,
+      'simulator-local'
+    ])
     expect(remoteBrowserAfterOpen.browserCount).toBe(2)
     expect(remoteBrowserAfterOpen.owner).toBe(remoteHostId)
     await input.fill('New Tab')
-    await expect(
-      palette.locator(`[cmdk-item][data-value="browser-page:${seeded.remotePageId}"]`)
-    ).toHaveCount(1)
+    await expect(palette.locator(`[cmdk-item][data-value="${remoteBrowserIdentity}"]`)).toHaveCount(
+      1
+    )
     await expect(palette.getByText('Local browser proof', { exact: true })).toHaveCount(0)
     await testInfo.attach('cmd-j-host-qualified-browser.png', {
       body: await page.screenshot(),
       contentType: 'image/png'
     })
     await expectSameIdCollisionIntact('remote browser page click')
-    await palette.locator(`[cmdk-item][data-value="browser-page:${seeded.remotePageId}"]`).click()
+    await palette.locator(`[cmdk-item][data-value="${remoteBrowserIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -433,11 +460,11 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     palette = page.getByRole('dialog', { name: 'Jump to...' })
     input = palette.getByPlaceholder('Search chats, terminals, worktrees, settings, and actions...')
     await input.fill('local.example.test')
-    await expect(palette.locator('[cmdk-item][data-value="browser-page:page-local"]')).toHaveCount(
+    await expect(palette.locator(`[cmdk-item][data-value="${localBrowserIdentity}"]`)).toHaveCount(
       1
     )
     await expectSameIdCollisionIntact('local browser page click')
-    await palette.locator('[cmdk-item][data-value="browser-page:page-local"]').click()
+    await palette.locator(`[cmdk-item][data-value="${localBrowserIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -469,7 +496,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       contentType: 'image/png'
     })
     await expectSameIdCollisionIntact('remote simulator click')
-    await palette.locator('[cmdk-item][data-value="simulator-tab:simulator-remote"]').click()
+    await palette.locator(`[cmdk-item][data-value="${remoteSimulatorIdentity}"]`).click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {
@@ -496,9 +523,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     palette = page.getByRole('dialog', { name: 'Jump to...' })
     input = palette.getByPlaceholder('Search chats, terminals, worktrees, settings, and actions...')
     await input.fill('Local emulator proof')
-    const localSimulatorRow = palette.locator(
-      '[cmdk-item][data-value="simulator-tab:simulator-local"]'
-    )
+    const localSimulatorRow = palette.locator(`[cmdk-item][data-value="${localSimulatorIdentity}"]`)
     await expect(localSimulatorRow).toHaveCount(1)
     await expectSameIdCollisionIntact('local simulator click')
     await localSimulatorRow.click()

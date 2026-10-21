@@ -108,6 +108,41 @@ describe('Windows shell PATH hydration', () => {
     expect(spawner.mock.calls).toEqual([['pwsh.exe'], ['powershell.exe']])
   })
 
+  it('falls back to Windows PowerShell when pwsh throws synchronously at spawn', async () => {
+    const proc = createMockShellProcess()
+    spawnMock
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error('spawn EPERM'), { code: 'EPERM' })
+      })
+      .mockReturnValueOnce(proc)
+    configureWindowsShellPathHydration('pwsh.exe', null, 'powershell.exe')
+
+    const resultPromise = hydrateShellPath()
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    proc.stdout.emit('data', Buffer.from('__ORCA_SHELL_PATH__C:\\inbox-ps__ORCA_SHELL_PATH__'))
+    proc.emit('close', 0, null)
+
+    await expect(resultPromise).resolves.toEqual({
+      segments: ['C:\\inbox-ps'],
+      ok: true,
+      failureReason: 'none'
+    })
+    expect(spawnMock.mock.calls.map((call) => call[0])).toEqual(['pwsh.exe', 'powershell.exe'])
+  })
+
+  it('reports spawn_error when every shell throws synchronously at spawn', async () => {
+    spawnMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawn EPERM'), { code: 'EPERM' })
+    })
+    configureWindowsShellPathHydration('pwsh.exe', null, 'powershell.exe')
+
+    await expect(hydrateShellPath()).resolves.toEqual({
+      segments: [],
+      ok: false,
+      failureReason: 'spawn_error'
+    })
+  })
+
   it('uses the resolved Git Bash executable for the configured sentinel', async () => {
     const spawner = vi.fn<HydrationSpawner>(async () => ({
       segments: ['C:\\tools'],

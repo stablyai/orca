@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { connect, type Socket } from 'node:net'
 import { randomBytes } from 'node:crypto'
+import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { ensureAdbOk } from './android-adb-result'
@@ -14,7 +15,6 @@ import {
 import {
   parseScrcpyVideoFrames,
   parseScrcpyVideoMeta,
-  type ScrcpyFrameParseResult,
   type ScrcpyVideoFrame,
   type ScrcpyVideoMeta
 } from './scrcpy-video-frame-parser'
@@ -57,7 +57,7 @@ export class ScrcpyStreamSession {
   private server: ChildProcess | null = null
   private videoSocket: Socket | null = null
   private controlSocket: Socket | null = null
-  private pendingVideo: Buffer = Buffer.alloc(0)
+  private readonly pendingVideo = new RelayFrameBuffer()
   private metaSeen = false
   private headerStripped = false
   private closed = false
@@ -206,47 +206,48 @@ export class ScrcpyStreamSession {
   }
 
   private handleVideoChunk(chunk: Buffer): void {
-    let buffer = Buffer.concat([this.pendingVideo, chunk])
+    const buffer = this.pendingVideo
+    if (chunk.length > 0) {
+      // Socket chunks and emitted frames must not share mutable pending storage.
+      buffer.append(Buffer.from(chunk))
+    }
     // The first socket carries a 1-byte readiness marker + the 64-byte device name.
     if (!this.headerStripped) {
       const headerLen = DUMMY_BYTE + DEVICE_NAME_BYTES
       if (buffer.length < headerLen) {
-        this.pendingVideo = buffer
         return
       }
-      buffer = Buffer.from(buffer.subarray(headerLen))
+      buffer.discard(headerLen)
       this.headerStripped = true
     }
     let shouldResolveReady = false
     if (!this.metaSeen) {
-      const meta = parseScrcpyVideoMeta(buffer)
-      if (!meta) {
-        this.pendingVideo = buffer
+      if (buffer.length < 12) {
         return
       }
+      const meta = parseScrcpyVideoMeta(buffer.peek(12))!
       this.metaSeen = true
       emulatorProbe('scrcpy.meta', meta)
       this.callbacks.onMeta(meta)
       shouldResolveReady = true
-      buffer = Buffer.from(buffer.subarray(12))
+      buffer.discard(12)
     }
     // The parser throws on a desynced stream (e.g. an absurd frame size); catch
     // it here so it fails the session via the normal teardown path rather than
     // surfacing as an unhandled exception in this socket 'data' listener.
-    let result: ScrcpyFrameParseResult
+    let frames: ScrcpyVideoFrame[]
     try {
-      result = parseScrcpyVideoFrames(Buffer.alloc(0), buffer)
+      frames = parseScrcpyVideoFrames(buffer)
     } catch (error) {
       this.fail(error instanceof Error ? error.message : String(error))
       return
     }
-    this.pendingVideo = result.pending
     if (shouldResolveReady) {
       this.resolveReady?.()
       this.resolveReady = null
       this.rejectReady = null
     }
-    for (const frame of result.frames) {
+    for (const frame of frames) {
       this.callbacks.onFrame(frame)
     }
   }

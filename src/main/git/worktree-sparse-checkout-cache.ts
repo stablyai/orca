@@ -2,11 +2,8 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { canonicalWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckout } from './worktree-sparse-state'
 
-// Why: `git worktree list` only emits a `sparse` porcelain line on newer Git (annotateSparseCheckoutStatus
-// already skips rows where that's set), but Orca's compatibility baseline is Git 2.25, which predates it —
-// so every listing still paid a per-worktree fs.stat + config read on the fallback path, measured at ~9x
-// the cost of the `git worktree list` call it decorates on a 1000-worktree repo. Cache the result, scoped
-// per repo so churn in one repo can't evict another's warm entries.
+// Worktree porcelain omits sparse state, so cache the per-worktree filesystem detection.
+// Keys isolate repositories and distros; one global budget bounds retained results.
 //
 // Invalidation coverage:
 //  - Orca-driven remove/move: explicit calls below (worktree-removal.ts, worktree-move.ts).
@@ -24,6 +21,7 @@ import { detectSparseCheckout } from './worktree-sparse-state'
 //    on the rare edge that actually flipped, rather than partial state that could quietly diverge.
 //  - App cold start: the map starts empty, so the first read is always a fresh detect.
 const SPARSE_CHECKOUT_CACHE_RECONCILE_INTERVAL_MS = 5 * 60_000
+export const MAX_SPARSE_CHECKOUT_CACHE_ENTRIES = 512
 
 // Part of the cache key, not just a probe argument. A distro-less read of a WSL-hosted repo
 // resolves the gitdir pointer against a fabricated Win32 path and reports "not sparse"; several
@@ -48,6 +46,18 @@ export type SparseCheckoutChangeListener = (
 
 const sparseCheckoutStateCache = new Map<string, SparseCheckoutCacheEntry>()
 let changeListener: SparseCheckoutChangeListener | undefined
+
+function retainSparseCheckoutCacheEntry(key: string, entry: SparseCheckoutCacheEntry): void {
+  sparseCheckoutStateCache.delete(key)
+  sparseCheckoutStateCache.set(key, entry)
+  while (sparseCheckoutStateCache.size > MAX_SPARSE_CHECKOUT_CACHE_ENTRIES) {
+    const oldest = sparseCheckoutStateCache.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    sparseCheckoutStateCache.delete(oldest.value)
+  }
+}
 
 // Distro last so the repo- and worktree-scoped prefix deletes below still match every variant.
 function cacheKey(
@@ -87,10 +97,11 @@ export async function detectSparseCheckoutCached(
   const cached = sparseCheckoutStateCache.get(key)
   if (!cached) {
     const isSparse = await detectSparseCheckout(worktreePath, options)
-    sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+    retainSparseCheckoutCacheEntry(key, { isSparse, cachedAt: Date.now() })
     return isSparse
   }
   if (Date.now() - cached.cachedAt < SPARSE_CHECKOUT_CACHE_RECONCILE_INTERVAL_MS) {
+    retainSparseCheckoutCacheEntry(key, cached)
     return cached.isSparse
   }
   // Stale-while-revalidate: serve the still-cached value now and correct it in the background,
@@ -115,7 +126,7 @@ async function revalidateInBackground(
     // A `has()`/presence check can't tell "still mine" from "someone else's fresh value" sharing
     // the key; comparing the map's current entry object to the one we started from can.
     if (sparseCheckoutStateCache.get(key) === startingEntry) {
-      sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+      retainSparseCheckoutCacheEntry(key, { isSparse, cachedAt: Date.now() })
     }
     if (isSparse !== startingEntry.isSparse) {
       changeListener?.(repoPath, worktreePath, isSparse)

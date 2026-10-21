@@ -1,3 +1,4 @@
+import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
 import type { GitHubPullRequestStateUpdate } from '../../../../shared/issue-mutation-types'
 import {
   ghExecFileAsync,
@@ -35,6 +36,7 @@ export async function updatePRState(
         ...ghOptions
       }
     )
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =

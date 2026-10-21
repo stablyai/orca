@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { RuntimeBrowserCommandHost } from '../runtime/orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
 import { BrowserError } from '../browser/browser-error'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import type { ExternalChromiumBrowserSession } from './external-chromium-browser-session'
@@ -243,7 +243,7 @@ export class ExternalChromiumTabRegistry {
     worktree: unknown
   ): Promise<string | undefined> {
     return typeof worktree === 'string' && worktree
-      ? (await host.resolveWorktreeSelector(worktree)).id
+      ? (await host.resolveBrowserWorkspace(worktree)).id
       : undefined
   }
 }

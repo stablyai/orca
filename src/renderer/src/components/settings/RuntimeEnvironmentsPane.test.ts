@@ -17,7 +17,7 @@ import {
   isRuntimeServerTransportConnected,
   isRuntimeEnvironmentRemovalBlocked,
   type RuntimeHostDetails
-} from './RuntimeEnvironmentsPane'
+} from './runtime-environment-host-details'
 
 function details(overrides: Partial<RuntimeHostDetails>): RuntimeHostDetails {
   return {
@@ -289,11 +289,9 @@ describe('RuntimeEnvironmentsPane host details', () => {
     ).toBe('disconnected')
   })
 
-  it('explains that selecting a saved server is the explicit default Host mode', () => {
-    expect(getActiveServerModeDescription(true)).toContain('Use this computer by default')
-    expect(getActiveServerModeDescription(true)).toContain('browser/mobile handoff')
-    expect(getActiveServerModeDescription(false)).toContain('default Host')
-    expect(getActiveServerModeDescription(false)).toContain('paired Orca runtime')
+  it('explains that the choice only picks the host for new projects', () => {
+    expect(getActiveServerModeDescription(true)).toBe('Existing projects stay where they are.')
+    expect(getActiveServerModeDescription(false)).toContain('new projects on the chosen server')
   })
 
   it('blocks removing the active server independently of local-runtime availability', () => {

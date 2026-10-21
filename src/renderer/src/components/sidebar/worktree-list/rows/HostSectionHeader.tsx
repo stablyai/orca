@@ -2,9 +2,10 @@ import React from 'react'
 import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import type { HostHeaderRow } from '../../host-section-rows'
+import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { HostSectionHeaderMenu } from '../../HostSectionHeaderMenu'
+import { stopRepoHeaderMenuEvent } from './header-event-guards'
+import { getHostHeaderDetail } from './host-header-detail'
 
 function formatSectionActivityLabel(count: number, label: string): string {
   return `${count} ${label}${count === 1 ? '' : 's'}`
@@ -43,37 +44,6 @@ function HostHeaderHealthIcon({
   }
   if (health === 'blocked' || health === 'error') {
     return <AlertTriangle className="size-3 shrink-0 text-destructive" />
-  }
-  return null
-}
-
-function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boolean } | null {
-  // Why: a blocked compatibility verdict earns a compact warning so the host stands out.
-  if (row.health === 'blocked') {
-    return {
-      text: translate('auto.components.sidebar.WorktreeList.7a8b9c0d1e', 'Update required'),
-      isWarning: true
-    }
-  }
-  // Why: auth-failed needs a worded status; the health icon alone doesn't tell the user to re-auth.
-  if (row.connectionStatus === 'auth-failed') {
-    return {
-      text: translate(
-        'auto.components.sidebar.WorktreeList.hostAuthNeeded',
-        'Authentication needed'
-      ),
-      isWarning: true
-    }
-  }
-  if (row.health === 'disconnected') {
-    return {
-      text: translate('auto.components.sidebar.WorktreeList.hostDisconnected', 'Disconnected'),
-      isWarning: false
-    }
-  }
-  // Why: show the transport detail only for remote hosts; it's noise under the local label.
-  if (row.kind !== 'local') {
-    return { text: row.detail, isWarning: false }
   }
   return null
 }
@@ -126,7 +96,7 @@ export function HostSectionHeader({
         )}
         <HostHeaderHealthIcon health={row.health} />
         {/* Why: badge hugs the label (like repo headers) instead of floating by the hover controls. */}
-        <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
               'min-w-0 truncate text-[12px] font-semibold leading-none',
@@ -152,7 +122,17 @@ export function HostSectionHeader({
             className={cn('size-3.5 transition-transform', row.collapsed && '-rotate-90')}
           />
         </div>
-        <span data-host-header-action="">
+        {/* Why: menu and dialog portals still bubble React events here; keep them from toggling or dragging the row. */}
+        <span
+          data-host-header-action=""
+          className="flex shrink-0 items-center"
+          onPointerDown={stopRepoHeaderMenuEvent}
+          onMouseDown={stopRepoHeaderMenuEvent}
+          onPointerUp={stopRepoHeaderMenuEvent}
+          onMouseUp={stopRepoHeaderMenuEvent}
+          onClick={stopRepoHeaderMenuEvent}
+          onKeyDown={stopRepoHeaderMenuEvent}
+        >
           <HostSectionHeaderMenu row={row} />
         </span>
       </div>

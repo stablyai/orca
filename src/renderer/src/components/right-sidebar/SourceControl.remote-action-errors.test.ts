@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearRemoteActionErrorsForCompletedConflictOperations } from './SourceControl'
+import { clearRemoteActionErrorsForCompletedConflictOperations } from './source-control/sync/remote-refresh'
 
 describe('SourceControl remote action error reconciliation', () => {
   it('clears a rebase failure after git status observes the rebase completed', () => {

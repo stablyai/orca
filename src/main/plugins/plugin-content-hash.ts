@@ -12,8 +12,8 @@ import { pluginPathSegmentError } from '../../shared/plugins/plugin-path-safety'
  * are refused outright (installed trees must be self-contained).
  */
 
-const MAX_PLUGIN_FILES = 2_000
-const MAX_PLUGIN_TOTAL_BYTES = 50 * 1024 * 1024
+export const MAX_PLUGIN_FILES = 2_000
+export const MAX_PLUGIN_TOTAL_BYTES = 50 * 1024 * 1024
 
 type PluginFile = { path: string; size: number }
 

@@ -226,7 +226,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const pane = this.resolvePane(team, tmuxValue(parsed, '-t') ?? envPane)
     const text = tmuxSendKeysText(parsed.positional, parsed.flags.has('-l'))
     if (text) {
-      await api.sendTerminal(pane.handle, { text })
+      await api.sendTerminal(pane.handle, { text }, { inputKind: 'driving' })
     }
     return ''
   }

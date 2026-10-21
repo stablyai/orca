@@ -23,7 +23,6 @@ export function SourceControlHeaderIconButton({
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
           aria-label={label}
-          title={label}
           onClick={onClick}
           disabled={disabled}
         >

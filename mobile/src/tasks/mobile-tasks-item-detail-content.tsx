@@ -25,6 +25,7 @@ import {
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
+import { JiraDetailMeta } from '../components/JiraDetailMeta'
 
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
@@ -80,6 +81,13 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             <Text style={styles.detailMetaLabel}>Project</Text>
             <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
           </View>
+        ) : null}
+        {detailPayload.provider === 'jira' ? (
+          <JiraDetailMeta
+            assignee={detailPayload.assignee}
+            priorityName={detailPayload.priorityName}
+            projectName={detailPayload.projectName}
+          />
         ) : null}
         {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
         detailPayload.assignees.length > 0 ? (

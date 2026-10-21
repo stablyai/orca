@@ -20,10 +20,15 @@ test.afterAll(() => {
   rmSync(missingGitPath, { recursive: true, force: true })
 })
 
-async function setProcessPath(app: ElectronApplication, value: string): Promise<void> {
-  await app.evaluate((_electron, nextPath) => {
-    process.env.PATH = nextPath
-  }, value)
+async function hideLocalGit(app: ElectronApplication, value: string): Promise<void> {
+  // Why SHELL too: a forced local preflight merges the login shell's PATH back in first.
+  await app.evaluate(
+    (_electron, { nextPath, missingShell }) => {
+      process.env.PATH = nextPath
+      process.env.SHELL = missingShell
+    },
+    { nextPath: value, missingShell: path.join(value, 'missing-shell') }
+  )
 }
 
 async function directGitPreflight(page: Page): Promise<boolean> {
@@ -84,7 +89,7 @@ async function runRuntimePreflightJourney(
 
     const offerA = await createRuntimeDesktopPairingOffer(hubAPage)
     client = await launchPairedElectronClient(offerA, testInfo, 'Preflight runtime A')
-    await setProcessPath(client.app, missingGitPath)
+    await hideLocalGit(client.app, missingGitPath)
     expect(await client.app.evaluate(() => process.env.PATH)).toBe(missingGitPath)
     if (headed) {
       await client.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show())

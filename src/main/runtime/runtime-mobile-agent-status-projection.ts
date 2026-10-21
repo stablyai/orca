@@ -1,5 +1,8 @@
 import {
+  AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusAuthorityObservedAt,
+  pickHostTurnEnd,
   pickParsedAgentStatusPayload,
   type AgentStatusEntry,
   type AgentStatusIpcPayload
@@ -22,7 +25,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   if (
     (status.state === 'waiting' || status.state === 'blocked') &&
     pty.lastAgentStatus === 'idle' &&
-    Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS
   ) {
     return status
   }
@@ -35,7 +38,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   }
   const richStatusCanOwnTitleInterval =
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
-    status.updatedAt > pty.lastAgentStatusRichInvalidatedAtEpochMs
+    agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
   const titleEvidenceAt = pty.lastOscTitleEpochMs
   if (titleEvidenceAt === null) {
     return richStatusCanOwnTitleInterval ? status : null
@@ -63,11 +66,23 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     (pty.lastAgentStatus === 'permission' &&
       (status.state === 'blocked' || status.state === 'waiting'))
   if (!titleConfirmsState) {
-    if (richStatusCanOwnTitleInterval && status.updatedAt >= titleEvidenceAt) {
+    if (
+      richStatusCanOwnTitleInterval &&
+      agentStatusAuthorityObservedAt(status) >= titleEvidenceAt
+    ) {
       return status
     }
     if (pty.lastAgentStatus === null && !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)) {
-      return status
+      // Why: an earlier title-only `working` was published at a later stamp; returning the
+      // older hook stamp makes clients keep that `working` forever (#28102). updatedAt is
+      // the ordering clock, so advance it while evidenceObservedAt keeps freshness honest.
+      return status.state !== 'working' && titleEvidenceAt > status.updatedAt
+        ? {
+            ...status,
+            updatedAt: titleEvidenceAt,
+            evidenceObservedAt: agentStatusAuthorityObservedAt(status)
+          }
+        : status
     }
     const titleState =
       pty.lastAgentStatus === 'working'
@@ -82,7 +97,8 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     )
   }
   const richStatusOwnsCurrentState =
-    Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS && richStatusCanOwnTitleInterval
+    Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS &&
+    richStatusCanOwnTitleInterval
   // Fresh explicit evidence from this title interval owns acknowledgement identity.
   const stateStartedAt = richStatusOwnsCurrentState
     ? status.stateStartedAt
@@ -106,6 +122,8 @@ export type RuntimeHookAgentRowLookup = {
   agentType: string | null
   agentIsLive: boolean
   live: HookLiveAgentRow | null
+  /** Latest nonterminal row hydrated across a host restart: unverifiable, never live. */
+  restored: HookLiveAgentRow | null
 }
 
 /** Resume identity stays valid until relaunch; ownership and live status remain freshness-bounded. */
@@ -115,7 +133,12 @@ export function selectRuntimeHookAgentRowForPane(
   let session: AgentStatusIpcPayload | null = null
   let agent: AgentStatusIpcPayload | null = null
   let live: AgentStatusIpcPayload | null = null
-  const freshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
+  let restored: AgentStatusIpcPayload | null = null
+  let confirmedReceivedAt = -Infinity
+  const now = Date.now()
+  const freshAfter = now - AGENT_STATUS_STALE_AFTER_MS
+  // Unverifiable lasts as long as hydration keeps the row; going quiet is not exit evidence.
+  const restoredAfter = now - AGENT_STATUS_HYDRATE_MAX_AGE_MS
   for (const entry of rows) {
     if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
       session = entry
@@ -124,20 +147,36 @@ export function selectRuntimeHookAgentRowForPane(
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
         (entry.agentType === 'pi' && entry.providerSession != null)) &&
-      entry.receivedAt >= freshAfter &&
+      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
       (!agent || entry.receivedAt > agent.receivedAt)
     ) {
       agent = entry
+    }
+    if (entry.providerSessionOnly !== true && entry.restoredUnconfirmed !== true) {
+      confirmedReceivedAt = Math.max(confirmedReceivedAt, entry.receivedAt)
     }
     if (
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
       entry.restoredUnconfirmed !== true &&
-      entry.receivedAt >= freshAfter &&
+      (entry.evidenceObservedAt ?? entry.receivedAt) >= freshAfter &&
       (!live || entry.receivedAt > live.receivedAt)
     ) {
       live = entry
     }
+    if (
+      entry.providerSessionOnly !== true &&
+      entry.restoredUnconfirmed === true &&
+      entry.state !== 'done' &&
+      (entry.evidenceObservedAt ?? entry.receivedAt) >= restoredAfter &&
+      (!restored || entry.receivedAt > restored.receivedAt)
+    ) {
+      restored = entry
+    }
+  }
+  // A confirmed row at least as new as the restored one supersedes it, stale or not.
+  if (restored && confirmedReceivedAt >= restored.receivedAt) {
+    restored = null
   }
   return {
     providerSession: session?.providerSession ?? null,
@@ -145,14 +184,20 @@ export function selectRuntimeHookAgentRowForPane(
     providerSessionReceivedAt: session?.receivedAt ?? null,
     agentType: agent?.agentType ?? null,
     agentIsLive: agent != null && agent.state !== 'done',
-    live: live
-      ? {
-          payload: pickParsedAgentStatusPayload(live),
-          updatedAt: live.receivedAt,
-          stateStartedAt: live.stateStartedAt ?? live.receivedAt,
-          ...(live.worktreeId ? { worktreeId: live.worktreeId } : {})
-        }
-      : null
+    live: live ? toHookLiveAgentRow(live) : null,
+    restored: restored ? toHookLiveAgentRow(restored) : null
+  }
+}
+
+function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
+  return {
+    payload: pickParsedAgentStatusPayload(row),
+    updatedAt: row.receivedAt,
+    ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
+    stateStartedAt: row.stateStartedAt ?? row.receivedAt,
+    ...pickHostTurnEnd(row),
+    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
+    ...(row.programStatus ? { programStatus: row.programStatus } : {})
   }
 }
 
@@ -167,6 +212,13 @@ export function resolveRuntimeHookLiveAgentRow(
   if (live.payload.interactivePrompt != null) {
     return live
   }
-  // This is the pane's only wall-clock title timestamp comparable to hook `receivedAt`.
-  return !nonAgentTitle && live.updatedAt >= (pty?.lastOscTitleEpochMs ?? 0) ? live : null
+  // This is the pane's only wall-clock title timestamp comparable to when the hook evidence
+  // was observed; replay delivery order must not make old evidence outrank a newer title.
+  return !nonAgentTitle &&
+    agentStatusAuthorityObservedAt({
+      updatedAt: live.updatedAt,
+      evidenceObservedAt: live.evidenceObservedAt
+    }) >= (pty?.lastOscTitleEpochMs ?? 0)
+    ? live
+    : null
 }

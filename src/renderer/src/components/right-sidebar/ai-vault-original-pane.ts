@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'

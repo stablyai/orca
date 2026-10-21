@@ -273,15 +273,35 @@ describe('folder workspace execution host', () => {
     expect(resolved).toEqual({ kind: 'ssh', targetId: 'nested-box' })
   })
 
-  it('still answers local for a runtime pin, which the type cannot express otherwise', () => {
-    const resolved = resolveFolderWorkspaceHost(
-      state({
-        folderWorkspaces: [workspace({ executionHostId: 'runtime:env-1' })]
-      }),
-      'fw-1'
-    )
-
-    expect(resolved).toEqual({ kind: 'local' })
+  it("answers a runtime pin with its server, paired with that server's own SSH target", () => {
+    expect(
+      resolveFolderWorkspaceHost(
+        state({ folderWorkspaces: [workspace({ executionHostId: 'runtime:env-1' })] }),
+        'fw-1'
+      )
+    ).toEqual({ kind: 'runtime', environmentId: 'env-1', sshTargetId: null })
+    expect(
+      resolveFolderWorkspaceHost(
+        state({
+          folderWorkspaces: [
+            workspace({ executionHostId: 'runtime:env-1', connectionId: 'server-box' })
+          ]
+        }),
+        'fw-1'
+      )
+    ).toEqual({ kind: 'runtime', environmentId: 'env-1', sshTargetId: 'server-box' })
+    // A same-id copy on another host leaves the selected one unknown here, so no target is named.
+    expect(
+      resolveFolderWorkspaceHost(
+        state({
+          folderWorkspaces: [
+            workspace({ executionHostId: 'runtime:env-1', connectionId: 'server-box' }),
+            workspace({ executionHostId: 'local' })
+          ]
+        }),
+        'fw-1'
+      )
+    ).toEqual({ kind: 'runtime', environmentId: 'env-1', sshTargetId: null })
   })
 
   // The candidate FILTER decides which rows reach the resolver, and it read `repo.connectionId` raw

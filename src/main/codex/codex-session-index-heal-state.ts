@@ -22,7 +22,7 @@ const HEAL_UNSUPPORTED_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 const HEAL_FAILED_THREAD_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 const CODEX_ROLLOUT_THREAD_ID_PATTERN =
-  /^rollout-(.+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i
+  /^rollout-(.+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl(?:\.zst)?$/i
 
 export type CodexSessionIndexHealPaths = {
   auditLogPath: string
@@ -70,11 +70,11 @@ export async function collectPendingHealThreads(
     if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
       continue
     }
-    const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(line.target))
-    if (!match) {
+    const rollout = parseCodexRolloutThreadId(line.target)
+    if (!rollout) {
       continue
     }
-    const threadId = match[2].toLowerCase()
+    const { threadId } = rollout
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
       auditRecordId
@@ -88,11 +88,19 @@ export async function collectPendingHealThreads(
       pendingByThreadId.delete(threadId)
       continue
     }
-    pendingByThreadId.set(threadId, { threadId, rolloutStamp: match[1], auditRecordId })
+    pendingByThreadId.set(threadId, { threadId, rolloutStamp: rollout.rolloutStamp, auditRecordId })
   }
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
   )
+}
+
+/** Thread id (lower-cased) and timestamp segment encoded in a rollout file name. */
+export function parseCodexRolloutThreadId(
+  filePath: string
+): { threadId: string; rolloutStamp: string } | null {
+  const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(filePath))
+  return match ? { threadId: match[2].toLowerCase(), rolloutStamp: match[1] } : null
 }
 
 function lastPathSegment(filePath: string): string {

@@ -20,3 +20,8 @@ declare const ORCA_POSTHOG_WRITE_KEY: string | null
 // point a packaged build at a staging server without re-running the
 // release pipeline.
 declare const ORCA_DIAGNOSTICS_TOKEN_URL: string | null
+
+// Full commit the build was made from (`git rev-parse HEAD`); official skill installs pin to it.
+declare const ORCA_BUILD_COMMIT: string
+
+// ORCA_LAYOUT_OWNER is declared and read in one place: src/shared/layout-owner-switch.ts.

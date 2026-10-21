@@ -5,11 +5,9 @@ import {
   assertRuntimeEnvironmentCapability,
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCacheForTests,
-  getActiveRuntimeTarget,
-  runtimeEnvironmentSupportsCapability,
-  RuntimeRpcCallError,
-  unwrapRuntimeRpcResult
+  runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -40,19 +38,6 @@ beforeEach(() => {
 })
 
 describe('runtime RPC client routing', () => {
-  it('uses the local runtime when no active environment is selected', () => {
-    expect(getActiveRuntimeTarget(null)).toEqual({ kind: 'local' })
-    expect(getActiveRuntimeTarget({ activeRuntimeEnvironmentId: null })).toEqual({ kind: 'local' })
-    expect(getActiveRuntimeTarget({ activeRuntimeEnvironmentId: '   ' })).toEqual({ kind: 'local' })
-  })
-
-  it('uses the active saved environment when one is selected', () => {
-    expect(getActiveRuntimeTarget({ activeRuntimeEnvironmentId: 'env-1' })).toEqual({
-      kind: 'environment',
-      environmentId: 'env-1'
-    })
-  })
-
   it('routes local runtime calls through window.api.runtime.call', async () => {
     runtimeCall.mockResolvedValue({
       id: 'local',

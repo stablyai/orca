@@ -4,8 +4,10 @@ import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
 import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
+import { SavedHostScopeWidenGate } from '../components/sidebar/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { useAppStore } from '../store'
+import { StructuredAgentSessionAttentionBridge } from '../components/native-chat/StructuredAgentSessionAttentionBridge'
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/StructuredAgentSessionStatusBridge'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
@@ -28,6 +30,7 @@ export function AppBackgroundServices(): React.JSX.Element {
       {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
       <RetainedAgentsSyncGate />
       <AiVaultTabTitleSyncGate />
+      <SavedHostScopeWidenGate />
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />
@@ -35,6 +38,9 @@ export function AppBackgroundServices(): React.JSX.Element {
       ) : null}
       <AgentHibernationGate />
       <StructuredAgentSessionStatusBridge />
+      {/* Why here and not in the chat pane: a backgrounded chat has no mounted pane, and that is
+          exactly the completion the user needs the dot for. */}
+      <StructuredAgentSessionAttentionBridge />
     </>
   )
 }

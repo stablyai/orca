@@ -1,194 +1,146 @@
-// Loading a journal from disk: snapshot + log → folded state.
+// Loading a journal: the session projection names the live epoch, and that
+// epoch's rows are folded through the reducer in sequence order.
 //
-// The snapshot is authoritative for the current epoch. Log rows belonging to a
-// superseded epoch are dropped rather than merged — a crash between publishing
-// a rollover snapshot and rewriting the log is the ordinary way that happens.
-// A gap in the surviving sequence is corruption, and the caller rolls the epoch
-// rather than rendering a partial timeline.
+// There is no snapshot to anchor to and no superseded-epoch rows to drop — a
+// roll deletes them in the same transaction that publishes the new epoch. A row
+// this build cannot parse, a gap, or a first row that is not the epoch's is
+// damage, and a row a newer Orca wrote is one this build cannot place: the load
+// names either and the open fails on it. Nothing is deleted.
 
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { findSequenceGap } from './journal-cursor'
-import {
-  quarantineInvalidJournalSnapshot,
-  readJournalLog,
-  readJournalSnapshot,
-  type JournalSnapshotFile
-} from './journal-log-file'
+import type Database from '../../sqlite/sync-database'
 import {
   applyJournalRow,
   createJournalReducerState,
-  rememberAppliedSettlementId,
   type JournalReducerState
 } from './journal-reducer'
-import { journalRowByteLength, type JournalRow } from './journal-row-schema'
+import {
+  iterateJournalEpochRows,
+  readJournalRowsAfter,
+  readJournalSessionEpoch
+} from './journal-row-table'
+import { parseJournalRow, type JournalRow } from './journal-row-schema'
+
+/** Every epoch row is sequence 1, and no compaction moves that floor. */
+const FIRST_JOURNAL_SEQUENCE = 1
+
+/** Where a journal stops being one this build can read as written. */
+export type JournalDamage = {
+  /** The first sequence that is missing, or not what the rows before it promise. */
+  sequence: number
+  cause: 'unparseable-row' | 'misnumbered-row' | 'sequence-gap' | 'no-epoch-row'
+}
 
 export type JournalLoad = {
   state: JournalReducerState
-  /** Rows still individually replayable, oldest first. */
-  tailRows: JournalRow[]
-  /** Highest sequence folded into the snapshot; the tail starts after it. */
-  compactedThrough: number
-  /** A future schema version was met: no writes, no compaction, no deletion. */
-  readOnly: boolean
-  /** Set when the surviving prefix is unusable and the caller must roll the epoch. */
-  corrupt: boolean
-  /** Log lines skipped because they failed to parse (schema-version rows are
-   *  `readOnly`, never counted here). The store discloses these in the timeline. */
-  malformedRows: number
-  sizeBytes: number
-  /** Raw unreadable suffix retained for quarantine instead of deletion. */
-  quarantineRemainder?: string
+  /** The first row a newer Orca wrote: a future row version, or a row kind this build does not
+   *  know. Only an update opens the chat. */
+  newer: { sequence: number } | null
+  /** Set when the history is damaged; a newer build's row wins over damage beside it. */
+  damage: JournalDamage | null
 }
 
-/** Returns null when no journal exists yet for this session. */
-export async function loadJournal(
-  journalDir: string,
-  sessionId: string,
-  quota?: { maxBytes: number }
-): Promise<JournalLoad | null> {
-  const snapshotRead = await readJournalSnapshot(journalDir)
-  if (snapshotRead.status === 'unreadable') {
-    // Written by a newer schema: not corrupt, so never quarantined. The file
-    // stays authoritative in place, and this build must not write, compact,
-    // delete, or render a partial timeline from rows it cannot anchor to the
-    // snapshot it cannot read.
-    return emptyReadOnlyLoad(sessionId)
+/** Replays one chat from the host's database. Returns null when the chat has no journal yet. */
+export function replayJournal(db: Database.Database, sessionId: string): JournalLoad | null {
+  const epoch = readJournalSessionEpoch(db, sessionId)
+  if (epoch === null) {
+    return null
   }
-  if (snapshotRead.status === 'invalid') {
-    await quarantineInvalidJournalSnapshot(
-      journalDir,
-      quota ? { sessionId, maxBytes: quota.maxBytes } : undefined
-    )
-  }
-  const snapshot = snapshotRead.status === 'valid' ? snapshotRead.snapshot : null
-  const log = await readJournalLog(journalDir)
-  const epoch = resolveEpoch(snapshot, log.rows)
-  if (!epoch) {
-    return snapshotRead.status === 'invalid' || log.hasBytes ? emptyReadOnlyLoad(sessionId) : null
-  }
-
-  const compactedThrough = snapshot?.epoch === epoch ? snapshot.compactedThrough : 0
-  const state = seedState(sessionId, epoch, snapshot?.epoch === epoch ? snapshot : null)
-  const liveRows = log.rows.filter((row) => row.epoch === epoch)
-  let tailRows = unionBySequence(snapshot?.epoch === epoch ? snapshot.tail : [], liveRows, epoch)
-
-  const oldest = tailRows[0]?.seq ?? compactedThrough + 1
-  const gap = findSequenceGap(
-    tailRows.map((row) => row.seq),
-    oldest
-  )
-  // A hole below the snapshot boundary is unrecoverable too: the snapshot only
-  // covers `compactedThrough`, so a tail that starts above it lost rows.
-  let corrupt = Boolean(gap) || oldest > compactedThrough + 1 || log.malformed > 0
-  let quarantineRemainder = log.remainder
-  if (gap) {
-    const firstBad = tailRows.findIndex((row, index) => {
-      const expected = (tailRows[0]?.seq ?? compactedThrough + 1) + index
-      return row.seq !== expected
-    })
-    if (firstBad !== -1) {
-      const suffix = tailRows.slice(firstBad)
-      tailRows = tailRows.slice(0, firstBad)
-      quarantineRemainder ??= `${suffix.map((row) => JSON.stringify(row)).join('\n')}\n`
+  const fold = startJournalRowFold({ sessionId, epoch })
+  for (const entry of iterateJournalEpochRows(db, sessionId, epoch)) {
+    if (!fold.add(entry)) {
+      break
     }
   }
+  return fold.finish()
+}
 
-  for (const row of tailRows) {
-    if (row.seq > compactedThrough) {
-      applyJournalRow(state, row)
+/** The same fold, fed a row at a time, for a caller that yields between batches of rows. */
+export function startJournalRowFold(input: { sessionId: string; epoch: string }): {
+  /** False once the fold has stopped: the rest of the rows are not read. */
+  add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
+  finish: () => JournalLoad
+} {
+  const state = createJournalReducerState(input.sessionId, input.epoch)
+  let expectedSequence = FIRST_JOURNAL_SEQUENCE
+  let damage: JournalDamage | null = null
+  let anchored = false
+  let newer: { sequence: number } | null = null
+  let empty = true
+
+  const add = (entry: { seq: number; rowJson: string; ts?: number }): boolean => {
+    empty = false
+    const parsed = parseJournalRow(entry.rowJson)
+    if (!parsed.ok && parsed.unreadable) {
+      newer = { sequence: entry.seq }
+      return false
     }
+    // Damage is read past, so a newer build's row further on still says to update.
+    if (!parsed.ok) {
+      damage ??= { sequence: entry.seq, cause: 'unparseable-row' }
+      return true
+    }
+    // A body naming another sequence than its key: writes would number past the key.
+    if (parsed.row.seq !== entry.seq) {
+      damage ??= { sequence: entry.seq, cause: 'misnumbered-row' }
+      return true
+    }
+    if (damage) {
+      return true
+    }
+    const row = parsed.row
+    if (row.seq !== expectedSequence) {
+      const cause = expectedSequence === FIRST_JOURNAL_SEQUENCE ? 'no-epoch-row' : 'sequence-gap'
+      damage = { sequence: expectedSequence, cause }
+      return true
+    }
+    expectedSequence += 1
+    if (row.seq === FIRST_JOURNAL_SEQUENCE && row.kind !== 'epoch') {
+      damage = { sequence: row.seq, cause: 'no-epoch-row' }
+      return true
+    }
+    anchored = true
+    applyJournalRow(state, row, entry.ts)
+    return true
   }
-  state.oldestSequence = oldest
-  state.lastSequence = Math.max(state.lastSequence, compactedThrough)
-
-  return {
-    state,
-    tailRows,
-    compactedThrough,
-    // A future-version snapshot never reaches here: it is classified
-    // unreadable above, so `valid` implies a version this build can write.
-    readOnly: log.unreadable,
-    corrupt,
-    malformedRows: log.malformed,
-    sizeBytes: tailRows.reduce((total, row) => total + journalRowByteLength(row), 0),
-    quarantineRemainder
+  const finish = (): JournalLoad => {
+    state.oldestSequence = FIRST_JOURNAL_SEQUENCE
+    // An epoch with no rows at all holds nothing to lose: the open founds a fresh one over it.
+    const found =
+      damage ??
+      (anchored || empty
+        ? null
+        : { sequence: FIRST_JOURNAL_SEQUENCE, cause: 'no-epoch-row' as const })
+    return { state, newer, damage: newer ? null : found }
   }
+  return { add, finish }
 }
 
-function emptyReadOnlyLoad(sessionId: string): JournalLoad {
-  const state = createJournalReducerState(sessionId, '')
-  return {
-    state,
-    tailRows: [],
-    compactedThrough: 0,
-    readOnly: true,
-    corrupt: false,
-    malformedRows: 0,
-    sizeBytes: 0
-  }
-}
-
-/** The snapshot names the live epoch; without one, the newest valid row does. */
-function resolveEpoch(snapshot: JournalSnapshotFile | null, rows: JournalRow[]): string | null {
-  if (snapshot?.epoch) {
-    return snapshot.epoch
-  }
-  return rows.at(-1)?.epoch ?? null
-}
-
-function seedState(
+/** `readJournalRowsAfterCursor` over one epoch, for a reader that supplies only the sequence. */
+export function journalRowsAfterReader(
+  db: Database.Database,
   sessionId: string,
   epoch: string,
-  snapshot: JournalSnapshotFile | null
-): JournalReducerState {
-  const state = createJournalReducerState(sessionId, epoch)
-  if (!snapshot) {
-    return state
-  }
-  for (const item of snapshot.items) {
-    state.items.set(item.itemId, item)
-  }
-  for (const submission of snapshot.submissions) {
-    state.submissions.set(submission.clientMessageId, { ...submission } as AgentJournalSubmission)
-  }
-  for (const receipt of snapshot.receipts) {
-    state.receipts.set(receipt.clientMessageId, {
-      clientMessageId: receipt.clientMessageId,
-      providerItemId: receipt.providerItemId,
-      cursor: { epoch: receipt.epoch, sequence: receipt.sequence },
-      acceptedAt: receipt.acceptedAt
-    })
-  }
-  for (const alias of snapshot.aliases) {
-    state.aliases.set(alias.providerItemId, alias.itemId)
-  }
-  for (const tombstone of snapshot.tombstones ?? []) {
-    state.tombstones.set(tombstone.itemId, tombstone.revision)
-  }
-  for (const settlementId of snapshot.appliedSettlementIds ?? []) {
-    rememberAppliedSettlementId(state, settlementId)
-  }
-  state.highestFence = snapshot.highestFence ?? 0
-  state.lastSequence = snapshot.compactedThrough
-  state.oldestSequence = snapshot.compactedThrough + 1
-  return state
+  limit?: number
+): (afterSequence: number) => JournalRow[] {
+  return (afterSequence) => readJournalRowsAfterCursor(db, sessionId, epoch, afterSequence, limit)
 }
 
-/** Merge the snapshot's retained tail with the live log, preferring the log's
- *  copy of any sequence both hold, and dropping rows from a superseded epoch. */
-function unionBySequence(
-  retained: readonly JournalRow[],
-  live: readonly JournalRow[],
-  epoch: string
+/** Rows after a cursor, in sequence order. Stops at the first row this build cannot parse: rows
+ *  past it are never served. */
+export function readJournalRowsAfterCursor(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  afterSequence: number,
+  limit?: number
 ): JournalRow[] {
-  const bySequence = new Map<number, JournalRow>()
-  for (const row of retained) {
-    if (row.epoch === epoch) {
-      bySequence.set(row.seq, row)
+  const rows: JournalRow[] = []
+  for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
+    const parsed = parseJournalRow(stored.rowJson)
+    if (!parsed.ok) {
+      break
     }
+    rows.push(parsed.row)
   }
-  for (const row of live) {
-    bySequence.set(row.seq, row)
-  }
-  return [...bySequence.values()].sort((a, b) => a.seq - b.seq)
+  return rows
 }

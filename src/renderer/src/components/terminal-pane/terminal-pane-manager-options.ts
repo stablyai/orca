@@ -1,6 +1,8 @@
 import type { IDisposable } from '@xterm/xterm'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
@@ -10,7 +12,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from './layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
@@ -27,6 +29,9 @@ import {
 } from './terminal-pane-lifecycle-primitives'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 
 /** Builds the imperative PaneManager option bag from the mount context. */
 export function createTerminalPaneManagerOptions(
@@ -102,6 +107,22 @@ export function createTerminalPaneManagerOptions(
     },
     resolveExternalPaneDropTarget,
     onExternalPaneDrop,
+    // Switch point: in-tab pane moves and divider ratios go through main.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? layoutOwnerPaneGestures({
+          worktreeId,
+          tabId,
+          managerRef,
+          shouldPersistLayout: context.shouldPersistLayout
+        })
+      : {}),
+    terminalLigaturesEnabled: () =>
+      resolveTerminalLigaturesEnabled(
+        settingsRef.current?.terminalLigatures,
+        settingsRef.current?.terminalFontFamily
+      ),
+    terminalInlineImagesEnabled: () =>
+      resolveTerminalInlineImagesEnabled(settingsRef.current?.terminalInlineImages),
     terminalOptions: () => {
       const currentSettings = settingsRef.current
       const terminalFontWeights = resolveTerminalFontWeights(
@@ -170,6 +191,8 @@ export function createTerminalPaneManagerOptions(
     formatLinkTooltip: (paneId, url, hint) =>
       formatTerminalUrlTooltip(url, hint, context.getHttpLinkSourceOwnerForPane(paneId)),
     initialRenderingSuspended: !isVisibleRef.current,
+    // Reopening the floating panel must rebuild silently corrupted glyph atlases.
+    retainHiddenWebgl: worktreeId !== FLOATING_TERMINAL_WORKTREE_ID,
     terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
     debugLabel: `tab:${tabId}/wt:${worktreeId}`
   }

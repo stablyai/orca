@@ -1,150 +1,126 @@
-import { execFile, execFileSync } from 'node:child_process'
-import { win32 as pathWin32 } from 'node:path'
+import { writeFileSync } from 'node:fs'
+import { reportSecurePathHardening as report } from './secure-path-hardening-report'
+import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
+import { findSecureDaclViolation, hardenedDaclSddl } from './windows-secure-dacl'
 
-let cachedWindowsUserSid: string | null | undefined
+/**
+ * Restricts a directory on the thread pool: a rewrite walks every descendant, seconds on a large
+ * userData. Never rejects; failures are reported and resolve false so the caller can retry.
+ */
+export function restrictWindowsDirectory(dirPath: string): Promise<boolean> {
+  const security = securityFor(dirPath)
+  return security ? restrictAsync(security, dirPath, true) : Promise.resolve(false)
+}
 
-function buildWindowsRestrictAclArgs(
+async function restrictAsync(
+  security: WindowsSecurity,
   targetPath: string,
-  currentUserSid: string,
   isDirectory: boolean
-): string[] {
-  return [
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    WINDOWS_RESTRICT_ACL_SCRIPT,
-    targetPath,
-    currentUserSid,
-    isDirectory ? '1' : '0'
-  ]
-}
-
-export function bestEffortRestrictWindowsPath(targetPath: string, isDirectory: boolean): void {
-  const currentUserSid = getCurrentWindowsUserSid()
-  if (!currentUserSid) {
-    return
-  }
-  // Why: async to avoid blocking the main thread — sync PowerShell cold-start (~1-1.5s) on the frequent read path stormed it (#4901).
-  execFile(
-    getWindowsSystemToolPath('WindowsPowerShell\\v1.0\\powershell.exe'),
-    buildWindowsRestrictAclArgs(targetPath, currentUserSid, isDirectory),
-    {
-      windowsHide: true,
-      timeout: 5000
-    },
-    () => {
-      // Why: ignore errors — hardening is best-effort; PowerShell ACL APIs may be unavailable or locked down.
-    }
-  )
-}
-
-export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean): boolean {
-  const currentUserSid = getCurrentWindowsUserSid()
-  if (!currentUserSid) {
-    return false
-  }
-  // Why: file must not be published until its ACL is actually restricted, so block and report real success (read path stays async, #4901).
-  try {
-    execFileSync(
-      getWindowsSystemToolPath('WindowsPowerShell\\v1.0\\powershell.exe'),
-      buildWindowsRestrictAclArgs(targetPath, currentUserSid, isDirectory),
-      {
-        stdio: ['ignore', 'ignore', 'ignore'],
-        windowsHide: true,
-        timeout: 5000
-      }
-    )
+): Promise<boolean> {
+  // Verify first: a directory rewrite walks every descendant (seconds on a large userData), so
+  // a path that already reads back correct must never pay it again.
+  if (violationOf(security, targetPath, isDirectory) === null) {
     return true
-  } catch {
-    // Why: best-effort — a failed ACL apply must not crash the write; false leaves the path uncached to retry later.
-    return false
-  }
-}
-
-const WINDOWS_RESTRICT_ACL_SCRIPT = `
-$ErrorActionPreference = 'Stop'
-$path = $args[0]
-$currentUserSid = $args[1]
-$isDirectory = $args[2] -eq '1'
-$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')
-$allowedSids = @{}
-foreach ($sidText in $allowedSidTexts) {
-  $allowedSids[$sidText] = $true
-}
-$acl = Get-Acl -LiteralPath $path
-$acl.SetAccessRuleProtection($true, $false)
-foreach ($rule in @($acl.Access)) {
-  [void]$acl.RemoveAccessRuleSpecific($rule)
-}
-$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None
-if ($isDirectory) {
-  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
-}
-foreach ($sidText in $allowedSidTexts) {
-  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)
-  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
-    $sid,
-    [System.Security.AccessControl.FileSystemRights]::FullControl,
-    $inheritanceFlags,
-    [System.Security.AccessControl.PropagationFlags]::None,
-    [System.Security.AccessControl.AccessControlType]::Allow
-  )
-  [void]$acl.AddAccessRule($rule)
-}
-Set-Acl -LiteralPath $path -AclObject $acl
-$verifiedAcl = Get-Acl -LiteralPath $path
-if (-not $verifiedAcl.AreAccessRulesProtected) {
-  throw 'ACL inheritance is still enabled'
-}
-$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl
-foreach ($rule in @($verifiedAcl.Access)) {
-  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
-  if (-not $allowedSids.ContainsKey($sid)) {
-    throw "Unexpected ACL entry $sid"
-  }
-  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {
-    throw "Unexpected ACL deny entry $sid"
-  }
-  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {
-    throw "ACL entry $sid does not grant FullControl"
-  }
-}
-`.trim()
-
-function getCurrentWindowsUserSid(): string | null {
-  if (cachedWindowsUserSid !== undefined) {
-    return cachedWindowsUserSid
   }
   try {
-    const output = execFileSync(
-      getWindowsSystemToolPath('whoami.exe'),
-      ['/user', '/fo', 'csv', '/nh'],
-      {
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        windowsHide: true,
-        timeout: 5000
-      }
-    ).trim()
-    const columns = parseCsvLine(output)
-    cachedWindowsUserSid = columns[1] ?? null
-  } catch {
-    cachedWindowsUserSid = null
+    await security.addon.setDaclSddlAsync(
+      targetPath,
+      hardenedDaclSddl(security.userSid, isDirectory)
+    )
+  } catch (error) {
+    report(targetPath, 'apply', String(error))
+    return false
   }
-  return cachedWindowsUserSid
+  return verifyAfterApply(security, targetPath, isDirectory)
 }
 
-function getWindowsSystemToolPath(relativeSystem32Path: string): string {
-  const systemRoot = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows'
-  return pathWin32.join(systemRoot, 'System32', relativeSystem32Path)
+/** Restricts one file on the thread pool; never rejects, resolves whether the DACL holds. */
+export function restrictWindowsFile(filePath: string): Promise<boolean> {
+  const security = securityFor(filePath)
+  return security ? restrictAsync(security, filePath, false) : Promise.resolve(false)
 }
 
-function parseCsvLine(line: string): string[] {
-  return line.split(/","/).map((part) => part.replace(/^"/, '').replace(/"$/, ''))
+/** Verifies and, only when that fails, rewrites the DACL on the calling thread. */
+export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean): boolean {
+  const security = securityFor(targetPath)
+  if (!security) {
+    return false
+  }
+  if (violationOf(security, targetPath, isDirectory) === null) {
+    return true
+  }
+  try {
+    security.addon.setDaclSddl(targetPath, hardenedDaclSddl(security.userSid, isDirectory))
+  } catch (error) {
+    // Why not fatal: a failed apply must not crash the caller; false leaves the path retryable.
+    report(targetPath, 'apply', String(error))
+    return false
+  }
+  return verifyAfterApply(security, targetPath, isDirectory)
 }
 
-export function resetSecureFileWindowsUserSidForTests(): void {
-  cachedWindowsUserSid = undefined
+/**
+ * Writes a NEW file that is restricted from the moment it exists, so its contents are never
+ * readable under the directory's (possibly broader) inherited DACL. Returns whether the
+ * restriction holds. Without the addon the file is written plainly and this is false; with it, a
+ * failed create throws like any other write failure.
+ */
+export function writeRestrictedWindowsFile(targetPath: string, contents: string | Buffer): boolean {
+  const security = securityFor(targetPath)
+  if (!security) {
+    writeFileSync(targetPath, contents, { encoding: 'utf-8', mode: 0o600 })
+    return false
+  }
+  security.addon.createFileWithDacl(
+    targetPath,
+    hardenedDaclSddl(security.userSid, false),
+    typeof contents === 'string' ? Buffer.from(contents, 'utf-8') : contents
+  )
+  // Why read it back: FAT32 and some shares accept the descriptor and silently drop it.
+  return verifyAfterApply(security, targetPath, false)
+}
+
+function verifyAfterApply(
+  security: WindowsSecurity,
+  targetPath: string,
+  isDirectory: boolean
+): boolean {
+  const invalid = violationOf(security, targetPath, isDirectory)
+  if (invalid) {
+    report(targetPath, 'verify', invalid)
+    return false
+  }
+  return true
+}
+
+/** Why the DACL on disk is not acceptable, or null when it is. */
+function violationOf(
+  security: WindowsSecurity,
+  targetPath: string,
+  isDirectory: boolean
+): string | null {
+  try {
+    return findSecureDaclViolation(
+      security.addon.getDaclAces(targetPath),
+      security.userSid,
+      isDirectory
+    )
+  } catch (error) {
+    return String(error)
+  }
+}
+
+let reportedLoadFailure = false
+
+function securityFor(targetPath: string): WindowsSecurity | null {
+  const loaded = loadWindowsSecurity()
+  if ('error' in loaded) {
+    // Once per process: a missing addon is a packaging fault, and every secure write would repeat it.
+    if (!reportedLoadFailure) {
+      reportedLoadFailure = true
+      report(targetPath, 'addon', loaded.error)
+    }
+    return null
+  }
+  return loaded
 }

@@ -1,9 +1,14 @@
 import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
-import { isWebviewDragPassthroughActive } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
-import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/host-guest/webview-registry'
+import {
+  moveFocusToRendererBeforeWebviewDetach,
+  registerPersistentWebview,
+  unregisterPersistentWebview,
+  webviewRegistry
+} from '@/components/browser-pane/host-guest/webview-registry'
 
 export function attachDocPreviewWebview({
+  previewId,
   container,
   url,
   ariaLabel,
@@ -11,8 +16,10 @@ export function attachDocPreviewWebview({
   onLoadStopped,
   onLoadFailed,
   onNavigated,
-  onTitleUpdated
+  onTitleUpdated,
+  onViewportMessage
 }: {
+  previewId: string
   container: HTMLDivElement
   url: string
   ariaLabel: string
@@ -21,6 +28,7 @@ export function attachDocPreviewWebview({
   onLoadFailed: (event: Electron.DidFailLoadEvent) => void
   onNavigated: () => void
   onTitleUpdated: (event: Electron.PageTitleUpdatedEvent) => void
+  onViewportMessage: (event: { message?: string }) => void
 }): { webview: Electron.WebviewTag; detach: () => void; reload: () => void } {
   const webview = document.createElement('webview') as Electron.WebviewTag
   // Why no allowpopups: the guest's preload intercepts a trusted click on a link before Chromium
@@ -45,13 +53,9 @@ export function attachDocPreviewWebview({
   // Why the document names its own tab: a preview is a browser tab, and this is how every other
   // one is named. What the document cannot do is name it the grant it is served over.
   webview.addEventListener('page-title-updated', onTitleUpdated)
-  // Why here and not in the enrolling hook: appending is what makes this guest hittable, and the
-  // registry's contract is that the path doing so settles it. Dragging the preview's own tab
-  // remounts this component mid-drag, and a hook effect lands a turn too late — for the rest of
-  // that turn the fresh guest eats the pointer stream and the drag freezes.
-  if (isWebviewDragPassthroughActive()) {
-    webview.style.pointerEvents = 'none'
-  }
+  webview.addEventListener('console-message', onViewportMessage)
+  // Register before append so a guest attached mid-drag cannot swallow the pointer stream.
+  registerPersistentWebview(previewId, webview)
   container.appendChild(webview)
   webview.setAttribute('src', url)
 
@@ -64,8 +68,12 @@ export function attachDocPreviewWebview({
       webview.removeEventListener('did-navigate', onNavigated)
       webview.removeEventListener('did-navigate-in-page', onNavigated)
       webview.removeEventListener('page-title-updated', onTitleUpdated)
+      webview.removeEventListener('console-message', onViewportMessage)
       moveFocusToRendererBeforeWebviewDetach(webview)
       webview.remove()
+      if (webviewRegistry.get(previewId) === webview) {
+        unregisterPersistentWebview(previewId)
+      }
     },
     // Why: the protocol handler answers with no-store, so a reload re-reads the workspace disk.
     reload: () => {

@@ -105,6 +105,11 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
   }
 }
 
+/** An unreadable checks reply is not an absent one, so the header must not read "No checks". */
+export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: string | null): string {
+  return checksError === null ? summary.label : 'Checks unavailable'
+}
+
 // Per-row status word shown beside each check (desktop ChecksList parity), so the
 // outcome is readable without expanding the row. Mirrors getCheckStatusLabel.
 export function checkStatusLabel(check: PRCheckDetail): string {

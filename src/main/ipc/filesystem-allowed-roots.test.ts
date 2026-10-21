@@ -8,13 +8,14 @@ import { listRepoWorktreeGraph } from '../repo-worktrees'
 import type * as ProjectGroupsModule from '../../shared/project-groups'
 import { buildProjectGroupChildIndex, getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import type * as CrossPlatformPathModule from '../../shared/cross-platform-path'
 import { getWorktreeMirrorDistro } from '../project-runtime-git-options'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Project } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import { getAllowedRoots } from './filesystem-allowed-roots'
-import { authorizeExternalPath, resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem-auth'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 
@@ -30,6 +31,13 @@ vi.mock('../../shared/project-groups', async () => {
     buildProjectGroupChildIndex: vi.fn(actual.buildProjectGroupChildIndex),
     getProjectGroupSubtreeIds: vi.fn(actual.getProjectGroupSubtreeIds)
   }
+})
+
+vi.mock('../../shared/cross-platform-path', async () => {
+  const actual = await vi.importActual<typeof CrossPlatformPathModule>(
+    '../../shared/cross-platform-path'
+  )
+  return { ...actual, isPathInsideOrEqual: vi.fn(actual.isPathInsideOrEqual) }
 })
 
 type StoreFixture = {
@@ -257,10 +265,24 @@ beforeEach(() => {
 })
 
 describe('getAllowedRoots', () => {
-  it('produces the same roots as the pre-change implementation', () => {
-    const { store } = makeCountingStore(makeMixedFixture())
-
-    expect(getAllowedRoots(store)).toEqual(referenceAllowedRoots(store))
+  it('stops scanning repositories when a local candidate settles each folder scope', () => {
+    const fixture: StoreFixture = {
+      repos: Array.from({ length: 1_000 }, (_, index) =>
+        makeRepo({ id: `repo-${index}`, path: `/folders/root/repo-${index}` })
+      ),
+      projects: [],
+      projectGroups: [],
+      folderWorkspaces: Array.from({ length: 100 }, (_, index) =>
+        makeWorkspace({ id: `folder-${index}`, folderPath: '/folders/root' })
+      )
+    }
+    const { store } = makeCountingStore(fixture)
+    vi.mocked(isPathInsideOrEqual).mockClear()
+    const actual = getAllowedRoots(store)
+    expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100)
+    vi.mocked(isPathInsideOrEqual).mockClear()
+    expect(actual).toEqual(referenceAllowedRoots(store))
+    expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100_000)
   })
 
   it('reads the store once and indexes project groups once per build', () => {
@@ -335,25 +357,6 @@ describe('resolveAuthorizedPath allowed-root reuse', () => {
       expect(vi.mocked(listRepoWorktreeGraph)).toHaveBeenCalled()
     }
   )
-
-  it('builds no allowed-root list at all for a granted external path', async () => {
-    const external = join(outsideRoot, 'external.md')
-    await writeFile(external, 'notes\n')
-    authorizeExternalPath(external)
-    counts.getRepos = 0
-    counts.getProjects = 0
-    counts.getFolderWorkspaces = 0
-
-    for (let index = 0; index < 5; index += 1) {
-      await expect(resolveAuthorizedPath(external, store)).resolves.toBe(external)
-    }
-
-    // The grant answers on its own; hoisting the snapshot must not turn zero builds into one per read.
-    expect.soft(counts.getRepos).toBe(0)
-    expect.soft(counts.getProjects).toBe(0)
-    expect.soft(counts.getFolderWorkspaces).toBe(0)
-    expect.soft(vi.mocked(buildProjectGroupChildIndex)).not.toHaveBeenCalled()
-  })
 
   it.skipIf(process.platform === 'win32')(
     'still refuses a directory symlink that escapes every allowed root',

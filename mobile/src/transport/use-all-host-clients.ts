@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from './rpc-client'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'
@@ -138,7 +139,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       path: MobileConnectionPath
       pendingPath: MobileConnectionPath | null
       pairingRejected: boolean
-      hostSignedOut: boolean
+      relayHostReachability: RelayHostReachability
     }>((hostId) => {
       const client = clientsByHostId.get(hostId)
       return client
@@ -150,7 +151,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
               path: ctx.getActivePath(hostId),
               pendingPath: ctx.getPendingPath(hostId),
               pairingRejected: ctx.isPairingRejected(hostId),
-              hostSignedOut: ctx.isHostSignedOut(hostId)
+              relayHostReachability: ctx.getRelayHostReachability(hostId)
             }
           ]
         : []

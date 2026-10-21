@@ -14,7 +14,11 @@ import {
   digitKeyMatches,
   resolveModifierToken
 } from './matching-key'
-import { getEffectiveKeybindingsForAction, keybindingIsActiveInContext } from './effective'
+import {
+  getDefaultBindings,
+  getEffectiveKeybindingsForAction,
+  keybindingIsActiveInContext
+} from './effective'
 
 export function keybindingMatchesInput(
   binding: string,
@@ -97,6 +101,21 @@ export function keybindingMatchesAction(
   }
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
     keybindingMatchesInput(binding, input, platform)
+  )
+}
+
+// Why: decided from the definition and the pressed chord, so re-saving a default never takes it from the field.
+export function keybindingRunsInTextField(
+  actionId: KeybindingActionId,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  const definition = DEFINITIONS_BY_ID.get(actionId)
+  return (
+    definition?.allowInTextField === 'non-default-chords' &&
+    !getDefaultBindings(definition, platform).some((binding) =>
+      keybindingMatchesInput(binding, input, platform)
+    )
   )
 }
 

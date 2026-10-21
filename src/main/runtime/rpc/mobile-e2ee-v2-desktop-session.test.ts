@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
-import { deriveSharedKey } from './e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { deriveSharedKey } from '../../../shared/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,

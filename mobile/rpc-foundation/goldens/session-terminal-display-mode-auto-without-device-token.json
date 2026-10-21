@@ -1,0 +1,153 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.terminal-display-mode",
+  "family": "session.terminal-display-mode",
+  "namedDeltas": [],
+  "values": {
+    "3ba74271a870": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"auto\",\"viewport\":{\"cols\":100,\"rows\":30}}}"
+    },
+    "61b1eb90a019": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": ["terminal-1"],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "857d314fbd2c": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "mode": "auto"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9d25aa3b9920": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mode": "auto",
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "e27323f28d10": {
+      "name": "subscribe-terminal",
+      "ordinal": 1,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fa46c84fb0ab": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": [],
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-terminal-display-mode-auto-without-device-token",
+    "checkpoints": [
+      {
+        "id": "in-flight",
+        "observation": {
+          "sender": ["9d25aa3b9920"],
+          "payloads": ["3ba74271a870"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "9270aeb7d9c6"
+          },
+          "state": "61b1eb90a019",
+          "effects": ["e27323f28d10"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["857d314fbd2c"],
+          "payloads": ["3ba74271a870"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "eb79a9b3682a"
+          },
+          "state": "fa46c84fb0ab",
+          "effects": ["e27323f28d10"]
+        }
+      }
+    ]
+  }
+}

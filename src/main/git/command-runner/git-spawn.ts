@@ -3,10 +3,13 @@ import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe
 import { startGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './abort-error'
 import { resolveGitCommand } from './git-command-resolution'
+import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
 import { untranslatedGitOutputEnv } from './git-process-env'
 import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
 import type { GitAdmissionTier } from './git-exec-options'
 import { acquireGitAdmission } from './git-subprocess-admission'
+import { classifyGitCommand } from '../../../shared/git-command-classification'
+import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 
 /**
  * Spawn a git child process. Drop-in replacement for
@@ -25,6 +28,10 @@ export async function gitSpawnAfterWindowsEnvironmentReady(
   if (options.signal?.aborted) {
     throw createAbortError()
   }
+  const lineEndingsReady = pendingWslDriveCheckoutGitRouting(args, options)
+  if (lineEndingsReady) {
+    await lineEndingsReady
+  }
   const resolved = resolveGitCommand(args, {
     cwd: options.cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
@@ -35,7 +42,14 @@ export async function gitSpawnAfterWindowsEnvironmentReady(
   if (options.signal?.aborted) {
     throw createAbortError()
   }
-  return withGitAdmission(args, env === options.env ? options : { ...options, env })
+  const policyEnv =
+    classifyGitCommand(args) === 'network'
+      ? (await buildNetworkSshPolicyEnv({ ...options, env }, args)).env
+      : env
+  return withGitAdmission(
+    args,
+    policyEnv === options.env ? options : { ...options, env: policyEnv }
+  )
 }
 
 export async function withGitAdmission(

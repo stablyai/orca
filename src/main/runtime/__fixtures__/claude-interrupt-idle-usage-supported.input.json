@@ -1,0 +1,25 @@
+[
+  {
+    "atMs": 540,
+    "kind": "title",
+    "title": "✳ Claude Code"
+  },
+  {
+    "atMs": 1610,
+    "kind": "input",
+    "label": "open-usage",
+    "text": "/usage"
+  },
+  {
+    "atMs": 2063,
+    "kind": "input",
+    "label": "submit-usage",
+    "text": "\r"
+  },
+  {
+    "atMs": 3215,
+    "kind": "input",
+    "label": "dismiss-usage",
+    "text": "\u001b"
+  }
+]

@@ -14,11 +14,9 @@ import {
   getActiveWorktreeId,
   getActiveTabType,
   getBrowserTabs,
-  getAllWorktreeIds,
-  switchToOtherWorktree,
-  switchToWorktree,
   ensureTerminalVisible
 } from './helpers/store'
+import { startBrowserLinkServer } from './helpers/browser-link-server'
 
 type CreatedBrowserTab = {
   id: string
@@ -51,25 +49,6 @@ async function createBrowserTab(
     },
     { targetWorktreeId: worktreeId, targetUrl: url, targetTitle: title }
   )
-}
-
-async function switchToTerminalTab(
-  page: Parameters<typeof getActiveWorktreeId>[0],
-  worktreeId: string
-): Promise<void> {
-  await page.evaluate((targetWorktreeId) => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
-
-    const state = store.getState()
-    const terminalTab = (state.tabsByWorktree[targetWorktreeId] ?? [])[0]
-    if (terminalTab) {
-      state.setActiveTab(terminalTab.id)
-    }
-    state.setActiveTabType('terminal')
-  }, worktreeId)
 }
 
 async function switchToBrowserTab(
@@ -117,84 +96,6 @@ async function startBrowserFormServer(host = '127.0.0.1'): Promise<{
   const port = (server.address() as AddressInfo).port
   return {
     url: (label: string) => `http://${host}:${port}/${encodeURIComponent(label)}`,
-    close: () => closeServer(server)
-  }
-}
-
-async function startBrowserLinkServer(): Promise<{
-  sourceUrl: string
-  close: () => Promise<void>
-}> {
-  const server = createServer((request, response) => {
-    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-    const pathname = new URL(request.url ?? '/', origin).pathname
-    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    if (pathname === '/destination') {
-      response.end(
-        `<!doctype html><html><head><title>Linked destination</title></head><body>Destination <a id="return-link" href="${origin}/source">Return</a></body></html>`
-      )
-      return
-    }
-    if (pathname === '/frame-destination') {
-      response.end(
-        `<!doctype html><html><head><title>Frame destination</title></head><body>Frame destination <a id="return-link" href="${origin}/source">Return</a></body></html>`
-      )
-      return
-    }
-    if (pathname === '/frame-modifier-destination') {
-      response.end(
-        '<!doctype html><html><head><title>Frame modifier destination</title></head><body>Frame modifier destination</body></html>'
-      )
-      return
-    }
-    if (pathname === '/frame-middle-destination') {
-      response.end(
-        '<!doctype html><html><head><title>Frame middle destination</title></head><body>Frame middle destination</body></html>'
-      )
-      return
-    }
-    if (pathname === '/frame') {
-      response.end(
-        `<!doctype html><html><body><a style="display:block" id="frame-link" href="${origin}/frame-destination" target="_blank">Open frame destination</a><a style="display:block" id="frame-modifier-link" href="${origin}/frame-modifier-destination">Open frame modifier destination</a><a style="display:block" id="frame-middle-link" href="${origin}/frame-middle-destination">Open frame middle destination</a></body></html>`
-      )
-      return
-    }
-    if (pathname === '/modifier-destination') {
-      response.end(
-        '<!doctype html><html><head><title>Modifier destination</title></head><body>Modifier destination</body></html>'
-      )
-      return
-    }
-    if (pathname === '/middle-destination') {
-      response.end(
-        '<!doctype html><html><head><title>Middle-click destination</title></head><body>Middle-click destination</body></html>'
-      )
-      return
-    }
-    response.end(`
-      <!doctype html>
-      <html>
-        <head><title>Source page</title></head>
-        <body>
-          <a id="external-link" href="${origin}/destination" target="_blank">Open destination</a>
-          <a id="modifier-link" href="${origin}/modifier-destination">Open with modifier</a>
-          <a id="middle-link" href="${origin}/middle-destination">Open with middle click</a>
-          <a id="cancelled-link" href="${origin}/destination" target="_blank">Handle in page</a>
-          <iframe id="link-frame" src="${origin}/frame" title="Embedded links"></iframe>
-          <script>
-            document.querySelector('#cancelled-link').addEventListener('click', (event) => {
-              event.preventDefault()
-              document.title = 'Click handled in page'
-            })
-          </script>
-        </body>
-      </html>
-    `)
-  })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const port = (server.address() as AddressInfo).port
-  return {
-    sourceUrl: `http://127.0.0.1:${port}/source`,
     close: () => closeServer(server)
   }
 }
@@ -281,8 +182,8 @@ async function clickBrowserLink(
   browserTabId: string,
   selector: string,
   options: {
-    modifiers?: ('meta' | 'control')[]
-    button?: 'left' | 'middle'
+    modifiers?: ('meta' | 'control' | 'shift')[]
+    button?: 'left' | 'middle' | 'right'
     frameSelector?: string
   } = {}
 ): Promise<void> {
@@ -317,21 +218,31 @@ async function clickBrowserLink(
       if (!point) {
         throw new Error(`Missing browser link ${targetSelector}`)
       }
-      await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
-      await webview.sendInputEvent({
-        type: 'mouseDown',
-        button,
-        clickCount: 1,
-        modifiers: inputModifiers,
-        ...point
-      })
-      await webview.sendInputEvent({
-        type: 'mouseUp',
-        button,
-        clickCount: 1,
-        modifiers: inputModifiers,
-        ...point
-      })
+      const holdShift = inputModifiers.includes('shift')
+      if (holdShift) {
+        await webview.sendInputEvent({ type: 'keyDown', keyCode: 'Shift', modifiers: ['shift'] })
+      }
+      try {
+        await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
+        await webview.sendInputEvent({
+          type: 'mouseDown',
+          button,
+          clickCount: 1,
+          modifiers: inputModifiers,
+          ...point
+        })
+        await webview.sendInputEvent({
+          type: 'mouseUp',
+          button,
+          clickCount: 1,
+          modifiers: inputModifiers,
+          ...point
+        })
+      } finally {
+        if (holdShift) {
+          await webview.sendInputEvent({ type: 'keyUp', keyCode: 'Shift' })
+        }
+      }
     },
     {
       targetBrowserTabId: browserTabId,
@@ -343,19 +254,41 @@ async function clickBrowserLink(
   )
 }
 
-async function expectBrowserTabActive(
+async function waitForTabIdByExactTitle(
   page: Parameters<typeof getActiveWorktreeId>[0],
   title: string
-): Promise<void> {
+): Promise<string> {
   const resolveTabId = (): Promise<string | null> =>
     page.locator('[data-tab-id]').evaluateAll((tabs, exactTitle) => {
       const tab = tabs.find((candidate) => candidate.textContent?.trim() === exactTitle)
       return tab?.getAttribute('data-tab-id') ?? null
     }, title)
   await expect.poll(resolveTabId, { timeout: 10_000 }).not.toBeNull()
-  const tabId = await resolveTabId()
-  expect(tabId).toBeTruthy()
+  return (await resolveTabId()) as string
+}
+
+async function expectBrowserTabActive(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  title: string
+): Promise<void> {
+  const tabId = await waitForTabIdByExactTitle(page, title)
   await expect(page.locator(`[data-browser-overlay-tab-id="${tabId}"]`)).toHaveCSS('opacity', '1')
+}
+
+async function expectBrowserTabOpenedInBackground(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  sourceTabId: string,
+  title: string
+): Promise<void> {
+  const openedTabId = await waitForTabIdByExactTitle(page, title)
+  await expect(page.locator(`[data-browser-overlay-tab-id="${sourceTabId}"]`)).toHaveCSS(
+    'opacity',
+    '1'
+  )
+  await expect(page.locator(`[data-browser-overlay-tab-id="${openedTabId}"]`)).toHaveCSS(
+    'opacity',
+    '0'
+  )
 }
 
 async function readBrowserInputValue(
@@ -413,77 +346,6 @@ test.describe('Browser Tab', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('creating a browser tab adds it and activates browser view', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-    const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
-
-    await createBrowserTab(orcaPage, worktreeId)
-
-    // Wait for the browser tab to appear in the store
-    await expect
-      .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
-      .toBe(browserTabsBefore.length + 1)
-
-    // The active tab type should switch to 'browser'
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('browser')
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('browser tab is created and active in the store', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await createBrowserTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-
-    // Verify the browser tab exists in the store
-    const browserTabs = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabs.length).toBeGreaterThan(0)
-
-    // The active browser tab should have a URL (even if it's about:blank or the default)
-    const activeBrowserTabId = await orcaPage.evaluate(() => {
-      const store = window.__store
-      return store?.getState().activeBrowserTabId ?? null
-    })
-    expect(activeBrowserTabId).not.toBeNull()
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('browser tab retains state when switching to terminal and back', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await createBrowserTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-
-    // Record the browser tab info
-    const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabsBefore.length).toBeGreaterThan(0)
-    const browserTabId = browserTabsBefore.at(-1)?.id
-    expect(browserTabId).toBeTruthy()
-
-    // Switch to the terminal view
-    await switchToTerminalTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('terminal')
-
-    // Switch back to browser tab
-    await switchToBrowserTab(orcaPage, worktreeId, browserTabId!)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('browser')
-
-    // The browser tab should still exist with the same ID
-    const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
-    const tabStillExists = browserTabsAfter.some((tab) => tab.id === browserTabId)
-    expect(tabStillExists).toBe(true)
   })
 
   test('browser webview form state survives switching between browser tabs', async ({
@@ -680,7 +542,7 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('every new-tab link gesture activates an Orca tab and never a native window', async ({
+  test('new-tab link gestures follow Chrome foreground and background behavior', async ({
     electronApp,
     orcaPage
   }) => {
@@ -698,38 +560,51 @@ test.describe('Browser Tab', () => {
       const baseWindowCount = await electronApp.evaluate(
         ({ BaseWindow }) => BaseWindow.getAllWindows().length
       )
-      // A plain target=_blank click is a new-tab request, in the main frame and in an iframe;
-      // the source tab must stay put rather than navigate away under it.
+      // A plain main-frame target=_blank click must not navigate the source tab away.
       const sourceTabLocator = orcaPage.locator(`[data-tab-id="${sourceTab!.id}"]`)
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
-      await expectBrowserTabActive(orcaPage, 'Linked destination')
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#blank-link')
+      await expectBrowserTabActive(orcaPage, 'Blank target destination')
       await expect(sourceTabLocator).toContainText('Source page')
       await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
+      // Context-menu links keep the source visible until the new tab is selected.
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link', { button: 'right' })
+      await orcaPage
+        .getByRole('menuitem', { name: 'Open Link In Orca Browser', exact: true })
+        .click()
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Linked destination')
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-link', {
         frameSelector: '#link-frame'
       })
       await expectBrowserTabActive(orcaPage, 'Frame destination')
-      await expect(sourceTabLocator).toContainText('Source page')
       await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-modifier-link', {
         frameSelector: '#link-frame',
         modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
       })
-      await expectBrowserTabActive(orcaPage, 'Frame modifier destination')
-      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await expectBrowserTabOpenedInBackground(
+        orcaPage,
+        sourceTab!.id,
+        'Frame modifier destination'
+      )
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-middle-link', {
         button: 'middle',
         frameSelector: '#link-frame'
       })
-      await expectBrowserTabActive(orcaPage, 'Frame middle destination')
-      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Frame middle destination')
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#modifier-link', {
         modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
       })
-      await expectBrowserTabActive(orcaPage, 'Modifier destination')
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Modifier destination')
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-shift-middle-link', {
+        button: 'middle',
+        modifiers: ['shift'],
+        frameSelector: '#link-frame'
+      })
+      await expectBrowserTabActive(orcaPage, 'Frame shift middle destination')
       await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
       const tabCountBeforeCancelledClick = await orcaPage.locator('[data-tab-id]').count()
@@ -740,7 +615,7 @@ test.describe('Browser Tab', () => {
       await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(tabCountBeforeCancelledClick)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#middle-link', { button: 'middle' })
-      await expectBrowserTabActive(orcaPage, 'Middle-click destination')
+      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Middle-click destination')
       await expect
         .poll(() => electronApp.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().length), {
           timeout: 5_000
@@ -836,39 +711,5 @@ test.describe('Browser Tab', () => {
     } finally {
       await closeServer.close()
     }
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('browser tab retains state when switching worktrees and back', async ({ orcaPage }) => {
-    const allWorktreeIds = await getAllWorktreeIds(orcaPage)
-    if (allWorktreeIds.length < 2) {
-      test.skip(true, 'Need at least 2 worktrees to test worktree switching')
-    }
-
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await createBrowserTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-
-    const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabsBefore.length).toBeGreaterThan(0)
-
-    // Switch to a different worktree via the store
-    const otherId = await switchToOtherWorktree(orcaPage, worktreeId)
-    expect(otherId).not.toBeNull()
-    await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 5_000 }).toBe(otherId)
-
-    // Switch back to the original worktree
-    await switchToWorktree(orcaPage, worktreeId)
-    await expect
-      .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 5_000 })
-      .toBe(worktreeId)
-
-    // Browser tabs should still be preserved
-    const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabsAfter.length).toBe(browserTabsBefore.length)
   })
 })

@@ -10,6 +10,12 @@ import {
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { getCodexSettingsBaselinePath } from './config-settings-baseline'
 
+// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+vi.mock('./codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 let root: string
 let homes: { runtimeHomePath: string; systemHomePath: string }
 

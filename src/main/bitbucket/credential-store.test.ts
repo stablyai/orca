@@ -1,7 +1,8 @@
-import { existsSync, mkdtempSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
+import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,6 +20,7 @@ async function loadStore(
   // Why: doMock registrations outlive resetModules, so an injected failure from
   // one case would leak into every later one in this file.
   vi.doUnmock('node:fs')
+  vi.doUnmock('../../shared/secure-path-windows-acl')
   const { setSecretStore } = await import('../../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -53,6 +55,13 @@ async function loadStore(
         }
       }
     })
+    // Why: on Windows the staged credential is written by the ACL helper, not writeSync.
+    vi.doMock('../../shared/secure-path-windows-acl', async (importOriginal) => ({
+      ...(await importOriginal<typeof WindowsAcl>()),
+      writeRestrictedWindowsFile: () => {
+        throw error
+      }
+    }))
   }
   if (options.unlinkError) {
     // Why mocked: chmod-based failure injection is not portable — Windows has no
@@ -235,7 +244,7 @@ describe('Bitbucket credential store', () => {
     ).toThrow(/disk full/)
 
     expect(readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))).toEqual(before)
-    expect(existsSync(join(tempHome, '.orca', 'bitbucket-credential.enc.tmp'))).toBe(false)
+    expect(readdirSync(join(tempHome, '.orca')).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
   it('authenticates from the envelope when metadata is stale (STA-3941)', async () => {

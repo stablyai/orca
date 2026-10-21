@@ -47,8 +47,9 @@ export function useTerminalParkVerdictPin(args: {
   terminalTabs: readonly TerminalTab[]
   /** Park verdict before damping — every input already merged. */
   candidateParkedTabIds: ReadonlySet<string>
+  allowSustainedPin: boolean
 }): ReadonlySet<string> {
-  const { records, terminalTabs, candidateParkedTabIds } = args
+  const { records, terminalTabs, candidateParkedTabIds, allowSustainedPin } = args
   const [pinnedTabIds, setPinnedTabIds] = useState<ReadonlySet<string>>(EMPTY_TAB_IDS)
   const pinnedTabIdsRef = useRef(pinnedTabIds)
   // Why a revision and not a raw timer callback: the pin lapse must re-run the
@@ -81,7 +82,8 @@ export function useTerminalParkVerdictPin(args: {
       records: flipRecords,
       liveTabIds,
       nextParkedTabIds: parkedTabIds,
-      nowMs
+      nowMs,
+      allowSustainedPin
     })
     const { pinnedTabIds: nextPinnedTabIds, earliestPinExpiryMs } = selectParkVerdictPinnedTabIds({
       records: flipRecords,
@@ -113,7 +115,7 @@ export function useTerminalParkVerdictPin(args: {
         Math.max(1, earliestPinExpiryMs - nowMs)
       )
     }
-  }, [parkedTabIds, pinExpiryRevision, records, terminalTabs])
+  }, [allowSustainedPin, parkedTabIds, pinExpiryRevision, records, terminalTabs])
 
   // Why separate from the observation effect: that effect intentionally keeps a
   // live timer across its own re-runs, so its cleanup cannot own disposal.

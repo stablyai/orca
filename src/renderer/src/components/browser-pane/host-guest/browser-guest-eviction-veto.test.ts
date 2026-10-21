@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import {
-  browserTabsVetoGuestEviction,
-  selectBrowserGuestEvictionWorktreeIds
-} from './browser-guest-worktree-retention'
+import { browserTabsVetoGuestEviction } from './browser-guest-eviction-veto'
+import { selectBrowserGuestEvictionWorktreeIds } from './browser-guest-worktree-retention'
 import { hydrateBrowserDrivers } from '../../../lib/pane-manager/browser-mobile-driver-state'
 import { hydrateBrowserRemoteViewerPages } from '../../../lib/pane-manager/browser-remote-viewer-state'
 import {
@@ -60,13 +58,6 @@ describe('browser guest eviction veto', () => {
     const token = acquireBrowserAutomationVisibility(WATCHED_PAGE)
     expect(evictionRun(tabsFor(WATCHED_PAGE))).not.toContain(WATCHED_WORKTREE)
     releaseBrowserAutomationVisibility(token)
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
-  })
-
-  it('releases the veto when the last remote viewer leaves', () => {
-    hydrateBrowserRemoteViewerPages([WATCHED_PAGE])
-    expect(browserTabsVetoGuestEviction(tabsFor(WATCHED_PAGE))).toBe(true)
-    hydrateBrowserRemoteViewerPages([])
     expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
   })
 

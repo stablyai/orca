@@ -14,12 +14,13 @@ import {
   type SearchableWorkspaceTab
 } from '@/lib/workspace-tab-palette-search'
 import type { AppState } from '@/store/types'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -40,14 +41,15 @@ export type OpenTabSearchEntryState = Pick<
   | 'activeWorktreeId'
   | 'browserPagesByWorkspace'
   | 'browserTabsByWorktree'
+  | 'folderWorkspaces'
   | 'groupsByWorktree'
   | 'openFiles'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
+  | 'worktreesByRepo'
 > & {
   executionHostId: ExecutionHostId
   generatedTitlesEnabled: boolean
-  ownershipWorktrees: readonly Pick<Worktree, 'id'>[]
   repo: Pick<Repo, 'connectionId' | 'displayName' | 'executionHostId' | 'id'> | null
   worktree: Worktree
 }
@@ -100,14 +102,15 @@ export function selectOpenTabSearchEntryState(
     browserPagesByWorkspace: state.browserPagesByWorkspace,
     browserTabsByWorktree: state.browserTabsByWorktree,
     executionHostId,
+    folderWorkspaces: selectFolderWorkspaces(state),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     groupsByWorktree: state.groupsByWorktree,
     openFiles: state.openFiles,
-    ownershipWorktrees: getIndexedAllWorktrees(state.worktreesByRepo),
     repo,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-    worktree
+    worktree,
+    worktreesByRepo: selectWorktreesByRepo(state)
   }
 }
 
@@ -133,7 +136,7 @@ export function buildOpenTabSearchEntries(
   const worktrees = [scopedWorktree]
   const scope = {
     worktrees,
-    ownershipWorktrees: state.ownershipWorktrees,
+    ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),
     repoMap: new Map(repo ? [[repo.id, repo]] : []),
     worktreeOrder: new Map([[worktree.id, 0]])
   }

@@ -3,8 +3,6 @@ import type { Repo } from '../shared/repo-types'
 import { isFullGitObjectId } from './git/commit-object-ref'
 import { hasLocalWorktreeBaseRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'
-import { getSshGitProvider } from './providers/ssh-git-dispatch'
-import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
 import { resolveWorktreeCreateBase } from './worktree-create-base'
 
 type WorktreeCreateBaseGitOptions = {
@@ -33,7 +31,7 @@ type WorktreeCreateBasePrefetchRuntime = {
     repoPath: string,
     base: RemoteTrackingBaseForPrefetch,
     options?: WorktreeCreateBaseGitOptions
-  ) => Promise<unknown>
+  ) => Promise<{ ok: boolean }>
   fetchRemoteWithCache: (
     repoPath: string,
     remote: string,
@@ -45,7 +43,8 @@ async function prefetchLocalWorktreeCreateBase(
   repo: Repo,
   baseBranch: string | undefined,
   runtime: WorktreeCreateBasePrefetchRuntime,
-  options: WorktreeCreateBaseGitOptions
+  options: WorktreeCreateBaseGitOptions,
+  prepareLocalCheckout: (base: string, beforeMaterialization?: Promise<void>) => void
 ): Promise<string | undefined> {
   // Keep host-routed calls at their original arity so they stay on the runtime's default options.
   const optionArgs: [] | [WorktreeCreateBaseGitOptions] = options.wslDistro ? [options] : []
@@ -83,15 +82,29 @@ async function prefetchLocalWorktreeCreateBase(
     ...optionArgs
   )
   if (remoteTrackingBase) {
+    const hasTrackingRef = await runtime.hasRemoteTrackingRef(
+      repo.path,
+      remoteTrackingBase,
+      ...optionArgs
+    )
     if (
-      (await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase, ...optionArgs)) ||
+      hasTrackingRef ||
       !(await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch, options))
     ) {
-      await runtime.getOrStartRemoteTrackingBaseRefresh(
+      const refresh = runtime.getOrStartRemoteTrackingBaseRefresh(
         repo.path,
         remoteTrackingBase,
         ...optionArgs
       )
+      if (hasTrackingRef) {
+        // Register during fetch, then materialize the settled base once; offline keeps its local tip.
+        const beforeMaterialization = refresh.then(
+          () => {},
+          () => {}
+        )
+        prepareLocalCheckout(resolvedBaseBranch, beforeMaterialization)
+      }
+      await refresh
       return resolvedBaseBranch
     }
   }
@@ -114,17 +127,37 @@ export async function prefetchWorktreeCreateBase(args: {
   /** Routing for the project's Git host; required so a caller cannot silently
    *  warm up the wrong ref store — pass `{}` for host Git. */
   gitOptions: WorktreeCreateBaseGitOptions
+  prepareCheckout?: (base: string, beforeMaterialization?: Promise<void>) => Promise<void>
 }): Promise<string | undefined> {
   if (isFolderRepo(args.repo)) {
     return undefined
   }
+  // An `ssh:` repo is not served here, so there is no ref store to warm.
   if (args.repo.connectionId) {
-    const provider = getSshGitProvider(args.repo.connectionId)
-    if (!provider) {
-      return undefined
-    }
-    await prefetchRemoteWorktreeCreateBase(provider, args.repo, { baseBranch: args.baseBranch })
     return undefined
   }
-  return prefetchLocalWorktreeCreateBase(args.repo, args.baseBranch, args.runtime, args.gitOptions)
+  const prepareCheckout = args.prepareCheckout
+  let preparation: Promise<void> | undefined
+  const prepare = (base: string, beforeMaterialization?: Promise<void>): void => {
+    if (!preparation && prepareCheckout) {
+      preparation = Promise.resolve().then(() => prepareCheckout(base, beforeMaterialization))
+    }
+    void preparation?.catch(() => {})
+  }
+  try {
+    const base = await prefetchLocalWorktreeCreateBase(
+      args.repo,
+      args.baseBranch,
+      args.runtime,
+      args.gitOptions,
+      prepare
+    )
+    if (base) {
+      prepare(base)
+    }
+    return base
+  } finally {
+    // Settle speculative work even if refresh fails; Create owns error reporting.
+    await preparation?.catch(() => {})
+  }
 }

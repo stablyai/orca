@@ -68,7 +68,7 @@ export function extractGrokToolFields(
     }
     return update
   }
-  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
+  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure', 'stop_cancelled')) {
     const direct =
       readString(hookPayload, 'lastAssistantMessage') ??
       readString(hookPayload, 'last_assistant_message')

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  BrowserHostPagePlacementRegistry,
-  type RuntimeBrowserClientPlacement
-} from './browser-host-page-placement'
+import { BrowserHostPagePlacementRegistry } from './browser-host/browser-host-page-placement'
+import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
 import {
   closeRuntimeBrowserClientPage,
   createRuntimeBrowserClientPage,

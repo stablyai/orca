@@ -2,11 +2,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
-import {
-  escapeWindowsBatchValue,
-  isAbsoluteForPlatform,
-  quoteShell
-} from './cli-install-path-format'
+import { escapeWindowsBatchValue, isAbsoluteForPlatform } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 export async function ensureDevLauncher(args: {
   platform: NodeJS.Platform
@@ -34,7 +31,7 @@ export async function ensureDevLauncher(args: {
   const content =
     args.platform === 'win32'
       ? buildWindowsDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
-      : buildUnixDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
+      : buildUnixCliLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
   await writeFile(launcherPath, content, {
     encoding: 'utf8',
     mode: args.platform === 'win32' ? undefined : 0o755
@@ -49,16 +46,25 @@ export async function ensureDevLauncher(args: {
   return launcherPath
 }
 
-export function buildUnixDevLauncher(
+export function buildUnixCliLauncher(
   execPathValue: string,
   cliEntryPath: string,
-  userDataPath: string
+  userDataPath: string,
+  runtime: 'electron' | 'node' = 'electron'
 ): string {
+  if (runtime === 'node') {
+    return `#!/usr/bin/env sh
+set -eu
+export ORCA_USER_DATA_PATH=${quotePosixShellDoubleQuotedApostrophe(userDataPath)}
+unset NODE_OPTIONS NODE_REPL_EXTERNAL_MODULE ELECTRON_RUN_AS_NODE
+exec ${quotePosixShellDoubleQuotedApostrophe(execPathValue)} ${quotePosixShellDoubleQuotedApostrophe(cliEntryPath)} "$@"
+`
+  }
   return `#!/usr/bin/env bash
 set -euo pipefail
-ELECTRON=${quoteShell(execPathValue)}
-CLI=${quoteShell(cliEntryPath)}
-export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
+ELECTRON=${quotePosixShellDoubleQuotedApostrophe(execPathValue)}
+CLI=${quotePosixShellDoubleQuotedApostrophe(cliEntryPath)}
+export ORCA_USER_DATA_PATH=${quotePosixShellDoubleQuotedApostrophe(userDataPath)}
 if [ -z "\${ORCA_APP_EXECUTABLE:-}" ]; then
   export ORCA_APP_EXECUTABLE="$ELECTRON"
   export ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1

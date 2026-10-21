@@ -1,0 +1,76 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "shadcn",
+      "specifier": "@shadcn/lint"
+    }
+  ],
+  "settings": {
+    "shadcn": {
+      "note": "See docs/STYLEGUIDE.md for the role each token and primitive plays."
+    }
+  },
+  "rules": {},
+  "overrides": [
+    {
+      "files": ["**/src/renderer/**/*.tsx"],
+      "rules": {
+        "shadcn/no-unknown-classes": [
+          "error",
+          {
+            "allow": [
+              "comment-md-*",
+              "compact-agent-*",
+              "feature-wall-*",
+              "is-*",
+              "markdown-annotation-*",
+              "markdown-body",
+              "markdown-dark",
+              "markdown-doc-link*",
+              "markdown-light",
+              "markdown-preview",
+              "markdown-preview-search*",
+              "markdown-preview-shell",
+              "markdown-review-*",
+              "markdown-toc-*",
+              "mobile-browser-driver-banner",
+              "mobile-driver-banner",
+              "native-chat-*",
+              "orca-*",
+              "pdfViewer",
+              "popover-scroll-content",
+              "popover-wheel-scroll",
+              "ravpr-*",
+              "ravs-*",
+              "scrollbar-editor",
+              "scrollbar-sleek",
+              "scrollbar-sleek-lg",
+              "scrollbar-sleek-parent",
+              "toaster",
+              "worktree-sidebar-scrollbar",
+              "xterm-*"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/*.test.tsx"],
+      "rules": {
+        "shadcn/no-unknown-classes": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "cloud/**", "mobile/**"]
+}

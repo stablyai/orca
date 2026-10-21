@@ -1,13 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason } from './abort-signal-reason'
-import type { PairingOffer } from './pairing'
+import type { PairedRuntimeConnection } from './paired-runtime-connection'
 import { scheduleOrphanedRemoteRuntimeSocketClose } from './remote-runtime-abort-orphaned-socket'
-import { decrypt, encrypt } from './e2ee-crypto'
-import {
-  serializeRemoteRuntimePayload,
-  serializeRemoteRuntimeRpcRequest
-} from './remote-runtime-memory-limits'
+import { serializeRemoteRuntimeRpcRequest } from './remote-runtime-memory-limits'
+import type { PairedE2EEClientHandshake } from './paired-e2ee-client-handshake'
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,
@@ -18,8 +15,8 @@ import {
 } from './remote-runtime-prepared-request-admission'
 import {
   invalidRemoteRuntimeResponseError,
-  parseAuthenticatedFrame,
-  parseReadyFrame,
+  remoteRuntimeAuthReplyError,
+  remoteRuntimeReadyError,
   remoteRuntimeTimeoutError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
@@ -32,6 +29,7 @@ import {
   type RemoteRuntimeRequestReadyWaiter
 } from './remote-runtime-request-ready-waiters'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
+import { sendRemoteRuntimeTokenAuth } from './remote-runtime-client-handshake'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import type { RuntimeCapability } from './protocol-version'
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
@@ -40,16 +38,20 @@ const IDLE_CLOSE_MS = 60_000
 export class RemoteRuntimeRequestConnection {
   private state: ConnectionState = 'closed'
   private ws: WebSocket | null = null
-  private sharedKey: Uint8Array | null = null
+  private handshake: PairedE2EEClientHandshake | null = null
   private socketCleanup: (() => void) | null = null
   private readonly pendingRequests = new Map<string, RemoteRuntimePendingRequest<unknown>>()
   private readonly readyWaiters: RemoteRuntimeRequestReadyWaiter[] = []
   private idleCloseTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
-    private readonly pairing: PairingOffer,
+    private readonly connection: PairedRuntimeConnection,
     private readonly additionalClientCapabilities: readonly RuntimeCapability[] = []
   ) {}
+
+  isReady(): boolean {
+    return this.state === 'ready' && this.ws?.readyState === WebSocket.OPEN && !!this.handshake
+  }
 
   request<TResult>(
     method: string,
@@ -66,7 +68,7 @@ export class RemoteRuntimeRequestConnection {
       preparedRequest = prepareRemoteRuntimeRequest(this.pendingRequests, () =>
         serializeRemoteRuntimeRpcRequest({
           requestId,
-          deviceToken: this.pairing.deviceToken,
+          deviceToken: this.connection.credential.deviceToken,
           method,
           params
         })
@@ -126,18 +128,15 @@ export class RemoteRuntimeRequestConnection {
   close(error?: Error): void {
     const ws = this.ws
     const cleanup = this.socketCleanup
-    this.ws = this.sharedKey = null
+    this.ws = this.handshake = null
     this.socketCleanup = null
     this.state = 'closed'
     this.clearIdleCloseTimer()
 
     const closeError = error ?? remoteRuntimeUnavailableError()
     rejectRemoteRuntimeRequestReadyWaiters(this.readyWaiters, closeError)
-    for (const [requestId, pending] of this.pendingRequests) {
-      clearTimeout(pending.timeout)
-      this.pendingRequests.delete(requestId)
-      releaseRemoteRuntimePreparedRequest(pending)
-      pending.reject(closeError)
+    for (const requestId of this.pendingRequests.keys()) {
+      this.rejectPendingRequest(requestId, closeError)
     }
 
     try {
@@ -150,7 +149,7 @@ export class RemoteRuntimeRequestConnection {
 
   private ensureReady(signal?: AbortSignal): Promise<void> {
     const ws = this.ws
-    if (this.state === 'ready' && ws?.readyState === WebSocket.OPEN && this.sharedKey) {
+    if (this.isReady()) {
       return Promise.resolve()
     }
 
@@ -168,7 +167,7 @@ export class RemoteRuntimeRequestConnection {
   }
 
   private open(): void {
-    const opened = openRemoteRuntimeWebSocket(this.pairing, {
+    const opened = openRemoteRuntimeWebSocket(this.connection, {
       onClose: (ws) => {
         if (this.ws === ws) {
           this.close()
@@ -190,7 +189,7 @@ export class RemoteRuntimeRequestConnection {
       return
     }
     this.ws = opened.socket.ws
-    this.sharedKey = opened.socket.sharedKey
+    this.handshake = opened.socket.handshake
     this.socketCleanup = opened.socket.cleanup
     this.state = 'awaiting_ready'
   }
@@ -201,11 +200,11 @@ export class RemoteRuntimeRequestConnection {
       return
     }
 
-    const sharedKey = this.sharedKey
-    if (!sharedKey) {
+    const handshake = this.handshake
+    if (!handshake) {
       return
     }
-    const plaintext = decrypt(frame, sharedKey)
+    const plaintext = handshake.channel.openText(frame)
     if (plaintext === null) {
       this.close(
         invalidRemoteRuntimeResponseError('Remote Orca runtime returned an undecryptable frame.')
@@ -214,7 +213,7 @@ export class RemoteRuntimeRequestConnection {
     }
 
     if (this.state === 'awaiting_authenticated') {
-      this.handleAuthenticatedFrame(plaintext)
+      this.handleAuthenticatedFrame(handshake, plaintext)
       return
     }
 
@@ -222,30 +221,32 @@ export class RemoteRuntimeRequestConnection {
   }
 
   private handleReadyFrame(frame: string): void {
-    const error = parseReadyFrame(frame)
+    const handshake = this.handshake
+    if (!handshake) {
+      return
+    }
+    const error = remoteRuntimeReadyError(handshake.acceptReadyText(frame))
     if (error) {
       this.close(error)
       return
     }
     this.state = 'awaiting_authenticated'
-    const sharedKey = this.sharedKey
-    if (!sharedKey) {
-      return
-    }
-    this.ws?.send(
-      encrypt(
-        serializeRemoteRuntimePayload({
-          type: 'e2ee_auth',
-          deviceToken: this.pairing.deviceToken,
-          clientCapabilities: remoteRuntimeClientCapabilities(this.additionalClientCapabilities)
-        }),
-        sharedKey
-      )
-    )
+    void sendRemoteRuntimeTokenAuth({
+      handshake,
+      deviceToken: this.connection.credential.deviceToken,
+      clientCapabilities: remoteRuntimeClientCapabilities(this.additionalClientCapabilities),
+      stillAwaiting: () => this.handshake === handshake && this.state === 'awaiting_authenticated',
+      send: (authFrame) => this.ws?.send(authFrame),
+      fail: (error) => {
+        if (this.handshake === handshake) {
+          this.close(toRemoteRuntimeRequestError(error))
+        }
+      }
+    })
   }
 
-  private handleAuthenticatedFrame(plaintext: string): void {
-    const error = parseAuthenticatedFrame(plaintext)
+  private handleAuthenticatedFrame(handshake: PairedE2EEClientHandshake, plaintext: string): void {
+    const error = remoteRuntimeAuthReplyError(handshake.classifyAuthReply(plaintext))
     if (error) {
       this.close(error)
       return
@@ -272,11 +273,11 @@ export class RemoteRuntimeRequestConnection {
   private sendRequest(requestId: string): void {
     const pending = this.pendingRequests.get(requestId)
     const ws = this.ws
-    const sharedKey = this.sharedKey
+    const handshake = this.handshake
     if (!pending) {
       return
     }
-    if (this.state !== 'ready' || !ws || ws.readyState !== WebSocket.OPEN || !sharedKey) {
+    if (this.state !== 'ready' || !ws || ws.readyState !== WebSocket.OPEN || !handshake) {
       this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
       return
     }
@@ -286,7 +287,7 @@ export class RemoteRuntimeRequestConnection {
       return
     }
     try {
-      ws.send(encrypt(serializedRequest, sharedKey))
+      ws.send(handshake.channel.sealText(serializedRequest))
     } catch (error) {
       this.rejectPendingRequest(requestId, toRemoteRuntimeRequestError(error))
     }

@@ -5,6 +5,8 @@ import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import { getWorkspaceAttachments } from './workspace-attachments'
+import { isSmartTier } from './sidebar-list/sort-stamps'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -73,6 +75,15 @@ export function normalizeFolderWorkspaces(
             : (group?.connectionId ?? null),
       ...(creatorProvenance ? { creatorProvenance } : {}),
       linkedTask,
+      ...(raw.linkedItems !== undefined
+        ? {
+            linkedItems: getWorkspaceAttachments({
+              linkedItems: raw.linkedItems,
+              linkedWorkItem: linkedTask,
+              linkedTaskSourceContext
+            })
+          }
+        : {}),
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
         linkedTask,
         linkedTaskSourceContext
@@ -104,6 +115,14 @@ export function normalizeFolderWorkspaces(
         typeof raw.lastActivityAt === 'number' && Number.isFinite(raw.lastActivityAt)
           ? raw.lastActivityAt
           : 0,
+      ...(isSmartTier(raw.smartTier) &&
+      typeof raw.smartAt === 'number' &&
+      Number.isFinite(raw.smartAt)
+        ? { smartTier: raw.smartTier, smartAt: raw.smartAt }
+        : {}),
+      ...(typeof raw.lastTerminalUseAt === 'number' && Number.isFinite(raw.lastTerminalUseAt)
+        ? { lastTerminalUseAt: raw.lastTerminalUseAt }
+        : {}),
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:

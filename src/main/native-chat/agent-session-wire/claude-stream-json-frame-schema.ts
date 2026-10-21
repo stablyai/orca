@@ -1,4 +1,4 @@
-// SDKMessage discriminators from Claude Agent SDK 0.3.231 / Claude Code 2.1.231.
+// SDKMessage discriminators from Claude Agent SDK 0.3.251 / Claude Code 2.1.258.
 export const CLAUDE_STREAM_JSON_FRAME_KINDS = [
   'message:assistant',
   'message:user',
@@ -10,6 +10,8 @@ export const CLAUDE_STREAM_JSON_FRAME_KINDS = [
   'message:stream_event:content_block_start',
   'message:stream_event:content_block_delta',
   'message:stream_event:content_block_stop',
+  // A Messages API keep-alive inside a stream; it carries nothing.
+  'message:stream_event:ping',
   'message:system:compact_boundary',
   'message:system:status',
   'message:system:api_retry',
@@ -42,7 +44,15 @@ export const CLAUDE_STREAM_JSON_FRAME_KINDS = [
   'message:prompt_suggestion',
   'message:system:mirror_error',
   'message:system:informational',
-  'message:conversation_reset'
+  'message:conversation_reset',
+  // Queue bookkeeping the CLI emits per client-supplied command uuid. Absent
+  // from the SDK's SDKMessage union, which is why it reached users as raw JSON.
+  'message:command_lifecycle',
+  'message:result:success',
+  'message:result:error_during_execution',
+  'message:result:error_max_turns',
+  'message:result:error_max_budget_usd',
+  'message:result:error_max_structured_output_retries'
 ] as const
 
 export type ClaudeStreamJsonFrameKind = (typeof CLAUDE_STREAM_JSON_FRAME_KINDS)[number]

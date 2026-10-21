@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { orderAutomationHostCatalogEntries } from './automation-host-catalog-order'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
-import {
-  ALL_HOSTS_OPTION_VALUE,
-  automationHostFilterForEntry,
-  automationHostSearchText,
-  groupAutomationHostEntriesByAuthority
-} from './automation-host-picker-groups'
+import { groupAutomationHostEntriesByAuthority } from './automation-host-picker-groups'
 
 function desktopSsh(targetId: string, label: string): AutomationHostCatalogEntry {
   return {
@@ -75,25 +70,5 @@ describe('automation host picker groups', () => {
 
     expect(groups).toHaveLength(2)
     expect(groups.map((group) => group.entries.length)).toEqual([1, 1])
-  })
-
-  it('builds a stable filter that carries no incarnation', () => {
-    expect(automationHostFilterForEntry(desktopSsh('t1', 'web-01'))).toEqual({
-      kind: 'host',
-      host: { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId: 't1' } }
-    })
-  })
-
-  it('uses an All hosts sentinel that cannot collide with a host stable key', () => {
-    const keys = [desktopSsh('t1', 'web-01'), runtimeSelf('env-a', 'Alpha box')].map(
-      (entry) => entry.stableKey
-    )
-    expect(keys).not.toContain(ALL_HOSTS_OPTION_VALUE)
-    expect(keys.every((key) => key.startsWith('host:'))).toBe(true)
-  })
-
-  it('indexes search text over both the host and its authority', () => {
-    expect(automationHostSearchText(runtimeSelf('env-a', 'Alpha Box'))).toBe('alpha box alpha box')
-    expect(automationHostSearchText(desktopSsh('t1', 'WEB-01'))).toBe('this computer web-01')
   })
 })

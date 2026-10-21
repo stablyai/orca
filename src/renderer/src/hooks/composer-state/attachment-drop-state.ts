@@ -8,10 +8,13 @@ type AttachmentDropStateInput = Pick<
   | 'promptCaretFrameRef'
   | 'promptTextareaRef'
   | 'selectedRepoPath'
-  | 'selectedRepoSettings'
+  | 'selectedRepoRuntimeEnvironmentId'
   | 'setAgentPrompt'
   | 'setAttachmentPaths'
->
+> & {
+  /** The selected repo's main worktree id; null for a folder project with no worktree yet. */
+  selectedWorktreeId: string | null
+}
 
 import { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -19,13 +22,29 @@ import { translate } from '@/i18n/i18n'
 import { joinPath } from '@/lib/path'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { useAppStore } from '@/store'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { showComposerDropFailureToast } from '../composer-drop-failure-toast'
 import {
-  collectComposerDropUploadResult,
-  shouldReportComposerDropUploadFailure
-} from '../composer-drop-upload-result'
+  collectComposerDropResult,
+  type ComposerDropFailure,
+  type ComposerDropItemResult
+} from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
-import { useComposerDropListener } from './composer-drop-listener'
+import { useMountedRef } from '../useMountedRef'
+import { userNamedFileAccess } from '@/lib/local-file-access'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+
+// Local drops bypass the runtime importer's skip classification.
+function localDropFailure(detail: string | undefined): ComposerDropFailure {
+  if (detail?.startsWith('ENOENT')) {
+    return { status: 'skipped', reason: 'missing' }
+  }
+  if (/^(EACCES|EPERM)/.test(detail ?? '')) {
+    return { status: 'skipped', reason: 'permission-denied' }
+  }
+  return { status: 'failed', reason: detail }
+}
 
 export function useAttachmentDropState(input: AttachmentDropStateInput) {
   const {
@@ -35,10 +54,12 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     promptCaretFrameRef,
     promptTextareaRef,
     selectedRepoPath,
-    selectedRepoSettings,
+    selectedRepoRuntimeEnvironmentId,
+    selectedWorktreeId,
     setAgentPrompt,
     setAttachmentPaths
   } = input
+  const mountedRef = useMountedRef()
 
   const addComposerAttachments = useCallback(
     (paths: string[]): void => {
@@ -105,12 +126,15 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
   const uploadComposerPaths = useCallback(
     async (
       sourcePaths: string[],
-      targetSettings = selectedRepoSettings,
+      targetEnvironmentId = selectedRepoRuntimeEnvironmentId,
       targetConnectionId: string | null | undefined = connectionId,
       targetRepoPath: string | null | undefined = selectedRepoPath,
+      targetWorktreeId: string | null | undefined = selectedWorktreeId,
       canReportFailure: () => boolean = () => true
     ): Promise<{ filePaths: string[]; folderPaths: string[] } | null> => {
-      if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
+      // The selected repo's host, not the focused server.
+      const targetRuntimeEnvironmentId = targetEnvironmentId?.trim() || null
+      if (!targetRuntimeEnvironmentId && !targetConnectionId) {
         return null
       }
       if (!targetRepoPath) {
@@ -129,7 +153,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         ? captureDirectSshMutationExpectation(
             useAppStore.getState(),
             targetConnectionId,
-            targetSettings?.activeRuntimeEnvironmentId
+            targetRuntimeEnvironmentId
           )
         : {
             expectedExecutionHostId: 'local' as const,
@@ -141,7 +165,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
             const current = captureDirectSshMutationExpectation(
               useAppStore.getState(),
               targetConnectionId,
-              targetSettings?.activeRuntimeEnvironmentId
+              targetRuntimeEnvironmentId
             )
             if (
               current.expectedSshTargetId !== sshExpectation.expectedSshTargetId ||
@@ -154,28 +178,27 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         : undefined
       const { results } = await importExternalPathsToRuntime(
         {
-          settings: targetSettings,
-          worktreeId: targetRepoPath,
+          target: runtimeTargetForOwnerEnvironment(targetRuntimeEnvironmentId),
+          worktreeId: targetWorktreeId ?? targetRepoPath,
           worktreePath: targetRepoPath,
           connectionId: targetConnectionId ?? undefined,
           ...sshExpectation
         },
         sourcePaths,
         destinationDir,
-        { ensureDestinationDir: true, assertCurrent }
+        { ensureDestinationDir: true, assertCurrent, nameExtensionlessImages: true }
       )
-      const uploadResult = collectComposerDropUploadResult(results)
-      if (shouldReportComposerDropUploadFailure(uploadResult, canReportFailure)) {
-        toast.error(
-          translate(
-            'auto.hooks.useComposerState.a9ff236145',
-            'Some attachments could not be uploaded.'
-          )
-        )
+      const uploadResult = collectComposerDropResult(results)
+      if (uploadResult.failureCount > 0 && canReportFailure()) {
+        showComposerDropFailureToast({
+          failureCount: uploadResult.failureCount,
+          total: sourcePaths.length,
+          commonFailure: uploadResult.commonFailure
+        })
       }
       return { filePaths: uploadResult.filePaths, folderPaths: uploadResult.folderPaths }
     },
-    [connectionId, selectedRepoPath, selectedRepoSettings]
+    [connectionId, selectedRepoPath, selectedRepoRuntimeEnvironmentId, selectedWorktreeId]
   )
 
   const handleAddAttachment = useCallback(async (): Promise<void> => {
@@ -199,42 +222,52 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
 
   const applyLocalComposerDrop = useCallback(
     async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
-      const fileAttachments: string[] = []
-      const folderPaths: string[] = []
+      const results: ComposerDropItemResult[] = []
       for (const filePath of paths) {
+        if (!mountedRef.current) {
+          return
+        }
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-          const stat = await window.api.fs.stat({ filePath })
-          if (stat.isDirectory) {
-            folderPaths.push(filePath)
-          } else {
-            fileAttachments.push(filePath)
-          }
-        } catch {
-          // Skip paths we cannot authorize or stat.
+          const stat = await window.api.fs.stat({ filePath, access: userNamedFileAccess() })
+          results.push({
+            status: 'imported',
+            destPath: filePath,
+            kind: stat.isDirectory ? 'directory' : 'file'
+          })
+        } catch (error) {
+          results.push(localDropFailure(readIpcErrorMessage(error)))
         }
       }
 
-      if (!canApply()) {
+      if (!mountedRef.current || !canApply()) {
         return
       }
-      addComposerAttachments(fileAttachments)
-      insertComposerFolderPaths(folderPaths)
+      const dropResult = collectComposerDropResult(results)
+      addComposerAttachments(dropResult.filePaths)
+      insertComposerFolderPaths(dropResult.folderPaths)
+      if (dropResult.failureCount > 0) {
+        showComposerDropFailureToast({
+          failureCount: dropResult.failureCount,
+          total: paths.length,
+          commonFailure: dropResult.commonFailure
+        })
+      }
     },
-    [addComposerAttachments, insertComposerFolderPaths]
+    [addComposerAttachments, insertComposerFolderPaths, mountedRef]
   )
 
   const applyNativeDrop = useCallback(
-    (paths: string[], isCurrentOwner: () => boolean): void => {
-      void applyComposerNativeFileDrop({
+    (paths: string[], isCurrentOwner: () => boolean): Promise<void> => {
+      return applyComposerNativeFileDrop({
         paths,
         isCurrentOwner,
         uploadPaths: (sourcePaths) =>
           uploadComposerPaths(
             sourcePaths,
-            selectedRepoSettings,
+            selectedRepoRuntimeEnvironmentId,
             connectionId,
             selectedRepoPath,
+            selectedWorktreeId,
             isCurrentOwner
           ),
         applyLocalPaths: applyLocalComposerDrop,
@@ -250,18 +283,18 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       connectionId,
       insertComposerFolderPaths,
       selectedRepoPath,
-      selectedRepoSettings,
+      selectedRepoRuntimeEnvironmentId,
+      selectedWorktreeId,
       uploadComposerPaths
     ]
   )
-  // Why: native OS file drops relay via the preload bridge; only the most recently mounted composer applies them.
-  useComposerDropListener(applyNativeDrop)
 
   return {
     addComposerAttachments,
     insertComposerFolderPaths,
     uploadComposerPaths,
     handleAddAttachment,
-    applyLocalComposerDrop
+    applyLocalComposerDrop,
+    applyNativeDrop
   }
 }

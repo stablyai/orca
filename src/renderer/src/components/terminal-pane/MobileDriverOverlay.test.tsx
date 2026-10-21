@@ -113,8 +113,8 @@ describe('MobileDriverOverlay', () => {
       onAllAction: vi.fn()
     }) as OverlayElement
 
-    expect(overlay.props.actionLabel).toBe('Restore this terminal')
-    expect(overlay.props.allActionLabel).toBe('Restore all terminals')
+    expect(overlay.props.actionLabel).toBe('Restore')
+    expect(overlay.props.allActionLabel).toBe('Restore all')
   })
 
   it('exposes an all-terminals restore action when provided', async () => {
@@ -123,8 +123,8 @@ describe('MobileDriverOverlay', () => {
 
     const overlay = renderOverlay(onAction, onAllAction)
 
-    expect(overlay.props.actionLabel).toBe('Take back this terminal')
-    expect(overlay.props.allActionLabel).toBe('Take back all terminals')
+    expect(overlay.props.actionLabel).toBe('Take back')
+    expect(overlay.props.allActionLabel).toBe('Take back all')
     expect(overlay.props.allActionPending).toBe(false)
     await overlay.props.onAllAction?.()
 

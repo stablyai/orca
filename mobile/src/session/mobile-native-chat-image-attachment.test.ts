@@ -50,7 +50,12 @@ describe('uploadMobileNativeChatImages', () => {
       pickImages: vi.fn().mockResolvedValue([{ base64: 'AAAA', uri: 'file:///photo.jpg' }])
     })
 
-    expect(result).toEqual([{ path: '/tmp/orca-attach.png', previewUri: 'file:///photo.jpg' }])
+    expect(result).toEqual([
+      {
+        path: '/tmp/orca-attach.png',
+        previewUri: 'file:///photo.jpg'
+      }
+    ])
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
@@ -86,9 +91,18 @@ describe('uploadMobileNativeChatImages', () => {
     })
 
     expect(result).toEqual([
-      { path: '/tmp/a.png', previewUri: 'file:///a.jpg' },
-      { path: '/tmp/b.png', previewUri: 'file:///b.jpg' },
-      { path: '/tmp/c.png', previewUri: 'file:///c.jpg' }
+      {
+        path: '/tmp/a.png',
+        previewUri: 'file:///a.jpg'
+      },
+      {
+        path: '/tmp/b.png',
+        previewUri: 'file:///b.jpg'
+      },
+      {
+        path: '/tmp/c.png',
+        previewUri: 'file:///c.jpg'
+      }
     ])
     expect(order).toEqual([
       'read:file:///a.jpg',
@@ -149,7 +163,12 @@ describe('uploadMobileNativeChatImages', () => {
       pickImages: vi.fn().mockResolvedValue([{ base64: 'BBBB' }])
     })
 
-    expect(result).toEqual([{ path: '/tmp/x.png', previewUri: 'data:image/png;base64,BBBB' }])
+    expect(result).toEqual([
+      {
+        path: '/tmp/x.png',
+        previewUri: 'data:image/png;base64,BBBB'
+      }
+    ])
   })
 
   it('signals upload start only after a real image is picked', async () => {

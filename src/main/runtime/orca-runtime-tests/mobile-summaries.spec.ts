@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { OrcaRuntimeService, listWorktrees } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -386,7 +387,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('attaches inline agent rows from the latest OSC 9999 status', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = new OrcaRuntimeService(store, undefined, makeAgentStatusStoreWiring().deps)
     const leafId = '22222222-2222-4222-8222-222222222222'
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
@@ -611,24 +612,37 @@ describe('OrcaRuntimeService', () => {
     ])
   })
   it('does not carry hook monitoring mode into a newer OSC turn', async () => {
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentStatusSnapshot: () => [
+    // One store, so the newer turn simply replaces the monitoring row; nothing reconciles them.
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
         {
-          paneKey: 'tab-1:1',
-          worktreeId: TEST_WORKTREE_ID,
           tabId: 'tab-1',
-          state: 'working',
-          workingMode: 'monitoring',
-          prompt: 'watch tests',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: now - 100,
-          stateStartedAt: now - 200
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: leafId,
+          layout: null
         }
+      ],
+      leaves: [
+        { tabId: 'tab-1', worktreeId: TEST_WORKTREE_ID, leafId, paneRuntimeId: 1, ptyId: 'pty-1' }
       ]
     })
-    syncSinglePty(runtime)
+    statusWiring.statusStore.ingestTerminalStatus({
+      paneKey: `tab-1:${leafId}`,
+      tabId: 'tab-1',
+      worktreeId: TEST_WORKTREE_ID,
+      connectionId: null,
+      payload: {
+        state: 'working',
+        workingMode: 'monitoring',
+        prompt: 'watch tests',
+        agentType: 'claude'
+      }
+    })
     runtime.onPtyData(
       'pty-1',
       '\x1b]9999;{"state":"working","prompt":"fix tests","agentType":"claude"}\x07',

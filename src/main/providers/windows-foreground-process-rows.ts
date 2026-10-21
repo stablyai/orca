@@ -1,8 +1,10 @@
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
+  readWindowsProcessIdentityTableFresh,
   readWindowsProcessTable,
   readWindowsProcessTableFresh,
   resetWindowsProcessTableForTests,
+  type WindowsProcessIdentityRow,
   type WindowsProcessRow as NativeWindowsProcessRow
 } from '../windows/windows-process-table'
 
@@ -49,17 +51,13 @@ function projectProcessRows(native: readonly NativeWindowsProcessRow[]): Windows
 }
 
 /**
- * Rows from a scan that starts after this call.
+ * A fresh scan for an ancestry walk, which reads only pid/ppid.
  *
- * PID-identity checks in teardown must not reuse a cached row — it can predate
- * the very recycle it is meant to detect. Rejects when the table is unreadable,
- * so "unavailable" stays distinguishable from "nothing is running".
- *
- * `readonly` because the projection is shared with every other reader of the
- * same snapshot.
+ * Returns identity rows so the command line is not merely unused but absent:
+ * asking for it costs an `OpenProcess` per process on the box.
  */
-export async function queryWindowsProcessRowsFresh(): Promise<readonly WindowsProcessRow[]> {
-  return projectProcessRows(await readWindowsProcessTableFresh())
+export async function queryWindowsProcessLinksFresh(): Promise<WindowsProcessIdentityRow[]> {
+  return readWindowsProcessIdentityTableFresh()
 }
 
 export async function queryWindowsProcessDescendants(

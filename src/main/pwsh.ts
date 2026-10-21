@@ -1,4 +1,4 @@
-import { runProcess, runProcessSync } from '../shared/child-process/run-process'
+import { runProcess, runProcessSync } from '@orca/process-host'
 
 const PWSH_SYNC_PROBE_TIMEOUT_MS = 5000
 const PWSH_WARMUP_PROBE_TIMEOUT_MS = 30_000

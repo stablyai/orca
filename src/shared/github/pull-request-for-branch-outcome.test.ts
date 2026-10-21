@@ -19,6 +19,13 @@ describe('normalizeGitHubPRForBranchOutcome', () => {
     expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toBe(outcome)
   })
 
+  it.each([
+    { kind: 'no-pr' as const, fetchedAt: 10 },
+    { kind: 'no-pr' as const, fetchedAt: 10, rejectedPRUrls: [PR.url] }
+  ])('preserves no-PR responses from older and newer hosts', (outcome) => {
+    expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toEqual(outcome)
+  })
+
   it('normalizes legacy PRInfo and null responses', () => {
     expect(normalizeGitHubPRForBranchOutcome(PR, 20)).toEqual({
       kind: 'found',

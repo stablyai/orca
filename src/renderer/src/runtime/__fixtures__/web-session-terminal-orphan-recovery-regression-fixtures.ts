@@ -2,7 +2,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../../shared/runtime-types'
-import { toRemoteRuntimePtyId } from '../runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { TerminalOrphanRecoveryState } from '../web-session-terminal-orphan-recovery-surface'
 
 export const ENVIRONMENT_ID = 'remote-runtime'

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isMobileRelayCloseCode,
   MOBILE_RELAY_CLOSE_CODE,
+  MOBILE_RELAY_PHONE_CLOSE_REASON,
   mobileRelayRecoveryFor
 } from './mobile-relay-close-codes'
 
@@ -17,6 +18,10 @@ describe('mobile relay close-code contract', () => {
     })
     expect(isMobileRelayCloseCode(4409)).toBe(true)
     expect(isMobileRelayCloseCode(1006)).toBe(false)
+  })
+
+  it('locks the phone close reasons the relay mirrors', () => {
+    expect(MOBILE_RELAY_PHONE_CLOSE_REASON).toEqual({ HOST_ATTACH_TIMEOUT: 'attach-timeout' })
   })
 
   it('uses the configured director and never a cell-supplied URL', () => {

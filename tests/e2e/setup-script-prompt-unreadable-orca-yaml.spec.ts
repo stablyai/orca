@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -112,17 +112,10 @@ async function addRepoAndActivateMainWorktree(
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      const normalize = (value: string): string =>
-        value.startsWith('/private/var/') ? value.slice('/private'.length) : value
-
       const state = store.getState()
       const worktrees = state.worktreesByRepo[targetRepoId] ?? []
-      const mainWorktree = worktrees.find(
-        (entry) => normalize(entry.path) === normalize(targetRepoPath)
-      )
-      const featureWorktree = worktrees.find(
-        (entry) => normalize(entry.path) === normalize(targetFeaturePath)
-      )
+      const mainWorktree = worktrees.find((entry) => entry.path === targetRepoPath)
+      const featureWorktree = worktrees.find((entry) => entry.path === targetFeaturePath)
       if (!mainWorktree || !featureWorktree) {
         throw new Error(
           `Missing worktrees for ${targetRepoPath}: ${worktrees.map((entry) => entry.path).join(', ')}`
@@ -145,7 +138,11 @@ async function addRepoAndActivateMainWorktree(
         featureWorktreeId: featureWorktree.id
       }
     },
-    { targetRepoId: repoId, targetRepoPath: repoPath, targetFeaturePath: featureWorktreePath }
+    {
+      targetRepoId: repoId,
+      targetRepoPath: realpathSync.native(repoPath),
+      targetFeaturePath: realpathSync.native(featureWorktreePath)
+    }
   )
 }
 

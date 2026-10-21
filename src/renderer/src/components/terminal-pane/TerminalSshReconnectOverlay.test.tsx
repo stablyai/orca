@@ -315,23 +315,6 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
   })
 
-  // Why: the sidebar card control, the host-header menu, and this overlay can be on screen
-  // at once; a shared verb table keeps them from naming the same click three ways.
-  it.each([
-    ['disconnected', 'Connect'],
-    ['auth-failed', 'Reconnect'],
-    ['error', 'Retry'],
-    ['reconnection-failed', 'Retry']
-  ] as const)('labels the %s action %s, matching every other SSH surface', (status, verb) => {
-    installSshConnect(vi.fn().mockResolvedValue(undefined))
-
-    render(
-      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="devbox" status={status} />
-    )
-
-    expect(screen.getByRole('button', { name: verb })).toBeEnabled()
-  })
-
   it('suppresses a second connect while one is already in flight for the same target', async () => {
     const connect = vi.fn().mockReturnValue(new Promise(() => {}))
     installSshConnect(connect)
@@ -378,5 +361,59 @@ describe('TerminalSshReconnectOverlay', () => {
     await waitFor(() =>
       expect(useAppStore.getState().sshConnectionStates.get('ssh-target-1')).toEqual(connectedState)
     )
+  })
+
+  // A move refused only by saved state has a way out; the pane must offer it, not just Retry.
+  it('offers Move anyway beside Retry for a local move refused only by saved state', async () => {
+    const allowMoveLeavingBehind = vi.fn().mockResolvedValue(undefined)
+    const connect = vi.fn().mockResolvedValue(null)
+    installSshConnect(connect)
+    Object.assign(window.api, {
+      runtimeEnvironments: { managedOrcad: { allowMoveLeavingBehind } }
+    })
+    useAppStore.getState().setSshConnectionState('ssh-target-1', {
+      targetId: 'ssh-target-1',
+      status: 'error',
+      error: 'blocked',
+      reconnectAttempt: 0,
+      managedServer: {
+        kind: 'relay',
+        reason: 'refused',
+        detail: 'This SSH host cannot move yet: automations (2).',
+        canLeaveBehind: true
+      }
+    })
+    const user = userEvent.setup()
+
+    const { rerender } = render(
+      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="lambda" status="error" />
+    )
+    await user.click(screen.getByRole('button', { name: 'Move anyway…' }))
+    await user.click(screen.getByRole('button', { name: 'Move anyway' }))
+    await waitFor(() =>
+      expect(allowMoveLeavingBehind).toHaveBeenCalledWith({ sshTargetId: 'ssh-target-1' })
+    )
+    expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
+
+    // A connect already in flight may clear the refusal, so the button waits for it.
+    rerender(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="lambda"
+        status="connecting"
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Move anyway…' })).toBeDisabled()
+
+    // A remote server's move is that server's own; this desktop can't drive it.
+    rerender(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="lambda"
+        status="error"
+        sshOwnerEnvironmentId="env-1"
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Move anyway…' })).not.toBeInTheDocument()
   })
 })

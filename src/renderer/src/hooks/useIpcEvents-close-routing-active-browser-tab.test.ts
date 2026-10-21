@@ -11,11 +11,11 @@ const { closeWebRuntimeSessionTab, destroyWorkspaceWebviews, isWebRuntimeSession
     isWebRuntimeSessionActive: vi.fn(() => true)
   }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  closeWebRuntimeSessionTab,
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({ closeWebRuntimeSessionTab }))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
 }))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({ isWebRuntimeSessionActive }))
 vi.mock('@/store/slices/browser-webview-cleanup', () => ({ destroyWorkspaceWebviews }))
 
 const closeBrowserTab = vi.fn()
@@ -94,7 +94,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
 
     expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'workspace-1',
+      tabId: 'unified-1',
       environmentId: 'env-a',
       reason: 'user'
     })
@@ -146,11 +146,11 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
 
     expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'workspace-1',
+      tabId: 'unified-1',
       environmentId: 'env-a',
       reason: 'user'
     })
-    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-1')
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-1', undefined)
     expect(closeBrowserTab).not.toHaveBeenCalled()
   })
 
@@ -181,7 +181,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     requireListener(listenerRef)()
 
     expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
-    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-1', undefined)
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
   })
 
@@ -212,7 +212,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
   // Why: an open-but-empty floating panel is the ambient close fallback only; a guest-forwarded
   // source id names a main-workspace target and must not be swallowed by the panel toggle.
   it('closes the source workspace even while an empty floating panel is visible', async () => {
-    vi.stubGlobal('document', { querySelector: () => ({}) })
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { querySelector: () => ({}) }))
     const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
     await useIpcEventsForCloseRouting({
       closeActiveTabListenerRef: listenerRef,

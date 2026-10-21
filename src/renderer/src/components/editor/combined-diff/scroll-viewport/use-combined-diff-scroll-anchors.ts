@@ -8,9 +8,11 @@ import {
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
-import { combinedDiffScrollAnchorCache } from '../remember-view/combined-diff-view-memory'
+import {
+  rememberCombinedDiffView,
+  type CombinedDiffViewLease
+} from '../remember-view/combined-diff-view-cache'
 
 export type CombinedDiffScrollAnchors = {
   persistScrollAnchor: (refreshDomAnchor?: boolean) => void
@@ -35,7 +37,7 @@ export function useCombinedDiffScrollAnchors({
   sideBySide,
   structureRevision,
   totalSize,
-  viewStateKey,
+  memoryLeaseRef,
   virtualizer
 }: {
   clampRestoreCount: number
@@ -52,7 +54,7 @@ export function useCombinedDiffScrollAnchors({
   sideBySide: boolean
   structureRevision: number
   totalSize: number
-  viewStateKey: string
+  memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): CombinedDiffScrollAnchors {
   const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
@@ -120,13 +122,10 @@ export function useCombinedDiffScrollAnchors({
     return true
   }, [latestDomScrollAnchorRef, scrollAnchorRef, scrollContainerRef])
   const writeScrollAnchor = useCallback((): void => {
-    const anchor = scrollAnchorRef.current
-    if (anchor) {
-      setWithLRU(combinedDiffScrollAnchorCache, viewStateKey, anchor)
-    } else {
-      combinedDiffScrollAnchorCache.delete(viewStateKey)
-    }
-  }, [scrollAnchorRef, viewStateKey])
+    rememberCombinedDiffView(memoryLeaseRef.current, {
+      scrollAnchor: scrollAnchorRef.current ?? undefined
+    })
+  }, [memoryLeaseRef, scrollAnchorRef])
   const persistScrollAnchor = useCallback(
     (refreshDomAnchor = true): void => {
       if (refreshDomAnchor) {

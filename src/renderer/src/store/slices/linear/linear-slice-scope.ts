@@ -11,6 +11,8 @@ import {
 } from '../../../../../shared/linear/issue-attribute-filter'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getLinearCacheGeneration, getLinearMutationGeneration } from './linear-slice-request-state'
+import { defaultScopeSource } from '@/lib/default-creation-host'
+import type { RowLessSource } from '@/lib/default-creation-host'
 
 export function normalizeListAttributeFilter(
   attributeFilter?: LinearIssueAttributeFilter | null
@@ -22,7 +24,7 @@ export function normalizeListAttributeFilter(
 }
 
 export type LinearReadScope = {
-  settings: AppState['settings'] | TaskSourceContext | null
+  settings: RowLessSource
   contextKey: string
   cachePrefix: string | null
   explicitSource: boolean
@@ -55,7 +57,8 @@ export function getLinearReadScope(
 ): LinearReadScope {
   if (!sourceContext) {
     return {
-      settings,
+      // Why: no Tasks source chosen yet; the default scope host is the row-less source's host.
+      settings: defaultScopeSource(settings),
       contextKey: getProviderRuntimeContextKey(settings),
       cachePrefix: null,
       explicitSource: false

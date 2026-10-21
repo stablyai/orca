@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
-import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'

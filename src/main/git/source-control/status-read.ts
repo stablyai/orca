@@ -1,4 +1,5 @@
 import type {
+  GitBranchLineTotal,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
@@ -6,7 +7,6 @@ import type {
 import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
 import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
-import type { GitBranchLineTotal } from '../../../shared/git-branch-line-total'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
@@ -14,7 +14,10 @@ import {
 } from '../../../shared/git-status-line-stats-cache'
 import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
+import {
+  findExistingWorktreeSymlinkPaths,
+  getSafeRelativePath
+} from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
@@ -30,6 +33,7 @@ import {
   createBranchLineTotalInput,
   getStatusLineStatsCacheKey
 } from './status-branch-line-total-input'
+import { reconcileDriveCheckoutSuspects } from './drive-checkout-suspect-status'
 
 /**
  * Parse `git status --porcelain=v2` output into structured entries.
@@ -89,8 +93,18 @@ async function dropSharedSymlinkUntrackedEntries(
   if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
     return
   }
+  const untrackedPaths = new Set(
+    entries.filter((entry) => entry.area === 'untracked').map((entry) => entry.path)
+  )
+  const candidatePaths = sharedLinkPaths.filter((rawPath) => {
+    const path = getSafeRelativePath(rawPath)
+    return path.safe && untrackedPaths.has(path.rel)
+  })
+  if (candidatePaths.length === 0) {
+    return
+  }
   const sharedLinks = new Set(
-    await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths, {
+    await findExistingWorktreeSymlinkPaths(worktreePath, candidatePaths, {
       wslDistro: options.wslDistro
     })
   )
@@ -171,7 +185,7 @@ async function runGetStatus(
     // Not a git repo or git not available
   }
 
-  const entries: GitStatusEntry[] = []
+  let entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
   // Why: git runs in the distro and answers in its namespace; the working-tree probes below run here.
   const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
@@ -192,6 +206,9 @@ async function runGetStatus(
     }
   }
 
+  if (statusSucceeded && !didHitLimit) {
+    entries = await reconcileDriveCheckoutSuspects(worktreePath, entries, options)
+  }
   await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
@@ -221,6 +238,7 @@ async function runGetStatus(
 
   // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
   let branchLineTotal: GitBranchLineTotal | undefined
+  let branchLineTotalUnavailable: string | undefined
   if (!didHitLimit && lineStatsWriteToken !== null) {
     const branchLineTotalInput = createBranchLineTotalInput(
       worktreePath,
@@ -239,6 +257,7 @@ async function runGetStatus(
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
     branchLineTotal = lineStats.branchLineTotal
+    branchLineTotalUnavailable = lineStats.branchLineTotalUnavailable
   } else if (lineStatsWriteToken !== null) {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -257,6 +276,7 @@ async function runGetStatus(
     branch,
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
+    ...(branchLineTotalUnavailable ? { branchLineTotalUnavailable } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded
       ? {

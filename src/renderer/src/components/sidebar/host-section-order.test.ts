@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { orderHostSectionOptions } from './host-section-order'
-import type { HostSectionOption } from './host-section-rows'
+import { orderHostSectionOptions } from '../../../../shared/sidebar-list/host-section-order'
+import type { HostSectionOption } from '../../../../shared/sidebar-list/host-section-rows'
 
 const host = (id: HostSectionOption['id'], label = id): HostSectionOption => ({
   id,

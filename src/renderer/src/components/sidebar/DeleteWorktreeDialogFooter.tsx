@@ -2,6 +2,8 @@ import type { JSX, Ref } from 'react'
 import { LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
@@ -13,6 +15,7 @@ export function DeleteWorktreeDialogFooter({
   lineageDeleteTargetCount,
   onCancel,
   onForceDelete,
+  onSavingChange,
   onDelete,
   confirmButtonRef
 }: {
@@ -25,6 +28,7 @@ export function DeleteWorktreeDialogFooter({
   lineageDeleteTargetCount: number
   onCancel: () => void
   onForceDelete: () => void
+  onSavingChange: (saving: boolean) => void
   onDelete: () => void
   confirmButtonRef: Ref<HTMLButtonElement>
 }): JSX.Element {
@@ -47,17 +51,31 @@ export function DeleteWorktreeDialogFooter({
           ? translate('auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb', 'Close')
           : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726', 'Cancel')}
       </Button>
-      {!isMainWorktree && (
+      {!isMainWorktree && canForceDelete ? (
+        <WorktreeForceDeleteButton
+          buttonRef={confirmButtonRef}
+          size="default"
+          disabled={isDeleting}
+          onForceDelete={onForceDelete}
+          onSavingChange={onSavingChange}
+          onAlwaysForceDelete={() =>
+            useAppStore.getState().updateSettingsOrThrow({ alwaysForceDeleteWorktrees: true })
+          }
+        >
+          {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
+          {label}
+        </WorktreeForceDeleteButton>
+      ) : !isMainWorktree ? (
         <Button
           ref={confirmButtonRef}
           variant="destructive"
-          onClick={canForceDelete ? onForceDelete : onDelete}
+          onClick={onDelete}
           disabled={isDeleting}
         >
           {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
           {label}
         </Button>
-      )}
+      ) : null}
     </>
   )
 }

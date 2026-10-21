@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 
 /**
  * A Windows directory that is safe to hand `wsl.exe` as its working directory.
@@ -19,6 +19,10 @@ import { homedir } from 'node:os'
  * git works. It is never the cwd the command runs in: WSL invocations carry
  * their Linux directory in `git -C`, a `cd` inside `bash -c`, or the `sh -c`
  * wrapper `withGuestCwd` builds.
+ *
+ * Why a system directory and never the profile or user folder (#29845): WSL
+ * holds this directory busy for about its ~60s idle timeout after `wsl.exe`
+ * exits, so a profile named here cannot be deleted for a minute after Orca exits.
  */
 
 let cachedSpawnCwd: string | null = null
@@ -40,22 +44,18 @@ export function resetWslInteropSpawnDirectoryCache(): void {
 }
 
 export function resolveWslInteropSpawnCwd(): string | undefined {
-  // Why re-validate: the answer is only useful while it still resolves, and the
-  // user's profile directory can go away on a roaming/mapped-drive host.
+  // Why re-validate: the answer is only useful while it still resolves.
   if (isExistingDirectory(cachedSpawnCwd)) {
     return cachedSpawnCwd
   }
   const env = process.env
-  // Why this order: an app-owned directory first (it outlives every worktree),
-  // then the user's profile, then the system root as a floor that always exists.
-  // A root is fine here — nothing scans this directory, it is only the value
-  // `CreateProcessW` receives for `lpCurrentDirectory`.
   const candidates: (string | undefined)[] = [
-    env.ORCA_USER_DATA_PATH,
-    env.USERPROFILE,
-    env.HOMEDRIVE && env.HOMEPATH ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined,
-    homedir(),
-    env.SystemDrive ? `${env.SystemDrive}\\` : 'C:\\'
+    env.SystemRoot,
+    env.windir,
+    env.SystemDrive ? `${env.SystemDrive}\\` : undefined,
+    'C:\\',
+    // Why last: unreachable on a real Windows host; it keeps POSIX test hosts naming a directory.
+    tmpdir()
   ]
   for (const candidate of candidates) {
     if (isExistingDirectory(candidate)) {

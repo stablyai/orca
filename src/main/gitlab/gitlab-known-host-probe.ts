@@ -1,7 +1,6 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../git/runner'
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
@@ -12,6 +11,7 @@ export type LocalGitExecOptions = {
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
+export const KNOWN_HOSTS_CACHE_MAX_ENTRIES = 128
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
@@ -21,8 +21,7 @@ function knownHostsExecutionKey(
   localGitOptions: LocalGitExecOptions = {}
 ): string {
   if (connectionId) {
-    // Why: reconnecting can replace the SSH/relay execution host under the same id.
-    return `connection:${connectionId}:${getSshGitProviderGeneration(connectionId)}`
+    return `connection:${connectionId}`
   }
   return localGitOptions.wslDistro ? `wsl:${localGitOptions.wslDistro}` : 'native'
 }
@@ -37,6 +36,21 @@ export function _resetKnownHostsCache(): void {
 /** @internal - exposed for tests only */
 export function _resetGlabUnauthenticatedHosts(): void {
   unauthenticatedHostExpiries.clear()
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _getKnownHostsCacheSize(): number {
+  return knownHostsCacheByExecutionContext.size
+}
+
+function trimKnownHostsCache(): void {
+  while (knownHostsCacheByExecutionContext.size > KNOWN_HOSTS_CACHE_MAX_ENTRIES) {
+    const oldest = knownHostsCacheByExecutionContext.keys().next()
+    if (oldest.done) {
+      break
+    }
+    knownHostsCacheByExecutionContext.delete(oldest.value)
+  }
 }
 
 function unauthenticatedHostKey(
@@ -122,6 +136,7 @@ export function rememberGlabKnownHosts(
     return
   }
   knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
+  trimKnownHostsCache()
 }
 
 export async function getGlabKnownHosts(
@@ -131,23 +146,26 @@ export async function getGlabKnownHosts(
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
   const cached = knownHostsCacheByExecutionContext.get(key)
   if (cached) {
+    knownHostsCacheByExecutionContext.delete(key)
+    knownHostsCacheByExecutionContext.set(key, cached)
     return cached
   }
   // Why: only join a probe still young enough to answer, so a wedged one cannot
   // pin every later retry for the life of the process (P1-D).
-  return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, () =>
-    probeGlabKnownHosts(key, connectionId, localGitOptions)
+  return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, (ownsKey) =>
+    probeGlabKnownHosts(key, ownsKey, connectionId, localGitOptions)
   )
 }
 
 async function probeGlabKnownHosts(
   key: string,
+  ownsKey: () => boolean,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<readonly string[]> {
   try {
-    // Why: auth config belongs to the executing host; do not share native, WSL,
-    // or reconnected SSH/relay results, and bound an otherwise global probe.
+    // Why: auth config belongs to the executing host; do not share native, WSL or
+    // connection results, and bound an otherwise global probe.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       timeout: GLAB_KNOWN_HOSTS_TIMEOUT_MS,
       // Why: a local probe would cache the default distro's auth under 'native'
@@ -162,7 +180,10 @@ async function probeGlabKnownHosts(
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
     const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
     const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
-    knownHostsCacheByExecutionContext.set(key, merged)
+    if (ownsKey()) {
+      knownHostsCacheByExecutionContext.set(key, merged)
+      trimKnownHostsCache()
+    }
     return merged
   } catch {
     // Keep failures uncached so auth or tunnel recovery is discovered later.

@@ -18,13 +18,33 @@ export type RemoteRuntimeSocketLivenessOptions = {
   livenessTimeoutMs?: number
 }
 
+// Why: after sleep or a network change a socket can read OPEN while its path is gone; the normal
+// cadence needs ~30-40 s to prove that. A resume probe settles it in one short, explicit window.
+export const REMOTE_RUNTIME_SOCKET_RESUME_PROBE_DEADLINE_MS = 8_000
+
 export type RemoteRuntimeSocketLivenessMonitor = {
   noteActivity: () => void
+  /** Ping now; declare the socket dead unless anything arrives within `deadlineMs`. */
+  probeNow: (deadlineMs?: number) => void
   stop: () => void
 }
 
+const activeMonitors = new Set<RemoteRuntimeSocketLivenessMonitor>()
+
+/** Probe every live remote-runtime socket in this process, e.g. on OS resume or network change. */
+export function probeAllRemoteRuntimeSocketsNow(
+  deadlineMs = REMOTE_RUNTIME_SOCKET_RESUME_PROBE_DEADLINE_MS
+): number {
+  const monitors = Array.from(activeMonitors)
+  for (const monitor of monitors) {
+    monitor.probeNow(deadlineMs)
+  }
+  return monitors.length
+}
+
 export function startRemoteRuntimeSocketLiveness(args: {
-  ping: () => void
+  /** Returns false when nothing was sent, e.g. the socket is still connecting. */
+  ping: () => boolean
   onDead: () => void
   options?: RemoteRuntimeSocketLivenessOptions
   now?: () => number
@@ -35,6 +55,8 @@ export function startRemoteRuntimeSocketLiveness(args: {
     args.options?.livenessTimeoutMs ?? REMOTE_RUNTIME_SOCKET_LIVENESS_TIMEOUT_MS
   let lastTickAt = now()
   let probeSentAt: number | null = null
+  let activitySinceResumeProbe = false
+  let resumeProbeTimer: ReturnType<typeof setTimeout> | null = null
   let stopped = false
 
   const timer = setInterval(() => {
@@ -72,20 +94,66 @@ export function startRemoteRuntimeSocketLiveness(args: {
     }
     stopped = true
     clearInterval(timer)
+    if (resumeProbeTimer !== null) {
+      clearTimeout(resumeProbeTimer)
+      resumeProbeTimer = null
+    }
+    activeMonitors.delete(monitor)
   }
 
-  function tryPing(): void {
-    try {
-      args.ping()
-    } catch {
-      // Why: ping() can throw while a socket is mid-teardown; the probe deadline still settles it.
+  function probeNow(deadlineMs = REMOTE_RUNTIME_SOCKET_RESUME_PROBE_DEADLINE_MS): void {
+    if (stopped || resumeProbeTimer !== null) {
+      return
+    }
+    activitySinceResumeProbe = false
+    // Why: a socket still connecting has no path to probe yet; a deadline with no ping could kill it mid-handshake.
+    if (!tryPing()) {
+      return
+    }
+    const probedAt = now()
+    resumeProbeTimer = setTimeout(() => {
+      resumeProbeTimer = null
+      if (stopped || activitySinceResumeProbe) {
+        return
+      }
+      // Why: a late timer means this process slept or stalled, so replies may still be queued; probe afresh.
+      const elapsedMs = now() - probedAt
+      if (elapsedMs < 0 || elapsedMs > deadlineMs * 1.5) {
+        probeNow(deadlineMs)
+        return
+      }
+      stop()
+      args.onDead()
+    }, deadlineMs)
+    // Why: mobile typechecks shared code with DOM timer types where unref is absent.
+    const timer: unknown = resumeProbeTimer
+    if (
+      typeof timer === 'object' &&
+      timer !== null &&
+      'unref' in timer &&
+      typeof timer.unref === 'function'
+    ) {
+      timer.unref()
     }
   }
 
-  return {
+  function tryPing(): boolean {
+    try {
+      return args.ping()
+    } catch {
+      // Why: ping() can throw while a socket is mid-teardown; the probe deadline still settles it.
+      return true
+    }
+  }
+
+  const monitor: RemoteRuntimeSocketLivenessMonitor = {
     noteActivity: () => {
       probeSentAt = null
+      activitySinceResumeProbe = true
     },
+    probeNow,
     stop
   }
+  activeMonitors.add(monitor)
+  return monitor
 }

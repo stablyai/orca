@@ -1,10 +1,13 @@
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {
+  subscriptionId?: string
   selector: string
   method: string
   params?: unknown
   timeoutMs?: number
+  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {
@@ -128,13 +131,18 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   callbacks: RuntimeEnvironmentSubscriptionCallbacks,
   createSubscriptionId = createRuntimeEnvironmentSubscriptionId
 ): Promise<RuntimeEnvironmentSubscriptionHandle> {
-  const subscriptionId = createSubscriptionId()
+  const subscriptionId = args.subscriptionId ?? createSubscriptionId()
   // Why: streaming RPCs can emit their first frame before ipcMain.handle()
   // resolves, so the dispatcher must be routing this id before invoking.
   const dispatcher = getOrCreateDispatcher(ipc)
+  if (dispatcher.callbacks.has(subscriptionId)) {
+    throw new Error('Runtime environment subscription id already exists')
+  }
   dispatcher.callbacks.set(subscriptionId, callbacks)
   const releaseCurrentSubscription = (): void => {
-    releaseSubscription(ipc, dispatcher, subscriptionId)
+    if (dispatcher.callbacks.get(subscriptionId) === callbacks) {
+      releaseSubscription(ipc, dispatcher, subscriptionId)
+    }
   }
   try {
     const result = (await ipc.invoke('runtimeEnvironments:subscribe', {

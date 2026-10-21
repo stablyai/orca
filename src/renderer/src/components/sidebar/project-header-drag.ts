@@ -15,6 +15,9 @@ import {
 } from './project-header-drag-contract'
 import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
+import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
+import type { Repo } from '../../../../shared/repo-types'
 
 // Why pointer events instead of HTML5 DnD: rows are absolutely-positioned by
 // react-virtual and unmount/remount as scroll changes, so DnD enter/leave fire
@@ -25,6 +28,7 @@ export function useRepoHeaderDrag({
   orderedRepoIds,
   sidebarRepoHeaderIdsByBucket,
   repoById,
+  getLiveRepos,
   usesProjectGroupOrdering,
   onCommitRepoOrder,
   onCommitProjectGroupOrder,
@@ -44,6 +48,8 @@ export function useRepoHeaderDrag({
   usesProjectGroupOrderingRef.current = usesProjectGroupOrdering
   const onCommitRepoOrderRef = useRef(onCommitRepoOrder)
   onCommitRepoOrderRef.current = onCommitRepoOrder
+  // Read once: callers pass a stable store reader.
+  const getLiveReposRef = useRef(getLiveRepos)
   const onCommitProjectGroupOrderRef = useRef(onCommitProjectGroupOrder)
   onCommitProjectGroupOrderRef.current = onCommitProjectGroupOrder
   const getContainerRef = useRef(getScrollContainer)
@@ -124,20 +130,7 @@ export function useRepoHeaderDrag({
         // capture may already be released (pointercancel, element unmounted)
       }
       if (session.promoted) {
-        const handleEl = session.handleEl
-        const swallow = (e: MouseEvent): void => {
-          const target = e.target as Node | null
-          if (target && handleEl.contains(target)) {
-            e.stopPropagation()
-            e.preventDefault()
-          }
-          window.removeEventListener('click', swallow, true)
-        }
-        window.addEventListener('click', swallow, true)
-        clickSwallowTimeoutRef.current = setTimeout(() => {
-          window.removeEventListener('click', swallow, true)
-          clickSwallowTimeoutRef.current = null
-        }, 0)
+        clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
       }
       const sidebarDropIndex =
         commit && session.promoted && latestDropIndexRef.current !== null
@@ -155,6 +148,7 @@ export function useRepoHeaderDrag({
         sidebarDropIndex,
         orderedRepoIds: orderedIdsRef.current,
         repoById: repoByIdRef.current,
+        liveRepos: getLiveReposRef.current(),
         usesProjectGroupOrdering: usesProjectGroupOrderingRef.current,
         onCommitRepoOrder: onCommitRepoOrderRef.current,
         onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current
@@ -188,7 +182,7 @@ export function useRepoHeaderDrag({
         refreshHeaderRects()
       }
 
-      applyDrop(session.repoId, computeDrop(session.latestPointerY))
+      applyDrop(session.repo.id, computeDrop(session.latestPointerY))
 
       autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
     },
@@ -210,6 +204,10 @@ export function useRepoHeaderDrag({
     const onPointerMove = (e: PointerEvent): void => {
       const session = dragSessionRef.current
       if (!session || e.pointerId !== session.pointerId) {
+        return
+      }
+      if (hasPointerBeenReleased(e)) {
+        endDrag(false)
         return
       }
       session.latestPointerY = e.clientY
@@ -234,10 +232,10 @@ export function useRepoHeaderDrag({
           }
         }
         refreshHeaderRects()
-        setState({ draggingRepoId: session.repoId, dropIndex: null, dropIndicatorY: null })
+        setState({ draggingRepoId: session.repo.id, dropIndex: null, dropIndicatorY: null })
       }
       refreshHeaderRects()
-      applyDrop(session.repoId, computeDrop(e.clientY))
+      applyDrop(session.repo.id, computeDrop(e.clientY))
       ensureAutoscroll()
     }
     const onPointerUp = (e: PointerEvent): void => {
@@ -303,23 +301,19 @@ export function useRepoHeaderDrag({
     }
   }, [state.draggingRepoId])
 
-  const onHandlePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLElement>, repoId: string) => {
-      const session = createProjectHeaderDragSession({
-        event,
-        repoId,
-        repoById: repoByIdRef.current,
-        sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
-        getScrollContainer: getContainerRef.current
-      })
-      if (!session) {
-        return
-      }
-      dragSessionRef.current = session
-      setSessionArmed(true)
-    },
-    []
-  )
+  const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLElement>, repo: Repo) => {
+    const session = createProjectHeaderDragSession({
+      event,
+      repo,
+      sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+      getScrollContainer: getContainerRef.current
+    })
+    if (!session) {
+      return
+    }
+    dragSessionRef.current = session
+    setSessionArmed(true)
+  }, [])
 
   return { state, onHandlePointerDown }
 }

@@ -1,7 +1,7 @@
 import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
-import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 

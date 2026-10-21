@@ -2,11 +2,12 @@
 import './setup.spec'
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { RuntimeBrowserCommands } from '../orca-runtime-browser'
+import { RuntimeBrowserCommands } from '../browser/browser-commands'
 import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from '../runtime-browser-commands-factory'
+import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
@@ -36,10 +37,8 @@ import {
   removeWorktree
 } from '../../git/worktree'
 import * as gitRunner from '../../git/runner'
-import {
-  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
-  WORKTREE_TEARDOWN_RPC_MARGIN_MS
-} from '../worktree-teardown'
+import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../worktree-teardown'
+import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../worktree-teardown-deadline'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../../git/status'
 import { getEffectiveHooks, hasHooksFile, loadHooks, parseOrcaYaml, runHook } from '../../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../../worktree-runner-script'
@@ -48,7 +47,11 @@ import {
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
 } from '../../effective-hook-config'
-import { getBaseRefDefault, getBranchConflictKind } from '../../git/repo'
+import {
+  getBaseRefDefault,
+  getBranchConflictKind,
+  resolveDefaultBaseRefWithLocalGit
+} from '../../git/repo'
 import { OrchestrationDb as RuntimeOrchestrationDb } from '../orchestration/db'
 import {
   AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -59,7 +62,7 @@ import {
 } from '../orca-runtime'
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../runtime-graph-reload-lifecycle'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
 import {
   appendRecentPtyPathCandidates,
   recentTerminalPathCandidatesIncludePath,
@@ -89,16 +92,11 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from '../../providers/ssh-filesystem-dispatch'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../../providers/ssh-git-dispatch'
-import {
   registerPty as registerLocalPtyMemoryRow,
   unregisterPty as unregisterLocalPtyMemoryRow
 } from '../../memory/pty-registry'
 import { inspectPtyProviderProcess } from '../../providers/pty-process-inspection'
-import * as worktreePathComparison from '../../ipc/worktree-path-comparison'
+import * as worktreePathComparison from '../../worktree-path-comparison-key'
 import * as localWorktreeFilesystem from '../../local-worktree-filesystem'
 import {
   DEFAULT_REPO_BADGE_COLOR,
@@ -113,8 +111,6 @@ import {
 } from '../../../shared/setup-agent-sequencing'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { RpcDispatcher } from '../rpc/dispatcher'
-import { TERMINAL_METHODS } from '../rpc/methods/terminal'
 import { beginWatcherInstall } from '../../ipc/watcher-removal-gate'
 import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../ipc/watcher-removal-drain'
 import {
@@ -146,7 +142,6 @@ export const exportedOrchestrationDb = RuntimeOrchestrationDb
 export const exportedREVIEW_HEAD_FETCH_TIMEOUT_MS = REVIEW_HEAD_FETCH_TIMEOUT_MS
 export const exportedRUNTIME_GRAPH_RELOAD_TIMEOUT_MS = RUNTIME_GRAPH_RELOAD_TIMEOUT_MS
 export const exportedRecentPtyOutputBuffer = RecentPtyOutputBuffer
-export const exportedRpcDispatcher = RpcDispatcher
 export const exportedRuntimeBrowserCommands = RuntimeBrowserCommands
 export const exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
@@ -155,7 +150,6 @@ export const exportedSETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
 export const exportedTERMINAL_INPUT_CHUNK_MAX_BYTES = TERMINAL_INPUT_CHUNK_MAX_BYTES
 export const exportedTERMINAL_INPUT_MAX_BYTES = TERMINAL_INPUT_MAX_BYTES
 export const exportedTERMINAL_INPUT_TOO_LARGE_ERROR = TERMINAL_INPUT_TOO_LARGE_ERROR
-export const exportedTERMINAL_METHODS = TERMINAL_METHODS
 export const exportedTUI_AGENT_CONFIG = TUI_AGENT_CONFIG
 export const exportedWATCHER_REMOVAL_DRAIN_BUDGET_MS = WATCHER_REMOVAL_DRAIN_BUDGET_MS
 export const exportedWORKTREE_PROCESS_SWEEP_TIMEOUT_MS = WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
@@ -174,6 +168,8 @@ export const exportedBeforeEach = beforeEach
 export const exportedBeginWatcherInstall = beginWatcherInstall
 export const exportedBuildAgentPromptPasteBytes = buildAgentPromptPasteBytes
 export const exportedBuildPreview = buildPreview
+export const exportedCancelLegacyWorkerTerminalRecoveryRetriesForTests =
+  __cancelLegacyWorkerTerminalRecoveryRetriesForTests
 export const exportedClearConfiguredWorktreeSharedDirectoriesCacheForTests =
   clearConfiguredWorktreeSharedDirectoriesCacheForTests
 export const exportedClearSubmodulePathsCacheForTests = clearSubmodulePathsCacheForTests
@@ -216,7 +212,7 @@ export const exportedMakePaneKey = makePaneKey
 export const exportedMkdir = mkdir
 export const exportedMkdirSync = mkdirSync
 export const exportedMkdtemp = mkdtemp
-export const exportedOnTestFinished = onTestFinished
+export const exportedOnTestFinished: typeof onTestFinished = onTestFinished
 export const exportedParseOrcaYaml = parseOrcaYaml
 export const exportedPerformance = performance
 export const exportedProjectHostSetupProjectionFromRepos = projectHostSetupProjectionFromRepos
@@ -225,8 +221,6 @@ export const exportedRecentTerminalOutputIncludesPath = recentTerminalOutputIncl
 export const exportedRecentTerminalPathCandidatesIncludePath =
   recentTerminalPathCandidatesIncludePath
 export const exportedRegisterLocalPtyMemoryRow = registerLocalPtyMemoryRow
-export const exportedRegisterSshFilesystemProvider = registerSshFilesystemProvider
-export const exportedRegisterSshGitProvider = registerSshGitProvider
 export const exportedRemoveWorktree = removeWorktree
 export const exportedResolveSetupRunnerShell = resolveSetupRunnerShell
 export const exportedResolveWorktreeScanCacheTtlMs = resolveWorktreeScanCacheTtlMs
@@ -242,9 +236,9 @@ export const exportedSetWorktreeWatcherRemoval = setWorktreeWatcherRemoval
 export const exportedShouldRunSetupForCreate = shouldRunSetupForCreate
 export const exportedTmpdir = tmpdir
 export const exportedUnregisterLocalPtyMemoryRow = unregisterLocalPtyMemoryRow
-export const exportedUnregisterSshFilesystemProvider = unregisterSshFilesystemProvider
-export const exportedUnregisterSshGitProvider = unregisterSshGitProvider
 export const exportedVi = vi
 export const exportedWin32 = win32
 export const exportedWorktreePathComparison = worktreePathComparison
 export const exportedWriteFile = writeFile
+
+export const exportedResolveDefaultBaseRefWithLocalGit = resolveDefaultBaseRefWithLocalGit

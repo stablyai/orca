@@ -118,7 +118,7 @@ vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({
   buildDefaultTerminalOptions: () => ({ scrollback: 0 })
 }))
 
-vi.mock('@/components/terminal-pane/layout-serialization', () => ({
+vi.mock('@/lib/monospace-font-family', () => ({
   buildFontFamily: (font: string) => `built:${font}`
 }))
 

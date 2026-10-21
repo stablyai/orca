@@ -19,6 +19,12 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
+/** The plugin probes both SDK call conventions — current `(parameters, options)` and legacy
+ *  single-options — so fixtures for one session-client method differ in arity. */
+type SessionClientCall = (...args: never[]) => Promise<{ data: SessionFixture[] }>
+
+type SessionClientFixture = { list: SessionClientCall; get?: SessionClientCall }
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
@@ -83,7 +89,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     return loadHooksWithSession({ list })
   }
 
-  async function loadHooksWithSession(session: object): Promise<PluginHooks> {
+  async function loadHooksWithSession(session: SessionClientFixture): Promise<PluginHooks> {
     const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     const module = (await import(pathToFileURL(pluginPath).href)) as {

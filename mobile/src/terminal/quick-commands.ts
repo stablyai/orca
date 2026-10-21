@@ -6,7 +6,6 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand,
   MAX_QUICK_COMMANDS,
-  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   parseNormalizedTerminalQuickCommands,
@@ -14,6 +13,11 @@ import {
   terminalQuickCommandMatchesRepo,
   type TerminalQuickCommandMutation
 } from '../../../src/shared/terminal-quick-commands'
+import {
+  getTerminalQuickCommandBodySize,
+  formatKilobytes,
+  terminalQuickCommandAgentPromptMaxLength
+} from '../../../src/shared/terminal-quick-command-prompt-limit'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
 
@@ -25,11 +29,13 @@ export {
   getTerminalQuickCommandBody,
   terminalQuickCommandMatchesRepo as quickCommandMatchesRepo,
   supportsTerminalAgentQuickCommand,
+  getTerminalQuickCommandBodySize,
+  formatKilobytes,
   MAX_QUICK_COMMANDS,
-  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   parseNormalizedTerminalQuickCommands,
+  terminalQuickCommandAgentPromptMaxLength,
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
 }
@@ -102,7 +108,7 @@ export function getQuickCommandDisplayPreview(command: TerminalQuickCommand): st
   if (preview.length <= MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH) {
     return preview
   }
-  // Why: one-line rows should not send up to 6 KB each through native text
+  // Why: one-line rows should not send whole prompts through native text
   // layout; full command bodies remain available to search, edit, and launch.
   return `${preview.slice(0, MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH - 1)}…`
 }

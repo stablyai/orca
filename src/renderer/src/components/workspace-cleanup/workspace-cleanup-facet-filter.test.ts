@@ -549,19 +549,14 @@ describe('query pipeline', () => {
       .filter((row) => result.selectableIdentities.includes(row.identity))
       .map((row) => row.worktreeId)
 
-    expect(selectableIds).toEqual(
-      expect.arrayContaining(['repo-1::/dirty', 'repo-1::/pinned', 'repo-1::/unknown'])
-    )
-    expect(selectableIds).not.toEqual(
-      expect.arrayContaining([
-        'repo-1::/active',
-        'repo-1::/agent',
-        'repo-1::/ignored',
-        'repo-1::/main',
-        'repo-1::/folder',
-        'repo-1::/remote'
-      ])
-    )
+    // STA-4686: the active workspace and a live agent are labels like any other.
+    expect([...selectableIds].sort()).toEqual([
+      'repo-1::/active',
+      'repo-1::/agent',
+      'repo-1::/dirty',
+      'repo-1::/pinned',
+      'repo-1::/unknown'
+    ])
     expect(canQueueWorkspaceCleanupCandidate(candidates[3])).toBe(true)
     expect(canQueueWorkspaceCleanupCandidate(candidates[4])).toBe(true)
     expect(canQueueWorkspaceCleanupCandidate(candidates[5])).toBe(true)

@@ -5,7 +5,14 @@ const hiddenClaimCounts = new Map<string, number>()
 
 type VisibilityClaim = { ptyId: string; visible: boolean }
 
-const visibilityClaimsByOwner = new Map<object, VisibilityClaim>()
+declare const visibilityClaimOwnerBrand: unique symbol
+
+/** The mounted transport holding a claim; only its reference is ever compared. */
+export type RendererPtyVisibilityClaimOwner = object & {
+  readonly [visibilityClaimOwnerBrand]?: never
+}
+
+const visibilityClaimsByOwner = new Map<RendererPtyVisibilityClaimOwner, VisibilityClaim>()
 const visibleClaimCounts = new Map<string, number>()
 
 function sendHiddenState(ptyId: string, hidden: boolean): void {
@@ -72,7 +79,7 @@ function removeVisibleClaim(claim: VisibilityClaim): boolean {
  * a retiring pane from hiding a PTY after its replacement has already bound.
  */
 export function setRendererPtyVisibilityClaim(
-  owner: object,
+  owner: RendererPtyVisibilityClaimOwner,
   ptyId: string,
   visible: boolean
 ): void {
@@ -103,7 +110,7 @@ export function setRendererPtyVisibilityClaim(
   }
 }
 
-export function releaseRendererPtyVisibilityClaim(owner: object): void {
+export function releaseRendererPtyVisibilityClaim(owner: RendererPtyVisibilityClaimOwner): void {
   const previous = visibilityClaimsByOwner.get(owner)
   if (!previous) {
     return

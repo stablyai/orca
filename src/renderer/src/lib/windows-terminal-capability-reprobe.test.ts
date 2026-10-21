@@ -40,6 +40,18 @@ afterEach(() => {
 })
 
 describe('windows terminal capability re-probe', () => {
+  it('settles usable WSL on a Windows host without waiting for process identity', async () => {
+    vi.useFakeTimers()
+    const { probe, readCached } = createWatcher([USABLE_WSL])
+    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+  })
+
   it('backs off to a five-minute ceiling on a stable answer', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()

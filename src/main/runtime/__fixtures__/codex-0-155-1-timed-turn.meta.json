@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-09-29T01:44:01.149Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "-c",
+    "check_for_update_on_startup=false",
+    "--dangerously-bypass-approvals-and-sandbox"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.155.1, default tui animations. One tool-using turn sent once the composer had been quiet 2.5s; cut 20s past the last busy frame, before exit. <name>.timing.json holds each PTY chunk as [ms since spawn, UTF-16 length] and the prompt-submit time. STA-8834.",
+  "exitCode": 0
+}

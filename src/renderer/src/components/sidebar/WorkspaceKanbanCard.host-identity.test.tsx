@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { makeWorktree } from '../../store/slices/store-test-helpers'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 
 vi.mock('@/components/ui/badge', () => ({

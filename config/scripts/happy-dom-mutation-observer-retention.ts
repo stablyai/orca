@@ -48,12 +48,12 @@ export function installHappyDomMutationObserverRetention(): boolean {
   const disconnect = prototype.disconnect
 
   prototype.observe = function patchedObserve(
-    this: object,
+    this: PatchableMutationObserver,
     target: Node,
     options?: MutationObserverInit
   ): void {
     const existing = new Set(readMutationListeners(target))
-    observe.call(this as unknown as PatchableMutationObserver, target, options)
+    observe.call(this, target, options)
     const pinned = retainedCallbacks.get(this) ?? new Set<unknown>()
     for (const listener of readMutationListeners(target)) {
       if (existing.has(listener)) {
@@ -69,8 +69,8 @@ export function installHappyDomMutationObserverRetention(): boolean {
     }
   }
 
-  prototype.disconnect = function patchedDisconnect(this: object): void {
-    disconnect.call(this as unknown as PatchableMutationObserver)
+  prototype.disconnect = function patchedDisconnect(this: PatchableMutationObserver): void {
+    disconnect.call(this)
     retainedCallbacks.delete(this)
   }
 

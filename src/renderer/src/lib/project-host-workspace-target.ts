@@ -4,7 +4,10 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import {
+  getProjectIdentityKey,
+  projectHostSetupProjectionFromRepos
+} from '../../../shared/project-host-setup-projection'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resolveComposerRepoId } from './new-workspace-composer-repo'
@@ -16,6 +19,25 @@ export type WorkspaceCreationTarget = {
   repoId: string
   repo: Repo
   setup: ProjectHostSetup
+}
+
+export type WorkspaceCreationTargetHint = Pick<WorkspaceCreationTarget, 'projectId' | 'hostId'> & {
+  projectHostSetupId?: string | null
+}
+
+export function getRepoWorkspaceCreationTargetHint(
+  repo: Repo,
+  projectHostSetups: readonly ProjectHostSetup[]
+): WorkspaceCreationTargetHint {
+  const hostId = getRepoExecutionHostId(repo)
+  const setup = projectHostSetups.find(
+    (candidate) => candidate.repoId === repo.id && candidate.hostId === hostId
+  )
+  return {
+    projectId: setup?.projectId ?? getProjectIdentityKey(repo),
+    hostId,
+    ...(setup ? { projectHostSetupId: setup.id } : {})
+  }
 }
 
 export type WorkspaceCreationTargetResolution =
@@ -41,6 +63,7 @@ type ProjectHostWorkspaceTargetInput = {
   projectId?: string | null
   hostId?: ExecutionHostId | null
   projectHostSetupId?: string | null
+  projectHostSetupHostId?: ExecutionHostId | null
   focusedHostScope?: ExecutionHostScope | null
   actionableHostIds?: ReadonlySet<ExecutionHostId>
 }
@@ -138,7 +161,9 @@ export function resolveWorkspaceCreationTarget(
     : allSetups
 
   if (projectHostSetupId) {
-    const setup = allSetups.find((entry) => entry.id === projectHostSetupId)
+    const matchingSetups = allSetups.filter((entry) => entry.id === projectHostSetupId)
+    const setupHostId = input.projectHostSetupHostId ?? (matchingSetups.length > 1 ? hostId : null)
+    const setup = matchingSetups.find((entry) => !setupHostId || entry.hostId === setupHostId)
     if (!setup) {
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
@@ -246,6 +271,11 @@ export function resolveWorkspaceCreationTarget(
   }
   if (legacyTarget) {
     return { status: 'ready', target: legacyTarget }
+  }
+  if (input.draftRepoId && reposById.has(input.draftRepoId)) {
+    // Why: the draft named this repo. Swapping in any other ready project would create the
+    // workspace in a project, and on a host, the user never chose.
+    return { status: 'unavailable', reason: 'setup-not-found' }
   }
   const fallbackTarget = findReadySetupTarget(setups, reposById, () => true)
   return fallbackTarget

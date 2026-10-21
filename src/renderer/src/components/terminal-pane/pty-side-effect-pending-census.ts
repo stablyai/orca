@@ -4,7 +4,7 @@ import { registerRendererMemoryProfileContributor } from '@/lib/renderer-memory-
 export type PtySideEffectGauge = {
   /** Entries still awaiting apply; saturates at MAX_PENDING_PTY_SIDE_EFFECTS. */
   pending: () => number
-  /** Entries the queue array still holds — drained-but-uncompacted ones included, so this is the count that tracks retained bytes. */
+  /** Effects still referenced by the queue array, excluding cleared consumed slots. */
   retained: () => number
 }
 

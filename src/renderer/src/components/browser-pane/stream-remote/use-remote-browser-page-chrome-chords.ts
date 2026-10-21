@@ -3,13 +3,14 @@ import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
-import { browserOverlayOwnsShortcutTarget } from '../describe-page/browser-overlay-shortcut-target'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
 import {
   REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID,
   type RemoteBrowserPaneNotice
 } from './remote-browser-page-input-model'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const FIND_UNAVAILABLE_NOTICE_MS = 4000
 
@@ -28,7 +29,9 @@ export function useRemoteBrowserPageChromeChords({
 }: {
   chromeShortcutScope: BrowserChromeShortcutScope
   workspaceId: string
-  runRemoteNavigation: (method: 'browser.reload') => Promise<void> | void
+  runRemoteNavigation: (
+    method: 'browser.reload' | 'browser.back' | 'browser.forward'
+  ) => Promise<void> | void
   setPaneNotice: Dispatch<SetStateAction<RemoteBrowserPaneNotice | null>>
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
@@ -42,10 +45,24 @@ export function useRemoteBrowserPageChromeChords({
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (
-        chromeShortcutScope === 'owned-target' &&
-        !browserOverlayOwnsShortcutTarget(event.target, workspaceId)
-      ) {
+      if (!browserChromeShortcutOwnsEvent(chromeShortcutScope, event, workspaceId)) {
+        return
+      }
+      const historyMethod = keybindingMatchesAction(
+        'browser.back',
+        event,
+        shortcutPlatform,
+        keybindings
+      )
+        ? 'browser.back'
+        : keybindingMatchesAction('browser.forward', event, shortcutPlatform, keybindings)
+          ? 'browser.forward'
+          : null
+      if (historyMethod !== null) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        // Why: remote panes have no local webview, so history goes through runtime RPC.
+        void runRemoteNavigation(historyMethod)
         return
       }
       // Why: Cmd+F should open find even from the address bar (Chrome/Safari do), but reload must
@@ -105,9 +122,9 @@ export function useRemoteBrowserPageChromeChords({
       // chords land on it rather than one of them silently doing nothing.
       void runRemoteNavigation('browser.reload')
     }
-    window.addEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, true)
+      removeAppKeyListener('keydown', handleKeyDown)
       if (findNoticeTimerRef.current !== null) {
         clearTimeout(findNoticeTimerRef.current)
         findNoticeTimerRef.current = null

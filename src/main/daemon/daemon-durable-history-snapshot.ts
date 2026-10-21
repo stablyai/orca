@@ -1,164 +1,162 @@
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
-import { HeadlessEmulator } from './headless-emulator'
-import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
+import {
+  DurableHistoryReplayEmulator,
+  type NormalBufferHead
+} from './durable-history-replay-emulator'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
+import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
+import { replayTerminalSnapshot } from './terminal-checkpoint-serializer'
+import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 
-type RestoreBase = {
-  scrollbackAnsi: string
-  rehydrateSequences: string
-  snapshotAnsi: string
-  pendingEscapeTailAnsi?: string
-  oscLinks?: TerminalSnapshot['oscLinks']
-  lastTitle?: string
-  terminalOwner?: TerminalSnapshot['terminalOwner']
-  cwd: string | null
-  cols: number
-  rows: number
-}
+// Why: the head's serializer ends on the replay's pen and open hyperlink; the live body assumes defaults.
+const OLDER_ROWS_SEAM = `${RESET_GRAPHIC_RENDITION}\x1b]8;;\x1b\\`
 
-export function terminalSnapshotFromColdRestore(
-  info: ColdRestoreInfo,
-  opts?: { outputSequence?: number; frameRestoreAnsi?: string }
-): TerminalSnapshot {
-  return {
-    snapshotAnsi: info.snapshotAnsi,
-    scrollbackAnsi: info.modes.alternateScreen ? info.scrollbackAnsi : '',
-    oscLinks: info.oscLinks,
-    rehydrateSequences: info.rehydrateSequences,
-    ...(info.pendingEscapeTailAnsi ? { pendingEscapeTailAnsi: info.pendingEscapeTailAnsi } : {}),
-    ...(opts?.frameRestoreAnsi ? { frameRestoreAnsi: opts.frameRestoreAnsi } : {}),
-    cwd: info.cwd,
-    modes: info.modes,
-    cols: info.cols,
-    rows: info.rows,
-    scrollbackLines:
-      info.scrollbackLines ?? Math.max(0, countAnsiRows(info.scrollbackAnsi) - info.rows),
-    ...(info.lastTitle ? { lastTitle: info.lastTitle } : {}),
-    ...(info.terminalOwner ? { terminalOwner: info.terminalOwner } : {}),
-    ...(opts?.outputSequence !== undefined ? { outputSequence: opts.outputSequence } : {})
-  }
-}
-
+/** Live is the authority for everything it holds; disk only adds normal-buffer rows live evicted. */
 export async function buildDurableCheckpointSnapshot(opts: {
   liveSnapshot: TerminalSnapshot
   restoreInfo: ColdRestoreInfo | null
-  pendingRecords?: readonly PendingOutputRecord[]
-  scrollbackRows?: number
+  pendingRecords: readonly PendingOutputRecord[]
+  /** Records span the live session's whole life, so restoreInfo is the base it was seeded from. */
+  isFirstTake: boolean
 }): Promise<TerminalSnapshot> {
-  const pendingRecords = opts.pendingRecords ?? []
-  if (!opts.restoreInfo && pendingRecords.length === 0) {
-    return opts.liveSnapshot
+  const { liveSnapshot, restoreInfo, pendingRecords } = opts
+  if (!restoreInfo && pendingRecords.length === 0) {
+    return liveSnapshot
   }
+  // Why not on a first fold: live was seeded with disk plus the ground, so disk is never live's copy.
   if (
-    opts.restoreInfo &&
+    restoreInfo &&
     pendingRecords.length === 0 &&
-    (opts.scrollbackRows === undefined || opts.scrollbackRows >= DAEMON_RESTORE_SCROLLBACK_ROWS)
+    !opts.isFirstTake &&
+    diskCheckpointAgreesWithLive(restoreInfo, liveSnapshot)
   ) {
-    return terminalSnapshotFromColdRestore(opts.restoreInfo, {
-      outputSequence: opts.liveSnapshot.outputSequence,
-      frameRestoreAnsi: opts.liveSnapshot.frameRestoreAnsi
-    })
+    return diskCheckpointWithLiveIdentity(restoreInfo, liveSnapshot)
   }
 
-  const emulator = new HeadlessEmulator({
-    cols: opts.restoreInfo?.cols ?? opts.liveSnapshot.cols,
-    rows: opts.restoreInfo?.rows ?? opts.liveSnapshot.rows,
-    scrollback: Math.min(
-      opts.scrollbackRows ?? DAEMON_RESTORE_SCROLLBACK_ROWS,
-      DAEMON_RESTORE_SCROLLBACK_ROWS
-    )
+  // Why the base's dims: a cold restore spawns and seeds the live session at them.
+  const emulator = new DurableHistoryReplayEmulator({
+    cols: restoreInfo?.cols ?? liveSnapshot.cols,
+    rows: restoreInfo?.rows ?? liveSnapshot.rows,
+    scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS
   })
   const replay = new ColdRestoreReplayWriter(emulator)
   try {
-    // Why not seed the live window when there is no disk history: pending records
-    // are the raw stream. Replaying them on top of the already-truncated live
-    // snapshot would duplicate the newest rows and evict the older recoverable ones.
-    if (opts.restoreInfo) {
-      const base = restoreBaseFrom(opts.restoreInfo)
-      for (const segment of [
-        base.scrollbackAnsi,
-        base.rehydrateSequences,
-        base.snapshotAnsi,
-        base.pendingEscapeTailAnsi ?? ''
-      ]) {
+    if (restoreInfo) {
+      // Why the seed on a first fold: live got exactly those bytes, so both copies' rows line up
+      // even when the base was a dead TUI's alt screen.
+      const segments = opts.isFirstTake
+        ? getRecoveredHistorySeedSegments(restoreInfo)
+        : restoreSegments(restoreInfo)
+      for (const segment of segments) {
         if (!(await replay.write(segment))) {
-          return opts.liveSnapshot
+          return liveSnapshot
         }
       }
-      emulator.setRestoredOscLinks(base.oscLinks)
-      if (base.lastTitle) {
-        emulator.setLastTitle(base.lastTitle)
-      }
-      emulator.setCwd(base.cwd)
     }
-    // Why a scanner, not emulator state: ownership is lifecycle evidence bound
-    // to byte order — newer replayed output (a TUI starting) must revoke a
-    // persisted proof exactly as it would have live.
-    const ownershipScanner = new TerminalShellLifecycleScanner()
-    // Why the live fallback: with no disk history the live snapshot holds the
-    // only persisted proof for this boundary; the re-scan below can revoke it
-    // but never mint one, so the result is never less safe than dropping it.
-    ownershipScanner.seedOwner(
-      opts.restoreInfo ? opts.restoreInfo.terminalOwner : opts.liveSnapshot.terminalOwner
-    )
     if (!(await replayPendingRecords(replay, pendingRecords))) {
-      return opts.liveSnapshot
+      return liveSnapshot
     }
-    for (const record of pendingRecords) {
-      if (record.kind === 'output') {
-        scanAllForOwnership(ownershipScanner, record.data)
-      }
+    if (!isValidTerminalHistorySize(liveSnapshot.cols, liveSnapshot.rows)) {
+      return liveSnapshot
     }
-    const snapshot = emulator.getSnapshot()
-    const terminalOwner = ownershipScanner.owner
+    // Why: rows are counted from the bottom, so both buffers must wrap on the same grid.
+    await replay.resize(liveSnapshot.cols, liveSnapshot.rows)
+    const head = emulator.serializeNormalBufferHead(
+      liveSnapshot.scrollbackLines + liveSnapshot.rows
+    )
     return {
-      ...snapshot,
-      ...(terminalOwner ? { terminalOwner } : {}),
-      ...(opts.liveSnapshot.outputSequence !== undefined
-        ? { outputSequence: opts.liveSnapshot.outputSequence }
-        : {}),
-      ...(opts.liveSnapshot.frameRestoreAnsi && !snapshot.frameRestoreAnsi
-        ? { frameRestoreAnsi: opts.liveSnapshot.frameRestoreAnsi }
+      ...rebaseOnOlderRows(liveSnapshot, head),
+      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {}),
+      ...(!liveSnapshot.lastTitle && restoreInfo?.lastTitle
+        ? { lastTitle: restoreInfo.lastTitle }
         : {})
     }
   } catch (error) {
     console.warn('[history] durable snapshot rebuild failed:', error)
-    return opts.liveSnapshot
+    return liveSnapshot
   } finally {
     emulator.dispose()
   }
 }
 
-function restoreBaseFrom(restoreInfo: ColdRestoreInfo): RestoreBase {
+/** True when disk already holds live's grid, modes and alt frame, so a rebase would change nothing. */
+function diskCheckpointAgreesWithLive(info: ColdRestoreInfo, live: TerminalSnapshot): boolean {
+  return (
+    info.cols === live.cols &&
+    info.rows === live.rows &&
+    info.rehydrateSequences === live.rehydrateSequences &&
+    info.modes.kittyKeyboardFlags === live.modes.kittyKeyboardFlags &&
+    (!live.modes.alternateScreen || info.snapshotAnsi === live.snapshotAnsi)
+  )
+}
+
+function diskCheckpointWithLiveIdentity(
+  info: ColdRestoreInfo,
+  live: TerminalSnapshot
+): TerminalSnapshot {
+  const { terminalOwner: _diskOwner, pendingOutputSeq: _diskSeq, ...disk } = info
   return {
-    scrollbackAnsi: restoreInfo.modes.alternateScreen ? restoreInfo.scrollbackAnsi : '',
-    rehydrateSequences: restoreInfo.rehydrateSequences,
-    snapshotAnsi: restoreInfo.snapshotAnsi,
-    ...(restoreInfo.pendingEscapeTailAnsi
-      ? { pendingEscapeTailAnsi: restoreInfo.pendingEscapeTailAnsi }
-      : {}),
-    oscLinks: restoreInfo.oscLinks,
-    lastTitle: restoreInfo.lastTitle,
-    terminalOwner: restoreInfo.terminalOwner,
-    cwd: restoreInfo.cwd,
-    cols: restoreInfo.cols,
-    rows: restoreInfo.rows
+    ...disk,
+    // Why: a normal-screen snapshotAnsi already holds its scrollback.
+    scrollbackAnsi: info.modes.alternateScreen ? info.scrollbackAnsi : '',
+    scrollbackLines:
+      info.scrollbackLines ?? Math.max(0, countAnsiRows(info.scrollbackAnsi) - info.rows),
+    ...(live.frameRestoreAnsi ? { frameRestoreAnsi: live.frameRestoreAnsi } : {}),
+    ...(live.terminalOwner ? { terminalOwner: live.terminalOwner } : {}),
+    ...(live.outputSequence !== undefined ? { outputSequence: live.outputSequence } : {})
   }
 }
 
-/** Replay can only carry or revoke a persisted proof, never mint one: the
- *  scanner has no confirmation source, so triggers are consumed as revocations. */
-function scanAllForOwnership(scanner: TerminalShellLifecycleScanner, data: string): void {
-  let rest = data
-  while (rest.length > 0) {
-    const events = scanner.scan(rest)
-    if (events.uncleanDeathTriggerEnd === undefined) {
-      return
+/** Trims a snapshot to `scrollbackRows` of scrollback, keeping its owner and sequence. */
+export async function boundSnapshot(
+  snapshot: TerminalSnapshot,
+  scrollbackRows: number
+): Promise<TerminalSnapshot> {
+  const emulator = await replayTerminalSnapshot(snapshot, { scrollbackRows })
+  try {
+    return {
+      ...emulator.getSnapshot(),
+      ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}),
+      ...(snapshot.outputSequence !== undefined ? { outputSequence: snapshot.outputSequence } : {})
     }
-    rest = rest.slice(events.uncleanDeathTriggerEnd)
+  } finally {
+    emulator.dispose()
+  }
+}
+
+function restoreSegments(restoreInfo: ColdRestoreInfo): string[] {
+  return [
+    // Why alt only: a normal-screen snapshotAnsi already holds its scrollback.
+    restoreInfo.modes.alternateScreen ? restoreInfo.scrollbackAnsi : '',
+    restoreInfo.rehydrateSequences,
+    restoreInfo.snapshotAnsi,
+    restoreInfo.pendingEscapeTailAnsi ?? ''
+  ]
+}
+
+function rebaseOnOlderRows(live: TerminalSnapshot, head: NormalBufferHead): TerminalSnapshot {
+  if (head.rowCount === 0) {
+    return live
+  }
+  // Why a screenful of newlines then home: it scrolls every older row into
+  // scrollback and leaves the blank, homed screen a fresh live replay expects.
+  const prefix = `${head.ansi}${OLDER_ROWS_SEAM}${'\r\n'.repeat(live.rows)}\x1b[H`
+  const scrollbackLines = live.scrollbackLines + head.rowCount
+  if (live.modes.alternateScreen) {
+    // Why links untouched: they index the alt screen, which older rows never enter.
+    return { ...live, scrollbackAnsi: prefix + live.scrollbackAnsi, scrollbackLines }
+  }
+  return {
+    ...live,
+    snapshotAnsi: prefix + live.snapshotAnsi,
+    oscLinks: [
+      ...head.oscLinks,
+      ...(live.oscLinks ?? []).map((link) => ({ ...link, row: link.row + head.rowCount }))
+    ],
+    scrollbackLines
   }
 }
 

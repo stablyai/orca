@@ -53,6 +53,23 @@ describe('AgentHookServer pane authority', () => {
     ])
   })
 
+  // A pane move is announced by main and again by the renderer; the repeat must change nothing.
+  it('ignores a transfer that is already in place', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setPaneKeyAliasPersistenceListener(listener)
+
+    server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10, { authorityVerified: true })
+    server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 20)
+    server.transferPaneAuthority(SOURCE, TARGET, undefined, 30)
+
+    expect(listener).toHaveBeenCalledOnce()
+    server.transferPaneAuthority(SOURCE, TARGET, 'pty-2', 40)
+    expect(listener).toHaveBeenLastCalledWith([
+      { legacyPaneKey: SOURCE, stablePaneKey: TARGET, ptyId: 'pty-2', updatedAt: 40 }
+    ])
+  })
+
   it('persists one physical alias while chained transfers advance its owner', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()

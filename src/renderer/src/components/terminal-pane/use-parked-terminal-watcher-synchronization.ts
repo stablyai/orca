@@ -122,11 +122,16 @@ function selectWatcherReconciliationStoreInputs(
   state: AppState,
   terminalTabs: readonly TerminalTab[]
 ): WatcherReconciliationStoreInputs {
-  return terminalTabs.flatMap((tab) => [
-    state.ptyIdsByTabId[tab.id] ?? EMPTY_PTY_IDS,
-    state.terminalLayoutsByTabId[tab.id] ?? null,
-    Object.keys(state.runtimePaneTitlesByTabId[tab.id] ?? {}).join(',')
-  ])
+  return terminalTabs.flatMap((tab) => {
+    // Why not `?? {}`: this runs per tab on every store write, and the fallback
+    // object was allocated only to be thrown away — Object.keys({}).join(',') is ''.
+    const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
+    return [
+      state.ptyIdsByTabId[tab.id] ?? EMPTY_PTY_IDS,
+      state.terminalLayoutsByTabId[tab.id] ?? null,
+      paneTitles ? Object.keys(paneTitles).join(',') : ''
+    ]
+  })
 }
 
 export function useParkedTerminalWatcherSynchronization(args: {

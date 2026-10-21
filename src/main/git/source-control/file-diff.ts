@@ -170,7 +170,7 @@ async function loadDiff(
       originalIsBinary = leftBlob.isBinary
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
-      modifiedDeleted = !rightBlob.exists
+      modifiedDeleted = !rightBlob.exists && !rightBlob.failed
       readFailed = leftBlob.failed === true || rightBlob.failed === true
     } else {
       // The left chain (index→HEAD) is sequential within itself, but the working

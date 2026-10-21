@@ -90,9 +90,10 @@ export async function sampleProductionPerformance(boundary, options) {
     heartbeatCount += 1
     boundary.sendHeartbeat()
   }, options.heartbeatIntervalMs)
-  const cpuBefore = combinedCpuTimeMs(boundary.pids)
-  loopDelay.enable()
+  let cpuBefore
   try {
+    cpuBefore = combinedCpuTimeMs(boundary.pids)
+    loopDelay.enable()
     await options.sleep(options.sampleMs)
   } finally {
     loopDelay.disable()

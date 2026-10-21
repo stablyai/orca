@@ -1,17 +1,25 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from './rpc-client'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('./host-app-version-store', () => ({
-  normalizeHostAppVersion: (value: unknown) => (typeof value === 'string' ? value : null),
   recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
 }))
 
+const recordDescriptorFromStatusMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: (...args: unknown[]) => recordDescriptorFromStatusMock(...args)
+}))
+
 describe('useHostStatusGates', () => {
+  beforeEach(() => {
+    recordDescriptorFromStatusMock.mockClear()
+  })
   it('clears every prior-host gate and ignores its late response while the client is replaced', async () => {
     let resolveOldStatus: ((response: unknown) => void) | null = null
     const pendingOldStatus = new Promise((resolve) => {
@@ -85,7 +93,9 @@ describe('useHostStatusGates', () => {
       result: {
         appVersion: '1.4.191',
         capabilities: ['browser.screencast.v1'],
-        floatingWorkspaceEnabled: true
+        floatingWorkspaceEnabled: true,
+        machineName: 'studio',
+        hostPlatform: 'darwin'
       }
     })
     const client = { sendRequest } as unknown as RpcClient
@@ -110,6 +120,10 @@ describe('useHostStatusGates', () => {
 
       expect(sendRequest).toHaveBeenCalledOnce()
       expect(recordHostAppVersionMock).toHaveBeenCalledWith('host-1', '1.4.191')
+      expect(recordDescriptorFromStatusMock).toHaveBeenCalledWith(
+        'host-1',
+        expect.objectContaining({ machineName: 'studio', hostPlatform: 'darwin' })
+      )
     } finally {
       renderer?.unmount()
     }
@@ -210,6 +224,154 @@ describe('useHostStatusGates', () => {
       expect(gates).toMatchObject({ hostCapabilities: [], statusPending: true })
     } finally {
       renderer?.unmount()
+    }
+  })
+
+  it('re-reads a status that failed while the connection stayed up', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('request timed out'))
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          capabilities: ['browser.screencast.v1'],
+          floatingWorkspaceEnabled: true,
+          machineName: 'studio'
+        }
+      })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      // Settled closed rather than pending, so a failed read never traps the host screen.
+      expect(gates).toMatchObject({
+        hostCapabilities: [],
+        statusPending: false,
+        statusReadable: false
+      })
+      expect(recordDescriptorFromStatusMock).not.toHaveBeenCalled()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(gates).toMatchObject({
+        hostCapabilities: ['browser.screencast.v1'],
+        statusPending: false,
+        statusReadable: true
+      })
+      expect(recordDescriptorFromStatusMock).toHaveBeenCalledWith(
+        'host-1',
+        expect.objectContaining({ machineName: 'studio' })
+      )
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles closed on a refusal and re-reads until the host answers', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, error: { code: 'unavailable', message: 'busy' } })
+      .mockResolvedValueOnce({ ok: true, result: { capabilities: ['browser.screencast.v1'] } })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(gates).toMatchObject({ statusPending: false, statusReadable: false })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(gates).toMatchObject({
+        hostCapabilities: ['browser.screencast.v1'],
+        statusReadable: true
+      })
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles closed and stops on a status this app cannot decode', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: 'not a status' })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(gates).toMatchObject({ statusPending: false, statusReadable: false })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(sendRequest).toHaveBeenCalledOnce()
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops re-reading once the host screen unmounts', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi.fn().mockRejectedValue(new Error('request timed out'))
+    const client = { sendRequest } as unknown as RpcClient
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      await act(async () => {
+        renderer?.unmount()
+        renderer = null
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(sendRequest).toHaveBeenCalledOnce()
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
     }
   })
 })

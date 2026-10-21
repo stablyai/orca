@@ -69,6 +69,7 @@ function harness() {
   const executor = new BrowserClientPageCommandExecutor({
     orcaProfileId: 'profile-a',
     authorityConnectionIdentity: 'authority-a',
+    pairingAuthorityConnectionIdentity: 'pairing-authority-a',
     legacyAuthorityConnectionIdentity: 'legacy-authority-a',
     storageScope: 'a'.repeat(64),
     retainNetworkRoute: vi.fn(async () => ({

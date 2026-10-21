@@ -76,7 +76,13 @@ describe('webview registry drag listeners', () => {
 
     registerPersistentWebview('page-1', createWebview())
 
-    expect(addedListeners.map((entry) => entry.type)).toEqual(['dragstart', 'dragend', 'drop'])
+    expect(addedListeners.map((entry) => entry.type)).toEqual([
+      'dragstart',
+      'dragend',
+      'drop',
+      'pointerdown',
+      'pointermove'
+    ])
   })
 
   it('removes drag listeners after the last webview is destroyed', async () => {
@@ -86,7 +92,7 @@ describe('webview registry drag listeners', () => {
     registerPersistentWebview('page-1', createWebview())
     registerPersistentWebview('page-2', createWebview())
 
-    expect(addedListeners).toHaveLength(3)
+    expect(addedListeners).toHaveLength(5)
 
     destroyPersistentWebview('page-1')
 
@@ -94,7 +100,13 @@ describe('webview registry drag listeners', () => {
 
     destroyPersistentWebview('page-2')
 
-    expect(removedListeners.map((entry) => entry.type)).toEqual(['dragstart', 'dragend', 'drop'])
+    expect(removedListeners.map((entry) => entry.type)).toEqual([
+      'dragstart',
+      'dragend',
+      'drop',
+      'pointerdown',
+      'pointermove'
+    ])
     expect(unregisterGuestMock).toHaveBeenCalledWith({ browserPageId: 'page-1' })
     expect(unregisterGuestMock).toHaveBeenCalledWith({ browserPageId: 'page-2' })
   })
@@ -124,13 +136,35 @@ describe('webview registry drag listeners', () => {
     expect(secondWebview.style.pointerEvents).toBe('auto')
   })
 
+  it('releases native drag passthrough when a cancelled dragstart never starts a drag', async () => {
+    const { registerPersistentWebview } = await import('./webview-registry')
+    const webview = createWebview()
+    webview.style.pointerEvents = 'auto'
+    registerPersistentWebview('page-1', webview)
+    const listener = (type: string): ((event: Event) => void) => {
+      const found = addedListeners.find((entry) => entry.type === type)?.listener
+      if (typeof found !== 'function') {
+        throw new Error(`${type} listener missing`)
+      }
+      return found
+    }
+
+    for (const pointerType of ['pointermove', 'pointerdown']) {
+      listener('dragstart')(new Event('dragstart'))
+      expect(webview.style.pointerEvents).toBe('none')
+      // No dragend or drop follows a cancelled dragstart; the next pointer event proves no drag is live.
+      listener(pointerType)(new Event(pointerType))
+      expect(webview.style.pointerEvents).toBe('auto')
+    }
+  })
+
   it('keeps one listener set across repeated registrations', async () => {
     const { registerPersistentWebview } = await import('./webview-registry')
 
     registerPersistentWebview('page-1', createWebview())
     registerPersistentWebview('page-2', createWebview())
 
-    expect(addedListeners).toHaveLength(3)
+    expect(addedListeners).toHaveLength(5)
   })
 
   it('profiles live webviews and registered browser guests for memory breadcrumbs', async () => {

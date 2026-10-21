@@ -1,28 +1,46 @@
-import { OrcaRuntimeWithGetRuntimeId } from './orca-runtime-get-runtime-id'
+import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
+  runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
+import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
+import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
+import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
+import { advertisedOrcadMigrationBlobCapabilities } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { RuntimeCapability } from '../../shared/protocol-version'
+import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+  BROWSER_IDENTITY_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
+  MANAGED_SERVER_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
 } from '../../shared/runtime-types'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../shared/mobile-web-bundle/mobile-web-bundle-capability'
+import { loadBundledMobileWebBundle } from './bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
+import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
+import type {
+  AutomaticWorkResumeOutcome,
+  AutomaticWorkStatus
+} from '../../shared/host-spawn-admission'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
   AutomationsChangedPayload,
@@ -30,16 +48,35 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
+import { getManagedServerActions } from './managed-server-actions-registry'
+import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
+import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
+import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
+import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
+  getUsageRateLimits(): unknown
   getRecordedTerminalSleepHandles(
     ptyIds: Iterable<string>,
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   ): string[]
 }
 
-export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+function supportsDurableTerminalPromptDelivery(): boolean {
+  if (typeof process.getBuiltinModule !== 'function') {
+    return false
+  }
+  try {
+    return process.getBuiltinModule('node:sqlite') !== undefined
+  } catch {
+    return false
+  }
+}
+
+export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -56,25 +93,67 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
+    const canHostClientPages = runtimeBrowserCommandsFactorySupportsClientHosting()
+    // TEMPORARY: nothing on this host reads it any more. Clients older than this build keep
+    // re-probing their WSL capabilities until it is true, so it is published for one
+    // compatibility window and then removed.
+    const windowsProcessStartTimeAvailable =
+      process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
         (capability !== 'browser.screencast.v1' || canBrowse) &&
+        (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
+        (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
+          canBrowse ||
+          hasHeadlessCommands ||
+          canHostClientPages) &&
         // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||
           capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
         (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
           capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY) &&
         (process.env.ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY !== '1' ||
-          capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY)
+          capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
+        (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
+          supportsDurableTerminalPromptDelivery()) &&
+        // Why: only a host with its own usage poller reads keys saved through these methods.
+        (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY ||
+          statusHost.getUsageRateLimits() !== null)
     )
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
+    // Why not a static capability: the identity is this host's own process-wide choice, fixed
+    // before ready. A host that never initialized the store has no identity to report or change,
+    // so advertising it would point clients at a method that can only throw.
+    if (isBrowserIdentityModeStoreInitialized()) {
+      capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
+    }
+    // Why not static: only the orcad inside a distro can receive that distro's projects.
+    if (servesLocalWslMigrationSource()) {
+      capabilities.push(ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY)
+    }
+    // Why not static: a blob kind is advertised only once this build installs it, since an
+    // unadvertised kind is refused by the sender rather than staged and silently never applied.
+    capabilities.push(...advertisedOrcadMigrationBlobCapabilities())
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+    }
+    if (getManagedServerActions()) {
+      capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
+    }
+    if (isDesktopBrowserBridgeHostEnabled()) {
+      capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
+    }
+    capabilities.push(...darkSwitchRuntimeCapabilities())
+    // Why not a static capability: dev trees and `orca serve` installs may carry no
+    // out/mobile-web, and advertising a bundle this install cannot produce would promise a
+    // download that only ever answers mobile_web_bundle_unavailable.
+    if (loadBundledMobileWebBundle()) {
+      capabilities.push(MOBILE_WEB_BUNDLE_CAPABILITY)
     }
     // Why the cause and not one fixed sentence: the operator can only act on the reason
     // that actually applies, and a host that says "set ORCA_BROWSER_EXECUTABLE" to someone
@@ -110,7 +189,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       capabilities,
       ...(degradations.length > 0 ? { degradations } : {}),
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
+      ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),
       hostPlatform: process.platform,
+      machineName: this.readMachineName(),
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -118,11 +199,33 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     }
   }
 
+  /** The name status publishes: the configured override, else the detected one. */
+  readMachineName(): string {
+    return this.machineName.read()
+  }
+
+  /**
+   * Waits for the machine-name lookup up to the publish budget. A status read leaks the bare
+   * hostname only while a slow lookup is still running; the next read carries what it found.
+   */
+  machineNameReady(): Promise<void> {
+    return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
+  }
+
   setPtyController(controller: RuntimePtyController | null): void {
     // Why: CLI terminal writes must go through the main-owned PTY registry
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
     this.ptyController = controller
+  }
+
+  /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
+  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
+    return (await this.ptyController?.getAutomaticWorkStatus?.()) ?? null
+  }
+
+  async resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
+    return (await this.ptyController?.resumeAutomaticWork?.()) ?? null
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -139,7 +242,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
     const statusHost = this.asRuntimeStatusHost()
     const events: RuntimeClientEvent[] = []
-    const sleepStates = [...this.terminalSleepStateByWorktreeId.values()].sort((a, b) =>
+    const sleepStates = [...this.terminalSleepStateByHostWorktree.values()].sort((a, b) =>
       a.worktreeId.localeCompare(b.worktreeId)
     )
     for (const state of sleepStates) {
@@ -200,9 +303,32 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     return { tabId, worktreeId: pty.worktreeId }
   }
 
-  protected notifyWorktreesChanged(repoId: string): void {
-    this.notifier?.worktreesChanged(repoId)
-    this.emitClientEvent({ type: 'worktreesChanged', repoId })
+  notifyWorktreesChanged(
+    repoId: string,
+    options?: {
+      invalidateGitScans?: boolean
+      sortOrderOnly?: boolean
+      sortOrders?: WorktreeSortOrderUpdate[]
+    }
+  ): void {
+    // Headless hosts invalidate here unless only metadata changed.
+    if (options?.invalidateGitScans !== false) {
+      runWorktreeChangeInvalidators(repoId)
+    }
+    if (options) {
+      const { sortOrders: _sortOrders, ...notifierOptions } = options
+      this.notifier?.worktreesChanged(repoId, undefined, notifierOptions)
+    } else {
+      this.notifier?.worktreesChanged(repoId)
+    }
+    this.emitClientEvent({
+      type: 'worktreesChanged',
+      repoId,
+      ...(options?.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+      ...(options?.sortOrderOnly === true && options.sortOrders
+        ? { sortOrders: options.sortOrders }
+        : {})
+    })
   }
 
   /** Detail-level worktree lifecycle tap (plugin event bus). The coarse

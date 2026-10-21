@@ -82,7 +82,7 @@ describe('buildSetupRunnerCommand', () => {
 
     expect(command).not.toContain('cmd.exe /c')
     expect(command).toMatch(
-      /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$/
+      /^powershell\.exe -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/
     )
   })
 
@@ -97,14 +97,6 @@ describe('buildSetupRunnerCommand', () => {
       runnerScriptPathForShell: 'C:\\repo\\.git\\orca\\setup-runner.cmd',
       shell: 'windows'
     })
-  })
-
-  it('still uses bash for a POSIX runner launched from a POSIX pane', () => {
-    expect(
-      buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.sh', 'windows', {
-        family: 'posix'
-      })
-    ).toBe('bash /c/repo/.git/orca/setup-runner.sh')
   })
 })
 
@@ -129,7 +121,7 @@ describe('buildSetupRunnerCommand cmd metacharacter guard', () => {
       })
 
       expect(command).toMatch(
-        /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$/
+        /^powershell\.exe -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/
       )
     }
   )

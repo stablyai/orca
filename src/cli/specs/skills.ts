@@ -40,22 +40,29 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Reads bundled guide metadata locally without contacting the Orca runtime.',
       'With --json, prints a topics array of canonical names and one-line descriptions.',
-      'Use `orca skills get <name>` for the full guide, or `orca skills install` to install skills.'
+      'Use `orca skills get <name>` for the compact guide, `--full` for its full reference package, or `orca skills install` to install skills.'
     ]
   },
   {
     path: ['skills', 'get'],
     aliases: [['skills', 'show']],
     summary: 'Print a version-matched skill guide as Markdown',
-    usage: 'orca skills get <topic> [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full'],
+    usage: 'orca skills get <topic> [--full | --reference <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full', 'reference', 'references'],
     positionalArgs: ['topic'],
     notes: [
       'Reads bundled guide content locally without contacting the Orca runtime.',
-      'Use --full to include bundled reference documents when the guide provides them.',
+      'Prints the compact guide by default. Use --full to print the full guide with bundled references when provided.',
+      'Use --reference <name> to print one bundled reference alone, which is what an action gate in the compact guide needs; --references lists the available names.',
+      'A reference name may be given bare (recovery-and-cleanup) or as the guide spells it (references/recovery-and-cleanup.md).',
       'Use --json for a deterministic object containing canonical topic metadata and content.'
     ],
-    examples: ['orca skills get orca-cli', 'orca skills get orchestration --full']
+    examples: [
+      'orca skills get orca-cli',
+      'orca skills get orchestration --full',
+      'orca skills get orchestration --references',
+      'orca skills get orchestration --reference recovery-and-cleanup'
+    ]
   },
   {
     path: ['skills', 'install'],
@@ -66,9 +73,10 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'dry-run'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
-      'Resolves to the same `npx skills add <repo> --skill <name> ...` command used by ' +
-        'Orca Settings, plus the non-interactive flags an unattended host needs ' +
-        '(`npx --yes` and `-y`), then runs it and forwards its output and exit code.',
+      'Resolves to the same `npx skills@<pinned> add <repo>/tree/<commit> --skill <name> ...` ' +
+        'command used by Orca Settings, pinned to the commit this Orca build was made from, ' +
+        'plus the non-interactive flags an unattended host needs (`npx --yes` and `-y`), ' +
+        'then runs it and forwards its output and exit code.',
       'Installs globally (all projects, adds --global) by default. Use --local to install ' +
         'into the current project instead.',
       'Targets the coding agents Orca detects on this host, plus the shared ' +
@@ -93,17 +101,19 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['skills', 'update'],
-    summary: 'Update already-installed Orca skills via the community skills CLI',
-    usage: 'orca skills update [--skill <name>]... [--all] [--local] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'local', 'dry-run'],
+    summary: 'Update Orca skills to the version this Orca build ships',
+    usage:
+      'orca skills update [--skill <name>]... [--all] [--agent <name>[,<name>]] ' +
+      '[--local] [--dry-run] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'dry-run'],
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
-      'Resolves to the same `npx skills update <names...>` command used by Orca Settings, ' +
-        'plus the non-interactive flags an unattended host needs (`npx --yes` and `-y`), ' +
-        'then runs it and forwards its output and exit code.',
+      'Runs the same pinned `npx skills add` command as `orca skills install`, which ' +
+        'replaces each selected skill with the copy this Orca build ships.',
       'Updates the global install (all projects, adds --global) by default. Use --local to ' +
         'update the current project instead.',
-      'Only refreshes skills that are already installed; use `orca skills install` first.',
+      'Targets the same agents as `orca skills install`, or only the shared ' +
+        '.agents/skills directory when none is detected; use --agent to choose them yourself.',
       'Use --dry-run to print the resolved command without running it.',
       'With --json, the skill listing and --dry-run emit JSON; a real update streams ' +
         "npx's own non-JSON output live and rejects --json.",

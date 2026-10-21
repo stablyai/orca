@@ -1,5 +1,6 @@
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
+import { shouldProbeGitRemote } from '../git/remote-name-listing'
 import {
   getOwnerRepoForRemote,
   type LocalGitExecOptions,
@@ -12,11 +13,19 @@ export async function getOwnerRepo(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<OwnerRepo | null> {
   // Why: on a fork checkout PRs live on the upstream parent, not origin (#7331).
-  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-  if (upstream) {
-    return upstream
+  const originPromise = getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+  if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
+    const upstream = await getOwnerRepoForRemote(
+      repoPath,
+      'upstream',
+      connectionId,
+      localGitOptions
+    )
+    if (upstream) {
+      return upstream
+    }
   }
-  return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+  return originPromise
 }
 
 export const getIssueOwnerRepo = getOwnerRepo
@@ -31,9 +40,18 @@ export async function resolvePRRepositoryCandidates(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRRepositoryCandidates> {
+  const originPromise = getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+  const probeUpstream = await shouldProbeGitRemote(
+    repoPath,
+    'upstream',
+    connectionId,
+    localGitOptions
+  )
   const [upstream, origin] = await Promise.all([
-    getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions),
-    getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+    probeUpstream
+      ? getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+      : null,
+    originPromise
   ])
   const seen = new Set<string>()
   const candidates: OwnerRepo[] = []

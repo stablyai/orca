@@ -1,0 +1,48 @@
+ • Affirmative response          +
+  ┃  Use the task tool three times in one go to launch three subagents in parallel. Give each one this exact
+  ┃  instruction: run the bash command `sleep 240` and then report done. Do not wait for them to finish before          Affirmative response
+  ┃  replying to me.
+  ┃                                                                                                                     Context
+                                                                                                                        8,907 tokens
+     ✓ General Subagent — Sleep 240 seconds  Background                                                                 1% used
+                                                                                                                        $0.04 spent
+     ✓ General Subagent — Sleep 240 seconds  Background
+
+     ✓ General Subagent — Sleep 240 seconds  Background
+
+     I have launched three subagents, each running sleep 240 in the background. You will be notified when they
+     complete.
+
+     Build · Gemini 2.5 Flash · 2.2s · 117.5 tok/s
+
+     ↳ General finished · Sleep 240 seconds
+
+     One of the subagents has reported "Done." I'm still waiting for the other two subagents to complete their sleep
+     240 command.
+
+     Build · Gemini 2.5 Flash · 1.1s · 58.7 tok/s
+
+     ↳ General finished · Sleep 240 seconds
+
+     Another subagent has finished. One subagent is still running its sleep 240 command.
+
+     Build · Gemini 2.5 Flash · 1.9s · 59.3 tok/s
+
+     ↳ General finished · Sleep 240 seconds
+
+     All three subagents have now completed their tasks.
+
+     Build · Gemini 2.5 Flash · 478ms · 21.2 tok/s
+
+  ┃
+  ┃  Subagents  Shell  Terminals                                                                               esc
+  ┃
+  ┃  No active subagents
+  ┃
+  ┃
+  ┃
+  ┃
+  ┃
+  ┃  show inactive ctrl+a  tabs ←/→
+  ┃                                                                                                                     /private/tmp/oc2-evidence
+

@@ -1,7 +1,7 @@
 import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
-import { graphState } from './graph-state'
+import { normalizeTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 
 function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -52,23 +52,36 @@ export function resolveMobileTerminalTheme(
       theme[key] = value
     }
   }
-  return { mode: appearance.mode, theme: theme as RuntimeMobileTerminalTheme['theme'] }
+  return {
+    mode: appearance.mode,
+    theme: theme as RuntimeMobileTerminalTheme['theme'],
+    // Why publish: mobile mirrors the desktop contrast gate, so an explicit floor has to travel with
+    // the theme or the same session would render differently on the phone (#10754).
+    minimumContrastRatio: normalizeTerminalMinimumContrastRatio(
+      settings.terminalMinimumContrastRatio
+    )
+  }
 }
+
+let cachedMobileTerminalThemeSettings: AppState['settings'] | null = null
+let cachedMobileTerminalThemeSystemPrefersDark: boolean | null = null
+let cachedMobileTerminalTheme: RuntimeMobileTerminalTheme | undefined
+let hasCachedMobileTerminalTheme = false
 
 export function getMobileTerminalTheme(
   state: AppState,
   systemPrefersDark = getSystemPrefersDark()
 ): RuntimeMobileTerminalTheme | undefined {
   if (
-    graphState.hasCachedMobileTerminalTheme &&
-    graphState.cachedMobileTerminalThemeSettings === state.settings &&
-    graphState.cachedMobileTerminalThemeSystemPrefersDark === systemPrefersDark
+    hasCachedMobileTerminalTheme &&
+    cachedMobileTerminalThemeSettings === state.settings &&
+    cachedMobileTerminalThemeSystemPrefersDark === systemPrefersDark
   ) {
-    return graphState.cachedMobileTerminalTheme
+    return cachedMobileTerminalTheme
   }
-  graphState.cachedMobileTerminalTheme = resolveMobileTerminalTheme(state, systemPrefersDark)
-  graphState.cachedMobileTerminalThemeSettings = state.settings
-  graphState.cachedMobileTerminalThemeSystemPrefersDark = systemPrefersDark
-  graphState.hasCachedMobileTerminalTheme = true
-  return graphState.cachedMobileTerminalTheme
+  cachedMobileTerminalTheme = resolveMobileTerminalTheme(state, systemPrefersDark)
+  cachedMobileTerminalThemeSettings = state.settings
+  cachedMobileTerminalThemeSystemPrefersDark = systemPrefersDark
+  hasCachedMobileTerminalTheme = true
+  return cachedMobileTerminalTheme
 }

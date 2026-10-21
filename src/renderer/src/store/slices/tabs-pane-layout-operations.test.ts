@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { getDefaultUIState } from '../../../../shared/constants'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 
@@ -129,63 +128,6 @@ describe('TabsSlice', () => {
       expect(
         state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
       ).toEqual([tab.id])
-    })
-
-    it('copies a unified tab into another group', () => {
-      const tab = store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'file-a.ts',
-        executionHostId: 'runtime:host-b',
-        label: 'file-a.ts'
-      })
-      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
-      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
-      expect(targetGroupId).toBeTruthy()
-
-      const copied = store.getState().copyUnifiedTabToGroup(tab.id, targetGroupId!)
-
-      expect(copied).not.toBeNull()
-      const state = store.getState()
-      expect(state.unifiedTabsByWorktree[WT]).toHaveLength(2)
-      expect(
-        state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)?.tabOrder
-      ).toEqual([tab.id])
-      expect(
-        state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
-      ).toEqual([copied!.id])
-      expect(copied?.entityId).toBe(tab.entityId)
-      expect(copied?.executionHostId).toBe('runtime:host-b')
-    })
-
-    it('merges a group into its sibling', () => {
-      const setMock = vi.mocked(window.api.ui.set)
-      const t1 = store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'file-a.ts',
-        label: 'file-a.ts'
-      })
-      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
-      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
-      expect(targetGroupId).toBeTruthy()
-      store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'file-b.ts',
-        label: 'file-b.ts',
-        targetGroupId: targetGroupId!
-      })
-      store.getState().hydratePersistedUI(getDefaultUIState())
-      setMock.mockClear()
-
-      const mergedInto = store.getState().mergeGroupIntoSibling(WT, targetGroupId!)
-
-      expect(mergedInto).toBe(sourceGroupId)
-      const state = store.getState()
-      expect(state.groupsByWorktree[WT]).toHaveLength(1)
-      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([t1.id, 'file-b.ts'])
-      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
-      expect(setMock).toHaveBeenCalledTimes(1)
-      expect(setMock).toHaveBeenCalledWith({
-        featureInteractions: {
-          'terminal-panes': expect.objectContaining({ interactionCount: 1 })
-        }
-      })
     })
 
     it('drops a unified tab into another group and collapses an emptied source group', () => {

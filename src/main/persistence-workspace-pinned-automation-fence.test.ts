@@ -1,3 +1,11 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState,
+  readPersistedStateJson,
+  writePersistedStateJson
+} from './persistence-test-harness'
 /**
  * A `local`-typed automation whose folder workspace pins it to an SSH host is
  * projected as SSH-owned, so it must be fenceable like any other SSH-owned row.
@@ -8,7 +16,7 @@
  * different machine. These tests drive the real Store through create and reload.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Automation, AutomationCreateInput } from '../shared/automations-types'
@@ -21,8 +29,9 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../shared/automation-owner-conf
 import { getDefaultPersistedState } from '../shared/constants'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -112,11 +121,15 @@ async function createStoreFromState(state: Record<string, unknown>) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 async function reloadStore() {
@@ -124,16 +137,16 @@ async function reloadStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 /** The same target id now carries a different registration incarnation. */
 function replaceStoredTargetGeneration(generation: number): void {
   const file = join(testState.dir, 'orca-data.json')
-  const state = JSON.parse(readFileSync(file, 'utf-8'))
+  const state = JSON.parse(readPersistedStateJson(file))
   state.sshTargets = [prodTarget(generation)]
   state.sshTargetGenerationCounter = generation
-  writeFileSync(file, JSON.stringify(state), 'utf-8')
+  writePersistedStateJson(file, JSON.stringify(state))
 }
 
 const PINNED_CREATE_INPUT: AutomationCreateInput = {
@@ -155,10 +168,13 @@ function createPinnedAutomation(store: {
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-pinned-fence-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
   vi.resetModules()
 })

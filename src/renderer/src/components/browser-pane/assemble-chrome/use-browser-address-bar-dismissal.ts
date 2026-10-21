@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /**
  * Why: Electron <webview> guests run in a separate process, so clicking the page never dispatches
@@ -35,11 +36,11 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
 
     window.addEventListener('blur', handleWindowBlur)
     document.addEventListener('focusin', handleFocusIn, true)
-    window.addEventListener('keydown', handleEscape, true)
+    addAppKeyListener('keydown', handleEscape)
     return () => {
       window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('focusin', handleFocusIn, true)
-      window.removeEventListener('keydown', handleEscape, true)
+      removeAppKeyListener('keydown', handleEscape)
     }
   }, [dismissSuggestions, open])
 }

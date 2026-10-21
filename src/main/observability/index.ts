@@ -48,7 +48,8 @@ import {
   type UploadBundleOptions,
   type UploadBundleResult
 } from './diagnostic-bundle-upload'
-import { setActiveSink } from './tracer'
+import { setActiveSink, startSpan } from './tracer'
+import { setSecurePathHardeningReporter } from '../../shared/secure-path-hardening-report'
 
 const CI_ENV_VARS = [
   'CI',
@@ -138,13 +139,19 @@ let consent: ObservabilityConsent | null = null
 
 /** Create the local file sink, install it as the active tracer sink, and
  *  update module-level `sink`. */
-function installLocalSink(): void {
-  const localSink = createLocalFileSink({ filePath: getTraceFilePath() })
-  sink = localSink
-  setActiveSink(localSink)
+function installLocalSink(filePath: string): void {
+  try {
+    const localSink = createLocalFileSink({ filePath })
+    sink = localSink
+    setActiveSink(localSink)
+  } catch (error) {
+    // Diagnostics are optional: a logs folder that cannot be opened must not stop the app or host.
+    console.warn(`[observability] tracing is off: cannot open ${filePath}`, error)
+  }
 }
 
-export function initObservability(): ObservabilityConsent {
+/** `traceFilePath` names another process's own file; the desktop's is the bundle's default. */
+export function initObservability(options?: { traceFilePath?: string }): ObservabilityConsent {
   const c = resolveObservabilityConsent()
   consent = c
   if (!c.localFileEnabled) {
@@ -152,11 +159,47 @@ export function initObservability(): ObservabilityConsent {
     // tracer's active sink unset, so all spans are no-ops.
     return c
   }
-  installLocalSink()
+  installLocalSink(options?.traceFilePath ?? getTraceFilePath())
+  installSecurePathHardeningReporter()
   return c
 }
 
+/**
+ * Why route it here: Windows path hardening lives in `src/shared` and defaults to `console.warn`,
+ * which reaches nothing in a packaged build — the main process is GUI-subsystem and owns no
+ * console. A credential file left on inherited ACLs is exactly what a diagnostic bundle should
+ * show, so it becomes a span in the trace sink.
+ *
+ * `recovered` ends successfully rather than failing: a host that climbs back out of the
+ * rate-limited state has to be as visible as one that fell into it, or the degraded state is only
+ * ever half-diagnosable.
+ */
+function installSecurePathHardeningReporter(): void {
+  setSecurePathHardeningReporter((entry) => {
+    const span = startSpan('secure-path.windows-acl', {
+      attributes: { targetPath: entry.targetPath, stage: entry.stage, detail: entry.detail }
+    })
+    if (entry.stage === 'recovered') {
+      span.end()
+      console.info('[secure-path.windows-acl] path hardening recovered', entry)
+      return
+    }
+    span.fail(entry.detail)
+    console.warn('[secure-path.windows-acl] failed to restrict path', entry)
+  })
+}
+
+/** Writes buffered lines now, for an exit that runs no shutdown. */
+export function flushObservability(): void {
+  try {
+    sink?.flush()
+  } catch {
+    // Nothing is left to report to.
+  }
+}
+
 export async function shutdownObservability(): Promise<void> {
+  setSecurePathHardeningReporter(null)
   // Order matters: tracer first so no new pushes arrive while the local sink
   // is closing and flushing buffered lines.
   setActiveSink(null)

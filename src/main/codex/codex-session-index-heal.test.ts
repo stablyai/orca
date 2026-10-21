@@ -14,6 +14,7 @@ import type { CodexAppServerInvocation } from './codex-app-server-session'
 import { createCodexSessionBackfillAuditWriter } from './codex-session-backfill-audit'
 import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
 import {
+  buildNativeHealInvocation,
   runCodexSessionIndexHeal,
   type CodexSessionIndexHealPaths
 } from './codex-session-index-heal'
@@ -340,6 +341,7 @@ describe('runCodexSessionIndexHeal', () => {
     const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
       retryableFailureAt: number
     }
+    expect(marker.retryableFailureAt).toEqual(expect.any(Number))
     marker.retryableFailureAt = 0
     writeFileSync(rig.paths.healMarkerPath, `${JSON.stringify(marker)}\n`, 'utf-8')
     const retried = await runCodexSessionIndexHeal(rig.paths, {
@@ -488,6 +490,25 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(resumed.outcome).toBe('completed')
     expect(resumed.healedThreads + summary.healedThreads).toBe(4)
+  })
+
+  it('writes no completion marker when stop flips inside the last batch', async () => {
+    const rig = createHealRig({
+      auditedThreads: [
+        { stamp: '2026-07-02T10-00-00', id: threadId('2') },
+        { stamp: '2026-07-01T10-00-00', id: threadId('1') }
+      ]
+    })
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      readConcurrency: 1,
+      interBatchDelayMs: 0,
+      shouldStop: () => rig.readLog().threadIds.length > 0
+    })
+
+    expect(summary).toMatchObject({ outcome: 'stopped', healedThreads: 1 })
+    expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
   })
 
   it('does not spawn another server when stop flips during the inter-batch delay', async () => {
@@ -775,5 +796,13 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
+  })
+})
+
+describe('buildNativeHealInvocation', () => {
+  it('pins the app-server to the given home', () => {
+    const invocation = buildNativeHealInvocation('/codex-home', 1_000)
+
+    expect(invocation.env).toEqual({ CODEX_HOME: '/codex-home' })
   })
 })

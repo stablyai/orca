@@ -73,62 +73,54 @@ const eventContributionSchema = z.object({
   on: z.enum(PLUGIN_EVENT_NAMES)
 })
 
-export const pluginManifestSchema = z
-  .object({
-    manifestVersion: z.literal(1),
-    id: pluginIdSchema,
-    /** Publisher slug; canonical identity is `<publisher>.<id>` — bare-id
-     *  global uniqueness is unverifiable without a registry. */
-    publisher: pluginIdSchema,
-    name: z.string().min(1).max(256),
-    version: z.string().regex(SEMVER_RE, 'must be semver'),
-    description: z.string().max(4096).optional(),
-    author: z
-      .object({ name: z.string().min(1).max(256), url: z.string().max(2048).optional() })
-      .optional(),
-    repository: z.string().max(2048).optional(),
-    icon: pluginRelativePathSchema.optional(),
-    /** Minimum host version gate; the host refuses to load below it. */
-    engines: z.object({ orca: orcaEngineRangeSchema }),
-    /** Host-API major version this plugin targets. */
-    pluginApi: z.literal(1),
-    /** Node entry executed inside the out-of-process plugin worker. */
-    main: pluginRelativePathSchema.optional(),
-    contributes: z
-      .object({
-        panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
-        commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
-        events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
-        languagePacks: z
-          .array(pluginLanguagePackContributionSchema)
-          .max(PLUGIN_LANGUAGE_PACK_LIMIT)
-          .default([]),
-        keybindings: z
-          .array(pluginKeybindingContributionSchema)
-          .max(PLUGIN_KEYBINDING_LIMIT)
-          .default([]),
-        vmRecipes: z
-          .array(pluginVmRecipeContributionSchema)
-          .max(PLUGIN_VM_RECIPE_LIMIT)
-          .default([]),
-        agents: z
-          .array(pluginAgentProfileContributionSchema)
-          .max(PLUGIN_AGENT_PROFILE_LIMIT)
-          .default([])
-      })
-      .strict()
-      .default(() => ({
-        panels: [],
-        commands: [],
-        events: [],
-        languagePacks: [],
-        keybindings: [],
-        vmRecipes: [],
-        agents: []
-      })),
-    capabilities: z.array(pluginCapabilitySchema).max(32).default([])
-  })
-  .superRefine(validatePluginManifestContributions)
+const pluginManifestV1Object = z.object({
+  manifestVersion: z.literal(1),
+  id: pluginIdSchema,
+  /** Publisher slug; canonical identity is `<publisher>.<id>` — bare-id
+   *  global uniqueness is unverifiable without a registry. */
+  publisher: pluginIdSchema,
+  name: z.string().min(1).max(256),
+  version: z.string().regex(SEMVER_RE, 'must be semver'),
+  description: z.string().max(4096).optional(),
+  author: z
+    .object({ name: z.string().min(1).max(256), url: z.string().max(2048).optional() })
+    .optional(),
+  repository: z.string().max(2048).optional(),
+  icon: pluginRelativePathSchema.optional(),
+  /** Minimum host version gate; the host refuses to load below it. */
+  engines: z.object({ orca: orcaEngineRangeSchema }),
+  /** Host-API major version this plugin targets. */
+  pluginApi: z.literal(1),
+  /** Node entry executed inside the out-of-process plugin worker. */
+  main: pluginRelativePathSchema.optional(),
+  contributes: z
+    .object({
+      panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
+      commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
+      events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
+      languagePacks: z
+        .array(pluginLanguagePackContributionSchema)
+        .max(PLUGIN_LANGUAGE_PACK_LIMIT)
+        .default([]),
+      keybindings: z
+        .array(pluginKeybindingContributionSchema)
+        .max(PLUGIN_KEYBINDING_LIMIT)
+        .default([]),
+      vmRecipes: z.array(pluginVmRecipeContributionSchema).max(PLUGIN_VM_RECIPE_LIMIT).default([]),
+      agents: z
+        .array(pluginAgentProfileContributionSchema)
+        .max(PLUGIN_AGENT_PROFILE_LIMIT)
+        .default([])
+    })
+    .strict()
+    // Why prefault: runs `{}` through the schema, so every family's own default applies.
+    .prefault({}),
+  capabilities: z.array(pluginCapabilitySchema).max(32).default([])
+})
+
+export const pluginManifestSchema = pluginManifestV1Object.superRefine(
+  validatePluginManifestContributions
+)
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>

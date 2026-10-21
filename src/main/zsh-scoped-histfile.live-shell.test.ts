@@ -18,11 +18,10 @@
  * Orca would not wrap cannot pass here by construction.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ensureOverlayRestoreWrappers } from '../relay/pty-shell-overlay-wrappers'
 import { getShellLaunchConfig } from './providers/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 import { hasZsh, makeZshHome, MARKERS, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty-harness'
@@ -333,25 +332,14 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     itWithZsh(
-      'degrades to an unwrapped pane, leaking nothing, when a config drops precmd_functions',
+      'still scopes history without leaking it when a config drops precmd_functions',
       withHome({ ...USER_FILES, '.zshrc': 'precmd_functions=()\n' }, async (home) => {
         const scoped = join(home, 'orca-history', 'zsh_history')
         const { env, launch } = launchPane(home, scoped)
 
         const report = ['HISTFILE', 'ORCA_HISTFILE', 'ZDOTDIR']
         const { values } = await runZshPty({ env, report })
-        // Why compared against an unwrapped run rather than asserted to differ
-        // from the scoped path: whether the scoped value survives at all is the
-        // host's call, not Orca's. macOS /etc/zshrc overwrites HISTFILE, so it
-        // does not; a host with no such assignment keeps whatever the spawn env
-        // set. The contract on both is the same — this pane is the pane the user
-        // would have had unwrapped.
-        const unwrapped = await runZshPty({
-          env: { PATH: '/usr/bin:/bin', HOME: home, HISTFILE: scoped },
-          report
-        })
-
-        expect(values.HISTFILE).toBe(unwrapped.values.HISTFILE)
+        expect(values.HISTFILE).toBe(scoped)
         expect(values.HISTFILE).not.toContain(launch.env.ZDOTDIR)
         // ORCA_HISTFILE was consumed in .zshenv precisely so a dropped hook
         // leaks nothing to the pane's children.
@@ -389,41 +377,42 @@ describe.skipIf(process.platform === 'win32')(
  * why it drifted from the desktop template; now the only differences are the
  * spec flags, and this pins that the variant still works in a real shell.
  */
-describe.skipIf(process.platform === 'win32')('the relay variant of the hook', () => {
+
+describe.skipIf(process.platform === 'win32')('the real-zsh harness', () => {
   itWithZsh(
-    'scopes history and restores the remote CLI path without emitting OSC 133',
-    withHome(USER_FILES, async (home) => {
-      const relayRoot = mkdtempSync(join(tmpdir(), 'orca-relay-wrapper-'))
-      try {
-        expect(ensureOverlayRestoreWrappers(relayRoot)).toBe(true)
-        const scoped = join(home, 'orca-history', 'zsh_history')
+    'waits for delayed first output before answering compinit and scoping history',
+    withHome(
+      {
+        '.zshenv': 'sleep 0.6\nfpath=("$HOME/insecure-completions" $fpath)\n',
+        '.zshrc':
+          'if (( ! $+_comps )); then\n' +
+          '  autoload -Uz compinit\n' +
+          '  compinit -D\n' +
+          'fi\n' +
+          'export ORCA_TEST_COMPINIT_READY=$+_comps\n'
+      },
+      async (home) => {
+        const completions = join(home, 'insecure-completions')
+        mkdirSync(completions)
+        chmodSync(completions, 0o777)
+        writeFileSync(
+          join(completions, '_orca_compinit_fixture'),
+          '#compdef orca_compinit_fixture\n'
+        )
+        const scoped = join(home, 'scoped_history')
+        const { env } = launchPane(home, scoped)
 
         const { output, values } = await runZshPty({
-          env: {
-            PATH: '/usr/bin:/bin',
-            HOME: home,
-            ZDOTDIR: join(relayRoot, 'zsh'),
-            ORCA_ORIG_ZDOTDIR: home,
-            ORCA_SHELL_FEATURES: 'overlay,history,ready',
-            ORCA_HISTFILE: scoped,
-            ORCA_REMOTE_CLI_BIN_DIR: '/orca/remote-bin'
-          },
-          commands: ['true'],
-          report: ['HISTFILE', 'ZDOTDIR', 'PATH', 'ORCA_HISTFILE']
+          env,
+          report: ['HISTFILE', 'ORCA_TEST_COMPINIT_READY']
         })
 
+        expect(output).toContain('Ignore insecure directories')
+        expect(output).not.toContain('initialization aborted')
+        expect(output).not.toContain('command not found: y')
+        expect(values.ORCA_TEST_COMPINIT_READY).toBe('1')
         expect(values.HISTFILE).toBe(scoped)
-        expect(values.ZDOTDIR).toBe(home)
-        expect(values.ORCA_HISTFILE).toBe('UNSET')
-        expect(values.PATH.startsWith('/orca/remote-bin:')).toBe(true)
-        expect(output).toContain(MARKERS.ready)
-        // Remote panes get their command lifecycle from the bash rcfile, so the
-        // zsh variant must stay silent here.
-        expect(output).not.toContain(MARKERS.promptStart)
-        expect(output).not.toContain(MARKERS.commandStart)
-      } finally {
-        rmSync(relayRoot, { recursive: true, force: true })
       }
-    })
+    )
   )
 })

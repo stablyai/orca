@@ -1,8 +1,11 @@
 import { stat } from 'node:fs/promises'
-import { basename, isAbsolute, join } from 'node:path'
+import { basename, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
+import {
+  resolveOpenCodeDataDirectory,
+  resolveOpenCodeDatabasePath
+} from '../opencode/opencode-data-directory'
 import type { OpenCodeUsageProcessedDatabase } from './types'
 
 type OpenCodeDatabaseOverride = {
@@ -10,17 +13,14 @@ type OpenCodeDatabaseOverride = {
   path: string | null
 }
 
-function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOverride {
-  const raw = process.env.OPENCODE_DB?.trim()
+function getOpenCodeDatabaseOverride(environment: NodeJS.ProcessEnv): OpenCodeDatabaseOverride {
+  const raw = environment.OPENCODE_DB?.trim()
   if (!raw) {
     return { isConfigured: false, path: null }
   }
-  if (raw === ':memory:') {
-    return { isConfigured: true, path: null }
-  }
   return {
     isConfigured: true,
-    path: isAbsolute(raw) ? raw : join(dataDirectory, raw)
+    path: resolveOpenCodeDatabasePath(environment)
   }
 }
 
@@ -30,43 +30,61 @@ function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOve
 export async function listOpenCodeDatabases(
   /** Lets a caller report the refusal; an empty list otherwise reads as
    *  "OpenCode not used" rather than "we could not look". */
-  onRefusal?: (path: string, error: WslTranscriptFsError) => void
+  onRefusal?: (path: string, error: WslTranscriptFsError) => void,
+  /** Every other stat/readdir failure, including ENOENT; also read as an empty list. */
+  onFsError?: (path: string, error: unknown) => void,
+  signal?: AbortSignal,
+  environment: NodeJS.ProcessEnv = process.env
 ): Promise<string[]> {
-  const dataDirectory = resolveOpenCodeDataDirectory()
-  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
+  const dataDirectory = resolveOpenCodeDataDirectory(environment)
+  const databaseOverride = getOpenCodeDatabaseOverride(environment)
   if (databaseOverride.isConfigured) {
     if (!databaseOverride.path) {
       return []
     }
     try {
-      return (await wslGatedStat(databaseOverride.path, 'scan')).isFile()
+      return (await wslGatedStat(databaseOverride.path, 'scan', signal)).isFile()
         ? [databaseOverride.path]
         : []
     } catch (error) {
-      reportRefusal(databaseOverride.path, error, onRefusal)
+      signal?.throwIfAborted()
+      reportFailure(databaseOverride.path, error, onRefusal, onFsError)
       return []
     }
   }
 
+  return listOpenCodeDatabasesInDirectory(dataDirectory, onRefusal, signal, onFsError)
+}
+
+export async function listOpenCodeDatabasesInDirectory(
+  dataDirectory: string,
+  onRefusal?: (path: string, error: WslTranscriptFsError) => void,
+  signal?: AbortSignal,
+  onFsError?: (path: string, error: unknown) => void
+): Promise<string[]> {
   try {
-    const entries = await wslGatedReaddir(dataDirectory, 'scan')
+    const entries = await wslGatedReaddir(dataDirectory, 'scan', signal)
     return entries
       .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
       .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch (error) {
-    reportRefusal(dataDirectory, error, onRefusal)
+    signal?.throwIfAborted()
+    reportFailure(dataDirectory, error, onRefusal, onFsError)
     return []
   }
 }
 
-function reportRefusal(
+function reportFailure(
   path: string,
   error: unknown,
-  onRefusal?: (path: string, error: WslTranscriptFsError) => void
+  onRefusal?: (path: string, error: WslTranscriptFsError) => void,
+  onFsError?: (path: string, error: unknown) => void
 ): void {
   if (error instanceof WslTranscriptFsError) {
     onRefusal?.(path, error)
+  } else {
+    onFsError?.(path, error)
   }
 }
 

@@ -350,7 +350,7 @@ describe('applyMobileNativeChatStreamFrame', () => {
     })
   })
 
-  it('surfaces snapshot errors and ignores unrelated frames', () => {
+  it('surfaces snapshot errors, reports a host end as an error, and ignores unrelated frames', () => {
     const merger = createNativeChatMerger()
     expect(
       applyMobileNativeChatStreamFrame({
@@ -372,6 +372,14 @@ describe('applyMobileNativeChatStreamFrame', () => {
       applyMobileNativeChatStreamFrame({
         merger,
         frame: { type: 'end' },
+        limit: 40,
+        replaceSnapshot: true
+      })
+    ).toEqual({ kind: 'error', error: 'Transcript stream ended' })
+    expect(
+      applyMobileNativeChatStreamFrame({
+        merger,
+        frame: { type: 'subscribed' },
         limit: 40,
         replaceSnapshot: true
       })

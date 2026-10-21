@@ -10,6 +10,7 @@ import {
   type ProjectSlug
 } from '../../../shared/new-workspace/gitlab-links'
 import type { Repo } from '../../../shared/repo-types'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 
 export type GitLabIssueOrMRLink = NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
@@ -61,39 +62,26 @@ export function worktreeMatchesGitLabUrl(
   repo: Repo | undefined,
   review: HostedReviewInfo | null | undefined
 ): boolean {
-  const linkedUrl = worktree.linkedWorkItem?.url
-    ? parseGitLabIssueOrMRLink(worktree.linkedWorkItem.url)
-    : null
-  if (linkedUrl && gitLabLinksEqual(linkedUrl, link)) {
-    return true
-  }
-
+  const attachments = getWorkspaceAttachments(worktree).filter((item) => item.provider === 'gitlab')
+  const attached = attachments.some((item) => {
+    const itemUrl = item.url ? parseGitLabIssueOrMRLink(item.url) : null
+    if (itemUrl) {
+      return gitLabLinksEqual(itemUrl, link)
+    }
+    return (
+      item.type === link.type &&
+      item.number === link.number &&
+      repoMatchesGitLabSlug(repo, link.slug) !== false
+    )
+  })
   const reviewUrl =
     review?.provider === 'gitlab' && review.url ? parseGitLabIssueOrMRLink(review.url) : null
-  if (reviewUrl && gitLabLinksEqual(reviewUrl, link)) {
-    return true
-  }
-
-  const linkedItem = worktree.linkedWorkItem
-  const linkedItemMatches =
-    linkedItem?.provider === 'gitlab' &&
-    linkedItem.type === link.type &&
-    linkedItem.number === link.number
-  const numberMatches =
-    linkedItemMatches ||
-    (link.type === 'mr'
-      ? worktree.linkedGitLabMR === link.number
-      : worktree.linkedGitLabIssue === link.number)
-  if (!numberMatches) {
-    return false
-  }
-
-  // Why: iids are per-project, so a bare number only survives when the repo remote agrees.
-  const repoMatch = repoMatchesGitLabSlug(repo, link.slug)
-  if (repoMatch !== 'unknown') {
-    return repoMatch
-  }
-  // Identity unresolvable: stay permissive unless the stored URL names the same type+number in a
-  // different project, which is a contradiction rather than a plausible cross-project reference.
-  return !(linkedUrl && linkedUrl.type === link.type && linkedUrl.number === link.number)
+  const legacyItem = worktree.linkedWorkItem
+  const legacyNumberMatch =
+    !legacyItem?.url &&
+    legacyItem?.provider === 'gitlab' &&
+    legacyItem.type === link.type &&
+    legacyItem.number === link.number &&
+    repoMatchesGitLabSlug(repo, link.slug) !== false
+  return attached || legacyNumberMatch || Boolean(reviewUrl && gitLabLinksEqual(reviewUrl, link))
 }

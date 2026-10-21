@@ -25,7 +25,7 @@ export function getGoldenStubAgentLaunchEnv(): NodeJS.ProcessEnv {
 export async function configureGoldenStubAgent(
   page: Page,
   options: {
-    agent?: (typeof GOLDEN_STUB_AGENTS)[number]['id']
+    agent?: (typeof GOLDEN_STUB_AGENTS)[number]['id'] | 'grok'
     agentArgs?: string
     /** Windows default shell the launch command must survive; ignored elsewhere. */
     windowsShell?: BuiltInWindowsTerminalShell

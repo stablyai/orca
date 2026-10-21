@@ -3,55 +3,25 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { agentArgOptionTokens, removeAgentArgOption } from './agent-session-option-agent-args'
+import { removeAgentArgOption } from './agent-session-option-agent-args'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
-import { hasFlag } from './agent-cli-flag-detection'
 
-function hasCodexEffortOverride(tokens: readonly string[]): boolean {
-  if (hasFlag(tokens, ['--reasoning-effort'])) {
-    return true
-  }
-  const optionTokens = agentArgOptionTokens(tokens)
-  return optionTokens.some((token, index) => {
-    const previous = optionTokens[index - 1]
-    return (
-      (token.startsWith('model_reasoning_effort=') &&
-        (previous === '-c' || previous === '--config')) ||
-      token.startsWith('-cmodel_reasoning_effort=') ||
-      token.startsWith('-c=model_reasoning_effort=') ||
-      token.startsWith('--config=model_reasoning_effort=')
-    )
-  })
-}
-
-function removeCodexEffortOverride(tokens: readonly string[]): string[] {
-  const withoutFlag = removeAgentArgOption(tokens, ['--reasoning-effort'])
-  const result: string[] = []
-  for (let index = 0; index < withoutFlag.length; index += 1) {
-    const token = withoutFlag[index]
-    if (token === '--') {
-      result.push(...withoutFlag.slice(index))
-      break
-    }
-    const next = withoutFlag[index + 1]
-    if ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) {
-      index += 1
-      continue
-    }
-    if (
-      token.startsWith('-cmodel_reasoning_effort=') ||
-      token.startsWith('-c=model_reasoning_effort=') ||
-      token.startsWith('--config=model_reasoning_effort=')
-    ) {
-      continue
-    }
-    result.push(token)
-  }
-  return result
+// Why: Codex also reads any setting from a `-c key=value` config override.
+function removeCodexAgentArgs(
+  tokens: readonly string[],
+  flags: readonly string[],
+  configKey: string
+): string[] {
+  return removeAgentArgOption(
+    'codex',
+    removeAgentArgOption('codex', tokens, flags),
+    ['-c', '--config'],
+    (value) => value?.startsWith(`${configKey}=`) === true
+  )
 }
 
 const STANDARD_EFFORT_CHOICES = [
@@ -84,8 +54,7 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
     },
     apply: {
       launchArgs: (value) => ['--effort', String(value)],
-      agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort']),
-      removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort']),
+      removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--effort']),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -162,8 +131,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--model']),
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
@@ -204,8 +172,8 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
     },
     apply: {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      agentArgsOverride: hasCodexEffortOverride,
-      removeAgentArgs: removeCodexEffortOverride,
+      removeAgentArgs: (tokens) =>
+        removeCodexAgentArgs(tokens, ['--reasoning-effort'], 'model_reasoning_effort'),
       midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
@@ -213,6 +181,7 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
+  hostListingNamesConfiguredModel: true,
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [
@@ -228,11 +197,12 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
+    removeAgentArgs: (tokens) => removeCodexAgentArgs(tokens, ['-m', '--model'], 'model'),
     // Codex classifies multi-character writes as pasted prose; type the bare
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('xhigh')]
+  // Why: models newer than this seed often support max/ultra; Codex falls back
+  // to the model's default effort rather than failing on an unsupported one.
+  unknownModelOptions: [codexEffort('ultra')]
 }

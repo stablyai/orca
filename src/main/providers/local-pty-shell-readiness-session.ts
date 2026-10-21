@@ -16,7 +16,7 @@ import {
   STARTUP_COMMAND_READY_MAX_WAIT_MS,
   type ShellReadySignal
 } from './local-pty-shell-ready-startup-command'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export type LocalPtyShellReadinessSession = {
   shellReadyPromise: Promise<ShellReadySignal>

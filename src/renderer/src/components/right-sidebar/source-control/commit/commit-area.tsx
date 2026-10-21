@@ -165,10 +165,6 @@ export function CommitArea({
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
   )
-  const moreActionsLabel = translate(
-    'auto.components.right.sidebar.SourceControl.4d6e1fd7f3',
-    'More actions'
-  )
   const dropdownMenuContent = (
     <DropdownMenuContent align="end" className="min-w-[14rem]">
       {dropdownItems.map((entry) =>
@@ -180,7 +176,6 @@ export function CommitArea({
               <div className="block">
                 <DropdownMenuItem
                   disabled={entry.disabled}
-                  title={entry.title}
                   variant={entry.variant}
                   className="w-full"
                   onSelect={(event) => {
@@ -235,7 +230,6 @@ export function CommitArea({
         showSpinner={showSpinner}
         showChevronSpinner={showChevronSpinner}
         moreCommitAndRemoteActionsLabel={moreCommitAndRemoteActionsLabel}
-        moreActionsLabel={moreActionsLabel}
         dropdownMenuContent={dropdownMenuContent}
         onPrimaryAction={onPrimaryAction}
       />

@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
@@ -6,7 +7,8 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_AFTER_BYTE_GAP
+  RESET_AFTER_BYTE_GAP,
+  buildKittyKeyboardRestore
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   discardTerminalOutput,
@@ -23,16 +25,24 @@ import {
 
 import { HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession): void {
+  // Why the kitty restore: an abandoned restore discards queued chunks the
+  // mirror already scanned, so xterm re-adopts the mirror's flags.
+  session.writeAbandonedRestoreGap = function (): void {
+    session.writePtyOutputToXterm(
+      `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)}`,
+      true
+    )
+  }
+
   session.writeRestoreUnavailableWarning = function (): void {
     // The reset must parse before both the warning and any foreground drain.
-    session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+    session.writeAbandonedRestoreGap()
     if (!shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
       return
     }
@@ -40,6 +50,26 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
       foreground: true,
       beforeWrite: session.beforeTerminalOutputWrite
     })
+    const ptyId = session.transport.getPtyId()
+    const episode = session.hiddenOutputRestoreLatestDropEpisode
+    if (ptyId !== null && episode !== null) {
+      // Repeat markers for the drop episode this banner disclosed are ignored.
+      session.hiddenOutputRestoreDisclosedGap = { ptyId, episode }
+    }
+    session.requestRemoteProgramRedraw('restore-unavailable')
+  }
+
+  // Why an ack instead of retiring on the serve: the pane can dispose across the serialize +
+  // IPC round trip, and a snapshot nobody painted heals nothing. Only PTYs whose bytes transit
+  // local main have a drop latch, so remote-runtime streams send nothing.
+  session.ackHiddenOutputRestoreApplied = function (
+    ptyId: string,
+    hiddenDropEpisode: number | null
+  ): void {
+    if (!session.canUseMainBufferSnapshot(ptyId)) {
+      return
+    }
+    window.api.pty.ackHiddenOutputRestoreApplied?.(ptyId, hiddenDropEpisode ?? undefined)
   }
 
   session.applyMainBufferSnapshot = async function (snapshot: {
@@ -51,6 +81,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     pendingDeliveryStartSeq?: number
     alternateScreen?: boolean
     scrollbackAnsi?: string
+    carriesNormalBuffer?: boolean
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
@@ -135,6 +166,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             // live-path constant, not the replay baseline — nothing repaints here,
             // so the pane is handed back to whatever is still running.
             session.writeReplayData(RESET_AFTER_BYTE_GAP)
+            session.requestRemoteProgramRedraw('restore-imageless')
           } else {
             for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
               skipAltFrame: skippedAltFrame,
@@ -156,7 +188,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               : hasLiveAgent
                 ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
                 : POST_REPLAY_LIVE_SNAPSHOT_RESET
-          session.writeReplayData(postReplayReset)
+          session.writeReplayEpilogue(postReplayReset)
           if (snapshot.pendingEscapeTailAnsi) {
             // Why last: snapshot taken mid-escape; re-arm as the FINAL replay write (any later ESC aborts it) so the live tail completes it, not render literally (Bug E / #7329).
             session.writeReplayData(snapshot.pendingEscapeTailAnsi)
@@ -210,8 +242,13 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                     session.pane.terminal.rows !== snapshot.rows
                   : session.pane.terminal.cols !== colsBeforeReplay ||
                     session.pane.terminal.rows !== rowsBeforeReplay
-                if (skippedAltFrame) {
-                  session.pulseVisibleLocalPtySizeForTuiRepaint(currentPtyId)
+                if (skippedAltFrame && !replayChangedDimensions) {
+                  // Why: the fit landed back on the capture grid, so no SIGWINCH repaints the skipped frame; the model still holds it.
+                  const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
+                  session.markHiddenOutputRestoreNeeded()
+                  if (restoreWasInFlight) {
+                    session.hiddenOutputRestoreFreshSnapshotNeeded = true
+                  }
                   return
                 }
                 if (replayChangedDimensions && session.isRendererPtyResizeAuthoritative()) {

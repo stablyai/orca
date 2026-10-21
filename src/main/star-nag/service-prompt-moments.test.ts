@@ -59,7 +59,7 @@ describe('StarNagService', () => {
     consoleInfoMock.mockRestore()
   })
 
-  it('shows agent value moment prompts once per app version after eligibility passes', async () => {
+  it('does not rearm agent value moment prompts after an app update', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
     const { service, ui } = createHarness()
@@ -71,6 +71,8 @@ describe('StarNagService', () => {
     })
     await getIpcHandler('star-nag:showAgentValueMoment')()
     getIpcHandler('star-nag:dismiss')()
+    ui.starNagDeferredUntil = null
+    mocks.appMock.getVersion.mockReturnValue('1.2.4')
     await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
       status: 'skipped'
     })
@@ -87,7 +89,7 @@ describe('StarNagService', () => {
     )
   })
 
-  it('consumes agent value moment for cooldown suppression without showing later in the same version', async () => {
+  it('keeps cooldown-suppressed agent value moments consumed after an update', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
     const { service, ui } = createHarness({
@@ -99,12 +101,26 @@ describe('StarNagService', () => {
       status: 'skipped'
     })
     ui.starNagDeferredUntil = null
+    mocks.appMock.getVersion.mockReturnValue('1.2.4')
     await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
       status: 'skipped'
     })
 
     expect(window.webContents.send).not.toHaveBeenCalled()
     expect(ui.starNagAgentValueMomentAppVersion).toBe('1.2.3')
+  })
+
+  it('honors an agent value moment consumed by an older app version on startup', async () => {
+    const { service, store } = createHarness({ starNagAgentValueMomentAppVersion: '1.2.2' })
+    service.registerIpcHandlers()
+
+    await expect(getIpcHandler('star-nag:agentValueMoment')()).resolves.toEqual({
+      status: 'skipped'
+    })
+    await getIpcHandler('star-nag:showAgentValueMoment')()
+
+    expect(checkOrcaStarredMock).not.toHaveBeenCalled()
+    expect(store.updateUI).not.toHaveBeenCalled()
   })
 
   it('does not consume agent value moment when no window can receive the card', async () => {

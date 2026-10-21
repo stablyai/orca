@@ -16,21 +16,21 @@ import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import type {
   MobileGitBranchChangeEntry,
-  MobileGitBranchCompareResult,
-  MobileGitBranchCompareSummary
-} from './mobile-branch-compare'
+  MobileGitBranchCompareReply
+} from './git-compare-reply-schema'
+import type { MobileGitBranchCompareSummary } from './mobile-branch-compare'
+import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
 import {
   canOpenMobileGitStatusEntry,
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
   type MobileGitFileStatus,
-  type MobileGitStatusEntry,
-  type MobileGitStatusResult
+  type MobileGitStatusEntry
 } from './mobile-git-status'
 
 export type ScreenState =
   | { kind: 'loading' }
-  | { kind: 'ready'; status: MobileGitStatusResult }
+  | { kind: 'ready'; status: MobileGitStatusHostPayload }
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
 
@@ -77,7 +77,7 @@ export function buildMobileGitStatusEntryViews(
 export type MobileBranchCompareState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ready'; result: MobileGitBranchCompareResult }
+  | { kind: 'ready'; result: MobileGitBranchCompareReply }
   | { kind: 'error'; message: string }
 
 export type MobileBranchEntryView = MobileGitBranchChangeEntry & {
@@ -118,10 +118,6 @@ export const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, 
 
 export const SELECTOR_RETRY_COUNT = 3
 export const SELECTOR_RETRY_DELAY_MS = 250
-
-export function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
-}
 
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))

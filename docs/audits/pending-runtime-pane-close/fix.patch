@@ -1,0 +1,179 @@
+diff --git a/src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts b/src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts
+index 081a33fc895..a3235fea66a 100644
+--- a/src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts
++++ b/src/renderer/src/components/terminal-pane/retire-unbound-ipc-terminal-pane.ts
+@@ -1,21 +1,16 @@
+-import type { AppState } from '@/store/types'
+ import {
+   buildTerminalTabRetirementPlan,
+-  getTerminalPtyOwnershipIdentity,
+-  hasTerminalPtyOwnerOutsidePane
++  getTerminalPtyOwnershipIdentity
+ } from '@/store/slices/terminal-tab-retirement'
+ import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-tab-close-providers'
+-import type { PtyTransport } from './pty-transport-types'
++import {
++  terminalPaneHasOtherOwner,
++  type UnboundTerminalPaneRetirement
++} from './terminal-pane-retirement-ownership'
+ 
+ /** Capture explicit split-close intent before the durable leaf binding is removed. */
+-export function retireUnboundIpcTerminalPane(args: {
+-  getState: () => AppState
+-  tabId: string
+-  leafId: string
+-  transport: PtyTransport | undefined
+-  getTransports: () => ReadonlyMap<number, PtyTransport>
+-}): void {
+-  const { getState, tabId, leafId, transport, getTransports } = args
++export function retireUnboundIpcTerminalPane(args: UnboundTerminalPaneRetirement): void {
++  const { getState, tabId, leafId, transport } = args
+   if (!transport || transport.getPtyId()) {
+     return
+   }
+@@ -33,19 +28,8 @@ export function retireUnboundIpcTerminalPane(args: {
+   if (!ptyId) {
+     return
+   }
+-  const hasOtherOwner = (excludedLeafId?: string): boolean => {
+-    const current = getState()
+-    return (
+-      hasTerminalPtyOwnerOutsidePane(current, identity, tabId, excludedLeafId) ||
+-      [...getTransports().values()].some((candidate) => {
+-        const boundId = candidate.getPtyId()
+-        return (
+-          boundId !== null &&
+-          getTerminalPtyOwnershipIdentity(current, boundId, plan.worktreeId) === identity
+-        )
+-      })
+-    )
+-  }
++  const hasOtherOwner = (excludedLeafId?: string): boolean =>
++    terminalPaneHasOtherOwner(args, identity, plan.worktreeId, excludedLeafId)
+   if (hasOtherOwner(leafId)) {
+     return
+   }
+diff --git a/src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts b/src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
+index ea85e929e81..3e8dd463a30 100644
+--- a/src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
++++ b/src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
+@@ -1,5 +1,6 @@
+ import { useCallback, useImperativeHandle, useRef } from 'react'
+ import { useAppStore } from '../../store'
++import { retireUnboundRuntimeTerminalPane } from './retire-unbound-runtime-terminal-pane'
+ import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager'
+ import { makePaneKey } from '../../../../shared/stable-pane-id'
+ import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+@@ -61,6 +62,13 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
+         }
+         setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+         if (leafId) {
++          retireUnboundRuntimeTerminalPane({
++            getState: useAppStore.getState,
++            tabId,
++            leafId,
++            transport: paneTransportsRef.current.get(paneId),
++            getTransports: () => paneTransportsRef.current
++          })
+           syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
+         } else {
+           syncPanePtyLayoutBinding(paneId, null)
+diff --git a/src/renderer/src/runtime/runtime-rpc-client.ts b/src/renderer/src/runtime/runtime-rpc-client.ts
+index eb04233cc91..719e54eac89 100644
+--- a/src/renderer/src/runtime/runtime-rpc-client.ts
++++ b/src/renderer/src/runtime/runtime-rpc-client.ts
+@@ -95,7 +95,7 @@ export async function callRuntimeRpc<TResult>(
+   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+ }
+ 
+-async function ensureRuntimeEnvironmentCompatible(
++export async function ensureRuntimeEnvironmentCompatible(
+   environmentId: string,
+   options: {
+     timeoutMs?: number
+diff --git a/src/renderer/src/store/terminals/terminal-tab-close-providers.ts b/src/renderer/src/store/terminals/terminal-tab-close-providers.ts
+index 322d4106c7e..4ba425d95d2 100644
+--- a/src/renderer/src/store/terminals/terminal-tab-close-providers.ts
++++ b/src/renderer/src/store/terminals/terminal-tab-close-providers.ts
+@@ -1,5 +1,9 @@
++import {
++  captureRuntimeEnvironmentRequestRevision,
++  getRuntimeEnvironmentRevision
++} from '@/runtime/runtime-environment-revision'
+ import type { AppState } from '../types'
+-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
++import { callRuntimeRpc, ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+ import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+ import {
+   classifyTerminalRetirementWorktree,
+@@ -11,13 +15,15 @@ export function startTerminalTabProviderRetirement({
+   remoteCloseOwnedByHost,
+   retirementPlan,
+   state,
+-  tabId
++  tabId,
++  canRetireRuntimeTerminal
+ }: {
+   localPtyTeardownOwnedExternally: boolean
+   remoteCloseOwnedByHost: boolean
+   retirementPlan: TerminalTabRetirementPlan
+   state: AppState
+   tabId: string
++  canRetireRuntimeTerminal?: () => boolean
+ }): void {
+   const fallbackWorktreeRoute = retirementPlan.worktreeId
+     ? resolveTerminalWorktreeRoute(state, retirementPlan.worktreeId)
+@@ -33,11 +39,7 @@ export function startTerminalTabProviderRetirement({
+       }
+       const environmentId = terminal.environmentId ?? fallbackWorktreeRoute?.runtimeEnvironmentId
+       retirementTasks.push(
+-        callRuntimeRpc(
+-          environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
+-          'terminal.close',
+-          { terminal: terminal.handle }
+-        )
++        retireRuntimeTerminal(environmentId, terminal.handle, canRetireRuntimeTerminal)
+       )
+     }
+   }
+@@ -66,3 +68,40 @@ export function startTerminalTabProviderRetirement({
+     }
+   })
+ }
++
++async function retireRuntimeTerminal(
++  environmentId: string | null | undefined,
++  handle: string,
++  canRetire?: () => boolean
++): Promise<unknown> {
++  const target = environmentId
++    ? { kind: 'environment' as const, environmentId }
++    : { kind: 'local' as const }
++  if (!canRetire) {
++    return callRuntimeRpc(target, 'terminal.close', { terminal: handle })
++  }
++  const revision = environmentId
++    ? captureRuntimeEnvironmentRequestRevision(environmentId)
++    : undefined
++  if (environmentId) {
++    await ensureRuntimeEnvironmentCompatible(environmentId, {
++      expectedEnvironmentPairingRevision: revision
++    })
++  }
++  if (
++    (environmentId && getRuntimeEnvironmentRevision(environmentId) !== revision) ||
++    !canRetire()
++  ) {
++    return
++  }
++  // Compatibility was checked above; recheck pane ownership at the actual dispatch boundary.
++  return callRuntimeRpc(
++    target,
++    'terminal.close',
++    { terminal: handle },
++    {
++      skipCompatibilityCheck: true,
++      expectedEnvironmentPairingRevision: revision
++    }
++  )
++}

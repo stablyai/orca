@@ -192,10 +192,10 @@ describe('pr-refresh queue growth bounds', () => {
     })
 
     reportVisiblePRRefreshCandidates([first], 1, 1)
-    await vi.advanceTimersByTimeAsync(100_000)
+    await vi.advanceTimersByTimeAsync(119_999)
 
     expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toEqual(['churn/1'])
-    await vi.advanceTimersByTimeAsync(500_001)
+    await vi.advanceTimersByTimeAsync(1)
     expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toEqual([
       'churn/1',
       'churn/2'

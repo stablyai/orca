@@ -9,10 +9,13 @@ import {
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../shared/wsl-paths'
+import { antigravitySessionOrigin } from '../../../shared/antigravity-session-origin'
+import { canResumeAiVaultSessionOnSshHost } from '../../../shared/ai-vault-ssh-resume-target'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
@@ -29,12 +32,6 @@ export function getAiVaultResumeRepoTargetStatus(
   return getAiVaultResumeExecutionHostTargetStatus(getRepoExecutionHostId(repo))
 }
 
-export function isSupportedAiVaultResumeRepo(
-  repo: AiVaultResumeRepoOwner | null | undefined
-): boolean {
-  return isSupportedAiVaultResumeTargetStatus(getAiVaultResumeRepoTargetStatus(repo))
-}
-
 export function isSupportedAiVaultResumeTargetStatus(status: AiVaultResumeTargetStatus): boolean {
   return status === 'local' || status === 'ssh' || status === 'runtime'
 }
@@ -48,9 +45,36 @@ export function canResumeAiVaultSessionOnTarget(args: {
   sessionExecutionHostId?: ExecutionHostId | null
   targetStatus: AiVaultResumeTargetStatus
   targetExecutionHostId?: ExecutionHostId | null
+  targetWslDistro?: string | null
 }): boolean {
   const sessionExecutionHostId = normalizeExecutionHostId(args.sessionExecutionHostId)
   const targetExecutionHostId = normalizeExecutionHostId(args.targetExecutionHostId)
+  const origin = args.sessionFilePath ? antigravitySessionOrigin(args.sessionFilePath) : null
+  if (origin && origin !== 'antigravity-cli') {
+    if (!isSupportedAiVaultResumeTargetStatus(args.targetStatus)) {
+      return false
+    }
+    const sourceHost = sessionExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
+    const targetHost =
+      targetExecutionHostId ?? (args.targetStatus === 'local' ? LOCAL_EXECUTION_HOST_ID : null)
+    if (sourceHost !== targetHost) {
+      // #6270's SSH/UNC labels do not prove this host owns the referenced file.
+      return false
+    }
+    if (args.targetStatus === 'local' && args.targetWslDistro === undefined) {
+      return false
+    }
+    const sourceWsl = args.sessionFilePath ? parseWslUncPath(args.sessionFilePath) : null
+    if (sourceWsl) {
+      return (
+        args.targetStatus === 'local' &&
+        Boolean(args.targetWslDistro) &&
+        sourceWsl.distro.toLowerCase() === args.targetWslDistro?.toLowerCase()
+      )
+    }
+    // File references require the original filesystem, unlike legacy ID resumes.
+    return args.targetStatus !== 'local' || !args.targetWslDistro
+  }
   if (args.targetStatus === 'runtime') {
     // Runtime session stores live on one paired server; only queue resumes back
     // onto that exact server host.
@@ -63,60 +87,39 @@ export function canResumeAiVaultSessionOnTarget(args: {
   if (!isSupportedAiVaultResumeTargetStatus(args.targetStatus)) {
     return false
   }
-  if (sessionExecutionHostId) {
-    if (targetExecutionHostId) {
-      if (sessionExecutionHostId === targetExecutionHostId) {
-        return true
-      }
-      // Why: SSH-to-local-WSL setups (#6270) tag the session 'local' but the
-      // file lives under a WSL UNC path reachable from any SSH shell into this
-      // machine, so we bypass the exact host-id match for that case.
-      return (
-        sessionExecutionHostId === LOCAL_EXECUTION_HOST_ID &&
-        args.targetStatus === 'ssh' &&
-        isWslStoredAiVaultSessionFile(args.sessionFilePath)
-      )
-    }
-    if (sessionExecutionHostId !== LOCAL_EXECUTION_HOST_ID) {
-      return false
-    }
-  }
-  // Why: vault sessions are scanned from this machine's disk (host home dirs
-  // plus local WSL homes). An SSH shell can only reach the WSL-stored ones
-  // (SSH-to-local-WSL setups, #6270); host-stored session files do not exist
-  // on a remote filesystem, so queuing a resume there is guaranteed to fail.
   if (args.targetStatus === 'ssh') {
-    return isWslStoredAiVaultSessionFile(args.sessionFilePath)
+    return canResumeAiVaultSessionOnSshHost({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId,
+      targetExecutionHostId
+    })
   }
-  return true
+  if (!isAiVaultSessionInWslNamespace(args.sessionFilePath, args.targetWslDistro)) {
+    return false
+  }
+  if (sessionExecutionHostId && targetExecutionHostId) {
+    return sessionExecutionHostId === targetExecutionHostId
+  }
+  return !sessionExecutionHostId || sessionExecutionHostId === LOCAL_EXECUTION_HOST_ID
 }
 
-export function isUnsupportedAiVaultResumeRepo(
-  repo: AiVaultResumeRepoOwner | null | undefined
+/**
+ * On Windows a WSL workspace and a Windows workspace are both `local`, but the agent runs
+ * in only one of them and finds only that namespace's sessions (#24408). `undefined` is an
+ * unknown namespace and refuses nothing; `null` is native.
+ */
+function isAiVaultSessionInWslNamespace(
+  sessionFilePath: string | null | undefined,
+  targetWslDistro: string | null | undefined
 ): boolean {
-  const status = getAiVaultResumeRepoTargetStatus(repo)
-  return status !== 'unknown' && !isSupportedAiVaultResumeTargetStatus(status)
-}
-
-export function getAiVaultResumeWorktreeTargetStatus(args: {
-  worktreeId: string | null
-  worktrees: readonly { id: string; repoId: string; hostId?: ExecutionHostId }[]
-  repos: readonly AiVaultResumeRepoOwnerWithId[]
-}): AiVaultResumeTargetStatus {
-  if (!args.worktreeId) {
-    return 'unknown'
+  if (targetWslDistro === undefined) {
+    return true
   }
-  const worktree = args.worktrees.find((candidate) => candidate.id === args.worktreeId)
-  if (!worktree) {
-    return 'unknown'
+  const sourceWsl = sessionFilePath ? parseWslUncPath(sessionFilePath) : null
+  if (!sourceWsl) {
+    return !targetWslDistro
   }
-  const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree.hostId)
-  if (worktreeHost !== 'unknown') {
-    return worktreeHost
-  }
-  return getAiVaultResumeRepoTargetStatus(
-    args.repos.find((candidate) => candidate.id === worktree.repoId)
-  )
+  return sourceWsl.distro.toLowerCase() === targetWslDistro?.toLowerCase()
 }
 
 export function getAiVaultResumeWorkspaceExecutionHostId(
@@ -133,7 +136,7 @@ export function getAiVaultResumeWorkspaceExecutionHostId(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state) ?? {}).get(worktreeId)
   const worktreeHostId = normalizeExecutionHostId(worktree?.hostId)
   if (worktreeHostId) {
     return worktreeHostId
@@ -157,7 +160,7 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state) ?? {}).get(worktreeId)
   const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree?.hostId)
   if (worktreeHost !== 'unknown') {
     return worktreeHost
@@ -166,13 +169,11 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   return getAiVaultResumeRepoTargetStatus(state.repos.find((repo) => repo.id === repoId))
 }
 
-type AiVaultResumeRepoOwnerWithId = AiVaultResumeRepoOwner & { id: string }
-
 function getAiVaultResumeFolderTargetStatus(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
   folderWorkspaceId: string
 ): AiVaultResumeTargetStatus {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  const workspace = selectFolderWorkspaces(state).find((entry) => entry.id === folderWorkspaceId)
   if (!workspace) {
     return 'unknown'
   }
@@ -196,7 +197,7 @@ function getAiVaultResumeFolderExecutionHostId(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
   folderWorkspaceId: string
 ): ExecutionHostId | null {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  const workspace = selectFolderWorkspaces(state).find((entry) => entry.id === folderWorkspaceId)
   if (!workspace) {
     return null
   }

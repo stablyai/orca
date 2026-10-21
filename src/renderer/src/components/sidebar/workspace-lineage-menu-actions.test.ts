@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { Tab } from '../../../../shared/tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import {
   getWorkspaceLineageMenuActions,
   hasSleepableWorkspaceActivity
@@ -66,7 +68,10 @@ describe('workspace lineage menu actions', () => {
         },
         browserTabsByWorktree: {
           [grandchild.id]: [{ id: 'grandchild-browser' }]
-        }
+        },
+        unifiedTabsByWorktree: {},
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       }
     })
 
@@ -91,7 +96,10 @@ describe('workspace lineage menu actions', () => {
       activity: {
         tabsByWorktree: { [child.id]: [{ id: 'child-tab' }] },
         ptyIdsByTabId: { 'child-tab': ['child-pty'] },
-        browserTabsByWorktree: {}
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {},
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       }
     })
 
@@ -100,13 +108,20 @@ describe('workspace lineage menu actions', () => {
   })
 })
 
+function hostHeld(tab: Tab): Record<string, { structuredHostOwned: true }> {
+  return { [structuredAgentSessionPaneKey(tab.id, tab.entityId)]: { structuredHostOwned: true } }
+}
+
 describe('hasSleepableWorkspaceActivity', () => {
   it('treats preserved empty PTY arrays as slept, not live', () => {
     expect(
       hasSleepableWorkspaceActivity('wt-1', {
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
         ptyIdsByTabId: { 'tab-1': [] },
-        browserTabsByWorktree: {}
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {},
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       })
     ).toBe(false)
   })
@@ -116,15 +131,50 @@ describe('hasSleepableWorkspaceActivity', () => {
       hasSleepableWorkspaceActivity('wt-1', {
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
         ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-        browserTabsByWorktree: {}
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {},
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       })
     ).toBe(true)
     expect(
       hasSleepableWorkspaceActivity('wt-1', {
         tabsByWorktree: {},
         ptyIdsByTabId: {},
-        browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] }
+        browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
+        unifiedTabsByWorktree: {},
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       })
     ).toBe(true)
+  })
+
+  it('offers Sleep for a chat-only workspace while its host holds the chat', () => {
+    const chat: Tab = {
+      id: 'chat-1',
+      entityId: 'session-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: 'Claude',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const activity = (agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>) =>
+      hasSleepableWorkspaceActivity('wt-1', {
+        tabsByWorktree: {},
+        ptyIdsByTabId: {},
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: { 'wt-1': [chat] },
+        agentStatusByPaneKey,
+        structuredChatSleptAtByPaneKey: {
+          [structuredAgentSessionPaneKey(chat.id, chat.entityId)]: null
+        }
+      })
+    expect(activity(hostHeld(chat))).toBe(true)
+    expect(activity({})).toBe(true)
   })
 })

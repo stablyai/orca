@@ -1,9 +1,23 @@
-import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal-mode-reset-profiles'
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
+import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): void {
+  // Why: a loss finalized while hidden swallows the banner and zeroes recovery, so no reveal
+  // can reach the gap. Stay armed; reveal spends one fresh snapshot (attempt counters are kept),
+  // which heals a recovered source or abandons in the foreground where the banner lands.
+  session.deferHiddenOutputRestoreLossToReveal = function (): boolean {
+    if (shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
+      return false
+    }
+    // A deadline armed while foreground fires after reveal under hidden-timer throttling and
+    // would bump the generation, discarding the reveal's fresh snapshot mid-flight.
+    session.clearHiddenOutputRestoreForegroundDeadlineTimer()
+    session.hiddenOutputRestoreNeeded = true
+    return true
+  }
+
   session.abandonHiddenOutputRestoreAndDrainPendingForeground = function (
     expectedPtyId: string,
     opts: { quiet?: boolean; rearmRemote?: boolean } = {}
@@ -26,6 +40,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
     const hadPendingOverflow = session.hiddenOutputRestorePendingOverflow
     const replayingSnapshot = session.hiddenOutputRestoreReplayingSnapshot
     session.hiddenOutputRestoreReplayingSnapshot = null
+    session.hiddenOutputRestoreUnhideSeq = null
     session.hiddenOutputRestoreGeneration += 1
     if (
       session.hiddenOutputSnapshotScrollRestore?.valid &&
@@ -62,7 +77,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
     // session.rearmRemoteHiddenOutputRestoreInsteadOfWarning. Only the quiet
     // flood-abandon reaches neither, and it still drains chunks below.
     else if (!rearmedRemoteRestore) {
-      session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+      session.writeAbandonedRestoreGap()
     }
     if (hadPendingOverflow) {
       return

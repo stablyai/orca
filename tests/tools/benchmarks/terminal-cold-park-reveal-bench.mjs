@@ -33,19 +33,19 @@ import {
   pickFreePort,
   stopDevApp,
   waitForStoreReady
-} from '../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
+} from '../../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
 import {
   createCompletedOnboardingProfile,
   safeRemoveLocalDirectory
-} from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
+} from '../../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
 import {
   pollUntil,
   rendererActionTimeoutMs,
   runWithTimeout,
   setupTimeoutMs
-} from '../../config/scripts/windows-apphang-repro/repro-timing.mjs'
+} from '../../../config/scripts/windows-apphang-repro/repro-timing.mjs'
 
-const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
+const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const scenarioTimeoutMs = 300_000
 
 // Short enough that a tab parks within a few seconds of being hidden, long
@@ -134,7 +134,8 @@ async function setupWorkspaces(page, fixture) {
           if ('error' in addResult) {
             throw new Error(addResult.error)
           }
-          await store.getState().fetchRepos()
+          const owner = store.getState().settings?.activeRuntimeEnvironmentId ?? null
+          await store.getState().fetchRepos({ runtimeEnvironmentId: owner })
           const state = store.getState()
           const repo = state.repos.find((c) => c.path === repoPath) ?? addResult.repo
           await state.updateRepo(repo.id, {

@@ -1,4 +1,7 @@
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { isShowRefNoMatchError } from '../../shared/git-show-ref-no-match'
+
+export { isShowRefNoMatchError }
 
 export type ExactRefProbeExecOptions = {
   maxBuffer?: number
@@ -21,23 +24,6 @@ type ExactRefPresence = 'present' | 'absent' | 'unknown'
 const EXACT_REF_PROBE_CONCURRENCY = 8
 // SHA-1 and SHA-256 repositories both report a full object id here.
 const OBJECT_ID_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
-
-export function isShowRefNoMatchError(error: unknown): boolean {
-  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : undefined
-  // Git reports a missing ref as numeric exit status 1. Keep string-valued
-  // transport/error codes (including a relay that happens to use `"1"`) in
-  // the unknown bucket so SSH loss cannot look like an absent ref.
-  if (record?.code !== 1) {
-    return false
-  }
-  // `--quiet` makes Git print nothing for a missing ref, but a wrapper that
-  // also exits 1 always explains itself: `wsl.exe` on a dead distro, a relay
-  // transport error. Empty stderr is what separates proven absence from a
-  // probe that never ran. A runner that reports no stderr at all (the SSH
-  // provider) keeps its existing exit-code contract.
-  const stderr = record.stderr
-  return stderr === undefined || stderr === null || String(stderr).trim().length === 0
-}
 
 function commandOptions(options: ExactRefProbeExecOptions): ExactRefProbeExecOptions | undefined {
   if (options.maxBuffer === undefined && options.timeoutMs === undefined) {

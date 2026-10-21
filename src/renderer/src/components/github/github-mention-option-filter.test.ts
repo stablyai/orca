@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   GITHUB_MENTION_QUERY_MAX_BYTES,
   filterGitHubMentionOptions,
-  isGitHubMentionQueryTooLarge,
   type GitHubMentionOption
 } from './github-mention-option-filter'
 
@@ -31,7 +30,6 @@ describe('github-mention-option-filter', () => {
     const query = 'é'.repeat(GITHUB_MENTION_QUERY_MAX_BYTES)
 
     expect(query.length).toBe(GITHUB_MENTION_QUERY_MAX_BYTES)
-    expect(isGitHubMentionQueryTooLarge(query)).toBe(true)
     expect(filterGitHubMentionOptions([option('octocat')], query)).toEqual([])
   })
 
@@ -46,7 +44,6 @@ describe('github-mention-option-filter', () => {
       }
     } as GitHubMentionOption
 
-    expect(isGitHubMentionQueryTooLarge(oversizedQuery)).toBe(true)
     expect(filterGitHubMentionOptions([candidate], oversizedQuery)).toEqual([])
   })
 })

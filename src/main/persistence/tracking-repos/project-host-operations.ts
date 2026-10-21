@@ -11,8 +11,10 @@ import type {
 } from '../../../shared/project-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
+import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
@@ -30,7 +32,7 @@ export type ProjectHostMutationOperations = {
     setup: ProjectHostSetup,
     updates: ProjectHostSetupUpdateArgs['updates']
   ) => ProjectHostSetup
-  removeProjectForHost: (id: string, hostId: ProjectHostSetup['hostId']) => void
+  removeProjectForHost: (target: RepoHostTarget) => void
   scheduleSave: () => void
 }
 
@@ -64,8 +66,8 @@ export class ProjectHostPersistenceOperations {
     return this.operations.updateIndependentProjectHostSetup(setup, updates)
   }
 
-  private removeProjectForHost(id: string, hostId: ProjectHostSetup['hostId']): void {
-    this.operations.removeProjectForHost(id, hostId)
+  private removeProjectForHost(target: RepoHostTarget): void {
+    this.operations.removeProjectForHost(target)
   }
 
   private scheduleSave(): void {
@@ -147,7 +149,7 @@ export class ProjectHostPersistenceOperations {
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = findProjectHostSetup(this.state.projectHostSetups, args)
     if (!setup) {
       return null
     }
@@ -155,9 +157,11 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
-    const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
-      : undefined
+    const repo = this.findSetupRepo(setup)
+    if (setup.repoId && !repo) {
+      // A stale repo-backed setup; editing it would write a sibling host's row.
+      return null
+    }
     if (repo) {
       const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
       const updatedProject = updated
@@ -171,8 +175,17 @@ export class ProjectHostPersistenceOperations {
     return { project, setup: updatedSetup }
   }
 
+  // Why: the same repo id can exist on several hosts; never fall back to a sibling host's row.
+  private findSetupRepo(setup: ProjectHostSetup): Repo | undefined {
+    return setup.repoId
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
+      : undefined
+  }
+
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = findProjectHostSetup(this.state.projectHostSetups, args)
     if (!setup) {
       return null
     }
@@ -180,21 +193,13 @@ export class ProjectHostPersistenceOperations {
     if (!project) {
       return null
     }
-    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
-    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
-    // registration. With no exact match the setup is stale, and the path below drops just the setup.
-    const repo = setup.repoId
-      ? this.state.repos.find(
-          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
-        )
-      : undefined
+    // With no exact row the setup is stale, and the path below drops just the setup.
+    const repo = this.findSetupRepo(setup)
     if (repo) {
-      this.removeProjectForHost(repo.id, setup.hostId)
+      this.removeProjectForHost(repo)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
-    this.state.projectHostSetups = this.state.projectHostSetups.filter(
-      (entry) => entry.id !== setup.id
-    )
+    this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
     this.scheduleSave()
     return { project, setup }
   }

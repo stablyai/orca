@@ -1,0 +1,53 @@
+name: Prepare Wayland clipboard helper
+description: Reuse the source-matched Ubuntu 20.04 helper, validating its architecture and glibc requirements every time.
+
+inputs:
+  save-cache:
+    description: Publish a validated helper from the default branch.
+    default: 'false'
+  build:
+    description: Build here; 'false' only restores, so the caller can build in a background run step.
+    default: 'true'
+
+outputs:
+  cache-hit:
+    description: Whether the helper was restored under the exact key.
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Wayland clipboard build identity
+      id: identity
+      shell: bash
+      run: |
+        node --input-type=module <<'NODE'
+        import { appendFileSync } from 'node:fs'
+        import { waylandClipboardFingerprint } from './config/scripts/build-wayland-clipboard.mjs'
+        const fingerprint = waylandClipboardFingerprint(process.cwd(), process.arch)
+        // Immutable invalid hits need a version bump here before publishing their repair.
+        appendFileSync(process.env.GITHUB_OUTPUT, `key=wayland-clipboard-v1-${process.arch}-${fingerprint}\n`)
+        NODE
+
+    - name: Restore Wayland clipboard helper
+      id: cache
+      uses: actions/cache/restore@v5
+      continue-on-error: true
+      with:
+        path: native/wayland-clipboard/.build
+        key: ${{ steps.identity.outputs.key }}
+
+    - name: Build or validate Wayland clipboard helper
+      if: inputs.build != 'false'
+      shell: bash
+      env:
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: bash "$GITHUB_ACTION_PATH/build-or-validate.sh"
+
+    - name: Save validated Wayland clipboard helper from main
+      if: inputs.build != 'false' && inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      uses: actions/cache/save@v5
+      continue-on-error: true
+      with:
+        path: native/wayland-clipboard/.build
+        key: ${{ steps.identity.outputs.key }}

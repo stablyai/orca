@@ -1,10 +1,6 @@
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import { isWatchRootCapacityRefusal } from '../../shared/watch-root-capacity-refusal'
-import {
-  WATCH_BATCH_MAX_WAIT_MS,
-  WATCH_BATCH_TRAILING_MS
-} from '../../shared/filesystem-watch-batch-window'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { MAX_BATCHED_WATCHER_EVENTS } from './filesystem-watcher-event-batch'
 import { createRemoteWatcherEventBatch } from './remote-watcher-event-batch'
@@ -15,11 +11,16 @@ import type {
 } from './filesystem-watcher-lifecycle-state'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import {
+  addCancelledInstallWaiter,
   addInFlightRemoteInstallListener,
   addRemoteWatchListener,
-  registerWatcherSenderCleanup
+  registerWatcherSenderCleanup,
+  takeCancelledInstallWaiter
 } from './filesystem-watcher-listener-lifecycle'
+
+const cancelledRemoteInstallWaiters = watcherLifecycleState.cancelledRemoteInstallWaiters
 
 export type RemoteWatcherTerminalErrorHandler = (
   key: string,
@@ -34,10 +35,12 @@ export async function installRemoteWatcherCore(
   connectionId: string,
   worktreePath: string,
   onTerminalError: RemoteWatcherTerminalErrorHandler,
-  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration
+  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration,
+  senderSignal = registerWatcherSenderCleanup(sender)
 ): Promise<RemoteWatcherInstallResult> {
   // Why: refuse installs racing in after teardown (or a waiter from an earlier lifecycle) so provider.watch() isn't called post-shutdown.
   if (
+    !isCurrentWatcherSender(sender, senderSignal) ||
     watcherLifecycleState.remoteWatchersClosed ||
     generation !== watcherLifecycleState.remoteWatcherLifecycleGeneration
   ) {
@@ -50,7 +53,8 @@ export async function installRemoteWatcherCore(
       connectionId,
       worktreePath,
       onTerminalError,
-      generation
+      generation,
+      senderSignal
     )
   } finally {
     finishInstall()
@@ -62,7 +66,8 @@ async function installRemoteWatcherWhileRemovalAllowed(
   connectionId: string,
   worktreePath: string,
   onTerminalError: RemoteWatcherTerminalErrorHandler,
-  generation: number
+  generation: number,
+  senderSignal: AbortSignal
 ): Promise<RemoteWatcherInstallResult> {
   const provider = getSshFilesystemProvider(connectionId)
   if (!provider || sender.isDestroyed()) {
@@ -84,7 +89,16 @@ async function installRemoteWatcherWhileRemovalAllowed(
       // Why: a new watcher joining before provider.watch() resolves should revive the install instead of inheriting the stale cancellation.
       addInFlightRemoteInstallListener(inFlight, sender)
     }
+    const waitToken = canJoinInstall
+      ? null
+      : addCancelledInstallWaiter(cancelledRemoteInstallWaiters, key, sender)
     const result = await pendingInstall
+    const stillWanted =
+      waitToken === null ||
+      takeCancelledInstallWaiter(cancelledRemoteInstallWaiters, key, sender.id, waitToken)
+    if (!stillWanted || !isCurrentWatcherSender(sender, senderSignal)) {
+      return 'cancelled'
+    }
     if (
       result === 'installed' &&
       watcherLifecycleState.remoteWatchers.has(key) &&
@@ -108,7 +122,8 @@ async function installRemoteWatcherWhileRemovalAllowed(
         connectionId,
         worktreePath,
         onTerminalError,
-        generation
+        generation,
+        senderSignal
       )
     }
     return result
@@ -153,8 +168,6 @@ async function doInstallRemoteWatcher(
   // still covers a flush that races a close.
   const batch = createRemoteWatcherEventBatch({
     rootPath: worktreePath,
-    trailingMs: WATCH_BATCH_TRAILING_MS,
-    maxWaitMs: WATCH_BATCH_MAX_WAIT_MS,
     maxEvents: MAX_BATCHED_WATCHER_EVENTS,
     deliver: (events) => {
       const state = watcherLifecycleState.remoteWatchers.get(key)
@@ -170,7 +183,8 @@ async function doInstallRemoteWatcher(
         try {
           listener.send('fs:changed', {
             worktreePath,
-            events
+            events,
+            connectionId
           } satisfies FsChangedPayload)
         } catch (err) {
           // Why: batching moved this send out of the SSH mux's notification try/catch into a bare

@@ -55,18 +55,6 @@ describe('#9040 worktree dot attributes spinner titles to the launched agent', (
     expect(status).toBe('working')
   })
 
-  // Why: pins the #9647 gate — spinner attribution needs a launch identity, so a
-  // spinner in a tab no agent was launched in cannot spin the dot.
-  it('stays active for a spinner title with no launch identity', () => {
-    const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
-      [],
-      livePtyMap('tab-1')
-    )
-
-    expect(status).toBe('active')
-  })
-
   it('does not manufacture activity from a non-spinner title with a launch identity', () => {
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: 'bash', launchAgent: 'claude' }],

@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -85,7 +86,9 @@ describe('daemon kill attribution', () => {
     expect(killLog.log).toHaveBeenCalledWith('session-kill-failed', {
       sessionId: 'agent-session',
       immediate: true,
-      clientId: 'control-42'
+      clientId: 'control-42',
+      errorName: 'Error',
+      error: 'kill refused'
     })
     expect(killLog.log).not.toHaveBeenCalledWith('session-killed', expect.anything())
   })

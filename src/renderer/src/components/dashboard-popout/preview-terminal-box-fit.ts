@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { PaneReparentFrameTracker } from '@/lib/pane-manager/pane-reparent-frame-tracker'
 
 type PreviewBoxFitTerminal = Pick<Terminal, 'rows' | 'buffer'>
 
@@ -13,7 +14,9 @@ type PreviewBoxFitTerminal = Pick<Terminal, 'rows' | 'buffer'>
 export function createPreviewBoxFit(args: {
   container: HTMLElement
   getTerminal: () => PreviewBoxFitTerminal | null
-}): { fit: () => void; schedule: () => void } {
+}): { fit: () => void; schedule: () => void; dispose: () => void } {
+  let disposed = false
+  const frames = new PaneReparentFrameTracker(() => disposed)
   const fit = (): void => {
     const terminal = args.getTerminal()
     const screen = args.container.querySelector<HTMLElement>('.xterm-screen')
@@ -33,15 +36,25 @@ export function createPreviewBoxFit(args: {
   // Re-fit after every parsed write (cursor may move ends); rAF coalesces.
   let scheduled = false
   const schedule = (): void => {
-    if (scheduled) {
+    if (disposed || scheduled) {
       return
     }
     scheduled = true
-    requestAnimationFrame(() => {
+    frames.request(() => {
       scheduled = false
       fit()
     })
   }
 
-  return { fit, schedule }
+  return {
+    fit,
+    schedule,
+    dispose: (): void => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      frames.cancelPending()
+    }
+  }
 }

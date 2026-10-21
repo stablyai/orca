@@ -1,9 +1,15 @@
+import {
+  CreateAgentSessionParams,
+  EnsureAgentSessionParams
+} from '../../shared/rpc-contract/agent-session-params'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 function operationId(now = Date.now()): string {
   return `${now}-0123456789abcdef0123456789abcdef`
@@ -35,10 +41,12 @@ function terminal() {
   }
 }
 
-function createRuntime(provider?: {
-  supportsAgentSessionClaims?: () => boolean
-  supportsAgentSessionCreateOperations?: () => boolean
-}) {
+function createRuntime(
+  provider?: Pick<
+    IPtyProvider,
+    'supportsAgentSessionClaims' | 'supportsAgentSessionCreateOperations'
+  >
+) {
   const runtime = new OrcaRuntimeService(
     {
       getSettings: () => ({
@@ -53,16 +61,12 @@ function createRuntime(provider?: {
   )
   const internal = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
-    markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
-    markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
   }
   internal.resolveTerminalWorkspaceLaunchScope = vi.fn(async () => ({
     id: 'worktree-1',
     path: '/tmp/worktree-1',
     connectionId: null
   }))
-  internal.markLocalWorkspaceTrustedForAgent = vi.fn()
-  internal.markRemoteWorkspaceTrustedForAgent = vi.fn()
   return runtime
 }
 
@@ -80,7 +84,6 @@ function installRemoteReclaimHarness(
       connectionId: 'ssh-1'
     })),
     executionOwnerSupportsAgentSessionOperation: vi.fn(async () => true),
-    markWorkspaceTrustedForAgent: vi.fn(async () => {}),
     adoptControllerTerminalHandle: vi.fn((ptyId: string, handle: string) => {
       handleByPtyId.set(ptyId, handle)
     }),
@@ -110,17 +113,118 @@ async function fenceRemoteAgentSessionSpawn(runtime: OrcaRuntimeService) {
   return { createTerminal, failure, id }
 }
 
+describe('agent-session execution namespace', () => {
+  it('calls the selected provider probe with its receiver and caller signal', async () => {
+    const signal = new AbortController().signal
+    const provider: Pick<IPtyProvider, 'supportsAgentSessionClaims'> = {
+      async supportsAgentSessionClaims(options) {
+        expect(this).toBe(provider)
+        expect(options?.signal).toBe(signal)
+        return true
+      }
+    }
+    const runtime = createRuntime(provider)
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    await runtime.ensureAgentSession(
+      {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      },
+      { signal }
+    )
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ signal })
+    )
+  })
+
+  it('propagates probe getter failure before entering the probe failure fallback', async () => {
+    const failure = new Error('probe getter failed')
+    const runtime = createRuntime({
+      get supportsAgentSessionClaims(): IPtyProvider['supportsAgentSessionClaims'] {
+        throw failure
+      }
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    await expect(
+      runtime.ensureAgentSession({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      })
+    ).rejects.toBe(failure)
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('captures the terminal callee before reading launch option getters', async () => {
+    const runtime = createRuntime()
+    const replacement = vi.fn(async () => terminal())
+    const original = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const resume = {
+      kind: 'explicit' as const,
+      worktree: 'id:worktree-1',
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'provider-session-1' },
+      get terminalKittyKeyboardProtocol() {
+        runtime.createTerminal = replacement
+        return true
+      }
+    }
+    await runtime.ensureAgentSession(resume)
+    expect(original).toHaveBeenCalledOnce()
+    expect(original.mock.calls[0]).toHaveLength(2)
+    expect(replacement).not.toHaveBeenCalled()
+    await runtime.ensureAgentSession(resume)
+    expect(replacement).toHaveBeenCalledOnce()
+    expect(replacement.mock.calls[0]).toHaveLength(2)
+  })
+})
+
 describe('agent-session create operation ledger', () => {
-  it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {
+  it.each([true, false, undefined])(
+    'forwards renderer keyboard support on create and resume: %s',
+    async (terminalKittyKeyboardProtocol) => {
+      const runtime = createRuntime()
+      const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      await runtime.createAgentSession(
+        CreateAgentSessionParams.parse(request(operationId(), { terminalKittyKeyboardProtocol }))
+      )
+      await runtime.ensureAgentSession(
+        EnsureAgentSessionParams.parse({
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-session-1' },
+          terminalKittyKeyboardProtocol
+        })
+      )
+      expect(createTerminal).toHaveBeenCalledTimes(2)
+      for (const call of createTerminal.mock.calls) {
+        expect(call[1]?.terminalKittyKeyboardProtocol).toBe(terminalKittyKeyboardProtocol)
+      }
+    }
+  )
+  it('refuses a changed keyboard capability under the same create operation', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const id = operationId()
+    await runtime.createAgentSession(request(id, { terminalKittyKeyboardProtocol: true }))
+    await expect(runtime.createAgentSession(request(id))).rejects.toThrow(
+      'agent_session_operation_conflict'
+    )
+    expect(createTerminal).toHaveBeenCalledOnce()
+  })
+
+  it('selects legacy before spawn or ledger state for an old daemon', async () => {
     const provider = {
       supportsAgentSessionClaims: vi.fn(() => false),
       supportsAgentSessionCreateOperations: vi.fn(() => false)
     }
     const runtime = createRuntime(provider)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
-    const internal = runtime as unknown as {
-      markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
-    }
     const id = operationId()
 
     await expect(runtime.createAgentSession(request(id))).rejects.toThrow(
@@ -136,7 +240,6 @@ describe('agent-session create operation ledger', () => {
     ).rejects.toThrow('agent_session_legacy_required')
 
     expect(createTerminal).not.toHaveBeenCalled()
-    expect(internal.markLocalWorkspaceTrustedForAgent).not.toHaveBeenCalled()
 
     provider.supportsAgentSessionCreateOperations.mockReturnValue(true)
     await expect(runtime.createAgentSession(request(id))).resolves.toMatchObject({
@@ -172,15 +275,19 @@ describe('agent-session create operation ledger', () => {
       },
       folderWorkspace: null
     })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    let planned: TerminalCreateOptions | undefined
+    vi.spyOn(runtime, 'createTerminal').mockImplementation(async (selector = '', opts = {}) => {
+      const scope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
+      planned = await runtime.resolveAgentTerminalCreateOptions(scope, opts)
+      return terminal()
+    })
 
     await runtime.createAgentSession(
       request(operationId(), { agent: 'claude-agent-teams', prompt: '' })
     )
 
-    expect(createTerminal).toHaveBeenCalledWith(
-      'id:worktree-1',
-      expect.objectContaining({ command: expect.stringContaining('orca-ide claude-teams') })
+    expect(planned?.command).toContain(
+      process.platform === 'linux' ? 'orca-ide claude-teams' : 'orca claude-teams'
     )
   })
 
@@ -232,7 +339,6 @@ describe('agent-session create operation ledger', () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
-      markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
     }
     internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
       id: 'worktree-1',
@@ -255,7 +361,6 @@ describe('agent-session create operation ledger', () => {
     ).rejects.toThrow('agent_session_legacy_required')
 
     expect(createTerminal).not.toHaveBeenCalled()
-    expect(internal.markRemoteWorkspaceTrustedForAgent).not.toHaveBeenCalled()
   })
 
   it('replays the same completed operation without spawning again', async () => {
@@ -307,6 +412,28 @@ describe('agent-session create operation ledger', () => {
     await runtime.createAgentSession(request(id), { clientId: 'device-a' })
     await runtime.createAgentSession(request(id), { clientId: 'device-b' })
     expect(createTerminal).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts a create however many unexpired operations are held, and still replays the first', async () => {
+    // Why: a count limit (512 per caller, 4,096 in all) refused a user's create for unrelated traffic.
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const now = Date.now()
+    const ids = Array.from(
+      { length: 4_097 },
+      (_, index) => `${now}-${index.toString(16).padStart(32, '0')}`
+    )
+    const dispositions = new Set<string>()
+    for (const id of ids) {
+      const created = await runtime.createAgentSession(request(id), { clientId: 'device-a' })
+      dispositions.add(created.disposition)
+    }
+
+    expect([...dispositions]).toEqual(['created'])
+    await expect(
+      runtime.createAgentSession(request(ids[0]!), { clientId: 'device-a' })
+    ).resolves.toMatchObject({ disposition: 'replayed' })
+    expect(createTerminal).toHaveBeenCalledTimes(4_097)
   })
 
   it('rejects an expired unseen operation before terminal creation', async () => {
@@ -392,7 +519,7 @@ describe('agent-session create operation ledger', () => {
       disposition: 'replayed',
       terminal: { handle: orphanHandle, ptyId: 'ssh-1:pty2:e:1', worktreeId: 'worktree-1' }
     })
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
     expect(createTerminal).toHaveBeenCalledOnce()
     expect(failure.message).toBe('execution_owner_unavailable')
   })
@@ -406,7 +533,7 @@ describe('agent-session create operation ledger', () => {
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
       failure.message
     )
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 

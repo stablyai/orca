@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ParcelWatcherProcess from './parcel-watcher-process'
 
@@ -36,11 +37,9 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   onSshFilesystemProviderRegistered: () => () => {}
 }))
 
-import {
-  closeAllWatchers,
-  closeLocalWatcherForWorktreePath,
-  registerFilesystemWatcherHandlers
-} from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { closeLocalWatcherForWorktreePath } from './filesystem-watcher-local-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import {
   createWatcherRemovalDeadline,
   drainBeforeWatcherRemoval,
@@ -84,12 +83,7 @@ describe('local filesystem watcher removal deadline', () => {
       // subscribe that ignores the abort signal exercises the deadline rather than the cancel path.
       // Once, so the wedge cannot leak into the next test.
       vi.mocked(subscribeViaWatcherProcess).mockImplementationOnce(() => new Promise(() => {}))
-      const sender = {
-        isDestroyed: () => false,
-        send: vi.fn(),
-        once: vi.fn(),
-        id: 1
-      }
+      const sender = createWatcherSender(1)
 
       const watchPromise = handlers['fs:watchWorktree'](
         { sender },
@@ -132,7 +126,7 @@ describe('local filesystem watcher removal deadline', () => {
         })
     )
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
 
@@ -160,12 +154,7 @@ describe('local filesystem watcher removal deadline', () => {
     try {
       vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
       vi.mocked(subscribeViaWatcherProcess).mockImplementationOnce(() => new Promise(() => {}))
-      const sender = {
-        isDestroyed: () => false,
-        send: vi.fn(),
-        once: vi.fn(),
-        id: 1
-      }
+      const sender = createWatcherSender(1)
 
       const watchPromise = handlers['fs:watchWorktree'](
         { sender },
@@ -209,7 +198,7 @@ describe('local filesystem watcher removal deadline', () => {
         })
     )
     vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
 
     vi.useFakeTimers()

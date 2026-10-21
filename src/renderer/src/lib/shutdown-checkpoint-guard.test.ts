@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
@@ -186,37 +184,5 @@ describe('createShutdownCheckpointGuard', () => {
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true)
 
     expect(persist).toHaveBeenCalledTimes(2)
-  })
-
-  it('runs the quit checkpoint inside the window-close scope and surfaces a vetoed quit (STA-5505/#15352)', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/use-terminal-editor-close-foundation.ts'),
-      'utf8'
-    )
-    const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(() => {')
-    const closeEnd = source.indexOf('window.api.ui.confirmWindowClose()', closeStart)
-    expect(closeStart).toBeGreaterThanOrEqual(0)
-    expect(closeEnd).toBeGreaterThan(closeStart)
-    const closeBlock = source.slice(closeStart, closeEnd)
-    // Why pin: without the scope, a persist failure blocks quit with no degradable
-    // tier; without the toast, the vetoed quit is silent and SIGKILL-only (#15352).
-    expect(closeBlock).toContain('runWithWindowCloseCheckpointScope(() =>')
-    expect(closeBlock).toContain('showShutdownCheckpointFailureToast()')
-  })
-
-  it('wires dirty editor unload vetoes to the paired-web checkpoint reset', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/use-terminal-window-lifecycle.ts'),
-      'utf8'
-    )
-    const dirtyGuardStart = source.indexOf(
-      'const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)'
-    )
-    const dirtyGuardEnd = source.indexOf("window.addEventListener('beforeunload', handler)")
-    expect(dirtyGuardStart).toBeGreaterThanOrEqual(0)
-    expect(dirtyGuardEnd).toBeGreaterThan(dirtyGuardStart)
-    expect(source.slice(dirtyGuardStart, dirtyGuardEnd)).toContain(
-      'preventUnloadAndScheduleShutdownCheckpointReset(event, window)'
-    )
   })
 })

@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { removeFileAtomicallyIfUnchanged, writeFileAtomically } from './fs-utils'
+import {
+  removeFileAtomicallyIfUnchanged,
+  writeFileAtomically,
+  writeFileAtomicallyIfUnchanged
+} from './fs-utils'
 import { CodexRuntimeHomeLaunch } from './runtime-home-service-launch'
 import type { CodexSystemDefaultSnapshot } from './runtime-home-service-types'
 
@@ -271,11 +275,23 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
     this.writeRuntimeAuth(snapshot.authJson, { owner: 'system-default' })
   }
 
-  protected writeSystemDefaultAuth(contents: string): void {
+  protected writeSystemDefaultAuth(
+    contents: string,
+    options?: { expectedContents: string | null }
+  ): boolean {
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
     mkdirSync(dirname(systemDefaultAuthPath), { recursive: true })
-    writeFileAtomically(systemDefaultAuthPath, contents, { mode: 0o600 })
+    if (!options) {
+      writeFileAtomically(systemDefaultAuthPath, contents, { mode: 0o600 })
+    } else if (
+      !writeFileAtomicallyIfUnchanged(systemDefaultAuthPath, options.expectedContents, contents, {
+        mode: 0o600
+      })
+    ) {
+      return false
+    }
     this.ensureOwnerOnlyMode(systemDefaultAuthPath)
+    return true
   }
 
   protected clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath: string): void {

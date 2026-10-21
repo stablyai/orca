@@ -33,8 +33,8 @@ type SkillPhaseStart = {
   phase: SkillOperationPhase
   platform?: 'darwin' | 'linux' | 'win32' | 'other'
   packageKind?: 'single' | 'bundle'
-  transport?: 'download-grant' | 'staged-upload' | 'local-file' | 'runtime-rpc' | 'ssh-relay'
-  destination?: 'startup' | 'transaction' | 'provider-placement' | 'remote-runtime' | 'global-ssh'
+  transport?: 'download-grant' | 'staged-upload' | 'local-file' | 'runtime-rpc'
+  destination?: 'startup' | 'transaction' | 'provider-placement' | 'remote-runtime'
   compressedBytes?: number
   skillCount?: number
   provider?: SkillInstallProviderId
@@ -159,7 +159,7 @@ export function recordSkillCapabilityAbsence(input: {
     | 'skills.install.bundle.v1'
     | 'skills.preview.bundle.v1'
     | 'skills.upload.v1'
-  destination: 'remote-runtime' | 'global-ssh'
+  destination: 'remote-runtime'
 }): void {
   const span = startSpan('skill.capability', {
     attributes: {

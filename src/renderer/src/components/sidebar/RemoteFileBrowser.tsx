@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
@@ -12,8 +13,9 @@ import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-
 import { translate } from '@/i18n/i18n'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
+// Both set: an SSH host the paired server owns, listed by that server.
 type RemoteFileBrowserProps = (
-  | { targetId: string; runtimeEnvironmentId?: never }
+  | { targetId: string; runtimeEnvironmentId?: string }
   | { runtimeEnvironmentId: string; targetId?: never }
 ) & {
   initialPath?: string
@@ -245,7 +247,7 @@ export function RemoteFileBrowser({
       {/* Filter input */}
       <div className="relative">
         <Search className="size-3.5 text-muted-foreground absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <input
+        <ImeInput
           ref={inputRef}
           type="text"
           autoFocus

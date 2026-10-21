@@ -264,6 +264,34 @@ describe('SkillsPage', () => {
     expect(renderedSkillNames()).not.toContain('local-only')
   })
 
+  it("does not show one runtime's skills when the next runtime scan fails", async () => {
+    const discover = vi.fn().mockResolvedValue(discoveryResult(['local-only']))
+    const call = vi.fn(async (args: { method: string; selector?: string }) => {
+      const compatibilityResponse = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (compatibilityResponse) {
+        return compatibilityResponse
+      }
+      throw new Error('remote unavailable')
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+    expect(renderedSkillNames()).toEqual(['local-only'])
+
+    await act(async () => {
+      setRuntimeOwner('env-1')
+    })
+    await flushMicrotasks()
+
+    expect(container?.textContent).toContain('Could not scan skills')
+    expect(renderedSkillNames()).toEqual([])
+  })
+
   it('keeps scanning rather than listing client skills before the owner is known', async () => {
     const discover = vi.fn().mockResolvedValue(discoveryResult(['local-only']))
     const call = vi.fn()
@@ -450,5 +478,71 @@ describe('SkillsPage', () => {
     await flushMicrotasks()
     expect(container?.textContent).toContain('0 selected')
     expect(renderedSkillNames()).toEqual(['beta'])
+  })
+  it('distinguishes a failed scan from empty skill folders', async () => {
+    const discover = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          "Error invoking remote method 'skills:discover': Error: EACCES: permission denied\nSSH host unavailable"
+        )
+      )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+
+    expect(container?.textContent).toContain('Could not scan skills')
+    expect(container?.textContent).toContain('EACCES: permission denied')
+    expect(container?.textContent).toContain('SSH host unavailable')
+    expect(container?.textContent).not.toContain('Error invoking remote method')
+    // Why: nothing was scanned, so "the scanned skill folders are empty" would be a claim we cannot make.
+    expect(container?.textContent).not.toContain('No skills found')
+  })
+
+  it('retries the failed scan from the error band and clears it on success', async () => {
+    const discover = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('EACCES: permission denied'))
+      .mockResolvedValueOnce(discoveryResult(['alpha']))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+    await act(async () => fireEvent.click(buttonNamed('Retry')))
+    await flushMicrotasks()
+
+    expect(container?.textContent).not.toContain('Could not scan skills')
+    expect(renderedSkillNames()).toEqual(['alpha'])
+  })
+
+  it('keeps a previously confirmed empty result visible when a refresh fails', async () => {
+    const discover = vi
+      .fn()
+      .mockResolvedValueOnce(discoveryResult([]))
+      .mockRejectedValueOnce(new Error('host unavailable'))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderPage()
+    await flushMicrotasks()
+    expect(container?.textContent).toContain('No skills found')
+
+    await act(async () => fireEvent.click(buttonNamed('Refresh')))
+    await flushMicrotasks()
+
+    expect(container?.textContent).toContain('Could not scan skills')
+    expect(container?.textContent).toContain('No skills found')
   })
 })

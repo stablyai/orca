@@ -144,12 +144,24 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('refuses a git operation whose worktree no row places, instead of using the focused server', async () => {
+    const store = createEditorStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    await expect(store.getState().pushBranch('wt-unknown', '/elsewhere')).rejects.toThrow(
+      'The workspace host is unresolved'
+    )
+
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('routes git operations through the explicit runtime owner instead of ambient focus', async () => {
     const store = createEditorStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
 
     await store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
-      runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+      runtimeTarget: { kind: 'local' }
     })
 
     expect(gitPushMock).toHaveBeenCalledWith({
@@ -376,35 +388,6 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('maps publish updates-were-rejected into a clean actionable toast', async () => {
-    const store = createEditorStore()
-    const publishError = new Error(
-      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
-    )
-    gitPushMock.mockRejectedValueOnce(publishError)
-
-    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
-      publishError.message
-    )
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Push rejected — remote has changes. Pull first, then try again.'
-    )
-    await flushAsyncRemoteRefresh()
-
-    expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitFetchMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined,
-      worktreeId: 'wt-1'
-    })
-    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
   it('maps raw publish wrapper errors into a cleaner actionable toast', async () => {
     const store = createEditorStore()
     const rawPublishError = new Error(
@@ -443,33 +426,6 @@ describe('createEditorSlice remote branch actions', () => {
     const pushError = new Error(
       'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
     )
-    gitPushMock.mockRejectedValueOnce(pushError)
-
-    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
-      pushError.message
-    )
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Push rejected — remote has changes. Pull first, then try again.'
-    )
-    await flushAsyncRemoteRefresh()
-
-    expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitFetchMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined,
-      worktreeId: 'wt-1'
-    })
-    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
-  it('maps non-fast-forward keyword push errors into a clean actionable toast', async () => {
-    const store = createEditorStore()
-    const pushError = new Error('Push rejected: remote has newer commits (non-fast-forward).')
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
@@ -716,7 +672,9 @@ describe('createEditorSlice remote branch actions', () => {
     await Promise.resolve()
     expect(store.getState().isRemoteOperationActive).toBe(true)
 
-    const pushB = store.getState().pushBranch('wt-2', '/b')
+    const pushB = store.getState().pushBranch('wt-2', '/b', false, undefined, undefined, {
+      runtimeTarget: { kind: 'local' }
+    })
     await Promise.resolve()
     expect(store.getState().isRemoteOperationActive).toBe(true)
 

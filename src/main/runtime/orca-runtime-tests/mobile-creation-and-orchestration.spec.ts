@@ -672,7 +672,7 @@ describe('OrcaRuntimeService', () => {
     )
     // The gate still refuses the frame on arrival; it reaches the client only via the
     // post-ready replay, so a static page does not leave the subscriber frameless.
-    expect(sendBinary).toHaveBeenCalledExactlyOnceWith(startupFrame)
+    expect(sendBinary).toHaveBeenCalledExactlyOnceWith(startupFrame, undefined)
 
     runtime.cleanupSubscription('browser-screencast:page-1:first')
     await task

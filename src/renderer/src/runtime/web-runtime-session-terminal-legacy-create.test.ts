@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createWebRuntimeSessionTerminal } from './web-runtime-session'
+import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -8,6 +8,7 @@ import {
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
 } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -27,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -39,25 +39,29 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     // The production caller invokes the returned settle receipt.
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -93,9 +97,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -130,6 +132,71 @@ describe('createWebRuntimeSessionTerminal', () => {
       'session.tabs.list'
     ])
   })
+
+  it.each([
+    {
+      agent: 'codex' as const,
+      predecessor: 'web-terminal-host-tab-1',
+      afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1'
+    },
+    {
+      agent: undefined,
+      predecessor: 'web-terminal-host-tab-1',
+      afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1'
+    },
+    { agent: undefined, predecessor: 'local-browser-tab', afterTabId: 'local-browser-tab' },
+    {
+      agent: undefined,
+      predecessor: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+      afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1'
+    }
+  ])(
+    'settles after $afterTabId for $agent creation without activating it',
+    async ({ agent, predecessor, afterTabId }) => {
+      const successor = 'web-terminal-host-tab-3'
+      const created = 'web-terminal-host-tab-2'
+      const reorderUnifiedTabs = vi.fn()
+      mocks.getState.mockReturnValue({
+        ...mocks.getState(),
+        unifiedTabsByWorktree: {
+          [WORKTREE_ID]: [predecessor, successor, created].map((id) => ({
+            id,
+            groupId: 'client-group'
+          }))
+        },
+        groupsByWorktree: {
+          [WORKTREE_ID]: [{ id: 'client-group', tabOrder: [predecessor, successor, created] }]
+        },
+        reorderUnifiedTabs,
+        moveUnifiedTabToGroup: mocks.moveUnifiedTabToGroup
+      })
+      const runtimeCall = vi.fn(async (request: { method: string }) => ({
+        id: request.method,
+        ok: true,
+        result:
+          request.method === 'session.tabs.createTerminal'
+            ? { tab: { id: 'host-tab-2::leaf-2' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
+            : makeSnapshot()
+      }))
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+      await expect(
+        createWebRuntimeSessionTerminal({
+          worktreeId: WORKTREE_ID,
+          afterTabId,
+          agent,
+          activate: false
+        })
+      ).resolves.toEqual({ status: 'created' })
+
+      expect(reorderUnifiedTabs).toHaveBeenCalledExactlyOnceWith(
+        'client-group',
+        [predecessor, created, successor],
+        { recordInteraction: false }
+      )
+      expect(mocks.moveUnifiedTabToGroup).not.toHaveBeenCalled()
+    }
+  )
 
   it('can create a terminal without selecting the target worktree', async () => {
     const setStateResults: unknown[] = []
@@ -166,13 +233,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         result: makeSnapshot()
       })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -213,9 +274,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       }
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -273,9 +332,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       }
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({
@@ -351,7 +408,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         result: { tab: { id: 'legacy-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 1 }
       }
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       createWebRuntimeSessionTerminal({

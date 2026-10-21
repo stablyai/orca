@@ -182,6 +182,7 @@ describe('getActiveChecksStatus caching', () => {
       {
         get(target, prop, receiver) {
           reads.add(prop)
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
           return Reflect.get(target, prop, receiver)
         },
         has(target, prop) {

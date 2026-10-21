@@ -122,30 +122,38 @@ export function flattenNativeChatSessionOptionRecord(
 
 export function applyNativeChatReportedSessionOptions(
   record: NativeChatSessionOptionRecord,
-  values: Record<string, SessionOptionValue>
+  values: Record<string, SessionOptionValue>,
+  /** Ids the provider reported back. Omitted means every value is a report, which
+   *  is what a surface that only ever learns values by reading them sends. */
+  confirmed?: readonly string[]
 ): boolean {
+  const sourceFor = (id: string): TrackedNativeChatSessionOption['source'] =>
+    confirmed === undefined || confirmed.includes(id) ? 'reported' : 'dispatched'
   const modelId = typeof values.model === 'string' ? values.model : null
   if (!modelId) {
     return false
   }
   const modelChanged = record.model?.value !== modelId
-  let changed = modelChanged || record.model?.source !== 'reported'
-  record.model = { value: modelId, source: 'reported' }
+  let changed = modelChanged || record.model?.source !== sourceFor('model')
+  record.model = { value: modelId, source: sourceFor('model') }
   const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
   for (const [id, value] of Object.entries(values)) {
     if (id === 'model') {
       continue
     }
     const current = modelValues[id]
-    if (current?.value !== value || current.source !== 'reported') {
+    if (current?.value !== value || current.source !== sourceFor(id)) {
       changed = true
     }
-    modelValues[id] = { value, source: 'reported' }
+    modelValues[id] = { value, source: sourceFor(id) }
   }
   record.valuesByModel[modelId] = modelValues
   return changed
 }
 
+/** Resolves a hook-reported model string to a catalog id: exact id, then label,
+ *  then the longest id the report contains. A catalog that seeds no models keeps
+ *  the report itself. Null when nothing matches. */
 export function matchNativeChatCatalogModelId(
   catalog: AgentSessionOptionCatalog,
   reported: string
@@ -153,6 +161,11 @@ export function matchNativeChatCatalogModelId(
   const normalized = reported.trim().toLowerCase()
   if (!normalized) {
     return null
+  }
+  // Why: a catalog with no seed (OMP) has nothing to match against, yet the hook's
+  // `provider/id` IS the selector the CLI accepts back — keep it as the tracked row.
+  if (catalog.models.length === 0) {
+    return reported.trim()
   }
   const exact = catalog.models.find((model) => model.id.toLowerCase() === normalized)
   if (exact) {
@@ -162,8 +175,14 @@ export function matchNativeChatCatalogModelId(
   if (byLabel) {
     return byLabel.id
   }
-  const containing = [...catalog.models]
-    .sort((left, right) => right.id.length - left.id.length)
-    .find((model) => normalized.includes(model.id.toLowerCase()))
-  return containing?.id ?? null
+  let containingId: string | null = null
+  for (const model of catalog.models) {
+    if (
+      (containingId === null || model.id.length > containingId.length) &&
+      normalized.includes(model.id.toLowerCase())
+    ) {
+      containingId = model.id
+    }
+  }
+  return containingId
 }

@@ -1,0 +1,30 @@
+{
+  "freebuff-lifecycle": [
+    "none/false/2/31:22f0e3d90d75ceaf6fd95853c0b772074e441596caadcea8d133b64bad5db0f6",
+    "none/true/2/31:22f0e3d90d75ceaf6fd95853c0b772074e441596caadcea8d133b64bad5db0f6",
+    "shrink/false/1/29:b5d123b659e7cdd5a3d8c6031529a032d60311b1073e46717d2cbed8d46b6ba4",
+    "shrink/false/2/32:c3408d293abaa4e25303a4d1acf1ea2f096a35ff685e548f98aec777355d10a5",
+    "shrink/false/2/34:6c1dd1d115eb1c2af110cfa30ce84649b206ff48c76bcbcdfa31877d1b918140",
+    "shrink/true/1/29:b5d123b659e7cdd5a3d8c6031529a032d60311b1073e46717d2cbed8d46b6ba4",
+    "shrink/true/2/32:c3408d293abaa4e25303a4d1acf1ea2f096a35ff685e548f98aec777355d10a5",
+    "shrink/true/2/34:6c1dd1d115eb1c2af110cfa30ce84649b206ff48c76bcbcdfa31877d1b918140",
+    "shrink-grow/false/2/33:407f38549bb5be0a2545ba448d21940a201f1cca92e8117e42f3b30907d7d486",
+    "shrink-grow/true/2/33:407f38549bb5be0a2545ba448d21940a201f1cca92e8117e42f3b30907d7d486",
+    "jitter/false/2/34:adbbc27204f00658207075d10787b1ae8d929226d70a5321e029635193dc432b",
+    "jitter/true/2/34:adbbc27204f00658207075d10787b1ae8d929226d70a5321e029635193dc432b"
+  ],
+  "freebuff-login": [
+    "shrink-grow/false/1/21:92981723de5526414b99435b93b94ec87341b90acc7fea71b492e3ea6ae0d445",
+    "shrink-grow/false/1/23:92981723de5526414b99435b93b94ec87341b90acc7fea71b492e3ea6ae0d445",
+    "shrink-grow/false/2/33:f8c02c8afab034cc4fdcaa06b97764a32f6432d0c6d5f47b5f675fe6fd4cf67c",
+    "shrink-grow/true/1/21:44734d78cecaf5ae6203125b92dde9b61816b626efd6b643f78ce3f41c8b1b2d",
+    "shrink-grow/true/1/23:44734d78cecaf5ae6203125b92dde9b61816b626efd6b643f78ce3f41c8b1b2d",
+    "shrink-grow/true/2/33:f8c02c8afab034cc4fdcaa06b97764a32f6432d0c6d5f47b5f675fe6fd4cf67c",
+    "jitter/false/1/11:073b9a35e7a854d650d63f00dcc126f89656fab0f39951de83ff50fd564faab9",
+    "jitter/false/1/21:a046fe007dfe1161435083c3ed3448b4e74fa2203d692db99353b8df3c45f9a1",
+    "jitter/true/1/11:073b9a35e7a854d650d63f00dcc126f89656fab0f39951de83ff50fd564faab9",
+    "jitter/true/1/21:719241163ae1c3629c6a6e0739bb66324f620b8e285d176853d06d0ae26a6c00"
+  ],
+  "freebuff-ready": [],
+  "freebuff-trust": []
+}

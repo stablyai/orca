@@ -11,10 +11,12 @@
 import type { ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
-import type {
-  TerminalViewAttributes,
-  TerminalViewRgb
+import {
+  terminalViewColorQueryReplyColors,
+  type TerminalViewAttributes,
+  type TerminalViewRgb
 } from '../../../../shared/terminal-view-attributes'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 
 type ParsedCssColor = {
   rgb: TerminalViewRgb
@@ -212,6 +214,22 @@ export function composeTerminalViewAttributes(
 }
 
 let lastPublishedSnapshot: string | null = null
+let lastPublishedColors: TerminalOscColorQueryReplyColors | null = null
+type PublishedColorsListener = (colors: TerminalOscColorQueryReplyColors) => void
+const publishedColorsListeners = new Set<PublishedColorsListener>()
+
+/** Hears the fg/bg of every published change, starting with the current one if any. */
+export function subscribeToPublishedTerminalViewColors(
+  listener: PublishedColorsListener
+): () => void {
+  publishedColorsListeners.add(listener)
+  if (lastPublishedColors) {
+    listener(lastPublishedColors)
+  }
+  return () => {
+    publishedColorsListeners.delete(listener)
+  }
+}
 
 function sendViaPreload(attributes: TerminalViewAttributes): boolean {
   // Guarded: unit tests and the web client run without the preload bridge
@@ -242,10 +260,17 @@ export function publishTerminalViewAttributes(
     return false
   }
   lastPublishedSnapshot = serialized
+  const colors = terminalViewColorQueryReplyColors(attributes)
+  lastPublishedColors = colors
+  for (const listener of publishedColorsListeners) {
+    listener(colors)
+  }
   return true
 }
 
 /** Test seam: reset the dedupe state between tests. */
 export function _resetTerminalViewAttributesPublisherForTest(): void {
   lastPublishedSnapshot = null
+  lastPublishedColors = null
+  publishedColorsListeners.clear()
 }

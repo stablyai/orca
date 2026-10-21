@@ -4,14 +4,18 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { getMixedHostContextLabels as getSharedMixedHostContextLabels } from '../../../src/shared/worktree/host-context-labels'
+import {
+  getHostContextLabel,
+  getMixedHostContextLabels as getSharedMixedHostContextLabels
+} from '../../../src/shared/worktree/host-context-labels'
 import { composeWorktreeHostIdentity } from '../../../src/shared/worktree/host-qualified-identity'
 export {
   buildHostLabelById,
   getHostContextLabel
 } from '../../../src/shared/worktree/host-context-labels'
-import type { RepoSummary } from './host-worktree-rpc-types'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import type { Worktree } from './workspace-list-types'
+import { getHostHealthBadgeLabel } from './worktree-host-health'
 
 export type HostLabelSources = {
   /** Host id per repo id from repo.list; rows from hosts that predate `hostId` fall back to it. */
@@ -20,10 +24,12 @@ export type HostLabelSources = {
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
   /** The paired host's own platform; the phone's platform must never name the desktop. */
   hostPlatform: NodeJS.Platform | null
+  /** Health per host the desktop reports one for; an absent host keeps the bare label. */
+  hostHealthById: ReadonlyMap<ExecutionHostId, ExecutionHostHealth>
 }
 
 export function buildRepoHostIdByRepoId(
-  repos: readonly Pick<RepoSummary, 'id' | 'connectionId' | 'executionHostId'>[]
+  repos: readonly { id: string; connectionId?: string | null; executionHostId?: string | null }[]
 ): Map<string, ExecutionHostId> {
   return new Map(repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)]))
 }
@@ -73,20 +79,27 @@ export function applyWorktreeHostContextLabels(
   sources: HostLabelSources
 ): Worktree[] {
   const labels = getWorktreeHostContextLabels(worktrees, sources)
-  if (!labels) {
+  // Why: the desktop card shows SSH status on any host count, so an unhealthy host is named even alone.
+  const anyUnhealthy = [...sources.hostHealthById.values()].some(getHostHealthBadgeLabel)
+  if (!labels && !anyUnhealthy) {
     return worktrees
   }
   return worktrees.map((worktree) => {
-    const hostContextLabel = labels.get(
-      getResolvedWorktreeRowIdentity(worktree, sources.repoHostIdByRepoId)
+    const hostContextHostId = resolveWorktreeHostId(worktree, sources.repoHostIdByRepoId)
+    const hostContextHealthLabel = getHostHealthBadgeLabel(
+      sources.hostHealthById.get(hostContextHostId)
     )
+    const hostContextLabel = labels
+      ? labels.get(getResolvedWorktreeRowIdentity(worktree, sources.repoHostIdByRepoId))
+      : hostContextHealthLabel && getHostContextLabel(hostContextHostId, sources)
     if (!hostContextLabel) {
       return worktree
     }
     return {
       ...worktree,
       hostContextLabel,
-      hostContextHostId: resolveWorktreeHostId(worktree, sources.repoHostIdByRepoId)
+      hostContextHostId,
+      ...(hostContextHealthLabel ? { hostContextHealthLabel } : {})
     }
   })
 }

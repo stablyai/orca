@@ -1,5 +1,6 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
+import { migrateLegacyDaemonScope } from './daemon-cgroup-scope'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { DaemonEndpointOwnershipError } from './daemon-endpoint-adoption'
 import { checkDaemonHealth, getMacDaemonSystemResolverHealth } from './daemon-health'
@@ -10,10 +11,12 @@ import {
 } from './daemon-launch-paths'
 import { trackDaemonReplaced } from './daemon-lifecycle-event'
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
+import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
-import type { DaemonProcessHandle } from './daemon-spawner'
+import { getDaemonPidPath, type DaemonProcessHandle } from './daemon-spawner'
 import { killStaleDaemon } from './daemon-stale-kill'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
+import { inspectDaemonHostImage } from './daemon-host-image'
 import { PROTOCOL_VERSION } from './types'
 
 // Why a count on top of the wall clock: DAEMON_RECOVERY_BUDGET_MS ends the grace, but a socket
@@ -33,6 +36,7 @@ type ReplacementPreflightOptions = {
   attributedReason: DaemonReplaceReason | null
   releaseAdoptionClient: () => void
   preserveDaemon: PreserveDaemon
+  launchNonce: string
 }
 
 export async function prepareDaemonReplacement(
@@ -46,7 +50,8 @@ export async function prepareDaemonReplacement(
     recoveryDeadlineMs,
     attributedReason,
     releaseAdoptionClient,
-    preserveDaemon
+    preserveDaemon,
+    launchNonce
   } = options
   let pendingReplacement:
     | {
@@ -57,8 +62,37 @@ export async function prepareDaemonReplacement(
   let confirmedReplacement = false
   const health = await checkDaemonHealth(socketPath, tokenPath)
   if (health === 'healthy') {
-    const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
-    if (resolverHealth === 'unhealthy') {
+    const pidRecord = readDaemonPidRecord(getDaemonPidPath(runtimeDir))
+    if (pidRecord && migrateLegacyDaemonScope(pidRecord.pid, launchNonce)) {
+      console.warn(
+        `[daemon] Migrated adopted daemon PID ${pidRecord.pid} out of legacy app scope into a durable scope`
+      )
+    }
+    // Why before identity: a daemon from a previous mount always reads as a different app path,
+    // and that branch would keep it as a normal target for fresh terminals.
+    const hostImage = inspectDaemonHostImage(pidRecord)
+    const resolverHealth =
+      hostImage.verdict === 'severed'
+        ? null
+        : await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+    if (hostImage.verdict === 'severed') {
+      const liveSessionCount = await getAliveDaemonSessionCount(
+        socketPath,
+        tokenPath,
+        recoveryDeadlineMs
+      )
+      if (liveSessionCount !== 0) {
+        console.warn(
+          liveSessionCount === null
+            ? '[daemon] Keeping daemon whose AppImage files are gone because live session state could not be verified'
+            : `[daemon] Keeping daemon whose AppImage files are gone because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+        )
+        return preserveDaemon('degraded-new-pty-fallback')
+      }
+      console.warn('[daemon] Replacing idle daemon whose AppImage files are gone')
+      pendingReplacement = { reason: 'severed_host_image', liveSessionCount }
+      confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)).cleaned
+    } else if (resolverHealth === 'unhealthy') {
       const liveSessionCount = await getAliveDaemonSessionCount(
         socketPath,
         tokenPath,

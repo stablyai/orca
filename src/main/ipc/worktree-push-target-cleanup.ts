@@ -20,7 +20,7 @@ export type GitRemoteExec = (
 // `getAllWorktreeMeta`) keep compiling; callers that want materialize-time
 // provenance persistence (worktree-remote.ts) pass a store that has it.
 export type WorktreePushTargetStore = Pick<Store, 'getAllWorktreeMeta'> &
-  Partial<Pick<Store, 'setWorktreeMeta'>>
+  Partial<Pick<Store, 'setWorktreeMeta' | 'getRepos' | 'getAllWorktreeMetaForHost'>>
 
 export function sameGitHubRemoteUrl(left: string, right: string): boolean {
   if (left === right) {

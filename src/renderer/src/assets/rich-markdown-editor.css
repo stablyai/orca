@@ -819,6 +819,13 @@
   overflow-wrap: break-word;
 }
 
+/* Why: --border is ~7% white in dark mode, so table grid lines are nearly invisible;
+   mix in foreground (~15% total) while keeping the border token role. */
+.dark .rich-markdown-editor th,
+.dark .rich-markdown-editor td {
+  border-color: color-mix(in srgb, var(--foreground) 8%, var(--border));
+}
+
 .rich-markdown-editor th {
   font-weight: 600;
   background: color-mix(in srgb, var(--foreground) 4%, transparent);

@@ -4,7 +4,6 @@ import {
   queueBrowserFocusRequest
 } from '@/components/browser-pane/host-guest/browser-focus'
 import { captureCmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
-import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import {
   CREATE_WORKTREE_ITEM_ID,
@@ -12,6 +11,7 @@ import {
 } from '@/lib/worktree-palette-create-action'
 import { useAppStore } from '@/store'
 import { CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID } from './worktree-jump-palette-model'
+import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import type { WorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
@@ -23,6 +23,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 
 type WorktreeJumpPaletteSelectionLifecycleInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteLocalState &
+  Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteProjectTargets &
   WorktreeJumpPaletteQuickActions &
@@ -38,6 +39,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   simulatorTabEntries,
   workspaceTabEntries,
   middleItems,
+  taskItems,
   visible,
   wasVisibleRef,
   recordFeatureInteraction,
@@ -56,7 +58,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   latestQueryRef,
   setQuery,
   setSelectedItemId,
-  setRawFilter,
+  setExpandedSectionCaps,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -81,10 +83,8 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     if (visible && !wasVisibleRef.current) {
       recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
-      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
-        useAppStore.getState(),
-        activeWorktreeId
-      )
+      const appState = useAppStore.getState()
+      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(appState, activeWorktreeId)
       previousWorktreeIdRef.current = activeWorktreeId
       previousActiveTabTypeRef.current = activeTabType
       previousBrowserPageIdRef.current =
@@ -107,11 +107,12 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       latestQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
+      setExpandedSectionCaps({})
       selectionMovedByUserRef.current = false
-      setRawFilter(EMPTY_PALETTE_FILTER)
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {
+      setExpandedSectionCaps({})
       if (preserveCreateLookupOnCloseRef.current) {
         preserveCreateLookupOnCloseRef.current = false
       } else {
@@ -130,13 +131,18 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     recordFeatureInteraction,
     visible
   ])
-  const commandSelectedItemId = getNextWorktreePaletteSelection({
-    currentSelectedItemId: selectedItemId,
-    queryChanged: false,
-    selectableItemIds: selectionItemIds,
-    showCreateAction,
-    autoSelectCreateAction: taskSourceUrl !== null
-  })
+  const commandSelectedItemId =
+    selectedItemId === CREATE_WORKTREE_ITEM_ID &&
+    !selectionMovedByUserRef.current &&
+    taskItems.length
+      ? (taskItems[0]?.id ?? selectedItemId)
+      : getNextWorktreePaletteSelection({
+          currentSelectedItemId: selectedItemId,
+          queryChanged: false,
+          selectableItemIds: selectionItemIds,
+          showCreateAction,
+          autoSelectCreateAction: taskSourceUrl !== null
+        })
   const handleCommandSelectionChange = useCallback(
     (nextItemId: string) => {
       setSelectedItemId(nextItemId)
@@ -171,6 +177,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       latestQueryRef.current = nextQuery
       setQuery(nextQuery)
       setSelectedItemId('')
+      setExpandedSectionCaps({})
       listRef.current?.scrollTo(0, 0)
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.

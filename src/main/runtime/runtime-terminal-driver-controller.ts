@@ -37,6 +37,10 @@ export class RuntimeTerminalDriverController {
   }
 
   set(ptyId: string, next: DriverState): void {
+    // A desktop reclaim or disconnect supersedes unfinished mobile input.
+    if (next.kind !== 'mobile') {
+      this.inputFloorClaims.delete(ptyId)
+    }
     const prev = this.get(ptyId)
     if (prev.kind === next.kind) {
       if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
@@ -59,6 +63,7 @@ export class RuntimeTerminalDriverController {
   }
 
   clear(ptyId: string): boolean {
+    this.inputFloorClaims.delete(ptyId)
     if (!this.current.delete(ptyId)) {
       return false
     }
@@ -104,7 +109,7 @@ export class RuntimeTerminalDriverController {
         }
         settled = true
         state.pending.delete(token)
-        if (generation < state.committedGeneration) {
+        if (this.inputFloorClaims.get(ptyId) !== state || generation < state.committedGeneration) {
           this.deleteSettledClaim(ptyId, state)
           return
         }

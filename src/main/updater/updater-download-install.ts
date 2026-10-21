@@ -1,9 +1,15 @@
-import { beginMacUpdateDownload, deferMacQuitUntilInstallerReady } from '../updater-mac-install'
+import {
+  beginMacUpdateDownload,
+  deferMacQuitUntilInstallerReady,
+  isMacInstallRequested,
+  setMacInstallPreflightInProgress
+} from '../updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
 import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
+import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
 
 /** Coordinates renderer-facing download/install actions and their duplicate guards. */
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
@@ -12,7 +18,8 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
       this.pendingQuitAndInstallTimer ||
-      this.quitAndInstallInProgress
+      this.quitAndInstallInProgress ||
+      isMacInstallRequested()
     ) {
       return
     }
@@ -20,7 +27,11 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (this.deferHeadlessServeInstall('install', this.getPendingInstallVersion())) {
       return
     }
+    // A queued check must not repoint the feed while native staging or installation is pending.
+    this.finishActiveUpdateCheckAttempt()
+    this.clearBackgroundCheckLaunchPending()
     if (
+      !this.isMacStagingDeferredToInstall() &&
       deferMacQuitUntilInstallerReady(
         this.currentStatus,
         this.hasInstallableDownloadedVersion(),
@@ -31,6 +42,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
 
+    if (process.platform === 'darwin') {
+      setMacInstallPreflightInProgress(true)
+    }
     // Why: defer the quit a tick so the renderer can flush dismissals/state before windows start closing.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
       void this.performQuitAndInstall()
@@ -41,6 +55,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress ||
+      isMacInstallRequested() ||
       this.downloadInFlight
     ) {
       return
@@ -84,17 +101,28 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     beginMacUpdateDownload()
     // Why: setup can take seconds before progress emits; surface acceptance now so the action never looks inert.
     this.sendStatus({ state: 'downloading', percent: 0, version })
-    this.getAutoUpdater()
-      .downloadUpdate()
-      .catch((err) => {
-        this.downloadInFlight = false
-        const message = String(err?.message ?? err)
-        if (localBuildDownload) {
-          this.sendLocalBuildErrorAndRestore(message)
-        } else {
-          this.sendErrorStatus(message)
-        }
-      })
+    const startDownload = (): void => {
+      this.getAutoUpdater()
+        .downloadUpdate()
+        .catch((err) => {
+          this.downloadInFlight = false
+          const message = String(err?.message ?? err)
+          if (localBuildDownload) {
+            this.sendLocalBuildErrorAndRestore(message)
+          } else {
+            this.sendErrorStatus(message)
+          }
+        })
+    }
+    // Why before the download: Squirrel stages as soon as it ends, unless staging waits for install.
+    const preparingStaging = this.isMacStagingDeferredToInstall()
+      ? null
+      : prepareThisProcessShipItStaging()
+    if (preparingStaging) {
+      void preparingStaging.then(startDownload)
+    } else {
+      startDownload()
+    }
   }
 
   protected isQuittingForUpdate(): boolean {

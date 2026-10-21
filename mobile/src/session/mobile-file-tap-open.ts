@@ -1,14 +1,14 @@
 import type {
-  RuntimeFileOpenResult,
   RuntimeNativeChatFileContext,
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
+import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 export type FileTapSessionTab = {
   id: string
@@ -16,7 +16,7 @@ export type FileTapSessionTab = {
 }
 
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
-  client: Pick<RpcClient, 'sendRequest'>
+  client: RpcOperationSender
   hostId: string
   worktreeId: string
   worktreeName?: string
@@ -74,8 +74,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
   const worktree = `id:${options.worktreeId}`
-  const response = await options.client.sendRequest(
-    'files.resolveTerminalPath',
+  const response = await fileTapPathResolve.request(
+    options.client,
     {
       worktree,
       pathText: options.pathText,
@@ -89,11 +89,13 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     },
     { timeoutMs: 10_000 }
   )
-  if (!response.ok) {
+  const accepted = fileTapPathResolve.interpret(response)
+  if (!accepted.accepted) {
     reportOpenFailure(options)
     return
   }
-  const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  const resolved = accepted.value as RuntimeTerminalPathResolution
   if (!resolved.exists || resolved.isDirectory) {
     reportOpenFailure(options)
     return
@@ -145,11 +147,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     return
   }
   options.triggerOpenFeedback()
-  if (
-    resolvedWorktreeId !== options.worktreeId ||
-    options.line !== null ||
-    options.column !== null
-  ) {
+  const pushWorktreePreview = (): void =>
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
         hostId: options.hostId,
@@ -162,6 +160,12 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
+  if (
+    resolvedWorktreeId !== options.worktreeId ||
+    options.line !== null ||
+    options.column !== null
+  ) {
+    pushWorktreePreview()
     return
   }
   if (
@@ -172,17 +176,26 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
-  const openResponse = await options.client.sendRequest(
-    'files.open',
+  const openResponse = await fileTapOpenRun.request(
+    options.client,
     { worktree: resolvedWorktree, relativePath: openedPath },
     { timeoutMs: 15_000 }
   )
-  if (!openResponse.ok) {
+  // Why: a host with no desktop window opens no editor tabs; the preview route reads the file through files.read.
+  if (isRendererUnavailableReply(openResponse)) {
+    // Not a failure: the user moved off the source tab during the call.
+    if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
+      return
+    }
+    pushWorktreePreview()
+    return
+  }
+  const opened = fileTapOpenRun.interpret(openResponse)
+  if (!opened.accepted) {
     reportOpenFailure(options)
     return
   }
-  const openResult = (openResponse as RpcSuccess).result as RuntimeFileOpenResult
-  if (!openResult.opened) {
+  if (!opened.value.opened) {
     reportOpenFailure(options)
     return
   }

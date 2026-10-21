@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:10:17.495Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy 1.2.14, macOS, Google account, AGY_CLI_HIDE_ACCOUNT_INFO=1, one turn, recording stopped while the turn was still running",
+  "exitCode": 0
+}

@@ -1,8 +1,9 @@
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-types'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
-import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
-import type { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   runtimeFailureCode,
   TERMINAL_RUNTIME_FAILURE_CODES
@@ -24,7 +25,7 @@ export type TerminalAgentSendReadinessResult = {
 }
 
 export async function getTerminalAgentSendReadiness(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
   options: { allowLegacyFallback: boolean }
 ): Promise<TerminalAgentSendReadinessResult> {
@@ -65,7 +66,7 @@ export async function getTerminalAgentSendReadiness(
 }
 
 async function getLegacyTerminalAgentSendStatus(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string
 ): Promise<TerminalAgentSendReadinessResult> {
   try {

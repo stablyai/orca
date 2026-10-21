@@ -17,10 +17,12 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
   const directory = dirname(writePath)
   mkdirSync(directory, { recursive: true })
   const temporaryPath = join(directory, `.${Date.now()}-${randomUUID()}.tmp`)
-  const existingMode = existsSync(writePath) ? statSync(writePath).mode : undefined
   let renamed = false
   try {
-    writeFileSync(temporaryPath, contents, { encoding: 'utf-8', mode: existingMode })
+    writeFileSync(temporaryPath, contents, {
+      encoding: 'utf-8',
+      mode: resolveCodexConfigTomlFileMode(writePath)
+    })
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
@@ -34,6 +36,15 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
         // Why: cleanup failure must not mask the write failure.
       }
     }
+  }
+}
+
+/** Codex config.toml can carry `mcp_servers` env tokens: keep an existing file's mode, else owner-only. */
+export function resolveCodexConfigTomlFileMode(configPath: string): number {
+  try {
+    return statSync(configPath).mode & 0o777
+  } catch {
+    return 0o600
   }
 }
 

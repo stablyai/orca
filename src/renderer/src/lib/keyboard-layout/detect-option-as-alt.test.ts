@@ -28,12 +28,6 @@ describe('detectOptionAsAltFromLayoutMap', () => {
     expect(detectOptionAsAltFromLayoutMap(mapOf(US))).toBe('us')
   })
 
-  it('classifies US International as us (same fingerprint, dead keys only)', () => {
-    // US-International keeps all unshifted ASCII letters and punctuation.
-    // Only Option-layer composition differs — invisible to getLayoutMap().
-    expect(detectOptionAsAltFromLayoutMap(mapOf(US))).toBe('us')
-  })
-
   it('classifies UK as non-us (Backquote → §)', () => {
     expect(detectOptionAsAltFromLayoutMap(mapOf({ ...US, Backquote: '§' }))).toBe('non-us')
   })

@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  scrapeScrollbackToMessages,
-  scrapeNativeChatSession,
-  stripScrollbackAnsi
-} from './native-chat-scrape-fallback'
+import { scrapeScrollbackToMessages, stripScrollbackAnsi } from './native-chat-scrape-fallback'
 
 const ESC = String.fromCharCode(27)
 
@@ -69,26 +65,5 @@ describe('stripScrollbackAnsi', () => {
   it('removes escape sequences and normalizes carriage returns', () => {
     const raw = `${ESC}[31mred\r\nnext`
     expect(stripScrollbackAnsi(raw)).toBe('red\nnext')
-  })
-})
-
-describe('scrapeNativeChatSession', () => {
-  it('builds a ready, approximate session from non-empty scrollback', () => {
-    const { session, isApproximate } = scrapeNativeChatSession('$ ls\n\noutput here', 'claude')
-
-    expect(isApproximate).toBe(true)
-    expect(session.status).toBe('ready')
-    expect(session.sessionId).toBeNull()
-    expect(session.agent).toBe('claude')
-    expect(session.messages.length).toBeGreaterThan(0)
-    expect(session.messages.every((message) => message.source === 'scrape')).toBe(true)
-  })
-
-  it('builds an empty session from blank scrollback', () => {
-    const { session, isApproximate } = scrapeNativeChatSession('   \n  ', 'claude')
-
-    expect(isApproximate).toBe(true)
-    expect(session.status).toBe('empty')
-    expect(session.messages).toEqual([])
   })
 })

@@ -194,7 +194,7 @@ describe('browser.tabCreate caller navigation', () => {
   beforeAll(async () => {
     // Why: constructing the browser commands is what pulls the Chromium cluster in, so production
     // installs this at the Electron entry and a Node host leaves the RPCs rejecting.
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     return () => setRuntimeBrowserCommandsFactory(null)
   })

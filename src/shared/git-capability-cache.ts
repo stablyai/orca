@@ -10,6 +10,7 @@ export type GitCapability =
   | 'merge-tree-merge-base'
   | 'merge-tree-write-tree'
   | 'rev-parse-path-format'
+  | 'worktree-add-lock-reason'
   | 'worktree-list-z'
 
 export class GitCapabilityCache extends CapabilityProbeCache<GitCapability> {

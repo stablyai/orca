@@ -68,8 +68,10 @@ export function buildBrowserPage(
     worktreeId,
     url: normalizedUrl,
     title: normalizeBrowserTitle(title, normalizedUrl, docLocation),
-    // Why: blank pages mount an inert guest (no real navigation); marking them loading would flash the loading affordance.
-    loading: normalizedUrl !== 'about:blank' && normalizedUrl !== ORCA_BROWSER_BLANK_URL,
+    // Why cold: only a live guest may report loading. A restored page owns no guest until first
+    // shown; a background-opened local page's guest starts under its mount admission and reports
+    // its own load.
+    loading: false,
     faviconUrl: null,
     canGoBack: false,
     canGoForward: false,

@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  getCustomCodexHomeOverrideForLaunch,
   hasCustomCodexHomeOverride,
-  hasCustomCodexHomeOverrideForLaunch,
-  shellStartupCodexHomeOverrideMatches
+  hasCustomCodexHomeOverrideForLaunch
 } from './codex-real-home-path'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 
@@ -46,13 +44,10 @@ describe('hasCustomCodexHomeOverride', () => {
     ).toBe(true)
   })
 
-  it('captures explicit environment provenance for restart comparison', () => {
-    const codexHome = join(process.cwd(), 'custom-codex-home')
-
-    expect(getCustomCodexHomeOverrideForLaunch({ CODEX_HOME: codexHome })).toEqual({
-      source: 'environment',
-      context: { codexHome }
-    })
+  it('detects an explicit launch env CODEX_HOME', () => {
+    expect(
+      hasCustomCodexHomeOverrideForLaunch({ CODEX_HOME: join(process.cwd(), 'custom-codex-home') })
+    ).toBe(true)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -62,26 +57,7 @@ describe('hasCustomCodexHomeOverride', () => {
       temporaryHomes.push(paneHome)
       writeFileSync(join(paneHome, '.zshrc'), 'export CODEX_HOME="$HOME/custom-codex-home"\n')
 
-      // Why cleared: the context records XDG_CONFIG_HOME, so a developer machine
-      // that sets one would otherwise change the recorded shape.
-      delete process.env.XDG_CONFIG_HOME
       expect(hasCustomCodexHomeOverrideForLaunch({ HOME: paneHome, SHELL: '/bin/zsh' })).toBe(true)
-      const override = getCustomCodexHomeOverrideForLaunch({
-        HOME: paneHome,
-        SHELL: '/bin/zsh'
-      })
-      expect(override).toEqual({
-        source: 'shell-startup',
-        context: {
-          home: paneHome,
-          shell: '/bin/zsh',
-          codexHome: join(paneHome, 'custom-codex-home')
-        }
-      })
-      expect(
-        override?.source === 'shell-startup' &&
-          shellStartupCodexHomeOverrideMatches(override.context)
-      ).toBe(true)
     }
   )
 
@@ -99,12 +75,6 @@ describe('hasCustomCodexHomeOverride', () => {
         join(configHome, 'fish', 'config.fish'),
         'set -gx CODEX_HOME "$HOME/custom-codex-home"\n'
       )
-      // The decoy fish reads only if XDG_CONFIG_HOME is ignored.
-      mkdirSync(join(paneHome, '.config', 'fish'), { recursive: true })
-      writeFileSync(
-        join(paneHome, '.config', 'fish', 'config.fish'),
-        'set -gx CODEX_HOME /wrong-default-config-home\n'
-      )
       delete process.env.XDG_CONFIG_HOME
 
       const launchEnv = {
@@ -112,22 +82,7 @@ describe('hasCustomCodexHomeOverride', () => {
         SHELL: '/opt/homebrew/bin/fish',
         XDG_CONFIG_HOME: configHome
       }
-      const override = getCustomCodexHomeOverrideForLaunch(launchEnv)
-
-      expect(override).toEqual({
-        source: 'shell-startup',
-        context: {
-          home: paneHome,
-          shell: '/opt/homebrew/bin/fish',
-          configHome,
-          codexHome: join(paneHome, 'custom-codex-home')
-        }
-      })
-      // And the recorded configHome is what a later re-check resolves against.
-      expect(
-        override?.source === 'shell-startup' &&
-          shellStartupCodexHomeOverrideMatches(override.context)
-      ).toBe(true)
+      expect(hasCustomCodexHomeOverrideForLaunch(launchEnv)).toBe(true)
     }
   )
 })

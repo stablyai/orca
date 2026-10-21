@@ -24,7 +24,6 @@ import {
   formatCheckFailure,
   normalizePnpmDiff,
   pnpmDiffEnvironment,
-  selectPatchEntries,
   sourceHunks,
   splitPatchEntries
 } from './xterm-patch-text.mjs'
@@ -98,26 +97,6 @@ const PATCHED = {
 }
 
 describe('pnpm diff format', () => {
-  it('keeps the exact git flags pnpm uses, so patches survive `pnpm patch-commit`', () => {
-    expect(PNPM_DIFF_FLAGS).toEqual([
-      '-c',
-      'core.safecrlf=false',
-      '-c',
-      'core.quotePath=false',
-      'diff',
-      '--src-prefix=a/',
-      '--dst-prefix=b/',
-      '--ignore-cr-at-eol',
-      '--irreversible-delete',
-      '--full-index',
-      '--no-index',
-      '--text',
-      '--no-ext-diff',
-      '--no-color',
-      '--'
-    ])
-  })
-
   it('matches pnpm git config isolation', () => {
     const environment = pnpmDiffEnvironment({ PATH: '/usr/bin', HOME: '/Users/someone' })
     expect(environment).toMatchObject({
@@ -428,7 +407,7 @@ describe('lockfile coupling', () => {
     // A bump renames the key, so --write has nothing to rewrite until pnpm install
     // creates it. Aborting there would strand the run before the later packages.
     expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.287')).toBe(true)
-    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.303')).toBe(false)
+    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.288')).toBe(false)
   })
 })
 
@@ -456,22 +435,6 @@ describe('check-mode reporting', () => {
 // These run without network or a build, so ordinary `pnpm test` catches the two
 // desyncs that would otherwise only surface in the heavy xterm_patch_sync job.
 describe('committed xterm patch artifacts', () => {
-  it('carries the font-weight probe into every WebGL runtime copy', async () => {
-    const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
-    const webgl = manifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
-    const patch = await readFile(path.join(REPO_ROOT, webgl.patch), 'utf8')
-    // The ESM and CJS bundles mangle locals differently, so anchor on the global the
-    // renderer diagnostics read; a copy missing it reports a font mismatch as a repaint bug.
-    for (const file of ['src/TextureAtlas.ts', 'lib/addon-webgl.js', 'lib/addon-webgl.mjs']) {
-      const stanza = selectPatchEntries(patch, (candidate) => candidate === file)
-      expect(stanza, file).not.toBe('')
-      expect(stanza, file).toContain('__orcaAtlasFontProbe')
-    }
-    // The probe must compare the rasterized weight against the requested one; comparing
-    // against a literal '400' would call every non-default weight a mismatch.
-    expect(sourceHunks(patch)).toContain('actual === desired')
-  })
-
   it('records the lockfile hash pnpm derives from the patch file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     const lockfile = await readFile(path.join(REPO_ROOT, 'pnpm-lock.yaml'), 'utf8')

@@ -86,6 +86,20 @@ describe('runtime-host persisted metadata retirement', () => {
     expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
   })
 
+  // Why: a host that does not answer is lost contact, never evidence a checkout is gone.
+  it('retires nothing when the runtime host does not answer', async () => {
+    const store = seedClientWithBothRows()
+    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime host unreachable'))
+
+    await store
+      .getState()
+      .fetchWorktrees(REPO_ID, { executionHostId: HOST_ID })
+      .catch(() => undefined)
+
+    expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[REPO_ID]).toEqual([live, deletedOnHost])
+  })
+
   // `session-fallback` claims authoritative but is the truncated, visibility-filtered `worktree.list`
   // reply from a host too old for `worktree.detectedList`. Its omissions prove nothing.
   it('retires nothing from a legacy session-fallback listing', async () => {

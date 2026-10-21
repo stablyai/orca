@@ -8,12 +8,18 @@ export function canonicalizeTerminalSessionWorktreeId(
   if (sourceWorktreeId === targetWorktreeId) {
     return
   }
-  const tabs = session.tabsByWorktree[sourceWorktreeId] ?? []
-  delete session.tabsByWorktree[sourceWorktreeId]
-  session.tabsByWorktree[targetWorktreeId] = tabs.map((tab) => ({
-    ...tab,
-    worktreeId: targetWorktreeId
-  }))
+  // Why presence and not `?? []`: an absent row means never initialized, an explicit empty one is
+  // the closed-last-terminal tombstone. Writing `[]` for a source that had no row invents that
+  // tombstone, and the workspace then never gets its initial terminal. Same guard the keyed maps
+  // below already use.
+  if (Object.hasOwn(session.tabsByWorktree, sourceWorktreeId)) {
+    const tabs = session.tabsByWorktree[sourceWorktreeId] ?? []
+    delete session.tabsByWorktree[sourceWorktreeId]
+    session.tabsByWorktree[targetWorktreeId] = tabs.map((tab) => ({
+      ...tab,
+      worktreeId: targetWorktreeId
+    }))
+  }
 
   const groups = session.tabGroups?.[sourceWorktreeId]
   if (groups) {

@@ -2,68 +2,25 @@ import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { getRepeatedStringFlag } from '../flags'
+import { writeStdoutLine } from '../stdout-line'
+import { loadCanonicalGuides, type BundledSkillGuide } from './bundled-skill-guide-table'
+import { SKILL_GUIDE_GET_HANDLER } from './skill-guide-get'
 import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
-import {
-  getTuiAgentDetectionProbeCommands,
-  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-  resolveDetectedTuiAgentIds
-} from '../../shared/tui-agent-detection-commands'
 import {
   getSpawnArgsForWindows,
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
-import { isSkillsCliAgentKeyShaped, toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
+import { isUsableSkillsCliAgentKey } from '../../shared/skills-cli-agent-keys'
+import {
+  detectSkillsCliAgentKeys,
+  detectSkillsCliUpdateAgentKeys
+} from '../../shared/skills-cli-agent-detection'
 import {
   buildAgentFeatureSkillInstallArgs,
-  buildAgentFeatureSkillUpdateArgs
+  SKILLS_CLI_ENV_OVERRIDES
 } from '../../shared/agent-feature-install-commands'
-
-type BundledSkillGuide = {
-  name: string
-  description: string
-  markdown: string
-  fullMarkdown: string
-  aliases: readonly string[]
-}
-
-function canonicalGuides(guides: readonly BundledSkillGuide[]): BundledSkillGuide[] {
-  return [...guides].sort((left, right) =>
-    left.name < right.name ? -1 : left.name > right.name ? 1 : 0
-  )
-}
-
-function requireTopic(
-  flags: Map<string, string | boolean>,
-  guides: BundledSkillGuide[]
-): BundledSkillGuide {
-  const availableTopics = guides.map((guide) => guide.name).join(', ')
-  const topic = flags.get('topic')
-  if (typeof topic !== 'string' || topic.length === 0) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `Missing skill topic. Available topics: ${availableTopics}`
-    )
-  }
-  // Why: installed stubs may retain an old topic forever, so aliases and canonical
-  // names share one lookup table instead of being treated as transient CLI aliases.
-  const guideByTopic = new Map<string, BundledSkillGuide>(
-    guides.flatMap((guide) => [guide.name, ...guide.aliases].map((name) => [name, guide]))
-  )
-  const guide = guideByTopic.get(topic)
-  if (!guide) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `Unknown skill topic "${topic}". Available topics: ${availableTopics}`
-    )
-  }
-  return guide
-}
-
-function writeStdout(value: string): void {
-  process.stdout.write(value.endsWith('\n') ? value : `${value}\n`)
-}
+import { readOrcaCliBuildCommit } from '../cli-version'
 
 function resolveSelectedSkillNames(
   flags: Map<string, string | boolean>,
@@ -137,7 +94,7 @@ function runNpxSkills(args: string[]): Promise<number> {
       // Why the shared helper: it verifies the sibling node actually exists,
       // skips a bare-name fallback whose dirname is '.', and writes the key
       // Windows will really read — all of which a local join got wrong.
-      env: withCliRuntimeOnPath(resolved, { ...process.env })
+      env: withCliRuntimeOnPath(resolved, { ...process.env, ...SKILLS_CLI_ENV_OVERRIDES })
     })
     // Why: a missing npx/Node on a headless host surfaces as a raw spawn ENOENT;
     // wrap it so the CLI reports an actionable message like every other failure here.
@@ -158,19 +115,7 @@ function runNpxSkills(args: string[]): Promise<number> {
 
 type SkillMutationVerb = 'install' | 'update'
 
-/** Agents Orca can see on this host, as `skills --agent` keys. */
-function detectSkillsCliAgentKeys(): string[] {
-  const runtime = process.platform
-  const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
-  const detected = resolveDetectedTuiAgentIds(
-    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    detectCommandsInInstallDirs(probes),
-    runtime
-  )
-  return detected.length === 0 ? [] : toSkillsCliAgentKeys(detected)
-}
-
-function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[] {
+function resolveAgentKeys(verb: SkillMutationVerb, flags: Map<string, string | boolean>): string[] {
   const requested = flags.get('agent')
   if (flags.has('agent') && typeof requested !== 'string') {
     throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
@@ -192,7 +137,7 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
     if (keys.length === 0) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
     }
-    const unusable = keys.find((key) => !isSkillsCliAgentKeyShaped(key))
+    const unusable = keys.find((key) => !isUsableSkillsCliAgentKey(key))
     if (unusable !== undefined) {
       // Why: the skills CLI drops a value starting with `-`, which leaves it with
       // no target and installs into every agent it knows.
@@ -203,6 +148,9 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
       )
     }
     return keys
+  }
+  if (verb === 'update') {
+    return detectSkillsCliUpdateAgentKeys()
   }
   const detected = detectSkillsCliAgentKeys()
   if (detected.length > 0) {
@@ -219,19 +167,20 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
   )
 }
 
-function buildNpxSkillsArgs(
-  verb: SkillMutationVerb,
-  skillNames: string[],
-  global: boolean,
-  agents: string[]
-): string[] {
-  const skillArgs =
-    verb === 'install'
-      ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true, agents })
-      : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+function buildNpxSkillsArgs(skillNames: string[], global: boolean, agents: string[]): string[] {
+  const sourceCommit = readOrcaCliBuildCommit()
+  if (!sourceCommit) {
+    throw new RuntimeClientError(
+      'invalid_environment',
+      'Could not read the commit this Orca CLI was built from, so there is no source to install skills from.'
+    )
+  }
   // Why: a cold package cache makes bare `npx` prompt before it will fetch
   // `skills`, which strands an unattended host just like the picker does.
-  return ['--yes', ...skillArgs]
+  return [
+    '--yes',
+    ...buildAgentFeatureSkillInstallArgs(skillNames, { sourceCommit, global, yes: true, agents })
+  ]
 }
 
 /** Render the exact argv a real run spawns, so --dry-run can never drift from it. */
@@ -251,14 +200,12 @@ function formatSkillSelectionHelp(verb: SkillMutationVerb, skillNames: string[])
 
 function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
   return async ({ flags, json }) => {
-    // Why: keep the large generated table off the eager handler registry path.
-    const { BUNDLED_SKILL_GUIDES } = await import('../bundled-skill-guides.js')
-    const guides = canonicalGuides(BUNDLED_SKILL_GUIDES)
+    const guides = await loadCanonicalGuides()
     const skillNames = resolveSelectedSkillNames(flags, guides)
 
     if (skillNames.length === 0) {
       const names = guides.map((guide) => guide.name)
-      writeStdout(
+      writeStdoutLine(
         json
           ? JSON.stringify({ availableSkills: names }, null, 2)
           : formatSkillSelectionHelp(verb, names)
@@ -279,14 +226,14 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     }
 
     const global = flags.get('local') !== true
-    // Why: install scopes its targets; update only refreshes what is already placed.
-    const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
-    const npxArgs = buildNpxSkillsArgs(verb, skillNames, global, agents)
+    // Why: update is the same pinned `skills add`; `skills update` follows GitHub HEAD,
+    // which runs ahead of the build this CLI judges freshness against.
+    const npxArgs = buildNpxSkillsArgs(skillNames, global, resolveAgentKeys(verb, flags))
     const command = formatNpxCommand(npxArgs)
     const dryRun = flags.get('dry-run') === true
 
     if (dryRun) {
-      writeStdout(
+      writeStdoutLine(
         json
           ? JSON.stringify({ command, skills: skillNames, global, executed: false }, null, 2)
           : `${command}\n\nRerun without --dry-run to ${verb} now.`
@@ -313,31 +260,19 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
 
 export const SKILL_HANDLERS: Record<string, CommandHandler> = {
   'skills list': async ({ json }) => {
-    // Why: the embedded guide table is large, so unrelated CLI commands must not
-    // pay its module-load and parse cost during startup.
-    const { BUNDLED_SKILL_GUIDES } = await import('../bundled-skill-guides.js')
-    const guides = canonicalGuides(BUNDLED_SKILL_GUIDES)
     // Why: generated registry order is not a user-facing contract, while stable
     // canonical sorting keeps agent-visible output reproducible across builds.
-    const topics = guides.map((guide) => ({
+    const topics = (await loadCanonicalGuides()).map((guide) => ({
       name: guide.name,
       description: guide.description.replace(/\s+/g, ' ').trim()
     }))
-    writeStdout(
+    writeStdoutLine(
       json
         ? JSON.stringify({ topics }, null, 2)
         : topics.map((topic) => `${topic.name}: ${topic.description}`).join('\n')
     )
   },
-  'skills get': async ({ flags, json }) => {
-    // Why: keep the large generated table off the eager handler registry path.
-    const { BUNDLED_SKILL_GUIDES } = await import('../bundled-skill-guides.js')
-    const guides = canonicalGuides(BUNDLED_SKILL_GUIDES)
-    const guide = requireTopic(flags, guides)
-    const full = flags.has('full')
-    const markdown = full ? guide.fullMarkdown : guide.markdown
-    writeStdout(json ? JSON.stringify({ name: guide.name, full, markdown }, null, 2) : markdown)
-  },
+  ...SKILL_GUIDE_GET_HANDLER,
   'skills install': createSkillMutationHandler('install'),
   'skills update': createSkillMutationHandler('update')
 }

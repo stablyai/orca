@@ -1,6 +1,7 @@
 import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: 14, padding: 0 },
+  searchInput: { flex: 1, color: colors.textPrimary, fontSize: TEXT_INPUT_FONT_SIZE, padding: 0 },
   error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
   loading: { paddingVertical: spacing.lg },
   empty: {

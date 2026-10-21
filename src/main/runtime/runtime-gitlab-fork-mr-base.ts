@@ -5,14 +5,10 @@ import {
 } from '../../shared/review-head-tracking-ref'
 import { isTransientReviewHeadFetchError } from '../git/fetch-error-classification'
 import { fetchGitLabMergeRequestHeadRef } from '../gitlab/mr-head-tracking-ref'
-import type { requireSshGitProvider } from '../providers/ssh-git-dispatch'
-
-type SshGitProvider = ReturnType<typeof requireSshGitProvider>
 type GitExec = (args: string[]) => Promise<{ stdout: string }>
 
 export async function resolveRuntimeGitLabForkMrBase(args: {
   repo: Repo
-  sshGitProvider: SshGitProvider | null
   remote: string
   mrIid: number
   localGitExecOptions?: { cwd: string; wslDistro?: string }
@@ -53,7 +49,6 @@ export async function resolveRuntimeGitLabForkMrBase(args: {
   try {
     const localRef = await fetchGitLabMergeRequestHeadRef(
       args.repo,
-      args.sshGitProvider,
       args.remote,
       args.mrIid,
       args.localGitExecOptions ? { localGitExecOptions: args.localGitExecOptions } : {}

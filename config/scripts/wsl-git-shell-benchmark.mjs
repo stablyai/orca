@@ -128,9 +128,10 @@ async function main() {
   assertRepoPath(options.mountedRepo, '/mnt/')
   const distro = await resolveDistro(options.distro)
   const jiti = createJiti(import.meta.url)
-  const { buildWslLoginShellCommand, quotePosixShell } = await jiti.import(
+  const { buildWslLoginShellCommand } = await jiti.import(
     '../../src/shared/wsl-login-shell-command.ts'
   )
+  const { quotePosixShell } = await jiti.import('../../src/shared/shell-argument-quoting.ts')
 
   const loginProbe = buildWslLoginShellCommand(
     `printf '\\n__ORCA_PATH__%s\\n__ORCA_GIT__%s\\n__ORCA_HOME__%s\\n' "$PATH" "$(command -v git)" "$HOME"`
@@ -358,7 +359,7 @@ async function main() {
     sampleAggregation: BENCHMARK_SAMPLE_AGGREGATION,
     injectedLoginDelayMs: options.loginDelayMs,
     loginProbePreambleBytes: Buffer.byteLength(probeText.split('__ORCA_PATH__', 1)[0]),
-    guestProcessShape: {
+    guestProcessChain: {
       login: 'sh -> interactive login shell -> git',
       fast: 'env -> git'
     },

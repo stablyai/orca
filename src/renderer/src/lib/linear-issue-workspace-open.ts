@@ -12,6 +12,7 @@ import {
   findLinearIssueWorkspaceAttachment,
   type LinearIssueAttachmentRef
 } from '@/lib/linear-issue-workspace-attachment'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /**
  * Opens the workspace already attached to a Linear issue, or starts a new one.
@@ -24,7 +25,7 @@ export function openLinearIssueWorkspaceOrStart(
 ): 'opened' | 'started' | 'failed' {
   const state = useAppStore.getState()
   const attached = findLinearIssueWorkspaceAttachment(
-    [...state.allWorktrees(), ...state.folderWorkspaces.map(folderWorkspaceToWorktree)],
+    [...state.allWorktrees(), ...selectFolderWorkspaces(state).map(folderWorkspaceToWorktree)],
     issue
   )
   if (!attached) {
@@ -35,14 +36,14 @@ export function openLinearIssueWorkspaceOrStart(
   const workspaceScope = parseWorkspaceKey(attached.id)
   const activation =
     workspaceScope?.type === 'folder'
-      ? activateAndRevealFolderWorkspace(
-          workspaceScope.folderWorkspaceId,
-          attached.hostId ? { executionHostId: attached.hostId } : undefined
-        )
-      : activateAndRevealWorktree(
-          attached.id,
-          attached.hostId ? { executionHostId: attached.hostId } : {}
-        )
+      ? activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
+          navigationIntent: 'user-open',
+          ...(attached.hostId ? { executionHostId: attached.hostId } : {})
+        })
+      : activateAndRevealWorktree(attached.id, {
+          navigationIntent: 'user-open',
+          ...(attached.hostId ? { executionHostId: attached.hostId } : {})
+        })
   if (activation === false) {
     toast.error(
       translate(

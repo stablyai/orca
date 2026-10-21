@@ -17,10 +17,13 @@ import { createStackedHostedReview } from '../source-control/stacked-hosted-revi
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import {
+  getLocalProjectGhExecOptions,
+  getLocalProjectWorktreeGitOptions
+} from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
-import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -107,12 +110,12 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepoForBranch(args, store)
     const localGitOptions = {
-      ...getLocalProjectWorktreeGitOptions(store, repo),
+      ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: args.admissionTier ?? ('background' as const)
     }
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
-      executionHostId: getRepoHostedReviewExecutionHostId(repo),
+      executionHostId: getStoredRepoExecutionHostId(repo),
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
@@ -122,6 +125,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
+      ...(args.force === true ? { force: true } : {}),
       localGitExecOptions: localGitOptions
     })
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
@@ -140,11 +144,11 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-      const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+      const localGitOptions = getLocalProjectGhExecOptions(store, repo)
       return getHostedReviewCreationEligibility({
         ...args,
         repoPath: worktreePath,
-        executionHostId: getRepoHostedReviewExecutionHostId(repo),
+        executionHostId: getStoredRepoExecutionHostId(repo),
         localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
       })
     }
@@ -154,7 +158,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = {
-      ...getLocalProjectWorktreeGitOptions(store, repo),
+      ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: 'interactive' as const
     }
     // Why: the dirty preflight must not count Orca's own shared symlinks as user work (issue #10451).
@@ -180,7 +184,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       draft: args.draft,
       ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
     }
-    const executionHostId = getRepoHostedReviewExecutionHostId(repo)
+    const executionHostId = getStoredRepoExecutionHostId(repo)
     const result = executionOptions
       ? await createHostedReview(worktreePath, input, executionHostId, executionOptions)
       : await createHostedReview(worktreePath, input, executionHostId)
@@ -201,7 +205,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = {
-        ...getLocalProjectWorktreeGitOptions(store, repo),
+        ...getLocalProjectGhExecOptions(store, repo),
         admissionTier: 'interactive' as const
       }
       const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
@@ -223,7 +227,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       const result = await createStackedHostedReview(
         worktreePath,
         input,
-        getRepoHostedReviewExecutionHostId(repo),
+        getStoredRepoExecutionHostId(repo),
         executionOptions
       )
       if (result.ok && !stats.hasCountedPR(result.url)) {

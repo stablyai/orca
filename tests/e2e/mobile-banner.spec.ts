@@ -48,20 +48,19 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await sendMobileSubscribeIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
-  await expect(overlay).toContainText(/from your phone/i)
   await expect(overlay).toContainText(/your phone is in control/i)
   await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
-  const takeBackThisTerminal = overlay.getByRole('button', { name: /take back this terminal/i })
-  const takeBackAllTerminals = overlay.getByRole('button', { name: /take back all terminals/i })
-  const collapse = overlay.getByRole('button', { name: /^collapse$/i })
+  const takeBackThisTerminal = overlay.getByRole('button', { name: /^take back$/i })
+  const takeBackAllTerminals = overlay.getByRole('button', { name: /^take back all$/i })
+  const collapse = overlay.getByRole('button', { name: /^minimize$/i })
   await expect(takeBackThisTerminal).toBeVisible()
   await expect(takeBackAllTerminals).toBeVisible()
   await expect(collapse).toBeVisible()
 
   await captureAttachment(orcaPage, testInfo, 'overlay-loud.png')
 
-  // Click Collapse → loud overlay swaps to the corner chip while the lock stays
+  // Click Minimize → loud overlay swaps to the corner chip while the lock stays
   // engaged. The user can keep watching live mobile output while the chip
   // remains a one-click escape hatch back to desktop control.
   await collapse.click()
@@ -109,24 +108,22 @@ test('held phone-fit state mounts restore overlay without collapse', async ({
   await sendHeldPhoneFitIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
-  await expect(overlay).toContainText(/from your phone/i)
-  await expect(overlay).toContainText(/your phone left this at phone size/i)
-  await expect(overlay).toContainText(/all terminals your phone left at phone size/i)
-  await expect(overlay.getByRole('button', { name: /restore this terminal/i })).toBeVisible()
-  await expect(overlay.getByRole('button', { name: /restore all terminals/i })).toBeVisible()
-  await expect(overlay.getByRole('button', { name: /^collapse$/i })).toHaveCount(0)
+  await expect(overlay).toContainText(/still sized for your phone/i)
+  await expect(overlay.getByRole('button', { name: /^restore$/i })).toBeVisible()
+  await expect(overlay.getByRole('button', { name: /^restore all$/i })).toBeVisible()
+  await expect(overlay.getByRole('button', { name: /^minimize$/i })).toHaveCount(0)
   await expect(overlay.getByRole('button', { name: /take back/i })).toHaveCount(0)
   await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   await captureAttachment(orcaPage, testInfo, 'overlay-held-fit.png')
 
-  await overlay.getByRole('button', { name: /restore this terminal/i }).click()
+  await overlay.getByRole('button', { name: /^restore$/i }).click()
   await expectRestoreTerminalFitCalls(electronApp, [ptyId])
   await sendDesktopRestoreIpc(electronApp, { ptyId })
   await expect(overlay).toBeHidden({ timeout: 15_000 })
 })
 
-test('restore this terminal refits the active restored pane', async ({ orcaPage, electronApp }) => {
+test('restore refits the active restored pane', async ({ orcaPage, electronApp }) => {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
@@ -144,14 +141,14 @@ test('restore this terminal refits the active restored pane', async ({ orcaPage,
 
   await orcaPage
     .locator(`[data-pty-id="${ptyId}"] .mobile-driver-banner`)
-    .getByRole('button', { name: /restore this terminal/i })
+    .getByRole('button', { name: /^restore$/i })
     .click()
 
   await expectRestoreTerminalFitCalls(electronApp, [ptyId])
   await expect
     .poll(() => getPaneTerminalCols(orcaPage, ptyId), {
       timeout: 5_000,
-      message: 'Restore this terminal should refit the active restored pane'
+      message: 'Restore should refit the active restored pane'
     })
     .toBeGreaterThan(20)
 })
@@ -186,7 +183,7 @@ test('restore all refits non-focused restored terminal panes', async ({
 
   await orcaPage
     .locator(`[data-pty-id="${focusPtyId}"] .mobile-driver-banner`)
-    .getByRole('button', { name: /restore all terminals/i })
+    .getByRole('button', { name: /^restore all$/i })
     .click()
 
   await expectRestoreTerminalFitCallSet(electronApp, [inactivePtyId, focusPtyId])
@@ -241,7 +238,7 @@ test('restore all recovers a hidden workspace held at narrow terminal geometry',
 
   await orcaPage
     .locator(`[data-pty-id="${activeWorkspacePtyId}"] .mobile-driver-banner`)
-    .getByRole('button', { name: /restore all terminals/i })
+    .getByRole('button', { name: /^restore all$/i })
     .click()
 
   await expectRestoreTerminalFitCallSet(electronApp, [hiddenWorkspacePtyId, activeWorkspacePtyId])

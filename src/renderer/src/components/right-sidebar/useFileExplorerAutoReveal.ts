@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
+import { getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
@@ -8,6 +9,7 @@ type UseFileExplorerAutoRevealParams = {
   activeFileId: string | null
   activeWorktreeId: string | null
   worktreePath: string | null
+  displayRootPath?: string | null
   pendingExplorerReveal: { worktreeId: string; filePath: string; requestId: number } | null
   openFiles: OpenFile[]
   rowProjection: FileExplorerRowProjection
@@ -27,6 +29,7 @@ export function useFileExplorerAutoReveal({
   activeFileId,
   activeWorktreeId,
   worktreePath,
+  displayRootPath = worktreePath,
   pendingExplorerReveal,
   openFiles,
   rowProjection,
@@ -74,6 +77,9 @@ export function useFileExplorerAutoReveal({
     }
 
     const filePath = activeFile.filePath
+    if (getRelativePathInsideRoot(filePath, displayRootPath) === null) {
+      return
+    }
 
     if (rowProjection.hasPath(filePath)) {
       // File is already visible in the tree — just scroll to it and select
@@ -103,6 +109,7 @@ export function useFileExplorerAutoReveal({
     activeWorktreeId,
     cancelScrollFrame,
     worktreePath,
+    displayRootPath,
     pendingExplorerReveal,
     openFiles,
     rowProjection,

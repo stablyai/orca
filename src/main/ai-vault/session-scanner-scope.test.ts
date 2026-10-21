@@ -136,7 +136,7 @@ describe('scanAiVaultSessions scope inclusion', () => {
     expect(matches).toHaveLength(1)
   })
 
-  it('matches WSL UNC scope paths against Linux Claude cwd values', async () => {
+  it('does not assign a native transcript to a WSL distro from cwd alone', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
     tempRoots.push(root)
     const claudeRoot = join(root, 'claude-projects')
@@ -165,6 +165,6 @@ describe('scanAiVaultSessions scope inclusion', () => {
       })
     )
 
-    expect(result.sessions.map((session) => session.sessionId)).toContain('old-wsl-in-scope')
+    expect(result.sessions.map((session) => session.sessionId)).not.toContain('old-wsl-in-scope')
   })
 })

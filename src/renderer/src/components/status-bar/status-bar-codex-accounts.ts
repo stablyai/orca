@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
+import { getCodexAccountDisplayLabel } from '@/lib/codex-account-display-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
@@ -11,10 +12,6 @@ import {
 } from './status-bar-runtime-targets'
 
 type CodexStatusAccount = CodexRateLimitAccountsState['accounts'][number]
-
-function getCodexAccountDisplayLabel(account: CodexStatusAccount): string {
-  return account.workspaceLabel ? `${account.email} (${account.workspaceLabel})` : account.email
-}
 
 function getSingleConcreteCodexWslDistro(state: CodexRateLimitAccountsState): string | null {
   const keys = new Set<string>()
@@ -96,7 +93,7 @@ export function buildCodexStatusSwitchGroups(
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
-          label: getCodexAccountDisplayLabel(account),
+          label: getCodexAccountDisplayLabel(account, accountsForTarget),
           active: account.id === activeId,
           runtimeTarget: target
         }))
@@ -175,11 +172,13 @@ function getCodexStatusAccountsFromSettings(
   }
 }
 
+/** `ownerEnvironmentId` is the server owning the shown accounts; `null` is this desktop. */
 export function resolveCodexStatusAccountState(
   settings: GlobalSettings | null | undefined,
-  runtimeState: CodexRateLimitAccountsState
+  runtimeState: CodexRateLimitAccountsState,
+  ownerEnvironmentId: string | null
 ): CodexRateLimitAccountsState {
-  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+  if (ownerEnvironmentId) {
     return runtimeState
   }
   return getCodexStatusAccountsFromSettings(settings) ?? runtimeState

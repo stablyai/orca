@@ -6,6 +6,9 @@ import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
+/** Revisiting an already-activated worktree re-inspects at most this often. */
+export const SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS = 30_000
+
 /**
  * Re-runs the setup-script prompt inspection when a shared `orca.yaml` setup hook
  * can have become effective outside SetupScriptPromptCard's reactive inputs, so a
@@ -72,6 +75,12 @@ export function useSetupScriptPromptRevalidation(input: {
   // card nulls it for the whole inspection round trip). Remember them instead of
   // dropping them, then replay once a revalidatable result exists.
   const pendingRevalidationRef = useRef(false)
+  // Why: a worktree's first activation is when its creation-time setup hook can have landed.
+  // Re-inspecting on every revisit cost two host round trips per click on remote repos (#26785).
+  const activatedWorktreeIdsRef = useRef(
+    new Set<string>(activeWorktreeId ? [activeWorktreeId] : [])
+  )
+  const lastActivationRevalidationAtRef = useRef(Number.NEGATIVE_INFINITY)
 
   useEffect(() => {
     const worktreeChanged = previousWorktreeIdRef.current !== activeWorktreeId
@@ -85,8 +94,21 @@ export function useSetupScriptPromptRevalidation(input: {
     if (hostChanged) {
       // A repo/host switch re-runs the card's own inspection, so no extra pass is owed.
       pendingRevalidationRef.current = false
-    } else if (worktreeChanged || reconnected) {
+    } else if (reconnected) {
       pendingRevalidationRef.current = true
+    } else if (worktreeChanged) {
+      const firstActivation =
+        activeWorktreeId !== null && !activatedWorktreeIdsRef.current.has(activeWorktreeId)
+      if (activeWorktreeId !== null) {
+        activatedWorktreeIdsRef.current.add(activeWorktreeId)
+      }
+      if (
+        firstActivation ||
+        Date.now() - lastActivationRevalidationAtRef.current >=
+          SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS
+      ) {
+        pendingRevalidationRef.current = true
+      }
     }
 
     if (
@@ -100,6 +122,7 @@ export function useSetupScriptPromptRevalidation(input: {
       return
     }
     pendingRevalidationRef.current = false
+    lastActivationRevalidationAtRef.current = Date.now()
     requestRevalidation()
   }, [
     activeRepo,

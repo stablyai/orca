@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
@@ -21,6 +22,7 @@ import {
   type RemoteBrowserPaneNotice,
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
+import { subscribeRuntimeEnvironment } from '@/runtime/runtime-environment-pairing-refresh'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -88,8 +90,7 @@ export function useRemoteBrowserPageLifecycle({
         browserPageExists
       },
       callRpc: callRuntimeRpc,
-      subscribeScreencast: (args, callbacks) =>
-        window.api.runtimeEnvironments.subscribe(args, callbacks),
+      subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
       readStoredHandle: () =>
@@ -236,7 +237,7 @@ export function useRemoteBrowserPageLifecycle({
         return
       }
       const state = useAppStore.getState()
-      const currentEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       const pageStillExists = browserPageExists(browserTab.id)
       if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
         return

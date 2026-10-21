@@ -1,4 +1,9 @@
-import { movePaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
+import { deriveCliWriterTopology } from './cli-writer-observation'
+import {
+  admitLegacyAgentStatus,
+  movePaneCacheState
+} from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../../shared/pane-key-alias'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { PANE_KEY_ALIASES_MAX } from './server-constants'
@@ -10,6 +15,11 @@ import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
 export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAuthorityEvidence {
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
     this.paneKeyAliasPersistenceListener = listener
+  }
+
+  /** The pane key that owns `paneKey`'s agent status once aliases are followed. */
+  resolvePaneAuthorityOwner(paneKey: string): string {
+    return this.resolvePaneKeyAlias(paneKey)
   }
 
   protected getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
@@ -133,28 +143,54 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     toPaneKey: string,
     ptyId?: string,
     updatedAt = Date.now(),
-    options?: { authorityVerified?: boolean }
+    options?: { authorityVerified?: boolean; emitStatusRowMutation?: boolean }
   ): void {
     if (!isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
       return
     }
     const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
+    const requestedPtyId = ptyId?.trim()
+    // Why: a repeat would clear the owner's own polls; a pane move announces from main and renderer.
+    if (
+      previousOwnerPaneKey === toPaneKey &&
+      (!requestedPtyId || this.legacyPaneKeyAliases.get(physicalPaneKey)?.ptyId === requestedPtyId)
+    ) {
+      return
+    }
+    for (const key of [fromPaneKey, previousOwnerPaneKey, physicalPaneKey, toPaneKey]) {
+      this.takeRetiredPaneRestartId(key)
+    }
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
-    const hadStatus = this.state.lastStatusByPaneKey.has(previousOwnerPaneKey)
+    const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const hadStatus = previousStatus !== undefined
     movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
     const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
     if (movedStatus) {
       const owner = parsePaneKey(toPaneKey)
-      this.state.lastStatusByPaneKey.set(toPaneKey, {
-        ...movedStatus,
-        paneKey: toPaneKey,
-        tabId: owner?.tabId
-      })
+      admitLegacyAgentStatus(
+        this.state,
+        'main-pane-alias-transfer',
+        deriveCliWriterTopology(
+          {
+            ...movedStatus,
+            paneKey: toPaneKey,
+            tabId: owner?.tabId
+          },
+          previousStatus,
+          this.cliWriterExecutionMatches
+        ),
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
     }
+    const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
     const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
     if (hydratedLaunchTokenHash) {
       this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
@@ -183,10 +219,23 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (restartedTokenHash) {
       this.restartedStatusLaunchTokenHashByPaneKey.set(toPaneKey, restartedTokenHash)
     }
+    const agentExit = this.agentExitedAtByPaneKey.get(previousOwnerPaneKey)
+    if (agentExit) {
+      agentExit.paneKeys.add(toPaneKey)
+      this.agentExitedAtByPaneKey.set(toPaneKey, agentExit)
+    }
     const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
     if (activeTurnCompletedAt !== undefined) {
       this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
       this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
+    }
+    this.programStatusFacets.move(previousOwnerPaneKey, toPaneKey)
+    this.hookSilenceRechecks.move(previousOwnerPaneKey, toPaneKey)
+    this.programStatusFacetRepublishes.move(previousOwnerPaneKey, toPaneKey)
+    const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
+    if (evidenceObservedAt !== undefined) {
+      this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)
+      this.evidenceObservedAtByPaneKey.set(toPaneKey, evidenceObservedAt)
     }
     const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
     if (authorityObservation) {
@@ -203,7 +252,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
-    this.clearCodexSubagentPoll(previousOwnerPaneKey)
+    this.clearTranscriptPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,
@@ -214,6 +263,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()
+    this.commitStatusRowMutation(
+      previousStatus,
+      transferredStatus,
+      options?.emitStatusRowMutation !== false
+    )
     if (hadStatus || persistedAuthority) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()

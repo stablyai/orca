@@ -3,7 +3,7 @@ import type { JiraProject } from '../../../shared/jira-types'
 
 export const JIRA_PROJECT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isJiraProjectPickerQueryTooLarge(
+function isJiraProjectPickerQueryTooLarge(
   query: string,
   maxBytes = JIRA_PROJECT_PICKER_QUERY_MAX_BYTES
 ): boolean {

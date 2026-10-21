@@ -5,7 +5,7 @@ import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl
 } from '../../../shared/linear/links'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState
@@ -56,7 +57,8 @@ export function LinearApiKeyDialog({
   const apiKeyErrorId = useId()
   const [dialogState, setDialogState] = useState(createLinearApiKeyDialogState)
 
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  // Why: connectLinear stores the key on the default scope host, so the copy names that host.
+  const runtimeTarget = useMemo(() => defaultScopeHost(settings), [settings])
   const personalKeyUrl = buildLinearPersonalApiKeySettingsUrl(workspace?.organizationUrlKey)
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
   const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
@@ -73,6 +75,10 @@ export function LinearApiKeyDialog({
       onOpenChange(nextOpen)
     }
   }
+
+  // Why: a stray backdrop click must not discard a typed API key. Escape / Cancel / × stay explicit.
+  const isDraftDirty = (): boolean => apiKeyDraft !== ''
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
   const handleConnect = async (): Promise<void> => {
     const apiKey = apiKeyDraft.trim()
@@ -125,6 +131,8 @@ export function LinearApiKeyDialog({
       <DialogContent
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
             event.preventDefault()

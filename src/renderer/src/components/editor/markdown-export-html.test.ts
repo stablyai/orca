@@ -28,4 +28,11 @@ describe('buildMarkdownExportHtml', () => {
     const html = buildMarkdownExportHtml({ title: '', renderedHtml: '<p>x</p>' })
     expect(html).toContain('<title>Untitled</title>')
   })
+
+  it('hides preview annotation controls even if DOM scrubbing misses them', () => {
+    const html = buildMarkdownExportHtml({ title: 'Notes', renderedHtml: '<p>x</p>' })
+    expect(html).toContain('.markdown-annotation-controls')
+    expect(html).toContain('[data-orca-export-hide')
+    expect(html).toContain('display: none')
+  })
 })

@@ -1,10 +1,6 @@
 import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
-import {
-  BULK_TAB_CLOSE_ACTIONS,
-  selectBulkCloseTabs,
-  type BulkTabCloseMode
-} from './mobile-tab-close-selection'
+import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 
 /** Session-route state the bulk close orchestration reads and drives. */
 type BulkCloseSheetDeps = {
@@ -16,14 +12,14 @@ type BulkCloseSheetDeps = {
 }
 
 /**
- * Builds the long-press bulk-close entries (Close Others / Left) shared
+ * Builds the long-press bulk-close entries (Close Others) shared
  * by every session tab sheet. Lives outside the session route to keep the
  * orchestration out of its max-lines budget; anchors are passed by tab id so
  * sheets never need the full tab object.
  */
 export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
-  const selectClosable = (anchorTabId: string, mode: BulkTabCloseMode) =>
-    selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId, mode).filter((candidate) => {
+  const selectClosable = (anchorTabId: string) =>
+    selectBulkCloseTabs(deps.sessionTabsRef.current, anchorTabId).filter((candidate) => {
       if (candidate.type !== 'markdown') {
         return true
       }
@@ -33,8 +29,8 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       return !(doc?.status === 'ready' && doc.isDirty)
     })
 
-  const bulkClose = async (anchor: MobileSessionTab, mode: BulkTabCloseMode) => {
-    const targets = selectClosable(anchor.id, mode)
+  const bulkClose = async (anchor: MobileSessionTab) => {
+    const targets = selectClosable(anchor.id)
     const activeWasTargeted = targets.some(
       (candidate) => candidate.id === deps.activeSessionTabIdRef.current
     )
@@ -53,19 +49,19 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       anchorTabId == null
         ? undefined
         : deps.sessionTabsRef.current.find((candidate) => candidate.id === anchorTabId)
-    if (!anchor) {
+    if (!anchor || selectClosable(anchor.id).length === 0) {
       return []
     }
-    return BULK_TAB_CLOSE_ACTIONS.filter(
-      ({ mode }) => selectClosable(anchor.id, mode).length > 0
-    ).map(({ mode, label }) => ({
-      label,
-      destructive: true,
-      onPress: () => {
-        dismiss()
-        void bulkClose(anchor, mode)
+    return [
+      {
+        label: 'Close Other Tabs',
+        destructive: true,
+        onPress: () => {
+          dismiss()
+          void bulkClose(anchor)
+        }
       }
-    }))
+    ]
   }
 }
 

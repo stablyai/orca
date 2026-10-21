@@ -9,7 +9,6 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
-vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
@@ -26,7 +25,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getGitHubPRLookupRateLimitBlock, _resetOwnerRepoCache } from './client'
+import { getGitHubPRLookupRateLimitBlock } from './client/lookup/pr-lookup-rate-limit'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { resetOriginRepositoryCache } from './client-test-harness'
 import type { RateLimitGuardResult } from './client-test-mocks'
 
@@ -85,20 +85,6 @@ describe('getGitHubPRLookupRateLimitBlock', () => {
 
     await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toEqual({
       resetAt: 1_800_003_600
-    })
-  })
-
-  it('reports the later reset when graphql outlasts core', async () => {
-    // Retrying at the earlier reset would fail again on the bucket still blocked.
-    rateLimitGuardMock.mockImplementation(((bucket: string) => ({
-      blocked: true,
-      remaining: 0,
-      limit: 5000,
-      resetAt: bucket === 'graphql' ? 1_800_000_600 : 1_800_000_000
-    })) as () => RateLimitGuardResult)
-
-    await expect(getGitHubPRLookupRateLimitBlock('/repo-root')).resolves.toEqual({
-      resetAt: 1_800_000_600
     })
   })
 

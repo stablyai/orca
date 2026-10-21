@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
-import { HeadlessEmulator } from './headless-emulator'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../shared/pty-owner-color-query-colors'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
@@ -300,54 +303,57 @@ describe('Session', () => {
       expect(snapshot?.outputSequence).toBe('\x1b]10;?\x07]10;rgb:2e2e/'.length)
     })
 
-    it('contains legacy paired-runtime reply echoes and removes their downstream producer', async () => {
+    it('answers a late query itself on every backend, so no downstream view is asked', () => {
       const query = '\x1b]10;?\x07'
-      const reply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
-      const projectedEcho = reply.replaceAll('\x1b', '^[')
-      createSession({ ownerBackend: 'posix-pty' })
-      session.closeStartupQueryAuthority()
-      const legacyReplyProducers: string[] = []
-      const legacyOnData = vi.fn((data: string) => {
-        if (data === query) {
-          legacyReplyProducers.push('remote-visible-renderer')
-          session.write(reply)
+      // Orca's default theme: nothing reported colours for this session.
+      const reply = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
+      for (const ownerBackend of ['posix-pty', 'windows-conpty'] as const) {
+        subprocess = createMockSubprocess()
+        createSession({ ownerBackend })
+        session.closeStartupQueryAuthority()
+        const downstreamReplies: string[] = []
+        const onData = vi.fn((data: string) => {
+          if (data.includes(query)) {
+            downstreamReplies.push(data)
+            session.write(reply)
+          }
+        })
+        session.attachClient({ onData, onExit: () => {} })
+
+        subprocess.simulateData(query)
+        subprocess.simulateData('prompt')
+
+        expect(downstreamReplies, ownerBackend).toEqual([])
+        expect(subprocess.written, ownerBackend).toEqual([reply])
+        expect(onData.mock.calls, ownerBackend).toEqual([
+          ['', query.length, true, query.length],
+          ['prompt']
+        ])
+        expect(session.getSnapshot()?.snapshotAnsi, ownerBackend).not.toContain(']10;rgb')
+        session.dispose()
+      }
+    })
+
+    it('answers from the daemon-wide colours pushed after the session started', () => {
+      createSession({
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
         }
       })
-      session.attachClient({ onData: legacyOnData, onExit: () => {} })
 
-      subprocess.simulateData(query)
+      subprocess.simulateData('\x1b]11;?\x07')
+      try {
+        setPtyOwnerHostColors({ foreground: '#000000', background: '#123456' })
+        subprocess.simulateData('\x1b]11;?\x07')
+      } finally {
+        _resetPtyOwnerHostColorsForTest()
+      }
 
-      expect(legacyReplyProducers).toEqual(['remote-visible-renderer'])
-      // Written in the calling turn — the echo is contained on the output side below,
-      // not by withholding the write.
-      expect(subprocess.written).toEqual([reply])
-      subprocess.simulateData(projectedEcho)
-      expect(legacyOnData.mock.calls).toEqual([
-        [query],
-        ['', projectedEcho.length, true, query.length + projectedEcho.length]
+      expect(subprocess.written).toEqual([
+        '\x1b]11;rgb:ffff/ffff/ffff\x1b\\',
+        '\x1b]11;rgb:1212/3434/5656\x1b\\'
       ])
-      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
-      session.dispose()
-
-      subprocess = createMockSubprocess()
-      createSession({ ownerBackend: 'windows-conpty' })
-      session.closeStartupQueryAuthority()
-      const fixedReplyProducers: string[] = []
-      const fixedOnData = vi.fn((data: string) => {
-        if (data === query) {
-          fixedReplyProducers.push('remote-visible-renderer')
-          session.write(reply)
-        }
-      })
-      session.attachClient({ onData: fixedOnData, onExit: () => {} })
-
-      subprocess.simulateData(query)
-      subprocess.simulateData('prompt')
-
-      expect(fixedReplyProducers).toEqual([])
-      expect(subprocess.written).toEqual([])
-      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
-      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
     })
   })
 
@@ -367,10 +373,9 @@ describe('Session', () => {
     // structural (terminal-query-authority.md): a delivered chunk is
     // answered by the consuming view's xterm, a hidden-dropped chunk by
     // MAIN's runtime model responder. The daemon emulator is neither — it
-    // stays write-only forever, and these pins are permanent.
+    // stays write-only forever, and these pins are permanent. OSC 10/11 are
+    // answered once by the session's source ingress, never by its emulator.
     it.each([
-      ['OSC 10 foreground-color', '\x1b]10;?\x07'],
-      ['OSC 11 background-color', '\x1b]11;?\x07'],
       ['OSC 12 cursor-color', '\x1b]12;?\x1b\\'],
       ['DA1 device-attributes', '\x1b[c'],
       ['DA2 secondary device-attributes', '\x1b[>c'],
@@ -483,29 +488,6 @@ describe('Session', () => {
       ])
       expect(session.getSnapshot()?.snapshotAnsi).toContain('hello % ')
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
-    })
-
-    it.each([
-      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
-      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
-    ])('preserves Fish bracketed-paste output split %s', (_boundary, chunks) => {
-      createSession({ shellReadySupported: true })
-      const received: string[] = []
-      session.attachClient({
-        onData: (data) => received.push(data),
-        onExit: () => {}
-      })
-
-      for (const chunk of chunks) {
-        subprocess.simulateData(chunk)
-      }
-
-      const output = received.join('')
-      expect(output).toBe('\x1b[?2004hfish> ')
-      const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
-      expect(rendered.writeSync(output)).toBe(true)
-      expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
-      rendered.dispose()
     })
 
     it('publishes an absolute output sequence with live snapshots', () => {

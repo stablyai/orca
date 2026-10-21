@@ -6,6 +6,7 @@ describe('pty buffer serializer registry', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry reads only these pty members.
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -13,6 +14,7 @@ describe('pty buffer serializer registry', () => {
         pty: {
           ...originalWindow?.api?.pty,
           onClearBufferRequest: vi.fn(() => () => {}),
+          onResetInputModesRequest: vi.fn(() => () => {}),
           onSerializeBufferRequest: vi.fn(() => () => {}),
           sendSerializedBuffer: vi.fn()
         }
@@ -98,5 +100,38 @@ describe('pty buffer serializer registry', () => {
       'request-sequenced',
       expect.objectContaining({ seq: 42 })
     )
+  })
+
+  it('preserves a pending escape tail for snapshot replay', async () => {
+    const { registerPtySerializer } = await import('./pty-buffer-serializer')
+    registerPtySerializer('pty-escape-tail', () => ({
+      data: 'prompt$ ',
+      cols: 80,
+      rows: 24,
+      pendingEscapeTailAnsi: '\x1b[38;5;'
+    }))
+    const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
+      .calls[0]?.[0]
+
+    serializeRequestHandler?.({ requestId: 'request-escape-tail', ptyId: 'pty-escape-tail' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith(
+      'request-escape-tail',
+      expect.objectContaining({ pendingEscapeTailAnsi: '\x1b[38;5;' })
+    )
+  })
+
+  it("routes a host's Reset Terminal request to the pane that owns the PTY", async () => {
+    const { registerPtySerializer } = await import('./pty-buffer-serializer')
+    const resetInputModes = vi.fn()
+    registerPtySerializer('pty-1', () => null, { resetInputModes })
+    const [[onRequest]] = vi.mocked(window.api.pty.onResetInputModesRequest).mock.calls
+
+    onRequest({ ptyId: 'pty-2' })
+    expect(resetInputModes).not.toHaveBeenCalled()
+    onRequest({ ptyId: 'pty-1' })
+    expect(resetInputModes).toHaveBeenCalledOnce()
   })
 })

@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   MOCK_GIT_WORKTREES,
@@ -13,8 +14,10 @@ import {
   TEST_WORKTREE_PATH,
   UUID_RE,
   deferred,
+  makeRuntimeStoreWithWorkspaceSession,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 
 describe('OrcaRuntimeService', () => {
   it('keeps client selection when a renderer session-tab close cannot commit', async () => {
@@ -249,17 +252,10 @@ describe('OrcaRuntimeService', () => {
 
   it('creates mobile session terminals in a headless runtime server', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-headless' })
-    const runtime = new OrcaRuntimeService(store)
-    const persistViewMode = vi.spyOn(
-      runtime as unknown as {
-        persistHeadlessSessionTabProps: (
-          worktreeId: string,
-          tabId: string,
-          props: { viewMode: 'terminal' | 'chat' }
-        ) => void
-      },
-      'persistHeadlessSessionTabProps'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      getDefaultWorkspaceSession()
     )
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -289,9 +285,12 @@ describe('OrcaRuntimeService', () => {
       viewMode: 'chat',
       isActive: true
     })
-    expect(persistViewMode).toHaveBeenCalledWith(TEST_WORKTREE_ID, result.tab.parentTabId, {
-      viewMode: 'chat'
-    })
+    // Written with the pane before spawn, so a serve restart keeps the initial mode.
+    expect(
+      getSession().tabsByWorktree[TEST_WORKTREE_ID]?.find(
+        (tab) => tab.id === result.tab.parentTabId
+      )?.viewMode
+    ).toBe('chat')
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(listed.tabs).toEqual([
@@ -301,6 +300,173 @@ describe('OrcaRuntimeService', () => {
         terminal: result.tab.terminal
       })
     ])
+  })
+
+  it.each([
+    {
+      label: 'after the split parent for a capable client',
+      supportsSplitGroupPlacement: true,
+      expectedOrder: (createdId: string) => [
+        'split::left',
+        'split::right',
+        createdId,
+        'trailing::leaf'
+      ]
+    },
+    {
+      label: 'at the end for an older client',
+      supportsSplitGroupPlacement: false,
+      expectedOrder: (createdId: string) => [
+        'split::left',
+        'split::right',
+        'trailing::leaf',
+        createdId
+      ]
+    }
+  ])('places a runtime-owned terminal $label', async (testCase) => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-created-after-split' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:split-placement',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'split::left',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'split::left',
+              parentTabId: 'split',
+              leafId: 'left',
+              title: 'Split',
+              isActive: true
+            },
+            {
+              type: 'terminal',
+              id: 'split::right',
+              parentTabId: 'split',
+              leafId: 'right',
+              title: 'Split',
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'trailing::leaf',
+              parentTabId: 'trailing',
+              leafId: 'leaf',
+              title: 'Trailing',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      afterTabId: 'split::left',
+      clientNavigationId: 'mobile-client',
+      supportsSplitGroupPlacement: testCase.supportsSplitGroupPlacement
+    })
+
+    expect(
+      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs.map((tab) => tab.id)
+    ).toEqual(testCase.expectedOrder(created.tab.id))
+  })
+
+  it('asks a headed host to append for an older client', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:legacy-placement',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'split::left',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'split::left',
+              parentTabId: 'split',
+              leafId: 'left',
+              title: 'Split',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime['waitForMobileTerminalSurface'] = vi.fn().mockResolvedValue({
+      tab: {
+        type: 'terminal',
+        id: 'created::leaf',
+        parentTabId: 'created',
+        leafId: 'leaf',
+        title: 'Terminal',
+        status: 'ready',
+        terminal: 'term_created',
+        isActive: false
+      },
+      publicationEpoch: 'renderer:legacy-placement',
+      snapshotVersion: 2
+    })
+    const webContents: {
+      isDestroyed: () => boolean
+      setBackgroundThrottling: ReturnType<typeof vi.fn>
+      capturePage: ReturnType<typeof vi.fn>
+      send: ReturnType<typeof vi.fn>
+    } = {
+      isDestroyed: () => false,
+      setBackgroundThrottling: vi.fn(),
+      capturePage: vi.fn(async () => null),
+      send: vi.fn()
+    }
+    webContents.send.mockImplementation(
+      (_channel: string, payload: { requestId: string; afterTabId?: string }) => {
+        expect(payload.afterTabId).toBeUndefined()
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          { requestId: payload.requestId, tabId: 'created', title: 'Terminal' }
+        )
+      }
+    )
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      afterTabId: 'split::left',
+      clientNavigationId: 'legacy-client',
+      supportsSplitGroupPlacement: false,
+      activate: false
+    })
+
+    expect(webContents.send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({ afterTabId: undefined })
+    )
   })
 
   it('leases renderer publication for a paired create and preserves host-owned inventory', async () => {
@@ -319,10 +485,12 @@ describe('OrcaRuntimeService', () => {
     const webContents: {
       isDestroyed: () => boolean
       setBackgroundThrottling: typeof setBackgroundThrottling
+      capturePage: ReturnType<typeof vi.fn>
       send: ReturnType<typeof vi.fn>
     } = {
       isDestroyed: () => false,
       setBackgroundThrottling,
+      capturePage: vi.fn(async () => null),
       send: vi.fn()
     }
     webContents.send.mockImplementation((_channel: string, payload: { requestId: string }) => {
@@ -397,7 +565,8 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ source: 'runtime-session', viewMode: 'chat' })
     )
     expect(spawn).not.toHaveBeenCalled()
-    expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
+    // The final release restores throttling on the next task, after any native destruction.
+    await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
     expect(result.tab).toMatchObject({
       type: 'terminal',
       status: 'ready',
@@ -468,12 +637,28 @@ describe('OrcaRuntimeService', () => {
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { isDestroyed: () => false, send, setBackgroundThrottling: vi.fn() }
+        webContents: {
+          isDestroyed: () => false,
+          send,
+          setBackgroundThrottling: vi.fn(),
+          capturePage: vi.fn(async () => null)
+        }
       })
       if (graphStatus === 'reloading') {
         runtime.markRendererReloading(1)
       } else {
         runtime.markGraphUnavailable(1)
+      }
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && graphStatus === 'unavailable') {
+        // Layout-owner build: the window closed, so main takes the graph back and starts the
+        // terminal itself; nothing reaches the closed window. (The fixture store has no
+        // agent-session API, so only where the start runs is under test.)
+        electronMocks.BrowserWindow.fromId.mockReturnValue(null)
+        await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {}).catch(() => null)
+        expect(runtime.getStatus().graphStatus).toBe('ready')
+        expect(spawn).toHaveBeenCalledTimes(1)
+        expect(send).not.toHaveBeenCalled()
+        return
       }
 
       await expect(
@@ -503,7 +688,12 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { isDestroyed: () => false, send, setBackgroundThrottling }
+      webContents: {
+        isDestroyed: () => false,
+        send,
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
+      }
     })
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     let resolutionStarted = (): void => {}
@@ -549,7 +739,12 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { isDestroyed: () => false, send, setBackgroundThrottling }
+      webContents: {
+        isDestroyed: () => false,
+        send,
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
+      }
     })
     abort.abort()
 

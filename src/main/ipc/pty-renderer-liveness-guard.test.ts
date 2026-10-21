@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal-input'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { subscribeToPtyEndpointLoss } from '../runtime/terminal/pty-endpoint-loss-signal'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -162,6 +163,20 @@ describe('pty:writeUnavailable renderer-liveness guard', () => {
         'pty:writeUnavailable',
         expect.anything()
       )
+    })
+
+    it('reaches remote terminal streams without a live window', () => {
+      // Why: a headless host has no window; its paired clients only hear through the streams.
+      const fanout = installProviderCapturingFanout()
+      mainWindow.webContents.isDestroyed.mockReturnValue(true)
+      const streamListener = vi.fn()
+      const unsubscribe = subscribeToPtyEndpointLoss('pane-1', streamListener)
+      try {
+        fanout({ id: 'pane-1' })
+        expect(streamListener).toHaveBeenCalledOnce()
+      } finally {
+        unsubscribe()
+      }
     })
   })
 })

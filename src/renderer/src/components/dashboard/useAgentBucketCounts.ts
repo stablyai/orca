@@ -6,6 +6,7 @@ import {
   buildDashboardBucketCounts,
   createDashboardBucketCountsCache
 } from './build-dashboard-bucket-counts'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AgentBucketCounts = Record<DashboardBucket, number>
 
@@ -23,6 +24,7 @@ export type AgentBucketCountState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'paneForegroundAgentByPaneKey'
   | 'folderWorkspaces'
   | 'acknowledgedAgentsByPaneKey'
   | 'agentStatusEpoch'
@@ -34,8 +36,8 @@ export type AgentBucketCountState = Pick<
 
 // Why module scope rather than useShallow: zustand runs this selector on every
 // store write, and shallow() on a plain object takes the compareEntries path —
-// two Object.entries arrays, 28 tuples and two Maps allocated per write just to
-// conclude nothing moved. Fourteen `===` against the previous slices allocates
+// two Object.entries arrays, 30 tuples and two Maps allocated per write just to
+// conclude nothing moved. Fifteen `===` against the previous slices allocates
 // nothing on the unchanged path, and the result is a pure function of the state
 // so one gate can serve every mounted consumer.
 let previousState: AgentBucketCountState | null = null
@@ -50,7 +52,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   if (
     previous !== null &&
     previous.repos === s.repos &&
-    previous.worktreesByRepo === s.worktreesByRepo &&
+    selectWorktreesByRepo(previous) === selectWorktreesByRepo(s) &&
     previous.tabsByWorktree === s.tabsByWorktree &&
     previous.unifiedTabsByWorktree === s.unifiedTabsByWorktree &&
     previous.agentStatusByPaneKey === s.agentStatusByPaneKey &&
@@ -60,7 +62,8 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.terminalLayoutsByTabId === s.terminalLayoutsByTabId &&
     previous.ptyIdsByTabId === s.ptyIdsByTabId &&
     previous.runtimePaneTitlesByTabId === s.runtimePaneTitlesByTabId &&
-    previous.folderWorkspaces === s.folderWorkspaces &&
+    previous.paneForegroundAgentByPaneKey === s.paneForegroundAgentByPaneKey &&
+    selectFolderWorkspaces(previous) === selectFolderWorkspaces(s) &&
     previous.acknowledgedAgentsByPaneKey === s.acknowledgedAgentsByPaneKey &&
     previous.agentStatusEpoch === s.agentStatusEpoch
   ) {
@@ -68,7 +71,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   }
   previousState = {
     repos: s.repos,
-    worktreesByRepo: s.worktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(s),
     tabsByWorktree: s.tabsByWorktree,
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     agentStatusByPaneKey: s.agentStatusByPaneKey,
@@ -78,7 +81,8 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-    folderWorkspaces: s.folderWorkspaces,
+    paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
+    folderWorkspaces: selectFolderWorkspaces(s),
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
     agentStatusEpoch: s.agentStatusEpoch,
     settings: null

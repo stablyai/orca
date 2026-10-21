@@ -8,6 +8,15 @@
 export const NATIVE_CHAT_INITIAL_LIMIT = 300
 export const NATIVE_CHAT_PAGE = 200
 
+/** How one older-page request ended. Only 'applied' moved the loaded window older;
+ *  'superseded' means a newer read generation (a re-attach or source swap) owns it now. */
+export type NativeChatOlderPageResult =
+  | 'applied'
+  | 'exhausted'
+  | 'unchanged'
+  | 'failed'
+  | 'superseded'
+
 /** The limit to request for the next older page. */
 export function nextNativeChatLimit(currentLimit: number): number {
   return currentLimit + NATIVE_CHAT_PAGE

@@ -1,5 +1,6 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 
 type LaunchEnvResolver = (
   provider: AgentSessionRecord['provider']
@@ -19,7 +20,9 @@ export async function pinnedAgentSessionLaunchEnv(
   return {
     launchEnv: {
       ...(await resolver(params.provider)),
-      [params.accountHome.variable]: params.accountHome.path
+      ...(isLegacyAgentSessionAccountHome(params.accountHome)
+        ? { [params.accountHome.variable]: params.accountHome.path }
+        : {})
     }
   }
 }
@@ -28,6 +31,6 @@ export async function pinnedAgentSessionLaunchArgs(
   resolver: LaunchArgsResolver | undefined,
   params: AgentSessionAttachParams
 ): Promise<{ launchArgs: string[] } | Record<string, never>> {
-  const launchArgs = await resolver?.(params.provider)
+  const launchArgs = params.launchArgs ?? (await resolver?.(params.provider))
   return launchArgs ? { launchArgs: [...launchArgs] } : {}
 }

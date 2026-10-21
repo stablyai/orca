@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
@@ -7,9 +8,8 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { IDisposable } from '@xterm/xterm'
-import { handleTerminalFileDrop } from './terminal-drop-handler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
@@ -26,13 +26,14 @@ import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
 } from './pty-renderer-delivery-claims'
+import { activePaneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
-  worktreeId: string
   cwd?: string
   isActive: boolean
   isVisible: boolean
+  isChatViewMode?: boolean
   isWorktreeActive?: boolean
   isSyncFitEnabled: boolean
   paneCount: number
@@ -51,7 +52,7 @@ function reportRendererPtyVisibility(
 ): void {
   for (const transport of paneTransports.values()) {
     const ptyId = transport.getPtyId()
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       // Why: remote-runtime PTYs use a relay path outside main's local
       // renderer-visibility registry, so reporting them here is misleading.
       continue
@@ -62,10 +63,9 @@ function reportRendererPtyVisibility(
 
 export function useTerminalPaneGlobalEffects({
   tabId,
-  worktreeId,
-  cwd,
   isActive,
   isVisible,
+  isChatViewMode = false,
   isWorktreeActive = isVisible,
   isSyncFitEnabled,
   paneCount,
@@ -77,10 +77,6 @@ export function useTerminalPaneGlobalEffects({
   isVisibleRef,
   toggleExpandPane
 }: UseTerminalPaneGlobalEffectsArgs): void {
-  const worktreeIdRef = useRef(worktreeId)
-  worktreeIdRef.current = worktreeId
-  const cwdRef = useRef(cwd)
-  cwdRef.current = cwd
   // Starts true so the first render with isVisible=false triggers a
   // suspendRendering(). Background worktrees that mount hidden would
   // otherwise leak WebGL contexts — openTerminal() unconditionally creates
@@ -121,6 +117,7 @@ export function useTerminalPaneGlobalEffects({
   })
   useTerminalWindowWakeRecovery({
     isVisible: rendererVisible,
+    isChatViewMode,
     managerRef,
     isActiveRef,
     isVisibleRef,
@@ -156,6 +153,9 @@ export function useTerminalPaneGlobalEffects({
       resumeTerminalVisibility({
         manager,
         isActive,
+        // Why: chat mode is tab-wide, but only the chat leaf's xterm is covered;
+        // a split terminal leaf that is active must still regain focus on reveal.
+        isChatViewMode: isChatViewMode && activePaneIsCoveredByNativeChat(manager),
         wasVisible,
         shouldUseLightTabResume,
         captureViewportPositions,
@@ -183,11 +183,11 @@ export function useTerminalPaneGlobalEffects({
     wasVisibleRef.current = false
     wasWorktreeActiveRef.current = isWorktreeActive
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isWorktreeActive, rendererVisible])
+  }, [isActive, isChatViewMode, isWorktreeActive, rendererVisible])
 
   useEffect(() => {
     const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       return
     }
     // Why: main uses this as a scheduler hint only, so the foreground pane's
@@ -243,7 +243,6 @@ export function useTerminalPaneGlobalEffects({
       handleTerminalProgrammaticTextPaste({
         detail,
         tabId,
-        worktreeId: worktreeIdRef.current,
         getManager: () => managerRef.current,
         getPaneTransports: () => paneTransportsRef.current
       })
@@ -281,7 +280,6 @@ export function useTerminalPaneGlobalEffects({
           ...(typeof requestedPaneId === 'number' ? { paneId: requestedPaneId } : {})
         },
         tabId,
-        worktreeId: worktreeIdRef.current,
         getManager: () => managerRef.current,
         getPaneTransports: () => paneTransportsRef.current
       })
@@ -289,41 +287,4 @@ export function useTerminalPaneGlobalEffects({
     document.addEventListener('dictation:insertText', onDictationInsert)
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)
   }, [isActiveRef, managerRef, paneTransportsRef, tabId])
-
-  // Why: visible but unfocused split-group terminals can still receive native
-  // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
-  // payloads without a tab id keep the old active-terminal-only behavior.
-  useEffect(() => {
-    if (!isActive && !isVisible) {
-      return
-    }
-    return window.api.ui.onFileDrop((data) => {
-      if (data.target !== 'terminal') {
-        return
-      }
-      if (data.tabId) {
-        if (data.tabId !== tabId) {
-          return
-        }
-      } else if (!isActive) {
-        return
-      }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      const wtId = worktreeIdRef.current
-      if (!wtId) {
-        return
-      }
-      void handleTerminalFileDrop({
-        manager,
-        paneTransports: paneTransportsRef.current,
-        worktreeId: wtId,
-        tabId,
-        cwd: cwdRef.current,
-        data
-      })
-    })
-  }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
 }

@@ -5,21 +5,21 @@ import {
   MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES,
   SshMultiplexerTransportWriter,
   type MultiplexerTransport,
-  type MultiplexerWriteSettlement
+  type MultiplexerTransportWriteResult
 } from './ssh-multiplexer-transport-writer'
 
 type WriterHarness = {
   transport: MultiplexerTransport
   drain: () => void
   writes: Buffer[]
-  callbacks: ((result: MultiplexerWriteSettlement) => void)[]
+  callbacks: ((result: MultiplexerTransportWriteResult) => void)[]
   removeDrain: ReturnType<typeof vi.fn>
 }
 
 function transportHarness(writeResults: (boolean | void)[]): WriterHarness {
   const emitter = new EventEmitter()
   const writes: Buffer[] = []
-  const callbacks: ((result: MultiplexerWriteSettlement) => void)[] = []
+  const callbacks: ((result: MultiplexerTransportWriteResult) => void)[] = []
   const removeDrain = vi.fn()
   return {
     transport: {
@@ -103,7 +103,7 @@ describe('SshMultiplexerTransportWriter', () => {
 
     expect(harness.writes.map(String)).toEqual(['ordinary-1'])
     harness.callbacks[0]({ ok: true })
-    expect(settlements[0]).toHaveBeenCalledWith({ ok: true })
+    expect(settlements[0]).toHaveBeenCalledWith({ outcome: 'accepted' })
     expect(harness.writes.map(String)).toEqual(['ordinary-1'])
 
     harness.drain()
@@ -182,8 +182,17 @@ describe('SshMultiplexerTransportWriter', () => {
     harness.callbacks[0]({ ok: true })
 
     expect(first).toHaveBeenCalledOnce()
-    expect(first).toHaveBeenCalledWith({ ok: false, error })
-    expect(queued).toHaveBeenCalledWith({ ok: false, error })
+    expect(first).toHaveBeenCalledWith({
+      outcome: 'unverifiable',
+      reason: 'transport_settlement_lost',
+      bytesHandedToTransport: true,
+      error
+    })
+    expect(queued).toHaveBeenCalledWith({
+      outcome: 'refused',
+      reason: 'transport_rejected_before_handoff',
+      error
+    })
     expect(failed).toHaveBeenCalledWith(error)
     expect(harness.removeDrain).toHaveBeenCalledOnce()
   })
@@ -199,11 +208,14 @@ describe('SshMultiplexerTransportWriter', () => {
     expect(writer.enqueue(Buffer.alloc(1), 'ordinary', overflow)).toBe(false)
 
     expect(overflow).toHaveBeenCalledWith({
-      ok: false,
+      outcome: 'refused',
+      reason: 'transport_queue_full',
       error: expect.objectContaining({ message: expect.stringContaining('bounded capacity') })
     })
     expect(retained).toHaveBeenCalledWith({
-      ok: false,
+      outcome: 'unverifiable',
+      reason: 'transport_settlement_lost',
+      bytesHandedToTransport: true,
       error: expect.objectContaining({ message: expect.stringContaining('bounded capacity') })
     })
     expect(failed).toHaveBeenCalledOnce()
@@ -230,8 +242,8 @@ describe('SshMultiplexerTransportWriter', () => {
     expect(second).not.toHaveBeenCalled()
 
     emitter.emit('drain')
-    expect(first).toHaveBeenCalledWith({ ok: true })
-    expect(second).toHaveBeenCalledWith({ ok: true })
+    expect(first).toHaveBeenCalledWith({ outcome: 'accepted' })
+    expect(second).toHaveBeenCalledWith({ outcome: 'accepted' })
   })
 
   it('does not miss a drain emitted synchronously by a hostile transport', () => {
@@ -258,8 +270,8 @@ describe('SshMultiplexerTransportWriter', () => {
     writer.enqueue(Buffer.from('second'), 'control', second)
 
     expect(write).toHaveBeenCalledTimes(2)
-    expect(first).toHaveBeenCalledWith({ ok: true })
-    expect(second).toHaveBeenCalledWith({ ok: true })
+    expect(first).toHaveBeenCalledWith({ outcome: 'accepted' })
+    expect(second).toHaveBeenCalledWith({ outcome: 'accepted' })
   })
 
   it('fails deterministically when write(false) has no drain source', () => {
@@ -276,7 +288,9 @@ describe('SshMultiplexerTransportWriter', () => {
 
     expect(writer.enqueue(Buffer.from('data'), 'ordinary', settled)).toBe(true)
     expect(settled).toHaveBeenCalledWith({
-      ok: false,
+      outcome: 'unverifiable',
+      reason: 'transport_settlement_lost',
+      bytesHandedToTransport: true,
       error: expect.objectContaining({ message: expect.stringContaining('without drain support') })
     })
     expect(failed).toHaveBeenCalledOnce()

@@ -50,4 +50,38 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
       expect.not.stringContaining('/secret/project/file.txt')
     )
   })
+
+  it('names a shared known skip reason', () => {
+    reportTerminalDropUploadSkipsAndFailures(
+      [{ reason: 'permission-denied' }, { reason: 'permission-denied' }],
+      []
+    )
+
+    expect(toast.message).toHaveBeenCalledWith(
+      'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889:Skipped {{value0}} {{value1}}.',
+      { description: 'auto.lib.dropSkipReason.permissionDenied:Permission denied.' }
+    )
+  })
+
+  it('gives no reason for mixed, unknown, or symlink-only skips', () => {
+    reportTerminalDropUploadSkipsAndFailures([{ reason: 'missing' }, { reason: 'symlink' }], [])
+    reportTerminalDropUploadSkipsAndFailures([{ reason: 'too_large' }], [])
+    reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }], [])
+
+    expect(vi.mocked(toast.message).mock.calls.map((call) => call[1])).toEqual([
+      { description: undefined },
+      { description: undefined },
+      { description: undefined }
+    ])
+  })
+
+  it('keeps upload wording for failures', () => {
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
+
+    expect(mocks.translate).toHaveBeenCalledWith(
+      'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
+      'Failed to upload {{value0}} {{value1}}.',
+      { value0: 2, value1: 'files' }
+    )
+  })
 })

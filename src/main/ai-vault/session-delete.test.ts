@@ -88,20 +88,6 @@ describe('deleteAiVaultSessionFile', () => {
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a symlink instead of trashing it (isFile() is false for a symlink under lstat)', async () => {
-    const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
-    lstatMock.mockResolvedValue({ isFile: () => false })
-
-    const result = await deleteAiVaultSessionFile(baseArgs(filePath))
-
-    expect(result).toEqual({
-      outcome: 'rejected',
-      agent: 'gemini',
-      reason: 'unexpected-target-kind'
-    })
-    expect(trashItemMock).not.toHaveBeenCalled()
-  })
-
   it('rejects a regular file whose realpath escapes the known roots', async () => {
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
     const escaped = join(HOME, 'Documents', 'escaped.json')

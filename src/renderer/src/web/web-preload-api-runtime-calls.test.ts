@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { WebRuntimeSubscriptionCallbacks } from './web-runtime-subscription-contract'
 import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
@@ -102,7 +103,7 @@ describe('web preload runtime calls', () => {
     if (!(rejection instanceof Error)) {
       throw new Error('Expected a domain Error rejection')
     }
-    expect(Reflect.get(rejection, 'code')).toBe('repo_unavailable')
+    expect('code' in rejection ? rejection.code : undefined).toBe('repo_unavailable')
     expect(
       JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
     ).toMatchObject({ runtimeId: 'runtime-domain-failure' })
@@ -143,6 +144,74 @@ describe('web preload runtime calls', () => {
     expect(call).toHaveBeenCalledTimes(8)
     release()
     await expect(Promise.all(accepted)).resolves.toHaveLength(264)
+  })
+
+  it('revokes unsent work and refuses queued or delivered work after pairing replacement', async () => {
+    let release!: () => void
+    const blocked = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+      release = () =>
+        resolve({ id: 'blocked', ok: true, result: null, _meta: { runtimeId: 'runtime-a' } })
+    })
+    let response = (_value: RuntimeRpcResponse<unknown>) => {}
+    const call = vi.fn(() => blocked)
+    const subscribe = vi.fn(
+      async (_method: string, _params: unknown, callbacks: WebRuntimeSubscriptionCallbacks) => {
+        response = callbacks.onResponse
+        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+      }
+    )
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call = call
+        subscribe = subscribe
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { callAbortableRuntimeEnvironment } =
+      await import('@/runtime/abortable-runtime-environment-call')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const environment = webRuntimeState.activeEnvironment!
+    const revision = environment.pairingRevision ?? environment.createdAt
+    const blockers = Array.from({ length: 8 }, () =>
+      globals.window.api.runtime.call({ method: 'blocker' })
+    )
+    const prepare = (signal: AbortSignal) =>
+      callAbortableRuntimeEnvironment(
+        'web-server-a',
+        'aiVault.prepareSessionResume',
+        {},
+        90_000,
+        signal,
+        revision
+      )
+    const source = new AbortController()
+    const cancelled = expect(prepare(source.signal)).rejects.toThrow('aborted')
+    source.abort()
+    await cancelled
+    const queued = globals.window.api.runtimeEnvironments.call({
+      selector: 'web-server-a',
+      method: 'aiVault.prepareSessionResume',
+      expectedEnvironmentPairingRevision: revision
+    })
+    const refused = expect(queued).rejects.toThrow('paired Orca server changed')
+    webRuntimeState.activeEnvironment = { ...environment, pairingRevision: revision + 1 }
+    release()
+    await Promise.all(blockers)
+    await refused
+    expect(call).toHaveBeenCalledTimes(8)
+    expect(subscribe).not.toHaveBeenCalled()
+    webRuntimeState.activeEnvironment = environment
+    const staleResponse = expect(prepare(new AbortController().signal)).rejects.toThrow(
+      'paired Orca server changed'
+    )
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    webRuntimeState.activeEnvironment = { ...environment, pairingRevision: revision + 1 }
+    response({ id: 'prepare', ok: true, result: {}, _meta: { runtimeId: 'old' } })
+    await staleResponse
   })
 
   it('does not spend a selected call timeout while queued and forwards it unchanged', async () => {

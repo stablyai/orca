@@ -108,12 +108,3 @@ export function applyRetiredWorktreeNames(
   scheduleSave(owner[retiredWorktreeNamePersistenceContext].scheduling)
   return true
 }
-
-export function installRetiredWorktreeNamePersistenceContext(
-  target: object,
-  source: RetiredWorktreeNamePersistence
-): void {
-  Object.defineProperty(target, retiredWorktreeNamePersistenceContext, {
-    value: source[retiredWorktreeNamePersistenceContext]
-  })
-}

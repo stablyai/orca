@@ -152,6 +152,24 @@ describe('SkillShareDialog', () => {
     )
   })
 
+  it('explains a skill name that is already in use', async () => {
+    setup(
+      [],
+      false,
+      [skill],
+      {},
+      Promise.reject(
+        new Error(
+          "Error invoking remote method 'skills:prepareShare': Error: skill-share-name-taken"
+        )
+      )
+    )
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'The skill name “private-skill” is already in use. Rename your skill to share it.'
+    )
+  })
+
   it('releases a prepared archive when the dialog unmounts', async () => {
     const { skills, unmount } = setup([])
     await screen.findByRole('heading', { name: 'Share skill' })

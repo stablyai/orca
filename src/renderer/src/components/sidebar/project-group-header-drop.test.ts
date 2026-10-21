@@ -8,7 +8,7 @@ import {
   getSidebarOrderedProjectGroupHeaderIdsByBucket,
   mapSidebarProjectGroupDropIndexToSiblingInsertIndex
 } from './project-group-header-drop'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 
@@ -62,22 +62,29 @@ describe('getSidebarOrderedProjectGroupHeaderIdsByBucket', () => {
       [rootB.id, rootB],
       [childA.id, childA]
     ])
-    const rows = [
+    const rows: Row[] = [
       {
         type: 'header',
         key: 'project-group:root-a',
         label: 'A',
         count: 0,
-        tone: '',
+        icon: { kind: 'project' },
         projectGroup: rootA
       },
-      { type: 'header', key: 'repo:repo-a', label: 'repo', count: 0, tone: '', repo },
+      {
+        type: 'header',
+        key: 'repo:repo-a',
+        label: 'repo',
+        count: 0,
+        icon: { kind: 'project' },
+        repo
+      },
       {
         type: 'header',
         key: 'project-group:child-a',
         label: 'A child',
         count: 0,
-        tone: '',
+        icon: { kind: 'project' },
         projectGroup: childA
       },
       {
@@ -85,10 +92,10 @@ describe('getSidebarOrderedProjectGroupHeaderIdsByBucket', () => {
         key: 'project-group:root-b',
         label: 'B',
         count: 0,
-        tone: '',
+        icon: { kind: 'project' },
         projectGroup: rootB
       }
-    ] as Row[]
+    ]
 
     expect(getSidebarOrderedProjectGroupHeaderIdsByBucket(rows, groupsById)).toEqual(
       new Map([
@@ -138,30 +145,6 @@ describe('computeProjectGroupHeaderDropPreview', () => {
     expect(preview).toEqual({ dropIndex: 1, dropIndicatorY: 96 })
   })
 
-  it('snaps a drop inside the last expanded Project Group section to its bottom boundary', () => {
-    const INDICATOR_GAP = 4
-    const sectionBottom = 380
-    const preview = computeProjectGroupHeaderDropPreview({
-      pointerY: 350,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
-      rects: [
-        {
-          groupId: 'c',
-          bucketKey: 'root',
-          headerIndex: 2,
-          top: 300,
-          bottom: 328,
-          sectionBottom
-        }
-      ]
-    })
-
-    // Only boundary available is 'c's section bottom → drop after 'c' (slot 3).
-    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: sectionBottom + INDICATOR_GAP })
-  })
-
   it('rejects a drop below the measured content when the estimated section overshoots', () => {
     const preview = computeProjectGroupHeaderDropPreview({
       pointerY: 360,
@@ -183,51 +166,6 @@ describe('computeProjectGroupHeaderDropPreview', () => {
     })
 
     expect(preview).toBeNull()
-  })
-
-  it('rejects an edge-zone final drop below measured content when the estimate overshoots', () => {
-    const preview = computeProjectGroupHeaderDropPreview({
-      pointerY: 389,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
-      rects: [
-        {
-          groupId: 'c',
-          bucketKey: 'root',
-          headerIndex: 2,
-          top: 300,
-          bottom: 328,
-          sectionBottom: 380
-        }
-      ],
-      // 389 crosses the estimated final boundary but remains below real content.
-      contentBottom: 350
-    })
-
-    expect(preview).toBeNull()
-  })
-
-  it('snaps a within-content drop even when the estimated section overshoots', () => {
-    const preview = computeProjectGroupHeaderDropPreview({
-      pointerY: 335,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
-      rects: [
-        {
-          groupId: 'c',
-          bucketKey: 'root',
-          headerIndex: 2,
-          top: 300,
-          bottom: 328,
-          sectionBottom: 380
-        }
-      ],
-      contentBottom: 340
-    })
-
-    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: 384 })
   })
 
   it('uses the whole Project Group section for the final boundary slot', () => {

@@ -136,12 +136,6 @@ describe('assertAutomationOwnerFence', () => {
     ).not.toThrow()
   })
 
-  it('leaves a legacy client unaffected on self records', () => {
-    expect(() =>
-      assertAutomationOwnerFence({ automation: automation(), operation: 'mutate', context })
-    ).not.toThrow()
-  })
-
   // The stored field is absent on a workspace-pinned record while the projection carries a
   // generation, so keying the demand off storage let precisely this population write unfenced.
   it('keeps legacy workspace-pinned mutations and execution compatible', () => {

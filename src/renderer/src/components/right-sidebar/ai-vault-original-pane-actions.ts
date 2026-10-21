@@ -2,11 +2,15 @@ import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { useAppStore } from '@/store'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,
@@ -19,7 +23,9 @@ export function useAiVaultOriginalPaneActions(): {
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
-  jumpToOriginalPane: (session: AiVaultSession) => void
+  isStructuredSessionOpen: (session: AiVaultSession) => boolean
+  /** Settles false when the pane is gone and nothing was switched. */
+  jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
   jumpToWorktree: (worktreeId: string) => void
 } {
   const originalPaneLookupState = useAppStore(
@@ -28,8 +34,24 @@ export function useAiVaultOriginalPaneActions(): {
       retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
       sleepingAgentSessionsByPaneKey: s.sleepingAgentSessionsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
-      terminalLayoutsByTabId: s.terminalLayoutsByTabId
+      terminalLayoutsByTabId: s.terminalLayoutsByTabId,
+      unifiedTabsByWorktree: s.unifiedTabsByWorktree
     }))
+  )
+
+  const isStructuredSessionOpen = useCallback(
+    (session: AiVaultSession): boolean => {
+      const structured = session.structuredSession
+      return structured
+        ? Boolean(
+            findStructuredAgentSessionTab(originalPaneLookupState.unifiedTabsByWorktree, {
+              workspaceId: structured.workspaceId,
+              sessionId: structured.sessionId
+            })
+          )
+        : false
+    },
+    [originalPaneLookupState.unifiedTabsByWorktree]
   )
   // Why: loading, filtered, or collapsed views may render no session rows.
   // Build once on the first actual lookup, then share it across visible rows.
@@ -50,45 +72,70 @@ export function useAiVaultOriginalPaneActions(): {
     [getOriginalPaneIndex]
   )
 
-  const jumpToOriginalPane = useCallback((session: AiVaultSession): void => {
-    const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
-    if (!target) {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.originalPaneUnavailable',
-          'Original pane is no longer available.'
+  const jumpToOriginalPane = useCallback(
+    async (session: AiVaultSession): Promise<boolean> => {
+      if (session.structuredSession && isStructuredSessionOpen(session)) {
+        return activateAiVaultStructuredSession(session)
+      }
+      const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
+      if (!target) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.originalPaneUnavailable',
+            'Original pane is no longer available.'
+          )
         )
-      )
-      return
-    }
+        return false
+      }
 
-    if (!activateAndRevealWorktree(target.worktreeId)) {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
-          'Worktree is no longer available.'
-        )
-      )
-      return
-    }
-    const state = useAppStore.getState()
-    state.setActiveTabType('terminal')
-    activateTabAndFocusPane(target.tabId, target.leafId, {
-      flashFocusedPane: true,
-      scrollToBottomIfOutputSinceLastView: true
-    })
-  }, [])
+      if (!revealSessionWorkspace(target.worktreeId)) {
+        return false
+      }
+      const state = useAppStore.getState()
+      state.setActiveTabType('terminal', target.worktreeId)
+      activateTabAndFocusPane(target.tabId, target.leafId, {
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      })
+      return true
+    },
+    [isStructuredSessionOpen]
+  )
 
   const jumpToWorktree = useCallback((worktreeId: string): void => {
-    if (!activateAndRevealWorktree(worktreeId)) {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
-          'Worktree is no longer available.'
-        )
-      )
-    }
+    revealSessionWorkspace(worktreeId)
   }, [])
 
-  return { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree }
+  return {
+    getOriginalPaneTarget,
+    getSessionLiveState,
+    isStructuredSessionOpen,
+    jumpToOriginalPane,
+    jumpToWorktree
+  }
+}
+
+function revealSessionWorkspace(workspaceId: string): boolean {
+  if (activateAndRevealWorkspace(workspaceId) !== false) {
+    return true
+  }
+  // Folder activation explains a refusal itself once it resolves the folder; anything else is gone.
+  const scope = parseWorkspaceKey(workspaceId)
+  const reported =
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId) !== null
+  if (!reported) {
+    toast.error(
+      scope?.type === 'folder'
+        ? translate(
+            'auto.components.right.sidebar.AiVaultPanel.folderWorkspaceUnavailable',
+            'Folder workspace is no longer available.'
+          )
+        : translate(
+            'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
+            'Worktree is no longer available.'
+          )
+    )
+  }
+  return false
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
+import type { BrowserPageGuestFocus } from '../assemble-chrome/browser-page-guest-focus'
 import { useWebviewDragPassthroughActive } from './use-webview-drag-passthrough-active'
 
 /**
@@ -11,11 +12,12 @@ import { useWebviewDragPassthroughActive } from './use-webview-drag-passthrough-
  */
 export function useClientHostedGuestActivationFocus({
   isActive,
-  webviewRef,
+  guestFocus,
   keepAddressBarFocusRef
 }: {
   isActive: boolean
-  webviewRef: RefObject<Electron.WebviewTag | null>
+  /** Not the raw tag: a retired page's <webview> is out of the DOM, where focus() throws (STA-3448). */
+  guestFocus: BrowserPageGuestFocus
   keepAddressBarFocusRef: RefObject<boolean>
 }): void {
   const dragPassthroughActive = useWebviewDragPassthroughActive()
@@ -41,6 +43,6 @@ export function useClientHostedGuestActivationFocus({
     if (keepAddressBarFocusRef.current) {
       return
     }
-    webviewRef.current?.focus()
-  }, [dragPassthroughActive, isActive, keepAddressBarFocusRef, webviewRef])
+    guestFocus.focus()
+  }, [dragPassthroughActive, guestFocus, isActive, keepAddressBarFocusRef])
 }

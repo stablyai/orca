@@ -1,10 +1,20 @@
+import {
+  readAgentAttentionUnreadReason,
+  type ReadableAgentAttentionUnread
+} from '@/attention/agent-attention-contract'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  applyAgentPaneActivityFlags,
+  type AgentPaneActivityFlags
+} from '@/lib/agent-pane-activity-flags'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
@@ -13,16 +23,18 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 // skip the card's retained-done promotion — see resolveTerminalTabActivityStatus).
 export type TerminalTabActivityStatus = WorktreeStatus
 
-// Per-tab live-hook flags, mirroring applyLiveAgentState in
-// worktree-agent-activity-summary.ts. blocked/waiting collapse to permission,
-// matching every other status surface in the app.
-type TerminalTabActivityFlags = {
-  hasPermission: boolean
-  hasLiveWorking: boolean
-  hasLiveMonitoring: boolean
-  hasInterrupted: boolean
-  hasLiveDone: boolean
+// The tab statuses whose dot draws a progress ring (see AgentStateDot).
+type ProgressRingStatus = Extract<TerminalTabActivityStatus, 'working' | 'permission'>
+
+type PaneProgramProgress = { progress: number; updatedAt: number }
+
+// Per-tab live-hook flags, folded by the same applyAgentPaneActivityFlags as the worktree card.
+type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
+  /** Panes whose row went stale; suppress generated permission labels only. */
+  stalePaneIds: Set<string>
+  /** Newest program progress per status it would drive, so ring tone and percent share a pane. */
+  programProgress: Partial<Record<ProgressRingStatus, PaneProgramProgress>>
 }
 
 type FlagsCache = {
@@ -69,25 +81,17 @@ function getTerminalTabActivityFlags(
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
+      getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
+        identity.paneId
+      )
       continue
     }
 
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
-      flags.hasPermission = true
-    } else if (entry.state === 'working') {
-      if (entry.workingMode === 'monitoring') {
-        flags.hasLiveMonitoring = true
-      } else {
-        flags.hasLiveWorking = true
-      }
-    } else if (entry.interrupted === true) {
-      // Interrupted is encoded as done, so it must be checked first.
-      flags.hasInterrupted = true
-    } else if (entry.state === 'done') {
-      flags.hasLiveDone = true
-    }
+    applyAgentPaneActivityFlags(flags, entry)
+    recordPaneProgramProgress(flags, entry)
   }
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
@@ -104,13 +108,42 @@ function getOrCreateTerminalTabActivityFlags(
       hasPermission: false,
       hasLiveWorking: false,
       hasLiveMonitoring: false,
+      hasFailed: false,
       hasInterrupted: false,
+      hasUnconfirmed: false,
       hasLiveDone: false,
-      paneIds: new Set()
+      paneIds: new Set(),
+      stalePaneIds: new Set(),
+      programProgress: {}
     }
     flagsByTabId.set(tabId, flags)
   }
   return flags
+}
+
+// Mirrors applyAgentPaneActivityFlags: monitoring and verdict-marked rows drive no ring status.
+function progressRingStatusForEntry(entry: AgentStatusEntry): ProgressRingStatus | null {
+  if (entry.state === 'blocked' || entry.state === 'waiting') {
+    return 'permission'
+  }
+  return entry.state === 'working' &&
+    entry.workingMode !== 'monitoring' &&
+    agentVerdictDisplayMark(entry) === null
+    ? 'working'
+    : null
+}
+
+function recordPaneProgramProgress(flags: TerminalTabActivityFlags, entry: AgentStatusEntry): void {
+  const progress = resolveProgramStatusPresentation(entry).progress
+  const status = progress === undefined ? null : progressRingStatusForEntry(entry)
+  if (progress === undefined || status === null) {
+    return
+  }
+  // A split tab with several reporting panes shows the most recently updated one.
+  const current = flags.programProgress[status]
+  if (!current || current.updatedAt < entry.updatedAt) {
+    flags.programProgress[status] = { progress, updatedAt: entry.updatedAt }
+  }
 }
 
 // Why: mirror the sidebar summary's parse — live entries on restored/imported
@@ -162,16 +195,41 @@ export function resolveTerminalTabActivityStatus({
     ptyIdsByTabId: ptyIdsByTabId ?? {},
     runtimePaneTitlesByTabId: runtimePaneTitlesByTabId ?? {},
     agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
+    stalePaneIdsByTabId: { [tab.id]: flags?.stalePaneIds ?? EMPTY_PANE_IDS },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
+    hasFailed: flags?.hasFailed ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
+    hasUnconfirmed: flags?.hasUnconfirmed ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
     hasRetainedDone: false
   })
+}
+
+/**
+ * The program-reported percentage for a tab's dot, taken from a pane whose row drives the tab's
+ * resolved `status`. Shares the activity flag pass, so the same freshness and pane-key rules apply.
+ */
+export function resolveTerminalTabProgramProgress({
+  tabId,
+  status,
+  agentStatusByPaneKey,
+  agentStatusEpoch
+}: {
+  tabId: string
+  status: TerminalTabActivityStatus
+  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentStatusEpoch?: number
+}): number | undefined {
+  if (status !== 'working' && status !== 'permission') {
+    return undefined
+  }
+  return getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tabId)
+    ?.programProgress[status]?.progress
 }
 
 /** True while the tab shows a live in-turn signal (spinner or needs-input). */
@@ -187,7 +245,9 @@ export type TerminalTabAttentionBadge =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'failed'
   | 'interrupted'
+  | 'unconfirmed'
   | 'unread'
   | 'done'
 
@@ -217,8 +277,8 @@ export function resolveTerminalTabAttentionBadge({
   if (status === 'done') {
     return 'done'
   }
-  if (status === 'interrupted') {
-    return 'interrupted'
+  if (status === 'failed' || status === 'interrupted' || status === 'unconfirmed') {
+    return status
   }
   return null
 }
@@ -226,12 +286,22 @@ export function resolveTerminalTabAttentionBadge({
 /** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
 export function terminalTabActivityToAgentDotState(
   status: TerminalTabActivityStatus
-): 'working' | 'monitoring' | 'permission' | 'interrupted' | 'done' | null {
+):
+  | 'working'
+  | 'monitoring'
+  | 'permission'
+  | 'failed'
+  | 'interrupted'
+  | 'unconfirmed'
+  | 'done'
+  | null {
   switch (status) {
     case 'working':
     case 'monitoring':
     case 'permission':
+    case 'failed':
     case 'interrupted':
+    case 'unconfirmed':
     case 'done':
       return status
     case 'active':
@@ -247,23 +317,23 @@ export function terminalTabHasUnreadActivity({
   unreadAgentCompletionPanes
 }: {
   terminalTabId: string
-  unreadTerminalTabs: Record<string, boolean | undefined>
-  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+  unreadTerminalTabs: Record<string, ReadableAgentAttentionUnread>
+  unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread>
 }): boolean {
   return (
-    unreadTerminalTabs[terminalTabId] === true ||
+    readAgentAttentionUnreadReason(unreadTerminalTabs[terminalTabId]) !== null ||
     hasUnreadAgentCompletionForTerminalTab(unreadAgentCompletionPanes, terminalTabId)
   )
 }
 
 // Why: production writes replace this map; WeakMap supports retained snapshots without pinning them.
 let unreadAgentCompletionTabIdsBySnapshot = new WeakMap<
-  Record<string, boolean | undefined>,
+  Record<string, ReadableAgentAttentionUnread>,
   ReadonlySet<string>
 >()
 
 function getUnreadAgentCompletionTabIds(
-  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread>
 ): ReadonlySet<string> {
   const cached = unreadAgentCompletionTabIdsBySnapshot.get(unreadAgentCompletionPanes)
   if (cached) {
@@ -285,7 +355,7 @@ function getUnreadAgentCompletionTabIds(
 
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
-  unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
+  unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread> | undefined,
   tabId: string
 ): boolean {
   return unreadAgentCompletionPanes

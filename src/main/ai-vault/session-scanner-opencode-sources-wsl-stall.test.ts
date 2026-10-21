@@ -16,7 +16,8 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 
 // The SQLite leg spawns a real worker thread, which fake timers cannot drive.
 vi.mock('./session-scanner-opencode-sqlite-worker-spawn', () => ({
-  listOpenCodeSqliteSessionsViaWorker: async () => []
+  listOpenCodeSqliteSessionsViaWorker: async () => [],
+  listOpenCode2SqliteSessionsViaWorker: async () => []
 }))
 
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
@@ -77,7 +78,8 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
     // Zero databases for that home is the degraded answer; without the issue it
     // would be indistinguishable from "OpenCode was never installed there".
     const resolved = await discoveries
-    expect(resolved).toHaveLength(2)
+    expect(resolved).toHaveLength(4)
+    expect(mocks.readdir.mock.calls.filter(([path]) => path === WSL_DATA_DIR)).toHaveLength(1)
     expect(resolved.every((discovery) => discovery.files.length === 0)).toBe(true)
     expect(issues.some((issue) => issue.path === WSL_DATA_DIR)).toBe(true)
     expect(issues.every((issue) => issue.agent === 'opencode')).toBe(true)
@@ -96,7 +98,7 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
 
       // The primary source is the one per-root containment cannot reach, so a
       // silent [] here reads as "no OpenCode sessions" on a clean scan.
-      await expect(discoveries).resolves.toHaveLength(1)
+      await expect(discoveries).resolves.toHaveLength(2)
       expect(
         issues.some((issue) => issue.agent === 'opencode' && issue.path === `${WSL_HOME}/opencode`)
       ).toBe(true)

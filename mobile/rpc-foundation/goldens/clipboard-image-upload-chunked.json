@@ -1,0 +1,155 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "clipboard.image-upload",
+  "family": "clipboard.image-upload",
+  "namedDeltas": [],
+  "values": {
+    "261840506035": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "received": 32
+          }
+        }
+      }
+    },
+    "28e38d6e1608": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "7442a814fa13": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.commitImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": "/tmp/img.png"
+        }
+      }
+    },
+    "7ab518750e0f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "/tmp/img.png"
+    },
+    "7bc2e4227914": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "a13ad28e242d": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
+    },
+    "a77b999a5f7c": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "path": "/tmp/img.png"
+    },
+    "d2a1a0e3d100": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-upload-chunked",
+    "checkpoints": [
+      {
+        "id": "uploaded",
+        "observation": {
+          "sender": ["d2a1a0e3d100", "261840506035", "7442a814fa13"],
+          "payloads": ["7bc2e4227914", "28e38d6e1608", "a13ad28e242d"],
+          "settlements": {
+            "remote": "7ab518750e0f"
+          },
+          "state": "a77b999a5f7c",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

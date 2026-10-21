@@ -1,5 +1,9 @@
 import type { IPty } from 'node-pty'
-import { isPtyJobOwnershipAvailable, listPtyJobProcessIds } from '../windows/windows-pty-job'
+import {
+  isPtyJobOwnershipAvailable,
+  listPtyJobProcessIds,
+  ptyShellProcessId
+} from '../windows/windows-pty-job'
 
 /**
  * Processes still running under a pane, or null when there is no answer.
@@ -30,7 +34,14 @@ export function readWindowsPtyJobProcessIds(
   const membership = new Set(pids.filter((pid) => Number.isSafeInteger(pid) && pid > 0))
   // Without the shell, a size-1 set would read as "shell alone, retire" when it
   // means the opposite. The forked probe this replaced refused the same way.
-  return membership.has(proc.pid) ? membership : null
+  const shellPid = ptyShellProcessId(proc)
+  if (shellPid === undefined || !membership.has(proc.pid) || !membership.has(shellPid)) {
+    return null
+  }
+  if (shellPid !== proc.pid) {
+    membership.delete(proc.pid)
+  }
+  return membership
 }
 
 /**

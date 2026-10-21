@@ -12,6 +12,8 @@ import {
 } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type DashboardLaunchDetectionState = Pick<
   AppState,
@@ -38,12 +40,26 @@ function buildDashboardLaunchCatalog(state: DashboardLaunchOptionState): Dashboa
     groupsById: new Map((state.projectGroups ?? []).map((group) => [group.id, group])),
     reposById: new Map((state.repos ?? []).map((repo) => [repo.id, repo])),
     worktreesByRepoAndId: new Map(
-      Object.entries(state.worktreesByRepo ?? {}).map(([repoId, worktrees]) => [
+      Object.entries(selectWorktreesByRepo(state) ?? {}).map(([repoId, worktrees]) => [
         repoId,
         new Map(worktrees.map((worktree) => [worktree.id, worktree]))
       ])
     )
   }
+}
+
+// Why the host-default fallback: a card can render before any launch surface probed its workspace.
+function runtimeAgentsForWorkspace(
+  state: DashboardLaunchOptionState,
+  environmentId: string,
+  worktreeId: string
+): readonly TuiAgent[] {
+  const agents = state.runtimeDetectedAgentIds
+  return (
+    agents?.[getRuntimeAgentInventoryKey(environmentId, worktreeId)] ??
+    agents?.[environmentId] ??
+    []
+  )
 }
 
 function detectedAgentsForWorktree(
@@ -58,7 +74,7 @@ function detectedAgentsForWorktree(
     const group = folder ? catalog.groupsById.get(folder.projectGroupId) : undefined
     const host = parseExecutionHostId(group?.executionHostId)
     if (host?.kind === 'runtime') {
-      return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
+      return runtimeAgentsForWorkspace(state, host.environmentId, worktreeId)
     }
     const connectionId = folder?.connectionId ?? group?.connectionId
     return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
@@ -68,7 +84,7 @@ function detectedAgentsForWorktree(
   const repo = catalog.reposById.get(worktree?.repoId ?? repoId)
   const host = parseExecutionHostId(worktree?.hostId ?? repo?.executionHostId)
   if (host?.kind === 'runtime') {
-    return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
+    return runtimeAgentsForWorkspace(state, host.environmentId, worktreeId)
   }
   const connectionId = host?.kind === 'ssh' ? host.targetId : repo?.connectionId
   return connectionId

@@ -9,6 +9,14 @@ export function isDaemonRestartInFlight(): boolean {
   return restartInFlight !== null
 }
 
+/** Settles once an in-flight restart has swapped in its provider (or failed); undefined when none. */
+export function settledDaemonRestart(): Promise<void> | undefined {
+  return restartInFlight?.then(
+    () => undefined,
+    () => undefined
+  )
+}
+
 export function runCoalescedDaemonRestart(
   run: () => Promise<RestartDaemonResult>
 ): Promise<RestartDaemonResult> {

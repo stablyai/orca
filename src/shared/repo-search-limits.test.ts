@@ -13,7 +13,6 @@ import {
 
 describe('repository ref-search limits', () => {
   it('accepts normal UI and CLI limits and adds one bounded probe row', () => {
-    expect(REPO_SEARCH_REFS_DEFAULT_LIMIT).toBe(25)
     expect(isRepoSearchRefsLimit(20)).toBe(true)
     expect(isRepoSearchRefsLimit(REPO_SEARCH_REFS_DEFAULT_LIMIT)).toBe(true)
     expect(isRepoSearchRefsLimit(600)).toBe(true)

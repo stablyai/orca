@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'

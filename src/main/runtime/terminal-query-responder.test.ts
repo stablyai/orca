@@ -21,6 +21,9 @@ import {
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
 import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+
+const QUERY_BATCH = '\x1b[c\x1b]11;?\x07\x1b[?996n'
 
 const settingsState = {
   terminalMainSideEffectAuthority: true as boolean,
@@ -58,9 +61,11 @@ type RendererBufferStub = { data: string; cols: number; rows: number }
 function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = {}) {
   const runtime = new OrcaRuntimeService(store)
   const replies: { ptyId: string; data: string }[] = []
+  const inputKinds: TerminalInputKind[] = []
   runtime.setPtyController({
-    write: (ptyId, data) => {
+    write: (ptyId, data, inputKind) => {
       replies.push({ ptyId, data })
+      inputKinds.push(inputKind)
       return true
     },
     kill: () => true,
@@ -74,7 +79,7 @@ function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = 
         }
       : {})
   })
-  return { runtime, replies }
+  return { runtime, replies, inputKinds }
 }
 
 /** Awaits the per-PTY emulator writeChain so queued chunk links (and the
@@ -146,7 +151,7 @@ describe('reply parity for hidden-dropped chunks', () => {
     ['kitty CSI ? u default flags', '\x1b[?u', ['\x1b[?0u']],
     ['kitty CSI ? u reports pushed flags', '\x1b[=5;1u\x1b[?u', ['\x1b[?5u']]
   ])('%s', async (_label, chunk, expectedReplies) => {
-    const { runtime, replies } = createResponderRuntime()
+    const { runtime, replies, inputKinds } = createResponderRuntime()
     markHiddenRendererPty('pty-q')
 
     runtime.onPtyData('pty-q', chunk, Date.now())
@@ -154,6 +159,8 @@ describe('reply parity for hidden-dropped chunks', () => {
 
     expect(replies.map((reply) => reply.data)).toEqual(expectedReplies)
     expect(replies.every((reply) => reply.ptyId === 'pty-q')).toBe(true)
+    // Why: a reply written as driving input would read the untouched run as typed.
+    expect(inputKinds).toEqual(expectedReplies.map(() => 'query-reply'))
   })
 
   it.each([
@@ -182,12 +189,11 @@ describe('reply parity for hidden-dropped chunks', () => {
 })
 
 describe('reply ownership matrix', () => {
-  const DA1 = '\x1b[c'
-
   it('never answers delivered (unmarked) chunks — the visible xterm owns them', async () => {
     const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
 
-    runtime.onPtyData('pty-v', DA1, Date.now())
+    runtime.onPtyData('pty-v', QUERY_BATCH, Date.now())
     await settle(runtime, 'pty-v')
 
     expect(replies).toEqual([])
@@ -195,10 +201,11 @@ describe('reply ownership matrix', () => {
 
   it('never answers while renderer delivery interest holds the chunk delivered', async () => {
     const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
     markHiddenRendererPty('pty-i')
     setRendererPtyDeliveryInterest('pty-i', true)
 
-    runtime.onPtyData('pty-i', DA1, Date.now())
+    runtime.onPtyData('pty-i', QUERY_BATCH, Date.now())
     await settle(runtime, 'pty-i')
 
     expect(replies).toEqual([])
@@ -214,40 +221,43 @@ describe('reply ownership matrix', () => {
   ])('never answers with kill switch %s off', async (_label, flip) => {
     flip()
     const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
     markHiddenRendererPty('pty-k')
 
-    runtime.onPtyData('pty-k', DA1, Date.now())
+    runtime.onPtyData('pty-k', QUERY_BATCH, Date.now())
     await settle(runtime, 'pty-k')
 
     expect(replies).toEqual([])
   })
 
-  it('yields while a remote view subscriber is attached and resumes on release', async () => {
+  it('yields until every remote view subscriber releases, including repeated release', async () => {
     const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
     markHiddenRendererPty('pty-r')
-    const release = runtime.registerRemoteTerminalViewSubscriber('pty-r')
+    const releaseA = runtime.registerRemoteTerminalViewSubscriber('pty-r')
+    const releaseB = runtime.registerRemoteTerminalViewSubscriber('pty-r')
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-r')).toBe(true)
 
-    runtime.onPtyData('pty-r', DA1, Date.now())
+    runtime.onPtyData('pty-r', QUERY_BATCH, Date.now())
     await settle(runtime, 'pty-r')
     expect(replies).toEqual([])
 
-    release()
-    // Releases are idempotent: a double release must not unbalance the count.
-    release()
-    runtime.onPtyData('pty-r', DA1, Date.now())
-    await settle(runtime, 'pty-r')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
-  })
-
-  it('counts overlapping remote view subscribers', () => {
-    const { runtime } = createResponderRuntime()
-    const releaseA = runtime.registerRemoteTerminalViewSubscriber('pty-m')
-    const releaseB = runtime.registerRemoteTerminalViewSubscriber('pty-m')
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(true)
     releaseA()
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(true)
+    releaseA()
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-r')).toBe(true)
+    runtime.onPtyData('pty-r', QUERY_BATCH, Date.now())
+    await settle(runtime, 'pty-r')
+    expect(replies).toEqual([])
+
     releaseB()
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(false)
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-r')).toBe(false)
+    runtime.onPtyData('pty-r', QUERY_BATCH, Date.now())
+    await settle(runtime, 'pty-r')
+    expect(replies.map((reply) => reply.data)).toEqual([
+      '\x1b[?1;2c',
+      '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\',
+      '\x1b[?997;1n'
+    ])
   })
 
   it('keeps raw preview presence separate from terminal query authority', async () => {
@@ -257,7 +267,7 @@ describe('reply ownership matrix', () => {
 
     expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(true)
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-preview')).toBe(false)
-    runtime.onPtyData('pty-preview', DA1, Date.now())
+    runtime.onPtyData('pty-preview', '\x1b[c', Date.now())
     await settle(runtime, 'pty-preview')
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
 
@@ -270,42 +280,35 @@ describe('reply ownership matrix', () => {
     await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(true)
   })
-
-  it('answers a dropped-chunk query exactly once', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-once')
-
-    runtime.onPtyData('pty-once', DA1, Date.now())
-    await settle(runtime, 'pty-once')
-
-    expect(replies).toHaveLength(1)
-  })
 })
 
 describe('main-side replay guard', () => {
-  const DA1 = '\x1b[c'
-
   it('never answers queries embedded in a seeded snapshot, then answers live bytes', async () => {
     const { runtime, replies } = createResponderRuntime()
+    setTerminalViewAttributes(viewAttributes())
     markHiddenRendererPty('pty-seed')
 
-    runtime.seedHeadlessTerminal('pty-seed', `restored prompt${DA1}`)
+    runtime.seedHeadlessTerminal('pty-seed', `restored prompt${QUERY_BATCH}`)
     await settle(runtime, 'pty-seed')
     expect(replies).toEqual([])
 
-    runtime.onPtyData('pty-seed', DA1, Date.now())
+    runtime.onPtyData('pty-seed', QUERY_BATCH, Date.now())
     await settle(runtime, 'pty-seed')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+    expect(replies.map((reply) => reply.data)).toEqual([
+      '\x1b[?1;2c',
+      '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\',
+      '\x1b[?997;1n'
+    ])
   })
 
   it('never answers queries replayed by renderer-buffer hydration', async () => {
+    setTerminalViewAttributes(viewAttributes())
     const { runtime, replies } = createResponderRuntime({
-      rendererBuffer: { data: `restored screen${DA1}`, cols: 80, rows: 24 }
+      rendererBuffer: { data: `restored screen${QUERY_BATCH}`, cols: 80, rows: 24 }
     })
     markHiddenRendererPty('pty-hyd')
 
-    // First live byte triggers maybeHydrateHeadlessFromRenderer; the hydration
-    // seed parses the embedded DA1 but must not forward its reply.
+    // Hydrated snapshots must not answer embedded terminal queries.
     runtime.onPtyData('pty-hyd', 'live output', Date.now())
     await settle(runtime, 'pty-hyd')
 
@@ -416,31 +419,19 @@ describe('ConPTY DA1 override', () => {
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c'])
   })
 
-  it('keeps the override single-reply when installed at creation and marked again', async () => {
+  it('answers once at creation and after a repeated native-Windows mark', async () => {
     const { runtime, replies } = createResponderRuntime()
     markNativeWindowsConptyPty('pty-win-idem')
     markHiddenRendererPty('pty-win-idem')
 
-    runtime.onPtyData('pty-win-idem', 'boot output', Date.now())
-    // A duplicate mark (e.g. respawn against a live emulator) must not stack
-    // a second handler that double-replies.
-    markNativeWindowsConptyPty('pty-win-idem')
-
     runtime.onPtyData('pty-win-idem', '\x1b[c', Date.now())
     await settle(runtime, 'pty-win-idem')
-
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c'])
-  })
 
-  it('answers CSI ?61;4c for marked native-Windows PTYs, suppressing the core ?1;2c', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markNativeWindowsConptyPty('pty-win')
-    markHiddenRendererPty('pty-win')
-
-    runtime.onPtyData('pty-win', '\x1b[c', Date.now())
-    await settle(runtime, 'pty-win')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c'])
+    markNativeWindowsConptyPty('pty-win-idem')
+    runtime.onPtyData('pty-win-idem', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-win-idem')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c', '\x1b[?61;4c'])
   })
 
   it('lets non-primary device-attribute queries fall through to the core', async () => {
@@ -628,7 +619,7 @@ describe('view-attribute bridge replies (after renderer push)', () => {
     setTerminalViewAttributes(viewAttributes({ cursorStyle: 'underline', cursorBlink: false }))
     runtime.onPtyData('pty-late', '\x1bP$q q\x1b\\', Date.now())
     await settle(runtime, 'pty-late')
-    expect(replies.map((reply) => reply.data).at(-1)).toBe('\x1bP1$r4 q\x1b\\')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1bP1$r2 q\x1b\\', '\x1bP1$r4 q\x1b\\'])
   })
 })
 
@@ -755,91 +746,5 @@ describe('per-PTY OSC color SET layering', () => {
     await settle(runtime, 'pty-clear')
 
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1010/2020/3030\x1b\\'])
-  })
-})
-
-describe('view-attribute replay guard and suppression', () => {
-  it('never answers view-attribute queries embedded in a seeded snapshot', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-vseed')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.seedHeadlessTerminal('pty-vseed', 'prompt\x1b]11;?\x07\x1b[?996n')
-    await settle(runtime, 'pty-vseed')
-    expect(replies).toEqual([])
-
-    runtime.onPtyData('pty-vseed', '\x1b]11;?\x07', Date.now())
-    await settle(runtime, 'pty-vseed')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'])
-  })
-
-  it('never answers view-attribute queries replayed by renderer-buffer hydration', async () => {
-    const { runtime, replies } = createResponderRuntime({
-      rendererBuffer: { data: 'restored\x1b]11;?\x07\x1b[?996n', cols: 80, rows: 24 }
-    })
-    markHiddenRendererPty('pty-vhyd')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-vhyd', 'live output', Date.now())
-    await settle(runtime, 'pty-vhyd')
-
-    expect(replies).toEqual([])
-  })
-
-  it('never answers a delivered (unmarked) view-attribute query — the visible xterm owns it', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-vvis', '\x1b]11;?\x07\x1b[?996n', Date.now())
-    await settle(runtime, 'pty-vvis')
-
-    expect(replies).toEqual([])
-  })
-
-  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-vint')
-    setRendererPtyDeliveryInterest('pty-vint', true)
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-vint', '\x1b]11;?\x07', Date.now())
-    await settle(runtime, 'pty-vint')
-
-    expect(replies).toEqual([])
-  })
-
-  it('yields view-attribute replies while a remote view subscriber is attached', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-vrem')
-    setTerminalViewAttributes(viewAttributes())
-    const release = runtime.registerRemoteTerminalViewSubscriber('pty-vrem')
-
-    runtime.onPtyData('pty-vrem', '\x1b]11;?\x07', Date.now())
-    await settle(runtime, 'pty-vrem')
-    expect(replies).toEqual([])
-
-    release()
-    runtime.onPtyData('pty-vrem', '\x1b]11;?\x07', Date.now())
-    await settle(runtime, 'pty-vrem')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'])
-  })
-
-  it.each([
-    ['terminalModelQueryAuthority', () => (settingsState.terminalModelQueryAuthority = false)],
-    ['terminalHiddenDeliveryGate', () => (settingsState.terminalHiddenDeliveryGate = false)],
-    [
-      'terminalMainSideEffectAuthority',
-      () => (settingsState.terminalMainSideEffectAuthority = false)
-    ]
-  ])('never answers view-attribute queries with kill switch %s off', async (_label, flip) => {
-    flip()
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-vkill')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-vkill', '\x1b]11;?\x07\x1b[?996n', Date.now())
-    await settle(runtime, 'pty-vkill')
-
-    expect(replies).toEqual([])
   })
 })

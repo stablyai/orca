@@ -119,8 +119,10 @@ async function runNativeScenario(
 
 test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
   test.skip(
-    process.platform !== 'darwin' || process.env.ORCA_E2E_NATIVE_MACOS_KOREAN !== '1',
-    'Requires macOS with 2-Set Korean selected and Accessibility access'
+    process.platform !== 'darwin' ||
+      process.env.ORCA_E2E_NATIVE_MACOS_KOREAN !== '1' ||
+      process.env.ORCA_E2E_FOREGROUND !== '1',
+    'Requires macOS with 2-Set Korean, Accessibility access, and an isolated foreground run'
   )
 
   test('forwards physical Hangul input as exact PTY bytes', async ({

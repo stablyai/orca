@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
+import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
@@ -22,7 +23,7 @@ import type {
   GitHubProjectSortDirection,
   GitHubProjectTable
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
@@ -58,7 +59,7 @@ type Props = {
   onEditIssueType?: (row: GitHubProjectRow, issueType: GitHubIssueType | null) => void
   onStartWork?: (row: GitHubProjectRow) => void
   onOpenInBrowser?: (row: GitHubProjectRow) => void
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
 }
 
 export default function ProjectViewList({
@@ -70,7 +71,7 @@ export default function ProjectViewList({
   onEditIssueType,
   onStartWork,
   onOpenInBrowser,
-  sourceSettings
+  sourceTarget
 }: Props): React.JSX.Element {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   // Why: column-header clicks override the view's saved sortByFields locally
@@ -181,14 +182,7 @@ export default function ProjectViewList({
   }
 
   if (table.rows.length === 0) {
-    return (
-      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        {translate(
-          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
-          "No items match this view's filter."
-        )}
-      </div>
-    )
+    return <ProjectItemsEmptyState filter={table.selectedView.filter} />
   }
 
   // Why: the visible sort indicator reflects either the local override or the
@@ -259,7 +253,7 @@ export default function ProjectViewList({
                     onStartWork={() => onStartWork?.(row)}
                     onOpenInBrowser={() => onOpenInBrowser?.(row)}
                     sourceHost={table.project.host}
-                    sourceSettings={sourceSettings}
+                    sourceTarget={sourceTarget}
                   />
                 ))
               : null}

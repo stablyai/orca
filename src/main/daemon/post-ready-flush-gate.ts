@@ -1,23 +1,5 @@
-/**
- * Defers a flush callback until after the shell has drawn its prompt and
- * switched the PTY into raw mode.
- *
- * Why: the OSC 777 shell-ready marker fires from zsh's precmd_functions /
- * bash's PROMPT_COMMAND — before the shell draws its prompt and before
- * zle/readline flips the PTY into raw mode. Flushing queued input then lets
- * the kernel (ECHO still on) echo the command once, and the line editor
- * redraws it under the prompt — producing a visible duplicate (e.g. "claude"
- * appears twice on agent launch).
- *
- * Strategy: after arm() is called, wait for prompt bytes plus a short delay
- * for the tcsetattr() that enables raw mode. If the marker-completing scan
- * already saw post-marker bytes, use that same short path immediately.
- * A conservative wall-clock fallback covers ambiguous marker-only cases.
- *
- * Mirrors the gate in local-pty-shell-ready.ts::writeStartupCommandWhenShellReady,
- * which solves the same race on the non-daemon path.
- */
-
+// Bash's prompt and zsh's line-init marker are ready for input immediately.
+// Other shells retain the existing settling delay.
 export const POST_READY_FLUSH_DELAY_MS = 30
 export const POST_READY_FLUSH_FALLBACK_MS = 200
 
@@ -26,7 +8,10 @@ export class PostReadyFlushGate {
   private postDataTimer: ReturnType<typeof setTimeout> | null = null
   private fallbackTimer: ReturnType<typeof setTimeout> | null = null
 
-  constructor(private readonly onFlush: () => void) {}
+  constructor(
+    private readonly onFlush: () => void,
+    private readonly markerIsLineEditorReady = false
+  ) {}
 
   /** True between arm() and the actual flush firing. Callers should treat
    *  input as still-queued during this window to preserve ordering. */
@@ -38,6 +23,10 @@ export class PostReadyFlushGate {
    *  wall-clock fallback unless the marker scan already observed post-marker
    *  bytes, in which case the short post-data settle path is enough. */
   arm(postMarkerBytesObserved = false): void {
+    if (this.markerIsLineEditorReady) {
+      this.onFlush()
+      return
+    }
     this.awaitingPromptDraw = true
     if (postMarkerBytesObserved) {
       this.notifyData()

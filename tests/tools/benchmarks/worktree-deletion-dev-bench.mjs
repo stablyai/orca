@@ -441,7 +441,8 @@ async function verifyRestart(instanceConfig, fixture, port, repoId) {
       await window.api.repos.list()
       let recovery = { repoPresent: false, worktreeCount: 0 }
       for (let attempt = 0; attempt < 60; attempt += 1) {
-        await store.getState().fetchRepos()
+        const owner = store.getState().settings?.activeRuntimeEnvironmentId ?? null
+        await store.getState().fetchRepos({ runtimeEnvironmentId: owner })
         if (store.getState().repos.some((repo) => repo.id === fixtureRepoId)) {
           await store.getState().fetchWorktrees(fixtureRepoId)
         }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildCollectionRows, insertCollectionRowsAfterPinned } from './worktree-list-collections'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Collection } from '../../../../shared/collection-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -167,7 +167,13 @@ describe('buildCollectionRows', () => {
   })
 
   it('slots collection rows between the pinned section and the project list', () => {
-    const header = (key: string): Row => ({ type: 'header', key, label: key, count: 1, tone: '' })
+    const header = (key: string): Row => ({
+      type: 'header',
+      key,
+      label: key,
+      count: 1,
+      icon: { kind: 'collection' }
+    })
     const item = (rowKey: string, sectionKey: string): Row => ({
       type: 'item',
       rowKey,
@@ -176,7 +182,6 @@ describe('buildCollectionRows', () => {
       repo: api,
       depth: 0,
       groupDepth: 0,
-      lineageTrail: [],
       isLastLineageChild: false,
       lineageChildCount: 0
     })

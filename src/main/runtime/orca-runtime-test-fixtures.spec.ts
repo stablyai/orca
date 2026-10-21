@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -8,7 +9,11 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
+import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
@@ -16,17 +21,17 @@ import {
 
 import type {
   FolderWorkspace,
-  MessagePriority,
-  MessageRow,
-  MessageType,
   ProjectGroup,
   RpcRequest,
   TerminalLayoutSnapshot,
   WorkspaceSessionState,
   WorktreeMeta
 } from './orca-runtime-test-mocks.spec'
+import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { Store } from '../persistence'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
@@ -150,6 +155,15 @@ const RESTORED_AUTHORITY_TOKEN_HASH = createHash('sha256')
   .update(RESTORED_AUTHORITY_TOKEN)
   .digest('hex')
 
+function isLocalBranchCatalogQuery(args: string[]): boolean {
+  return (
+    args.length === 3 &&
+    args[0] === 'for-each-ref' &&
+    args[1] === '--format=%(refname)' &&
+    args[2] === 'refs/heads/'
+  )
+}
+
 function isOriginMainBaseRefProbe(args: string[]): boolean {
   return (
     args[0] === 'rev-parse' &&
@@ -211,169 +225,6 @@ function cursorBusyScreen(): string {
     'Composer 2.5 Fast                                          Run Everything',
     '~/Documents/projects/AutoGenie · main'
   ].join('\n')
-}
-
-// Why: these tests only need message-queue semantics; real SQLite would make them fail on unrelated native runtime ABI drift.
-class InMemoryOrchestrationMessages {
-  private sequence = 0
-
-  private activeCoordinatorRun: { coordinator_handle: string } | null = null
-
-  private messages: MessageRow[] = []
-
-  private runs = new Map<
-    string,
-    { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
-  >()
-
-  insertMessage(msg: {
-    from: string
-    to: string
-    subject: string
-    body?: string
-    type?: MessageType
-    priority?: MessagePriority
-    threadId?: string
-    payload?: string
-  }): MessageRow {
-    this.sequence += 1
-    const row: MessageRow = {
-      id: `msg_${this.sequence}`,
-      run_id: 'run_test',
-      from_handle: msg.from,
-      to_handle: msg.to,
-      subject: msg.subject,
-      body: msg.body ?? '',
-      type: msg.type ?? 'status',
-      priority: msg.priority ?? 'normal',
-      thread_id: msg.threadId ?? null,
-      payload: msg.payload ?? null,
-      read: 0,
-      sequence: this.sequence,
-      created_at: '1970-01-01 00:00:00',
-      delivered_at: null,
-      sender_pane_key: null
-    }
-    this.messages.push(row)
-    return row
-  }
-
-  getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    return this.messages
-      .filter(
-        (message) =>
-          message.to_handle === toHandle &&
-          message.read === 0 &&
-          (!types || types.length === 0 || types.includes(message.type))
-      )
-      .sort((a, b) => a.sequence - b.sequence)
-  }
-
-  getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
-    return this.getUnreadMessages(toHandle, types).filter((message) => !message.delivered_at)
-  }
-
-  getUndeliveredUnreadMailboxHandles(): string[] {
-    return [
-      ...new Set(
-        this.messages
-          .filter((message) => message.read === 0 && !message.delivered_at)
-          .map((message) => message.to_handle)
-      )
-    ]
-  }
-
-  setActiveCoordinatorRun(run: { coordinator_handle: string } | null): void {
-    this.activeCoordinatorRun = run
-  }
-
-  getActiveCoordinatorRun(): { coordinator_handle: string } | null {
-    return this.activeCoordinatorRun
-  }
-
-  setRun(run: {
-    id: string
-    coordinator_handle: string | null
-    coordinator_pane_key?: string | null
-  }): void {
-    this.runs.set(run.id, { coordinator_pane_key: null, ...run })
-  }
-
-  getRun(
-    id: string
-  ):
-    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
-    | undefined {
-    return this.runs.get(id)
-  }
-
-  getCurrentRunForPane(
-    paneKey: string
-  ):
-    | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
-    | undefined {
-    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
-  }
-
-  listWorkerTerminalReleaseBacklog(): never[] {
-    return []
-  }
-
-  hasUndeliveredDirectMessageForRun(runId: string, directHandle: string): boolean {
-    return this.messages.some(
-      (message) =>
-        message.run_id === runId &&
-        message.to_handle === directHandle &&
-        message.read === 0 &&
-        !message.delivered_at
-    )
-  }
-
-  routeUnreadDirectMessagesToRunMailbox(
-    runId: string,
-    directHandle: string
-  ): { routedCount: number; hasMore: boolean; types: MessageType[] } {
-    const routed = this.messages.filter(
-      (message) =>
-        message.run_id === runId && message.to_handle === directHandle && message.read === 0
-    )
-    for (const message of routed) {
-      message.to_handle = `run:${runId}`
-    }
-    return {
-      routedCount: routed.length,
-      hasMore: false,
-      types: [...new Set(routed.map((message) => message.type))]
-    }
-  }
-
-  areUnreadMessages(toHandle: string, ids: string[]): boolean {
-    return ids.every((id) =>
-      this.messages.some(
-        (message) => message.id === id && message.to_handle === toHandle && message.read === 0
-      )
-    )
-  }
-
-  markAsDelivered(ids: string[]): void {
-    const deliveredIds = new Set(ids)
-    for (const message of this.messages) {
-      if (deliveredIds.has(message.id)) {
-        message.delivered_at = '1970-01-01 00:00:00'
-      }
-    }
-  }
-
-  markAsUndelivered(ids: string[]): void {
-    const releasedIds = new Set(ids)
-    for (const message of this.messages) {
-      if (releasedIds.has(message.id) && message.read === 0) {
-        message.delivered_at = null
-      }
-    }
-  }
-
-  close(): void {}
 }
 
 function setInMemoryOrchestrationMessages(
@@ -528,14 +379,14 @@ function createStaleRuntimeWorktreeStore(
   const metaById: Record<string, WorktreeMeta> = {
     [worktreeId]: makeWorktreeMeta(metaOverrides)
   }
-  const removeWorktreeMeta = vi.fn((id: string) => {
+  const removeWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget) => {
     delete metaById[id]
   })
   const runtimeStore = {
     ...store,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
       return metaById[id]
     },
@@ -559,7 +410,7 @@ const store = {
   getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
   mergeRetiredWorktreeNames: () => false,
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...store.getRepo(id),
       ...updates
@@ -581,7 +432,7 @@ const store = {
     }
   }),
   getWorktreeMeta: (worktreeId: string) => store.getAllWorktreeMeta()[worktreeId],
-  setWorktreeMeta: (_worktreeId: string, meta: Record<string, unknown>) =>
+  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) =>
     ({
       ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
       ...meta
@@ -600,8 +451,8 @@ const store = {
   getProjects: () => []
 }
 
-// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as
-// upsertSshRemotePtyLease does through toStoredPtyId. Non-SSH ids pass through untouched.
+// Callers pass the pane's APP-form pty id; the lease stores RELAY form, exactly as the relay-era
+// writer did through toStoredPtyId. Non-SSH ids pass through untouched.
 function createRuntimeWithSshLease(
   ptyId: string,
   tabId: string,
@@ -722,10 +573,11 @@ function makeRuntimeStoreWithWorkspaceSession(
   ownerHostId = 'local'
 ): {
   runtimeStore: typeof store & {
+    admitTerminalPane: ReturnType<typeof withRuntimePaneAdmission>['admitTerminalPane']
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
-    setWorkspaceSession: ReturnType<typeof vi.fn>
-    flushOrThrow: ReturnType<typeof vi.fn>
-    persistPtyBinding: ReturnType<typeof vi.fn>
+    setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
+    flushOrThrow: ReturnType<typeof vi.fn<() => void>>
+    persistPtyBinding: ReturnType<typeof vi.fn<Store['persistPtyBinding']>>
   }
   getSession: () => WorkspaceSessionState
   setSession: (next: WorkspaceSessionState) => void
@@ -734,16 +586,30 @@ function makeRuntimeStoreWithWorkspaceSession(
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const runtimeStore = {
-    ...store,
-    getWorkspaceSession: (hostId?: string) =>
-      hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
-    setWorkspaceSession: vi.fn(setSession),
-    // Headless close is a durable transaction; keep the in-memory fixture's
-    // persistence contract equivalent to the production store.
-    flushOrThrow: vi.fn(),
-    persistPtyBinding: vi.fn(
-      (args: { worktreeId: string; tabId: string; leafId: string; ptyId: string }) => {
+  const runtimeStore = withRuntimePaneAdmission(
+    withDurableRuntimeStore({
+      ...store,
+      getWorkspaceSession: (hostId?: string) =>
+        hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
+      setWorkspaceSession: vi.fn(setSession),
+      // Main's `layout.apply` on this partition, as the Store applies it (switch-on writes).
+      applyLayoutCommand: vi.fn(async (command: LayoutCommand, hostIds?: readonly string[]) => {
+        const change = applyCommandToSession(
+          resolveHostId(hostIds?.[0] ?? ownerHostId),
+          session,
+          command
+        )
+        session = change.session ?? session
+        return change.value
+      }),
+      // Headless close is a durable transaction; keep the in-memory fixture's
+      // persistence contract equivalent to the production store.
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
+        const args = typeof input === 'function' ? input() : input
+        if (!args) {
+          return false
+        }
         const tabs = session.tabsByWorktree[args.worktreeId] ?? []
         session = {
           ...session,
@@ -769,9 +635,9 @@ function makeRuntimeStoreWithWorkspaceSession(
           }
         }
         return true
-      }
-    )
-  }
+      })
+    })
+  )
   return { runtimeStore, getSession: () => session, setSession }
 }
 
@@ -832,9 +698,10 @@ export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSi
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
 export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
 export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
-export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
+export { renderGateCapMs, setInMemoryOrchestrationMessages, spawnedPtyEnv, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

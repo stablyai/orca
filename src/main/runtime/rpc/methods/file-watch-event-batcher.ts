@@ -1,13 +1,17 @@
-import {
-  WATCH_BATCH_MAX_WAIT_MS,
-  WATCH_BATCH_TRAILING_MS
-} from '../../../../shared/filesystem-watch-batch-window'
+import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
 import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem-watcher-event-batch'
+import type { FileWatchBatchCadence } from '../../../../shared/rpc-contract/files-target-params'
+
+// Why: older clients restart a read per batch and drop superseded results, so a 100 ms
+// cadence starves them on slow links; keep their trailing window unless they opt in.
+const LEGACY_WATCH_BATCH_TRAILING_MS = 150
+const LEGACY_WATCH_BATCH_MAX_WAIT_MS = 500
 
 export function createFileWatchEventBatcher(
   worktree: string,
-  emit: (result: unknown) => void
+  emit: (result: unknown) => void,
+  cadence?: FileWatchBatchCadence
 ): {
   push: (events: FsChangeEvent[]) => void
   flush: () => void
@@ -16,6 +20,7 @@ export function createFileWatchEventBatcher(
   let events: FsChangeEvent[] = []
   let overflowed = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  let lastFlushAt = 0
   let firstEventAt = 0
 
   const clearTimer = (): void => {
@@ -34,6 +39,7 @@ export function createFileWatchEventBatcher(
     if (nextEvents.length === 0) {
       return
     }
+    lastFlushAt = Date.now()
     emit({ type: 'changed', worktree, events: nextEvents })
   }
 
@@ -63,21 +69,24 @@ export function createFileWatchEventBatcher(
           }
         }
       }
-      const now = Date.now()
-      if (firstEventAt === 0) {
-        firstEventAt = now
-      }
-      if (now - firstEventAt >= WATCH_BATCH_MAX_WAIT_MS) {
-        flush()
+      if (cadence !== 'interval') {
+        const now = Date.now()
+        firstEventAt ||= now
+        if (now - firstEventAt >= LEGACY_WATCH_BATCH_MAX_WAIT_MS) {
+          flush()
+          return
+        }
+        clearTimer()
+        timer = setTimeout(flush, LEGACY_WATCH_BATCH_TRAILING_MS)
+        timer.unref?.()
         return
       }
-      clearTimer()
-      // Why: remote file-watch events cross the runtime WebSocket before the
-      // renderer refreshes the tree. Match local watcher batching here.
-      timer = setTimeout(flush, WATCH_BATCH_TRAILING_MS)
-      if (typeof timer.unref === 'function') {
-        timer.unref()
+      // Why: never push an armed flush back; resetting on each event starved delivery under continuous writes.
+      if (timer) {
+        return
       }
+      timer = setTimeout(flush, watchBatchFlushDelayMs(Date.now(), lastFlushAt))
+      timer.unref?.()
     },
     flush,
     dispose(): void {

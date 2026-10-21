@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  reconcileDeadSessions,
   reconcileMissingSessions,
   shouldReconcileMissingSession,
   shouldReconcileDeadSession
@@ -199,68 +198,6 @@ describe('reconcileMissingSessions', () => {
     expect(bindingA.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
     expect(bindingB.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
     const [, requestedAt] = bindingA.reconcileIfSessionMissing.mock.calls[0]!
-    expect(requestedAt).toBeGreaterThanOrEqual(before)
-    expect(requestedAt).toBeLessThanOrEqual(after)
-  })
-})
-
-describe('reconcileDeadSessions', () => {
-  function createBinding() {
-    return {
-      reconcileIfSessionDead:
-        vi.fn<(liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void>()
-    }
-  }
-
-  it('invokes each binding with the resolved live-session id set', async () => {
-    const bindingA = createBinding()
-    const bindingB = createBinding()
-    await reconcileDeadSessions({
-      bindings: [bindingA, bindingB],
-      listSessions: async () => [
-        { id: 'wt@@alive', cwd: '/a', title: 'a' },
-        { id: 'wt@@other', cwd: '/b', title: 'b' }
-      ]
-    })
-    const expectedSet = new Set(['wt@@alive', 'wt@@other'])
-    expect(bindingA.reconcileIfSessionDead).toHaveBeenCalledWith(expectedSet, expect.any(Number))
-    expect(bindingB.reconcileIfSessionDead).toHaveBeenCalledWith(expectedSet, expect.any(Number))
-  })
-
-  it('treats a rejected listSessions as "unknown" and reconciles nothing', async () => {
-    const binding = createBinding()
-    await reconcileDeadSessions({
-      bindings: [binding],
-      listSessions: async () => {
-        throw new Error('IPC failed')
-      }
-    })
-    expect(binding.reconcileIfSessionDead).not.toHaveBeenCalled()
-  })
-
-  it('treats a resolved empty list as authoritative (still reconciles)', async () => {
-    const binding = createBinding()
-    await reconcileDeadSessions({
-      bindings: [binding],
-      listSessions: async () => []
-    })
-    expect(binding.reconcileIfSessionDead).toHaveBeenCalledWith(new Set(), expect.any(Number))
-  })
-
-  it('forwards a requestedAt timestamp captured before listSessions resolves', async () => {
-    // Why (fail-open guard): if requestedAt is not threaded, a fresh pane bound
-    // after the request is wrongly reconciled. Prove a Number reaches each binding
-    // and that it predates a post-call now (captured before, not after, resolve).
-    const binding = createBinding()
-    const before = performance.now()
-    await reconcileDeadSessions({
-      bindings: [binding],
-      listSessions: async () => [{ id: 'wt@@alive', cwd: '/a', title: 'a' }]
-    })
-    const after = performance.now()
-    expect(binding.reconcileIfSessionDead).toHaveBeenCalledTimes(1)
-    const [, requestedAt] = binding.reconcileIfSessionDead.mock.calls[0]!
-    expect(typeof requestedAt).toBe('number')
     expect(requestedAt).toBeGreaterThanOrEqual(before)
     expect(requestedAt).toBeLessThanOrEqual(after)
   })

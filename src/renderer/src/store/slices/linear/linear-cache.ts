@@ -68,8 +68,12 @@ export function workspaceErrorMessage(error: unknown): string {
 }
 
 export function getSelectedWorkspaceId(
-  status: LinearConnectionStatus
+  status: LinearConnectionStatus,
+  options?: { workspaceId?: LinearWorkspaceSelection | null }
 ): LinearWorkspaceSelection | null {
+  if (options?.workspaceId !== undefined) {
+    return options.workspaceId
+  }
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
 }
 

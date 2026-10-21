@@ -1,0 +1,467 @@
+{
+  "node": "v26.6.0",
+  "electron": null,
+  "v8": "14.6.202.34-node.26",
+  "platform": "darwin",
+  "runnerSha256": "b78dc54a08345732235d4fcc1f72ca1534b00f89280981beda00667d22b8f291",
+  "loaderSha256": "730da9091abba3997432657aef4a2e6e7a3dd0e9218ea78f1838806b6c0fa789",
+  "pendingTailCodeUnits": 18,
+  "clearedRegexStatics": true,
+  "bundles": {
+    "baseline": {
+      "bundleSha256": "6023f5d6868f5db601f6883acda5d56990d204084a6a3c812799aff1e533a5b0",
+      "evaluatedSources": {
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/terminal-kitty-keyboard-mode-tracker.ts": "2ee0bad47d4575046f71c16e0334a8ae8be531f0cfc67133abc287f8ae5aa403",
+        "src/main/daemon/terminal-mouse-mode-mirror.ts": "5bf8a94ad7ec3fdd151ba7559f49a229b2156818aba88f7b562bef258048acf1",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+        "src/shared/terminal-kitty-keyboard-flags.ts": "ee8ca63afdca8356fa12878e74973ff92d807aa8d99750b2415b42f4bccb0225"
+      },
+      "sourceVersionsSha256": "29cde88cb882b2d7726a2d4a077484217076090acc009f47a805e368f597e51a"
+    },
+    "fixed-buffer": {
+      "bundleSha256": "bbae10735fc999eea9dafffcd0e1fc4c47e1a8f1daf0045ed074b08cf3a93d45",
+      "evaluatedSources": {
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/shared/terminal-kitty-keyboard-mode-tracker.ts": "a8da704564b9ab97aa344f380940021d3fa98f80af817751824d14271acb8a84",
+        "src/main/daemon/terminal-mouse-mode-mirror.ts": "e8f4888dabee5c4cc50b0f15584b3b1b5e2da4db1ba25695dd5762ef9c4a6fb3",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+        "src/shared/terminal-kitty-keyboard-flags.ts": "ee8ca63afdca8356fa12878e74973ff92d807aa8d99750b2415b42f4bccb0225"
+      },
+      "sourceVersionsSha256": "29cde88cb882b2d7726a2d4a077484217076090acc009f47a805e368f597e51a"
+    },
+    "fixed-fallback": {
+      "bundleSha256": "bbae10735fc999eea9dafffcd0e1fc4c47e1a8f1daf0045ed074b08cf3a93d45",
+      "evaluatedSources": {
+        "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+        "src/main/daemon/terminal-mouse-mode-mirror.ts": "e8f4888dabee5c4cc50b0f15584b3b1b5e2da4db1ba25695dd5762ef9c4a6fb3",
+        "src/shared/terminal-kitty-keyboard-mode-tracker.ts": "a8da704564b9ab97aa344f380940021d3fa98f80af817751824d14271acb8a84",
+        "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+        "src/shared/terminal-kitty-keyboard-flags.ts": "ee8ca63afdca8356fa12878e74973ff92d807aa8d99750b2415b42f4bccb0225"
+      },
+      "sourceVersionsSha256": "29cde88cb882b2d7726a2d4a077484217076090acc009f47a805e368f597e51a"
+    }
+  },
+  "reports": [
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 2120952,
+      "afterCompletionDelta": 31112
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 33557944,
+      "afterCompletionDelta": 3840
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scanReplay",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 2107000,
+      "afterCompletionDelta": 9336
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scanReplay",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 33557928,
+      "afterCompletionDelta": 3752
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 2,
+      "heapDelta": 3320,
+      "afterCompletionDelta": 3288
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 3176,
+      "afterCompletionDelta": 4792
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 3176,
+      "afterCompletionDelta": 4904
+    },
+    {
+      "variant": "baseline",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 17,
+      "heapDelta": 33557944,
+      "afterCompletionDelta": 3232
+    },
+    {
+      "variant": "baseline",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 2111984,
+      "afterCompletionDelta": 13904
+    },
+    {
+      "variant": "baseline",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 33557072,
+      "afterCompletionDelta": 2272
+    },
+    {
+      "variant": "baseline",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 2,
+      "heapDelta": 1232,
+      "afterCompletionDelta": 1232
+    },
+    {
+      "variant": "baseline",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 992,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "baseline",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 992,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "baseline",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 17,
+      "heapDelta": 33555840,
+      "afterCompletionDelta": 1048
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 18376,
+      "afterCompletionDelta": 25472
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 3448,
+      "afterCompletionDelta": 3144
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scanReplay",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 9400,
+      "afterCompletionDelta": 8216
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scanReplay",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 3696,
+      "afterCompletionDelta": 3392
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 2,
+      "heapDelta": 3320,
+      "afterCompletionDelta": 3240
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 3176,
+      "afterCompletionDelta": 4648
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 3128,
+      "afterCompletionDelta": 3144
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 17,
+      "heapDelta": 3448,
+      "afterCompletionDelta": 3152
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 15112,
+      "afterCompletionDelta": 14376
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 1312,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 2,
+      "heapDelta": 1232,
+      "afterCompletionDelta": 1200
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 992,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 992,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "fixed-buffer",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 17,
+      "heapDelta": 1344,
+      "afterCompletionDelta": 1048
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 9480,
+      "afterCompletionDelta": 8216
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 3448,
+      "afterCompletionDelta": 4048
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scanReplay",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 13216,
+      "afterCompletionDelta": 11952
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scanReplay",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 3448,
+      "afterCompletionDelta": 3144
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 2,
+      "heapDelta": 3320,
+      "afterCompletionDelta": 3240
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 3176,
+      "afterCompletionDelta": 3192
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 3912,
+      "afterCompletionDelta": 3928
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "kitty",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 17,
+      "heapDelta": 3448,
+      "afterCompletionDelta": 3152
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 65536,
+      "count": 32,
+      "expectedTailLength": 18,
+      "heapDelta": 9336,
+      "afterCompletionDelta": 8072
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 18,
+      "heapDelta": 1312,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 2,
+      "heapDelta": 1232,
+      "afterCompletionDelta": 8184
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 992,
+      "afterCompletionDelta": 1008
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 0,
+      "heapDelta": 2280,
+      "afterCompletionDelta": 2296
+    },
+    {
+      "variant": "fixed-fallback",
+      "kind": "mouse",
+      "method": "scan",
+      "inputChars": 4194304,
+      "count": 8,
+      "expectedTailLength": 17,
+      "heapDelta": 1312,
+      "afterCompletionDelta": 1016
+    }
+  ]
+}

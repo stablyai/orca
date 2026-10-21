@@ -88,7 +88,7 @@ function runWithNativeCallCount(fn) {
   let calls = 0
   Buffer.byteLength = (...args) => {
     calls += 1
-    return Reflect.apply(nativeByteLength, Buffer, args)
+    return nativeByteLength.call(Buffer, ...args)
   }
   try {
     return { output: fn(), calls }

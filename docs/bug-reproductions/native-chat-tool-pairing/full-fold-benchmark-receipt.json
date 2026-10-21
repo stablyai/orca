@@ -1,0 +1,51 @@
+{
+  "commands": [
+    "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/native-chat-fold-benchmark.mjs --memory-control > /tmp/orca-chat-full-fold-memory-control.json",
+    "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/native-chat-fold-benchmark.mjs > /tmp/orca-chat-full-fold-final.json"
+  ],
+  "artifactPromotion": "Final JSON copied only after successful process exit, all 54 cases completed, and memory-control validation passed.",
+  "artifactFormatting": {
+    "rawSha256": "ce89f6c858439fd3eaf7335ee4fa500414d102e5590a2b5516d97c0775a96c66",
+    "formattedSha256": "c101e09bd1841aa7637bc0c37b5779f7c05336413d7a365075d7806c55ae89f4",
+    "parsedJsonIdentical": true
+  },
+  "sha256": {
+    "config/scripts/native-chat-fold-benchmark.mjs": "8211f3f7159cb7559de622e35f5216e04000d40913109636adda7cf116aa1b16",
+    "config/scripts/native-chat-fold-benchmark-workloads.mjs": "2e6996889d678c71513e08c820c2b3dc2ae0731764b7133e5f2a88a72fe5f977",
+    "config/scripts/counterbalanced-benchmark-schedule.mjs": "bc35b40e954fa7ddec0225ed375bd3b113c2e05b8554bc50734d14f89987294d",
+    "config/scripts/benchmark-sample-summary.mjs": "feecbd5ec627e7d0ad568f8521c108c1a1cfd478b56f2239d72cd04cb079db1c",
+    "config/scripts/script-child-process.mjs": "a7441428bf7b5c9a897b6a3c057c50f46acca24c4f218a4b849de5aec53c4173",
+    "src/shared/child-process/run-process.ts": "f4d9683c0a0d2ea3ceb9c99b5b713b502496a2f3f982e2c63728063d5f1b239d",
+    "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+    "mobile/src/session/MobileNativeChatToolRun.tsx": "a6690578f1fbd89ff2874bc80a069deed5807dd445a21fdaa7f285eee31f59cd",
+    "docs/bug-reproductions/native-chat-tool-pairing/full-fold-benchmark.json": "c101e09bd1841aa7637bc0c37b5779f7c05336413d7a365075d7806c55ae89f4",
+    "docs/bug-reproductions/native-chat-tool-pairing/full-fold-memory-control.json": "01feb2876d2c43302bd5c503469168c2077054787003f4b210ab8a4bc7940159"
+  },
+  "postMainMergeReview": {
+    "head": "bcfbb8cb6d543aca516fca346c32c47ec880019f",
+    "measuredCurrentModules": 55,
+    "unchangedModules": 52,
+    "changes": [
+      {
+        "path": "src/shared/agent-session-failure.ts",
+        "measuredSha256": "a857f8657cd3a24eb7f81c169a37cfcfb9981e6fec2c568f2994c4267962e8bf",
+        "postMergeSha256": "9a0e10463b338c695c35dfbff3561bab71b862d7588465b12a74f58f13e540af",
+        "delta": "AGENT_SESSION_FAILURE_KINDS adds claudeAccountFolderMissing and claudeAccountSetupFailed."
+      },
+      {
+        "path": "src/shared/agent-session-refusal-details.ts",
+        "measuredSha256": "b4715dac4535cfdcb7db4c1c2e422330d3360e7c74f8c89e694b408bc7d9e897",
+        "postMergeSha256": "370368c32fd91271b3a2f2d8721031ce1ebcf49424b3861e8c028ae2431d3b0f",
+        "delta": "The startup refusal-reason union adds claudeAccountFolderMissing and claudeAccountSetupFailed, plus comments."
+      },
+      {
+        "path": "src/shared/structured-agent-session-dispatch-rejection.ts",
+        "measuredSha256": "24131349753a9e69ea8c2d24c97408b1c79bfebcccf651c1e85acc6f67d99234",
+        "postMergeSha256": "1fb152d779eb890ddcd711da543b4f7501e635baa9969eb0fa24350f94770c57",
+        "delta": "KIND_CATEGORY maps both added reasons to startFailed; KIND_VERDICT maps both to failure."
+      }
+    ],
+    "executedPathAssessment": "Only static account-startup enum/map additions changed. Fixtures contain no failure/refusal events or subagent journal envelopes; the root-conversation projection returns before turn-membership work when byAgent is empty. No function logic used by these fixtures changed. Module initialization occurs outside timed operations and before memory-sample GC baselines.",
+    "decision": "No timing rerun: measured matching/folding/projection paths and benchmark tools remain byte-identical. Artifact module and bundle hashes continue to identify the measured pre-merge graph; post-merge enum/map hashes are recorded separately, without claiming a newly timed bundle."
+  }
+}

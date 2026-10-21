@@ -1,0 +1,16 @@
+{
+  "source_scenario": "bg-subagent-cancel",
+  "claude_version": "2.1.280 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/Users/uuuuuuuuuuuuu/orca-qa/phase0-cancel/settings.json",
+    "--dangerously-skip-permissions"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-22",
+  "clock": "t is seconds since the first record; hook records keep the ps snapshot taken inside the hook",
+  "note": "Claude Code driven over a real PTY with every hook logged. The main agent launches an Agent-tool subagent (2.1.280 launches it asynchronously and Stops), then a foreground turn on the main agent is cancelled with Esc. No hook fires for the cancel; the subagent and its shell survive it and the next Stop still lists the subagent as running. Scrubbed: username replaced by a same-length placeholder."
+}

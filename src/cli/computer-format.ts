@@ -63,7 +63,11 @@ export function prepareComputerCliJsonResult<TResult>(
       screenshotStatus?: unknown
     }
   }
-  if (!record.result || !('screenshotStatus' in record.result)) {
+  if (
+    !record.result ||
+    typeof record.result !== 'object' ||
+    !('screenshotStatus' in record.result)
+  ) {
     return response
   }
   const screenshot = record.result?.screenshot

@@ -1,6 +1,6 @@
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserStreamToken,
@@ -186,6 +186,31 @@ export function resolveRemoteBrowserCssViewport(input: {
       requestedHeight ??
       deviceHeight ??
       input.naturalSize.height
+  }
+}
+
+// Why the image's own box and not the pane's: the frame is letterboxed inside the pane, so only
+// the rect it is drawn in says which page pixel sits under the pointer.
+export function mapRemoteBrowserClientPoint(input: {
+  clientX: number
+  clientY: number
+  frameRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  cssViewport: RemoteBrowserViewportSize
+}): RemoteBrowserImagePoint | null {
+  const { frameRect, cssViewport } = input
+  if (
+    frameRect.width <= 0 ||
+    frameRect.height <= 0 ||
+    cssViewport.width <= 0 ||
+    cssViewport.height <= 0
+  ) {
+    return null
+  }
+  const x = ((input.clientX - frameRect.left) / frameRect.width) * cssViewport.width
+  const y = ((input.clientY - frameRect.top) / frameRect.height) * cssViewport.height
+  return {
+    x: Math.round(Math.min(cssViewport.width, Math.max(0, x))),
+    y: Math.round(Math.min(cssViewport.height, Math.max(0, y)))
   }
 }
 

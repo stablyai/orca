@@ -1,0 +1,210 @@
+diff --git a/src/main/ipc/local-log-tail.ts b/src/main/ipc/local-log-tail.ts
+index 430882b4e0..0892665ad5 100644
+--- a/src/main/ipc/local-log-tail.ts
++++ b/src/main/ipc/local-log-tail.ts
+@@ -9,35 +9,83 @@ import type {
+ } from '../../shared/local-log-tail-types'
+ import { readLocalLogTailRange } from '../ai-vault/local-log-tail-reader'
+ import { resolveAuthorizedPath } from './filesystem-auth'
++import { abortWhenRendererGone } from './renderer-lifetime-abort'
+ 
+-type TailWatch = {
++type TailSenderOwner = {
+   senderId: number
++  pending: Map<string, symbol>
++  watchKeys: Set<string>
++  signal: AbortSignal
++  dispose: () => void
++}
++
++type TailWatch = {
++  owner: TailSenderOwner
+   watcher: FSWatcher
+ }
+ 
+ const tailWatches = new Map<string, TailWatch>()
+-const senderCleanupRegistered = new Set<number>()
++const senderOwners = new Map<number, TailSenderOwner>()
+ 
+ function watchKey(senderId: number, subscriptionId: string): string {
+   return `${senderId}:${subscriptionId}`
+ }
+ 
+-function closeWatch(key: string): void {
++function releaseIdleOwner(owner: TailSenderOwner): void {
++  if (owner.pending.size > 0 || owner.watchKeys.size > 0) {
++    return
++  }
++  if (senderOwners.get(owner.senderId) === owner) {
++    senderOwners.delete(owner.senderId)
++  }
++  owner.dispose()
++}
++
++function closeWatch(key: string, expected?: TailWatch): void {
+   const subscription = tailWatches.get(key)
+-  if (!subscription) {
++  if (!subscription || (expected && subscription !== expected)) {
+     return
+   }
+   tailWatches.delete(key)
+-  subscription.watcher.close()
++  subscription.owner.watchKeys.delete(key)
++  try {
++    subscription.watcher.close()
++  } finally {
++    releaseIdleOwner(subscription.owner)
++  }
+ }
+ 
+-function closeSenderWatches(senderId: number): void {
+-  senderCleanupRegistered.delete(senderId)
+-  for (const [key, subscription] of tailWatches) {
+-    if (subscription.senderId === senderId) {
+-      closeWatch(key)
++function closeSenderWatches(owner: TailSenderOwner): void {
++  owner.pending.clear()
++  for (const key of owner.watchKeys) {
++    const subscription = tailWatches.get(key)
++    if (subscription?.owner === owner) {
++      closeWatch(key, subscription)
++    }
++  }
++  releaseIdleOwner(owner)
++}
++
++function getSenderOwner(sender: WebContents): TailSenderOwner {
++  const existing = senderOwners.get(sender.id)
++  if (existing) {
++    return existing
++  }
++  const lifetime = abortWhenRendererGone(sender)
++  const onAbort = (): void => closeSenderWatches(owner)
++  const owner: TailSenderOwner = {
++    senderId: sender.id,
++    pending: new Map(),
++    watchKeys: new Set(),
++    signal: lifetime.signal,
++    dispose: () => {
++      lifetime.signal.removeEventListener('abort', onAbort)
++      lifetime.dispose()
+     }
+   }
++  senderOwners.set(sender.id, owner)
++  lifetime.signal.addEventListener('abort', onAbort, { once: true })
++  return owner
+ }
+ 
+ function validateSubscriptionId(value: unknown): string {
+@@ -47,12 +95,52 @@ function validateSubscriptionId(value: unknown): string {
+   return value
+ }
+ 
+-function registerSenderCleanup(sender: WebContents): void {
+-  if (senderCleanupRegistered.has(sender.id)) {
++async function startWatch(
++  sender: WebContents,
++  args: LocalLogTailWatchArgs,
++  store: Store
++): Promise<void> {
++  const subscriptionId = validateSubscriptionId(args.subscriptionId)
++  if (sender.isDestroyed()) {
+     return
+   }
+-  senderCleanupRegistered.add(sender.id)
+-  sender.once('destroyed', () => closeSenderWatches(sender.id))
++  const key = watchKey(sender.id, subscriptionId)
++  const owner = getSenderOwner(sender)
++  const pending = Symbol(subscriptionId)
++  owner.pending.set(key, pending)
++  try {
++    const filePath = await resolveAuthorizedPath(args.filePath, store)
++    if (
++      sender.isDestroyed() ||
++      owner.signal.aborted ||
++      senderOwners.get(sender.id) !== owner ||
++      owner.pending.get(key) !== pending
++    ) {
++      return
++    }
++    closeWatch(key)
++    const sendChange = (eventType: 'change' | 'rename'): void => {
++      if (tailWatches.get(key) !== subscription || sender.isDestroyed()) {
++        return
++      }
++      const payload: LocalLogTailChangedPayload = { subscriptionId, eventType }
++      sender.send('fs:localLogTailChanged', payload)
++    }
++    const watcher = watch(filePath, (eventType) => sendChange(eventType))
++    const subscription: TailWatch = { owner, watcher }
++    watcher.on('error', () => {
++      // Rotation needs one final drain before releasing this exact watcher.
++      sendChange('rename')
++      closeWatch(key, subscription)
++    })
++    tailWatches.set(key, subscription)
++    owner.watchKeys.add(key)
++  } finally {
++    if (owner.pending.get(key) === pending) {
++      owner.pending.delete(key)
++    }
++    releaseIdleOwner(owner)
++  }
+ }
+ 
+ export function registerLocalLogTailHandlers(store: Store): void {
+@@ -64,43 +152,25 @@ export function registerLocalLogTailHandlers(store: Store): void {
+     }
+   )
+ 
+-  ipcMain.handle(
+-    'fs:startLocalLogTail',
+-    async (event, args: LocalLogTailWatchArgs): Promise<void> => {
+-      const subscriptionId = validateSubscriptionId(args.subscriptionId)
+-      const filePath = await resolveAuthorizedPath(args.filePath, store)
+-      const key = watchKey(event.sender.id, subscriptionId)
+-      closeWatch(key)
+-
+-      const sendChange = (eventType: 'change' | 'rename'): void => {
+-        if (!tailWatches.has(key) || event.sender.isDestroyed()) {
+-          return
+-        }
+-        const payload: LocalLogTailChangedPayload = { subscriptionId, eventType }
+-        event.sender.send('fs:localLogTailChanged', payload)
+-      }
+-      const watcher = watch(filePath, (eventType) => sendChange(eventType))
+-      watcher.on('error', () => {
+-        // Why: an error commonly accompanies rotation. Signal one final drain so
+-        // the renderer can detect identity change, then release the dead handle.
+-        sendChange('rename')
+-        closeWatch(key)
+-      })
+-      tailWatches.set(key, { senderId: event.sender.id, watcher })
+-      registerSenderCleanup(event.sender)
+-    }
++  ipcMain.handle('fs:startLocalLogTail', (event, args: LocalLogTailWatchArgs): Promise<void> =>
++    startWatch(event.sender, args, store)
+   )
+ 
+   ipcMain.handle('fs:stopLocalLogTail', (event, args: { subscriptionId: string }): void => {
+-    closeWatch(watchKey(event.sender.id, validateSubscriptionId(args.subscriptionId)))
++    const key = watchKey(event.sender.id, validateSubscriptionId(args.subscriptionId))
++    const owner = senderOwners.get(event.sender.id)
++    owner?.pending.delete(key)
++    closeWatch(key)
++    if (owner) {
++      releaseIdleOwner(owner)
++    }
+   })
+ }
+ 
+ export function closeAllLocalLogTailWatchers(): void {
+-  for (const key of Array.from(tailWatches.keys())) {
+-    closeWatch(key)
++  for (const owner of senderOwners.values()) {
++    closeSenderWatches(owner)
+   }
+-  senderCleanupRegistered.clear()
+ }
+ 
+ /** Test-only: verifies tab/window teardown does not retain native watchers. */

@@ -103,6 +103,9 @@ function sgrSequenceSetsBackground(params: string): boolean {
 }
 
 function containsBackgroundSgr(data: string): boolean {
+  if (!data.includes('\x1b[')) {
+    return false
+  }
   SGR_SEQUENCE_PATTERN.lastIndex = 0
   for (
     let match = SGR_SEQUENCE_PATTERN.exec(data);

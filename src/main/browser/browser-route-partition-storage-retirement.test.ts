@@ -36,6 +36,7 @@ function stubExecutor(onClose: () => void) {
     handle: vi.fn(async () => ({ status: 'completed' as const })),
     retirePage: vi.fn(async () => true),
     hasUnresolvedPage: vi.fn(() => false),
+    hostsPage: vi.fn(() => false),
     beginAuthorityTransition: vi.fn(),
     completeAuthorityTransition: vi.fn(),
     fenceNavigation: vi.fn(),
@@ -107,6 +108,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: number
       authorityRuntimeId: string
       authorityConnectionIdentity: string
+      pairingAuthorityConnectionIdentity: string
       legacyAuthorityConnectionIdentity: string
     }>({
       createComposition: () =>
@@ -116,6 +118,7 @@ describe('browser route partition storage retirement', () => {
             pairingRevision: 1,
             authorityRuntimeId: 'runtime-a',
             authorityConnectionIdentity: 'authority-a',
+            pairingAuthorityConnectionIdentity: 'pairing-authority-a',
             legacyAuthorityConnectionIdentity: 'legacy-authority-a'
           },
           createRoutes: () => stubRoutes(),
@@ -133,6 +136,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: 1,
       authorityRuntimeId: 'runtime-a',
       authorityConnectionIdentity: 'authority-a',
+      pairingAuthorityConnectionIdentity: 'pairing-authority-a',
       legacyAuthorityConnectionIdentity: 'legacy-authority-a'
     })
 

@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import type { RemoteWatcherInstallToken } from './filesystem-watcher-lifecycle-state'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import { registerWatcherSenderCleanup } from './filesystem-watcher-listener-lifecycle'
 import {
   installRemoteWatcherCore,
   type RemoteWatcherTerminalErrorHandler
@@ -14,14 +15,16 @@ export function installRemoteWatcher(
   sender: WebContents,
   connectionId: string,
   worktreePath: string,
-  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration
+  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration,
+  senderSignal = registerWatcherSenderCleanup(sender)
 ) {
   return installRemoteWatcherCore(
     sender,
     connectionId,
     worktreePath,
     handleRemoteWatcherTerminalError,
-    generation
+    generation,
+    senderSignal
   )
 }
 
@@ -82,6 +85,7 @@ const handleRemoteWatcherTerminalError: RemoteWatcherTerminalErrorHandler = (
   }
   watcherLifecycleState.remoteWatchers.delete(key)
   state.batch.close()
+  // Why: a suspended snapshot means a removal or its restore owns these listeners; a retry would race it.
   if (
     watcherLifecycleState.remoteWatchersClosed ||
     watcherLifecycleState.suspendedRemoteWatcherListeners.has(key)

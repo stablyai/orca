@@ -114,6 +114,49 @@ export function isGitForWindowsBashPath(shellPath: string): boolean {
   return /(?:^|\\)(?:git|portablegit)(?:\\usr)?\\bin\\bash\.exe$/.test(normalized)
 }
 
+/**
+ * Files only a Git for Windows install root carries. `usr\bin\bash.exe` is the launcher's own
+ * hand-off target, and the other two separate that root from a Cygwin or MSYS2 one: neither ships a
+ * `cmd\` directory, and `git-bash.exe` is Git for Windows' own launcher rather than an upstream git
+ * binary, so no Cygwin package can put it here. All three confirmed present on a real Git 2.x
+ * install and absent from a real Cygwin root.
+ */
+const GIT_FOR_WINDOWS_ROOT_MARKERS = [
+  ['usr', 'bin', 'bash.exe'],
+  ['cmd', 'git.exe'],
+  ['git-bash.exe']
+] as const
+
+/**
+ * Git for Windows' `bin\bash.exe` is a launcher: it runs `..\usr\bin\bash.exe` as a child and waits.
+ *
+ * The installer's folder is named `Git`, but a user-chosen install directory, an unzipped
+ * PortableGit, and Scoop's `apps\git\current` are equally real, so a folder this does not recognize
+ * falls back to the install layout instead of denying the hand-off.
+ */
+export function isGitForWindowsBashLauncherPath(
+  shellPath: string,
+  options: Pick<GitBashPathOptions, 'exists'> = {}
+): boolean {
+  const normalized = pathWin32.normalize(shellPath)
+  if (/(?:^|\\)(?:git|portablegit)\\bin\\bash\.exe$/.test(normalized.toLowerCase())) {
+    return true
+  }
+  const binDirectory = pathWin32.dirname(normalized)
+  if (
+    pathWin32.basename(normalized).toLowerCase() !== 'bash.exe' ||
+    pathWin32.basename(binDirectory).toLowerCase() !== 'bin'
+  ) {
+    return false
+  }
+  // `usr\bin\bash.exe` lands here too, and is refused because no install root sits inside `usr`.
+  const installRoot = pathWin32.dirname(binDirectory)
+  const exists = options.exists ?? existsSync
+  return GIT_FOR_WINDOWS_ROOT_MARKERS.every((marker) =>
+    exists(pathWin32.join(installRoot, ...marker))
+  )
+}
+
 export function resolveWindowsGitBashShellPath(
   shell: string,
   options: GitBashPathOptions = {}

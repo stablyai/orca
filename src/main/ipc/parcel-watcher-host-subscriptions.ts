@@ -16,6 +16,11 @@ export type PendingWatcherUnsubscribe = (error?: Error) => void
 export const WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS = RUNTIME_FILE_WATCH_CANCEL_TIMEOUT_MS
 
 const terminalTeardownFailures = new WeakMap<WatcherProcessSubscriptionRecord, Error>()
+const pendingRecordUnsubscribes = new WeakMap<WatcherProcessSubscriptionRecord, Promise<void>>()
+const hostSubscriptions = new WeakMap<
+  WatcherProcessSubscriptionRecord,
+  WatcherProcessSubscription
+>()
 
 export function handleWatcherHostMessage(
   message: Exclude<
@@ -138,49 +143,85 @@ export function createHostWatcherSubscription({
   terminateUnavailableChild,
   sendToChild
 }: CreateHostWatcherSubscriptionOptions): WatcherProcessSubscription {
-  return {
-    unsubscribe: (): Promise<void> => {
-      const terminalFailure = terminalTeardownFailures.get(record)
-      if (terminalFailure) {
-        return Promise.reject(terminalFailure)
-      }
-      const termination = getTerminationPromise()
-      if (!records.delete(record.id)) {
-        return termination ?? Promise.resolve()
-      }
-      resetPendingSubscribeAttempt(record)
-      if (termination) {
-        return termination
-      }
-      if (records.size === 0) {
-        return killWatcherChildIfIdle()
-      }
-      const child = getChild()
-      if (!child?.connected) {
-        return terminateUnavailableChild(child)
-      }
-      return new Promise((resolve, reject) => {
-        const onTimeout = (): void => {
-          if (pendingUnsubscribes.get(record.id) !== settle) {
-            return
-          }
-          // Why: canary setup itself can fail, so native teardown needs an
-          // independent host deadline that exits the child and releases handles.
-          void terminateUnavailableChild(child).catch(() => undefined)
-        }
-        const timer = setTimeout(onTimeout, WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS)
-        timer.unref?.()
-        const settle: PendingWatcherUnsubscribe = (error) => {
-          clearTimeout(timer)
-          if (error) {
-            reject(error)
-          } else {
-            resolve()
-          }
-        }
-        pendingUnsubscribes.set(record.id, settle)
-        sendToChild(child, { op: 'unsubscribe', id: record.id })
-      })
+  const existing = hostSubscriptions.get(record)
+  if (existing) {
+    return existing
+  }
+  const unsubscribe = (): Promise<void> => {
+    const terminalFailure = terminalTeardownFailures.get(record)
+    if (terminalFailure) {
+      return Promise.reject(terminalFailure)
     }
+    const termination = getTerminationPromise()
+    if (!records.delete(record.id)) {
+      return termination ?? Promise.resolve()
+    }
+    resetPendingSubscribeAttempt(record)
+    if (termination) {
+      return termination
+    }
+    if (records.size === 0) {
+      return killWatcherChildIfIdle()
+    }
+    const child = getChild()
+    if (!child?.connected) {
+      return terminateUnavailableChild(child)
+    }
+    return new Promise((resolve, reject) => {
+      const onTimeout = (): void => {
+        if (pendingUnsubscribes.get(record.id) !== settle) {
+          return
+        }
+        // Why: canary setup itself can fail, so native teardown needs an
+        // independent host deadline that exits the child and releases handles.
+        void terminateUnavailableChild(child).catch(() => undefined)
+      }
+      const timer = setTimeout(onTimeout, WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS)
+      timer.unref?.()
+      const settle: PendingWatcherUnsubscribe = (error) => {
+        clearTimeout(timer)
+        if (error) {
+          reject(error)
+        } else {
+          resolve()
+        }
+      }
+      pendingUnsubscribes.set(record.id, settle)
+      sendToChild(child, { op: 'unsubscribe', id: record.id })
+    })
+  }
+  const subscription: WatcherProcessSubscription = {
+    unsubscribe: (): Promise<void> => {
+      const pending = pendingRecordUnsubscribes.get(record)
+      if (pending) {
+        return pending
+      }
+      const closing = unsubscribe()
+      pendingRecordUnsubscribes.set(record, closing)
+      const clearPending = (): void => {
+        if (pendingRecordUnsubscribes.get(record) === closing) {
+          pendingRecordUnsubscribes.delete(record)
+        }
+      }
+      void closing.then(clearPending, clearPending)
+      return closing
+    }
+  }
+  hostSubscriptions.set(record, subscription)
+  return subscription
+}
+
+export async function retireHostWatcherSubscription(
+  record: WatcherProcessSubscriptionRecord,
+  error: Error,
+  shouldReport: () => boolean
+): Promise<void> {
+  try {
+    await hostSubscriptions.get(record)?.unsubscribe()
+  } catch (teardownError) {
+    error = teardownError instanceof Error ? teardownError : new Error(String(teardownError))
+  }
+  if (shouldReport()) {
+    reportWatcherTerminalError(record, error)
   }
 }

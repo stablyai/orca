@@ -98,4 +98,23 @@ describe('BottomDrawer close lifecycle', () => {
     expect(latestAfterClose).toHaveBeenCalledTimes(1)
     expect(renderer.toJSON()).toBeNull()
   })
+
+  // The hide finished and the drawer reopened before the scheduled JS callback ran; that late
+  // callback used to latch, so the next close never unmounted and its invisible Modal ate taps.
+  it('a hide that lands after a reopen does not swallow the next close', () => {
+    const onAfterClose = vi.fn()
+    const renderer = renderDrawer(true, vi.fn(), onAfterClose)
+    const lateOnHidden = mountedDrawer(renderer).props.onHidden
+    updateDrawer(renderer, false, vi.fn(), onAfterClose)
+    updateDrawer(renderer, true, vi.fn(), onAfterClose)
+
+    act(() => lateOnHidden())
+    expect(mountedDrawer(renderer).props.visible).toBe(true)
+    expect(onAfterClose).not.toHaveBeenCalled()
+
+    updateDrawer(renderer, false, vi.fn(), onAfterClose)
+    act(() => mountedDrawer(renderer).props.onHidden())
+    expect(renderer.toJSON()).toBeNull()
+    expect(onAfterClose).toHaveBeenCalledTimes(1)
+  })
 })

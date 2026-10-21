@@ -8,7 +8,7 @@ import {
   Plus,
   X
 } from 'lucide-react'
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'

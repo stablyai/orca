@@ -7,7 +7,9 @@ import {
   type BackgroundMountTerminalWorktreeDetail,
   type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
+import { listenForHibernatedAgentWake } from '@/components/terminal-pane/hibernated-agent-wake-listener'
 import type { ResumeSleepingAgentSessionsOptions } from './resume-sleeping-agent-session'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const resumeSpy = vi.fn<
   (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
@@ -23,7 +25,7 @@ vi.mock('./resume-sleeping-agent-session', () => ({
 // the gating, not the predicate internals.
 const isPassiveSpy = vi.fn()
 vi.mock('./sleeping-agent-pane-ownership', () => ({
-  isPassiveCompletedHibernationEvidence: (record: unknown) => isPassiveSpy(record),
+  activationTreatsNoteAsFinished: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
   getProviderSessionClaimKey: (record: {
     worktreeId: string
@@ -54,6 +56,7 @@ import {
   createBackgroundSleepingAgentWakeDispatcher,
   wakeSleepingAgentsForWorktreeInBackground
 } from './wake-sleeping-agents-in-background'
+import { takeSleepingAgentWakeRequest } from './sleeping-agent-wake-requests'
 
 type RecordedEvents = {
   events: string[]
@@ -154,6 +157,31 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
       'wt-1',
       expect.objectContaining({ suppressNavigation: true })
     )
+  })
+
+  it('asks only the mounted tabs to start their agents while hidden', () => {
+    const record = (tabId: string): SleepingAgentSessionRecord => ({
+      paneKey: `${tabId}:leaf-1`,
+      tabId,
+      worktreeId: 'wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: `session-${tabId}` },
+      prompt: '',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1
+    })
+    const passive = record('tab-a')
+    const slept = { ...record('tab-b'), restoreOnTabOpenOnly: true }
+    sleepingRecords = { k1: passive, k2: slept }
+    isPassiveSpy.mockReturnValue(true)
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    // Why: the background-mounted pane lands hidden, where a sleeping resume otherwise waits for a reveal.
+    expect(takeSleepingAgentWakeRequest(passive)).toBe(true)
+    expect(takeSleepingAgentWakeRequest(passive)).toBe(false)
+    expect(takeSleepingAgentWakeRequest(slept)).toBe(false)
   })
 
   it('falls back to a whole-worktree mount when a passive record has no resolvable tab', () => {
@@ -379,21 +407,24 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     )
   })
 
-  it('passes claims consumed by mounted panes to the generic resume as skipClaimKeys', () => {
+  it('wakes mounted panes through the real pane listener and skips their claims', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
-    // A mounted pane consuming the in-place wake adds its claim key to the
-    // event detail — exactly what use-terminal-pane-lifecycle does.
-    const onWake = (event: Event): void => {
-      ;(event as CustomEvent<WakeHibernatedAgentsWorktreeDetail>).detail.wokenClaimKeys?.add(
-        'claim-1'
-      )
-    }
-    window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
+    const wakeHibernatedAgentIfArmed = vi.fn(() => 'claim-1')
+    const otherWorktreeWake = vi.fn(() => 'claim-other')
+    const stopListening = listenForHibernatedAgentWake('wt-1', () => [
+      { dispose: () => {}, wakeHibernatedAgentIfArmed }
+    ])
+    const stopOtherListening = listenForHibernatedAgentWake('wt-2', () => [
+      { dispose: () => {}, wakeHibernatedAgentIfArmed: otherWorktreeWake }
+    ])
 
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
-    window.removeEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
+    stopListening()
+    stopOtherListening()
+    expect(wakeHibernatedAgentIfArmed).toHaveBeenCalledTimes(1)
+    expect(otherWorktreeWake).not.toHaveBeenCalled()
     const options = resumeSpy.mock.calls[0]?.[1]
     expect(options?.skipClaimKeys?.has('claim-1')).toBe(true)
   })

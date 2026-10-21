@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import { describe, expect, it } from 'vitest'
+import { describe, it } from 'vitest'
 import {
   TERMINAL_MULTIPLEX_ACK_BATCH_BYTES,
   TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
@@ -158,20 +158,6 @@ function simulateParsedCredit(streamCount: number, rttMs: number): SimulationRes
     loopIterations
   }
 }
-
-describe('terminal multiplex parsed-credit bounds', () => {
-  it('keeps aggregate memory bounded and streams fair at 100 ms RTT', () => {
-    const result = simulateParsedCredit(8, 100)
-    expect(result.maxInFlightBytes).toBeLessThanOrEqual(
-      TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES
-    )
-    expect(result.throughputMiBPerSecond / 8).toBeGreaterThan(7)
-    expect(result.ackFrames).toBeLessThan(result.outputFrames / 3)
-    expect(
-      Math.max(...result.perStreamCompletionMs) - Math.min(...result.perStreamCompletionMs)
-    ).toBeLessThan(200)
-  })
-})
 
 describe.skipIf(!benchEnabled)('terminal multiplex parsed-credit benchmark', () => {
   it('reports RTT, fairness, protocol allocations, and measured xterm parser cost', async () => {

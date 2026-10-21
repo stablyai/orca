@@ -240,6 +240,7 @@ describe('browserManager', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'https://example.com/'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -258,6 +259,32 @@ describe('browserManager', () => {
     const preventDefault = vi.fn()
     willNavigateHandler?.({ preventDefault }, 'file:///etc/passwd')
     expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['https://example.com/', true],
+    ['file:///docs/plan.html', false]
+  ])('from %s, a file: link navigation is blocked=%s', (currentUrl, blocked) => {
+    const guest = {
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => currentUrl),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+    const preventDefault = vi.fn()
+    willNavigateHandler?.({ preventDefault }, 'file:///docs/index.html')
+    expect(preventDefault).toHaveBeenCalledTimes(blocked ? 1 : 0)
   })
 
   it('unregisterAll clears tracked guests and context-menu listeners', () => {
@@ -288,19 +315,17 @@ describe('browserManager', () => {
       webContentsId: 102,
       rendererWebContentsId
     })
-    // Why: attach-before-registration teardown skips unregisterGuest, so global
-    // cleanup must independently release the private click-routing token.
-    browserManager.attachGuestPolicies({ ...guest, id: 103 } as never)
+    // Guests attached before registration still need their policy listeners released.
+    const unregisteredGuestOff = vi.fn()
+    browserManager.attachGuestPolicies({ ...guest, id: 103, off: unregisteredGuestOff } as never)
 
     browserManager.unregisterAll()
 
     expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
-    const managerState = browserManager as unknown as {
-      clickedLinkFrameNameByGuestId: Map<number, unknown>
-    }
-    expect(managerState.clickedLinkFrameNameByGuestId.size).toBe(0)
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('did-create-window', expect.any(Function))
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('input-event', expect.any(Function))
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {
@@ -637,9 +662,9 @@ describe('browserManager', () => {
     ).toHaveLength(2)
   })
 
-  it('cancels pending anti-detection reattach timers when unregistering a guest', () => {
-    vi.useFakeTimers()
-
+  // Why: a plain browsing tab must never attach a debugger (Cloudflare treats CDP as a bot signal);
+  // the only debugger wiring it keeps is the detach listener that invalidates the auth-host UA override.
+  it('never attaches a debugger to a browsing guest and drops its detach listener on unregister', () => {
     const debuggerHandlers = new Map<string, () => void>()
     const debuggerAttachMock = vi.fn()
     const guest = {
@@ -670,18 +695,17 @@ describe('browserManager', () => {
 
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
-      browserPageId: 'browser-reattach',
+      browserPageId: 'browser-no-debugger',
       webContentsId: 809,
       rendererWebContentsId
     })
 
-    debuggerHandlers.get('detach')?.()
-    expect(vi.getTimerCount()).toBe(1)
+    expect(debuggerAttachMock).not.toHaveBeenCalled()
+    expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
+    expect(debuggerHandlers.has('detach')).toBe(true)
 
-    browserManager.unregisterGuest('browser-reattach')
-    expect(vi.getTimerCount()).toBe(0)
-
-    vi.advanceTimersByTime(500)
-    expect(debuggerAttachMock).toHaveBeenCalledTimes(1)
+    browserManager.unregisterGuest('browser-no-debugger')
+    expect(debuggerHandlers.has('detach')).toBe(false)
+    expect(debuggerAttachMock).not.toHaveBeenCalled()
   })
 })

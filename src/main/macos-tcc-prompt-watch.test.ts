@@ -91,12 +91,16 @@ describe('isOrcaAttributedPrompt', () => {
 
 function createFakeLogStream(): {
   child: LogStreamChild
+  stdin: PassThrough
   stdout: PassThrough
   killed: string[]
 } {
+  const stdin = new PassThrough()
   const stdout = new PassThrough()
   const killed: string[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watcher only touches stdin/stdout/kill and EventEmitter events, all provided here.
   const child = Object.assign(new EventEmitter(), {
+    stdin,
     stdout,
     stderr: new PassThrough(),
     kill: (signal?: string) => {
@@ -104,7 +108,7 @@ function createFakeLogStream(): {
       return true
     }
   }) as unknown as LogStreamChild
-  return { child, stdout, killed }
+  return { child, stdin, stdout, killed }
 }
 
 // Why: the watcher is darwin-gated, so CI (Linux) would silently no-op every
@@ -158,11 +162,26 @@ describe('MacosTccPromptWatch', () => {
   })
 
   it('kills the child on stop so it cannot outlive app quit', () => {
-    const { child, killed } = createFakeLogStream()
+    const { child, stdin, killed } = createFakeLogStream()
     const watch = new MacosTccPromptWatch({ onPrompt: vi.fn(), spawnLogStream: () => child })
     watch.start()
     watch.stop()
     expect(killed).toEqual(['SIGTERM'])
+    // Why: closing the parent-death pipe is the backstop if the wrapper missed the signal.
+    expect(stdin.destroyed).toBe(true)
+  })
+
+  it('closes the parent-death pipe of a child that terminated on its own', () => {
+    const { child, stdin } = createFakeLogStream()
+    const watch = new MacosTccPromptWatch({
+      onPrompt: vi.fn(),
+      spawnLogStream: () => child,
+      restartDelayMs: 60_000
+    })
+    watch.start()
+    child.emit('exit', 1)
+    expect(stdin.destroyed).toBe(true)
+    watch.stop()
   })
 
   it('restarts once after an unexpected termination without creating a retry loop', async () => {

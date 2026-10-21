@@ -8,6 +8,8 @@ export type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
   LinearCommentAddResult,
+  LinearCommentDeleteResult,
+  LinearCommentEditResult,
   LinearCreateResult,
   LinearErrorCode,
   LinearIssueListFilter,
@@ -51,7 +53,9 @@ export {
 export {
   addIssueComment as addLinearIssueComment,
   addIssueCommentForAgent as addLinearIssueCommentForAgent,
-  createIssueAttachment as createLinearIssueAttachment
+  createIssueAttachment as createLinearIssueAttachment,
+  deleteIssueCommentForAgent as deleteLinearIssueCommentForAgent,
+  updateIssueCommentForAgent as updateLinearIssueCommentForAgent
 } from '../linear/linear-issue-comments'
 export {
   createIssueForAgent as createLinearIssueForAgent,

@@ -5,6 +5,7 @@ import {
   parseAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { PANE } from './server.test-fixtures'
+import { AGENT_STATUS_RUNS_RUNTIME_CAPABILITY } from '../../shared/agent-status-run-capability'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -193,7 +194,7 @@ describe('AgentHookServer ingestRemote', () => {
     )
   })
 
-  it('preserves active pane identity when a nested remote hook reports another agent', () => {
+  it('preserves active pane status when a nested remote hook reports another agent', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -233,17 +234,15 @@ describe('AgentHookServer ingestRemote', () => {
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
-          prompt: 'nested claude',
+          prompt: 'parent codex',
           agentType: 'codex',
-          toolName: 'Read',
-          toolInput: '00-review-context.md',
-          receivedAt: 1_100
+          receivedAt: 1_000
         })
       ])
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
-            prompt: 'nested claude',
+            prompt: 'parent codex',
             agentType: 'codex'
           })
         })
@@ -564,20 +563,6 @@ describe('AgentHookServer ingestRemote', () => {
     expect(server.getStatusSnapshot()).toEqual([])
   })
 
-  it('rejects empty connectionId', () => {
-    const server = new AgentHookServer()
-    const payload = parseAgentStatusPayload(
-      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
-    )
-    if (!payload) {
-      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
-    }
-    const listener = vi.fn()
-    server.setListener(listener)
-    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '')
-    expect(listener).not.toHaveBeenCalled()
-  })
-
   it('rejects whitespace-only connectionId', () => {
     const server = new AgentHookServer()
     const payload = parseAgentStatusPayload(
@@ -643,5 +628,33 @@ describe('AgentHookServer ingestRemote', () => {
     expect(listener).toHaveBeenCalledTimes(1)
     const event = listener.mock.calls[0][0] as { payload: { prompt: string } }
     expect(event.payload.prompt.length).toBe(200)
+  })
+
+  it('never falls back to the legacy writer for a run-capable peer', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        advertisedAgentStatusCapabilities: [],
+        payload: { state: 'working', prompt: 'unsupported peer', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    const olderPeerRow = server.getStatusSnapshot()[0]
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        advertisedAgentStatusCapabilities: [AGENT_STATUS_RUNS_RUNTIME_CAPABILITY],
+        payload: { state: 'done', prompt: 'capable peer', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([olderPeerRow])
   })
 })

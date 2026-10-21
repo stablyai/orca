@@ -1,6 +1,8 @@
 import type { DiffSection } from './diff-section-types'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
-type DiffSectionPopoverTarget = {
+type DiffSectionCommentTarget = {
   lineNumber: number
   startLine?: number
 }
@@ -19,7 +21,7 @@ export async function submitDiffSectionComment({
   addDiffComment,
   body,
   onAddLineComment,
-  popover,
+  target,
   section,
   worktreeId
 }: {
@@ -33,14 +35,14 @@ export async function submitDiffSectionComment({
       body: string
     }
   ) => Promise<boolean>
-  popover: DiffSectionPopoverTarget
+  target: DiffSectionCommentTarget
   section: DiffSection
   worktreeId?: string
 }): Promise<boolean> {
   if (onAddLineComment) {
     return onAddLineComment(section, {
-      lineNumber: popover.lineNumber,
-      startLine: popover.startLine,
+      lineNumber: target.lineNumber,
+      startLine: target.startLine,
       body
     })
   }
@@ -53,13 +55,13 @@ export async function submitDiffSectionComment({
     worktreeId,
     filePath: section.path,
     source: 'diff',
-    startLine: popover.startLine,
-    lineNumber: popover.lineNumber,
+    startLine: target.startLine,
+    lineNumber: target.lineNumber,
     body,
     side: 'modified'
   })
   if (!result) {
-    console.error('Failed to add diff comment — draft preserved')
+    toast.error(translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
   }
   return Boolean(result)
 }

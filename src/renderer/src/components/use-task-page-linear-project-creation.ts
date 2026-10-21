@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import { linearCreateProject } from '@/runtime/runtime-linear-project-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreationModel) {
   const {
     settings,
@@ -47,19 +48,22 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
     }
     setNewLinearProjectSubmitting(true)
     try {
-      const result = await linearCreateProject(linearTaskSourceContext ?? settings, {
-        name,
-        description: newLinearProjectDescription.trim() || undefined,
-        content: newLinearProjectContent.trim() || undefined,
-        teamIds: [newLinearProjectTargetTeam.id],
-        workspaceId: newLinearProjectTargetTeam.workspaceId,
-        leadId: newLinearProjectLeadId || undefined,
-        memberIds: newLinearProjectMemberIds.length > 0 ? newLinearProjectMemberIds : undefined,
-        labelIds: newLinearProjectLabelIds.length > 0 ? newLinearProjectLabelIds : undefined,
-        priority: newLinearProjectPriority,
-        startDate: newLinearProjectStartDate || undefined,
-        targetDate: newLinearProjectTargetDate || undefined
-      })
+      const result = await linearCreateProject(
+        linearTaskSourceContext ?? defaultScopeSource(settings),
+        {
+          name,
+          description: newLinearProjectDescription.trim() || undefined,
+          content: newLinearProjectContent.trim() || undefined,
+          teamIds: [newLinearProjectTargetTeam.id],
+          workspaceId: newLinearProjectTargetTeam.workspaceId,
+          leadId: newLinearProjectLeadId || undefined,
+          memberIds: newLinearProjectMemberIds.length > 0 ? newLinearProjectMemberIds : undefined,
+          labelIds: newLinearProjectLabelIds.length > 0 ? newLinearProjectLabelIds : undefined,
+          priority: newLinearProjectPriority,
+          startDate: newLinearProjectStartDate || undefined,
+          targetDate: newLinearProjectTargetDate || undefined
+        }
+      )
       if (!result.ok) {
         toast.error(
           result.error ||

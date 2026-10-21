@@ -26,6 +26,8 @@ import type {
 } from '../../../../shared/github/project-result-types'
 import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   CacheEntry,
   FetchOptions,
@@ -48,6 +50,9 @@ export type GitHubSlice = {
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
+  visibleReviewWorktreeIds: readonly string[]
+  visibleReviewCardWorktreeIds: readonly string[]
+  setVisibleReviewCardWorktreeIds: (ids: readonly string[]) => void
   // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
   workItemsCache: Record<string, CacheEntry<readonly GitHubWorkItem[]>>
   fetchPRForBranch: (
@@ -72,7 +77,7 @@ export type GitHubSlice = {
     branch?: string,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { throwOnError?: boolean }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
     repoPath: string,
@@ -132,7 +137,10 @@ export type GitHubSlice = {
     reason: GitHubPRRefreshReason,
     priority?: number
   ) => void
-  reportVisibleGitHubPRRefreshCandidates: (worktreeIds: string[], generation: number) => void
+  reportVisibleGitHubPRRefreshCandidates: (
+    worktreeIds: string[],
+    generation: number
+  ) => Promise<void>
   bumpGitHubPRVisibleRefreshGeneration: () => void
   applyGitHubPRRefreshEvent: (event: GitHubPRRefreshEvent) => void
   getEffectiveGitHubPRRefreshState: (cacheKey: string, now?: number) => PRRefreshState | undefined
@@ -242,12 +250,17 @@ export type GitHubSlice = {
   setIssueSourcePreference: (
     repoId: string,
     repoPath: string,
-    preference: IssueSourcePreference
+    preference: IssueSourcePreference,
+    /** Required: a twin's rows share the id, so only the caller's row host names which one changed. */
+    hostId: ExecutionHostId
   ) => Promise<void>
-  evictGitHubRepoCaches: (repoId: string, repoPath?: string) => void
+  /** Drops the row's entries on every host scope; `hostId` names the row so a same-id twin on another host keeps its own. */
+  evictGitHubRepoCaches: (repoId: string, repoPath?: string, hostId?: ExecutionHostId) => void
   // ── ProjectV2 view cache ─────────────────────────────────────────────
   projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
+  /** `sourceTarget` names the board's row-less source host; the focused server is never read. */
   fetchProjectViewTable: (
+    sourceTarget: RuntimeClientTarget,
     args: GetProjectViewTableArgs,
     options?: FetchOptions
   ) => Promise<GetProjectViewTableResult>

@@ -1,8 +1,8 @@
 import { useRef, type MutableRefObject } from 'react'
-import { useAppStore } from '@/store'
 import { serializeRichMarkdownForReconcile } from './rich-markdown-reconcile-serializer'
 import { createRichMarkdownImageResolverContext } from './rich-markdown-image-context'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 
 type ReconcileRoundTripParams = {
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
@@ -27,7 +27,7 @@ export function useRichMarkdownReconcileRoundTrip({
   worktreeId,
   worktreeRoot
 }: ReconcileRoundTripParams): MutableRefObject<(markdown: string) => string | null> {
-  const settings = useAppStore((s) => s.settings)
+  const runtimeTarget = useFileOwnerRuntimeTarget(worktreeId, runtimeEnvironmentId)
   const ref = useRef<(markdown: string) => string | null>(() => null)
   ref.current = (markdown) =>
     serializeRichMarkdownForReconcile(markdown, {
@@ -35,8 +35,7 @@ export function useRichMarkdownReconcileRoundTrip({
       imageResolverContext: createRichMarkdownImageResolverContext({
         filePath,
         externalSshTargetId,
-        runtimeEnvironmentId,
-        settings,
+        runtimeTarget,
         worktreeId,
         worktreeRoot
       })

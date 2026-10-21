@@ -153,8 +153,8 @@ beforeEach(() => {
 
 // isActive stays true for the active tab of every split group, so the scope is what separates the
 // focused pane from a background one (#11348).
-function renderPane(chromeShortcutScope: BrowserChromeShortcutScope = 'focused'): void {
-  render(
+function renderPane(chromeShortcutScope: BrowserChromeShortcutScope = 'focused'): HTMLElement {
+  return render(
     <TooltipProvider>
       <RemoteBrowserPagePane
         browserTab={page()}
@@ -167,7 +167,7 @@ function renderPane(chromeShortcutScope: BrowserChromeShortcutScope = 'focused')
         onSetUrl={vi.fn()}
       />
     </TooltipProvider>
-  )
+  ).container
 }
 
 afterEach(() => {
@@ -268,6 +268,53 @@ describe('streamed browser pane chrome chords', () => {
 
     expect(event.defaultPrevented).toBe(false)
     expect(mocks.runRemoteNavigation).not.toHaveBeenCalled()
+  })
+
+  it('walks remote history from the focused split only', () => {
+    renderPane()
+    act(() => {
+      fireEvent.keyDown(screen.getByTestId('frame'), {
+        key: '[',
+        code: 'BracketLeft',
+        metaKey: true
+      })
+    })
+    expect(mocks.runRemoteNavigation).toHaveBeenCalledWith('browser.back')
+    expect(mocks.handleRemoteScreenshotKeyDown).not.toHaveBeenCalled()
+    cleanup()
+    mocks.runRemoteNavigation.mockClear()
+
+    renderPane('inactive')
+    const event = new KeyboardEvent('keydown', {
+      key: ']',
+      code: 'BracketRight',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    act(() => {
+      window.dispatchEvent(event)
+    })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(mocks.runRemoteNavigation).not.toHaveBeenCalled()
+  })
+
+  it('walks remote history from the address bar only inside its own overlay when no split is focused', () => {
+    const container = renderPane('owned-target')
+    const addressBar = screen.getByRole('combobox')
+    const back = { key: '[', code: 'BracketLeft', metaKey: true }
+
+    act(() => {
+      fireEvent.keyDown(addressBar, back)
+    })
+    expect(mocks.runRemoteNavigation).not.toHaveBeenCalled()
+
+    container.setAttribute('data-browser-overlay-tab-id', 'workspace-a')
+    act(() => {
+      fireEvent.keyDown(addressBar, back)
+    })
+    expect(mocks.runRemoteNavigation).toHaveBeenCalledWith('browser.back')
   })
 
   // With no focused group known, only chords raised from inside this pane's own overlay count.

@@ -19,7 +19,7 @@ import type { SourceControlWorktreeContext } from './use-worktree-context'
  */
 export function useSourceControlFileListing({
   activeRemoteActionSequence,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   branchEntries,
   branchName,
@@ -35,6 +35,7 @@ export function useSourceControlFileListing({
   isMac,
   refreshActiveGitStatusAfterMutation,
   remoteActionError,
+  repositoryHuge,
   rightSidebarTab,
   sourceControlGroupOrder,
   sourceControlRef,
@@ -43,7 +44,7 @@ export function useSourceControlFileListing({
   worktreePath
 }: {
   activeRemoteActionSequence: number | null
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   branchEntries: SourceControlWorktreeContext['branchEntries']
   branchName: string
@@ -59,6 +60,7 @@ export function useSourceControlFileListing({
   isMac: boolean
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   remoteActionError: SourceControlActionError | null
+  repositoryHuge: SourceControlWorktreeContext['repositoryHuge']
   rightSidebarTab: SourceControlWorktreeContext['rightSidebarTab']
   sourceControlGroupOrder: SourceControlPanelViewState['sourceControlGroupOrder']
   sourceControlRef: SourceControlPanelViewState['sourceControlRef']
@@ -70,7 +72,7 @@ export function useSourceControlFileListing({
     useSourceControlSubmoduleStatus({
       activeWorktreeId,
       worktreePath,
-      activeRepoSettings,
+      activeRepoTarget,
       entries
     })
   const {
@@ -101,7 +103,7 @@ export function useSourceControlFileListing({
     collapsedSections
   })
   const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     compareBaseRef,
@@ -113,7 +115,7 @@ export function useSourceControlFileListing({
   })
 
   // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
-  const { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff } =
+  const { resolveSplitTargetGroupId, activeOpenRowKeys, openUncommittedFile, openBranchFile } =
     useSourceControlRowOpening({
       isMac,
       activeWorktreeId,
@@ -129,7 +131,7 @@ export function useSourceControlFileListing({
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
     useSourceControlSelection({
       flatEntries: visibleSelectionEntries,
-      onOpenDiff: handleOpenDiff,
+      onOpenFile: openUncommittedFile,
       shouldOpenAsSplit,
       containerRef: sourceControlRef
     })
@@ -157,15 +159,18 @@ export function useSourceControlFileListing({
     handleBulkStage,
     handleBulkUnstage,
     handleStageAllPaths,
+    handleStageSectionPaths,
     handleUnstagePaths,
-    handleStageAllPrimary
+    handleStageAllPrimary,
+    handleStageWorktreeChanges
   } = useSourceControlBulkActions({
     selectedKeys,
     flatEntriesByKey,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     grouped,
+    isStatusTruncated: repositoryHuge !== undefined,
     clearSelection,
     refreshActiveGitStatusAfterMutation
   })
@@ -207,15 +212,17 @@ export function useSourceControlFileListing({
     handleBulkStage,
     handleBulkUnstage,
     handleContextMenu,
-    handleOpenDiff,
+    openUncommittedFile,
     handleSelect,
     handleStageAllPaths,
     handleStageAllPrimary,
+    handleStageSectionPaths,
+    handleStageWorktreeChanges,
     handleUnstagePaths,
     isExecutingBulk,
     isGitHistoryVisible,
     normalizedFilter,
-    openCommittedDiff,
+    openBranchFile,
     pushRecovery,
     refreshGitHistory,
     refreshGitHistoryRef,

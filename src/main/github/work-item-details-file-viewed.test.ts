@@ -1,3 +1,4 @@
+import type * as WorkItemDetailsTestLookup from './work-item-details-test-lookup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RateLimitGuardResult =
@@ -59,8 +60,11 @@ vi.mock('./gh-utils', () => ({
   release: releaseMock
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./client', async () => ({
   getWorkItem: getWorkItemMock,
+  getWorkItemWithRepository: (
+    await vi.importActual<typeof WorkItemDetailsTestLookup>('./work-item-details-test-lookup')
+  ).makeWorkItemDetailsLookupMock(getWorkItemMock),
   getWorkItemByOwnerRepo: vi.fn(),
   getPRChecks: getPRChecksMock,
   getPRComments: getPRCommentsMock

@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
 import { syncContentUpdate, type MonacoContentSyncMode } from './monaco-content-sync'
+import { mayPushTabTextIntoModel } from './editor-stale-mount-guard'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -24,10 +25,13 @@ export function useMonacoContentSyncBridge(params: {
   content: string
   contentRef: MutableRefObject<string>
   contentSyncModeRef: MutableRefObject<MonacoContentSyncMode>
-  filePath: string
+  modelKey: string
+  /** The tab whose text this editor shows; disk text from it never enters a dirty model. */
+  fileId?: string
   onContentChange: (content: string) => void
 }): MonacoContentSyncBridge {
-  const { editorRef, content, contentRef, contentSyncModeRef, filePath, onContentChange } = params
+  const { editorRef, content, contentRef, contentSyncModeRef, modelKey, onContentChange, fileId } =
+    params
 
   const lastSyncedContentRef = useRef<string>(content)
 
@@ -38,6 +42,9 @@ export function useMonacoContentSyncBridge(params: {
   const handleChange = useCallback(
     (value: string | undefined) => {
       if (value !== undefined) {
+        if (editorRef.current?.getModel()?.uri.toString() !== modelKey) {
+          return
+        }
         // Why: split panes share one retained model, so a sibling must ignore the echoed programmatic-sync onChange or it marks the file dirty.
         if (isApplyingLargePasteRef.current) {
           lastSyncedContentRef.current = value
@@ -45,7 +52,7 @@ export function useMonacoContentSyncBridge(params: {
         }
         if (
           shouldIgnoreMonacoContentChange({
-            filePath,
+            modelKey,
             isApplyingProgrammaticContent: isApplyingProgrammaticContentRef.current
           })
         ) {
@@ -55,25 +62,30 @@ export function useMonacoContentSyncBridge(params: {
         onContentChange(value)
       }
     },
-    [filePath, onContentChange]
+    [editorRef, modelKey, onContentChange]
   )
 
   // Why: sync the model on external `content` drift; useLayoutEffect lands the overwrite before paint so no stale text flashes. On-mount handled in handleMount.
   useLayoutEffect(() => {
     const ed = editorRef.current
-    if (!ed || lastSyncedContentRef.current === content) {
+    if (
+      !ed ||
+      ed.getModel()?.uri.toString() !== modelKey ||
+      lastSyncedContentRef.current === content ||
+      (fileId !== undefined && !mayPushTabTextIntoModel(fileId))
+    ) {
       return
     }
-    beginProgrammaticContentSync(filePath)
+    beginProgrammaticContentSync(modelKey)
     isApplyingProgrammaticContentRef.current = true
     try {
       syncContentUpdate(ed, content, contentSyncModeRef.current)
       lastSyncedContentRef.current = content
     } finally {
       isApplyingProgrammaticContentRef.current = false
-      endProgrammaticContentSync(filePath)
+      endProgrammaticContentSync(modelKey)
     }
-  }, [content, contentSyncModeRef, editorRef, filePath])
+  }, [content, contentSyncModeRef, editorRef, fileId, modelKey])
 
   return {
     contentRef,

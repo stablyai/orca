@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MermaidDiagram } from './MermaidDiagram'
@@ -145,7 +146,7 @@ function openMarkdownLink(url: string): void {
   if (!isAllowedMarkdownLinkUrl(url)) {
     return
   }
-  void Linking.openURL(url).catch(() => {})
+  openExternalLink(url)
 }
 
 function alignToFlex(align: CellAlign | undefined): 'flex-start' | 'center' | 'flex-end' {

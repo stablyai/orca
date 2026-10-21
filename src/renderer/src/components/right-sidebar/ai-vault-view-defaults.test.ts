@@ -3,8 +3,7 @@ import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import {
   countAiVaultViewAdjustments,
   DEFAULT_AI_VAULT_GROUP,
-  DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-  DEFAULT_AI_VAULT_SORT
+  DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS
 } from './ai-vault-view-defaults'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from './ai-vault-session-limit'
 
@@ -17,7 +16,6 @@ describe('ai-vault-view-defaults', () => {
     expect(
       countAiVaultViewAdjustments({
         agents: [...AI_VAULT_AGENTS],
-        sort: DEFAULT_AI_VAULT_SORT,
         group: DEFAULT_AI_VAULT_GROUP,
         hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
         sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
@@ -29,24 +27,11 @@ describe('ai-vault-view-defaults', () => {
     expect(
       countAiVaultViewAdjustments({
         agents: [...AI_VAULT_AGENTS],
-        sort: DEFAULT_AI_VAULT_SORT,
         group: DEFAULT_AI_VAULT_GROUP,
         hideEmptySessions: true,
         sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
       })
     ).toBe(1)
-  })
-
-  it('does not count showing empty sessions as an adjustment', () => {
-    expect(
-      countAiVaultViewAdjustments({
-        agents: [...AI_VAULT_AGENTS],
-        sort: DEFAULT_AI_VAULT_SORT,
-        group: DEFAULT_AI_VAULT_GROUP,
-        hideEmptySessions: false,
-        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
-      })
-    ).toBe(0)
   })
 
   it('counts an equal-length agent swap as an adjustment', () => {
@@ -56,7 +41,6 @@ describe('ai-vault-view-defaults', () => {
     expect(
       countAiVaultViewAdjustments({
         agents: swapped,
-        sort: DEFAULT_AI_VAULT_SORT,
         group: DEFAULT_AI_VAULT_GROUP,
         hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
         sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
@@ -68,11 +52,10 @@ describe('ai-vault-view-defaults', () => {
     expect(
       countAiVaultViewAdjustments({
         agents: ['claude'],
-        sort: 'created',
         group: 'agent',
         hideEmptySessions: true,
         sessionLimit: 1000
       })
-    ).toBe(5)
+    ).toBe(4)
   })
 })

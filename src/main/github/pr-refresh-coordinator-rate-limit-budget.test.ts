@@ -33,6 +33,19 @@ describe('pr-refresh-coordinator', () => {
     vi.useRealTimers()
   })
 
+  it('drops a queued background refresh once its project is no longer registered', async () => {
+    const { enqueuePRRefresh, setPRRefreshRegistrationCheck } =
+      await import('./pr-refresh-coordinator')
+    enqueuePRRefresh(makeCandidate(), 'swr', 0, 1)
+    setPRRefreshRegistrationCheck(() => false)
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getOriginGitHubApiRepositoryMock).not.toHaveBeenCalled()
+    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+    expect(sendMock.mock.calls.map(([, event]) => event.status)).toContain('skipped')
+  })
+
   it('proceeds with background refreshes when the budget probe fails (fail open)', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
     // Why: regression for #7553 — GHES with rate limiting disabled 404s every

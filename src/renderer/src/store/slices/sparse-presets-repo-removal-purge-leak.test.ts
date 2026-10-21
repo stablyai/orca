@@ -7,6 +7,7 @@
  * so orphaned entries accumulated for the renderer's whole session. repoIds are
  * random UUIDs (never reused), so re-adding a repo cannot reclaim the old keys.
  */
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -21,7 +22,7 @@ beforeEach(() => {
   reposRemove.mockReset().mockResolvedValue(undefined)
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
+      repos: { removeForHost: reposRemove },
       pty: { kill: vi.fn() },
       runtimeEnvironments: { call: vi.fn() }
     }
@@ -54,7 +55,7 @@ describe('removeProject purges the removed repo sparse-preset maps (leak regress
     const store = createTestStore()
     seed(store)
 
-    await store.getState().removeProject(repo1.id)
+    await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
     const s = store.getState()
     // Removed repo: every sparse-preset map key is gone.

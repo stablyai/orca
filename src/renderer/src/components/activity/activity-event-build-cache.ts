@@ -55,7 +55,7 @@ export function resolvePaneBuild(
   request: PaneBuildRequest,
   cache: ActivityEventBuildCache | undefined,
   seenCacheKeys: Set<string> | null
-): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null } {
+): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null; rowEntry: AgentStatusEntry } {
   seenCacheKeys?.add(request.cacheKey)
   const cached = cache?.panes.get(request.cacheKey)
   const inputsUnchanged =
@@ -84,22 +84,22 @@ export function resolvePaneBuild(
         cached.live.timestamp === liveTimestamp)
 
   if (inputsUnchanged && liveMatchesCache) {
-    return { events: cached.events, live: cached.live }
+    return { events: cached.events, live: cached.live, rowEntry }
   }
 
-  const events = inputsUnchanged
-    ? cached.events
-    : buildPaneActivityEvents({
-        entry: rowEntry,
-        worktree: request.worktree,
-        repo: request.repo,
-        tab: request.tab,
-        agentType: request.agentType,
-        agentAlive: request.agentAlive,
-        acknowledgedAt: request.acknowledgedAt,
-        clearedAt: request.clearedAt,
-        migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
-      })
+  // The live turn is itself an event, so a live change always rebuilds the pane's events.
+  const events = buildPaneActivityEvents({
+    entry: rowEntry,
+    worktree: request.worktree,
+    repo: request.repo,
+    tab: request.tab,
+    agentType: request.agentType,
+    agentAlive: request.agentAlive,
+    acknowledgedAt: request.acknowledgedAt,
+    clearedAt: request.clearedAt,
+    liveState: request.liveState,
+    migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
+  })
   const live: ActivityLiveAgentSnapshot | null =
     request.liveState === null
       ? null
@@ -125,5 +125,5 @@ export function resolvePaneBuild(
     live,
     rowEntry
   })
-  return { events, live }
+  return { events, live, rowEntry }
 }

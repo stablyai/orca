@@ -5,6 +5,41 @@ import { OrcaRuntimeService } from './orca-runtime'
 afterEach(() => setStructuredAgentSessionHost(null))
 
 describe('structured session cold restoration', () => {
+  it('publishes a versioned title change and derives listAll titles from the record', async () => {
+    const runtime = new OrcaRuntimeService()
+    runtime.projectStructuredAgentSessionTab({
+      activate: false,
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+      agent: 'claude'
+    })
+    const before = await runtime.listMobileSessionTabs('id:workspace-1')
+    let name: string | undefined = 'auth/login'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record and replacement list from this host stub.
+    setStructuredAgentSessionHost({
+      deps: {
+        store: {
+          getRecord: () => ({ location: { workspaceId: 'workspace-1' }, conversationName: name })
+        }
+      },
+      conversationReplacements: () => []
+    } as never)
+    const listed = await runtime.listAllMobileSessionTabs()
+    expect(listed.find((row) => row.worktree === 'workspace-1')?.tabs[0]?.title).toBe('auth/login')
+    const events: { snapshotVersion: number; tabs: { title: string }[] }[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+      if (snapshot.worktree === 'workspace-1') {
+        events.push(snapshot)
+      }
+    })
+    runtime.refreshStructuredConversationTabTitle('workspace-1', 'session-1')
+    expect(events.at(-1)?.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
+    expect(events.at(-1)?.tabs[0]?.title).toBe('auth/login')
+    name = undefined
+    runtime.refreshStructuredConversationTabTitle('workspace-1', 'session-1')
+    expect(events.at(-1)?.tabs[0]?.title).toBe('Claude Chat')
+    unsubscribe()
+  })
   it('skips every heavy recovery step when no durable session store exists', async () => {
     const runtime = new OrcaRuntimeService()
     const refresh = vi.fn(async () => new Set<string>())
@@ -307,11 +342,9 @@ describe('structured session cold restoration', () => {
       reason: 'user'
     })
 
-    expect(closeSessionTab).toHaveBeenCalledWith(
-      'structured-agent-session-restored-session',
-      'workspace-1'
-    )
-    expect(closeStructuredSession).toHaveBeenCalledWith('restored-session')
+    expect(closeSessionTab).toHaveBeenCalledWith('agent-session:restored-session', 'workspace-1')
+    // The user closed this chat, so a turn the close cuts short is their cancellation.
+    expect(closeStructuredSession).toHaveBeenCalledWith('restored-session', 'user-close')
     expect(setSessionTabVisibility).toHaveBeenCalledWith('restored-session', false)
     expect(setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
       closeStructuredSession.mock.invocationCallOrder[0]!
@@ -323,6 +356,56 @@ describe('structured session cold restoration', () => {
       'terminal-tab::leaf-2'
     ])
     expect(closed.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab'])
+  })
+
+  it('publishes restored Claude tabs with the Claude title', async () => {
+    const runtime = new OrcaRuntimeService()
+    const project = vi.spyOn(runtime, 'projectStructuredAgentSessionTab')
+    const internal = runtime as unknown as {
+      hasPersistedStructuredAgentSessionStore(): boolean
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.hasPersistedStructuredAgentSessionStore = () => true
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      reconcileRestartLeases: async () => undefined,
+      restoreReadableSessions: async () => undefined,
+      listSessionTabs: () => [
+        {
+          sessionId: 'agent-session:agent-session:restored-claude',
+          workspaceId: 'workspace-1',
+          agent: 'claude'
+        }
+      ]
+    } as never)
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    expect(project).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      sessionId: 'restored-claude',
+      agent: 'claude',
+      activate: false,
+      notify: false
+    })
+
+    const restored = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(restored.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'agent-session',
+          id: 'agent-session:restored-claude',
+          title: 'Claude Chat',
+          agent: 'claude'
+        })
+      ])
+    )
   })
 
   it('commits the host close when the renderer already removed the structured tab', async () => {

@@ -24,7 +24,7 @@ export function NewWorktreeFormSheet(props: {
   loading: boolean
   hasRepos: boolean
   project: Selection | null
-  runTarget: Selection | null
+  runTarget: (Selection & { hostId: string }) | null
   projectBadgeColor: string | null
   selectedRepoIsGit: boolean
   selectedRepoConnectionId: string | null
@@ -43,6 +43,7 @@ export function NewWorktreeFormSheet(props: {
   creating: boolean
   canCreate: boolean
   onClose: () => void
+  onOpenExternalUrl: (url: string) => void
   onOpenProject: () => void
   onOpenRunTarget: () => void
   onOpenSource: () => void
@@ -84,6 +85,7 @@ export function NewWorktreeFormSheet(props: {
             label={props.selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
             disabled={props.sshGate.requiresConnection}
             interactive={props.interactive}
+            onOpenExternalUrl={props.onOpenExternalUrl}
             onBeforeOpen={props.onClearError}
             onOpenDrawer={props.onOpenSource}
           />

@@ -1,5 +1,9 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-decay-state'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
+import { isProgramStatusRow } from './program-status/row'
+
+type ToolPreviewEntry = Pick<AgentStatusEntry, 'toolName' | 'toolInput'> &
+  Partial<Pick<AgentStatusEntry, 'agentType' | 'programStatus' | 'observation'>>
 
 /**
  * States whose cached tool fields describe live work: 'working' names the tool the agent is
@@ -13,18 +17,33 @@ export function showsAgentToolPreview(state: AgentRowState | null | undefined): 
   return state === 'working' || state === 'waiting'
 }
 
-/** One-line `tool: input` preview, or '' when the state or the entry has nothing to show. */
+/**
+ * The input line a row shows. Alone it is a real agent's orphaned tool argument, so only an OSC 7501
+ * program's message — reported as input with no tool to name — stands without a tool name.
+ */
+export function agentRowToolInput(
+  entry: ToolPreviewEntry,
+  state: AgentRowState | null | undefined
+): string {
+  if (!showsAgentToolPreview(state)) {
+    return ''
+  }
+  const toolInput = entry.toolInput?.trim() ?? ''
+  return entry.toolName?.trim() || isProgramStatusRow(entry) ? toolInput : ''
+}
+
+/** One-line `tool: input` preview (or a program's bare message), or '' when there is nothing. */
 export function formatAgentToolPreview(
-  entry: Pick<AgentStatusEntry, 'toolName' | 'toolInput'>,
+  entry: ToolPreviewEntry,
   state: AgentRowState | null | undefined
 ): string {
   if (!showsAgentToolPreview(state)) {
     return ''
   }
   const toolName = entry.toolName?.trim() ?? ''
-  const toolInput = entry.toolInput?.trim() ?? ''
+  const toolInput = agentRowToolInput(entry, state)
   if (toolName && toolInput) {
     return `${toolName}: ${toolInput}`
   }
-  return toolName
+  return toolName || toolInput
 }

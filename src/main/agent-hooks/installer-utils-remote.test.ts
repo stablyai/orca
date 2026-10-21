@@ -284,16 +284,4 @@ describe('installer-utils-remote', () => {
     })
     expect(fs.files.get(path)).toBe('old script')
   })
-
-  it('skips a no-op write when contents already match', async () => {
-    const { sftp, fs } = createFakeSftp()
-    const path = '/home/u/.claude/settings.json'
-    await writeHooksJsonRemote(sftp, path, { hooks: {} })
-    const beforeKey = fs.files.get(path)
-    // Re-writing the same payload should produce the same content; there is
-    // no rename/tmp cycle visible to a downstream observer beyond the
-    // identical file body.
-    await writeHooksJsonRemote(sftp, path, { hooks: {} })
-    expect(fs.files.get(path)).toBe(beforeKey)
-  })
 })

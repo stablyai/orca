@@ -1,77 +1,48 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
-import { malformedRowsDisclosure, quarantineCorruptSuffix } from './journal-corruption-quarantine'
-import { ensureJournalDir } from './journal-log-file'
-import { loadJournal, type JournalLoad } from './journal-open'
-import { assertJournalPhysicalCapacity, journalDirectoryBytes } from './journal-physical-quota'
-import type { JournalRow } from './journal-row-schema'
-
-export function journalStoreLoadedFields(loaded: JournalLoad) {
-  return {
-    state: loaded.state,
-    tailRows: loaded.tailRows,
-    compactedThrough: loaded.compactedThrough,
-    sizeBytes: loaded.sizeBytes,
-    readOnly: loaded.readOnly,
-    malformedRows: loaded.malformedRows
-  }
-}
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session-journal-types'
+import type { JournalLoad } from './journal-open'
+import { failLoadOnUnloadableJournal } from './journal-open-failure'
+import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
 
 export async function openJournalStoreState(input: {
-  journalDir: string
   sessionId: string
-  maxBytes: number
-  loaded: JournalLoad | null | undefined
-  start: () => Promise<void>
+  replay: () => JournalLoad | null
+  start: () => void
   adopt: (loaded: JournalLoad) => void
-  tailRows: () => readonly JournalRow[]
-  snapshot: () => AgentJournalSnapshot
-  rebuildLifecycle: (snapshot: AgentJournalSnapshot, physicalBytes: number) => void
-  appendDisclosure: (
-    identity: ReturnType<typeof malformedRowsDisclosure>['identity'],
-    body: ReturnType<typeof malformedRowsDisclosure>['body'],
+  appendItem: (
+    identity: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
     fence: number
   ) => Promise<unknown>
   highestFence: () => number
-  malformedRows: () => number
-  readOnly: () => boolean
-  setPhysicalBytes: (bytes: number) => void
 }): Promise<void> {
-  await ensureJournalDir(input.journalDir)
-  input.setPhysicalBytes(
-    await assertJournalPhysicalCapacity({
-      journalDir: input.journalDir,
-      sessionId: input.sessionId,
-      maxBytes: input.maxBytes
-    })
-  )
-  const loaded =
-    input.loaded !== undefined
-      ? input.loaded
-      : await loadJournal(input.journalDir, input.sessionId, { maxBytes: input.maxBytes })
-  if (!loaded) {
-    await input.start()
-    input.setPhysicalBytes(await journalDirectoryBytes(input.journalDir))
+  const loaded = input.replay()
+  // An epoch named but holding no row (a crash inside an older build's repair) has nothing to
+  // keep, so it is founded afresh like a chat with no journal; no row is deleted.
+  if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
+    input.start()
     return
   }
+  failLoadOnUnloadableJournal(input.sessionId, loaded)
   input.adopt(loaded)
-  if (loaded.corrupt && !loaded.readOnly) {
-    await quarantineCorruptSuffix(input.journalDir, input.tailRows(), loaded.quarantineRemainder, {
-      sessionId: input.sessionId,
-      maxBytes: input.maxBytes
-    })
+  await settleStaleSubagentRosters(input, loaded)
+}
+
+/** Retires a `working` subagent roster the previous host never got to settle. */
+async function settleStaleSubagentRosters(
+  input: {
+    appendItem: (
+      identity: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      fence: number
+    ) => Promise<unknown>
+    highestFence: () => number
+  },
+  loaded: JournalLoad
+): Promise<void> {
+  for (const revision of staleSubagentRosterRevisions(loaded.state.items.values())) {
+    await input.appendItem(revision.identity, revision.body, input.highestFence())
   }
-  let physicalBytes = await journalDirectoryBytes(input.journalDir)
-  input.setPhysicalBytes(physicalBytes)
-  // A future-schema/read-only journal is inspection-only. Its reduced state is
-  // intentionally empty, and rebuilding reservations from it would mutate the
-  // in-memory quota model (and could influence later admission decisions).
-  if (!loaded.readOnly) {
-    input.rebuildLifecycle(input.snapshot(), physicalBytes)
-  }
-  if (input.malformedRows() > 0 && !input.readOnly()) {
-    const disclosure = malformedRowsDisclosure(input.malformedRows())
-    await input.appendDisclosure(disclosure.identity, disclosure.body, input.highestFence())
-  }
-  physicalBytes = await journalDirectoryBytes(input.journalDir)
-  input.setPhysicalBytes(physicalBytes)
 }

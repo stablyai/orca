@@ -9,6 +9,7 @@ import {
   type AgentGenerationFailureOutput
 } from './agent-failure-output'
 import type { InternalTextGenerationResult } from './source-control-text-generation-types'
+import { parseOpenCodeGenerationOutput } from '../../shared/opencode-generation-output'
 
 export function formatAgentCliFailureMessage(
   label: string,
@@ -34,7 +35,7 @@ export function formatAgentCliFailureMessage(
 }
 
 export function userFacingUnsafeWindowsBatchArgs(label: string): string {
-  return `${label} cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.`
+  return `${label} runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin.`
 }
 
 export function finalizeFromAgentOutput(args: {
@@ -45,17 +46,35 @@ export function finalizeFromAgentOutput(args: {
   emptyResultName: string
   includeLocalMacDnsHint?: boolean
   includeStdoutDetail?: boolean
+  outputFormat?: 'opencode-json'
 }): InternalTextGenerationResult {
   const { code, stdout, stderr, label, emptyResultName } = args
+  const parsed =
+    args.outputFormat === 'opencode-json' ? parseOpenCodeGenerationOutput(stdout) : null
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', { label, exitCode: code, stdout, stderr })
     return {
       success: false,
-      error: formatAgentCliFailureMessage(label, stdout, stderr, code, args),
+      error: formatAgentCliFailureMessage(
+        label,
+        stdout,
+        parsed && !parsed.ok && parsed.error !== 'OpenCode returned invalid JSON events.'
+          ? parsed.error
+          : stderr,
+        code,
+        args
+      ),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
-  const cleaned = cleanGeneratedCommitMessage(stdout)
+  if (parsed && !parsed.ok) {
+    return {
+      success: false,
+      error: sanitizeAgentFailureDetail(parsed.error) ?? 'OpenCode reported an error.',
+      failureOutput: captureFailureOutput(label, code, stdout, stderr)
+    }
+  }
+  const cleaned = cleanGeneratedCommitMessage(parsed?.ok ? parsed.text : stdout)
   if (cleaned) {
     return { success: true, rawOutput: cleaned, agentLabel: label }
   }

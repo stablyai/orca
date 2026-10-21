@@ -8,7 +8,10 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../shared/automation-precheck'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import type {
+  HeadlessAutomationDispatcher,
+  HeadlessAutomationDispatchLaunch
+} from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
 
@@ -22,6 +25,9 @@ export type HeadlessAutomationDispatchContext = {
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
   watchRun: (run: AutomationRun) => void
 }
+
+/** Thrown by a dispatcher that finds the run should not start; recorded as a skip, not a failure. */
+export class AutomationDispatchRefusedError extends Error {}
 
 function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -42,53 +48,66 @@ export async function runHeadlessAutomationDispatch(
       error: formatAutomationPrecheckFailure(precheckResult)
     })
   }
+  let launch: HeadlessAutomationDispatchLaunch
+  // Before the agent is picked or prompted: its turn can end before the launch returns.
+  const dispatchedAt = Date.now()
   try {
-    const launch = await ctx.dispatcher({ automation, run, target })
-    const launchRunTarget = {
-      workspaceId: launch.workspaceId,
-      workspaceDisplayName: launch.workspaceDisplayName ?? null,
-      terminalSessionId: launch.terminalSessionId,
-      terminalPaneKey: launch.terminalPaneKey ?? null,
-      terminalPtyId: launch.terminalPtyId ?? null
-    }
-    const updated = runs.updateRun({
-      runId: run.id,
-      status: 'dispatched',
-      ...launchRunTarget,
-      error: null
-    })
-    if (!launch.completion) {
-      // Why: a dispatcher that reports no completion promise would otherwise
-      // leave the run at 'dispatched' for the process lifetime.
-      ctx.watchRun(updated)
-      return updated
-    }
-    void launch.completion
-      .then((completion) =>
-        ctx.markDispatchResult({
-          runId: run.id,
-          status: completion.status,
-          ...launchRunTarget,
-          precheckResult,
-          outputSnapshot: completion.outputSnapshot ?? null,
-          error: completion.error ?? null
-        })
-      )
-      .catch((error) =>
-        ctx.markDispatchResult({
-          runId: run.id,
-          status: 'dispatch_failed',
-          ...launchRunTarget,
-          error: describeDispatchError(error)
-        })
-      )
-    return updated
+    launch = await ctx.dispatcher({ automation, run, target })
   } catch (error) {
     return runs.updateRun({
       runId: run.id,
-      status: 'dispatch_failed',
+      status:
+        error instanceof AutomationDispatchRefusedError ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
       error: describeDispatchError(error)
     })
   }
+  const launchRunTarget = {
+    workspaceId: launch.workspaceId,
+    workspaceDisplayName: launch.workspaceDisplayName ?? null,
+    terminalSessionId: launch.terminalSessionId,
+    terminalPaneKey: launch.terminalPaneKey ?? null,
+    terminalPtyId: launch.terminalPtyId ?? null
+  }
+  const updated = runs.updateRun({
+    runId: run.id,
+    status: 'dispatched',
+    dispatchedAt,
+    ...launchRunTarget,
+    // Kept here: a watched run's completion is written without it.
+    ...(precheckResult ? { precheckResult } : {}),
+    error: null
+  })
+  // Observe the launched agent even while persistence is stalled or rejects its acknowledgement.
+  if (!launch.completion) {
+    ctx.watchRun({
+      ...run,
+      ...launchRunTarget,
+      status: 'dispatched',
+      dispatchedAt,
+      error: null
+    })
+  } else {
+    void launch.completion
+      .then(
+        (completion) =>
+          ctx.markDispatchResult({
+            runId: run.id,
+            status: completion.status,
+            ...launchRunTarget,
+            precheckResult,
+            outputSnapshot: completion.outputSnapshot ?? null,
+            error: completion.error ?? null
+          }),
+        (error) =>
+          ctx.markDispatchResult({
+            runId: run.id,
+            status: 'dispatch_failed',
+            ...launchRunTarget,
+            error: describeDispatchError(error)
+          })
+      )
+      .catch((error) => console.error('[automations] Failed to persist run completion:', error))
+  }
+  return updated
 }

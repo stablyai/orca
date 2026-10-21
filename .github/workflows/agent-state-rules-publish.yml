@@ -1,0 +1,94 @@
+name: Publish agent state rules
+
+# The only publisher of agent state rules releases. Merging never publishes: a maintainer runs
+# this from main, first to `next` (RC and dev builds), then promotes the identical file to
+# `stable` after a soak. Every job runs on the dispatched commit, so the publish job runs exactly
+# the script and rules the gate tested.
+#
+# Why GITHUB_TOKEN: release-policy.yml deletes an agent-state-rules-* release any other author
+# publishes. Its releases start no workflow, so release-policy.yml sees them only when someone
+# edits one by hand, and then accepts them as bot-authored prereleases.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'publish-next builds from main and publishes to next; promote-stable copies the next file to stable'
+        required: true
+        type: choice
+        options:
+          - publish-next
+          - promote-stable
+      bundled_only:
+        description: 'publish-next: tell apps to fall back to the rules they shipped with; promote-stable then carries it to stable'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-state-rules-publish
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'publish-next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Run the rules gate (schema, regex safety, the bundle, every transcript replay)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t gate_files < <(git ls-files \
+            ':(glob)src/main/runtime/agent-state-rules/**/*.test.ts' \
+            ':(glob)src/main/runtime/readiness-census*.test.ts' \
+            ':(glob)src/main/runtime/*transcript.test.ts' \
+            ':(glob)src/main/runtime/*transcripts.test.ts' \
+            config/scripts/agent-state-rules-bundle.test.mjs)
+          pnpm exec vitest run --config config/vitest.config.ts "${gate_files[@]}"
+
+  publish-next:
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: agent-state-rules
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Publish to next
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLED_ONLY: ${{ inputs.bundled_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags=()
+          [[ "$BUNDLED_ONLY" == "true" ]] && flags+=(--bundled-only)
+          node config/scripts/agent-state-rules-bundle.mjs publish-next "${flags[@]}"
+
+  promote-stable:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'promote-stable'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: agent-state-rules
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Copy the next file to stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node config/scripts/agent-state-rules-bundle.mjs promote-stable

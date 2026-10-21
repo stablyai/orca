@@ -1,6 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -245,6 +246,17 @@ function getVersionManagerDirectories(
   return directories
 }
 
+// Why one list for both resolvers: the system block must stay LAST so a
+// version-manager install always outranks a Homebrew/npm/snap one, and two
+// hand-spelled spreads is how the native and WSL lists drifted apart before.
+function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+  return [
+    ...getNvmVersionDirectories(homePath),
+    ...getBaseVersionManagerDirectories(platform, homePath),
+    ...getSystemCliInstallDirectories(platform, homePath)
+  ]
+}
+
 export function resolveCliCommand(
   commandName: string,
   options: ResolveCommandOptions = {}
@@ -258,19 +270,33 @@ export function resolveCliCommand(
   }
 
   const homePath = options.homePath ?? homedir()
-  const nvmCandidate = findFirstExecutable(
+  const installCandidate = findFirstExecutable(
     platform,
-    getNvmVersionDirectories(homePath),
+    getCliInstallDirectories(platform, homePath),
     executableNames
   )
-  const versionManagerCandidate =
-    nvmCandidate ??
-    findFirstExecutable(
-      platform,
-      getBaseVersionManagerDirectories(platform, homePath),
-      executableNames
-    )
-  return versionManagerCandidate ?? commandName
+  return installCandidate ?? commandName
+}
+
+/** Resolve a literal override without falling back to an unverified command name. */
+export function resolveExecutableCommand(
+  command: string,
+  options: ResolveCommandOptions = {}
+): string | null {
+  const platform = options.platform ?? process.platform
+  const expanded =
+    command.startsWith('~/') || command.startsWith('~\\')
+      ? join(options.homePath ?? homedir(), command.slice(2))
+      : command
+  if (isAbsolute(expanded)) {
+    return isRunnableCommand(platform, expanded) ? expanded : null
+  }
+  // Relative paths depend on the workspace, which a session-less catalog cannot name.
+  if (expanded.includes('/') || expanded.includes('\\')) {
+    return null
+  }
+  const resolved = resolveCliCommand(expanded, options)
+  return isAbsolute(resolved) && isRunnableCommand(platform, resolved) ? resolved : null
 }
 
 export function resolveCliCommands(
@@ -281,10 +307,7 @@ export function resolveCliCommands(
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   const pathDirectories = splitPath(pathEnv)
   const homePath = options.homePath ?? homedir()
-  const installDirectories = [
-    ...getNvmVersionDirectories(homePath),
-    ...getBaseVersionManagerDirectories(platform, homePath)
-  ]
+  const installDirectories = getCliInstallDirectories(platform, homePath)
   const resolved = new Map<string, string>()
 
   for (const commandName of new Set(commandNames)) {

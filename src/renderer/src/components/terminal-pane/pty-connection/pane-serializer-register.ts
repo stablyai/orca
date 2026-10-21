@@ -1,3 +1,4 @@
+import { buildProcessBoundaryGround } from '../../../../../shared/terminal-mode-reset-profiles'
 import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { registerPtySerializer, registerPtyTitleSource } from '../pty-buffer-serializer'
@@ -6,6 +7,7 @@ import {
   waitForTerminalOutputParsed
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
+import { terminalMouseEncodingRestoreAnsi } from '@/lib/pane-manager/terminal-mouse-encoding-tracker'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -43,11 +45,17 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
           // while an alt-screen TUI was up therefore dropped the pre-TUI shell
           // output from the seed instead of the transient TUI bytes, and every
           // later restore painted only the TUI screen (#6106).
-          const data = serializeWithAbsoluteCursor(
+          // Why appended last: SerializeAddon writes mouse tracking but not its
+          // encoding, and readers keep only what follows the final `?1049h`.
+          const serialized = serializeWithAbsoluteCursor(
             session.pane.serializeAddon,
             session.pane.terminal,
             { scrollback: opts?.scrollbackRows }
           )
+          // Why non-empty only: '' means nothing to restore to its readers.
+          const data = serialized
+            ? serialized + terminalMouseEncodingRestoreAnsi(session.pane.terminal)
+            : serialized
           const orderedSeq =
             session.rendererOrderedPtyId === ptyId ? session.rendererOrderedSeq : null
           // Why snapshotFlags and not `flags`: this pane may itself have
@@ -57,6 +65,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
           const provenKittyFlags = session.kittyKeyboardModes.hasProvenBaseline
             ? session.kittyKeyboardModes.snapshotFlags
             : undefined
+          const pendingEscapeTailAnsi = session.transport.getPendingEscapeTailAnsi?.()
           return {
             data,
             cols: session.pane.terminal.cols,
@@ -64,16 +73,23 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
             ...(orderedSeq !== null ? { seq: orderedSeq } : {}),
             ...(orderedSeq !== null && provenKittyFlags !== undefined
               ? { kittyKeyboardFlags: provenKittyFlags }
-              : {})
+              : {}),
+            ...(pendingEscapeTailAnsi ? { pendingEscapeTailAnsi } : {})
           }
         } catch {
           return null
         }
       },
-      () => {
-        session.clearHiddenOutputRestoreState()
-        discardTerminalOutput(session.pane.terminal)
-        clearTerminalScrollbackAndFollowOutput(session.pane.terminal)
+      {
+        clear: () => {
+          session.clearHiddenOutputRestoreState()
+          discardTerminalOutput(session.pane.terminal)
+          clearTerminalScrollbackAndFollowOutput(session.pane.terminal)
+        },
+        resetInputModes: () =>
+          session.writeInputModeGround(
+            buildProcessBoundaryGround({ keepFocusReporting: session.isNativeWindowsConpty })
+          )
       }
     )
     const unregisterTitleSource = registerPtyTitleSource(ptyId, (handler) =>

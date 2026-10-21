@@ -1,32 +1,29 @@
+import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
 import type { RpcFailure } from '../transport/types'
-
-const RENDERER_UNAVAILABLE = 'renderer_unavailable'
+import type { MarkdownDocState } from './mobile-session-route-types'
 
 export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailure): boolean {
-  return (
-    response.error.code === RENDERER_UNAVAILABLE ||
-    (response.error.code === 'runtime_error' && response.error.message === RENDERER_UNAVAILABLE)
-  )
+  return isRendererUnavailableReply(response)
 }
 
 export function buildMarkdownDiskFallbackDoc(args: {
   content: string
-  truncated: boolean
+  truncated?: boolean
+  byteLength?: number
   tabIsDirty: boolean
-}) {
-  const readOnlyReason = args.truncated
-    ? 'File too large for mobile preview'
-    : args.tabIsDirty
-      ? 'Desktop has unsaved changes. Showing disk content.'
-      : 'Editing needs Orca desktop running.'
+}): Extract<MarkdownDocState, { status: 'ready' }> {
+  const readOnlyReason = args.tabIsDirty
+    ? 'Desktop has unsaved changes. Showing disk content.'
+    : 'Editing needs Orca desktop running.'
   return {
-    status: 'ready' as const,
+    status: 'ready',
     content: args.content,
     localContent: args.content,
     baseVersion: '',
     isDirty: false,
     editable: false,
     stale: args.tabIsDirty,
-    readOnlyReason
+    readOnlyReason,
+    ...(args.truncated ? { truncated: true, byteLength: args.byteLength } : {})
   }
 }

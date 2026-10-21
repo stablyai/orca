@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPendingEditorChange } from './editor-pending-flush'
+import { flushPendingEditorBuffer } from './editor-pending-flush'
 import { parseIpynb } from './ipynb-parse'
 import { useIpynbDocumentEditing } from './useIpynbDocumentEditing'
+import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 function notebookContent(firstSource = 'a', secondSource = 'b'): string {
   return JSON.stringify({
@@ -87,7 +88,7 @@ describe('notebook document editing lifecycle', () => {
     expect(onDirtyStateHint).toHaveBeenCalledTimes(2)
     expect(onContentChange).not.toHaveBeenCalled()
 
-    act(() => flushPendingEditorChange('notebook-a'))
+    act(() => flushPendingEditorBuffer(NO_SHARING, 'notebook-a'))
     expect(onContentChange).toHaveBeenCalledTimes(1)
     const committedContent = onContentChange.mock.calls[0]?.[0] as string
     expect(parseIpynb(committedContent).cells[0]?.source).toBe('latest draft')

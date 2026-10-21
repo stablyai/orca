@@ -7,12 +7,7 @@ import {
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_LAYOUT_BY_WORKTREE
 } from './graph-state'
-import {
-  buildRuntimeMobileAgentStatusProjection,
-  buildRuntimeMobileAgentStatusProjectionForTests,
-  resetRuntimeMobileAgentStatusProjectionCacheForTests,
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
-} from './agent-status-projection'
+import { buildRuntimeMobileAgentStatusProjection } from './agent-status-projection'
 import {
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
@@ -23,13 +18,7 @@ import {
 } from './sync-projections'
 import { resolveMobileTerminalTheme } from './mobile-terminal-theme'
 import type { RuntimeMobileSessionSyncKey } from './types'
-
-export {
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
-  buildRuntimeMobileAgentStatusProjectionForTests,
-  resetRuntimeMobileAgentStatusProjectionCacheForTests
-}
-export type { RuntimeMobileSessionSyncKey } from './types'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 function getTerminalThemeSystemPrefersDark(
   state: Pick<AppState, 'settings'>,
@@ -72,7 +61,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
     state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
-    state.folderWorkspaces === previousState.folderWorkspaces &&
+    selectFolderWorkspaces(state) === selectFolderWorkspaces(previousState) &&
     state.agentStatusEpoch === previousState.agentStatusEpoch &&
     state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
   )
@@ -102,7 +91,7 @@ export function getRuntimeMobileSessionSyncKey(
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
     layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,

@@ -8,9 +8,13 @@ import {
 } from '../../workspace-kanban-sidebar-drop'
 import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
-import type { WorktreeDropCommitContext } from './drop-commit-context'
+import type {
+  ShouldShowWorkspaceBoardDropIndicator,
+  WorktreeDropCommitContext
+} from './drop-commit-context'
 import {
   applyWorktreeDropPreview,
+  applyWorktreeLineageDropPreview,
   clearWorktreeDropPreview,
   NO_WORKTREE_SIDEBAR_DROP_TARGET,
   updateLatestWorktreeStatusDropTarget,
@@ -19,16 +23,15 @@ import {
   type WorktreeSidebarLineageDropTarget
 } from './row-state'
 
+const REORDER_INTENT_DELAY_MS = 160
+
 export type WorktreePointerDragFrameArgs = {
   drag: WorktreePointerDrag
   ctx: WorktreeDropCommitContext
   workspaceBoardOpen: boolean
   onWorkspaceBoardDragPreviewStart: () => void
   onWorkspaceBoardDragPreviewCommit: () => void
-  shouldShowWorkspaceBoardDropIndicator: (
-    worktreeIds: readonly string[],
-    status: WorkspaceStatus
-  ) => boolean
+  shouldShowWorkspaceBoardDropIndicator: ShouldShowWorkspaceBoardDropIndicator
   setWorktreeDragState: React.Dispatch<React.SetStateAction<WorktreeRowDragState>>
   setDragOverStatus: (status: WorkspaceStatus | null) => void
   setPinDragOver: (pinDragOver: boolean) => void
@@ -83,6 +86,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
   if (!drag.active || !drag.preview) {
     return
   }
+  delete drag.preview.dataset.worktreeSidebarNesting
   updateSidebarDragPreviewPosition({
     preview: drag.preview,
     pointerX: drag.currentX,
@@ -109,7 +113,11 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     shouldShowDropIndicator: (target) =>
       Boolean(
         target.status &&
-        args.shouldShowWorkspaceBoardDropIndicator(drag.reorderDraggedIds, target.status)
+        args.shouldShowWorkspaceBoardDropIndicator(
+          drag.reorderDraggedIds,
+          target.status,
+          drag.draggedCopies
+        )
       )
   })
   drag.latestBoardDropTarget = {
@@ -121,6 +129,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     args.onWorkspaceBoardDragPreviewCommit()
   }
   if (boardTarget.status || boardTarget.isPinDrop) {
+    drag.reorderIntent = null
     drag.latestStatusDropTarget = null
     clearInsertionLine(args)
     return
@@ -137,10 +146,24 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
       : NO_WORKTREE_SIDEBAR_DROP_TARGET,
     drag.draggedIds
   )
-  if (preferredStatusTarget.lineageParentId) {
+  const lineageParentId = preferredStatusTarget.lineageParentId
+  if (lineageParentId) {
+    drag.reorderIntent = null
     updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
     clearWorkspaceKanbanSidebarDropTargetVisual()
-    clearInsertionLine(args)
+    drag.preview.dataset.worktreeSidebarNesting = 'true'
+    updateSidebarDragPreviewPosition({
+      preview: drag.preview,
+      pointerX: drag.currentX,
+      pointerY: drag.currentY,
+      offsetX: drag.previewOffsetX,
+      offsetY: drag.previewOffsetY
+    })
+    args.setDragOverStatus(null)
+    args.setPinDragOver(false)
+    args.setWorktreeDragState((prev) =>
+      applyWorktreeLineageDropPreview(prev, lineageParentId, drag.currentY)
+    )
     return
   }
   if (
@@ -150,13 +173,40 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
       workspaceStatuses: ctx.workspaceStatuses
     })
   ) {
+    drag.reorderIntent = null
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
     return
   }
 
   const drop = ctx.computeWorktreeDrop(drag.currentY)
   if (!drop) {
+    drag.reorderIntent = null
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
+    return
+  }
+  // Let the pointer cross a reorder gutter into the card before moving its target.
+  let intent = drag.reorderIntent
+  if (!intent || (intent.dropIndex !== drop.dropIndex && intent.pointerY !== drag.currentY)) {
+    intent = {
+      dropIndex: drop.dropIndex,
+      pointerY: drag.currentY,
+      startedAt: performance.now()
+    }
+  } else {
+    // Autoscroll changes slots beneath a stationary pointer without renewing intent.
+    intent.dropIndex = drop.dropIndex
+    intent.pointerY = drag.currentY
+  }
+  drag.reorderIntent = intent
+  if (performance.now() - intent.startedAt < REORDER_INTENT_DELAY_MS) {
+    drag.latestStatusDropTarget = null
+    args.setWorktreeDragState((prev) =>
+      clearWorktreeDropPreview(prev, {
+        pointerY: drag.currentY,
+        preserveOffsets: true
+      })
+    )
+    drag.frameId = window.requestAnimationFrame(() => flushWorktreePointerDragFrame(args))
     return
   }
   drag.latestStatusDropTarget = null

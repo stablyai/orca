@@ -26,6 +26,7 @@ import {
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
 import { translate } from '@/i18n/i18n'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -60,14 +61,34 @@ type ContextualTourOverlaySurfaceProps = {
   onOverlayKeyDownCapture: (event: KeyboardEvent<HTMLDivElement>) => void
 }
 
+function disposeContextualTourGlobalKeyGuard(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const guardedWindow = window as Window & {
+    __orcaContextualTourGlobalKeyGuardInstalled?: boolean
+  }
+  if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
+    return
+  }
+  removeAppKeyListener('keydown', handleContextualTourGlobalKeyDown)
+  delete guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled
+}
+
 if (typeof window !== 'undefined') {
   const guardedWindow = window as Window & {
     __orcaContextualTourGlobalKeyGuardInstalled?: boolean
   }
   if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
     guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled = true
-    window.addEventListener('keydown', handleContextualTourGlobalKeyDown, true)
+    addAppKeyListener('keydown', handleContextualTourGlobalKeyDown)
   }
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Vite can replace this module without a full renderer reload. Remove the
+  // global key guard so dev sessions do not retain stale module closures.
+  import.meta.hot.dispose(disposeContextualTourGlobalKeyGuard)
 }
 
 const PANEL_BASE_CLASSES =

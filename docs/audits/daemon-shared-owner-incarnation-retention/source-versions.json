@@ -1,0 +1,1407 @@
+{
+  "sourcePath": "src/main/daemon/daemon-session-owner-resolution.ts",
+  "baselineSha256": "4a69ddc724e58ab9eb7607a7ed1f740c5a69b0f809148c03a59f623f275fbe62",
+  "fixedSha256": "8f62a181a398dc91d20d269a19e3266e199191486fddfee6dcaf3b2a570c76eb",
+  "dependencies": {
+    "src/main/daemon/degraded-daemon-pty-provider.ts": [
+      "a2b95e457bd7819bfe1a56f5dde2fd6785e5a731801d7f75d2f6ed657c9b50cd"
+    ],
+    "src/main/daemon/daemon-pty-adapter.ts": [
+      "edb242c76bba5e823ebd84e87260bcce564ec928d18ca7d3f10f43c3bcc85c88",
+      "c4868235fea41d1d96b0fb0332b3dc591d4f0a3c98e122e4552c3efbb33791fc"
+    ],
+    "src/main/daemon/types.ts": [
+      "ac253a9fe626ab585d7b988df22c1c79b3dd63510c563538ca50876c6dd6f96d"
+    ],
+    "src/main/daemon/daemon-pty-daemon-recovery.ts": [
+      "f12d5516b6b40859256fa56593ab58484482be39c59b1176773cda58b5ce78f2",
+      "9c76ce16e8d191d542addd0679ed8b730b3eb4c519602b40ffc5705a50c91dce"
+    ],
+    "src/main/daemon/degraded-daemon-owner-recovery.ts": [
+      "74f7b2000d3a637e4b509e29cceebeccb36a791a8fba34bb6e0811cedb7311c6"
+    ],
+    "src/main/providers/pty-process-inspection.ts": [
+      "aad924d84e3ba26c8d5a48102518a9ee0edfa3e47afe0b63537c1a3d92b35b20"
+    ],
+    "src/main/daemon/degraded-daemon-session-routing.ts": [
+      "d0cf9bb317fb0e8b1621861db1241c00b3d5e5bcd4574ac6d2c9875960087e6b"
+    ],
+    "src/main/daemon/degraded-daemon-fallback-shutdown.ts": [
+      "12d2cf65777e5ac8d016536503da52f48eaed2f2a297600f5a9746b85f7e6efb"
+    ],
+    "src/main/daemon/combine-unsubscribes.ts": [
+      "4d468d5bdb8b30fceb4044b276f2f50a1cd4e73845562eedf2f0effd4a8532a4"
+    ],
+    "src/main/daemon/degraded-daemon-fresh-spawn-routing.ts": [
+      "c917dfdf1e4cf25b5b3d6249e8307390c4fb2412ebe999d66942403d49ea76ff"
+    ],
+    "src/main/daemon/daemon-errors.ts": [
+      "d6775c72188f400a92e1658e70df76f8b32437ed94d82eee484a404d69a3ffac"
+    ],
+    "src/main/daemon/daemon-protocol-version.ts": [
+      "9f26d58414fd35891ebc2912cf8e96488b72248dc27f8736dff5d53fd8b27fcd"
+    ],
+    "src/main/daemon/daemon-pty-checkpoint-persistence.ts": [
+      "2cbe518533013d4208e10c34c40ece45368c11366a9db898fc043c9d19b7fad0"
+    ],
+    "src/main/daemon/daemon-health.ts": [
+      "c1ba2c5c687bfbf6d99ee82f51b81d9eac238ff90f48af23a086d10ceb2ed114"
+    ],
+    "src/main/daemon/daemon-tcc-attribution.ts": [
+      "c89d54b3ebe5e2f9c988b39052ddd5e496065515d70a340205b07ac43e7d6923"
+    ],
+    "src/main/daemon/daemon-bundle-staleness.ts": [
+      "1742a353bedb6cd0685f213feaa5652fbf5ac65d228c52a93426a19c239783c1"
+    ],
+    "src/main/daemon/daemon-endpoint-errors.ts": [
+      "83a553bd23a971f0f13da5420dfe11dc509f316cb9992153eda2cf09d8290aa7"
+    ],
+    "src/shared/terminal-process-inspection.ts": [
+      "790ac705cf1d12bf805c868d558b75073173c59dd1399596f1e7d79e0bcf534b"
+    ],
+    "src/main/daemon/daemon-endpoint-ownership.ts": [
+      "b2eab15f782c142b756d5562b0246aa4026a7c97a51c3b30e094b607b15f3efc"
+    ],
+    "src/main/daemon/daemon-pty-checkpoint-scheduler.ts": [
+      "2593cdbd3d0b48e45e04e7205970422bdc6c5ccd240d518961429f88751b50c1"
+    ],
+    "src/main/daemon/daemon-durable-history-snapshot.ts": [
+      "35c3b071f3cd5f41e6d2f507f029057663983cf42ec211180fabb9f775cc5072"
+    ],
+    "src/main/daemon/daemon-pid-identity.ts": [
+      "a64e4cfae8c80b7b83fec38b35f4c3f657e447414056feb435d374d04882a190"
+    ],
+    "src/main/daemon/daemon-spawner.ts": [
+      "0e247aadfaafdf32f1a866f852ca348dbb481604a20a8990b948889cd9e39017"
+    ],
+    "src/main/daemon/daemon-pid-file-parse.ts": [
+      "9a1acc477a9c76f19b7a2cc167889c74d48006e3538d0669bca5787afdaaad51"
+    ],
+    "src/main/daemon/ndjson.ts": [
+      "d3df2c0a66ab9b234703d139aec8eea53e512eaf63bd85c97d46610e6de39e91"
+    ],
+    "src/shared/main-process-ndjson-framer.ts": [
+      "cac5d9cdba42fc9f8340b2b815e6b36ff20e104d734a7ac4b8bca7136e6fa490"
+    ],
+    "src/main/daemon/daemon-process-start-time.ts": [
+      "9cef6be893e1a760357b418863726b64684b7102e3d770dc66290756942372d3"
+    ],
+    "src/main/daemon/daemon-process-identity-query.ts": [
+      "8f3f051ccbbb251ffb007e5157af73c217ae97f697828b9644c4d512b32afc9b"
+    ],
+    "src/main/daemon/daemon-respawn-throttle.ts": [
+      "976463ced65580f049e9d8b14585faa03dddc280c3cdb095531eb2040a477645"
+    ],
+    "src/main/daemon/daemon-endpoint-probe.ts": [
+      "b27023ee842a68593ae657aa9d77cc5f125ee763839af0c1d8e4c8def35e2f52"
+    ],
+    "src/main/daemon/daemon-pty-connection-lifecycle.ts": [
+      "8f705518dff40fc7fbf847aa310719f2950cd91ce6a2bf320be131ba48992eef"
+    ],
+    "src/main/daemon/daemon-request-deadline.ts": [
+      "f6a55c176bb4aff63358517b70d69dc187fca406164621385aba4ce43f7f4a10"
+    ],
+    "src/main/daemon/terminal-history-dimensions.ts": [
+      "bf8260412fe7e29a38063d2c7355ed63098d4de20a8ca8ebb5d1f9421b73d81b"
+    ],
+    "src/main/daemon/headless-emulator.ts": [
+      "ace96102285c3967cd9544e7696fe73e1ac6df576b476939aa9819f5c298bab6",
+      "b8bcb28dae2d9fb1b1361c9d32eb69357177943778bf56c2ce9848c82c9ba2a7"
+    ],
+    "src/main/daemon/terminal-shell-lifecycle-scanner.ts": [
+      "2bc25f07183c727e5d4e9d5670bbcaa015e37f74abadba422b6bf8f040fdc04c"
+    ],
+    "src/main/daemon/cold-restore-replay-writer.ts": [
+      "0d9dee4459c802564b1b0ae38a5856d5b5cac98d96723700b08863f23faf05b5"
+    ],
+    "src/main/daemon/daemon-restore-scrollback-depth.ts": [
+      "ffcf76d820c9dd41289bd0af77d33d073a6c69a89e3ef18cf881b12a91ee6f0d"
+    ],
+    "src/shared/process-output-field-scanner.ts": [
+      "03f89dcee7b9abc0c8c1a51423cb612ef936b8046d10a6b586fcea05e4a359a5"
+    ],
+    "src/main/startup/startup-diagnostics.ts": [
+      "7318d5b3ead157615f85f4e5f7e921b64f2222fa01f1450c6c21e09c01b2089e"
+    ],
+    "src/main/daemon/daemon-pty-event-subscriptions.ts": [
+      "85c68ffd0e20dad097fe32b8fcf39de7c4e89cee75e7c76a3b4699bad3e6913c",
+      "0a8f8de8430a674e61177563396d0d6322b8d60aa8f182ca8430e5477e4cd16e"
+    ],
+    "src/main/daemon/daemon-listener-registry.ts": [
+      "86966184f856fe1367cd3279bd09706e7935dcd62798e1cb8c07b35008281449"
+    ],
+    "src/main/daemon/daemon-endpoint-incarnation.ts": [
+      "095bcacd5452ad9a893a27ace50b9072a823b291c17aed1901418242d57a2f07"
+    ],
+    "src/main/daemon/daemon-audit-classifier.ts": [
+      "dcf4dff58e0cad4f0159bd1a1592693a920e4b6ef1d5acd92fd953813c5dfe9b"
+    ],
+    "src/shared/terminal-scrollback-policy.ts": [
+      "7816c5a7540bbb3fbff61f7b3c4a89a8b331621f769b77bddd29abe06a752f17"
+    ],
+    "src/main/daemon/headless-emulator-modes.ts": [
+      "acc05652aa78e3504f3d71250537ac5dbd61777fab9516ed69a22a5d11857807"
+    ],
+    "src/main/daemon/terminal-mode-rehydrate-sequences.ts": [
+      "922d2533cc78adae2d93850507925426e17f456ea3cfb98bbc03b454b7d766ca"
+    ],
+    "src/main/daemon/terminal-mouse-mode-mirror.ts": [
+      "e8f4888dabee5c4cc50b0f15584b3b1b5e2da4db1ba25695dd5762ef9c4a6fb3",
+      "5bf8a94ad7ec3fdd151ba7559f49a229b2156818aba88f7b562bef258048acf1"
+    ],
+    "src/shared/terminal-serialize-absolute-cursor.ts": [
+      "5e4566f8b4fb752a8bec0acf9e2e87a36d223b06760d53d911d42ed46b2100a9"
+    ],
+    "src/main/daemon/terminal-osc-cwd-title-scanner.ts": [
+      "77145544a185fd5a6007e415ed4c9b7f7bb3f6009c96391a72253f3550b2ea6d"
+    ],
+    "src/shared/terminal-partial-escape-tail.ts": [
+      "0739b887bf650a81b6d596b5d2ec2e17d45254eaf3d95c7d008bd82b4af81d29"
+    ],
+    "src/main/daemon/terminal-frame-restore-sequences.ts": [
+      "828285b5e5ca54ba59e6756d2fc6f89e468016ed3a7595775c6dedd08b2c57c7"
+    ],
+    "src/main/daemon/terminal-snapshot-ansi-buffers.ts": [
+      "8e95c7e000db648d64a582b06f75a21890c656f391ee996e583bdf7c1f6a13ee"
+    ],
+    "src/main/daemon/terminal-view-attribute-responder.ts": [
+      "51fa68da93e150a2c15072999b63b3440fb5540b67d732020ca287123ae20fa7"
+    ],
+    "src/main/daemon/startup-device-attributes-responder.ts": [
+      "de1092ba15ec03cdd2fb08b33cd5ba5a04f26b19616476e3c7f717e54d337b7b"
+    ],
+    "src/shared/terminal-cursor-line-context.ts": [
+      "c02e769fb8e49111e63e52079b26feda2d47d70c5e56cf34a81244f2f893cae1"
+    ],
+    "src/shared/terminal-osc-link-retirement.ts": [
+      "40afa50eb7f531a2ff8df54b2fb0d86761597b635a1d6009e22503efdbd0113d"
+    ],
+    "src/shared/terminal-unicode-provider.ts": [
+      "eae524000d37c01ff9818ebe822dff4c12a3479b9a97370414a928cabb3d948f"
+    ],
+    "src/main/daemon/headless-osc-link-ranges.ts": [
+      "90232b09a6aed3f029952a6850f5c3e2037a395ca0c7d2750f497a7f38d1fdca"
+    ],
+    "src/main/daemon/xterm-env-polyfill.ts": [
+      "83a5c2f6386d27c9895699fd3dfd1c6bfdb38c6ae24948ea07d75e24c213e6e9"
+    ],
+    "src/main/daemon/daemon-pty-session-inventory.ts": [
+      "37a9ff93dd9a227f708597c3eafecf886350e7d3c8b5ad4468149513775a8f4c",
+      "ef12cd9c10adb536e6884db6e4a00e3915ea2286410228443228fc4972c0ecad"
+    ],
+    "src/main/daemon/daemon-incarnation-evidence.ts": [
+      "be9c8d27d040c0cfc1aca2593fa8a9c823ea6c496fa63bdadeafefa4fd71dabb"
+    ],
+    "src/shared/terminal-mode-reset-profiles.ts": [
+      "38028c60950d462412e6ebd9699ef0697c859f27c08da377a16b6c3e5da91049"
+    ],
+    "src/shared/own-retained-string.ts": [
+      "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2"
+    ],
+    "src/main/daemon/osc7-uri-extraction.ts": [
+      "6be83d04eef8a38c65df5b8e20513526936a47d2e095e71a0df1269ad93567a7"
+    ],
+    "src/shared/agent-detection.ts": [
+      "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651"
+    ],
+    "src/main/daemon/osc7-file-uri.ts": [
+      "a09f7b8f2bd73a7d547e5c5eecdaa62e23716a16da05fe082041e771ae8dbe9a"
+    ],
+    "src/shared/terminal-escape-introducer.ts": [
+      "399406e19ea928d9905fe08a7aaa81807c436cda7f55e459293e94e868b43fc5"
+    ],
+    "src/shared/terminal-view-attributes.ts": [
+      "f9a6f84532a49107daadf82cde6ac61949d3881d8ac42327f46a08a0c218e305"
+    ],
+    "src/main/providers/pty-process-list-admission.ts": [
+      "6ba5c65c9552497aac0182b6ad8b38b4253d7834ee6853c0c6c1c252af7e2356"
+    ],
+    "src/shared/wsl-paths.ts": ["1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"],
+    "src/shared/claimed-agent-pty-owner-snapshot.ts": [
+      "82935b7bd08639e94ea181be0cb998dfef8c4960eb8d3a8563d6d1aa3156cca5"
+    ],
+    "src/shared/agent-session-host-authority.ts": [
+      "8c5952323d2766f136a3685eda51a439d363d1e2224da5516f3d9cabe34bd5d7"
+    ],
+    "src/main/daemon/daemon-pty-process-inspection.ts": [
+      "4104b34ff7b3ef25989c51c391e532d8058b14921fd72216b8be36013f8725a8"
+    ],
+    "src/main/daemon/pty-session-id.ts": [
+      "1c8beaf069eb5e093e45a9489feffac60e8a5635e8f941722d2a3c3124b4f878"
+    ],
+    "src/shared/agent-title-core.ts": [
+      "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d"
+    ],
+    "src/shared/opencode-terminal-title.ts": [
+      "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec"
+    ],
+    "src/shared/agent-title-identity.ts": [
+      "613c6284eb31aaa381db438c47d2ccf2c726ad150ae62ef269a2cfb762a03453"
+    ],
+    "src/shared/agent-title-status.ts": [
+      "570a4710ebd0a7626dbdccff795efd087997853ac7c0fdb82c015976760b70bb"
+    ],
+    "src/shared/claimed-agent-pty-owner.ts": [
+      "6c49c9b4649559a45149a3118a3560a7c724d9b06fd9b57182f5b880b4fd77c1"
+    ],
+    "src/shared/agent-name-token-match.ts": [
+      "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8"
+    ],
+    "src/shared/osc-title-extraction.ts": [
+      "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a"
+    ],
+    "src/shared/shell-process-detection.ts": [
+      "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f"
+    ],
+    "src/shared/owned-utf16-suffix.ts": [
+      "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+    ],
+    "src/main/daemon/daemon-process-inspection.ts": [
+      "a5ece8904c6d99621b960d476dbeaddd104bd74e07f85bd2085ee26dc9d69683"
+    ],
+    "src/main/agent-hooks/managed-hook-owner-identity.ts": [
+      "1c1d48647a1db09d1255b0816b267f3b8d2ec7b1ca267ffbef67b875eedcaf4c"
+    ],
+    "src/main/daemon/daemon-incarnation-evidence-types.ts": [
+      "85b6135d13257b11ba3162941cd6443ca4e056fdf35091d4ea8f4109f48b1cb8"
+    ],
+    "src/shared/foreground-process-evidence.ts": [
+      "e82342503c7fa83197ef1002f306d410ebed43e93c4dea86d6b8643ae87bf53c"
+    ],
+    "src/shared/pty-incarnation.ts": [
+      "f232a871e24afd92b29e798601f23403a8cc082a6b89e009e5e9d99e6a1f82d5"
+    ],
+    "src/shared/terminal-tab-id.ts": [
+      "3bf691ba305880a6d67f620d9ce671e5388e169c4783b1caf0d73fa589b5aa82"
+    ],
+    "src/shared/stable-pane-id.ts": [
+      "0dfb20a173dc658229c46b7df4e36a443fee7089cffb79d76a74d8a92f41b884"
+    ],
+    "src/shared/protocol-version.ts": [
+      "397ce01879e98b4c8f6b0068ce8c0d180e34c65663db66f65016790bd31f4e6d",
+      "053a152568959f5576050bc83743924772880c85ab6dfb7ce95c6c6acdb02954"
+    ],
+    "src/shared/agent-session-resume.ts": [
+      "3dd5cd7ba4c764c848374b168e715a410974657a9b7e70e9d56b69a06254ce43"
+    ],
+    "src/shared/terminal-title-classification-memo.ts": [
+      "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda"
+    ],
+    "src/shared/pi-state-title-marker.ts": [
+      "c398ce62a0f0dc72b23d106742833c1d60807f4dee92c78adb428a0b0031dce8"
+    ],
+    "src/shared/pi-compatible-synthetic-title.ts": [
+      "99b401985234b242229f9f7eb244b041ffe98f0e463cf90a74c1c248943b820f"
+    ],
+    "src/shared/pty-session-id-format.ts": [
+      "42bb5177724f9dd38ae1814b38f795966536fd803d92364e0b5f9f49a8f8a49b"
+    ],
+    "src/main/daemon/daemon-pty-buffer-snapshots.ts": [
+      "dd0e66898c3035be4c4fe41138a26f00f2d9d84e3999e328c77aa4cc2f29faf9"
+    ],
+    "src/shared/terminal-title-wrapper-segments.ts": [
+      "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78"
+    ],
+    "src/shared/agent-title-decoration.ts": [
+      "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41"
+    ],
+    "src/shared/terminal-title-agent-type.ts": [
+      "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864"
+    ],
+    "src/shared/terminal-surface-id.ts": [
+      "7093584672a541e22c0094bfb0257f6bd8f83d4b23e1a5b077132da011f8f9da"
+    ],
+    "src/shared/skill-install-capability.ts": [
+      "4dae209e014524ad9bd1f72f8366a78f80720546d36e19adbc299d3d7da1ff19"
+    ],
+    "src/shared/remote-server-update.ts": [
+      "c7384b964a0bfaa1573cd00761c5e2d29143c591cb1b4cd6ee1b0db464110d12"
+    ],
+    "src/shared/workspace-scope.ts": [
+      "961b4e7d05f044aa58ac0f3e0ca9344d166f4787742836c855c06ba90dd71581"
+    ],
+    "src/main/daemon/daemon-session-scrollback-window.ts": [
+      "038507c6193b5a18eb0e39276d83a1335a33dfb3b87dcf93286ed91a449f9a68"
+    ],
+    "src/shared/terminal-kitty-keyboard-flags.ts": [
+      "ee8ca63afdca8356fa12878e74973ff92d807aa8d99750b2415b42f4bccb0225"
+    ],
+    "src/main/daemon/daemon-pty-session-control.ts": [
+      "5fd2e9ad493e0b89cf1c2d18d546e820bdcc863f6c4ba7e95b1dd77f5cea48b8"
+    ],
+    "src/shared/pane-agent-identity-adapter.ts": [
+      "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9"
+    ],
+    "src/main/daemon/daemon-pty-applied-size.ts": [
+      "fc17c9636f0d6ce41ac2e4c45fc093d08a4ce29a9c4a0b6ed7202fc99fb821e0"
+    ],
+    "src/main/providers/pty-default-cwd.ts": [
+      "ddb07acfd0ee4d45ff62416b013db9c7b2f1db3ef3d3b8120b941d32d71e2f6f"
+    ],
+    "src/main/daemon/wsl-cold-restore-cwd.ts": [
+      "68a2309fc994799667a5955daa654a1bce3d42b4aa9bab28228f7732eb4d4200"
+    ],
+    "src/main/daemon/daemon-pty-session-input.ts": [
+      "c1b08e0c51deebc21f2af16863051976a56565449e16f7aa2660b8d5c8fd6037"
+    ],
+    "src/main/daemon/daemon-pty-lifecycle-errors.ts": [
+      "d706e04875eb4c08ae92eb0182eb6f0a4c07150a46b98f817e165dc1add92da1"
+    ],
+    "src/shared/agent-title-evidence.ts": [
+      "5ea226cea3867f5421cd45ac54d37f57fc2d1364cb0eafa4a5ff71ddda5fc7ea"
+    ],
+    "src/shared/pane-agent-evidence-sources.ts": [
+      "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f"
+    ],
+    "src/main/providers/pty-path-safety.ts": [
+      "c6b67c9756ea26efea2641ec578ad92fdaad3d5f3f4b668aca6133f0f2ec5aa0"
+    ],
+    "src/main/daemon/daemon-pty-size.ts": [
+      "cb78f1d5e2cf142f86155595df62fd6f3ccd5f45aa11ed74068efc2de77ab741"
+    ],
+    "src/shared/pty-write-settlement.ts": [
+      "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6"
+    ],
+    "src/main/daemon/daemon-pty-session-spawn.ts": [
+      "c14d3697aa509157cd0ccd64bb08dcc258901f3e64d8de85df1d1bbdfd1df114"
+    ],
+    "src/main/providers/pty-write-unavailable-error.ts": [
+      "bb31714600152bc9e3f0e1be7c81fe50b9301b97f39318245607be3047db8e40"
+    ],
+    "src/shared/tui-agent-display-names.ts": [
+      "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296"
+    ],
+    "src/shared/synthetic-agent-title.ts": [
+      "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922"
+    ],
+    "src/shared/agent-process-recognition.ts": [
+      "2a93bfec55fabc7052bf1654d270131a61935c72976bfd3251585c7c1138a0a4"
+    ],
+    "src/main/daemon/session-shell-ready-barrier.ts": [
+      "a7ae62cc0ccce6eb8dfceb9437d3c1497d06588043bca49c559f3f6948f64109"
+    ],
+    "src/main/daemon/daemon-pty-spawn-result.ts": [
+      "4ef2cd27ee763d3542833e4ebf8afc4e0b75675689295a50e68ca6a79c2efe0e"
+    ],
+    "src/shared/codex-startup-delivery.ts": [
+      "8d2a47a0b56dc6ef1fa4a598973805898bd8e42f566130bd3d301d6cbc5733ad"
+    ],
+    "src/main/daemon/daemon-adoption-telemetry-event.ts": [
+      "05ea98bcd32f606cc15c8f0cb9d66401ec2dc801f8e717ed6dd0e9c6911cbd2d"
+    ],
+    "src/main/wsl-env.ts": ["66eb01ec8a5593bcc0e64089a7024624deb009b19250d3d1e6eab2bbd315be52"],
+    "src/main/daemon/terminal-history-seed-segments.ts": [
+      "e0d1bfc920a0df5a561a8ff6c8227ee352822c3d93f48f1015c271eaa6bafcf5"
+    ],
+    "src/main/terminal-history.ts": [
+      "f4ed054c6d478ae191f1379b614487076eb9ee35ec876197c2c20cc024de3013"
+    ],
+    "src/main/daemon/shell-ready.ts": [
+      "8bea3210928c4efb35de5201a53b370eb473e32c7c404b39778efb1b7f779669"
+    ],
+    "src/main/providers/local-pty-utils.ts": [
+      "d655643b42503ccfdab6436273557581b447f4b9f452dfa7649a959705744f25"
+    ],
+    "src/shared/shell-ready-marker-timing.ts": [
+      "4e7fcab88785ecc7d446831d23433c7031a01f534bcd53d5124531b2871857e2"
+    ],
+    "src/main/daemon/wsl-session-context.ts": [
+      "860dfd518182937b04e43d8d330066913799b00c4c2a5dbc04f81e7000e4718a"
+    ],
+    "src/main/shell-prompt-readiness-probe.ts": [
+      "8e871ed4a1d61569a29185bfa95ad4aa0a52ca127098088d3853bfcd5a8a2e73"
+    ],
+    "src/main/daemon/post-ready-flush-gate.ts": [
+      "d53f2d436d768bbe4c4bfe1dd1442e84a031bc8078d3856c0361b40447936cac"
+    ],
+    "src/main/shell-startup-output-scanner.ts": [
+      "cff0c8234de84ed34c1cbfd9013dbb10f5ac60efa01076ad3be2f80394248ac7"
+    ],
+    "src/shared/command-token-scanner.ts": [
+      "86eeb322b12bb3e5bc48edf5d85ec647c0c0ec24d3beb3526e1ae3c9aa7303a0"
+    ],
+    "src/shared/tui-agent-config.ts": [
+      "ac7407900e6dafad72cc47aae171b169e8e1d7752d28caa0e09441d73a1fe1ad"
+    ],
+    "src/shared/agent-node-entrypoint-identities.ts": [
+      "f2d58fcb086f30afbee3987a3b3ccbde566983e9f230a6da05f9c1d808ffa2d4"
+    ],
+    "src/shared/agent-headless-command.ts": [
+      "10f84a57c243c7e9b13b9cd9419ff174cd0c8b20cf4783aeceb6cebbc52def87"
+    ],
+    "src/main/daemon/daemon-history-recovery-freeze.ts": [
+      "e629d2e2729e598293e64213464ca0fb45ba3f205b3f45a45781408f180262a0"
+    ],
+    "src/shared/wsl-env.ts": ["9f9a6bc39f8a3e4b245338652bf30721d8e3888734a40d7cab602dc792dccc88"],
+    "src/main/daemon/daemon-attach-only-retirement.ts": [
+      "b883fe6f3647f1a95be9d3f0390653933d8bea79c21538d045fe2085d31bdbca"
+    ],
+    "src/main/daemon/daemon-pty-spawn-request.ts": [
+      "d3c2e9f8995c73df427dea36e0ea64508fef6fd5880616df9ad430e34d3acb3e"
+    ],
+    "src/main/daemon/daemon-pty-provider-sequence.ts": [
+      "6aa2e70fbc53a57d92b80f1b3e0f8b36ad33d7027191359eb674292d156416bb"
+    ],
+    "src/main/telemetry/client.ts": [
+      "cd6fd4066a7fab559cc13aa4822ef80f0dba34a1e8211613344223b70db532d0"
+    ],
+    "src/shared/app-environment.ts": [
+      "91bd2a883048a56f8c3966057a062bac75f48f9e1b5670d8d7958f8c7fe21140"
+    ],
+    "src/shared/daemon-adoption-telemetry.ts": [
+      "7af34179b683b936ba248b7d92bc0f506642658673b0200e52bdfa4068729ed5"
+    ],
+    "src/shared/daemon-lifecycle-telemetry.ts": [
+      "b3bcb90f98bbdcf98c76fb985de86b2ac5eb96a4b000c278f5a133bf79bc31dc"
+    ],
+    "src/main/line-editor-ready-output-scanner.ts": [
+      "c697380e4bf4677229f59346d7e69d7cc27ed03d163a2882885092e6eb703293"
+    ],
+    "src/shared/pty-slave-line-discipline-echo.ts": [
+      "3df5bc2c7c45ffce766da5460ed5d888f463768d8d8287792cecf45e5f3618b4"
+    ],
+    "src/shared/shell-process-readiness.ts": [
+      "9aeb7bcdc6e0ca1b70d62471a8ad7ac5f39fab966134cfd2397a8d7f850d82cd"
+    ],
+    "src/main/telemetry/validator.ts": [
+      "39e028a8e431fe991ad6bf37acad7a0b0e9d7c174c07e898779b4a614bd12c99"
+    ],
+    "src/main/telemetry/cohort-classifier.ts": [
+      "2d9aeafab4782fd350622d122d0381dda6b02272eda4db0d10b148bf2d5c933f"
+    ],
+    "src/main/telemetry/consent.ts": [
+      "dd8b489ed5ed4af5cc912182ea1ec165f8e0056260a2f3b1e6725aa025027d39"
+    ],
+    "src/main/telemetry/burst-cap.ts": [
+      "12a72a3f1582210fb8b8a81818f1471d62938359f97bdc2e5a2ce59571a3ce2c"
+    ],
+    "src/main/providers/working-directory-validation.ts": [
+      "0ef75b5d5242ad7e5423bde2cb7fe633a8f437fc545f22ca04612782fc2de212",
+      "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043"
+    ],
+    "src/shared/node-pty-spawn-helper.ts": [
+      "4796707cd3d98c1b296a2b7ff6917b324de6ab830a7bb9cd14eb952bbd587c7d"
+    ],
+    "src/main/providers/macos-tcc-login-shell.ts": [
+      "3987924df6e455a41561926d50c3811394232f9dca68d96bbe67c152e57744ba"
+    ],
+    "src/main/daemon/terminal-history-seed-chunks.ts": [
+      "a2616cd2815d92ba8dbe9ddad9d34adc08076a33765010ee18e82c4905adee3f"
+    ],
+    "src/main/daemon/daemon-pty-runtime-state.ts": [
+      "c3424eeeaa1aa8d267df12a6b6b084b6925b45a73cb454f8480d67f8fa564f4e",
+      "d0898287992c4a3acb14c9c4087c7b28cf11b13417f115d25b445d25d1404f19"
+    ],
+    "src/shared/print-mode-headless-command.ts": [
+      "4a632179d794718904989bfb00dabb7c741a0ae35d58585cf07f4aa746c36f7a"
+    ],
+    "src/shared/prime-agent-headless-command.ts": [
+      "0898cb5322ff91510e81c11ec9c7d4fc1cd6e850491092a78f79931722651ec3"
+    ],
+    "src/shared/ante-headless-command.ts": [
+      "710a59e55ab1dfa32a33f7df9b4ecac77f85e387dc93e740d0bc678c37e61620"
+    ],
+    "src/main/shell-startup-identity-scanner.ts": [
+      "37aa9dc4a6ed70c5b52aeda7c4204cffc5b0838808dbe65df4266033628088f6"
+    ],
+    "src/main/shell-ready-marker-scanner.ts": [
+      "a504be037d0ef1a19d3ce1ad608c279028132f0c91357c6dc1f2d5486d914a4d"
+    ],
+    "src/shared/orca-cli-command-name.ts": [
+      "c90b037ec7a6143770a40dd907bf9d053fb2cede21128b60b78a78671c0780c0"
+    ],
+    "src/main/wsl.ts": ["d888b67769461a7ba0a175db9775e2e2ab30601cbec53077a27351604a04882a"],
+    "src/shared/worktree/id.ts": [
+      "d4da9e75db6f0d3301ef5f073d3136282dab4fc4fbd2978bdcdf0e142e7a9d30"
+    ],
+    "src/shared/process-table-snapshot.ts": [
+      "fe423af1745925a52b5d205a3cb20325220c39996e1c065d56fe2af1e69182e9"
+    ],
+    "src/shared/local-windows-terminal-runtime.ts": [
+      "6dfb40bf9bb1a73b358615ea82fd86abec10b1a170b7ef0771b9c574addd4e7c"
+    ],
+    "src/main/terminal-history-id.ts": [
+      "58a0e50e220343925535c67911fb9e45f298916fad2163e6396ba9cc754baac0"
+    ],
+    "src/main/fish-history-session.ts": [
+      "0f746534888842d53ffc8f5565a6010b1c4a2f7bf5f750301c547f7e5450f8eb"
+    ],
+    "src/main/daemon/daemon-shell-ready-marker.ts": [
+      "d128c88e65e7835864c67dc2c1e1a355c50111de77802930b06b350a0beb9a21"
+    ],
+    "src/main/shell-wrapper-content-address.ts": [
+      "bd1ddf63b4de77fe8dabf533edfb0a14b81416e114f795978a1a46776ecea028"
+    ],
+    "src/main/shell-wrapper-file-writer.ts": [
+      "5ebfaf5c3356c651a359b6064cc8aac4a32a413b86548681b1e20370e198f232"
+    ],
+    "src/main/daemon/daemon-shell-ready-wrapper-fileset.ts": [
+      "09cb0a1ff975c2299c46ea47c4ed79820aa93fc505592875db4add634249c55b"
+    ],
+    "src/main/worktree-history-file-path.ts": [
+      "b0b04151717e3fb245b17ad8ba140db32e0af55c7c740a14684e3c2729c5f0aa"
+    ],
+    "src/shared/telemetry-events.ts": [
+      "40b800fdb343cd66801613dddfcacebc148adf864ceb65e6f70e250136e9f4b6"
+    ],
+    "src/main/pty/codex-shell-launch-preflight.ts": [
+      "d80794841adace87db9a24fe3d73f873d5a1b9219ac6887962bace681677deca"
+    ],
+    "src/main/terminal-history-paths.ts": [
+      "27148b37c6fa2f99540d18864013e8909aa86b65be7f92cd10b6a31a1d3d3e75"
+    ],
+    "src/main/zsh-wrapper-dir-ownership.ts": [
+      "e6544e2d8d3348cc2a2e533c60a2bd1e91b6c8446fffa4dea24968218f9e2c9e"
+    ],
+    "src/main/shell-templates.ts": [
+      "17122cebe3ea2b01462e645fa3ce335495734a3ab18f5fb7d015180060896d0a"
+    ],
+    "src/main/powershell-osc133-bootstrap.ts": [
+      "5a53aa934bbb50fba15dc2a0421b07910b09c76824a23ba224d8a4216ef9b446"
+    ],
+    "src/main/shell-startup-features.ts": [
+      "1b418a6d759230950f320494fa70dddea030d3d1f29ea1fba05c238fc98211c7"
+    ],
+    "src/shared/priority-semaphore.ts": [
+      "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5"
+    ],
+    "src/main/providers/macos-login-session-pty-probe.ts": [
+      "260cb5a780287b6dea7c1eaa45e89b78fb9a5e1805c1f8c4bf2b17c5d952af63"
+    ],
+    "src/shared/child-process/run-process.ts": [
+      "ae4dad239273351ce61269cd7f7abb8325f3f620be600fa9c0ae760c1dd7cbad"
+    ],
+    "src/shared/cross-platform-path.ts": [
+      "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3"
+    ],
+    "src/main/daemon/history-reader.ts": [
+      "8579629f0d023bad3d652661c6f767ad5be767a2759c2978b114645df0814a3d"
+    ],
+    "src/main/daemon/client.ts": [
+      "e7698849f62c51bd36bf6789423dcd3f9194d979fc143dd267f0c1b1de1ddf14"
+    ],
+    "src/main/daemon/daemon-audit-eligibility-event.ts": [
+      "11755c26094c81a82c72027eb5b96b97fbd686bca4f32c9fbc9ba1758fbfa137"
+    ],
+    "src/main/daemon/daemon-checkpoint-session-queue.ts": [
+      "f4cc3809309c57125955ee8a7439df8f8000bfca452015c5bffad3ceea5fdf7b"
+    ],
+    "src/main/daemon/cold-restore-payload-cache.ts": [
+      "6e97bb387ec9b00619226685934126a90e4572720de3ed6a16de0cf8f43ceb77"
+    ],
+    "src/main/daemon/history-manager.ts": [
+      "7b0a99ecbf735ea3bf6480af6463dc15a35ea6dc27b3b0e8d07b73a787ad0f5c"
+    ],
+    "src/main/wsl-directory-probe-command.ts": [
+      "1db18370dff7e8656d27b105625dd03bdba51cb60099e90c0abb3252ec2ec246"
+    ],
+    "src/main/wsl-distro-list-output.ts": [
+      "27f772c9dc451757f4397a4e47ca9c9e28c4067e50a41ceef846013ff43db7bc"
+    ],
+    "src/main/wsl-availability.ts": [
+      "324c636f9779595b62fe1f8c98535ddc818b6d892195f1f28ec2ae0bd7ec1bcf"
+    ],
+    "src/main/wsl-interop-spawn-directory.ts": [
+      "857a1253971cb0d4e7da5659c9ded80c4f0930c70b03e243ed858f8999f294cf"
+    ],
+    "src/main/wsl-running-distro-cache.ts": [
+      "d8bcf954daa78cba331ef725bf1ab2c63a117cb3d0bb099edba6133ffeee386a"
+    ],
+    "src/main/wsl-distro-retry.ts": [
+      "d5711a29eb67bd49d9c512a5f35743921045b703ba27275cdcdc0d5aaf64e4be"
+    ],
+    "src/main/cli/bundled-cli-launcher-path.ts": [
+      "d18971de3491d0f678c99ab3fca72dd71c5b3e635bf258b7c8d1ba4584e358c4"
+    ],
+    "src/shared/powershell-command-encoding.ts": [
+      "405d7aa5cf55f0053a6ae84f92335446dde6c316f782761be5ce1c24967046a9"
+    ],
+    "src/main/pty/omp-shell-wrapper.ts": [
+      "fcf15117265833933064f0315ce1b02473d8f5618efed09c0d3f8d4872395fcf"
+    ],
+    "src/main/daemon/daemon-zsh-shell-ready-wrapper-spec.ts": [
+      "502ef8934f77c6ec3ffe278cc4f8e644f0890bc4f2ac6360077e34c00bc3d58b"
+    ],
+    "src/main/zsh-startup-wrapper-builder.ts": [
+      "eacff52ff47cebcd34914b020fa746d1e3720e3b7c8059013ffcf74d1cf3dc26"
+    ],
+    "src/main/bash-prompt-command-composition.ts": [
+      "1519e1b2f4d408c5e46ff7f7d9b3dc2187ac03ed6e99217ef2b5137158fa264d"
+    ],
+    "src/main/pty/posix-shell-startup-command.ts": [
+      "f69611a77938cf13455f67728cf1a9fc1a67ff864919245787d659f3c1c6055c"
+    ],
+    "src/main/daemon/daemon-bash-shell-ready-rcfile.ts": [
+      "475bdef878015fb3531fe0f340d0f99d224146f0aa8adde406175a2e51e228be"
+    ],
+    "src/shared/telemetry-app-event-schemas.ts": [
+      "5dc7d68e3a235db3755ae71381a8b01e3584f21a80b6de48a6b4e7538f1c0831"
+    ],
+    "src/shared/telemetry-daemon-event-schemas.ts": [
+      "0566f2763169d68a63887bcabf15e3f6a92237191caeaa01276022c647c982ac"
+    ],
+    "src/shared/telemetry-property-schemas.ts": [
+      "3b09098052708589b2954189e19d595668b4e3d4ccb09b1de75681839d7c72bd"
+    ],
+    "src/shared/telemetry-event-classification.ts": [
+      "0a04ffab3f99083e2a07e254040633519771450303e6dc803cd46ac074c97a4e"
+    ],
+    "src/shared/telemetry-event-registry.ts": [
+      "fd2782c8606fac43241fa96e0999fd651047434ffac68688dd009f060a315be9"
+    ],
+    "src/shared/wsl-login-shell-command.ts": [
+      "69445d4cb6eae151ef28ed4fe320774bad9c46577f8a2263c14a14ecfdb28075"
+    ],
+    "src/shared/child-process/process-spec.ts": [
+      "97e52b5e320da1eed4cfb2c0b73a88696b62f355eb4b5fe0df5389764afb8289"
+    ],
+    "src/shared/child-process/bounded-output-sink.ts": [
+      "7dbab9fc70dac8e5d19dd03d743b55609092b45ca13423e2dc80a69cf7fc4865"
+    ],
+    "src/shared/child-process/child-termination-reporter.ts": [
+      "d91ff09b26c9a23e26c2a2f92b129879cd6d0bddea14cd3bcac5d4489fecfca0"
+    ],
+    "src/shared/child-process/process-tree-termination.ts": [
+      "49f001659c872e23040fe5bab2dd387f2589178f5bc3ce9361373303d23ff120"
+    ],
+    "src/shared/child-process/spawn-resolution.ts": [
+      "8c62c3c14d6f110f25bab23e3f4b2633a68e2f36252bd3aac68cffd7b2e274dc"
+    ],
+    "src/main/daemon/history-paths.ts": [
+      "a565f91fb2def34aa2c063d0089fa9b491c5aabd7736886ba9e4d2bb31418b63"
+    ],
+    "src/main/daemon/terminal-history-log.ts": [
+      "8d9ec783257c1f7bd7380491038b499ecaca00f57d99047806cba9d6ab816bcb"
+    ],
+    "src/main/daemon/terminal-history-file-limits.ts": [
+      "21185a571e0d326472554dae3b49bc578834d00432a2bf50f044a4d3da1e1a3a"
+    ],
+    "src/main/daemon/terminal-history-recovery-quarantine.ts": [
+      "65e37d29a84d8ebaf43e78e13b94004c2ca9a0801c49a843642ff84928837c85"
+    ],
+    "src/main/daemon/terminal-history-file-reader.ts": [
+      "923c9e0c5e803c2f3ea25969341c76525ece822ddd3cea4d96c5176c438b92ae"
+    ],
+    "src/main/daemon/terminal-history-legacy-scrollback-restore.ts": [
+      "5af2cb2998362feccbe1025e019aef6c5ebaf1d4ae9d9e4c6ef527033f1fc441"
+    ],
+    "src/main/daemon/terminal-history-restorable-retention.ts": [
+      "1bfc897132026875086cb99e9d2d5df73db793cd6cef916706934b215bfd7b7d"
+    ],
+    "src/main/daemon/daemon-private-file-modes.ts": [
+      "7dbd0693d254e8ec2bf4f73499ecc8eca560ef1d440fe0026cff910e58bf0615"
+    ],
+    "src/main/daemon/terminal-history-session-tombstone.ts": [
+      "ed4ced675f275e16b5a1a142e91b5e33e10a4a35885ba2dd8a7e5a90e4d8ebe6"
+    ],
+    "src/main/daemon/terminal-history-metadata.ts": [
+      "d273daac2c06d140b8a75a1d43382025f04b430708af57fd359623ee506ce084"
+    ],
+    "src/main/daemon/terminal-history-session-files.ts": [
+      "d8b0c2ac3e41a267f2a85aa11571e66807e9204613881433ddeb2a5beca217fb"
+    ],
+    "src/main/daemon/terminal-history-cold-restore-info.ts": [
+      "5f44e06414227fa7148c0a88784aa5146b23ab36719db9d293432ebde63b0680"
+    ],
+    "src/main/daemon/terminal-history-checkpoint-reader.ts": [
+      "d69e6e765d9b318ecbdeca27fc295e57e678d47e1312b77f0b2900b1b727b8d1"
+    ],
+    "src/main/daemon/terminal-history-recovery-freezes.ts": [
+      "c1dd816085442d69b556a590196bed679aaf02f14d919ca7c62742d382591f0a"
+    ],
+    "src/main/daemon/terminal-history-session-writer.ts": [
+      "50eb181f8f13355e9ebf5c3dd1bc004ec10b3eba51bd74368a75421634562856"
+    ],
+    "src/main/daemon/terminal-history-mutation-tracker.ts": [
+      "fa7a88fb2bd9461b12cd97c60c1383f9c51b4d0e445b9d8852dbeabf136f548e"
+    ],
+    "src/shared/star-nag-telemetry.ts": [
+      "dd3e57bc92a680ca78c521d3e503ec42220c7c9bef6970523cb804e79a7f0f7b"
+    ],
+    "src/shared/gh-star-source.ts": [
+      "92d6db38e5f5881d9c522fa0e85c9f4b757e41cc92517e5d642c8795eb4310fe"
+    ],
+    "src/shared/feature-interactions.ts": [
+      "d0f06fea1a436f77584b8bc3c93a944ee0cc1504cb0b12fc08cf49eb2d6dec7a"
+    ],
+    "src/shared/daemon-audit-eligibility.ts": [
+      "54322c582a2ffc880ace5b0eefd3f44b8110e038de9603207601d9ef35979446"
+    ],
+    "src/shared/agent-hook-types.ts": [
+      "dc64ba21ad8dd32c4a9a43eacb2c66d19c6dfe8dc6d77b2656f008b70597b78b"
+    ],
+    "src/shared/telemetry-feature-education-event-schemas.ts": [
+      "51d0e9260f7945aa8efe28c0db73b935ff662da03567e6867f1c5470e24cd2fe"
+    ],
+    "src/shared/telemetry-native-feature-event-schemas.ts": [
+      "407d1e75d18cde42ef430689af476d122b2f3f6a08b4c406454f1b0bd66c453d"
+    ],
+    "src/main/daemon/daemon-client-listener-registry.ts": [
+      "ff74d77bd915b4ae424054be740322e17e46bcc64316057c264eed1010c1a50b"
+    ],
+    "src/main/daemon/daemon-client-pending-requests.ts": [
+      "4fa6740fc377c898493809f7469b98c37062c059aaef38bd07dcd6f5e9bccb9b"
+    ],
+    "src/main/daemon/daemon-client-hello-handshake.ts": [
+      "532be287024d5fa8374d61af5ed488622b2f7a8530642a2120a4993caa14cc73"
+    ],
+    "src/main/daemon/daemon-client-ndjson-readers.ts": [
+      "3333a83f0f75a05867083c6890c564e4bdbd0df820313d646944c55ba04056ee"
+    ],
+    "src/shared/telemetry-onboarding-event-schemas.ts": [
+      "9e74c1de5cb4cc07b5f6cd0ec3e03fc3c183ef16e862e2485217057397b28756"
+    ],
+    "src/main/daemon/daemon-client-notify-settlement.ts": [
+      "7ce27ff7c79fb5027b884328505f0b792c4a039886deae12371a4b5e4594bf25"
+    ],
+    "src/main/daemon/daemon-client-socket-connect.ts": [
+      "958e918424e5ea6d9ed4f8d85e1d07c46977e074ea2f2f880dc6b1ac5c927c76"
+    ],
+    "src/shared/telemetry-repository-event-schemas.ts": [
+      "d8cc2d46954a41accc3b5e5cecefc6be2410e60e416411e5be8178cd13cc2572"
+    ],
+    "src/main/daemon/daemon-client-rpc-request.ts": [
+      "c846c4e7cb1a5eaa3266e3f3779dbd62c7f60a0c783c55d2af80c42d8468db7b"
+    ],
+    "src/shared/child-process/windows-cmd-shim-resolution.ts": [
+      "5044e3a9140a19c8bb713044de655b611244659a754f32e5a5df7f519df40eb3"
+    ],
+    "src/shared/child-process/windows-command-line.ts": [
+      "4bf94aa90ee63d965bc6e1198ddafa4a715c05d78be979025d17dc59d90557ca"
+    ],
+    "src/shared/workspace-source.ts": [
+      "78c66dc7361ade7984de2d7fb5afa879eaade2a2f289e42cd78e53eee07d5b29"
+    ],
+    "src/shared/feature-wall-tour-depth.ts": [
+      "93614de5dacfa1fd084dffbe56d8a6a5a20097dc6fbc6c39eabd7f49e60e46cb"
+    ],
+    "src/shared/setup-script-import-providers.ts": [
+      "f152cefab4922d992633da4d950b319b9e61862c3835d6fe88ed0e98edcc3f5a"
+    ],
+    "src/shared/child-process/process-tree-kill-gate.ts": [
+      "62848f063785e15cb0231deb622b043e81484ed3040c612afdc4f98fa2db06ab"
+    ],
+    "src/shared/node-bounded-file-reader.ts": [
+      "2cffa451b72d059226e0c2d4b6d2a5203cb8ddafb358d5e828dcd3436d197ecb"
+    ],
+    "src/main/daemon/terminal-checkpoint-serializer.ts": [
+      "dfd5f0f3b72f58ad9d6b9df712dc1318b8e04dc7ec7327ccf714c0e7bfde1375"
+    ],
+    "src/shared/terminal-osc-link-ranges.ts": [
+      "bc3c39fd44489a27669225474ab9f52aaae32988ed80b26aab69e1ad0cb3d390"
+    ],
+    "src/shared/terminal-owner.ts": [
+      "60e3c07e99b8d2813f2241a8fc5ab8d1a11229b23b32aa53fb67154052c92309"
+    ],
+    "src/main/host-tree-removal.ts": [
+      "ba8ea5e3503bf30eddf70efc68bdd6a1d9b864734ac67cf21f83b95f4f862c97"
+    ],
+    "src/shared/feature-interaction-categories.ts": [
+      "320daec20570a0d5cae909bd4eec1d8b35a460a54aee480ddfb464fc1603d27d"
+    ],
+    "src/main/daemon/node-pty-error-hints.ts": [
+      "0595cf09081e0ed369078d1698093f02f3c23e5814e3d884b5083e70e8bd440a"
+    ],
+    "src/shared/feature-interaction-catalog.ts": [
+      "0015a3cfc624d9dd800d54dba6cc420e4e7505131cedc3314f38c1ed03eeda80"
+    ],
+    "src/shared/feature-interaction-usage-buckets.ts": [
+      "5d4ac4b615d4af1dbb3057d3373d33fdf25c4bef15f93a93884c3e660cfcc8ff"
+    ],
+    "src/shared/feature-education-telemetry.ts": [
+      "7330076fabc31fc2878b79caa7b2b1cc901d6f99387e7ec846a85942f08b4d00"
+    ],
+    "src/shared/feature-wall-setup-steps.ts": [
+      "e917ed94cf96ea99cce9f537bdd37bd0ddb7cbc6172d8f67aac9efe11379160d"
+    ],
+    "src/shared/feature-wall-telemetry.ts": [
+      "1ae90c3ee862a109493eb88ff3690a124d05e3c5cdaac331b818610925ec5693"
+    ],
+    "src/main/asar-transparent-fs.ts": [
+      "48b031ef8f72545c5f8f0d4cf6fb80e168a38315e83103ff00e4392c9cbdd2ee"
+    ],
+    "src/shared/telemetry-onboarding-foundation-schemas.ts": [
+      "32772dc9111ad9e72f83322ee54a4f090b49cd14592f95b129be61b6469dc0d3"
+    ],
+    "src/shared/windows-transient-lock-removal.ts": [
+      "dbfbc53d044d4bb76d1c5378a1011dff69b88c1ba042b23ebd1b0057153868f2"
+    ],
+    "src/shared/nested-repo-telemetry.ts": [
+      "fdcb4ce4565e7d71f6833099c3725a7bb2fcf27ef6d2089ad77ba588ad12efe7"
+    ],
+    "src/main/daemon/daemon-pty-listener-emission.ts": [
+      "9d1e9b89dfb3bccd2c7e9eb3e0f574fe93772154b57e0ca34ce2779d1b94084f"
+    ]
+  },
+  "workingRevision": "6ab6802df90553d2a26e9a4c7a519ae11d4b5e09",
+  "publicationRevision": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+  "reportedRevision": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+  "historicalCore": {
+    "291b4ddd6f1c1af480169885e0fda7f9c78ff053": {
+      "src/main/daemon/daemon-session-owner-resolution.ts": "4a69ddc724e58ab9eb7607a7ed1f740c5a69b0f809148c03a59f623f275fbe62",
+      "src/main/daemon/degraded-daemon-owner-recovery.ts": "74f7b2000d3a637e4b509e29cceebeccb36a791a8fba34bb6e0811cedb7311c6",
+      "src/main/daemon/degraded-daemon-pty-provider.ts": "a2b95e457bd7819bfe1a56f5dde2fd6785e5a731801d7f75d2f6ed657c9b50cd",
+      "src/main/daemon/daemon-pty-connection-lifecycle.ts": "8f705518dff40fc7fbf847aa310719f2950cd91ce6a2bf320be131ba48992eef"
+    },
+    "e0826956fcfc532f5a1e55b5e081f2e57e553c43": {
+      "src/main/daemon/daemon-session-owner-resolution.ts": "4a69ddc724e58ab9eb7607a7ed1f740c5a69b0f809148c03a59f623f275fbe62",
+      "src/main/daemon/degraded-daemon-owner-recovery.ts": "74f7b2000d3a637e4b509e29cceebeccb36a791a8fba34bb6e0811cedb7311c6",
+      "src/main/daemon/degraded-daemon-pty-provider.ts": "108dc9bf12eaaaa1f446c1a86e264611c5a28cd9dfc4f2e8bc59baca168a9d59",
+      "src/main/daemon/daemon-pty-connection-lifecycle.ts": "8f705518dff40fc7fbf847aa310719f2950cd91ce6a2bf320be131ba48992eef"
+    }
+  },
+  "workingEvaluated": {
+    "src/main/daemon/degraded-daemon-pty-provider.ts": "a2b95e457bd7819bfe1a56f5dde2fd6785e5a731801d7f75d2f6ed657c9b50cd",
+    "src/main/daemon/daemon-pty-adapter.ts": "edb242c76bba5e823ebd84e87260bcce564ec928d18ca7d3f10f43c3bcc85c88",
+    "src/main/daemon/types.ts": "ac253a9fe626ab585d7b988df22c1c79b3dd63510c563538ca50876c6dd6f96d",
+    "src/main/daemon/daemon-pty-daemon-recovery.ts": "f12d5516b6b40859256fa56593ab58484482be39c59b1176773cda58b5ce78f2",
+    "src/main/daemon/degraded-daemon-owner-recovery.ts": "74f7b2000d3a637e4b509e29cceebeccb36a791a8fba34bb6e0811cedb7311c6",
+    "src/main/providers/pty-process-inspection.ts": "aad924d84e3ba26c8d5a48102518a9ee0edfa3e47afe0b63537c1a3d92b35b20",
+    "src/main/daemon/degraded-daemon-session-routing.ts": "d0cf9bb317fb0e8b1621861db1241c00b3d5e5bcd4574ac6d2c9875960087e6b",
+    "src/main/daemon/degraded-daemon-fallback-shutdown.ts": "12d2cf65777e5ac8d016536503da52f48eaed2f2a297600f5a9746b85f7e6efb",
+    "src/main/daemon/combine-unsubscribes.ts": "4d468d5bdb8b30fceb4044b276f2f50a1cd4e73845562eedf2f0effd4a8532a4",
+    "src/main/daemon/degraded-daemon-fresh-spawn-routing.ts": "c917dfdf1e4cf25b5b3d6249e8307390c4fb2412ebe999d66942403d49ea76ff",
+    "src/main/daemon/daemon-errors.ts": "d6775c72188f400a92e1658e70df76f8b32437ed94d82eee484a404d69a3ffac",
+    "src/main/daemon/daemon-protocol-version.ts": "9f26d58414fd35891ebc2912cf8e96488b72248dc27f8736dff5d53fd8b27fcd",
+    "src/main/daemon/daemon-pty-checkpoint-persistence.ts": "2cbe518533013d4208e10c34c40ece45368c11366a9db898fc043c9d19b7fad0",
+    "src/main/daemon/daemon-health.ts": "c1ba2c5c687bfbf6d99ee82f51b81d9eac238ff90f48af23a086d10ceb2ed114",
+    "src/main/daemon/daemon-tcc-attribution.ts": "c89d54b3ebe5e2f9c988b39052ddd5e496065515d70a340205b07ac43e7d6923",
+    "src/main/daemon/daemon-bundle-staleness.ts": "1742a353bedb6cd0685f213feaa5652fbf5ac65d228c52a93426a19c239783c1",
+    "src/main/daemon/daemon-endpoint-errors.ts": "83a553bd23a971f0f13da5420dfe11dc509f316cb9992153eda2cf09d8290aa7",
+    "src/shared/terminal-process-inspection.ts": "790ac705cf1d12bf805c868d558b75073173c59dd1399596f1e7d79e0bcf534b",
+    "src/main/daemon/daemon-session-owner-resolution.ts": "4a69ddc724e58ab9eb7607a7ed1f740c5a69b0f809148c03a59f623f275fbe62",
+    "src/main/daemon/daemon-endpoint-ownership.ts": "b2eab15f782c142b756d5562b0246aa4026a7c97a51c3b30e094b607b15f3efc",
+    "src/main/daemon/daemon-pty-checkpoint-scheduler.ts": "2593cdbd3d0b48e45e04e7205970422bdc6c5ccd240d518961429f88751b50c1",
+    "src/main/daemon/daemon-durable-history-snapshot.ts": "35c3b071f3cd5f41e6d2f507f029057663983cf42ec211180fabb9f775cc5072",
+    "src/main/daemon/daemon-pid-identity.ts": "a64e4cfae8c80b7b83fec38b35f4c3f657e447414056feb435d374d04882a190",
+    "src/main/daemon/daemon-spawner.ts": "0e247aadfaafdf32f1a866f852ca348dbb481604a20a8990b948889cd9e39017",
+    "src/main/daemon/daemon-pid-file-parse.ts": "9a1acc477a9c76f19b7a2cc167889c74d48006e3538d0669bca5787afdaaad51",
+    "src/main/daemon/ndjson.ts": "d3df2c0a66ab9b234703d139aec8eea53e512eaf63bd85c97d46610e6de39e91",
+    "src/shared/main-process-ndjson-framer.ts": "cac5d9cdba42fc9f8340b2b815e6b36ff20e104d734a7ac4b8bca7136e6fa490",
+    "src/main/daemon/daemon-process-start-time.ts": "9cef6be893e1a760357b418863726b64684b7102e3d770dc66290756942372d3",
+    "src/main/daemon/daemon-process-identity-query.ts": "8f3f051ccbbb251ffb007e5157af73c217ae97f697828b9644c4d512b32afc9b",
+    "src/main/daemon/daemon-respawn-throttle.ts": "976463ced65580f049e9d8b14585faa03dddc280c3cdb095531eb2040a477645",
+    "src/main/daemon/daemon-endpoint-probe.ts": "b27023ee842a68593ae657aa9d77cc5f125ee763839af0c1d8e4c8def35e2f52",
+    "src/main/daemon/daemon-pty-connection-lifecycle.ts": "8f705518dff40fc7fbf847aa310719f2950cd91ce6a2bf320be131ba48992eef",
+    "src/main/daemon/daemon-request-deadline.ts": "f6a55c176bb4aff63358517b70d69dc187fca406164621385aba4ce43f7f4a10",
+    "src/main/daemon/terminal-history-dimensions.ts": "bf8260412fe7e29a38063d2c7355ed63098d4de20a8ca8ebb5d1f9421b73d81b",
+    "src/main/daemon/headless-emulator.ts": "ace96102285c3967cd9544e7696fe73e1ac6df576b476939aa9819f5c298bab6",
+    "src/main/daemon/terminal-shell-lifecycle-scanner.ts": "2bc25f07183c727e5d4e9d5670bbcaa015e37f74abadba422b6bf8f040fdc04c",
+    "src/main/daemon/cold-restore-replay-writer.ts": "0d9dee4459c802564b1b0ae38a5856d5b5cac98d96723700b08863f23faf05b5",
+    "src/main/daemon/daemon-restore-scrollback-depth.ts": "ffcf76d820c9dd41289bd0af77d33d073a6c69a89e3ef18cf881b12a91ee6f0d",
+    "src/shared/process-output-field-scanner.ts": "03f89dcee7b9abc0c8c1a51423cb612ef936b8046d10a6b586fcea05e4a359a5",
+    "src/main/startup/startup-diagnostics.ts": "7318d5b3ead157615f85f4e5f7e921b64f2222fa01f1450c6c21e09c01b2089e",
+    "src/main/daemon/daemon-pty-event-subscriptions.ts": "85c68ffd0e20dad097fe32b8fcf39de7c4e89cee75e7c76a3b4699bad3e6913c",
+    "src/main/daemon/daemon-listener-registry.ts": "86966184f856fe1367cd3279bd09706e7935dcd62798e1cb8c07b35008281449",
+    "src/main/daemon/daemon-endpoint-incarnation.ts": "095bcacd5452ad9a893a27ace50b9072a823b291c17aed1901418242d57a2f07",
+    "src/main/daemon/daemon-audit-classifier.ts": "dcf4dff58e0cad4f0159bd1a1592693a920e4b6ef1d5acd92fd953813c5dfe9b",
+    "src/shared/terminal-scrollback-policy.ts": "7816c5a7540bbb3fbff61f7b3c4a89a8b331621f769b77bddd29abe06a752f17",
+    "src/main/daemon/headless-emulator-modes.ts": "acc05652aa78e3504f3d71250537ac5dbd61777fab9516ed69a22a5d11857807",
+    "src/main/daemon/terminal-mode-rehydrate-sequences.ts": "922d2533cc78adae2d93850507925426e17f456ea3cfb98bbc03b454b7d766ca",
+    "src/main/daemon/terminal-mouse-mode-mirror.ts": "e8f4888dabee5c4cc50b0f15584b3b1b5e2da4db1ba25695dd5762ef9c4a6fb3",
+    "src/shared/terminal-serialize-absolute-cursor.ts": "5e4566f8b4fb752a8bec0acf9e2e87a36d223b06760d53d911d42ed46b2100a9",
+    "src/main/daemon/terminal-osc-cwd-title-scanner.ts": "77145544a185fd5a6007e415ed4c9b7f7bb3f6009c96391a72253f3550b2ea6d",
+    "src/shared/terminal-partial-escape-tail.ts": "0739b887bf650a81b6d596b5d2ec2e17d45254eaf3d95c7d008bd82b4af81d29",
+    "src/main/daemon/terminal-frame-restore-sequences.ts": "828285b5e5ca54ba59e6756d2fc6f89e468016ed3a7595775c6dedd08b2c57c7",
+    "src/main/daemon/terminal-snapshot-ansi-buffers.ts": "8e95c7e000db648d64a582b06f75a21890c656f391ee996e583bdf7c1f6a13ee",
+    "src/main/daemon/terminal-view-attribute-responder.ts": "51fa68da93e150a2c15072999b63b3440fb5540b67d732020ca287123ae20fa7",
+    "src/main/daemon/startup-device-attributes-responder.ts": "de1092ba15ec03cdd2fb08b33cd5ba5a04f26b19616476e3c7f717e54d337b7b",
+    "src/shared/terminal-cursor-line-context.ts": "c02e769fb8e49111e63e52079b26feda2d47d70c5e56cf34a81244f2f893cae1",
+    "src/shared/terminal-osc-link-retirement.ts": "40afa50eb7f531a2ff8df54b2fb0d86761597b635a1d6009e22503efdbd0113d",
+    "src/shared/terminal-unicode-provider.ts": "eae524000d37c01ff9818ebe822dff4c12a3479b9a97370414a928cabb3d948f",
+    "src/main/daemon/headless-osc-link-ranges.ts": "90232b09a6aed3f029952a6850f5c3e2037a395ca0c7d2750f497a7f38d1fdca",
+    "src/main/daemon/xterm-env-polyfill.ts": "83a5c2f6386d27c9895699fd3dfd1c6bfdb38c6ae24948ea07d75e24c213e6e9",
+    "src/main/daemon/daemon-pty-session-inventory.ts": "37a9ff93dd9a227f708597c3eafecf886350e7d3c8b5ad4468149513775a8f4c",
+    "src/main/daemon/daemon-incarnation-evidence.ts": "be9c8d27d040c0cfc1aca2593fa8a9c823ea6c496fa63bdadeafefa4fd71dabb",
+    "src/shared/terminal-mode-reset-profiles.ts": "38028c60950d462412e6ebd9699ef0697c859f27c08da377a16b6c3e5da91049",
+    "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+    "src/main/daemon/osc7-uri-extraction.ts": "6be83d04eef8a38c65df5b8e20513526936a47d2e095e71a0df1269ad93567a7",
+    "src/shared/agent-detection.ts": "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651",
+    "src/main/daemon/osc7-file-uri.ts": "a09f7b8f2bd73a7d547e5c5eecdaa62e23716a16da05fe082041e771ae8dbe9a",
+    "src/shared/terminal-escape-introducer.ts": "399406e19ea928d9905fe08a7aaa81807c436cda7f55e459293e94e868b43fc5",
+    "src/shared/terminal-view-attributes.ts": "f9a6f84532a49107daadf82cde6ac61949d3881d8ac42327f46a08a0c218e305",
+    "src/main/providers/pty-process-list-admission.ts": "6ba5c65c9552497aac0182b6ad8b38b4253d7834ee6853c0c6c1c252af7e2356",
+    "src/shared/wsl-paths.ts": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a",
+    "src/shared/claimed-agent-pty-owner-snapshot.ts": "82935b7bd08639e94ea181be0cb998dfef8c4960eb8d3a8563d6d1aa3156cca5",
+    "src/shared/agent-session-host-authority.ts": "8c5952323d2766f136a3685eda51a439d363d1e2224da5516f3d9cabe34bd5d7",
+    "src/main/daemon/daemon-pty-process-inspection.ts": "4104b34ff7b3ef25989c51c391e532d8058b14921fd72216b8be36013f8725a8",
+    "src/main/daemon/pty-session-id.ts": "1c8beaf069eb5e093e45a9489feffac60e8a5635e8f941722d2a3c3124b4f878",
+    "src/shared/agent-title-core.ts": "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d",
+    "src/shared/opencode-terminal-title.ts": "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec",
+    "src/shared/agent-title-identity.ts": "613c6284eb31aaa381db438c47d2ccf2c726ad150ae62ef269a2cfb762a03453",
+    "src/shared/agent-title-status.ts": "570a4710ebd0a7626dbdccff795efd087997853ac7c0fdb82c015976760b70bb",
+    "src/shared/claimed-agent-pty-owner.ts": "6c49c9b4649559a45149a3118a3560a7c724d9b06fd9b57182f5b880b4fd77c1",
+    "src/shared/agent-name-token-match.ts": "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8",
+    "src/shared/osc-title-extraction.ts": "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a",
+    "src/shared/shell-process-detection.ts": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f",
+    "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+    "src/main/daemon/daemon-process-inspection.ts": "a5ece8904c6d99621b960d476dbeaddd104bd74e07f85bd2085ee26dc9d69683",
+    "src/main/agent-hooks/managed-hook-owner-identity.ts": "1c1d48647a1db09d1255b0816b267f3b8d2ec7b1ca267ffbef67b875eedcaf4c",
+    "src/main/daemon/daemon-incarnation-evidence-types.ts": "85b6135d13257b11ba3162941cd6443ca4e056fdf35091d4ea8f4109f48b1cb8",
+    "src/shared/foreground-process-evidence.ts": "e82342503c7fa83197ef1002f306d410ebed43e93c4dea86d6b8643ae87bf53c",
+    "src/shared/pty-incarnation.ts": "f232a871e24afd92b29e798601f23403a8cc082a6b89e009e5e9d99e6a1f82d5",
+    "src/shared/terminal-tab-id.ts": "3bf691ba305880a6d67f620d9ce671e5388e169c4783b1caf0d73fa589b5aa82",
+    "src/shared/stable-pane-id.ts": "0dfb20a173dc658229c46b7df4e36a443fee7089cffb79d76a74d8a92f41b884",
+    "src/shared/protocol-version.ts": "397ce01879e98b4c8f6b0068ce8c0d180e34c65663db66f65016790bd31f4e6d",
+    "src/shared/agent-session-resume.ts": "3dd5cd7ba4c764c848374b168e715a410974657a9b7e70e9d56b69a06254ce43",
+    "src/shared/terminal-title-classification-memo.ts": "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda",
+    "src/shared/pi-state-title-marker.ts": "c398ce62a0f0dc72b23d106742833c1d60807f4dee92c78adb428a0b0031dce8",
+    "src/shared/pi-compatible-synthetic-title.ts": "99b401985234b242229f9f7eb244b041ffe98f0e463cf90a74c1c248943b820f",
+    "src/shared/pty-session-id-format.ts": "42bb5177724f9dd38ae1814b38f795966536fd803d92364e0b5f9f49a8f8a49b",
+    "src/main/daemon/daemon-pty-buffer-snapshots.ts": "dd0e66898c3035be4c4fe41138a26f00f2d9d84e3999e328c77aa4cc2f29faf9",
+    "src/shared/terminal-title-wrapper-segments.ts": "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78",
+    "src/shared/agent-title-decoration.ts": "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41",
+    "src/shared/terminal-title-agent-type.ts": "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864",
+    "src/shared/terminal-surface-id.ts": "7093584672a541e22c0094bfb0257f6bd8f83d4b23e1a5b077132da011f8f9da",
+    "src/shared/skill-install-capability.ts": "4dae209e014524ad9bd1f72f8366a78f80720546d36e19adbc299d3d7da1ff19",
+    "src/shared/remote-server-update.ts": "c7384b964a0bfaa1573cd00761c5e2d29143c591cb1b4cd6ee1b0db464110d12",
+    "src/shared/workspace-scope.ts": "961b4e7d05f044aa58ac0f3e0ca9344d166f4787742836c855c06ba90dd71581",
+    "src/main/daemon/daemon-session-scrollback-window.ts": "038507c6193b5a18eb0e39276d83a1335a33dfb3b87dcf93286ed91a449f9a68",
+    "src/shared/terminal-kitty-keyboard-flags.ts": "ee8ca63afdca8356fa12878e74973ff92d807aa8d99750b2415b42f4bccb0225",
+    "src/main/daemon/daemon-pty-session-control.ts": "5fd2e9ad493e0b89cf1c2d18d546e820bdcc863f6c4ba7e95b1dd77f5cea48b8",
+    "src/shared/pane-agent-identity-adapter.ts": "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9",
+    "src/main/daemon/daemon-pty-applied-size.ts": "fc17c9636f0d6ce41ac2e4c45fc093d08a4ce29a9c4a0b6ed7202fc99fb821e0",
+    "src/main/providers/pty-default-cwd.ts": "ddb07acfd0ee4d45ff62416b013db9c7b2f1db3ef3d3b8120b941d32d71e2f6f",
+    "src/main/daemon/wsl-cold-restore-cwd.ts": "68a2309fc994799667a5955daa654a1bce3d42b4aa9bab28228f7732eb4d4200",
+    "src/main/daemon/daemon-pty-session-input.ts": "c1b08e0c51deebc21f2af16863051976a56565449e16f7aa2660b8d5c8fd6037",
+    "src/main/daemon/daemon-pty-lifecycle-errors.ts": "d706e04875eb4c08ae92eb0182eb6f0a4c07150a46b98f817e165dc1add92da1",
+    "src/shared/agent-title-evidence.ts": "5ea226cea3867f5421cd45ac54d37f57fc2d1364cb0eafa4a5ff71ddda5fc7ea",
+    "src/shared/pane-agent-evidence-sources.ts": "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f",
+    "src/main/providers/pty-path-safety.ts": "c6b67c9756ea26efea2641ec578ad92fdaad3d5f3f4b668aca6133f0f2ec5aa0",
+    "src/main/daemon/daemon-pty-size.ts": "cb78f1d5e2cf142f86155595df62fd6f3ccd5f45aa11ed74068efc2de77ab741",
+    "src/shared/pty-write-settlement.ts": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6",
+    "src/main/daemon/daemon-pty-session-spawn.ts": "c14d3697aa509157cd0ccd64bb08dcc258901f3e64d8de85df1d1bbdfd1df114",
+    "src/main/providers/pty-write-unavailable-error.ts": "bb31714600152bc9e3f0e1be7c81fe50b9301b97f39318245607be3047db8e40",
+    "src/shared/tui-agent-display-names.ts": "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296",
+    "src/shared/synthetic-agent-title.ts": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922",
+    "src/shared/agent-process-recognition.ts": "2a93bfec55fabc7052bf1654d270131a61935c72976bfd3251585c7c1138a0a4",
+    "src/main/daemon/session-shell-ready-barrier.ts": "a7ae62cc0ccce6eb8dfceb9437d3c1497d06588043bca49c559f3f6948f64109",
+    "src/main/daemon/daemon-pty-spawn-result.ts": "4ef2cd27ee763d3542833e4ebf8afc4e0b75675689295a50e68ca6a79c2efe0e",
+    "src/shared/codex-startup-delivery.ts": "8d2a47a0b56dc6ef1fa4a598973805898bd8e42f566130bd3d301d6cbc5733ad",
+    "src/main/daemon/daemon-adoption-telemetry-event.ts": "05ea98bcd32f606cc15c8f0cb9d66401ec2dc801f8e717ed6dd0e9c6911cbd2d",
+    "src/main/wsl-env.ts": "66eb01ec8a5593bcc0e64089a7024624deb009b19250d3d1e6eab2bbd315be52",
+    "src/main/daemon/terminal-history-seed-segments.ts": "e0d1bfc920a0df5a561a8ff6c8227ee352822c3d93f48f1015c271eaa6bafcf5",
+    "src/main/terminal-history.ts": "f4ed054c6d478ae191f1379b614487076eb9ee35ec876197c2c20cc024de3013",
+    "src/main/daemon/shell-ready.ts": "8bea3210928c4efb35de5201a53b370eb473e32c7c404b39778efb1b7f779669",
+    "src/main/providers/local-pty-utils.ts": "d655643b42503ccfdab6436273557581b447f4b9f452dfa7649a959705744f25",
+    "src/shared/shell-ready-marker-timing.ts": "4e7fcab88785ecc7d446831d23433c7031a01f534bcd53d5124531b2871857e2",
+    "src/main/daemon/wsl-session-context.ts": "860dfd518182937b04e43d8d330066913799b00c4c2a5dbc04f81e7000e4718a",
+    "src/main/shell-prompt-readiness-probe.ts": "8e871ed4a1d61569a29185bfa95ad4aa0a52ca127098088d3853bfcd5a8a2e73",
+    "src/main/daemon/post-ready-flush-gate.ts": "d53f2d436d768bbe4c4bfe1dd1442e84a031bc8078d3856c0361b40447936cac",
+    "src/main/shell-startup-output-scanner.ts": "cff0c8234de84ed34c1cbfd9013dbb10f5ac60efa01076ad3be2f80394248ac7",
+    "src/shared/command-token-scanner.ts": "86eeb322b12bb3e5bc48edf5d85ec647c0c0ec24d3beb3526e1ae3c9aa7303a0",
+    "src/shared/tui-agent-config.ts": "ac7407900e6dafad72cc47aae171b169e8e1d7752d28caa0e09441d73a1fe1ad",
+    "src/shared/agent-node-entrypoint-identities.ts": "f2d58fcb086f30afbee3987a3b3ccbde566983e9f230a6da05f9c1d808ffa2d4",
+    "src/shared/agent-headless-command.ts": "10f84a57c243c7e9b13b9cd9419ff174cd0c8b20cf4783aeceb6cebbc52def87",
+    "src/main/daemon/daemon-history-recovery-freeze.ts": "e629d2e2729e598293e64213464ca0fb45ba3f205b3f45a45781408f180262a0",
+    "src/shared/wsl-env.ts": "9f9a6bc39f8a3e4b245338652bf30721d8e3888734a40d7cab602dc792dccc88",
+    "src/main/daemon/daemon-attach-only-retirement.ts": "b883fe6f3647f1a95be9d3f0390653933d8bea79c21538d045fe2085d31bdbca",
+    "src/main/daemon/daemon-pty-spawn-request.ts": "d3c2e9f8995c73df427dea36e0ea64508fef6fd5880616df9ad430e34d3acb3e",
+    "src/main/daemon/daemon-pty-provider-sequence.ts": "6aa2e70fbc53a57d92b80f1b3e0f8b36ad33d7027191359eb674292d156416bb",
+    "src/main/telemetry/client.ts": "cd6fd4066a7fab559cc13aa4822ef80f0dba34a1e8211613344223b70db532d0",
+    "src/shared/app-environment.ts": "91bd2a883048a56f8c3966057a062bac75f48f9e1b5670d8d7958f8c7fe21140",
+    "src/shared/daemon-adoption-telemetry.ts": "7af34179b683b936ba248b7d92bc0f506642658673b0200e52bdfa4068729ed5",
+    "src/shared/daemon-lifecycle-telemetry.ts": "b3bcb90f98bbdcf98c76fb985de86b2ac5eb96a4b000c278f5a133bf79bc31dc",
+    "src/main/line-editor-ready-output-scanner.ts": "c697380e4bf4677229f59346d7e69d7cc27ed03d163a2882885092e6eb703293",
+    "src/shared/pty-slave-line-discipline-echo.ts": "3df5bc2c7c45ffce766da5460ed5d888f463768d8d8287792cecf45e5f3618b4",
+    "src/shared/shell-process-readiness.ts": "9aeb7bcdc6e0ca1b70d62471a8ad7ac5f39fab966134cfd2397a8d7f850d82cd",
+    "src/main/telemetry/validator.ts": "39e028a8e431fe991ad6bf37acad7a0b0e9d7c174c07e898779b4a614bd12c99",
+    "src/main/telemetry/cohort-classifier.ts": "2d9aeafab4782fd350622d122d0381dda6b02272eda4db0d10b148bf2d5c933f",
+    "src/main/telemetry/consent.ts": "dd8b489ed5ed4af5cc912182ea1ec165f8e0056260a2f3b1e6725aa025027d39",
+    "src/main/telemetry/burst-cap.ts": "12a72a3f1582210fb8b8a81818f1471d62938359f97bdc2e5a2ce59571a3ce2c",
+    "src/main/providers/working-directory-validation.ts": "0ef75b5d5242ad7e5423bde2cb7fe633a8f437fc545f22ca04612782fc2de212",
+    "src/shared/node-pty-spawn-helper.ts": "4796707cd3d98c1b296a2b7ff6917b324de6ab830a7bb9cd14eb952bbd587c7d",
+    "src/main/providers/macos-tcc-login-shell.ts": "3987924df6e455a41561926d50c3811394232f9dca68d96bbe67c152e57744ba",
+    "src/main/daemon/terminal-history-seed-chunks.ts": "a2616cd2815d92ba8dbe9ddad9d34adc08076a33765010ee18e82c4905adee3f",
+    "src/main/daemon/daemon-pty-runtime-state.ts": "c3424eeeaa1aa8d267df12a6b6b084b6925b45a73cb454f8480d67f8fa564f4e",
+    "src/shared/print-mode-headless-command.ts": "4a632179d794718904989bfb00dabb7c741a0ae35d58585cf07f4aa746c36f7a",
+    "src/shared/prime-agent-headless-command.ts": "0898cb5322ff91510e81c11ec9c7d4fc1cd6e850491092a78f79931722651ec3",
+    "src/shared/ante-headless-command.ts": "710a59e55ab1dfa32a33f7df9b4ecac77f85e387dc93e740d0bc678c37e61620",
+    "src/main/shell-startup-identity-scanner.ts": "37aa9dc4a6ed70c5b52aeda7c4204cffc5b0838808dbe65df4266033628088f6",
+    "src/main/shell-ready-marker-scanner.ts": "a504be037d0ef1a19d3ce1ad608c279028132f0c91357c6dc1f2d5486d914a4d",
+    "src/shared/orca-cli-command-name.ts": "c90b037ec7a6143770a40dd907bf9d053fb2cede21128b60b78a78671c0780c0",
+    "src/main/wsl.ts": "d888b67769461a7ba0a175db9775e2e2ab30601cbec53077a27351604a04882a",
+    "src/shared/worktree/id.ts": "d4da9e75db6f0d3301ef5f073d3136282dab4fc4fbd2978bdcdf0e142e7a9d30",
+    "src/shared/process-table-snapshot.ts": "fe423af1745925a52b5d205a3cb20325220c39996e1c065d56fe2af1e69182e9",
+    "src/shared/local-windows-terminal-runtime.ts": "6dfb40bf9bb1a73b358615ea82fd86abec10b1a170b7ef0771b9c574addd4e7c",
+    "src/main/terminal-history-id.ts": "58a0e50e220343925535c67911fb9e45f298916fad2163e6396ba9cc754baac0",
+    "src/main/fish-history-session.ts": "0f746534888842d53ffc8f5565a6010b1c4a2f7bf5f750301c547f7e5450f8eb",
+    "src/main/daemon/daemon-shell-ready-marker.ts": "d128c88e65e7835864c67dc2c1e1a355c50111de77802930b06b350a0beb9a21",
+    "src/main/shell-wrapper-content-address.ts": "bd1ddf63b4de77fe8dabf533edfb0a14b81416e114f795978a1a46776ecea028",
+    "src/main/shell-wrapper-file-writer.ts": "5ebfaf5c3356c651a359b6064cc8aac4a32a413b86548681b1e20370e198f232",
+    "src/main/daemon/daemon-shell-ready-wrapper-fileset.ts": "09cb0a1ff975c2299c46ea47c4ed79820aa93fc505592875db4add634249c55b",
+    "src/main/worktree-history-file-path.ts": "b0b04151717e3fb245b17ad8ba140db32e0af55c7c740a14684e3c2729c5f0aa",
+    "src/shared/telemetry-events.ts": "40b800fdb343cd66801613dddfcacebc148adf864ceb65e6f70e250136e9f4b6",
+    "src/main/pty/codex-shell-launch-preflight.ts": "d80794841adace87db9a24fe3d73f873d5a1b9219ac6887962bace681677deca",
+    "src/main/terminal-history-paths.ts": "27148b37c6fa2f99540d18864013e8909aa86b65be7f92cd10b6a31a1d3d3e75",
+    "src/main/zsh-wrapper-dir-ownership.ts": "e6544e2d8d3348cc2a2e533c60a2bd1e91b6c8446fffa4dea24968218f9e2c9e",
+    "src/main/shell-templates.ts": "17122cebe3ea2b01462e645fa3ce335495734a3ab18f5fb7d015180060896d0a",
+    "src/main/powershell-osc133-bootstrap.ts": "5a53aa934bbb50fba15dc2a0421b07910b09c76824a23ba224d8a4216ef9b446",
+    "src/main/shell-startup-features.ts": "1b418a6d759230950f320494fa70dddea030d3d1f29ea1fba05c238fc98211c7",
+    "src/shared/priority-semaphore.ts": "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5",
+    "src/main/providers/macos-login-session-pty-probe.ts": "260cb5a780287b6dea7c1eaa45e89b78fb9a5e1805c1f8c4bf2b17c5d952af63",
+    "src/shared/child-process/run-process.ts": "ae4dad239273351ce61269cd7f7abb8325f3f620be600fa9c0ae760c1dd7cbad",
+    "src/shared/cross-platform-path.ts": "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3",
+    "src/main/daemon/history-reader.ts": "8579629f0d023bad3d652661c6f767ad5be767a2759c2978b114645df0814a3d",
+    "src/main/daemon/client.ts": "e7698849f62c51bd36bf6789423dcd3f9194d979fc143dd267f0c1b1de1ddf14",
+    "src/main/daemon/daemon-audit-eligibility-event.ts": "11755c26094c81a82c72027eb5b96b97fbd686bca4f32c9fbc9ba1758fbfa137",
+    "src/main/daemon/daemon-checkpoint-session-queue.ts": "f4cc3809309c57125955ee8a7439df8f8000bfca452015c5bffad3ceea5fdf7b",
+    "src/main/daemon/cold-restore-payload-cache.ts": "6e97bb387ec9b00619226685934126a90e4572720de3ed6a16de0cf8f43ceb77",
+    "src/main/daemon/history-manager.ts": "7b0a99ecbf735ea3bf6480af6463dc15a35ea6dc27b3b0e8d07b73a787ad0f5c",
+    "src/main/wsl-directory-probe-command.ts": "1db18370dff7e8656d27b105625dd03bdba51cb60099e90c0abb3252ec2ec246",
+    "src/main/wsl-distro-list-output.ts": "27f772c9dc451757f4397a4e47ca9c9e28c4067e50a41ceef846013ff43db7bc",
+    "src/main/wsl-availability.ts": "324c636f9779595b62fe1f8c98535ddc818b6d892195f1f28ec2ae0bd7ec1bcf",
+    "src/main/wsl-interop-spawn-directory.ts": "857a1253971cb0d4e7da5659c9ded80c4f0930c70b03e243ed858f8999f294cf",
+    "src/main/wsl-running-distro-cache.ts": "d8bcf954daa78cba331ef725bf1ab2c63a117cb3d0bb099edba6133ffeee386a",
+    "src/main/wsl-distro-retry.ts": "d5711a29eb67bd49d9c512a5f35743921045b703ba27275cdcdc0d5aaf64e4be",
+    "src/main/cli/bundled-cli-launcher-path.ts": "d18971de3491d0f678c99ab3fca72dd71c5b3e635bf258b7c8d1ba4584e358c4",
+    "src/shared/powershell-command-encoding.ts": "405d7aa5cf55f0053a6ae84f92335446dde6c316f782761be5ce1c24967046a9",
+    "src/main/pty/omp-shell-wrapper.ts": "fcf15117265833933064f0315ce1b02473d8f5618efed09c0d3f8d4872395fcf",
+    "src/main/daemon/daemon-zsh-shell-ready-wrapper-spec.ts": "502ef8934f77c6ec3ffe278cc4f8e644f0890bc4f2ac6360077e34c00bc3d58b",
+    "src/main/zsh-startup-wrapper-builder.ts": "eacff52ff47cebcd34914b020fa746d1e3720e3b7c8059013ffcf74d1cf3dc26",
+    "src/main/bash-prompt-command-composition.ts": "1519e1b2f4d408c5e46ff7f7d9b3dc2187ac03ed6e99217ef2b5137158fa264d",
+    "src/main/pty/posix-shell-startup-command.ts": "f69611a77938cf13455f67728cf1a9fc1a67ff864919245787d659f3c1c6055c",
+    "src/main/daemon/daemon-bash-shell-ready-rcfile.ts": "475bdef878015fb3531fe0f340d0f99d224146f0aa8adde406175a2e51e228be",
+    "src/shared/telemetry-app-event-schemas.ts": "5dc7d68e3a235db3755ae71381a8b01e3584f21a80b6de48a6b4e7538f1c0831",
+    "src/shared/telemetry-daemon-event-schemas.ts": "0566f2763169d68a63887bcabf15e3f6a92237191caeaa01276022c647c982ac",
+    "src/shared/telemetry-property-schemas.ts": "3b09098052708589b2954189e19d595668b4e3d4ccb09b1de75681839d7c72bd",
+    "src/shared/telemetry-event-classification.ts": "0a04ffab3f99083e2a07e254040633519771450303e6dc803cd46ac074c97a4e",
+    "src/shared/telemetry-event-registry.ts": "fd2782c8606fac43241fa96e0999fd651047434ffac68688dd009f060a315be9",
+    "src/shared/wsl-login-shell-command.ts": "69445d4cb6eae151ef28ed4fe320774bad9c46577f8a2263c14a14ecfdb28075",
+    "src/shared/child-process/process-spec.ts": "97e52b5e320da1eed4cfb2c0b73a88696b62f355eb4b5fe0df5389764afb8289",
+    "src/shared/child-process/bounded-output-sink.ts": "7dbab9fc70dac8e5d19dd03d743b55609092b45ca13423e2dc80a69cf7fc4865",
+    "src/shared/child-process/child-termination-reporter.ts": "d91ff09b26c9a23e26c2a2f92b129879cd6d0bddea14cd3bcac5d4489fecfca0",
+    "src/shared/child-process/process-tree-termination.ts": "49f001659c872e23040fe5bab2dd387f2589178f5bc3ce9361373303d23ff120",
+    "src/shared/child-process/spawn-resolution.ts": "8c62c3c14d6f110f25bab23e3f4b2633a68e2f36252bd3aac68cffd7b2e274dc",
+    "src/main/daemon/history-paths.ts": "a565f91fb2def34aa2c063d0089fa9b491c5aabd7736886ba9e4d2bb31418b63",
+    "src/main/daemon/terminal-history-log.ts": "8d9ec783257c1f7bd7380491038b499ecaca00f57d99047806cba9d6ab816bcb",
+    "src/main/daemon/terminal-history-file-limits.ts": "21185a571e0d326472554dae3b49bc578834d00432a2bf50f044a4d3da1e1a3a",
+    "src/main/daemon/terminal-history-recovery-quarantine.ts": "65e37d29a84d8ebaf43e78e13b94004c2ca9a0801c49a843642ff84928837c85",
+    "src/main/daemon/terminal-history-file-reader.ts": "923c9e0c5e803c2f3ea25969341c76525ece822ddd3cea4d96c5176c438b92ae",
+    "src/main/daemon/terminal-history-legacy-scrollback-restore.ts": "5af2cb2998362feccbe1025e019aef6c5ebaf1d4ae9d9e4c6ef527033f1fc441",
+    "src/main/daemon/terminal-history-restorable-retention.ts": "1bfc897132026875086cb99e9d2d5df73db793cd6cef916706934b215bfd7b7d",
+    "src/main/daemon/daemon-private-file-modes.ts": "7dbd0693d254e8ec2bf4f73499ecc8eca560ef1d440fe0026cff910e58bf0615",
+    "src/main/daemon/terminal-history-session-tombstone.ts": "ed4ced675f275e16b5a1a142e91b5e33e10a4a35885ba2dd8a7e5a90e4d8ebe6",
+    "src/main/daemon/terminal-history-metadata.ts": "d273daac2c06d140b8a75a1d43382025f04b430708af57fd359623ee506ce084",
+    "src/main/daemon/terminal-history-session-files.ts": "d8b0c2ac3e41a267f2a85aa11571e66807e9204613881433ddeb2a5beca217fb",
+    "src/main/daemon/terminal-history-cold-restore-info.ts": "5f44e06414227fa7148c0a88784aa5146b23ab36719db9d293432ebde63b0680",
+    "src/main/daemon/terminal-history-checkpoint-reader.ts": "d69e6e765d9b318ecbdeca27fc295e57e678d47e1312b77f0b2900b1b727b8d1",
+    "src/main/daemon/terminal-history-recovery-freezes.ts": "c1dd816085442d69b556a590196bed679aaf02f14d919ca7c62742d382591f0a",
+    "src/main/daemon/terminal-history-session-writer.ts": "50eb181f8f13355e9ebf5c3dd1bc004ec10b3eba51bd74368a75421634562856",
+    "src/main/daemon/terminal-history-mutation-tracker.ts": "fa7a88fb2bd9461b12cd97c60c1383f9c51b4d0e445b9d8852dbeabf136f548e",
+    "src/shared/star-nag-telemetry.ts": "dd3e57bc92a680ca78c521d3e503ec42220c7c9bef6970523cb804e79a7f0f7b",
+    "src/shared/gh-star-source.ts": "92d6db38e5f5881d9c522fa0e85c9f4b757e41cc92517e5d642c8795eb4310fe",
+    "src/shared/feature-interactions.ts": "d0f06fea1a436f77584b8bc3c93a944ee0cc1504cb0b12fc08cf49eb2d6dec7a",
+    "src/shared/daemon-audit-eligibility.ts": "54322c582a2ffc880ace5b0eefd3f44b8110e038de9603207601d9ef35979446",
+    "src/shared/agent-hook-types.ts": "dc64ba21ad8dd32c4a9a43eacb2c66d19c6dfe8dc6d77b2656f008b70597b78b",
+    "src/shared/telemetry-feature-education-event-schemas.ts": "51d0e9260f7945aa8efe28c0db73b935ff662da03567e6867f1c5470e24cd2fe",
+    "src/shared/telemetry-native-feature-event-schemas.ts": "407d1e75d18cde42ef430689af476d122b2f3f6a08b4c406454f1b0bd66c453d",
+    "src/main/daemon/daemon-client-listener-registry.ts": "ff74d77bd915b4ae424054be740322e17e46bcc64316057c264eed1010c1a50b",
+    "src/main/daemon/daemon-client-pending-requests.ts": "4fa6740fc377c898493809f7469b98c37062c059aaef38bd07dcd6f5e9bccb9b",
+    "src/main/daemon/daemon-client-hello-handshake.ts": "532be287024d5fa8374d61af5ed488622b2f7a8530642a2120a4993caa14cc73",
+    "src/main/daemon/daemon-client-ndjson-readers.ts": "3333a83f0f75a05867083c6890c564e4bdbd0df820313d646944c55ba04056ee",
+    "src/shared/telemetry-onboarding-event-schemas.ts": "9e74c1de5cb4cc07b5f6cd0ec3e03fc3c183ef16e862e2485217057397b28756",
+    "src/main/daemon/daemon-client-notify-settlement.ts": "7ce27ff7c79fb5027b884328505f0b792c4a039886deae12371a4b5e4594bf25",
+    "src/main/daemon/daemon-client-socket-connect.ts": "958e918424e5ea6d9ed4f8d85e1d07c46977e074ea2f2f880dc6b1ac5c927c76",
+    "src/shared/telemetry-repository-event-schemas.ts": "d8cc2d46954a41accc3b5e5cecefc6be2410e60e416411e5be8178cd13cc2572",
+    "src/main/daemon/daemon-client-rpc-request.ts": "c846c4e7cb1a5eaa3266e3f3779dbd62c7f60a0c783c55d2af80c42d8468db7b",
+    "src/shared/child-process/windows-cmd-shim-resolution.ts": "5044e3a9140a19c8bb713044de655b611244659a754f32e5a5df7f519df40eb3",
+    "src/shared/child-process/windows-command-line.ts": "4bf94aa90ee63d965bc6e1198ddafa4a715c05d78be979025d17dc59d90557ca",
+    "src/shared/workspace-source.ts": "78c66dc7361ade7984de2d7fb5afa879eaade2a2f289e42cd78e53eee07d5b29",
+    "src/shared/feature-wall-tour-depth.ts": "93614de5dacfa1fd084dffbe56d8a6a5a20097dc6fbc6c39eabd7f49e60e46cb",
+    "src/shared/setup-script-import-providers.ts": "f152cefab4922d992633da4d950b319b9e61862c3835d6fe88ed0e98edcc3f5a",
+    "src/shared/child-process/process-tree-kill-gate.ts": "62848f063785e15cb0231deb622b043e81484ed3040c612afdc4f98fa2db06ab",
+    "src/shared/node-bounded-file-reader.ts": "2cffa451b72d059226e0c2d4b6d2a5203cb8ddafb358d5e828dcd3436d197ecb",
+    "src/main/daemon/terminal-checkpoint-serializer.ts": "dfd5f0f3b72f58ad9d6b9df712dc1318b8e04dc7ec7327ccf714c0e7bfde1375",
+    "src/shared/terminal-osc-link-ranges.ts": "bc3c39fd44489a27669225474ab9f52aaae32988ed80b26aab69e1ad0cb3d390",
+    "src/shared/terminal-owner.ts": "60e3c07e99b8d2813f2241a8fc5ab8d1a11229b23b32aa53fb67154052c92309",
+    "src/main/host-tree-removal.ts": "ba8ea5e3503bf30eddf70efc68bdd6a1d9b864734ac67cf21f83b95f4f862c97",
+    "src/shared/feature-interaction-categories.ts": "320daec20570a0d5cae909bd4eec1d8b35a460a54aee480ddfb464fc1603d27d",
+    "src/main/daemon/node-pty-error-hints.ts": "0595cf09081e0ed369078d1698093f02f3c23e5814e3d884b5083e70e8bd440a",
+    "src/shared/feature-interaction-catalog.ts": "0015a3cfc624d9dd800d54dba6cc420e4e7505131cedc3314f38c1ed03eeda80",
+    "src/shared/feature-interaction-usage-buckets.ts": "5d4ac4b615d4af1dbb3057d3373d33fdf25c4bef15f93a93884c3e660cfcc8ff",
+    "src/shared/feature-education-telemetry.ts": "7330076fabc31fc2878b79caa7b2b1cc901d6f99387e7ec846a85942f08b4d00",
+    "src/shared/feature-wall-setup-steps.ts": "e917ed94cf96ea99cce9f537bdd37bd0ddb7cbc6172d8f67aac9efe11379160d",
+    "src/shared/feature-wall-telemetry.ts": "1ae90c3ee862a109493eb88ff3690a124d05e3c5cdaac331b818610925ec5693",
+    "src/main/asar-transparent-fs.ts": "48b031ef8f72545c5f8f0d4cf6fb80e168a38315e83103ff00e4392c9cbdd2ee",
+    "src/shared/telemetry-onboarding-foundation-schemas.ts": "32772dc9111ad9e72f83322ee54a4f090b49cd14592f95b129be61b6469dc0d3",
+    "src/shared/windows-transient-lock-removal.ts": "dbfbc53d044d4bb76d1c5378a1011dff69b88c1ba042b23ebd1b0057153868f2",
+    "src/shared/nested-repo-telemetry.ts": "fdcb4ce4565e7d71f6833099c3725a7bb2fcf27ef6d2089ad77ba588ad12efe7"
+  },
+  "publicationEvaluated": {
+    "src/main/daemon/degraded-daemon-pty-provider.ts": "a2b95e457bd7819bfe1a56f5dde2fd6785e5a731801d7f75d2f6ed657c9b50cd",
+    "src/main/daemon/daemon-pty-adapter.ts": "c4868235fea41d1d96b0fb0332b3dc591d4f0a3c98e122e4552c3efbb33791fc",
+    "src/main/daemon/degraded-daemon-owner-recovery.ts": "74f7b2000d3a637e4b509e29cceebeccb36a791a8fba34bb6e0811cedb7311c6",
+    "src/main/daemon/degraded-daemon-fallback-shutdown.ts": "12d2cf65777e5ac8d016536503da52f48eaed2f2a297600f5a9746b85f7e6efb",
+    "src/main/providers/pty-process-inspection.ts": "aad924d84e3ba26c8d5a48102518a9ee0edfa3e47afe0b63537c1a3d92b35b20",
+    "src/main/daemon/combine-unsubscribes.ts": "4d468d5bdb8b30fceb4044b276f2f50a1cd4e73845562eedf2f0effd4a8532a4",
+    "src/main/daemon/degraded-daemon-session-routing.ts": "d0cf9bb317fb0e8b1621861db1241c00b3d5e5bcd4574ac6d2c9875960087e6b",
+    "src/main/daemon/degraded-daemon-fresh-spawn-routing.ts": "c917dfdf1e4cf25b5b3d6249e8307390c4fb2412ebe999d66942403d49ea76ff",
+    "src/shared/terminal-process-inspection.ts": "790ac705cf1d12bf805c868d558b75073173c59dd1399596f1e7d79e0bcf534b",
+    "src/main/daemon/daemon-session-owner-resolution.ts": "4a69ddc724e58ab9eb7607a7ed1f740c5a69b0f809148c03a59f623f275fbe62",
+    "src/main/daemon/types.ts": "ac253a9fe626ab585d7b988df22c1c79b3dd63510c563538ca50876c6dd6f96d",
+    "src/main/daemon/daemon-pty-listener-emission.ts": "9d1e9b89dfb3bccd2c7e9eb3e0f574fe93772154b57e0ca34ce2779d1b94084f",
+    "src/main/daemon/daemon-pty-daemon-recovery.ts": "9c76ce16e8d191d542addd0679ed8b730b3eb4c519602b40ffc5705a50c91dce",
+    "src/main/daemon/daemon-errors.ts": "d6775c72188f400a92e1658e70df76f8b32437ed94d82eee484a404d69a3ffac",
+    "src/main/daemon/daemon-protocol-version.ts": "9f26d58414fd35891ebc2912cf8e96488b72248dc27f8736dff5d53fd8b27fcd",
+    "src/main/daemon/daemon-pty-checkpoint-persistence.ts": "2cbe518533013d4208e10c34c40ece45368c11366a9db898fc043c9d19b7fad0",
+    "src/main/daemon/daemon-health.ts": "c1ba2c5c687bfbf6d99ee82f51b81d9eac238ff90f48af23a086d10ceb2ed114",
+    "src/main/daemon/daemon-bundle-staleness.ts": "1742a353bedb6cd0685f213feaa5652fbf5ac65d228c52a93426a19c239783c1",
+    "src/main/daemon/daemon-endpoint-errors.ts": "83a553bd23a971f0f13da5420dfe11dc509f316cb9992153eda2cf09d8290aa7",
+    "src/main/daemon/daemon-tcc-attribution.ts": "c89d54b3ebe5e2f9c988b39052ddd5e496065515d70a340205b07ac43e7d6923",
+    "src/main/daemon/daemon-pid-identity.ts": "a64e4cfae8c80b7b83fec38b35f4c3f657e447414056feb435d374d04882a190",
+    "src/main/daemon/daemon-spawner.ts": "0e247aadfaafdf32f1a866f852ca348dbb481604a20a8990b948889cd9e39017",
+    "src/main/daemon/daemon-endpoint-ownership.ts": "b2eab15f782c142b756d5562b0246aa4026a7c97a51c3b30e094b607b15f3efc",
+    "src/main/daemon/daemon-pty-checkpoint-scheduler.ts": "2593cdbd3d0b48e45e04e7205970422bdc6c5ccd240d518961429f88751b50c1",
+    "src/main/daemon/daemon-durable-history-snapshot.ts": "35c3b071f3cd5f41e6d2f507f029057663983cf42ec211180fabb9f775cc5072",
+    "src/main/daemon/daemon-pid-file-parse.ts": "9a1acc477a9c76f19b7a2cc167889c74d48006e3538d0669bca5787afdaaad51",
+    "src/main/daemon/ndjson.ts": "d3df2c0a66ab9b234703d139aec8eea53e512eaf63bd85c97d46610e6de39e91",
+    "src/main/daemon/daemon-process-start-time.ts": "9cef6be893e1a760357b418863726b64684b7102e3d770dc66290756942372d3",
+    "src/main/daemon/daemon-process-identity-query.ts": "8f3f051ccbbb251ffb007e5157af73c217ae97f697828b9644c4d512b32afc9b",
+    "src/shared/main-process-ndjson-framer.ts": "cac5d9cdba42fc9f8340b2b815e6b36ff20e104d734a7ac4b8bca7136e6fa490",
+    "src/main/daemon/terminal-history-dimensions.ts": "bf8260412fe7e29a38063d2c7355ed63098d4de20a8ca8ebb5d1f9421b73d81b",
+    "src/main/daemon/cold-restore-replay-writer.ts": "0d9dee4459c802564b1b0ae38a5856d5b5cac98d96723700b08863f23faf05b5",
+    "src/main/daemon/daemon-respawn-throttle.ts": "976463ced65580f049e9d8b14585faa03dddc280c3cdb095531eb2040a477645",
+    "src/main/daemon/daemon-restore-scrollback-depth.ts": "ffcf76d820c9dd41289bd0af77d33d073a6c69a89e3ef18cf881b12a91ee6f0d",
+    "src/main/daemon/headless-emulator.ts": "b8bcb28dae2d9fb1b1361c9d32eb69357177943778bf56c2ce9848c82c9ba2a7",
+    "src/main/daemon/terminal-shell-lifecycle-scanner.ts": "2bc25f07183c727e5d4e9d5670bbcaa015e37f74abadba422b6bf8f040fdc04c",
+    "src/main/daemon/daemon-endpoint-probe.ts": "b27023ee842a68593ae657aa9d77cc5f125ee763839af0c1d8e4c8def35e2f52",
+    "src/main/daemon/daemon-pty-connection-lifecycle.ts": "8f705518dff40fc7fbf847aa310719f2950cd91ce6a2bf320be131ba48992eef",
+    "src/main/daemon/daemon-request-deadline.ts": "f6a55c176bb4aff63358517b70d69dc187fca406164621385aba4ce43f7f4a10",
+    "src/shared/process-output-field-scanner.ts": "03f89dcee7b9abc0c8c1a51423cb612ef936b8046d10a6b586fcea05e4a359a5",
+    "src/main/startup/startup-diagnostics.ts": "7318d5b3ead157615f85f4e5f7e921b64f2222fa01f1450c6c21e09c01b2089e",
+    "src/shared/terminal-scrollback-policy.ts": "7816c5a7540bbb3fbff61f7b3c4a89a8b331621f769b77bddd29abe06a752f17",
+    "src/main/daemon/daemon-pty-event-subscriptions.ts": "0a8f8de8430a674e61177563396d0d6322b8d60aa8f182ca8430e5477e4cd16e",
+    "src/main/daemon/daemon-audit-classifier.ts": "dcf4dff58e0cad4f0159bd1a1592693a920e4b6ef1d5acd92fd953813c5dfe9b",
+    "src/main/daemon/daemon-listener-registry.ts": "86966184f856fe1367cd3279bd09706e7935dcd62798e1cb8c07b35008281449",
+    "src/main/daemon/daemon-endpoint-incarnation.ts": "095bcacd5452ad9a893a27ace50b9072a823b291c17aed1901418242d57a2f07",
+    "src/shared/terminal-unicode-provider.ts": "eae524000d37c01ff9818ebe822dff4c12a3479b9a97370414a928cabb3d948f",
+    "src/main/daemon/xterm-env-polyfill.ts": "83a5c2f6386d27c9895699fd3dfd1c6bfdb38c6ae24948ea07d75e24c213e6e9",
+    "src/main/daemon/terminal-mouse-mode-mirror.ts": "5bf8a94ad7ec3fdd151ba7559f49a229b2156818aba88f7b562bef258048acf1",
+    "src/shared/terminal-cursor-line-context.ts": "c02e769fb8e49111e63e52079b26feda2d47d70c5e56cf34a81244f2f893cae1",
+    "src/main/daemon/terminal-osc-cwd-title-scanner.ts": "77145544a185fd5a6007e415ed4c9b7f7bb3f6009c96391a72253f3550b2ea6d",
+    "src/main/daemon/headless-emulator-modes.ts": "acc05652aa78e3504f3d71250537ac5dbd61777fab9516ed69a22a5d11857807",
+    "src/main/daemon/terminal-mode-rehydrate-sequences.ts": "922d2533cc78adae2d93850507925426e17f456ea3cfb98bbc03b454b7d766ca",
+    "src/main/daemon/headless-osc-link-ranges.ts": "90232b09a6aed3f029952a6850f5c3e2037a395ca0c7d2750f497a7f38d1fdca",
+    "src/main/daemon/terminal-frame-restore-sequences.ts": "828285b5e5ca54ba59e6756d2fc6f89e468016ed3a7595775c6dedd08b2c57c7",
+    "src/main/daemon/startup-device-attributes-responder.ts": "de1092ba15ec03cdd2fb08b33cd5ba5a04f26b19616476e3c7f717e54d337b7b",
+    "src/shared/terminal-serialize-absolute-cursor.ts": "5e4566f8b4fb752a8bec0acf9e2e87a36d223b06760d53d911d42ed46b2100a9",
+    "src/shared/terminal-partial-escape-tail.ts": "0739b887bf650a81b6d596b5d2ec2e17d45254eaf3d95c7d008bd82b4af81d29",
+    "src/main/daemon/terminal-snapshot-ansi-buffers.ts": "8e95c7e000db648d64a582b06f75a21890c656f391ee996e583bdf7c1f6a13ee",
+    "src/main/daemon/terminal-view-attribute-responder.ts": "51fa68da93e150a2c15072999b63b3440fb5540b67d732020ca287123ae20fa7",
+    "src/shared/terminal-mode-reset-profiles.ts": "38028c60950d462412e6ebd9699ef0697c859f27c08da377a16b6c3e5da91049",
+    "src/main/daemon/osc7-uri-extraction.ts": "6be83d04eef8a38c65df5b8e20513526936a47d2e095e71a0df1269ad93567a7",
+    "src/shared/agent-detection.ts": "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651",
+    "src/main/daemon/daemon-incarnation-evidence.ts": "be9c8d27d040c0cfc1aca2593fa8a9c823ea6c496fa63bdadeafefa4fd71dabb",
+    "src/main/daemon/osc7-file-uri.ts": "a09f7b8f2bd73a7d547e5c5eecdaa62e23716a16da05fe082041e771ae8dbe9a",
+    "src/shared/terminal-view-attributes.ts": "f9a6f84532a49107daadf82cde6ac61949d3881d8ac42327f46a08a0c218e305",
+    "src/shared/terminal-escape-introducer.ts": "399406e19ea928d9905fe08a7aaa81807c436cda7f55e459293e94e868b43fc5",
+    "src/main/daemon/daemon-pty-session-inventory.ts": "ef12cd9c10adb536e6884db6e4a00e3915ea2286410228443228fc4972c0ecad",
+    "src/shared/wsl-paths.ts": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a",
+    "src/shared/shell-process-detection.ts": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f",
+    "src/shared/agent-name-token-match.ts": "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8",
+    "src/shared/agent-title-core.ts": "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d",
+    "src/shared/osc-title-extraction.ts": "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a",
+    "src/shared/agent-title-status.ts": "570a4710ebd0a7626dbdccff795efd087997853ac7c0fdb82c015976760b70bb",
+    "src/shared/opencode-terminal-title.ts": "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec",
+    "src/shared/agent-title-identity.ts": "613c6284eb31aaa381db438c47d2ccf2c726ad150ae62ef269a2cfb762a03453",
+    "src/main/daemon/daemon-process-inspection.ts": "a5ece8904c6d99621b960d476dbeaddd104bd74e07f85bd2085ee26dc9d69683",
+    "src/main/agent-hooks/managed-hook-owner-identity.ts": "1c1d48647a1db09d1255b0816b267f3b8d2ec7b1ca267ffbef67b875eedcaf4c",
+    "src/main/daemon/daemon-incarnation-evidence-types.ts": "85b6135d13257b11ba3162941cd6443ca4e056fdf35091d4ea8f4109f48b1cb8",
+    "src/main/daemon/daemon-pty-process-inspection.ts": "4104b34ff7b3ef25989c51c391e532d8058b14921fd72216b8be36013f8725a8",
+    "src/shared/agent-session-host-authority.ts": "8c5952323d2766f136a3685eda51a439d363d1e2224da5516f3d9cabe34bd5d7",
+    "src/shared/claimed-agent-pty-owner-snapshot.ts": "82935b7bd08639e94ea181be0cb998dfef8c4960eb8d3a8563d6d1aa3156cca5",
+    "src/main/daemon/pty-session-id.ts": "1c8beaf069eb5e093e45a9489feffac60e8a5635e8f941722d2a3c3124b4f878",
+    "src/main/providers/pty-process-list-admission.ts": "6ba5c65c9552497aac0182b6ad8b38b4253d7834ee6853c0c6c1c252af7e2356",
+    "src/shared/claimed-agent-pty-owner.ts": "6c49c9b4649559a45149a3118a3560a7c724d9b06fd9b57182f5b880b4fd77c1",
+    "src/shared/terminal-title-classification-memo.ts": "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda",
+    "src/shared/terminal-title-wrapper-segments.ts": "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78",
+    "src/shared/terminal-title-agent-type.ts": "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864",
+    "src/shared/pi-state-title-marker.ts": "c398ce62a0f0dc72b23d106742833c1d60807f4dee92c78adb428a0b0031dce8",
+    "src/shared/pi-compatible-synthetic-title.ts": "99b401985234b242229f9f7eb244b041ffe98f0e463cf90a74c1c248943b820f",
+    "src/shared/agent-title-decoration.ts": "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41",
+    "src/shared/pty-session-id-format.ts": "42bb5177724f9dd38ae1814b38f795966536fd803d92364e0b5f9f49a8f8a49b",
+    "src/main/daemon/daemon-pty-buffer-snapshots.ts": "dd0e66898c3035be4c4fe41138a26f00f2d9d84e3999e328c77aa4cc2f29faf9",
+    "src/shared/protocol-version.ts": "053a152568959f5576050bc83743924772880c85ab6dfb7ce95c6c6acdb02954",
+    "src/shared/agent-session-resume.ts": "3dd5cd7ba4c764c848374b168e715a410974657a9b7e70e9d56b69a06254ce43",
+    "src/shared/stable-pane-id.ts": "0dfb20a173dc658229c46b7df4e36a443fee7089cffb79d76a74d8a92f41b884",
+    "src/shared/terminal-tab-id.ts": "3bf691ba305880a6d67f620d9ce671e5388e169c4783b1caf0d73fa589b5aa82",
+    "src/shared/foreground-process-evidence.ts": "e82342503c7fa83197ef1002f306d410ebed43e93c4dea86d6b8643ae87bf53c",
+    "src/shared/pty-incarnation.ts": "f232a871e24afd92b29e798601f23403a8cc082a6b89e009e5e9d99e6a1f82d5",
+    "src/shared/pane-agent-identity-adapter.ts": "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9",
+    "src/shared/workspace-scope.ts": "961b4e7d05f044aa58ac0f3e0ca9344d166f4787742836c855c06ba90dd71581",
+    "src/shared/terminal-surface-id.ts": "7093584672a541e22c0094bfb0257f6bd8f83d4b23e1a5b077132da011f8f9da",
+    "src/shared/remote-server-update.ts": "c7384b964a0bfaa1573cd00761c5e2d29143c591cb1b4cd6ee1b0db464110d12",
+    "src/shared/skill-install-capability.ts": "4dae209e014524ad9bd1f72f8366a78f80720546d36e19adbc299d3d7da1ff19",
+    "src/main/daemon/daemon-session-scrollback-window.ts": "038507c6193b5a18eb0e39276d83a1335a33dfb3b87dcf93286ed91a449f9a68",
+    "src/shared/terminal-kitty-keyboard-flags.ts": "ee8ca63afdca8356fa12878e74973ff92d807aa8d99750b2415b42f4bccb0225",
+    "src/main/daemon/daemon-pty-session-control.ts": "5fd2e9ad493e0b89cf1c2d18d546e820bdcc863f6c4ba7e95b1dd77f5cea48b8",
+    "src/shared/pane-agent-evidence-sources.ts": "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f",
+    "src/shared/agent-title-evidence.ts": "5ea226cea3867f5421cd45ac54d37f57fc2d1364cb0eafa4a5ff71ddda5fc7ea",
+    "src/main/daemon/daemon-pty-applied-size.ts": "fc17c9636f0d6ce41ac2e4c45fc093d08a4ce29a9c4a0b6ed7202fc99fb821e0",
+    "src/main/providers/pty-default-cwd.ts": "ddb07acfd0ee4d45ff62416b013db9c7b2f1db3ef3d3b8120b941d32d71e2f6f",
+    "src/main/daemon/daemon-pty-lifecycle-errors.ts": "d706e04875eb4c08ae92eb0182eb6f0a4c07150a46b98f817e165dc1add92da1",
+    "src/main/daemon/daemon-pty-session-input.ts": "c1b08e0c51deebc21f2af16863051976a56565449e16f7aa2660b8d5c8fd6037",
+    "src/main/daemon/wsl-cold-restore-cwd.ts": "68a2309fc994799667a5955daa654a1bce3d42b4aa9bab28228f7732eb4d4200",
+    "src/shared/tui-agent-display-names.ts": "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296",
+    "src/shared/synthetic-agent-title.ts": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922",
+    "src/main/daemon/daemon-pty-size.ts": "cb78f1d5e2cf142f86155595df62fd6f3ccd5f45aa11ed74068efc2de77ab741",
+    "src/main/providers/pty-path-safety.ts": "c6b67c9756ea26efea2641ec578ad92fdaad3d5f3f4b668aca6133f0f2ec5aa0",
+    "src/shared/pty-write-settlement.ts": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6",
+    "src/main/daemon/daemon-pty-session-spawn.ts": "c14d3697aa509157cd0ccd64bb08dcc258901f3e64d8de85df1d1bbdfd1df114",
+    "src/main/providers/pty-write-unavailable-error.ts": "bb31714600152bc9e3f0e1be7c81fe50b9301b97f39318245607be3047db8e40",
+    "src/main/wsl-env.ts": "66eb01ec8a5593bcc0e64089a7024624deb009b19250d3d1e6eab2bbd315be52",
+    "src/shared/agent-process-recognition.ts": "2a93bfec55fabc7052bf1654d270131a61935c72976bfd3251585c7c1138a0a4",
+    "src/shared/codex-startup-delivery.ts": "8d2a47a0b56dc6ef1fa4a598973805898bd8e42f566130bd3d301d6cbc5733ad",
+    "src/main/daemon/session-shell-ready-barrier.ts": "a7ae62cc0ccce6eb8dfceb9437d3c1497d06588043bca49c559f3f6948f64109",
+    "src/main/daemon/daemon-adoption-telemetry-event.ts": "05ea98bcd32f606cc15c8f0cb9d66401ec2dc801f8e717ed6dd0e9c6911cbd2d",
+    "src/main/daemon/daemon-pty-spawn-result.ts": "4ef2cd27ee763d3542833e4ebf8afc4e0b75675689295a50e68ca6a79c2efe0e",
+    "src/main/daemon/shell-ready.ts": "8bea3210928c4efb35de5201a53b370eb473e32c7c404b39778efb1b7f779669",
+    "src/shared/shell-ready-marker-timing.ts": "4e7fcab88785ecc7d446831d23433c7031a01f534bcd53d5124531b2871857e2",
+    "src/main/daemon/terminal-history-seed-segments.ts": "e0d1bfc920a0df5a561a8ff6c8227ee352822c3d93f48f1015c271eaa6bafcf5",
+    "src/main/daemon/wsl-session-context.ts": "860dfd518182937b04e43d8d330066913799b00c4c2a5dbc04f81e7000e4718a",
+    "src/main/providers/local-pty-utils.ts": "d655643b42503ccfdab6436273557581b447f4b9f452dfa7649a959705744f25",
+    "src/main/terminal-history.ts": "f4ed054c6d478ae191f1379b614487076eb9ee35ec876197c2c20cc024de3013",
+    "src/shared/wsl-env.ts": "9f9a6bc39f8a3e4b245338652bf30721d8e3888734a40d7cab602dc792dccc88",
+    "src/main/telemetry/client.ts": "cd6fd4066a7fab559cc13aa4822ef80f0dba34a1e8211613344223b70db532d0",
+    "src/shared/app-environment.ts": "91bd2a883048a56f8c3966057a062bac75f48f9e1b5670d8d7958f8c7fe21140",
+    "src/shared/daemon-adoption-telemetry.ts": "7af34179b683b936ba248b7d92bc0f506642658673b0200e52bdfa4068729ed5",
+    "src/shared/daemon-lifecycle-telemetry.ts": "b3bcb90f98bbdcf98c76fb985de86b2ac5eb96a4b000c278f5a133bf79bc31dc",
+    "src/main/wsl.ts": "d888b67769461a7ba0a175db9775e2e2ab30601cbec53077a27351604a04882a",
+    "src/shared/worktree/id.ts": "d4da9e75db6f0d3301ef5f073d3136282dab4fc4fbd2978bdcdf0e142e7a9d30",
+    "src/shared/local-windows-terminal-runtime.ts": "6dfb40bf9bb1a73b358615ea82fd86abec10b1a170b7ef0771b9c574addd4e7c",
+    "src/main/terminal-history-id.ts": "58a0e50e220343925535c67911fb9e45f298916fad2163e6396ba9cc754baac0",
+    "src/main/terminal-history-paths.ts": "27148b37c6fa2f99540d18864013e8909aa86b65be7f92cd10b6a31a1d3d3e75",
+    "src/main/fish-history-session.ts": "0f746534888842d53ffc8f5565a6010b1c4a2f7bf5f750301c547f7e5450f8eb",
+    "src/main/worktree-history-file-path.ts": "b0b04151717e3fb245b17ad8ba140db32e0af55c7c740a14684e3c2729c5f0aa",
+    "src/main/daemon/daemon-attach-only-retirement.ts": "b883fe6f3647f1a95be9d3f0390653933d8bea79c21538d045fe2085d31bdbca",
+    "src/main/daemon/daemon-history-recovery-freeze.ts": "e629d2e2729e598293e64213464ca0fb45ba3f205b3f45a45781408f180262a0",
+    "src/main/daemon/daemon-pty-provider-sequence.ts": "6aa2e70fbc53a57d92b80f1b3e0f8b36ad33d7027191359eb674292d156416bb",
+    "src/main/daemon/daemon-pty-spawn-request.ts": "d3c2e9f8995c73df427dea36e0ea64508fef6fd5880616df9ad430e34d3acb3e",
+    "src/main/providers/working-directory-validation.ts": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043",
+    "src/main/providers/macos-tcc-login-shell.ts": "3987924df6e455a41561926d50c3811394232f9dca68d96bbe67c152e57744ba",
+    "src/shared/node-pty-spawn-helper.ts": "4796707cd3d98c1b296a2b7ff6917b324de6ab830a7bb9cd14eb952bbd587c7d",
+    "src/shared/command-token-scanner.ts": "86eeb322b12bb3e5bc48edf5d85ec647c0c0ec24d3beb3526e1ae3c9aa7303a0",
+    "src/shared/agent-headless-command.ts": "10f84a57c243c7e9b13b9cd9419ff174cd0c8b20cf4783aeceb6cebbc52def87",
+    "src/shared/agent-node-entrypoint-identities.ts": "f2d58fcb086f30afbee3987a3b3ccbde566983e9f230a6da05f9c1d808ffa2d4",
+    "src/shared/tui-agent-config.ts": "ac7407900e6dafad72cc47aae171b169e8e1d7752d28caa0e09441d73a1fe1ad",
+    "src/main/shell-prompt-readiness-probe.ts": "8e871ed4a1d61569a29185bfa95ad4aa0a52ca127098088d3853bfcd5a8a2e73",
+    "src/main/daemon/post-ready-flush-gate.ts": "d53f2d436d768bbe4c4bfe1dd1442e84a031bc8078d3856c0361b40447936cac",
+    "src/main/shell-startup-output-scanner.ts": "cff0c8234de84ed34c1cbfd9013dbb10f5ac60efa01076ad3be2f80394248ac7",
+    "src/main/powershell-osc133-bootstrap.ts": "5a53aa934bbb50fba15dc2a0421b07910b09c76824a23ba224d8a4216ef9b446",
+    "src/main/daemon/daemon-shell-ready-marker.ts": "d128c88e65e7835864c67dc2c1e1a355c50111de77802930b06b350a0beb9a21",
+    "src/main/pty/codex-shell-launch-preflight.ts": "d80794841adace87db9a24fe3d73f873d5a1b9219ac6887962bace681677deca",
+    "src/main/shell-wrapper-file-writer.ts": "5ebfaf5c3356c651a359b6064cc8aac4a32a413b86548681b1e20370e198f232",
+    "src/main/daemon/daemon-shell-ready-wrapper-fileset.ts": "09cb0a1ff975c2299c46ea47c4ed79820aa93fc505592875db4add634249c55b",
+    "src/main/shell-wrapper-content-address.ts": "bd1ddf63b4de77fe8dabf533edfb0a14b81416e114f795978a1a46776ecea028",
+    "src/main/zsh-wrapper-dir-ownership.ts": "e6544e2d8d3348cc2a2e533c60a2bd1e91b6c8446fffa4dea24968218f9e2c9e",
+    "src/main/shell-templates.ts": "17122cebe3ea2b01462e645fa3ce335495734a3ab18f5fb7d015180060896d0a",
+    "src/main/shell-startup-features.ts": "1b418a6d759230950f320494fa70dddea030d3d1f29ea1fba05c238fc98211c7",
+    "src/shared/cross-platform-path.ts": "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3",
+    "src/main/telemetry/validator.ts": "39e028a8e431fe991ad6bf37acad7a0b0e9d7c174c07e898779b4a614bd12c99",
+    "src/main/telemetry/burst-cap.ts": "12a72a3f1582210fb8b8a81818f1471d62938359f97bdc2e5a2ce59571a3ce2c",
+    "src/main/telemetry/cohort-classifier.ts": "2d9aeafab4782fd350622d122d0381dda6b02272eda4db0d10b148bf2d5c933f",
+    "src/main/telemetry/consent.ts": "dd8b489ed5ed4af5cc912182ea1ec165f8e0056260a2f3b1e6725aa025027d39",
+    "src/main/shell-startup-identity-scanner.ts": "37aa9dc4a6ed70c5b52aeda7c4204cffc5b0838808dbe65df4266033628088f6",
+    "src/shared/print-mode-headless-command.ts": "4a632179d794718904989bfb00dabb7c741a0ae35d58585cf07f4aa746c36f7a",
+    "src/shared/priority-semaphore.ts": "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5",
+    "src/main/shell-ready-marker-scanner.ts": "a504be037d0ef1a19d3ce1ad608c279028132f0c91357c6dc1f2d5486d914a4d",
+    "src/shared/ante-headless-command.ts": "710a59e55ab1dfa32a33f7df9b4ecac77f85e387dc93e740d0bc678c37e61620",
+    "src/main/daemon/terminal-history-seed-chunks.ts": "a2616cd2815d92ba8dbe9ddad9d34adc08076a33765010ee18e82c4905adee3f",
+    "src/main/wsl-directory-probe-command.ts": "1db18370dff7e8656d27b105625dd03bdba51cb60099e90c0abb3252ec2ec246",
+    "src/main/daemon/daemon-pty-runtime-state.ts": "d0898287992c4a3acb14c9c4087c7b28cf11b13417f115d25b445d25d1404f19",
+    "src/main/providers/macos-login-session-pty-probe.ts": "260cb5a780287b6dea7c1eaa45e89b78fb9a5e1805c1f8c4bf2b17c5d952af63",
+    "src/main/wsl-availability.ts": "324c636f9779595b62fe1f8c98535ddc818b6d892195f1f28ec2ae0bd7ec1bcf",
+    "src/main/wsl-interop-spawn-directory.ts": "857a1253971cb0d4e7da5659c9ded80c4f0930c70b03e243ed858f8999f294cf",
+    "src/main/wsl-running-distro-cache.ts": "d8bcf954daa78cba331ef725bf1ab2c63a117cb3d0bb099edba6133ffeee386a",
+    "src/shared/child-process/run-process.ts": "ae4dad239273351ce61269cd7f7abb8325f3f620be600fa9c0ae760c1dd7cbad",
+    "src/main/wsl-distro-retry.ts": "d5711a29eb67bd49d9c512a5f35743921045b703ba27275cdcdc0d5aaf64e4be",
+    "src/main/wsl-distro-list-output.ts": "27f772c9dc451757f4397a4e47ca9c9e28c4067e50a41ceef846013ff43db7bc",
+    "src/main/line-editor-ready-output-scanner.ts": "c697380e4bf4677229f59346d7e69d7cc27ed03d163a2882885092e6eb703293",
+    "src/shared/pty-slave-line-discipline-echo.ts": "3df5bc2c7c45ffce766da5460ed5d888f463768d8d8287792cecf45e5f3618b4",
+    "src/shared/shell-process-readiness.ts": "9aeb7bcdc6e0ca1b70d62471a8ad7ac5f39fab966134cfd2397a8d7f850d82cd",
+    "src/shared/prime-agent-headless-command.ts": "0898cb5322ff91510e81c11ec9c7d4fc1cd6e850491092a78f79931722651ec3",
+    "src/main/daemon/daemon-zsh-shell-ready-wrapper-spec.ts": "502ef8934f77c6ec3ffe278cc4f8e644f0890bc4f2ac6360077e34c00bc3d58b",
+    "src/main/zsh-startup-wrapper-builder.ts": "eacff52ff47cebcd34914b020fa746d1e3720e3b7c8059013ffcf74d1cf3dc26",
+    "src/main/daemon/daemon-bash-shell-ready-rcfile.ts": "475bdef878015fb3531fe0f340d0f99d224146f0aa8adde406175a2e51e228be",
+    "src/main/bash-prompt-command-composition.ts": "1519e1b2f4d408c5e46ff7f7d9b3dc2187ac03ed6e99217ef2b5137158fa264d",
+    "src/main/pty/posix-shell-startup-command.ts": "f69611a77938cf13455f67728cf1a9fc1a67ff864919245787d659f3c1c6055c",
+    "src/main/cli/bundled-cli-launcher-path.ts": "d18971de3491d0f678c99ab3fca72dd71c5b3e635bf258b7c8d1ba4584e358c4",
+    "src/shared/powershell-command-encoding.ts": "405d7aa5cf55f0053a6ae84f92335446dde6c316f782761be5ce1c24967046a9",
+    "src/shared/orca-cli-command-name.ts": "c90b037ec7a6143770a40dd907bf9d053fb2cede21128b60b78a78671c0780c0",
+    "src/main/pty/omp-shell-wrapper.ts": "fcf15117265833933064f0315ce1b02473d8f5618efed09c0d3f8d4872395fcf",
+    "src/shared/telemetry-events.ts": "40b800fdb343cd66801613dddfcacebc148adf864ceb65e6f70e250136e9f4b6",
+    "src/main/daemon/daemon-audit-eligibility-event.ts": "11755c26094c81a82c72027eb5b96b97fbd686bca4f32c9fbc9ba1758fbfa137",
+    "src/main/daemon/client.ts": "e7698849f62c51bd36bf6789423dcd3f9194d979fc143dd267f0c1b1de1ddf14",
+    "src/main/daemon/daemon-checkpoint-session-queue.ts": "f4cc3809309c57125955ee8a7439df8f8000bfca452015c5bffad3ceea5fdf7b",
+    "src/main/daemon/cold-restore-payload-cache.ts": "6e97bb387ec9b00619226685934126a90e4572720de3ed6a16de0cf8f43ceb77",
+    "src/main/daemon/history-manager.ts": "7b0a99ecbf735ea3bf6480af6463dc15a35ea6dc27b3b0e8d07b73a787ad0f5c",
+    "src/shared/process-table-snapshot.ts": "fe423af1745925a52b5d205a3cb20325220c39996e1c065d56fe2af1e69182e9",
+    "src/main/daemon/history-reader.ts": "8579629f0d023bad3d652661c6f767ad5be767a2759c2978b114645df0814a3d",
+    "src/shared/child-process/spawn-resolution.ts": "8c62c3c14d6f110f25bab23e3f4b2633a68e2f36252bd3aac68cffd7b2e274dc",
+    "src/shared/child-process/process-tree-termination.ts": "49f001659c872e23040fe5bab2dd387f2589178f5bc3ce9361373303d23ff120",
+    "src/shared/child-process/bounded-output-sink.ts": "7dbab9fc70dac8e5d19dd03d743b55609092b45ca13423e2dc80a69cf7fc4865",
+    "src/shared/child-process/process-spec.ts": "97e52b5e320da1eed4cfb2c0b73a88696b62f355eb4b5fe0df5389764afb8289",
+    "src/shared/child-process/child-termination-reporter.ts": "d91ff09b26c9a23e26c2a2f92b129879cd6d0bddea14cd3bcac5d4489fecfca0",
+    "src/shared/wsl-login-shell-command.ts": "69445d4cb6eae151ef28ed4fe320774bad9c46577f8a2263c14a14ecfdb28075",
+    "src/shared/telemetry-event-classification.ts": "0a04ffab3f99083e2a07e254040633519771450303e6dc803cd46ac074c97a4e",
+    "src/shared/telemetry-property-schemas.ts": "3b09098052708589b2954189e19d595668b4e3d4ccb09b1de75681839d7c72bd",
+    "src/shared/telemetry-app-event-schemas.ts": "5dc7d68e3a235db3755ae71381a8b01e3584f21a80b6de48a6b4e7538f1c0831",
+    "src/shared/telemetry-event-registry.ts": "fd2782c8606fac43241fa96e0999fd651047434ffac68688dd009f060a315be9",
+    "src/shared/telemetry-daemon-event-schemas.ts": "0566f2763169d68a63887bcabf15e3f6a92237191caeaa01276022c647c982ac",
+    "src/shared/child-process/process-tree-kill-gate.ts": "62848f063785e15cb0231deb622b043e81484ed3040c612afdc4f98fa2db06ab",
+    "src/main/daemon/history-paths.ts": "a565f91fb2def34aa2c063d0089fa9b491c5aabd7736886ba9e4d2bb31418b63",
+    "src/main/daemon/daemon-client-hello-handshake.ts": "532be287024d5fa8374d61af5ed488622b2f7a8530642a2120a4993caa14cc73",
+    "src/main/daemon/daemon-client-pending-requests.ts": "4fa6740fc377c898493809f7469b98c37062c059aaef38bd07dcd6f5e9bccb9b",
+    "src/main/daemon/daemon-client-socket-connect.ts": "958e918424e5ea6d9ed4f8d85e1d07c46977e074ea2f2f880dc6b1ac5c927c76",
+    "src/main/daemon/daemon-client-listener-registry.ts": "ff74d77bd915b4ae424054be740322e17e46bcc64316057c264eed1010c1a50b",
+    "src/main/daemon/daemon-client-ndjson-readers.ts": "3333a83f0f75a05867083c6890c564e4bdbd0df820313d646944c55ba04056ee",
+    "src/main/daemon/daemon-client-notify-settlement.ts": "7ce27ff7c79fb5027b884328505f0b792c4a039886deae12371a4b5e4594bf25",
+    "src/shared/child-process/windows-command-line.ts": "4bf94aa90ee63d965bc6e1198ddafa4a715c05d78be979025d17dc59d90557ca",
+    "src/shared/child-process/windows-cmd-shim-resolution.ts": "5044e3a9140a19c8bb713044de655b611244659a754f32e5a5df7f519df40eb3",
+    "src/main/daemon/daemon-client-rpc-request.ts": "c846c4e7cb1a5eaa3266e3f3779dbd62c7f60a0c783c55d2af80c42d8468db7b",
+    "src/main/daemon/terminal-history-log.ts": "8d9ec783257c1f7bd7380491038b499ecaca00f57d99047806cba9d6ab816bcb",
+    "src/main/daemon/terminal-history-checkpoint-reader.ts": "d69e6e765d9b318ecbdeca27fc295e57e678d47e1312b77f0b2900b1b727b8d1",
+    "src/main/daemon/terminal-history-file-reader.ts": "923c9e0c5e803c2f3ea25969341c76525ece822ddd3cea4d96c5176c438b92ae",
+    "src/main/daemon/terminal-history-session-tombstone.ts": "ed4ced675f275e16b5a1a142e91b5e33e10a4a35885ba2dd8a7e5a90e4d8ebe6",
+    "src/main/daemon/terminal-history-recovery-quarantine.ts": "65e37d29a84d8ebaf43e78e13b94004c2ca9a0801c49a843642ff84928837c85",
+    "src/main/daemon/terminal-history-cold-restore-info.ts": "5f44e06414227fa7148c0a88784aa5146b23ab36719db9d293432ebde63b0680",
+    "src/main/daemon/terminal-history-file-limits.ts": "21185a571e0d326472554dae3b49bc578834d00432a2bf50f044a4d3da1e1a3a",
+    "src/main/daemon/terminal-history-restorable-retention.ts": "1bfc897132026875086cb99e9d2d5df73db793cd6cef916706934b215bfd7b7d",
+    "src/main/daemon/terminal-history-legacy-scrollback-restore.ts": "5af2cb2998362feccbe1025e019aef6c5ebaf1d4ae9d9e4c6ef527033f1fc441",
+    "src/main/daemon/terminal-history-metadata.ts": "d273daac2c06d140b8a75a1d43382025f04b430708af57fd359623ee506ce084",
+    "src/main/daemon/terminal-history-mutation-tracker.ts": "fa7a88fb2bd9461b12cd97c60c1383f9c51b4d0e445b9d8852dbeabf136f548e",
+    "src/main/daemon/terminal-history-recovery-freezes.ts": "c1dd816085442d69b556a590196bed679aaf02f14d919ca7c62742d382591f0a",
+    "src/main/daemon/terminal-history-session-files.ts": "d8b0c2ac3e41a267f2a85aa11571e66807e9204613881433ddeb2a5beca217fb",
+    "src/main/daemon/terminal-history-session-writer.ts": "50eb181f8f13355e9ebf5c3dd1bc004ec10b3eba51bd74368a75421634562856",
+    "src/main/daemon/daemon-private-file-modes.ts": "7dbd0693d254e8ec2bf4f73499ecc8eca560ef1d440fe0026cff910e58bf0615",
+    "src/shared/star-nag-telemetry.ts": "dd3e57bc92a680ca78c521d3e503ec42220c7c9bef6970523cb804e79a7f0f7b",
+    "src/shared/telemetry-feature-education-event-schemas.ts": "51d0e9260f7945aa8efe28c0db73b935ff662da03567e6867f1c5470e24cd2fe",
+    "src/shared/telemetry-native-feature-event-schemas.ts": "407d1e75d18cde42ef430689af476d122b2f3f6a08b4c406454f1b0bd66c453d",
+    "src/shared/telemetry-onboarding-event-schemas.ts": "9e74c1de5cb4cc07b5f6cd0ec3e03fc3c183ef16e862e2485217057397b28756",
+    "src/shared/telemetry-repository-event-schemas.ts": "d8cc2d46954a41accc3b5e5cecefc6be2410e60e416411e5be8178cd13cc2572",
+    "src/shared/daemon-audit-eligibility.ts": "54322c582a2ffc880ace5b0eefd3f44b8110e038de9603207601d9ef35979446",
+    "src/shared/feature-wall-tour-depth.ts": "93614de5dacfa1fd084dffbe56d8a6a5a20097dc6fbc6c39eabd7f49e60e46cb",
+    "src/shared/setup-script-import-providers.ts": "f152cefab4922d992633da4d950b319b9e61862c3835d6fe88ed0e98edcc3f5a",
+    "src/shared/workspace-source.ts": "78c66dc7361ade7984de2d7fb5afa879eaade2a2f289e42cd78e53eee07d5b29",
+    "src/shared/gh-star-source.ts": "92d6db38e5f5881d9c522fa0e85c9f4b757e41cc92517e5d642c8795eb4310fe",
+    "src/shared/feature-interactions.ts": "d0f06fea1a436f77584b8bc3c93a944ee0cc1504cb0b12fc08cf49eb2d6dec7a",
+    "src/shared/agent-hook-types.ts": "dc64ba21ad8dd32c4a9a43eacb2c66d19c6dfe8dc6d77b2656f008b70597b78b",
+    "src/main/daemon/node-pty-error-hints.ts": "0595cf09081e0ed369078d1698093f02f3c23e5814e3d884b5083e70e8bd440a",
+    "src/shared/terminal-owner.ts": "60e3c07e99b8d2813f2241a8fc5ab8d1a11229b23b32aa53fb67154052c92309",
+    "src/shared/terminal-osc-link-ranges.ts": "bc3c39fd44489a27669225474ab9f52aaae32988ed80b26aab69e1ad0cb3d390",
+    "src/shared/node-bounded-file-reader.ts": "2cffa451b72d059226e0c2d4b6d2a5203cb8ddafb358d5e828dcd3436d197ecb",
+    "src/main/daemon/terminal-checkpoint-serializer.ts": "dfd5f0f3b72f58ad9d6b9df712dc1318b8e04dc7ec7327ccf714c0e7bfde1375",
+    "src/main/host-tree-removal.ts": "ba8ea5e3503bf30eddf70efc68bdd6a1d9b864734ac67cf21f83b95f4f862c97",
+    "src/shared/nested-repo-telemetry.ts": "fdcb4ce4565e7d71f6833099c3725a7bb2fcf27ef6d2089ad77ba588ad12efe7",
+    "src/shared/feature-interaction-categories.ts": "320daec20570a0d5cae909bd4eec1d8b35a460a54aee480ddfb464fc1603d27d",
+    "src/shared/feature-interaction-catalog.ts": "0015a3cfc624d9dd800d54dba6cc420e4e7505131cedc3314f38c1ed03eeda80",
+    "src/shared/feature-interaction-usage-buckets.ts": "5d4ac4b615d4af1dbb3057d3373d33fdf25c4bef15f93a93884c3e660cfcc8ff",
+    "src/shared/feature-wall-telemetry.ts": "1ae90c3ee862a109493eb88ff3690a124d05e3c5cdaac331b818610925ec5693",
+    "src/shared/feature-wall-setup-steps.ts": "e917ed94cf96ea99cce9f537bdd37bd0ddb7cbc6172d8f67aac9efe11379160d",
+    "src/shared/telemetry-onboarding-foundation-schemas.ts": "32772dc9111ad9e72f83322ee54a4f090b49cd14592f95b129be61b6469dc0d3",
+    "src/shared/feature-education-telemetry.ts": "7330076fabc31fc2878b79caa7b2b1cc901d6f99387e7ec846a85942f08b4d00",
+    "src/shared/windows-transient-lock-removal.ts": "dbfbc53d044d4bb76d1c5378a1011dff69b88c1ba042b23ebd1b0057153868f2",
+    "src/main/asar-transparent-fs.ts": "48b031ef8f72545c5f8f0d4cf6fb80e168a38315e83103ff00e4392c9cbdd2ee"
+  }
+}

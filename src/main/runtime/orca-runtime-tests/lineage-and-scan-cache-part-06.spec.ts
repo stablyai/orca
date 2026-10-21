@@ -15,6 +15,10 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it.each(['failed', 'circuit_broken'] as const)(
@@ -125,12 +129,12 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
         return metaById[worktreeId]
@@ -181,7 +185,10 @@ describe('OrcaRuntimeService', () => {
       childWorktreeIds: [],
       lineage: result.lineage
     })
-    expect(setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
+      expect.any(Object)
+    )
   })
 
   it('keeps cwd-inferred lineage best-effort when the cwd parent cannot be resolved', async () => {
@@ -235,12 +242,12 @@ describe('OrcaRuntimeService', () => {
         displayName: 'worker'
       })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
         return metaById[worktreeId]
@@ -315,7 +322,7 @@ describe('OrcaRuntimeService', () => {
       taskId: 'task_abc123'
     })
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         parentWorktreeInstanceId: 'worker-instance'
       })
@@ -333,12 +340,12 @@ describe('OrcaRuntimeService', () => {
         displayName: 'parent'
       })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
         return metaById[worktreeId]
@@ -413,7 +420,7 @@ describe('OrcaRuntimeService', () => {
       taskId: 'task_creator123'
     })
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         parentWorktreeInstanceId: 'parent-instance'
       })

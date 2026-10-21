@@ -19,10 +19,10 @@ describe('AgentStep', () => {
       </TooltipProvider>
     )
 
-    expect(html).toContain(`Show ${AGENT_CATALOG.length - 1} more agents→`)
+    expect(html).toContain(`Show ${AGENT_CATALOG.length - 1} more agents →`)
     expect(html).toContain('data-agent-grid-scroll')
-    expect(html).toContain('data-slot="checkbox"')
-    expect(html).toContain('Yolo / Dangerously skip permissions')
+    expect(html).toContain('data-slot="switch"')
+    expect(html).toContain('Yolo mode')
     expect(html).not.toContain('role="radiogroup"')
   })
 
@@ -41,6 +41,6 @@ describe('AgentStep', () => {
     )
 
     expect(html).toContain('Hide agents')
-    expect(html).not.toContain(`Show ${AGENT_CATALOG.length - 1} more agents→`)
+    expect(html).not.toContain(`Show ${AGENT_CATALOG.length - 1} more agents →`)
   })
 })

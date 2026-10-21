@@ -42,9 +42,9 @@ const getRuntimeEnvironmentStatus = vi.fn()
 // injects a transport, so this mock stands in for a paired host that answers.
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args),
-  hasRuntimeRpcErrorCode: () => false
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 const RUNTIME_AUTHORITY: AutomationAuthorityRef = {
   kind: 'runtime',

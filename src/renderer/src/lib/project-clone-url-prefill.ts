@@ -22,8 +22,23 @@ export function resolveProjectCloneUrlPrefill(
   }
   const sourceRepoIds =
     projects.find((candidate) => candidate.id === selectedProjectId)?.sourceRepoIds ?? []
-  const remoteUrl = sourceRepoIds
-    .map((sourceId) => repos.find((repo) => repo.id === sourceId)?.gitRemoteIdentity?.remoteUrl)
-    .find((url): url is string => Boolean(url))
-  return remoteUrl ? stripCredentialsFromMessage(remoteUrl) : ''
+  let reposById: Map<string, Repo> | undefined
+  for (let index = 0; index < sourceRepoIds.length; index++) {
+    if (index > 0 && !reposById) {
+      reposById = new Map()
+      for (const repo of repos) {
+        const id = repo.id
+        if (!reposById.has(id)) {
+          reposById.set(id, repo)
+        }
+      }
+    }
+    const sourceId = sourceRepoIds[index]
+    const source = reposById ? reposById.get(sourceId) : repos.find((repo) => repo.id === sourceId)
+    const remoteUrl = source?.gitRemoteIdentity?.remoteUrl
+    if (remoteUrl) {
+      return stripCredentialsFromMessage(remoteUrl)
+    }
+  }
+  return ''
 }

@@ -231,8 +231,8 @@ export function WorktreeParentPickerPopover({
   }, [anchorRect, candidates.length, viewportHeight])
 
   const filtered = useMemo(
-    () => filterWorktreeParentCandidates(candidates, search),
-    [candidates, search]
+    () => filterWorktreeParentCandidates(candidates, search, repoMap),
+    [candidates, search, repoMap]
   )
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length)
 

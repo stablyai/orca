@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   isResumeTargetConfirmedMissing,
@@ -6,11 +5,6 @@ import {
   type HomeResumeCardInput
 } from './home-resume-card'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
-
-const resumeCardSource = readFileSync(
-  new URL('../home/MobileHomeResumeCard.tsx', import.meta.url),
-  'utf8'
-)
 
 function worktree(worktreeId: string): HomeWorktreeSummary {
   return {
@@ -120,11 +114,6 @@ describe('home resume card', () => {
       worktree: worktree('repo::/tmp/two'),
       actionable: true
     })
-  })
-
-  it('renders the home Resume card inert until its host connects', () => {
-    expect(resumeCardSource).toContain('disabled={!props.card.actionable}')
-    expect(resumeCardSource).toContain('!props.card.actionable && styles.cardDisabled')
   })
 })
 

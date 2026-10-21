@@ -1,3 +1,7 @@
+import {
+  buildAgentSessionContinuationPrompt,
+  hasFullAgentSessionContext
+} from '@/lib/agent-session-continuation'
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
@@ -64,6 +68,33 @@ describe('AI Vault session continuation', () => {
     expect(request.source.transcriptPath).toContain('session.jsonl')
     expect(request.source.capturedText).toContain('assistant: The component tests still need work.')
   })
+
+  it.each(['opencode', 'opencode2'] as const)(
+    'uses bounded %s vault previews for plain and synthetic database paths',
+    (agent) => {
+      for (const filePath of [
+        '/data/opencode/opencode.db',
+        '/data/opencode/opencode.db#session',
+        '/data/private-account.db'
+      ]) {
+        const sourceSession = { ...session(agent), filePath }
+        const request = prepareAiVaultSessionContinuation({
+          session: sourceSession,
+          targetWorktreeId: 'folder:project',
+          targetWorkspacePath: '/project'
+        })
+        expect(hasFullAgentSessionContext(request.source)).toBe(false)
+        expect(buildAgentSessionContinuationPrompt(request.source, 'focused')).toContain(
+          'The component tests still need work.'
+        )
+        expect(buildAgentSessionContinuationPrompt(request.source, 'focused')).not.toContain(
+          filePath
+        )
+        sourceSession.previewMessages = []
+        expect(canContinueAiVaultSessionInNewSession(sourceSession, 'folder:project')).toBe(false)
+      }
+    }
+  )
 
   it('never treats a preview tool result as the user prompt', () => {
     const sourceSession = session()

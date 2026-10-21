@@ -7,10 +7,11 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
-import { browserOverlayOwnsShortcutTarget } from '../describe-page/browser-overlay-shortcut-target'
+import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import type { BrowserAddressBarSelection } from './browser-address-bar-edit-session'
 import type { BrowserPageGuestFocus } from './browser-page-guest-focus'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /** Frames an address-bar grab keeps retrying before it lets the guest have focus back. */
 const ADDRESS_BAR_FOCUS_FRAMES = 6
@@ -153,10 +154,12 @@ export function useBrowserPageChromeFocus({
     if (!isActive) {
       return
     }
-    return window.api.ui.onFocusBrowserAddressBar(() => {
-      focusAddressBarNow()
+    return window.api.ui.onFocusBrowserAddressBar(({ browserPageId }) => {
+      if (browserPageId === browserTabId) {
+        focusAddressBarNow()
+      }
     })
-  }, [focusAddressBarNow, isActive])
+  }, [browserTabId, focusAddressBarNow, isActive])
 
   // Why: the IPC above only fires while the page itself holds focus; from chrome the chord
   // never leaves the renderer, and capture beats the workspace or an embedded editor to it.
@@ -171,10 +174,7 @@ export function useBrowserPageChromeFocus({
       ) {
         return
       }
-      if (
-        chromeShortcutScope === 'owned-target' &&
-        !browserOverlayOwnsShortcutTarget(event.target, workspaceId)
-      ) {
+      if (!browserChromeShortcutOwnsEvent(chromeShortcutScope, event, workspaceId)) {
         return
       }
       event.preventDefault()
@@ -183,8 +183,8 @@ export function useBrowserPageChromeFocus({
       event.stopImmediatePropagation()
       focusAddressBarNow()
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
 
   useEffect(() => {

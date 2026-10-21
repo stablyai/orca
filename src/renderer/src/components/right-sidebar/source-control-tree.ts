@@ -128,12 +128,16 @@ export function buildSourceControlTree<
     }
 
     let parent = root
+    // Why accumulated and only materialized on a miss: `slice().join('/')` per segment made
+    // tree building O(files x depth^2) in characters copied, and the Source Control filter
+    // rebuilds this whole tree on every keystroke.
+    let ancestorPath = ''
     for (let index = 0; index < segments.length - 1; index += 1) {
       const name = segments[index]
-      const path = segments.slice(0, index + 1).join('/')
+      ancestorPath = ancestorPath ? `${ancestorPath}/${name}` : name
       let dir = parent.directoryChildren.get(name)
       if (!dir) {
-        dir = makeDirectoryNode<Entry, Area>(area, path, name, index)
+        dir = makeDirectoryNode<Entry, Area>(area, ancestorPath, name, index)
         parent.directoryChildren.set(name, dir)
         parent.children.push(dir)
       }

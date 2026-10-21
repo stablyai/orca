@@ -50,7 +50,7 @@ async function useFullAgentActivityRows(page: Page): Promise<void> {
     // reads off the rendered sidebar instead of a collapsed summary pill.
     state.setAgentActivityDisplayMode('full')
     if (!state.worktreeCardProperties.includes('inline-agents')) {
-      state.toggleWorktreeCardProperty('inline-agents')
+      state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
     }
   })
 }
@@ -83,7 +83,7 @@ async function openAgentTab(
         launchAgent
       })
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', store.getState().activeWorktreeId)
       return tab.id
     },
     { worktreeId, launchAgent }

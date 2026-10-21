@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MiniMaxCookieStore from './minimax-cookie-store'
+import { setSecretStore } from '../../shared/secret-store'
 
 const safeStorageMock = vi.hoisted(() => ({
   isEncryptionAvailable: vi.fn(() => true),
   encryptString: vi.fn((value: string) => Buffer.from(value)),
   decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
 }))
-
-const electronMock = vi.hoisted(() => ({
-  safeStorage: safeStorageMock
-}))
-
-vi.mock('electron', () => electronMock)
 
 const existsSyncMock = vi.fn()
 const readFileSyncMock = vi.fn()
@@ -60,6 +55,7 @@ describe('minimax-cookie-store', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value))
     safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf8'))
+    setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null })
   })
 
   afterEach(() => {
@@ -204,5 +200,51 @@ describe('minimax-cookie-store', () => {
     store.clearMiniMaxSessionCookie()
     expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
     expect(store.readMiniMaxSessionCookie()).toBeNull()
+  })
+
+  describe('getMiniMaxSessionCookieProtection', () => {
+    it('reports null when nothing is stored', async () => {
+      existsSyncMock.mockReturnValue(false)
+      const store = await loadStore()
+      expect(store.getMiniMaxSessionCookieProtection()).toBeNull()
+    })
+
+    it('reports plaintext for a plaintext envelope', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('plaintext', 'sessionId=abc123')))
+      const store = await loadStore()
+      expect(store.getMiniMaxSessionCookieProtection()).toBe('plaintext')
+    })
+
+    it('reports sealed for an encrypted envelope', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'sessionId=abc123')))
+      const store = await loadStore()
+      expect(store.getMiniMaxSessionCookieProtection()).toBe('sealed')
+    })
+
+    // Pre-envelope files carry no kind, so the legacy sniff decides — the same one the
+    // reader uses, so the warning cannot disagree with how the bytes are interpreted.
+    it('reports a legacy pre-envelope cookie header as plaintext', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from('sessionId=abc123; other=1', 'utf8'))
+      const store = await loadStore()
+      expect(store.getMiniMaxSessionCookieProtection()).toBe('plaintext')
+    })
+
+    it('reports legacy sealed bytes as sealed', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from([0x76, 0x31, 0x30, 0x00, 0x8f, 0x02, 0x1c]))
+      const store = await loadStore()
+      expect(store.getMiniMaxSessionCookieProtection()).toBe('sealed')
+    })
+
+    it('does not decrypt, so opening Settings cannot trigger a keychain prompt', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'sessionId=abc123')))
+      const store = await loadStore()
+      store.getMiniMaxSessionCookieProtection()
+      expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+    })
   })
 })

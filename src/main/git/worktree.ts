@@ -2,7 +2,8 @@ export { addWorktree } from './worktree-add'
 export {
   configurePushAutoSetupRemote,
   persistWorktreeCreationBase,
-  resolveWorktreeAddBaseContext
+  resolveWorktreeAddBaseContext,
+  trackSameNameRemoteBase
 } from './worktree-add'
 export { forceDeleteLocalBranch } from './worktree-branch-removal'
 export { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
@@ -32,7 +33,8 @@ export {
   _resetWorktreeScanCacheForTests,
   listWorktreeGraph,
   listWorktrees,
-  listWorktreesSharedStrict
+  listWorktreesSharedStrict,
+  listWorktreesSharedStrictAllowingTrueEmpty
 } from './worktree-scan-cache'
 export { bumpWorktreeScanGeneration as notifyPreparedWorktreeMutation } from './worktree-scan-cache'
 export { addSparseWorktree } from './worktree-sparse-add'

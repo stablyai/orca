@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry-instance'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'

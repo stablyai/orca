@@ -105,4 +105,18 @@ describe('readRasterImageDimensions', () => {
       height: 480
     })
   })
+
+  it.each(['c00011081770177003011100021100031100', 'c0001108000c001003011100021100031100'])(
+    'reads the real JPEG frame after stray bytes: %s',
+    (strayHex) => {
+      const jpeg = jpegWithMetadata(0, 640, 480)
+      const prefixed = Buffer.concat([
+        jpeg.subarray(0, 2),
+        Buffer.from(strayHex, 'hex'),
+        jpeg.subarray(2)
+      ])
+
+      expect(readRasterImageDimensions(prefixed)).toEqual({ width: 640, height: 480 })
+    }
+  )
 })

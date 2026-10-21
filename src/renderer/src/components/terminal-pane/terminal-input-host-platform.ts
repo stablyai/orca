@@ -1,9 +1,10 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/worktree-runtime-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import type { AppState } from '@/store/types'
@@ -71,9 +72,12 @@ export function resolveTerminalInputHostPlatform(args: {
     )
   }
   if (runtimeEnvironmentId) {
+    // Why last-verified: the host's platform is a fact about the host, and falling back to the
+    // client's silently re-points every keystroke and path at the wrong conventions -- a Windows
+    // host driven from a Mac. See docs/reference/ssh-execution-boundary.md.
     return (
-      args.state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status?.hostPlatform ??
-      args.clientPlatform
+      lastVerifiedRuntimeStatus(args.state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId))
+        ?.hostPlatform ?? args.clientPlatform
     )
   }
   const localSessionMetadata = args.transport?.getLocalSessionMetadata?.()
@@ -86,7 +90,7 @@ export function resolveTerminalInputHostPlatform(args: {
 
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(args.state, args.worktreeId))
   if (host?.kind === 'ssh') {
-    const ownerEnvironmentId = getRuntimeEnvironmentIdForWorktree(args.state, args.worktreeId)
+    const ownerEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(args.state, args.worktreeId)
     return ownerEnvironmentId
       ? (args.state.sshStateByEnvironment
           .get(ownerEnvironmentId)
@@ -95,8 +99,8 @@ export function resolveTerminalInputHostPlatform(args: {
   }
   if (host?.kind === 'runtime') {
     return (
-      args.state.runtimeStatusByEnvironmentId.get(host.environmentId)?.status?.hostPlatform ??
-      args.clientPlatform
+      lastVerifiedRuntimeStatus(args.state.runtimeStatusByEnvironmentId.get(host.environmentId))
+        ?.hostPlatform ?? args.clientPlatform
     )
   }
   return args.clientPlatform

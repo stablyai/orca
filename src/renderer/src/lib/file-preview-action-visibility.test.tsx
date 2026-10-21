@@ -18,7 +18,7 @@ vi.mock('@/lib/client-creation-action-policy', () => ({
   getClientCreationActionPolicy: () => ({ 'managed-browser': mocks.browserAvailability })
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => mocks.environmentId
 }))
 
 const storeState = {

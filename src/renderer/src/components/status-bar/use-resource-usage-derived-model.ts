@@ -4,7 +4,7 @@ import type { MemorySnapshot } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { mergeSnapshotAndSessions } from './mergeSnapshotAndSessions'
-import type { DaemonSession } from './resource-usage-merge-types'
+import type { DaemonSession, RuntimeHostResourceSample } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import { countUnboundDaemonSessions } from './resource-session-bindings'
 import {
@@ -17,15 +17,18 @@ import {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatMemory } from './resource-usage-metrics'
+import { findAmbiguousWorktreeIds, findDuplicateIds } from '../../lib/unified-tab-host-ownership'
 
 export function useResourceUsageDerivedModel({
   open,
   resourceSnapshot,
+  runtimeHostResources,
   sessions,
   resourceSessionBindings,
   runtimePaneTitlesByTabId,
   repos,
   allWorktrees,
+  projectGroups,
   browserTabsByWorktree,
   workspaceSessionReady,
   sessionCount,
@@ -36,11 +39,13 @@ export function useResourceUsageDerivedModel({
 }: {
   open: boolean
   resourceSnapshot: MemorySnapshot | null
+  runtimeHostResources: readonly RuntimeHostResourceSample[]
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   repos: AppState['repos']
   allWorktrees: Worktree[]
+  projectGroups: AppState['projectGroups']
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   workspaceSessionReady: boolean
   sessionCount: number
@@ -57,8 +62,14 @@ export function useResourceUsageDerivedModel({
         map.set(repo.id, display)
       }
     }
+    const ambiguousGroupIds = findDuplicateIds(projectGroups)
+    for (const group of projectGroups) {
+      if (!ambiguousGroupIds.has(group.id)) {
+        map.set(`folder-workspace:${group.id}`, group.name)
+      }
+    }
     return map
-  }, [repos])
+  }, [repos, projectGroups])
 
   // Why: non-null connectionId is the only honest "remote" signal (SSH PTYs run remote); build from the store, not a missing memory sample.
   const repoConnectionIdById = useMemo(() => {
@@ -69,12 +80,14 @@ export function useResourceUsageDerivedModel({
     return map
   }, [repos])
 
-  // Why: runtime-hosted repos have no local daemon samples or killable sessions; this map drives their per-row exclusion in the merge.
-  const repoRuntimeScopedById = useMemo(() => {
-    const map = new Map<string, boolean>()
+  // Why: runtime-hosted repos have no local samples or killable sessions; their rows come only from that server's own samples.
+  const repoRuntimeHostIdById = useMemo(() => {
+    const map = new Map<string, string>()
     for (const repo of repos) {
       const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-      map.set(repo.id, parsed?.kind === 'runtime')
+      if (parsed?.kind === 'runtime') {
+        map.set(repo.id, parsed.id)
+      }
     }
     return map
   }, [repos])
@@ -83,6 +96,9 @@ export function useResourceUsageDerivedModel({
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
+  // Why: a bare resource identity cannot choose between the same workspace id on different
+  // hosts, but the id still exists; keep the map whole and let the merge gate attribution only.
+  const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
@@ -96,9 +112,11 @@ export function useResourceUsageDerivedModel({
             runtimePaneTitlesByTabId,
             repoDisplayNameById,
             repoConnectionIdById,
-            repoRuntimeScopedById,
+            repoRuntimeHostIdById,
+            runtimeHostResources,
             browserTabsByWorktree,
-            worktreeById
+            worktreeById,
+            ambiguousWorktreeIds
           })
         : [],
     [
@@ -109,9 +127,11 @@ export function useResourceUsageDerivedModel({
       runtimePaneTitlesByTabId,
       repoDisplayNameById,
       repoConnectionIdById,
-      repoRuntimeScopedById,
+      repoRuntimeHostIdById,
+      runtimeHostResources,
       browserTabsByWorktree,
-      worktreeById
+      worktreeById,
+      ambiguousWorktreeIds
     ]
   )
 

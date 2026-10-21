@@ -13,8 +13,17 @@ import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-inca
 import { notifyDaemonAuditListeners } from './daemon-listener-registry'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
+import { supportsColorQueryReplyColors } from './daemon-protocol-version'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
 export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscriptions {
+  private colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+
+  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+    this.colorQueryReplyColors = colors
+    this.syncColorQueryReplyColors()
+  }
+
   protected async ensureConnected(deadlineMs?: number): Promise<void> {
     try {
       // Why: destructive teardown bounds the handshake by its deadline so a wedged
@@ -35,6 +44,14 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     this.flushOwedProducerResumes()
     if (isFreshConnection) {
       this.resyncBackgroundedSessions()
+      // Why: a replacement daemon starts with no colours, and a disconnected push was dropped.
+      this.syncColorQueryReplyColors()
+    }
+  }
+
+  private syncColorQueryReplyColors(): void {
+    if (this.colorQueryReplyColors && supportsColorQueryReplyColors(this.protocolVersion)) {
+      this.client.notify('setColorQueryReplyColors', { colors: this.colorQueryReplyColors })
     }
   }
 

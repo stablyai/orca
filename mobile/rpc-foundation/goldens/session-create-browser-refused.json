@@ -1,0 +1,88 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.content-create",
+  "family": "session.content-create",
+  "namedDeltas": [],
+  "values": {
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "7f4ea6e4256c": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Browser unavailable"
+      }
+    },
+    "d9a882adde26": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}"
+    },
+    "dd0b5e7b9130": {
+      "createError": "Browser unavailable",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "eb4b8e1128bd": {
+      "name": "browser.tabCreate#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.tabCreate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "browser_unavailable",
+            "message": "Browser unavailable"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-create-browser-refused",
+    "checkpoints": [
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["eb4b8e1128bd"],
+          "payloads": ["d9a882adde26"],
+          "settlements": {
+            "browser": "7ed3d39f0607"
+          },
+          "state": "dd0b5e7b9130",
+          "effects": ["7f4ea6e4256c"]
+        }
+      }
+    ]
+  }
+}

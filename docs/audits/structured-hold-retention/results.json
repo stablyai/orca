@@ -1,0 +1,18 @@
+{
+  "source": "src/main/native-chat/agent-session-wire/structured-agent-session-holds.ts",
+  "sourceSha256": "c95e27518d6cb09f1c97e5ff18bbb9fc5b15c7680d4a99e90cc14353d602230f",
+  "comparison": "same source, before omits only the post-resume holder check",
+  "before": {
+    "child": true,
+    "held": false,
+    "releasePendingAfterAcquisition": false,
+    "evictions": 0
+  },
+  "after": {
+    "child": false,
+    "held": false,
+    "releasePendingAfterAcquisition": true,
+    "evictions": 1
+  },
+  "passed": true
+}

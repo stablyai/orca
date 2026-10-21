@@ -1,3 +1,4 @@
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -34,20 +35,43 @@ async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise
     if (nextHealth === 'blocked' && !current?.status) {
       throw new Error('Paired web runtime status unavailable for compatibility fault')
     }
+    // Why rewrite the snapshot and not just the status: since #20003 the published snapshot owns
+    // host health. A bare `status: null` leaves the paired-web client's verified/ready snapshot in
+    // place, addRuntimeHost reads transport 'ready' before it ever looks at status, and the host
+    // still renders Connected. Pinning at the top sequence also stops the live status owner
+    // restoring the host mid-assertion.
+    const verified = current?.status ?? current?.snapshot?.status ?? null
+    const snapshot = {
+      environmentId: environment.id,
+      pairingRevision: environment.pairingRevision ?? environment.createdAt,
+      sequence: Number.MAX_SAFE_INTEGER,
+      checkedAt: Date.now(),
+      ...(nextHealth === 'blocked'
+        ? {
+            status: { ...verified!, protocolVersion: 0, runtimeProtocolVersion: 0 },
+            verification: 'verified' as const,
+            transport: 'ready' as const
+          }
+        : {
+            status: null,
+            verification: 'unavailable' as const,
+            // Why 'unknown' and not 'disconnected': an unavailable/unknown snapshot falls
+            // through to disconnected health; explicit disconnected transport is treated as
+            // reconnecting and renders Connecting.
+            transport: 'unknown' as const
+          })
+    }
     store.setState({
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
         environment.id,
-        nextHealth === 'blocked'
-          ? {
-              ...current,
-              checkedAt: Date.now(),
-              status: {
-                ...current!.status!,
-                protocolVersion: 0,
-                runtimeProtocolVersion: 0
-              }
-            }
-          : { ...current, checkedAt: Date.now(), status: null }
+        {
+          ...current,
+          snapshot,
+          checkedAt: snapshot.checkedAt,
+          status: snapshot.verification === 'verified' ? snapshot.status : null,
+          // Why: runtimeHealth answers 'available' on a ready remoteControl even with a null status.
+          remoteControl: null
+        }
       )
     })
     return environment.name
@@ -61,10 +85,7 @@ async function assertCreationActionsDisabled(args: {
   testInfo: TestInfo
   topology: 'headed' | 'headless'
 }): Promise<void> {
-  await args.page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(args.page)
   const dialog = args.page.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
   const hostPicker = dialog.getByRole('combobox')

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
 
 const { statSyncMock } = vi.hoisted(() => ({ statSyncMock: vi.fn() }))
 
@@ -34,38 +35,36 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('quoteForPosixShell', () => {
-  it('wraps plain values in single quotes', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('/tmp/orca.deb')).toBe("'/tmp/orca.deb'")
+describe('quotePosixShellDoubleQuotedApostrophe', () => {
+  it('wraps plain values in single quotes', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/orca.deb')).toBe("'/tmp/orca.deb'")
   })
 
-  it('quotes spaces', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('/tmp/Orca Setup.deb')).toBe("'/tmp/Orca Setup.deb'")
+  it('quotes spaces', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/Orca Setup.deb')).toBe(
+      "'/tmp/Orca Setup.deb'"
+    )
   })
 
-  it('neutralizes expansion, command substitution, separators, and double quotes', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('/tmp/$HOME.deb')).toBe("'/tmp/$HOME.deb'")
-    expect(quoteForPosixShell('/tmp/`id`.deb')).toBe("'/tmp/`id`.deb'")
-    expect(quoteForPosixShell('/tmp/a;rm -rf ~.deb')).toBe("'/tmp/a;rm -rf ~.deb'")
-    expect(quoteForPosixShell('/tmp/"quoted".deb')).toBe('\'/tmp/"quoted".deb\'')
+  it('neutralizes expansion, command substitution, separators, and double quotes', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/$HOME.deb')).toBe("'/tmp/$HOME.deb'")
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/`id`.deb')).toBe("'/tmp/`id`.deb'")
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/a;rm -rf ~.deb')).toBe(
+      "'/tmp/a;rm -rf ~.deb'"
+    )
+    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/"quoted".deb')).toBe('\'/tmp/"quoted".deb\'')
   })
 
-  it('closes and reopens the quote around a literal single quote', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell("/tmp/it's.deb")).toBe(`'/tmp/it'"'"'s.deb'`)
+  it('closes and reopens the quote around a literal single quote', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe("/tmp/it's.deb")).toBe(`'/tmp/it'"'"'s.deb'`)
   })
 
-  it('escapes every single quote in a value', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell("'; rm -rf /; '")).toBe(`''"'"'; rm -rf /; '"'"''`)
+  it('escapes every single quote in a value', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe("'; rm -rf /; '")).toBe(`''"'"'; rm -rf /; '"'"''`)
   })
 
-  it('quotes an empty value', async () => {
-    const { quoteForPosixShell } = await loadCommandModule()
-    expect(quoteForPosixShell('')).toBe("''")
+  it('quotes an empty value', () => {
+    expect(quotePosixShellDoubleQuotedApostrophe('')).toBe("''")
   })
 })
 

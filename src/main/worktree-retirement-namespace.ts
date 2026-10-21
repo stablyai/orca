@@ -4,8 +4,8 @@ import {
   type RetiredNameRegistry
 } from '../shared/worktree/retired-name-registry'
 import type { Repo } from '../shared/repo-types'
-import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
-import { sshEndpointKey, type SshIdentityFields } from './ssh/ssh-target-identity'
+import { worktreePathComparisonKey } from './worktree-path-comparison-key'
+import { sshEndpointKey, type SshIdentityFields } from './ssh/targets/ssh-target-identity'
 
 /**
  * Keys for `retiredWorktreeNamesByNamespace`, the copy of the retirement registry that survives a
@@ -50,7 +50,7 @@ export function retirementNamespaceKey(hostIdentity: string, probePath: string):
 
 /** Rewrites a key's host identity, keeping its workspace-path half. Returns null when the key is
  *  not under `fromIdentity` or the swap is a no-op. */
-function swapRetirementNamespaceHost(
+export function swapRetirementNamespaceHost(
   namespaceKey: string,
   fromIdentity: string,
   toIdentity: string

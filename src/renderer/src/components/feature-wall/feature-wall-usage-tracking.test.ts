@@ -52,6 +52,24 @@ describe('feature wall usage tracking state', () => {
     ).toEqual({ connected: false, label: 'Tracking not set up' })
   })
 
+  it('returns unknown when the account list has not loaded', () => {
+    expect(
+      getFeatureWallUsageProviderConnection({
+        managedAccountCount: undefined,
+        provider: null
+      })
+    ).toEqual({ connected: false, label: 'Account status unknown' })
+  })
+
+  it('prefers observed provider usage over an unknown account list', () => {
+    expect(
+      getFeatureWallUsageProviderConnection({
+        managedAccountCount: undefined,
+        provider: rateLimits()
+      })
+    ).toEqual({ connected: true, label: 'Connected · System default' })
+  })
+
   it('marks the usage step complete from system-default provider data', () => {
     expect(
       hasFeatureWallUsageTracking({

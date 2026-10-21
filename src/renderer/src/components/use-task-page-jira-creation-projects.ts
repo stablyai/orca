@@ -1,3 +1,4 @@
+import { useJiraCreateAssignee } from './use-jira-create-assignee'
 import React, { useCallback, useEffect, useMemo } from 'react'
 
 import { filterJiraProjectPickerProjects } from '@/components/jira-project-picker-filter'
@@ -54,6 +55,10 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
   const newJiraIssueTargetProjectSelectionKey = newJiraIssueTargetProject
     ? getJiraProjectSelectionKey(newJiraIssueTargetProject)
     : ''
+  const { newJiraIssueAssignee, setNewJiraIssueAssignee } = useJiraCreateAssignee(
+    model.providerRuntimeContextKey,
+    newJiraIssueTargetProjectSelectionKey
+  )
   const newJiraIssueTargetType = useMemo(
     () =>
       availableJiraIssueTypes.find((issueType) => issueType.id === newJiraIssueTypeId) ??
@@ -173,7 +178,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     handleNewJiraIssueProjectComboboxOpenChange
   nextModel.handleNewJiraIssueProjectSelect = handleNewJiraIssueProjectSelect
   nextModel.handleNewJiraIssueProjectTriggerKeyDown = handleNewJiraIssueProjectTriggerKeyDown
-  return nextModel
+  return Object.assign(nextModel, { newJiraIssueAssignee, setNewJiraIssueAssignee })
 }
 
 export type TaskPageJiraCreationProjectsModel = ReturnType<typeof useTaskPageJiraCreationProjects>

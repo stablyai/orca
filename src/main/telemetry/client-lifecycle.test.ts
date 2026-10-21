@@ -53,7 +53,7 @@ describe('setOptIn()', () => {
     expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
-  it('fires telemetry_opted_in after posthog.optIn without app_opened for settings opt-in', async () => {
+  it('fires app_opened and telemetry_opted_in after the SDK enables settings opt-in', async () => {
     state.settings.telemetry!.optedIn = false
     const order: string[] = []
     mock.optIn.mockImplementation(async () => order.push('optIn'))
@@ -61,7 +61,7 @@ describe('setOptIn()', () => {
       order.push(`capture:${message.event}`)
     })
     await setOptIn('settings', true)
-    expect(order).toEqual(['optIn', 'capture:telemetry_opted_in'])
+    expect(order).toEqual(['optIn', 'capture:app_opened', 'capture:telemetry_opted_in'])
   })
 
   it('drops telemetry_opted_in silently in non-official builds', async () => {

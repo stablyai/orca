@@ -9,6 +9,8 @@ import {
 export type TuiAgentDetectionCommand = {
   id: TuiAgent
   cmd: string
+  /** Ask an execution host to report this CLI's `--version` output when found. */
+  reportVersion?: true
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
 }
@@ -46,9 +48,11 @@ export function getTuiAgentDetectionProbeCommands(
 ): string[] {
   return [
     ...new Set(
-      commands
-        .filter((command) => !isDetectionUnsupportedInRuntime(command, runtime))
-        .flatMap((command) => [command.cmd, ...(command.requiredCommands ?? [])])
+      commands.flatMap((command) =>
+        isDetectionUnsupportedInRuntime(command, runtime)
+          ? []
+          : [command.cmd, ...(command.requiredCommands ?? [])]
+      )
     )
   ]
 }

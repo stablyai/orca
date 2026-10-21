@@ -4,6 +4,16 @@ import type { BrowserPageDocLocation } from '../../../shared/browser-workspace-t
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { getWorkspaceFilePreviewPlan } from '@/lib/file-preview'
 import type { AppState } from '@/store/types'
+import { htmlFilePathFromUrl } from '../../../shared/html-file-url'
+import { authorityKey } from '../../../shared/host-authority'
+import { resolveOwner } from './resolve-owner'
+import { translate } from '@/i18n/i18n'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+
+function workspaceHostKey(state: AppState, workspaceId: string): string | null {
+  const match = resolveOwner(state, { workspaceId })
+  return match.kind === 'resolved' ? authorityKey(match.owner) : null
+}
 
 export type WorkspaceDocAddressTarget =
   | { status: 'workspace-doc'; docLocation: BrowserPageDocLocation }
@@ -16,25 +26,33 @@ const PREVIEWABLE_PATH_PATTERN = /\.html?$/i
 
 function ownedWorktreeRoots(
   state: AppState,
-  currentWorktreeId: string
+  currentWorktreeId: string,
+  hostKey: string
 ): { worktreeId: string; root: string }[] {
   const roots: { worktreeId: string; root: string }[] = []
-  const currentPath = state.getKnownWorktreeById(currentWorktreeId)?.path ?? null
   for (const worktree of state.allWorktrees()) {
-    if (worktree.id !== currentWorktreeId && worktree.path) {
+    if (
+      worktree.id !== currentWorktreeId &&
+      worktree.path &&
+      workspaceHostKey(state, worktree.id) === hostKey
+    ) {
       roots.push({ worktreeId: worktree.id, root: worktree.path })
     }
   }
-  for (const folder of state.folderWorkspaces) {
+  for (const folder of selectFolderWorkspaces(state)) {
     const worktreeId = folderWorkspaceKey(folder.id)
-    if (worktreeId !== currentWorktreeId && folder.folderPath) {
+    if (
+      worktreeId !== currentWorktreeId &&
+      folder.folderPath &&
+      workspaceHostKey(state, worktreeId) === hostKey
+    ) {
       roots.push({ worktreeId, root: folder.folderPath })
     }
   }
   // Most-specific root first (after the current worktree), so a file inside a nested workspace is
   // attributed to that workspace and not to the outer one that lexically contains it too.
   roots.sort((a, b) => b.root.length - a.root.length)
-  return currentPath ? [{ worktreeId: currentWorktreeId, root: currentPath }, ...roots] : roots
+  return roots
 }
 
 function planToTarget(
@@ -69,23 +87,42 @@ export function resolveWorkspaceDocAddressTarget(
   currentWorktreeId: string,
   rawInput: string
 ): WorkspaceDocAddressTarget {
-  const input = rawInput.trim()
+  const raw = rawInput.trim()
+  const input = htmlFilePathFromUrl(raw) ?? raw
   if (!PREVIEWABLE_PATH_PATTERN.test(input)) {
     return { status: 'not-a-workspace-doc' }
   }
-
+  if (!isAbsoluteFilesystemPathInput(input) && !input.startsWith('./')) {
+    return { status: 'not-a-workspace-doc' }
+  }
+  const hostKey = workspaceHostKey(state, currentWorktreeId)
+  if (hostKey === null) {
+    return {
+      status: 'unsupported',
+      message: translate(
+        'auto.components.editor.HtmlDocPreview.openExternallyUnknownHostError',
+        "Can't open '{{value0}}': the host that owns it is no longer known.",
+        { value0: input }
+      )
+    }
+  }
   if (isAbsoluteFilesystemPathInput(input)) {
     // Same refusal as the relative branch: the containment check is lexical, so an absolute path
     // routed through dot segments could claim a workspace it then escapes.
     if (input.split(/[\\/]+/).some((segment) => segment === '..' || segment === '.')) {
       return { status: 'not-a-workspace-doc' }
     }
-    for (const { worktreeId, root } of ownedWorktreeRoots(state, currentWorktreeId)) {
+    const currentPath = state.getKnownWorktreeById(currentWorktreeId)?.path
+    if (currentPath && getRelativePathInsideRoot(input, currentPath)) {
+      return planToTarget(state, currentWorktreeId, input)
+    }
+    for (const { worktreeId, root } of ownedWorktreeRoots(state, currentWorktreeId, hostKey)) {
       if (getRelativePathInsideRoot(input, root)) {
         return planToTarget(state, worktreeId, input)
       }
     }
-    return { status: 'not-a-workspace-doc' }
+    // Paths outside known roots still belong to this host; its preview plan checks the boundary.
+    return planToTarget(state, currentWorktreeId, input)
   }
 
   if (input.startsWith('./')) {

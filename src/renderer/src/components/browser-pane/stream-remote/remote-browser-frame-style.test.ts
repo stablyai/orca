@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 
 describe('getRemoteBrowserFrameStyle', () => {
-  it('fills the client viewport even when stale metadata reports an oversized bitmap', () => {
+  it('fits the frame by the CSS viewport it shows, not by the bitmap size', () => {
     expect(
       getRemoteBrowserFrameStyle({
         imageWidth: 2266,
@@ -11,70 +11,16 @@ describe('getRemoteBrowserFrameStyle', () => {
         deviceHeight: 609
       })
     ).toEqual({
-      width: '100%',
-      height: '100%',
-      objectFit: 'fill',
-      objectPosition: 'top left'
+      inset: 0,
+      margin: 'auto',
+      width: `min(100cqw, calc(100cqh * ${958 / 609}))`,
+      height: `min(100cqh, calc(100cqw / ${958 / 609}))`,
+      objectFit: 'fill'
     })
   })
 
-  it('keeps correctly sized frames filling the viewport', () => {
-    expect(
-      getRemoteBrowserFrameStyle({
-        imageWidth: 958,
-        imageHeight: 609,
-        deviceWidth: 958,
-        deviceHeight: 609
-      })
-    ).toEqual({
-      width: '100%',
-      height: '100%',
-      objectFit: 'fill',
-      objectPosition: 'top left'
-    })
-  })
-
-  it('does not crop high-DPI frames with a uniform device scale', () => {
-    expect(
-      getRemoteBrowserFrameStyle({
-        imageWidth: 1998,
-        imageHeight: 1218,
-        deviceWidth: 999,
-        deviceHeight: 609
-      })
-    ).toEqual({
-      width: '100%',
-      height: '100%',
-      objectFit: 'fill',
-      objectPosition: 'top left'
-    })
-  })
-
-  it('does not crop slightly uneven high-DPI frames after navigation', () => {
-    expect(
-      getRemoteBrowserFrameStyle({
-        imageWidth: 3278,
-        imageHeight: 2070,
-        deviceWidth: 999,
-        deviceHeight: 609
-      })
-    ).toEqual({
-      width: '100%',
-      height: '100%',
-      objectFit: 'fill',
-      objectPosition: 'top left'
-    })
-  })
-
-  it('does not shrink malformed frame metadata below the viewport', () => {
-    expect(
-      getRemoteBrowserFrameStyle({
-        imageWidth: 10,
-        imageHeight: 10,
-        deviceWidth: 958,
-        deviceHeight: 609
-      })
-    ).toEqual({
+  it('fills the pane when the frame does not say what it shows', () => {
+    expect(getRemoteBrowserFrameStyle({ imageWidth: 800, imageHeight: 600 })).toEqual({
       width: '100%',
       height: '100%',
       objectFit: 'fill',

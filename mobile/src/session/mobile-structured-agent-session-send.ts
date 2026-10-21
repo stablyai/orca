@@ -1,0 +1,60 @@
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
+import {
+  structuredAgentSessionSendBody,
+  type StructuredAgentSessionAttachment
+} from '../../../src/shared/structured-agent-session-send-mutation'
+import type { RpcClient } from '../transport/rpc-client'
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import {
+  requestStructuredAgentSessionMutation,
+  timeoutForDeadline
+} from './mobile-structured-agent-session-rpc'
+import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+
+export async function sendMobileStructuredAgentSessionMessage(input: {
+  client: RpcClient
+  sessionId: string
+  expectedRuntimeFence: number
+  text: string
+  attachments: readonly StructuredAgentSessionAttachment[]
+  /** Sent only when the host advertises `agent-session.queued-messages.v1`. */
+  delivery?: 'queue-if-active'
+  /** Sent only when the host advertises `agent-session.send-options.v1`. */
+  options?: Readonly<Record<string, string>>
+  deadline?: number
+  /** The id the host records the message under. */
+  clientMessageId: string
+  onError: MobileNativeChatSendErrorReporter
+  onAccepted?: (cursor: AgentJournalCursor | undefined) => void
+}): Promise<MobileNativeChatSendOutcome> {
+  const timeoutMs = timeoutForDeadline(input.deadline)
+  if (timeoutMs === null) {
+    input.onError('Message not sent')
+    return 'rejected'
+  }
+  // Each Send is a new action, under one operation id.
+  const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
+    client: input.client,
+    method: 'agentSession.send',
+    fingerprintMethod: 'agentSession.send',
+    sessionId: input.sessionId,
+    expectedRuntimeFence: input.expectedRuntimeFence,
+    fields: {
+      body: structuredAgentSessionSendBody(input.text, input.attachments),
+      ...(input.delivery ? { delivery: input.delivery } : {}),
+      ...(input.options ? { options: input.options } : {})
+    },
+    clientOperationId: input.clientMessageId,
+    timeoutMs
+  })
+  const outcome = mobileStructuredSendDelivery(result)
+  if (outcome.error !== null) {
+    input.onError(outcome.error)
+  }
+  if (outcome.outcome === 'accepted' && result.status === 'accepted') {
+    input.onAccepted?.(result.cursor)
+  }
+  return outcome.outcome
+}

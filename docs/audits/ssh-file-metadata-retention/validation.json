@@ -1,0 +1,264 @@
+{
+  "productTests": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/relay/fs-handler-stream.test.ts",
+    "passed": 124,
+    "files": 5,
+    "newTests": 9,
+    "exitCode": 0
+  },
+  "baselineOverlay": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config docs/audits/ssh-file-metadata-retention/before.config.mjs src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts",
+    "passed": 22,
+    "expectedFailed": 1,
+    "failure": "64 foreign frame params objects remain reachable before this reader receives metadata.",
+    "exitCode": 1
+  },
+  "transportIntegration": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/fs-stream-pty-echo-backpressure.integration.test.ts",
+    "passed": 3,
+    "exitCode": 0
+  },
+  "typecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node",
+    "exitCode": 0
+  },
+  "portableProof": {
+    "cases": 80,
+    "reports": [
+      {
+        "file": "worktree-before-node-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "26.6.0",
+          "electron": null
+        },
+        "heapDelta": 45478552
+      },
+      {
+        "file": "worktree-before-electron-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "24.21.0",
+          "electron": "43.7.0"
+        },
+        "heapDelta": 45298880
+      },
+      {
+        "file": "worktree-fixed-node-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "26.6.0",
+          "electron": null
+        },
+        "heapDelta": -663256
+      },
+      {
+        "file": "worktree-fixed-electron-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "24.21.0",
+          "electron": "43.7.0"
+        },
+        "heapDelta": 520252
+      },
+      {
+        "file": "main-before-node-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "26.6.0",
+          "electron": null
+        },
+        "heapDelta": 45477336
+      },
+      {
+        "file": "main-before-electron-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "24.21.0",
+          "electron": "43.7.0"
+        },
+        "heapDelta": 45298640
+      },
+      {
+        "file": "main-fixed-node-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "26.6.0",
+          "electron": null
+        },
+        "heapDelta": -669752
+      },
+      {
+        "file": "main-fixed-electron-results.json",
+        "controls": 10,
+        "runtime": {
+          "node": "24.21.0",
+          "electron": "43.7.0"
+        },
+        "heapDelta": 513692
+      }
+    ],
+    "sourceGraphModules": 59,
+    "additionalCallerSources": 5,
+    "canonicalCrLfReads": 66
+  },
+  "quality": [
+    {
+      "label": "ordinary lint",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint --no-ignore --deny-warnings  src/main/ssh/ssh-filesystem-stream-reader.ts src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts docs/audits/ssh-file-metadata-retention/sources.cjs docs/audits/ssh-file-metadata-retention/relay-fixture.mjs docs/audits/ssh-file-metadata-retention/scenario.test.mjs docs/audits/ssh-file-metadata-retention/vitest.config.mjs docs/audits/ssh-file-metadata-retention/before.config.mjs",
+      "exitCode": 0
+    },
+    {
+      "label": "casting",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint --no-ignore --deny-warnings --config config/oxlint-code-quality-casting.json src/main/ssh/ssh-filesystem-stream-reader.ts src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts docs/audits/ssh-file-metadata-retention/sources.cjs docs/audits/ssh-file-metadata-retention/relay-fixture.mjs docs/audits/ssh-file-metadata-retention/scenario.test.mjs docs/audits/ssh-file-metadata-retention/vitest.config.mjs docs/audits/ssh-file-metadata-retention/before.config.mjs",
+      "exitCode": 1
+    },
+    {
+      "label": "type-aware",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint --no-ignore --deny-warnings --type-aware --config config/oxlint-code-quality-type-aware.json src/main/ssh/ssh-filesystem-stream-reader.ts src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts docs/audits/ssh-file-metadata-retention/sources.cjs docs/audits/ssh-file-metadata-retention/relay-fixture.mjs docs/audits/ssh-file-metadata-retention/scenario.test.mjs docs/audits/ssh-file-metadata-retention/vitest.config.mjs docs/audits/ssh-file-metadata-retention/before.config.mjs",
+      "exitCode": 0
+    },
+    {
+      "label": "native code quality",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint --no-ignore --deny-warnings --config config/oxlint-code-quality-native-plugins.json src/main/ssh/ssh-filesystem-stream-reader.ts src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts docs/audits/ssh-file-metadata-retention/sources.cjs docs/audits/ssh-file-metadata-retention/relay-fixture.mjs docs/audits/ssh-file-metadata-retention/scenario.test.mjs docs/audits/ssh-file-metadata-retention/vitest.config.mjs docs/audits/ssh-file-metadata-retention/before.config.mjs",
+      "exitCode": 0
+    },
+    {
+      "label": "anti-slop",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint --no-ignore --deny-warnings --config config/oxlint-anti-slop.json src/main/ssh/ssh-filesystem-stream-reader.ts src/main/ssh/ssh-filesystem-stream-retention.test.ts src/main/providers/ssh-filesystem-provider-stream.test.ts docs/audits/ssh-file-metadata-retention/sources.cjs docs/audits/ssh-file-metadata-retention/relay-fixture.mjs docs/audits/ssh-file-metadata-retention/scenario.test.mjs docs/audits/ssh-file-metadata-retention/vitest.config.mjs docs/audits/ssh-file-metadata-retention/before.config.mjs",
+      "exitCode": 0
+    }
+  ],
+  "inheritedCasting": {
+    "baselineFindings": 15,
+    "currentFindings": 15,
+    "sameRuleAndExactAssertionSpans": true,
+    "findings": [
+      {
+        "path": "src/main/providers/ssh-filesystem-provider-stream.test.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["mux as never"]
+      },
+      {
+        "path": "src/main/providers/ssh-filesystem-provider-stream.test.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["new Error('Method not found') as Error & { code: number }"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["err as Error"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["err as Error"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["err as { code?: unknown }"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["new Error(message) as Error & { code: string }"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["new Error(message) as Error & { code: string }"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.code as string | undefined"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.data as string"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.message as string | undefined"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.seq as number"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.streamId as number | undefined"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.streamId as number | undefined"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["params.streamId as number | undefined"]
+      },
+      {
+        "path": "src/main/ssh/ssh-filesystem-stream-reader.ts",
+        "rule": "typescript(consistent-type-assertions)",
+        "spans": ["rawMetadata as StreamMetadataResponse"]
+      }
+    ],
+    "baselineSourceHashes": {
+      "src/main/providers/ssh-filesystem-provider-stream.test.ts": "422bcaa7293925217f9c61197599f26e9f0f0993cb562ec004a48a1b27d43fa3",
+      "src/main/ssh/ssh-filesystem-stream-reader.ts": "b8586de1412df98428939a0a4870c5f8ccab22f506a188b2eb1c7a38c317b1ef"
+    }
+  },
+  "changedCodeGate": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm run check:code-quality:changed",
+    "exitCode": 0,
+    "newFindings": 0,
+    "observedGlobalChangedFiles": 392,
+    "baseline": "2fccacadbe23",
+    "scope": "Primary worktree including concurrent global evidence changes"
+  },
+  "whitespace": {
+    "fullContentsChecked": true,
+    "zeroContextPatches": true,
+    "diagnostics": 0
+  },
+  "formatting": {
+    "idempotent": true
+  },
+  "emptyFileFixtureCiCorrection": {
+    "failedHead": "458e11e9f3f5981a85fc1006083c19738a8b26e3",
+    "jobUrl": "https://github.com/stablyai/orca/actions/runs/35186075669/job/105088389138",
+    "cause": "General provider test double resolved empty metadata without invoking the synchronous beforeResolve callback. Real-mux empty metadata cases already passed.",
+    "correction": "Move the existing empty-file control to the existing streaming fixture, which models beforeResolve; also assert all stream/disposal listeners are released. No product change.",
+    "localCounterexample": {
+      "failed": 1,
+      "skipped": 53,
+      "timeoutMs": 1000,
+      "logSha256": "a53af8ea05b06fabf918ea12f5c81f635dbfec97709688ce1139f9efc619a438"
+    },
+    "fixedFiveSuites": {
+      "passed": 124,
+      "exitCode": 0,
+      "logSha256": "bab1beb5ed50ff0611b67eda8a96b1176a86442baa50abc07516402e987e31db"
+    },
+    "baselineOverlay": {
+      "expectedFailed": 1,
+      "passed": 22,
+      "exitCode": 1,
+      "logSha256": "044aaae5fd3943263616d32eafafbfbb0fc4fb742f754feb233a8e6b49160b6b"
+    },
+    "otherCiFailure": {
+      "jobUrl": "https://github.com/stablyai/orca/actions/runs/35186075669/job/105088388326",
+      "path": "src/main/windows/windows-pty-job.win32.test.ts",
+      "failure": "ConPTY job ownership: grandchild never reported its pid",
+      "mainAndPublishedBlob": "c5f408f73115a11821b06fafe04ca28eaa15acb7",
+      "scope": "Untouched Windows native test; missing PID cause not established. No retry or timing-threshold change."
+    }
+  }
+}

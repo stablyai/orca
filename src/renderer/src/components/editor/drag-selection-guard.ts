@@ -185,6 +185,12 @@ export const DragSelectionGuard = Extension.create({
               doc.removeEventListener('selectionchange', patchedOnSelectionChange)
               observer.onSelectionChange = originalOnSelectionChange
               doc.addEventListener('selectionchange', originalOnSelectionChange)
+              // Why: ProseMirror destroys plugin views after its observer has disconnected.
+              queueMicrotask(() => {
+                if (editorView.isDestroyed) {
+                  doc.removeEventListener('selectionchange', originalOnSelectionChange)
+                }
+              })
               viewRef = null
             }
           }

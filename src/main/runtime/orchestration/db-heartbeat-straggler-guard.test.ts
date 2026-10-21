@@ -13,7 +13,7 @@ afterEach(() => {
 function seedHeartbeatedDispatch(): { d: OrchestrationDb; dispatchId: string } {
   const d = new OrchestrationDb(':memory:')
   db = d
-  const task = d.createTask({ spec: 'work' })
+  const task = d.createTask({ runId: 'run_legacy_local', spec: 'work' })
   const dispatch = createRootDispatch(d, task.id, 'term_worker')
   d.recordHeartbeat(dispatch.id, '2026-05-03T00:00:00.000Z')
   return { d, dispatchId: dispatch.id }

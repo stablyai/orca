@@ -1,26 +1,31 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type * as GitLabReviewClient from './gitlab-review-client'
 
-const poller = vi.hoisted(() => ({
+const poller = vi.hoisted<{
+  install: Mock<() => void>
+  run: null | (() => Promise<void> | void)
+  getDelayMs: null | (() => number | null)
+  cleanup: Mock<() => void>
+}>(() => ({
   install: vi.fn(),
-  run: null as null | (() => Promise<void> | void),
-  getDelayMs: null as null | (() => number),
+  run: null,
+  getDelayMs: null,
   cleanup: vi.fn()
 }))
 const gitlab = vi.hoisted(() => ({ fetchDetails: vi.fn() }))
 
 vi.mock('@/lib/window-visibility-timeout-poller', () => ({
   installWindowVisibilityTimeoutPoller: vi.fn(
-    (config: { run: () => Promise<void> | void; getDelayMs: () => number }) => {
+    (config: { run: () => Promise<void> | void; getDelayMs: () => number | null }) => {
       poller.run = config.run
       poller.getDelayMs = config.getDelayMs
       poller.install()
-      return poller.cleanup
+      return Object.assign(poller.cleanup, { refresh: vi.fn() })
     }
   )
 }))
@@ -31,40 +36,11 @@ vi.mock('./gitlab-review-client', async (importOriginal) => {
 
 import { useChecksPanelPolling } from './use-checks-panel-polling'
 
-type PollingInput = Parameters<typeof useChecksPanelPolling>[0]
-
-function createModel(overrides: Partial<PollingInput> = {}): PollingInput {
-  const fetchPRChecks = vi.fn<() => Promise<PRCheckDetail[]>>().mockResolvedValue([])
-  return {
-    activeGitLabReview: null,
-    activeWorktree: null,
-    asyncResultKeyRef: { current: 'cache::main::42' },
-    branch: 'main',
-    fetchPRChecks,
-    hostedReviewCacheKey: 'hosted-review',
-    isCurrentAsyncResult: () => true,
-    isPanelVisible: true,
-    pollIntervalRef: { current: 30_000 },
-    pr: {
-      number: 42,
-      headSha: 'head-1',
-      prRepo: { owner: 'orca', repo: 'app', host: 'github.com' }
-    } as NonNullable<PollingInput['pr']>,
-    prCacheKey: 'cache',
-    prNumber: 42,
-    prevChecksRef: { current: '' },
-    repo: { id: 'repo-1', path: '/workspace/repo' } as NonNullable<PollingInput['repo']>,
-    settings: null,
-    setChecks: vi.fn(),
-    setChecksLoading: vi.fn(),
-    setComments: vi.fn(),
-    setCommentsLoading: vi.fn(),
-    gitLabProjectRefRef: { current: null },
-    ...overrides
-  }
-}
+import { createModel } from './checks-panel-polling-test-model'
 
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
   poller.install.mockReset()
   poller.cleanup.mockReset()
   poller.run = null
@@ -78,6 +54,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
 })
 
 describe('useChecksPanelPolling live behavior', () => {
@@ -91,22 +68,39 @@ describe('useChecksPanelPolling live behavior', () => {
 
     hook.rerender({ input: { ...model, isPanelVisible: true } })
     expect(poller.install).toHaveBeenCalledOnce()
-    expect(poller.getDelayMs?.()).toBe(30_000)
+    expect(poller.getDelayMs?.()).toBe(60_000)
 
     hook.rerender({ input: { ...model, isPanelVisible: false } })
     expect(poller.cleanup).toHaveBeenCalledOnce()
   })
 
-  it('preserves live repeated-empty backoff at 30, 60, then 120 seconds', async () => {
+  it.each([
+    ['merged', 'success', null],
+    ['merged', 'pending', 60_000],
+    ['closed', 'success', 15 * 60_000]
+  ] as const)('paces %s checks with %s status', (state, checksStatus, interval) => {
+    const model = createModel()
+    renderHook(() =>
+      useChecksPanelPolling({
+        ...model,
+        pr: model.pr ? { ...model.pr, state, checksStatus } : null
+      })
+    )
+    expect(poller.getDelayMs?.()).toBe(interval)
+  })
+
+  it('preserves live repeated-empty backoff at 60, then 120 seconds', async () => {
     const model = createModel()
     renderHook(() => useChecksPanelPolling(model))
 
     await act(async () => poller.run?.())
-    expect(model.pollIntervalRef.current).toBe(30_000)
-    expect(poller.getDelayMs?.()).toBe(30_000)
-    await act(async () => poller.run?.())
     expect(model.pollIntervalRef.current).toBe(60_000)
     expect(poller.getDelayMs?.()).toBe(60_000)
+    vi.setSystemTime(Date.now() + 60_000)
+    await act(async () => poller.run?.())
+    expect(model.pollIntervalRef.current).toBe(120_000)
+    expect(poller.getDelayMs?.()).toBe(120_000)
+    vi.setSystemTime(Date.now() + 120_000)
     await act(async () => poller.run?.())
     expect(model.pollIntervalRef.current).toBe(120_000)
     expect(poller.getDelayMs?.()).toBe(120_000)
@@ -117,8 +111,14 @@ describe('useChecksPanelPolling live behavior', () => {
       activeGitLabReview: {
         provider: 'gitlab',
         number: 17,
-        headSha: 'gitlab-head'
-      } as NonNullable<PollingInput['activeGitLabReview']>
+        headSha: 'gitlab-head',
+        title: 'MR',
+        state: 'open',
+        url: '',
+        status: 'pending',
+        updatedAt: '',
+        mergeable: 'UNKNOWN'
+      }
     })
     renderHook(() => useChecksPanelPolling(model))
 
@@ -128,22 +128,24 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(model.fetchPRChecks).not.toHaveBeenCalled()
   })
 
-  it('uses an explicit owner and missing head override for a replacement MR', async () => {
-    const ownerSettings = {
-      activeRuntimeEnvironmentId: 'owner-runtime'
-    } as PollingInput['settings']
+  it('uses the workspace owner and missing head override for a replacement MR', async () => {
     const model = createModel({
       activeGitLabReview: {
         provider: 'gitlab',
         number: 17,
-        headSha: 'old-head'
-      } as NonNullable<PollingInput['activeGitLabReview']>,
+        headSha: 'old-head',
+        title: 'MR',
+        state: 'open',
+        url: '',
+        status: 'pending',
+        updatedAt: '',
+        mergeable: 'UNKNOWN'
+      },
       activeWorktree: makeWorktree({
         id: 'worktree-1',
         repoId: 'repo-1',
         hostId: 'runtime:owner-runtime'
-      }),
-      settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as PollingInput['settings']
+      })
     })
     const { result } = renderHook(() => useChecksPanelPolling(model))
 
@@ -151,20 +153,46 @@ describe('useChecksPanelPolling live behavior', () => {
       result.current.fetchGitLabDetails({
         mrNumberOverride: 18,
         headShaOverride: null,
-        commitAsCurrent: true,
-        settingsOverride: ownerSettings
+        commitAsCurrent: true
       })
     )
 
     expect(gitlab.fetchDetails).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iid: 18,
-        settings: ownerSettings,
-        repoOwnerExecutionHostId: 'runtime:owner-runtime'
-      })
+      expect.objectContaining({ iid: 18, repoOwnerExecutionHostId: 'runtime:owner-runtime' })
     )
     expect(model.asyncResultKeyRef.current).toContain('::18::none')
     expect(model.asyncResultKeyRef.current).not.toContain('old-head')
+  })
+
+  it('reports a failed MR read as an error naming the machine, not as no checks (#24264)', async () => {
+    gitlab.fetchDetails.mockRejectedValue(new Error('glab: not logged in'))
+    const model = createModel({
+      activeGitLabReview: {
+        provider: 'gitlab',
+        number: 17,
+        headSha: 'head',
+        title: 'MR',
+        state: 'open',
+        url: '',
+        status: 'pending',
+        updatedAt: '',
+        mergeable: 'UNKNOWN'
+      },
+      activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1', hostId: 'ssh:devbox' })
+    })
+    renderHook(() => useChecksPanelPolling(model))
+
+    await act(async () => poller.run?.())
+
+    const message = 'Could not load from this computer: glab: not logged in'
+    expect(model.setChecksError).toHaveBeenCalledWith(message)
+    expect(model.setCommentsError).toHaveBeenCalledWith(message)
+    // Why: a later reset would clear the error; only the scope reset may precede it.
+    const setChecks = vi.mocked(model.setChecks).mock
+    const setChecksError = vi.mocked(model.setChecksError).mock
+    expect(Math.max(0, ...setChecks.invocationCallOrder)).toBeLessThan(
+      setChecksError.invocationCallOrder[0]
+    )
   })
 
   it('drops replacement MR details when the relink scope changes in flight', async () => {
@@ -196,8 +224,8 @@ describe('useChecksPanelPolling live behavior', () => {
     })
     await act(async () => request)
 
-    expect(model.setChecks).not.toHaveBeenCalled()
-    expect(model.setComments).not.toHaveBeenCalled()
+    expect(model.setChecks).toHaveBeenCalledExactlyOnceWith([])
+    expect(model.setComments).toHaveBeenCalledExactlyOnceWith([])
     expect(model.setChecksLoading).toHaveBeenLastCalledWith(false)
     expect(model.setCommentsLoading).toHaveBeenLastCalledWith(false)
   })

@@ -1,0 +1,38 @@
+import type { ExecutionHostId } from '../shared/execution-host'
+import { advertisedUrlWatcher } from './ports/advertised-url-watcher'
+import { localhostWorktreeLabelProxy } from './localhost-worktree-label-proxy'
+import { deleteWorktreeHistoryDir } from './terminal-history-deletion'
+import { recordWorkspaceCleanupRemovalSnapshotPrune } from './workspace-cleanup-removal-snapshot-prune'
+import { pruneWorkspaceCleanupScanSnapshot } from './workspace-cleanup-scan-snapshot'
+import { pruneWorkspaceSpaceAnalysisSnapshot } from './workspace-space-analysis-snapshot'
+
+/**
+ * Process-local state keyed by the bare worktree id. Every removal path (desktop IPC and the
+ * runtime: CLI, paired client, headless) calls this, and only when no same-id twin survives.
+ */
+export function dropRemovedWorktreeProcessState(worktreeId: string): void {
+  advertisedUrlWatcher.forgetWorktree(worktreeId)
+  // Why: label routes otherwise accumulate in the proxy's route maps for the whole session.
+  localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
+  // Why: async history tree removal, never recursive-rmSync on the delete critical path.
+  deleteWorktreeHistoryDir(worktreeId)
+}
+
+/** Removed workspaces must never resurrect from the persisted cleanup/space scan snapshots. */
+export function pruneRemovedWorktreeSnapshots(
+  snapshotDirectory: string,
+  worktreeId: string,
+  hostId: ExecutionHostId | undefined,
+  snapshotPruneBatchId?: string
+): void {
+  if (snapshotPruneBatchId) {
+    recordWorkspaceCleanupRemovalSnapshotPrune(snapshotDirectory, {
+      batchId: snapshotPruneBatchId,
+      worktreeId,
+      executionHostId: hostId
+    })
+    return
+  }
+  void pruneWorkspaceCleanupScanSnapshot(snapshotDirectory, worktreeId, hostId)
+  void pruneWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, worktreeId, hostId)
+}

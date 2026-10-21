@@ -1,0 +1,81 @@
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import type { Tab } from '../../../shared/tab-types'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { isTwinWorkspace, namedHostForOwnerRef } from '@/lib/resolve-owner'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
+import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+
+/**
+ * The one mapping from a chat's owning host to the runtime that serves it. Null for an owner no
+ * runtime serves: an SSH host, or the catalog's unresolved-owner sentinel.
+ */
+export function structuredAgentSessionTargetForHost(
+  executionHostId: string | null | undefined
+): RuntimeClientTarget | null {
+  const host = parseExecutionHostId(executionHostId)
+  return host ? runtimeRpcTargetForAuthorityKey(host.id) : null
+}
+
+/**
+ * The host that would own a new structured chat in this workspace: the one every other operation
+ * on it routes to. Worktree ids (`repoId::path`) repeat across hosts, so an id two hosts publish is
+ * refused unless the active workspace's host selection qualifies it, and so is an owner no runtime
+ * serves; neither falls back to this machine.
+ */
+export function resolveStructuredAgentSessionOwner(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string
+): ExecutionHostId | null {
+  // Why resolveOwner's twin rule: an id-only check missed folder twins and an active twin with no
+  // host picked, and the fallback below reads both as this machine.
+  if (
+    !namedHostForOwnerRef(state, { workspaceId: worktreeId }) &&
+    isTwinWorkspace(state, worktreeId)
+  ) {
+    return null
+  }
+  const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
+  return structuredAgentSessionTargetForHost(executionHostId) ? executionHostId : null
+}
+
+/**
+ * Where an existing chat lives: the host stamped on its tab when it was launched or mirrored. A tab
+ * from before that stamp existed resolves from its workspace; null when neither names a runtime.
+ */
+export function structuredAgentSessionTargetForTab(
+  state: WorktreeRuntimeOwnerState,
+  tab: Pick<Tab, 'worktreeId' | 'executionHostId'>
+): RuntimeClientTarget | null {
+  return structuredAgentSessionTargetForHost(structuredAgentSessionOwnerForTab(state, tab))
+}
+
+/** The host recorded for an existing chat, as a string a store selector can compare. */
+export function structuredAgentSessionOwnerForTab(
+  state: WorktreeRuntimeOwnerState,
+  tab: Pick<Tab, 'worktreeId' | 'executionHostId'>
+): ExecutionHostId | null {
+  return tab.executionHostId ?? resolveStructuredAgentSessionOwner(state, tab.worktreeId)
+}
+
+/** The host a runtime target serves, for bookkeeping keyed by host. */
+export function executionHostIdForStructuredTarget(target: RuntimeClientTarget): ExecutionHostId {
+  return target.kind === 'local'
+    ? LOCAL_EXECUTION_HOST_ID
+    : toRuntimeExecutionHostId(target.environmentId)
+}
+
+/** The focus-intent owner key the tab sync for `target` resolves intents under. */
+export function structuredAgentSessionFocusOwner(target: RuntimeClientTarget): {
+  environmentId: string
+} {
+  return {
+    environmentId: target.kind === 'local' ? LOCAL_STRUCTURED_SESSION_OWNER : target.environmentId
+  }
+}

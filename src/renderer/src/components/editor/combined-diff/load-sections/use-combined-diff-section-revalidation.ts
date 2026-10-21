@@ -5,6 +5,8 @@ import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
 } from '../../editor-autosave'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import {
   getCombinedDiffFileTreeSectionKey,
@@ -26,7 +28,7 @@ export function useCombinedDiffSectionRevalidation({
 }: {
   file: OpenFile
   gitStatusEntries: GitStatusEntry[]
-  registry: CombinedDiffSectionLoadRegistry
+  registry: Pick<CombinedDiffSectionLoadRegistry, 'loadedIndicesRef' | 'loadingIndicesRef'>
   requestSectionReload: (index: number) => void
   sectionIndexByKeyRef: React.RefObject<ReadonlyMap<string, number>>
   // The entry set is structurally stable while individual section content/loading state changes.
@@ -35,7 +37,7 @@ export function useCombinedDiffSectionRevalidation({
   shouldAutoReloadFromGitStatus: boolean
   treeMode: CombinedDiffFileTreeMode
 }): string {
-  const { loadedIndicesRef } = registry
+  const { loadedIndicesRef, loadingIndicesRef } = registry
   const combinedGitStatusSignature = React.useMemo(() => {
     if (!shouldAutoReloadFromGitStatus) {
       return ''
@@ -102,6 +104,39 @@ export function useCombinedDiffSectionRevalidation({
     file.worktreeId,
     requestSectionReload,
     sectionIndexByKeyRef,
+    treeMode
+  ])
+
+  useEffect(() => {
+    if (treeMode !== 'all' && treeMode !== 'uncommitted') {
+      return
+    }
+    // Why: a resync (the watch was down) names no paths, and snapshot-backed reviews skip
+    // status-driven reloads, so re-read every loaded working-tree section of this workspace.
+    // A storm overflow only refreshes git status, so it never re-reads every section.
+    const handler = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
+      const { payload, runtimeEnvironmentId } = event.detail
+      if (
+        (runtimeEnvironmentId?.trim() || null) !== (file.runtimeEnvironmentId?.trim() || null) ||
+        normalizeRuntimePathForComparison(payload.worktreePath) !==
+          normalizeRuntimePathForComparison(file.filePath) ||
+        payload.resync !== true
+      ) {
+        return
+      }
+      // Why: an in-flight read may have started before the missed write, so retry it too.
+      for (const index of new Set([...loadedIndicesRef.current, ...loadingIndicesRef.current])) {
+        requestSectionReload(index)
+      }
+    }
+    window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handler)
+    return () => window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handler)
+  }, [
+    file.filePath,
+    file.runtimeEnvironmentId,
+    loadedIndicesRef,
+    loadingIndicesRef,
+    requestSectionReload,
     treeMode
   ])
 

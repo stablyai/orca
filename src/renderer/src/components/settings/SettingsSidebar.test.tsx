@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { Bot, GitBranch, Mic, Network, Puzzle } from 'lucide-react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import type * as ShortcutLabels from '@/hooks/useShortcutLabel'
 import { SettingsSidebar } from './SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
@@ -13,10 +15,14 @@ const mocks = vi.hoisted(() => ({
   useSettingsSetupGuideProgress: vi.fn()
 }))
 
-vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: () => '⌘F',
-  useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'F'], doubleTap: false }]
-}))
+vi.mock('@/hooks/useShortcutLabel', async () => {
+  const actual = await vi.importActual<typeof ShortcutLabels>('@/hooks/useShortcutLabel')
+  return {
+    ...actual,
+    useShortcutLabel: () => '⌘F',
+    useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'F'], doubleTap: false }]
+  }
+})
 
 vi.mock('./settings-setup-guide-progress', () => ({
   useSettingsSetupGuideProgress: mocks.useSettingsSetupGuideProgress
@@ -126,6 +132,33 @@ describe('SettingsSidebar', () => {
 
   afterEach(() => {
     document.body.innerHTML = ''
+  })
+
+  it.each([false, true])('renders Chat navigation only with the opt-in enabled (%s)', (enabled) => {
+    const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: enabled,
+      repos: []
+    }).filter((section) => section.group === 'interface')
+    const container = document.createElement('div')
+    container.innerHTML = renderToStaticMarkup(
+      <TooltipProvider>
+        <SettingsSidebar
+          activeSectionId="appearance"
+          settings={settings}
+          generalGroups={[{ id: 'interface', title: 'Interface', sections }]}
+          repoSections={[]}
+          hasRepos={false}
+          onBack={vi.fn()}
+          onSelectSection={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    const buttons = Array.from(container.querySelectorAll('button'))
+    expect(buttons.some((button) => button.textContent === 'Chat')).toBe(enabled)
   })
 
   it('applies left sidebar appearance styles to the settings navigation', () => {

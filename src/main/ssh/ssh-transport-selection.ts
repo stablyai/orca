@@ -1,16 +1,16 @@
 import { constants } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { SshResolvedConfig } from './ssh-config-parser'
+import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 import { listDefaultIdentityFilePaths, resolveIdentityFilePaths } from './ssh-auth-resolution'
-import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
 import {
   MAX_SSH_IDENTITY_FILE_BYTES,
   isOpenSshSecurityKeyPrivateKey,
   isOpenSshSecurityKeyPublicKey
 } from './ssh-security-key-identity'
-import { isOpenSshConfigBackedTarget } from './system-ssh-args'
-import { findSystemSsh } from './system-ssh-binary'
+import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
+import { findSystemSsh } from './system-transport/system-ssh-binary'
 
 type TransportResolvedConfig = Pick<
   SshResolvedConfig,

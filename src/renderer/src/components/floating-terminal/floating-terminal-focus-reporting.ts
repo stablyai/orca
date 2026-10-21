@@ -29,8 +29,3 @@ export function reportFloatingFocus(next: EventTarget | null, release = false): 
   lastReportedFloatingFocus = { panelFocused, terminalFocused }
   setFloatingFocus({ panelFocused, terminalFocused })
 }
-
-export function clearReportedFloatingFocusCache(): void {
-  lastReportedFloatingFocus = null
-  lastReportedFloatingFocusFn = null
-}

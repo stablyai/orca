@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   createMockStore,
-  registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+  registerWorktreeActivationReset,
+  createdTabStartups
+} from './worktree-activation.test-fixture'
 
 registerWorktreeActivationReset()
 
@@ -17,12 +18,14 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       pendingActivationSpawn: true
     })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
+    expect(createdTabStartups(store)).toEqual({})
   })
 
-  it('does not recreate a terminal after an explicit empty state was persisted', () => {
-    const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
+  it('does not recreate a terminal after the user closed the last one', () => {
+    const store = createMockStore({
+      tabsByWorktree: { 'wt-1': [] },
+      closedTerminalTabTombstonesByTabId: { closed: { closedAt: Date.now(), worktreeId: 'wt-1' } }
+    })
 
     ensureWorktreeHasInitialTerminal(store, 'wt-1')
 
@@ -36,9 +39,10 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     ensureWorktreeHasInitialTerminal(store, 'wt-1', { command: 'claude "Fix this bug"' })
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      pendingActivationSpawn: true
+      pendingActivationSpawn: true,
+      pendingStartup: expect.anything()
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'claude "Fix this bug"'
     })
   })
@@ -68,7 +72,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(createTab).toHaveBeenCalledTimes(2)
     expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
       pendingActivationSpawn: true,
-      recordInteraction: false
+      recordInteraction: false,
+      pendingStartup: expect.anything()
     })
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Claude', {
       recordInteraction: false
@@ -78,8 +83,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
     expect(store.setTabColor).toHaveBeenCalledWith('tab-1', '#f97316')
     expect(store.setTabColor).toHaveBeenCalledWith('tab-2', '#9ca3af')
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'claude' })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', { command: 'pnpm dev' })
+    expect(createdTabStartups(store)['tab-1']).toEqual({ command: 'claude' })
+    expect(createdTabStartups(store)['tab-2']).toEqual({ command: 'pnpm dev' })
     expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
   })
 
@@ -108,18 +113,20 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
       pendingActivationSpawn: true,
       recordInteraction: false,
-      activate: false
+      activate: false,
+      pendingStartup: expect.anything()
     })
     expect(createTab).toHaveBeenNthCalledWith(2, 'wt-1', undefined, undefined, {
       recordInteraction: false,
-      activate: false
+      activate: false,
+      pendingStartup: expect.anything()
     })
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'pnpm dev' })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({ command: 'pnpm dev' })
+    expect(createdTabStartups(store)['tab-2']).toEqual({
       command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
       env: { ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1' }
     })
@@ -133,7 +140,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       tabs: [{ title: 'Server', command: 'pnpm dev' }]
     })
 
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(createdTabStartups(store)).toEqual({})
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Server', {
       recordInteraction: false
     })
@@ -156,7 +163,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setTabCustomTitle).not.toHaveBeenCalledWith('tab-1', 'Claude', {
       recordInteraction: false
     })
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).not.toEqual({
       command: 'claude'
     })
   })
@@ -173,8 +180,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(store.createTab).not.toHaveBeenCalled()
     expect(store.setActiveTab).not.toHaveBeenCalled()
-    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
+    expect(createdTabStartups(store)).toEqual({})
     expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
   })
 

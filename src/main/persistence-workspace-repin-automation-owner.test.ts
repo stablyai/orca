@@ -1,3 +1,11 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState,
+  readPersistedStateJson,
+  writePersistedStateJson
+} from './persistence-test-harness'
 /**
  * A folder workspace can be re-pointed at another SSH host outside the automation
  * editor — the workspace's scope connection moves, and every record inside it
@@ -10,7 +18,7 @@
  * a host removed and re-added under the same id still cannot re-adopt the record.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FolderWorkspace } from '../shared/folder-workspace-types'
@@ -21,8 +29,9 @@ import { AUTOMATION_ORPHAN_ISSUES } from '../shared/automation-list-scope'
 import { getDefaultPersistedState } from '../shared/constants'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -136,29 +145,36 @@ async function loadStore(state: Record<string, unknown>) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 /** The workspace's execution host changes without any automation being edited. */
 function repinWorkspace(connectionId: string, sshTargets?: SshTarget[]): void {
   const file = join(testState.dir, 'orca-data.json')
-  const state = JSON.parse(readFileSync(file, 'utf-8'))
+  const state = JSON.parse(readPersistedStateJson(file))
   state.folderWorkspaces = [folderWorkspace(connectionId)]
   if (sshTargets) {
     state.sshTargets = sshTargets
   }
-  writeFileSync(file, JSON.stringify(state), 'utf-8')
+  writePersistedStateJson(file, JSON.stringify(state))
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-workspace-repin-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
   vi.resetModules()
 })
@@ -183,7 +199,9 @@ describe('a workspace re-pinned outside the automation editor', () => {
     installFakeAppEnvironment({ getPath: () => testState.dir })
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
-    const reloaded = new Store()
+    const reloaded = createSqliteTestStore(Store, {
+      dataFile: join(testState.dir, 'orca-data.json')
+    })
 
     expect(reloaded.listAutomations()[0].executionTargetGeneration).toBe(STAGING_GENERATION)
     expect(reloaded.listAutomationsForScope().items[0].selector).toEqual({
@@ -205,7 +223,9 @@ describe('a workspace re-pinned outside the automation editor', () => {
     installFakeAppEnvironment({ getPath: () => testState.dir })
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
-    const reloaded = new Store()
+    const reloaded = createSqliteTestStore(Store, {
+      dataFile: join(testState.dir, 'orca-data.json')
+    })
 
     expect(reloaded.listAutomations()[0].executionTargetGeneration).toBe(PROD_GENERATION)
     expect(reloaded.listAutomationsForScope().items[0].selector).toEqual({

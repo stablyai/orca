@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
 import { BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT } from './browser-screencast-ghost-subscriber-eviction'
-import type { RuntimeBrowserCommandHost, RuntimeBrowserCommands } from './orca-runtime-browser'
-import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import type { RuntimeBrowserCommands } from './browser/browser-commands'
+import {
+  createSinglePageBrowserCommandsHost,
+  createStreamedGuest
+} from './single-page-browser-commands-host-test-double'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
   webContentsFromId: vi.fn(),
@@ -24,46 +26,20 @@ function deferred() {
   return { promise, resolve }
 }
 
-function createCommandsHost(): RuntimeBrowserCommandHost {
-  const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
-  const bridge = {
-    getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
-    getActivePageId: vi.fn(() => 'page-1'),
-    tabList: vi.fn(() => ({
-      tabs: [
-        {
-          browserPageId: 'page-1',
-          index: 0,
-          url: 'about:blank',
-          title: 'Browser',
-          active: true
-        }
-      ]
-    }))
-  } as unknown as AgentBrowserBridge
-  return {
-    resolveWorktreeSelector: async () => ({ id: 'wt-1' }),
-    getAgentBrowserBridge: () => bridge,
-    getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
-    getAvailableAuthoritativeWindow: vi.fn(() => null),
-    getOffscreenBrowserBackend: vi.fn(() => null)
-  } as unknown as RuntimeBrowserCommandHost
-}
-
 describe('RuntimeBrowserCommands screencast fanout', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()
-    webContentsFromId.mockReturnValue({ isDestroyed: () => false })
+    webContentsFromId.mockReturnValue(createStreamedGuest())
     startBrowserScreencast.mockReset()
   })
 
   it('restores the surviving subscriber viewport without stopping its shared stream', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const firstSend = vi.fn(() => false)
     const secondSend = vi.fn(() => true)
     const first = await commands.browserScreencast(
@@ -90,8 +66,8 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     const frame = new Uint8Array([1, 2, 3])
     expect(startBrowserScreencast).toHaveBeenCalledOnce()
     expect(startBrowserScreencast.mock.calls[0][1].onFrame(frame)).toBe(true)
-    expect(firstSend).toHaveBeenCalledWith(frame)
-    expect(secondSend).toHaveBeenCalledWith(frame)
+    expect(firstSend).toHaveBeenCalledWith(frame, { dropWhenBacklogged: true })
+    expect(secondSend).toHaveBeenCalledWith(frame, { dropWhenBacklogged: true })
     expect(updateViewport).toHaveBeenLastCalledWith(
       expect.objectContaining({ viewportWidth: 800, viewportHeight: 600 })
     )
@@ -107,12 +83,12 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('keeps viewport authority with sized subscribers when a sizeless viewer joins', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const sized = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -142,7 +118,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('replays the joiner snapshot that its pre-ready gate refused', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const snapshot = new Uint8Array([9, 9, 9])
     let onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void = () => true
@@ -160,7 +136,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
         updateFrameBudget: vi.fn(async () => {})
       }
     })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const creatorSend = vi.fn(() => true)
     await commands.browserScreencast(
       {
@@ -185,12 +161,12 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       { sendBinary: joinerSend }
     )
 
-    expect(creatorSend).toHaveBeenCalledWith(snapshot)
-    expect(joinerSend).toHaveBeenCalledWith(snapshot)
+    expect(creatorSend).toHaveBeenCalledWith(snapshot, { dropWhenBacklogged: true })
+    expect(joinerSend).toHaveBeenCalledWith(snapshot, { dropWhenBacklogged: true })
     joinerSend.mockClear()
     gateOpen = true
     joiner.flushPendingFrame()
-    expect(joinerSend).toHaveBeenCalledExactlyOnceWith(snapshot)
+    expect(joinerSend).toHaveBeenCalledExactlyOnceWith(snapshot, { dropWhenBacklogged: true })
 
     // The accepted replay is not retained, so a second flush cannot duplicate it.
     joinerSend.mockClear()
@@ -201,7 +177,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('drives the shared stream at the most constrained subscriber and releases it on leave', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const updateFrameBudget = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({
@@ -210,7 +186,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       updateViewport: vi.fn(async () => {}),
       updateFrameBudget
     })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const desktop = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -263,7 +239,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('admits shared frames through the paired-runtime size guard', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     startBrowserScreencast.mockResolvedValue({
       stop: vi.fn(() => done.resolve()),
@@ -271,7 +247,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       updateViewport: vi.fn(async () => {})
     })
     const sendBinary = vi.fn(() => true)
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const started = await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
       { sendBinary }
@@ -290,7 +266,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
 describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()
-    webContentsFromId.mockReturnValue({ isDestroyed: () => false })
+    webContentsFromId.mockReturnValue(createStreamedGuest())
     startBrowserScreencast.mockReset()
   })
 
@@ -311,12 +287,12 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   }
 
   it('evicts a departed subscriber and hands its viewport to the survivor', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const survivorSend = vi.fn(() => true)
     const survivor: Subscription = await commands.browserScreencast(
       {
@@ -366,7 +342,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('stops the shared stream when the evicted subscriber was the last one', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -374,7 +350,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       done: done.promise,
       updateViewport: vi.fn(async () => {})
     })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const only: Subscription = await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
       { sendBinary: sendUntilQuit(1) }
@@ -386,7 +362,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('keeps a subscriber whose refusals are broken by a delivery', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -394,7 +370,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       done: done.promise,
       updateViewport: vi.fn(async () => {})
     })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     let sends = 0
     // Why: this is the backpressure shape — a link that drains one frame per window must never
     // be mistaken for a socket that is gone.
@@ -414,7 +390,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('never evicts on the refusals a joiner pre-ready gate produced', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -422,7 +398,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       done: done.promise,
       updateViewport: vi.fn(async () => {})
     })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     let gateOpen = false
     const joinerSend = vi.fn(() => gateOpen)
     const joiner: Subscription = await commands.browserScreencast(
@@ -446,12 +422,12 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('replaces the older subscription when the same paired device reattaches', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const ghostSend = vi.fn(() => true)
     const ghost: Subscription = await commands.browserScreencast(
       {
@@ -496,7 +472,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('leaves other devices and unidentified callers attached', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -504,7 +480,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       done: done.promise,
       updateViewport: vi.fn(async () => {})
     })
-    const commands = new RuntimeBrowserCommands(createCommandsHost())
+    const commands = new RuntimeBrowserCommands(createSinglePageBrowserCommandsHost())
     const anonymousFirst = vi.fn(() => true)
     const anonymousSecond = vi.fn(() => true)
     const identified = vi.fn(() => true)

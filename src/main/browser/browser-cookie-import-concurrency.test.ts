@@ -2,6 +2,7 @@ import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CookiesGetFilter } from 'electron'
 
 const {
   appGetPathMock,
@@ -33,11 +34,11 @@ vi.mock('electron', () => ({
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
-      get: (filter: object) => Promise<unknown>
+      get: (filter: CookiesGetFilter) => Promise<unknown>
       remove: (url: string, name: string) => Promise<void>
     }
   }) => ({
-    get: (filter: object) => targetSession.cookies.get(filter),
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
     snapshotClearIdentities: snapshotClearIdentitiesMock,
     restoreClearIdentities: async () => undefined,
@@ -240,8 +241,7 @@ describe('two concurrent imports into one partition', () => {
     const fileB = writeSource('new-b', '.b.example')
 
     const first = importCookiesFromFile(fileA, 'persist:concurrency-test')
-    // Let the first import reach its write and block there.
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await vi.waitFor(() => expect(events).toContain('set:new-a'))
     const second = importCookiesFromFile(fileB, 'persist:concurrency-test')
     await new Promise((resolve) => setTimeout(resolve, 20))
 

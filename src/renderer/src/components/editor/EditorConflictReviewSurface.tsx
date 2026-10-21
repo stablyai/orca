@@ -1,4 +1,5 @@
 import React from 'react'
+import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
@@ -82,7 +83,7 @@ export function EditorConflictReviewSurface({
         : undefined
 
     return {
-      id: absolutePath,
+      id: conflictOverviewFileId(openFiles, activeFile.worktreeId, absolutePath),
       filePath: absolutePath,
       relativePath: entry.path,
       worktreeId: activeFile.worktreeId,
@@ -131,6 +132,7 @@ export function EditorConflictReviewSurface({
         <div className={className}>
           <EditorFileLoadErrorView
             message={fileContent.loadError}
+            code={fileContent.loadErrorCode}
             onRetry={() => reloadContent(contentFile)}
           />
         </div>

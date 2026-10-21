@@ -7,6 +7,7 @@ import type {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 // ---------------------------------------------------------------------------
 // Grab mode state machine
@@ -266,8 +267,8 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
         cancel()
       }
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [state, cancel])
 
   return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }

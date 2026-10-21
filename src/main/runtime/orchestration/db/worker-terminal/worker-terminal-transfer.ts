@@ -18,10 +18,9 @@ export function findTransferableWorkerTerminalResource(
   }
   const candidates = this.db
     .prepare(
-      `SELECT r.* FROM worker_terminal_resources r
-         JOIN worker_dispatches w ON w.dispatch_id = r.owner_dispatch_id
-        WHERE r.process_incarnation = ? AND r.host_scope IS ?
-          AND r.ownership_state != 'released'`
+      `SELECT * FROM worker_terminal_resources
+        WHERE process_incarnation = ? AND host_scope IS ?
+          AND ownership_state != 'released'`
     )
     .all(params.processIncarnation, params.hostScope) as WorkerTerminalResourceRow[]
   const exact = candidates.filter(
@@ -47,7 +46,9 @@ export function findTransferableWorkerTerminalResource(
       candidate.ownership_state === 'owned' &&
       ['not_requested', 'retained'].includes(candidate.release_state) &&
       ['succeeded', 'failed', 'stopped', 'abandoned'].includes(
-        this.getWorkerDispatch(candidate.owner_dispatch_id)?.state ?? ''
+        this.getWorkerDispatch(candidate.owner_dispatch_id)?.state ??
+          this.getRemoteDispatchAttachment(candidate.owner_dispatch_id)?.state ??
+          ''
       )
   )
 }
@@ -80,14 +81,30 @@ export function workerTerminalResourceHasIdentityConflict(
   )
 }
 
+/** Every resource whose process incarnation starts with `prefix`, newest first. */
+export function listWorkerTerminalResourcesByIncarnationPrefix(
+  this: OrchestrationDb,
+  prefix: string
+): WorkerTerminalResourceRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE substr(process_incarnation, 1, ?) = ? ORDER BY updated_at DESC`
+    )
+    .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
+}
+
 export type WorkerTerminalTransferMethods = {
   findTransferableWorkerTerminalResource: typeof findTransferableWorkerTerminalResource
   workerTerminalResourceHasIdentityConflict: typeof workerTerminalResourceHasIdentityConflict
+  listWorkerTerminalResourcesByIncarnationPrefix: typeof listWorkerTerminalResourcesByIncarnationPrefix
 }
 
 export function attachWorkerTerminalTransfer(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     findTransferableWorkerTerminalResource,
-    workerTerminalResourceHasIdentityConflict
+    workerTerminalResourceHasIdentityConflict,
+    listWorkerTerminalResourcesByIncarnationPrefix
   })
 }

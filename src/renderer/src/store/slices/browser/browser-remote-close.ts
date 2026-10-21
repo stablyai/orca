@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { isBrowserPageDefinitivelyGone } from '@/runtime/client-hosted-browser-close-intent-replay'
 import { isDurableClientHostedBrowserHandle } from '@/runtime/client-hosted-browser-close-intents'

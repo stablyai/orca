@@ -1,13 +1,5 @@
 import React from 'react'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { HostCombobox } from '@/components/host-picker/HostCombobox'
 import { translate } from '@/i18n/i18n'
 import { AutomationHostLabel, AutomationHostStatusBadges } from './AutomationHostBadges'
 import { Field } from './automation-page-parts'
@@ -41,36 +33,33 @@ export function AutomationDestinationField({
 
   return (
     <Field label={label} labelClassName={labelClassName}>
-      <Select value={selected?.stableKey ?? ''} onValueChange={control.onSelect}>
-        <SelectTrigger aria-label={label} className="h-9 w-full min-w-0">
-          <SelectValue
-            placeholder={translate(
-              'auto.components.automations.createDestination.placeholder',
-              'Select a host'
-            )}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {groups.map((group) => (
-            <SelectGroup key={group.authorityKey} data-authority-key={group.authorityKey}>
-              <SelectLabel>{group.authorityLabel}</SelectLabel>
-              {group.entries.map((entry) => (
-                <SelectItem
-                  key={entry.stableKey}
-                  value={entry.stableKey}
-                  disabled={!automationCreateHostEligible(entry)}
-                  data-host-stable-key={entry.stableKey}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <AutomationHostLabel entry={entry} className="min-w-0" />
-                    <AutomationHostStatusBadges entry={entry} />
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+      <HostCombobox
+        value={selected?.stableKey ?? ''}
+        onChange={control.onSelect}
+        ariaLabel={label}
+        placeholder={translate(
+          'auto.components.automations.createDestination.placeholder',
+          'Select a host'
+        )}
+        className="min-w-0"
+        options={groups.flatMap((group) =>
+          group.entries.map((entry) => ({
+            id: entry.stableKey,
+            label: entry.label,
+            group: group.authorityLabel,
+            disabled: !automationCreateHostEligible(entry),
+            content: (
+              <span
+                className="flex min-w-0 flex-1 items-center gap-2"
+                data-host-stable-key={entry.stableKey}
+              >
+                <AutomationHostLabel entry={entry} className="min-w-0" />
+                <AutomationHostStatusBadges entry={entry} />
+              </span>
+            )
+          }))
+        )}
+      />
       {selected && control.projects.length === 0 ? (
         // Otherwise Create is disabled for an empty project list with nothing said.
         <p className="text-xs text-destructive" data-testid="automation-create-no-projects">

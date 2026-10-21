@@ -1,8 +1,11 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  readPersistedTestAgentSessionStoreText
+} from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -20,7 +23,6 @@ function request(overrides: Partial<AgentSessionReserveRequest> = {}): AgentSess
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
@@ -46,7 +48,7 @@ afterEach(async () => {
 
 describe('agent session launch environment admission', () => {
   it('does not persist ambient launch variables', async () => {
-    const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const store = await openTestAgentSessionRecordStore(directory)
     await store.reserveOwner(request())
     await store.reserveOwner(
       request({
@@ -64,15 +66,15 @@ describe('agent session launch environment admission', () => {
       })
     )
 
-    const raw = await readFile(join(directory, 'agent-sessions.json'), 'utf-8')
+    const raw = await readPersistedTestAgentSessionStoreText(directory)
     expect(raw).not.toContain('OPENAI_API_KEY')
     expect(raw).not.toContain('"PATH"')
-    const reopened = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const reopened = await openTestAgentSessionRecordStore(directory)
     expect(reopened.getRecord(SESSION)).not.toHaveProperty('launchEnv')
   })
 
   it('rejects an environment that could not be validated before writing', async () => {
-    const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const store = await openTestAgentSessionRecordStore(directory)
     const launchEnv = Object.fromEntries(
       Array.from({ length: 257 }, (_, index) => [`KEY_${index}`, 'value'])
     )
@@ -84,7 +86,7 @@ describe('agent session launch environment admission', () => {
   })
 
   it('rejects an overlong environment key before writing it', async () => {
-    const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+    const store = await openTestAgentSessionRecordStore(directory)
 
     await expect(
       store.reserveOwner(request({ launchEnv: { ['K'.repeat(513)]: 'value' } }))

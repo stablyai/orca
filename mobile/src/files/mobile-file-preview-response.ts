@@ -1,11 +1,13 @@
+import type { MobileFileMedia } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
-import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
 export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
 
 export type MobileFilePreviewResult =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
   | {
       status: 'loading'
       message: string
@@ -37,21 +39,20 @@ export type MobileFilePreviewResult =
       reconnect: boolean
     }
 
-export function normalizeMobileFilePreviewResponse(
+/** The accepted arm, for a call site whose acceptance policy already admitted the payload. */
+export function normalizeMobileFilePreviewResult(
   relativePath: string,
-  response: RpcResponse
+  result: unknown
 ): MobileFilePreviewResult {
-  if (!response.ok) {
-    return previewError(
-      (response as RpcFailure).error.message || (response as RpcFailure).error.code
-    )
-  }
-
-  const result = (response as RpcSuccess).result
   if (classifyMobileArtifact(relativePath) === 'image') {
     return normalizeImagePreviewResult(result)
   }
   return normalizeTextPreviewResult(relativePath, result)
+}
+
+/** The refused arm. The code is the fallback copy, which is why the refusal itself is needed. */
+export function previewErrorFromRefusal(error: RpcFailure['error']): MobileFilePreviewResult {
+  return previewError(error.message || error.code)
 }
 
 export function previewError(message: string): MobileFilePreviewResult {

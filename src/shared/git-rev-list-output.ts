@@ -30,6 +30,17 @@ export function parseGitRevListFirstParentOid(output: string): string | null {
   return getProcessOutputFields(output, 2)[1] ?? null
 }
 
+export function parseGitRevListCommitAndFirstParentOid(output: string): {
+  commitOid: string
+  parentOid: string | null
+} {
+  const [commitOid, parentOid] = getProcessOutputFields(output, 2)
+  if (!commitOid || !/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(commitOid)) {
+    throw new Error('Unexpected git rev-list commit output')
+  }
+  return { commitOid, parentOid: parentOid ?? null }
+}
+
 function parseGitRevListNonNegativeCount(value: string | undefined): number | null {
   if (!value || !/^\d+$/.test(value)) {
     return null

@@ -16,11 +16,11 @@
  *
  * WHAT THIS GUARD CANNOT CATCH: a transient code whose message matches no fragment. The
  * message side has nothing to disagree with, so the pair looks consistent. `remote_runtime_busy`
- * is exactly that case today — its messages say "retry after…" but match no fragment, so it
- * classifies fatal and this guard stays silent. Tracked as STA-3479; do not "fix" it here.
+ * was that case until STA-3479; its pairs are pinned recoverable below for that reason.
  */
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
   RECOVERABLE_CODES,
   RECOVERABLE_MESSAGE_FRAGMENTS,
@@ -30,10 +30,14 @@ import {
   type RemoteRuntimeClientErrorLike
 } from './remote-runtime-client-error-classification'
 import {
+  WS_HANDSHAKE_TIMEOUT_MESSAGE,
+  remoteRuntimeConnectFailureMessage
+} from './remote-runtime-connect-bound'
+import {
   invalidRemoteRuntimeResponseError,
-  parseAuthenticatedFrame,
-  parseReadyFrame,
   parseRemoteRuntimeRpcFrame,
+  remoteRuntimeAuthReplyError,
+  remoteRuntimeReadyError,
   remoteRuntimeTimeoutError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
@@ -59,6 +63,12 @@ function frameError(producer: string, frame: string): TransportErrorPair {
 const CLOSE_REASON = Buffer.from('server restarting')
 const EMPTY_CLOSE_REASON = Buffer.from('')
 
+// Why: the connect bound's message is built from the real helper so a rewording updates the
+// corpus with it, and the code-less entry below then fails instead of the user.
+const CONNECT_BOUND_ENDPOINT = 'ws://desk.example.com:6768'
+const connectBoundMessage = (endpoint = CONNECT_BOUND_ENDPOINT): string =>
+  remoteRuntimeConnectFailureMessage(new Error(WS_HANDSHAKE_TIMEOUT_MESSAGE), endpoint)
+
 const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:120',
@@ -80,6 +90,10 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
     code: 'remote_runtime_unavailable',
     message: 'Could not connect to the remote Orca runtime.'
   },
+  producedPair(
+    'remote-runtime-connect-bound.ts (elapsed handshakeTimeout; request-socket, request-websocket and subscription-transport onError)',
+    new RemoteRuntimeClientError('remote_runtime_unavailable', connectBoundMessage())
+  ),
   {
     producer: 'remote-runtime-client.ts:270 / :667 (formatRemoteRuntimeCloseMessage, 1006)',
     code: 'remote_runtime_unavailable',
@@ -183,16 +197,19 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   },
   producedPair('remote-runtime-request-frames.ts:24', remoteRuntimeUnavailableError()),
   producedPair('remote-runtime-request-frames.ts:30', remoteRuntimeTimeoutError()),
-  producedPair('remote-runtime-request-frames.ts:46', parseReadyFrame('not-json')),
-  producedPair('remote-runtime-request-frames.ts:55', parseReadyFrame('{"type":"nope"}')),
-  producedPair('remote-runtime-request-frames.ts:67', parseAuthenticatedFrame('not-json')),
+  producedPair('remoteRuntimeReadyError (invalid)', remoteRuntimeReadyError('invalid')),
+  producedPair('remoteRuntimeReadyError (unexpected)', remoteRuntimeReadyError('unexpected')),
   producedPair(
-    'remote-runtime-request-frames.ts:81 (rejected token)',
-    parseAuthenticatedFrame(JSON.stringify({ error: { code: 'unauthorized' } }))
+    'remoteRuntimeAuthReplyError (invalid)',
+    remoteRuntimeAuthReplyError({ kind: 'invalid' })
   ),
   producedPair(
-    'remote-runtime-request-frames.ts:81 (unrecognized auth frame)',
-    parseAuthenticatedFrame(JSON.stringify({ type: 'e2ee_other' }))
+    'remoteRuntimeAuthReplyError (rejected token)',
+    remoteRuntimeAuthReplyError({ kind: 'rejected', type: null, errorCode: 'unauthorized' })
+  ),
+  producedPair(
+    'remoteRuntimeAuthReplyError (unrecognized auth frame)',
+    remoteRuntimeAuthReplyError({ kind: 'rejected', type: 'e2ee_other', errorCode: null })
   ),
   frameError('remote-runtime-request-frames.ts:91', 'not-json'),
   frameError('remote-runtime-request-frames.ts:103', JSON.stringify({ not: 'an envelope' })),
@@ -245,11 +262,7 @@ const SHARED_CONTROL_TRANSPORT_ERRORS: TransportErrorPair[] = [
   }
 ]
 
-/**
- * `remote_runtime_busy` is semantically transient but absent from `RECOVERABLE_CODES`, so it
- * classifies fatal. It is listed here (not omitted) so the corpus stays complete; STA-3479
- * covers the classification itself.
- */
+/** Client-side admission caps: each frees as pending work settles, so the caller retries. */
 const BUSY_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-prepared-request-admission.ts:100',
@@ -340,6 +353,11 @@ const TAILSCALE_HINTED_TRANSPORT_ERRORS: TransportErrorPair[] = [
       'Remote Orca runtime closed the connection.',
       'https://desk.tail1234.ts.net'
     )
+  },
+  {
+    producer: 'main/ipc/runtime-environment-transport-routing.ts:153 (connect bound elapsed)',
+    code: 'remote_runtime_unavailable',
+    message: withRemoteRuntimeTailscaleHint(connectBoundMessage(), 'https://desk.example.com')
   }
 ]
 
@@ -393,6 +411,15 @@ const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })
     recoverable: true
   },
   {
+    // Why: the subscribe handler rethrows, and Electron keeps only the message. This is the
+    // exact pair that dead-ended a terminal pane when the connect bound's wording drifted
+    // outside RECOVERABLE_MESSAGE_FRAGMENTS.
+    producer:
+      "ipcMain.handle('runtimeEnvironments:subscribe') rejection after the connect bound elapsed (code stripped)",
+    message: `Error invoking remote method 'runtimeEnvironments:subscribe': Error: ${withRemoteRuntimeTailscaleHint(connectBoundMessage(), CONNECT_BOUND_ENDPOINT)}`,
+    recoverable: true
+  },
+  {
     producer: 'untyped host rejection with no connection wording',
     message: 'Worktree is missing on the remote host.',
     recoverable: false
@@ -412,7 +439,7 @@ describe('transport error code/message classification agreement', () => {
   it('enumerates every reachable coded producer', () => {
     // Floor, not an exact count: the corpus should only grow. Lower it deliberately when a
     // producer is genuinely deleted. (#12667's review enumerated 34 of these by hand.)
-    expect(CODED_TRANSPORT_ERRORS.length).toBeGreaterThanOrEqual(57)
+    expect(CODED_TRANSPORT_ERRORS.length).toBeGreaterThanOrEqual(59)
     expect(CODED_TRANSPORT_ERRORS.every((pair) => typeof pair.code === 'string')).toBe(true)
   })
 
@@ -476,12 +503,11 @@ describe('transport error code/message classification agreement', () => {
     expect(unbacked).toEqual([])
   })
 
-  it('pins why the guard cannot see the remote_runtime_busy exception (STA-3479)', () => {
+  it('classifies remote_runtime_busy recoverable with or without its code (STA-3479)', () => {
     for (const pair of BUSY_TRANSPORT_ERRORS) {
-      // Fatal by code with a message that matches nothing: the two sides cannot disagree, so the
-      // differential above stays silent. Fixing the classification is STA-3479, not this file.
-      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(false)
-      expect(matchingRecoverableFragment(pair.message)).toBeNull()
+      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(true)
+      // Electron IPC keeps only the message, so the fragment fallback must agree with the code.
+      expect(isRecoverableRemoteRuntimeConnectionError({ message: pair.message })).toBe(true)
     }
   })
 })

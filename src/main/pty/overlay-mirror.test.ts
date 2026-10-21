@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync, symlinkSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as NodePath from 'node:path'
@@ -19,6 +19,33 @@ afterEach(() => {
 })
 
 describe('safeRemoveOverlay', () => {
+  it('keeps missing owned paths a silent no-op', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-overlay-missing-'))
+    tempRoots.push(root)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    safeRemoveOverlay(join(root, 'missing', 'leaf'), join(root, 'missing'))
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('refuses cleanup through an intermediate symlink and unlinks only a leaf symlink', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-overlay-symlink-'))
+    tempRoots.push(root)
+    const overlay = join(root, 'overlay')
+    const outside = join(root, 'outside')
+    mkdirSync(overlay)
+    mkdirSync(outside)
+    const sentinel = join(outside, 'keep.txt')
+    writeFileSync(sentinel, 'private sentinel')
+    const linked = join(overlay, 'linked')
+    symlinkSync(outside, linked, process.platform === 'win32' ? 'junction' : 'dir')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    safeRemoveOverlay(join(linked, 'keep.txt'), overlay)
+    expect(existsSync(sentinel)).toBe(true)
+    safeRemoveOverlay(linked, overlay)
+    expect(existsSync(linked)).toBe(false)
+    expect(existsSync(sentinel)).toBe(true)
+  })
+
   it('removes valid overlay children whose names start with dot-dot', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-overlay-root-'))
     tempRoots.push(root)

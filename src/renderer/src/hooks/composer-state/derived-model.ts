@@ -17,8 +17,6 @@ export type ComposerDerivedModel = {
   setupConfig: SetupConfig | null
   setupPolicy: SetupRunPolicy
   linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | null
-  willApplyIssueCommandAsPrompt: boolean
-  shouldWaitForIssueAutomationCheck: boolean
   requiresExplicitSetupChoice: boolean
   resolvedSetupDecision: 'skip' | 'run' | null
   isSetupCheckPending: boolean

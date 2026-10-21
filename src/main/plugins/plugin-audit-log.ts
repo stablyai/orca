@@ -71,8 +71,8 @@ export class PluginAuditLog {
         [this.rotatedFilePath, this.filePath].map((path) => readFile(path, 'utf8').catch(() => ''))
       )
       const text = rotated + current
-      const lines = text.split('\n').filter((line) => line.length > 0)
-      return lines.slice(-limit).flatMap((line) => {
+      const lines = recentAuditLines(text, limit)
+      return lines.flatMap((line) => {
         try {
           return [JSON.parse(line) as PluginAuditEntry]
         } catch {
@@ -83,4 +83,27 @@ export class PluginAuditLog {
       return []
     }
   }
+}
+
+function recentAuditLines(text: string, limit: number): string[] {
+  if (!Number.isFinite(limit) || limit < 1) {
+    return text
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .slice(-limit)
+  }
+  const lines: string[] = []
+  let end = text.length
+  const count = Math.trunc(limit)
+  while (end > 0 && lines.length < count) {
+    const start = text.lastIndexOf('\n', end - 1) + 1
+    if (start < end) {
+      lines.push(text.slice(start, end))
+    }
+    if (start === 0) {
+      break
+    }
+    end = start - 1
+  }
+  return lines.toReversed()
 }

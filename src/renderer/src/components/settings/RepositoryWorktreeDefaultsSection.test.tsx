@@ -64,7 +64,7 @@ afterEach(() => {
 
 function render(
   repo: Repo,
-  updateRepo: (repoId: string, updates: object) => void | Promise<boolean>,
+  updateRepo: React.ComponentProps<typeof RepositoryWorktreeDefaultsSection>['updateRepo'],
   options: {
     settings?: Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> | null
     refreshRepo?: (repoId: string) => void | Promise<unknown>

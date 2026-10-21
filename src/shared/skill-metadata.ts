@@ -14,7 +14,7 @@ function stripQuotePair(value: string): string {
 }
 
 function parseYamlFrontmatter(raw: string): Record<string, FrontmatterValue> {
-  const lines = raw.replace(/\r\n/g, '\n').split('\n')
+  const lines = raw.replace(/\r\n/g, '\n').replace(/\r$/, '').split('\n')
   const data: Record<string, FrontmatterValue> = {}
   let index = 0
   while (index < lines.length) {

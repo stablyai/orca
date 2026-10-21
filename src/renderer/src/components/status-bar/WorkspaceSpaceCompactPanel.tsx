@@ -63,16 +63,16 @@ export function WorkspaceSpaceCompactPanel({
                     )
                   : analysis.unavailableWorktreeCount > 0
                     ? translate(
-                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.bef4dc0457',
-                        '{{value0}} reclaimable · {{value1}} unavailable',
+                        'workspaceSpace.compact.linkedAndUnavailable',
+                        '{{value0}} in linked worktrees · {{value1}} unavailable',
                         {
                           value0: formatBytes(analysis.reclaimableBytes),
                           value1: analysis.unavailableWorktreeCount
                         }
                       )
                     : translate(
-                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.bef4dc0457',
-                        '{{value0}} reclaimable · {{value1}} workspaces',
+                        'workspaceSpace.compact.linkedAndScanned',
+                        '{{value0}} in linked worktrees · {{value1}} workspaces',
                         {
                           value0: formatBytes(analysis.reclaimableBytes),
                           value1: analysis.scannedWorktreeCount
@@ -153,10 +153,7 @@ export function WorkspaceSpaceCompactPanel({
           </div>
           <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
             <div className="text-muted-foreground">
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceCompactPanel.9be86c46a0',
-                'Freeable'
-              )}
+              {translate('workspaceSpace.compact.linked', 'Linked')}
             </div>
             <div className="truncate font-medium text-foreground">
               {formatBytes(analysis.reclaimableBytes)}

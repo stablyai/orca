@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 
@@ -48,6 +49,7 @@ type SenderHarness = {
     id: number
     isDestroyed: () => boolean
     once: (event: string, callback: () => void) => void
+    removeListener: (event: string, callback: () => void) => void
     send: ReturnType<typeof vi.fn>
   }
 }
@@ -78,23 +80,18 @@ function deferredSubscription(): DeferredSubscription {
 
 function createSender(id: number): SenderHarness {
   let destroyed = false
-  const destroyedCallbacks: (() => void)[] = []
+  const events = new EventEmitter()
   return {
     destroy: () => {
       destroyed = true
-      for (const callback of destroyedCallbacks) {
-        callback()
-      }
+      events.emit('destroyed')
     },
-    registeredCleanupCount: () => destroyedCallbacks.length,
+    registeredCleanupCount: () => events.listenerCount('destroyed'),
     sender: {
       id,
       isDestroyed: () => destroyed,
-      once: (event, callback) => {
-        if (event === 'destroyed') {
-          destroyedCallbacks.push(callback)
-        }
-      },
+      once: (event, callback) => void events.once(event, callback),
+      removeListener: (event, callback) => void events.removeListener(event, callback),
       send: vi.fn()
     }
   }

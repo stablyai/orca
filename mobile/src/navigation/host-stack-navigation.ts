@@ -7,7 +7,7 @@ export type HostStackNavigationState = Readonly<{
 export type HostStackNavigationRoute = Readonly<{
   key?: string
   name: string
-  params?: Readonly<{ hostId?: unknown }>
+  params?: Readonly<{ hostId?: unknown; worktreeId?: unknown }>
   state?: HostStackNavigationState
 }>
 
@@ -27,7 +27,16 @@ export type HostStackReplaceAction = Readonly<{
 
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
-  dispatch: (action: HostStackReplaceAction) => void
+  dispatch: (
+    action:
+      | HostStackReplaceAction
+      | Readonly<{
+          type: 'SET_PARAMS'
+          target: string
+          source: string
+          payload: { params: Readonly<Record<string, string>> }
+        }>
+  ) => void
   // Why: the root layout's navigator has no committed state until it hydrates, and a
   // notification tap can arm the transition before that first commit.
   getState: () => HostStackNavigationState | undefined
@@ -124,6 +133,25 @@ export function navigateToHostStackRoute(
   hostId: string,
   target: HostStackRouteTarget
 ): HostStackNavigationController {
+  const state = navigation.getState()
+  const hostState = state && focusedHostRoute(state)?.state
+  const focused = hostState?.routes[hostState.index]
+  if (
+    hostState?.key &&
+    focused?.key &&
+    focused.name === target.name &&
+    hostParamMatches(focused.params?.hostId, hostId) &&
+    hostParamMatches(focused.params?.worktreeId, target.params.worktreeId)
+  ) {
+    navigation.dispatch({
+      type: 'SET_PARAMS',
+      target: hostState.key,
+      source: focused.key,
+      payload: { params: target.params }
+    })
+    return { cancel: () => {}, isActive: () => false, retarget: () => {} }
+  }
+
   let active = true
   let hostRouteSeen = false
   let selectedTarget = target

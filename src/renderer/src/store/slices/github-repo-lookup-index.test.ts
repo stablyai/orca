@@ -26,6 +26,16 @@ describe('getGitHubRepoLookupIndex', () => {
     expect(lookup.findByIdOrPath('target', '/target')).toBe(pathMatch)
   })
 
+  it('picks the twin at the requested path over an earlier row with the same id', () => {
+    const localTwin = makeRepo('twin', '/laptop/twin')
+    const sshTwin = { ...makeRepo('twin', '/remote/twin'), connectionId: 'builder' }
+    const lookup = getGitHubRepoLookupIndex([localTwin, sshTwin])
+
+    expect(lookup.findByIdOrPath('twin', '/remote/twin')).toBe(sshTwin)
+    expect(lookup.findByIdOrPath('twin', '/laptop/twin')).toBe(localTwin)
+    expect(lookup.findByIdOrPath('twin', '/elsewhere')).toBe(localTwin)
+  })
+
   it('scans each repo once across repeated misses', () => {
     let idReads = 0
     const repos = Array.from({ length: 32 }, (_, index) => {

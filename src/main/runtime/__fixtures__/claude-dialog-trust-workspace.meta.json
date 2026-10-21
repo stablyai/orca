@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-25T20:03:23.885Z",
+  "platform": "darwin",
+  "command": ["claude", "--dangerously-skip-permissions"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Claude Code v2.1.280, macOS arm64, first launch in an untrusted git worktree; API-key auth; capture ends with the trust dialog owning the screen",
+  "exitCode": 129
+}

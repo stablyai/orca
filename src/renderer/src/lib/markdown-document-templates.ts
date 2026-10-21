@@ -1,11 +1,9 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import {
-  readRuntimeDirectory,
-  readRuntimeFileContent,
-  runtimePathExists
-} from '@/runtime/runtime-file-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { basename, joinPath, normalizeRelativePath } from './path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
@@ -211,14 +209,14 @@ export async function listMarkdownDocumentTemplates(
 
 export async function readMarkdownDocumentTemplateContent(
   context: {
-    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+    target: RuntimeClientTarget
     worktreeId: string
     connectionId?: string
   },
   template: MarkdownDocumentTemplate
 ): Promise<string> {
   const result = await readRuntimeFileContent({
-    settings: context.settings,
+    target: context.target,
     filePath: template.filePath,
     relativePath: template.relativePath,
     worktreeId: context.worktreeId,

@@ -1,5 +1,8 @@
 import { taskPageGitHubFamilyDirtyKey } from './task-page-github-work-item-mutation-keys'
 
+/** Identity token for the caller driving one quiet run; compared by reference, never read. */
+export type QuietRevalidateRunOwner = Record<string, never>
+
 export type QuietRevalidateState = {
   inFlight: boolean
   trailingQueued: boolean
@@ -10,7 +13,7 @@ export type QuietRevalidateState = {
   networkFailureAttempts: number
   lastConfirmAt: number
   runGeneration: number
-  runOwner: object | null
+  runOwner: QuietRevalidateRunOwner | null
 }
 
 const quietByQueryKey = new Map<string, QuietRevalidateState>()
@@ -37,7 +40,7 @@ export function getOrCreateQuietRevalidateState(queryKey: string): QuietRevalida
 
 export function beginTaskPageQuietRevalidateRun(
   state: QuietRevalidateState,
-  owner: object
+  owner: QuietRevalidateRunOwner
 ): number | null {
   if (state.inFlight && state.runOwner === owner) {
     state.trailingQueued = true
@@ -52,7 +55,7 @@ export function beginTaskPageQuietRevalidateRun(
 
 export function finishTaskPageQuietRevalidateRun(
   state: QuietRevalidateState,
-  owner: object,
+  owner: QuietRevalidateRunOwner,
   generation: number
 ): boolean {
   if (state.runOwner !== owner || state.runGeneration !== generation) {

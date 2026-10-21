@@ -12,10 +12,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getAllProcessesMock = vi.fn()
 
-import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
+import {
+  __setWindowsProcessTreeLoaderForTests,
+  readWindowsProcessIdentityTable
+} from '../windows/windows-process-table'
 import {
   queryWindowsProcessDescendants,
-  queryWindowsProcessRowsFresh,
+  queryWindowsProcessLinksFresh,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
 // A real snapshot always contains the process doing the querying; the reader
@@ -81,7 +84,7 @@ describe('windows process rows', () => {
     })
     resetWindowsProcessRowsSnapshotForTests()
 
-    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow(/unreadable/)
+    expect(await queryWindowsProcessDescendants(100, { fresh: true })).toBeNull()
   })
 
   it('reports an unreadable table as unavailable, not as an empty machine', async () => {
@@ -92,7 +95,7 @@ describe('windows process rows', () => {
     })
     resetWindowsProcessRowsSnapshotForTests()
 
-    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow()
+    expect(await queryWindowsProcessDescendants(100, { fresh: true })).toBeNull()
     expect(await queryWindowsProcessDescendants(100)).toBeNull()
   })
 
@@ -103,18 +106,41 @@ describe('windows process rows', () => {
 
   it('collapses a burst of concurrent identity probes into one scan', async () => {
     // A worktree delete tears down PTYs 32-wide.
-    const rows = await Promise.all(Array.from({ length: 32 }, () => queryWindowsProcessRowsFresh()))
+    const rows = await Promise.all(
+      Array.from({ length: 32 }, () => queryWindowsProcessDescendants(100, { fresh: true }))
+    )
 
     expect(scanCount()).toBe(1)
-    expect(rows[31]?.map((row) => row.pid)).toEqual([process.pid, 100, 200])
+    expect(rows[31]?.map((row) => row.pid)).toEqual([200])
   })
 
   it('never answers from the TTL cache, which can predate the recycle it detects', async () => {
     await queryWindowsProcessDescendants(100)
     expect(scanCount()).toBe(1)
 
-    await queryWindowsProcessRowsFresh()
+    await queryWindowsProcessDescendants(100, { fresh: true })
 
     expect(scanCount()).toBe(2)
+  })
+
+  it('never answers the ancestry links from the identity TTL cache either', async () => {
+    // The identity table is a second reader with its own TTL, so the freshness
+    // the ancestry walk depends on has to be pinned on its own.
+    await readWindowsProcessIdentityTable()
+    getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
+      cb(withSelf([{ pid: 300, ppid: 100, name: 'node.exe' }]))
+    })
+    // Proves the cache the fresh read below ignores is live, not merely expired.
+    expect((await readWindowsProcessIdentityTable()).map((row) => row.pid)).toEqual([
+      process.pid,
+      100,
+      200
+    ])
+    expect(scanCount()).toBe(1)
+
+    const links = await queryWindowsProcessLinksFresh()
+
+    expect(scanCount()).toBe(2)
+    expect(links.map((row) => row.pid)).toEqual([process.pid, 300])
   })
 })

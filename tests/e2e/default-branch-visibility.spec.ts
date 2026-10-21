@@ -4,9 +4,10 @@
  * while a sleeping feature workspace is still swept.
  */
 
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { addRepoWithWorkspaces, writeWorkspaceMeta } from './helpers/repo-with-workspaces'
+import { waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
 
 type SidebarVisibilityScenario = {
@@ -14,92 +15,45 @@ type SidebarVisibilityScenario = {
   featureId: string
 }
 
-async function seedSidebarVisibilityScenario(page: Page): Promise<SidebarVisibilityScenario> {
-  return page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available')
-    }
-
-    const state = store.getState()
-    const repo = state.repos[0]
-    if (!repo) {
-      throw new Error('Sidebar visibility E2E needs a seeded repo')
-    }
-
-    const currentWorktree = (state.worktreesByRepo[repo.id] ?? [])[0]
-    if (!currentWorktree) {
-      throw new Error('Sidebar visibility E2E needs a seeded worktree')
-    }
-
-    const defaultBranchId = 'e2e-default-branch-visibility-main'
-    const featureId = 'e2e-default-branch-visibility-feature'
-    const currentId = currentWorktree.id
-
-    store.setState((current) => ({
-      worktreesByRepo: {
-        ...current.worktreesByRepo,
-        [repo.id]: [
-          {
-            ...currentWorktree,
-            id: currentId,
-            displayName: 'Current workspace',
-            isMainWorktree: false,
-            branch: 'refs/heads/current',
-            lastActivityAt: 3
-          },
-          {
-            ...currentWorktree,
-            id: defaultBranchId,
-            displayName: 'Default branch workspace',
-            isMainWorktree: true,
-            branch: 'refs/heads/main',
-            lastActivityAt: 2
-          },
-          {
-            ...currentWorktree,
-            id: featureId,
-            displayName: 'Feature workspace',
-            isMainWorktree: false,
-            branch: 'refs/heads/feature',
-            lastActivityAt: 1
-          }
-        ]
-      },
-      tabsByWorktree: {
-        ...current.tabsByWorktree,
-        [defaultBranchId]: [],
-        [featureId]: []
-      },
-      browserTabsByWorktree: {
-        ...current.browserTabsByWorktree,
-        [defaultBranchId]: [],
-        [featureId]: []
-      }
-    }))
-
-    const nextState = store.getState()
-    nextState.setActiveView('terminal')
-    nextState.setSidebarOpen(true)
-    nextState.setGroupBy('none')
-    nextState.setSortBy('recent')
-    nextState.setShowActiveOnly(false)
-    nextState.setFilterRepoIds([])
-
-    return { defaultBranchId, featureId }
-  })
+async function seedSidebarVisibilityScenario(
+  page: Page,
+  testInfo: TestInfo
+): Promise<SidebarVisibilityScenario> {
+  // The repo's own checkout is its default branch workspace.
+  const repo = await addRepoWithWorkspaces(page, testInfo, 2)
+  const [currentId, featureId] = repo.ids
+  await writeWorkspaceMeta(page, [
+    { worktreeId: currentId!, updates: { displayName: 'Current workspace', lastActivityAt: 3 } },
+    {
+      worktreeId: repo.mainId,
+      updates: { displayName: 'Default branch workspace', lastActivityAt: 2 }
+    },
+    { worktreeId: featureId!, updates: { displayName: 'Feature workspace', lastActivityAt: 1 } }
+  ])
+  await page.evaluate((currentId) => {
+    const state = window.__store!.getState()
+    state.setActiveWorktree(currentId)
+    state.setActiveView('terminal')
+    state.setSidebarOpen(true)
+    state.setGroupBy('none')
+    state.setSortBy('recent')
+    state.setShowActiveOnly(false)
+    state.setFilterRepoIds([])
+  }, currentId!)
+  return { defaultBranchId: repo.mainId, featureId: featureId! }
 }
+
+test.use({ seedTestRepo: false })
 
 test.describe('Default branch visibility', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
   })
 
   test('keeps the default branch visible when sleeping workspaces are hidden', async ({
     orcaPage
-  }) => {
-    const { defaultBranchId, featureId } = await seedSidebarVisibilityScenario(orcaPage)
+  }, testInfo) => {
+    const { defaultBranchId, featureId } = await seedSidebarVisibilityScenario(orcaPage, testInfo)
     const defaultBranchRow = worktreeRow(orcaPage, defaultBranchId)
     const featureRow = worktreeRow(orcaPage, featureId)
 

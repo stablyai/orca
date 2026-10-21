@@ -54,6 +54,9 @@ export type SkillDiscoveryTarget = {
   /** Bypass the host's shared scans because the caller knows disk just changed.
    *  Optional so an older host simply ignores it and scans as it always did. */
   refresh?: boolean
+  /** Optional inventory filter for callers that only need known installed skills. */
+  names?: string[]
+  sourceKinds?: SkillSourceKind[]
 }
 
 const ResolvedProjectRuntimeSchema = z.object({
@@ -104,7 +107,12 @@ export const SkillDiscoveryTargetSchema: z.ZodType<SkillDiscoveryTarget> = z.obj
   projectRuntime: z
     .discriminatedUnion('status', [ResolvedProjectRuntimeSchema, RepairProjectRuntimeSchema])
     .optional(),
-  refresh: z.boolean().optional()
+  refresh: z.boolean().optional(),
+  names: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  sourceKinds: z
+    .array(z.enum(['home', 'repo', 'bundled', 'plugin']))
+    .max(4)
+    .optional()
 })
 
 export type SkillFrontmatterSummary = {

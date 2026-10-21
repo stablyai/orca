@@ -1,16 +1,26 @@
-import { agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../../shared/agent-main-agent-verdict'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
   resolveActivityThreadStatusPreview
 } from '@/lib/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { translate } from '@/i18n/i18n'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
+import { isHistoricalActivityState } from './activity-event-state'
+import type {
+  ActivityEvent,
+  ActivityLiveAgentState,
+  AgentPaneThread
+} from './activity-thread-types'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
@@ -58,14 +68,33 @@ export function activityThreadResponseRenderPreview({
 }
 
 export function agentTitle(event: ActivityEvent): string {
+  if (event.state === 'working') {
+    return 'Agent working'
+  }
   if (event.state === 'done') {
-    return event.entry.interrupted ? 'Agent interrupted' : 'Agent finished'
+    switch (agentMainAgentVerdict(event.entry)) {
+      // A turn cut short by anything but the user is a fault, as a failure is.
+      case 'failure':
+      case 'interruption':
+        return 'Agent failed'
+      case 'cancellation':
+      case 'superseded':
+        return 'Agent interrupted'
+      case 'unconfirmed':
+        return 'Couldn’t confirm agent finished'
+      case 'success':
+      case null:
+        return 'Agent finished'
+    }
   }
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
 
 export function agentSummary(event: ActivityEvent): string {
   const prompt = getAgentRowPrimaryText(event.entry)
+  if (event.state === 'working') {
+    return prompt || 'The agent is working on the current turn.'
+  }
   if (event.state === 'done') {
     const message = event.entry.lastAssistantMessage?.trim()
     return message || prompt || 'Completed the current turn.'
@@ -75,8 +104,23 @@ export function agentSummary(event: ActivityEvent): string {
 
 export function agentMeta(event: ActivityEvent): string {
   const agent = formatAgentTypeLabel(event.agentType)
+  if (event.state === 'working') {
+    return `${agent} ${event.state}`
+  }
   if (event.state === 'done') {
-    return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
+    switch (agentMainAgentVerdict(event.entry)) {
+      case 'failure':
+      case 'interruption':
+        return `${agent} failed`
+      case 'cancellation':
+      case 'superseded':
+        return `${agent} interrupted`
+      case 'unconfirmed':
+        return `${agent} unconfirmed`
+      case 'success':
+      case null:
+        return `${agent} completed`
+    }
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
@@ -102,16 +146,88 @@ export function statusPreviewForEntry(
   return resolveActivityThreadStatusPreview(entry, agentState, previousPreview)
 }
 
-export function threadAgentState(thread: AgentPaneThread): AgentDotState {
-  return thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
+export type ActivityThreadStatusId = AgentDotState
+
+/** Single classifier behind grouping, labels, and clear-completed; the only place the
+ *  verdict predicate is spelled. */
+export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
+  // Why: a failed main agent outranks the subagent work still holding its row live.
+  if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
+    return 'failed'
+  }
+  const state = threadCurrentState(thread) ?? 'done'
+  const verdictEntry = threadVerdictEntry(thread)
+  const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
+  if (!thread.currentAgentState && state === 'done' && verdictDot) {
+    return verdictDot
+  }
+  return state
+}
+
+function threadVerdictEntry(thread: AgentPaneThread): AgentStatusEntry | undefined {
+  return paneActivityEntry(thread) ?? thread.latestEvent?.entry
+}
+
+// Why the pane's row: an answered ask's done predates the blocked event, and a clear can hide it.
+function paneActivityEntry(thread: AgentPaneThread): AgentStatusEntry | null {
+  return thread.paneEntry && isHistoricalActivityState(thread.paneEntry.state)
+    ? thread.paneEntry
+    : null
+}
+
+function threadCurrentState(
+  thread: AgentPaneThread
+): ActivityLiveAgentState | AgentStatusState | null {
+  return (
+    thread.currentAgentState ??
+    paneActivityEntry(thread)?.state ??
+    thread.latestEvent?.state ??
+    null
+  )
 }
 
 export function threadAgentStateLabel(thread: AgentPaneThread): string {
-  const state = threadAgentState(thread)
-  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
-    return 'Interrupted'
+  // Literal keys with literal fallbacks: a dynamic key registers no catalog reference
+  // and forces every state string into the boot bundle.
+  switch (activityThreadStatusId(thread)) {
+    case 'working':
+      return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
+    case 'monitoring':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.monitoring',
+        'Monitoring background tasks'
+      )
+    case 'blocked':
+      return translate('auto.components.activity.ActivityPrototypePage.state.blocked', 'Blocked')
+    case 'waiting':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.waiting',
+        'Waiting for input'
+      )
+    case 'interrupted':
+      return translate('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
+    case 'failed':
+      return translate('auto.components.activity.ActivityPrototypePage.state.failed', 'Failed')
+    case 'done':
+      return translate('auto.components.activity.ActivityPrototypePage.state.done', 'Done')
+    case 'idle':
+      return translate('auto.components.activity.ActivityPrototypePage.state.idle', 'Idle')
+    case 'unverifiable':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.unverifiable',
+        'No recent update'
+      )
+    case 'unconfirmed':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.unconfirmed',
+        'Couldn’t confirm'
+      )
+    case 'permission':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.permission',
+        'Needs attention'
+      )
   }
-  return agentStateLabel(state)
 }
 
 export type ActivityThreadStatusKind = 'tool' | 'message' | 'state' | 'none'
@@ -142,9 +258,9 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
   const renderedPreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
-  const liveState = thread.currentAgentState ?? thread.latestEvent?.state ?? null
+  const liveState = threadCurrentState(thread)
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
-  const state = threadAgentState(thread)
+  const state = activityThreadStatusId(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
   if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
     return {

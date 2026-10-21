@@ -11,6 +11,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/e
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 
 export type RuntimeTerminalQuickCommands = {
@@ -71,7 +72,8 @@ async function mutateLocalCommands(
     await get().updateSettingsOrThrow({ terminalQuickCommands: next })
     return true
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to save quick command.'
+    // Why: main refuses an unstorable list with its own sentence; drop Electron's IPC wrapper.
+    const message = extractIpcErrorMessage(error, 'Failed to save quick command.')
     toast.error(
       translate(
         'auto.store.slices.terminal.quick.command.hosts.5b7d781d67',

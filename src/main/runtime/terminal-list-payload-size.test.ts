@@ -30,7 +30,7 @@ const makeStore = () => ({
     { id: REPO_ID, path: '/tmp/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 }
   ],
   addRepo: () => {},
-  updateRepo: (id: string) => makeStore().getRepo(id) as never,
+  updateRepo: () => null,
   getAllWorktreeMeta: () => ({
     [WORKTREE_ID]: {
       displayName: 'foo',

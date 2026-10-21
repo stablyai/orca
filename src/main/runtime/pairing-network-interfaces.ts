@@ -1,3 +1,4 @@
+import { isIP } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import {
   isVirtualBridgeInterface,
@@ -19,11 +20,23 @@ function isUsableIPv6Address(address: string): boolean {
   return !/^fe[89ab][0-9a-f]:/i.test(address)
 }
 
+// Why: Node's `0.0.0.0` listener never accepts IPv6, so a v6 interface would mint a link nothing
+// answers (#31161); only an IPv6 bind (`::` is dual-stack by default) serves both families.
+function listenerServesFamily(listenerHost: string, family: 'IPv4' | 'IPv6'): boolean {
+  const listenerFamily = isIP(listenerHost)
+  if (listenerFamily === 6 && /^[0:]+$/.test(listenerHost)) {
+    return true
+  }
+  return listenerFamily === (family === 'IPv6' ? 6 : 4)
+}
+
 function isProxyFakeIpIPv4Address(address: string): boolean {
   return /^198\.(?:18|19)\./.test(address)
 }
 
+/** `listenerHost` is the WS listener's network bind; only addresses of a family it accepts are offered. */
 export async function getPairingNetworkInterfaces(
+  listenerHost: string,
   getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<NetworkInterface[]> {
   const result: NetworkInterface[] = []
@@ -49,6 +62,9 @@ export async function getPairingNetworkInterfaces(
       ) {
         continue
       }
+      if (!listenerServesFamily(listenerHost, addr.family)) {
+        continue
+      }
       result.push({
         name,
         address: addr.address,
@@ -70,11 +86,12 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
 }
 
 export async function getDefaultPairingAddress(
+  listenerHost: string,
   getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<string | null> {
   return (
     selectAutoAdvertisedPairingAddress(
-      await getPairingNetworkInterfaces(getDefaultRouteInterfaceNames)
+      await getPairingNetworkInterfaces(listenerHost, getDefaultRouteInterfaceNames)
     ) ?? null
   )
 }

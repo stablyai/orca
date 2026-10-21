@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
@@ -46,18 +46,14 @@ export function useProjectRowActions({
     host?: string
     url: string | null
   } | null>(null)
-  const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
-  const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(
+  const { dialog: resolvedDialogRepoItem, repo: dialogRepo } = resolveRepoBackedProjectDialogState(
     dialogRepoItem,
-    liveRepoIds,
+    repos,
     selectedRepoIds
   )
   if (resolvedDialogRepoItem !== dialogRepoItem) {
     setDialogRepoItem(resolvedDialogRepoItem)
   }
-  const dialogRepo = resolvedDialogRepoItem
-    ? (repos.find((repo) => repo.id === resolvedDialogRepoItem.repoId) ?? null)
-    : null
   const dialogSourceContext = dialogRepo
     ? buildTaskSourceContextFromRepo({
         provider: 'github',
@@ -173,7 +169,7 @@ export function useProjectRowActions({
       if (resolution.status === 'no_global_match') {
         setSlugDialog({ origin })
       } else if (resolution.status === 'selected_match' && table) {
-        const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
+        const workItem = buildProjectWorkItem(row, resolution.repo, table.project.host)
         if (workItem) {
           setDialogRepoItem({
             workItem,
@@ -206,7 +202,7 @@ export function useProjectRowActions({
       if (resolution.status !== 'selected_match' || !table) {
         return
       }
-      const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
+      const workItem = buildProjectWorkItem(row, resolution.repo, table.project.host)
       if (!workItem) {
         return
       }

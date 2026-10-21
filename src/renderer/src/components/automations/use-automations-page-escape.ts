@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useAutomationsPageEscape({
   store,
@@ -17,14 +18,12 @@ export function useAutomationsPageEscape({
     externalDeleteTarget,
     isDetailOpen,
     selectedAutomationRunPageId,
-    selectedExternalRunPage,
     pageView,
     runPageOrigin,
     setPageView,
     setActivePaneTab,
     setIsDetailOpen,
-    setSelectedAutomationRunPageId,
-    setSelectedExternalRunPage
+    setSelectedAutomationRunPageId
   } = local
   useEffect(() => {
     if (createOpen || deleteTarget || externalDeleteTarget || activeModal !== 'none') {
@@ -75,10 +74,6 @@ export function useAutomationsPageEscape({
 
       if (isDetailOpen) {
         event.preventDefault()
-        if (selectedExternalRunPage) {
-          setSelectedExternalRunPage(null)
-          return
-        }
         if (selectedAutomationRunPageId) {
           setSelectedAutomationRunPageId(null)
           return
@@ -98,8 +93,8 @@ export function useAutomationsPageEscape({
       closeAutomationsPage()
     }
 
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
     closeAutomationsPage,
@@ -110,11 +105,9 @@ export function useAutomationsPageEscape({
     pageView,
     runPageOrigin,
     selectedAutomationRunPageId,
-    selectedExternalRunPage,
     setActivePaneTab,
     setIsDetailOpen,
     setSelectedAutomationRunPageId,
-    setSelectedExternalRunPage,
     setPageView
   ])
 }

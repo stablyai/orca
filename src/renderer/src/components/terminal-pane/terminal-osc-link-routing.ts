@@ -48,7 +48,7 @@ export function handleOscLink(
     Partial<
       Pick<
         LinkHandlerDeps,
-        'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro'
+        'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath' | 'wslDistro' | 'sourceTabId'
       >
     > & {
       sourceOwner?: HttpLinkSourceOwner

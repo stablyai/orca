@@ -2,8 +2,8 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { ActiveSurfaceVariant } from '../../WorktreeCard'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { HostSectionRow } from '../../host-section-rows'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
 
 // A worktree can render in more than one section; the row the user actually clicked owns

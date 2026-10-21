@@ -198,11 +198,9 @@ describePosix('daemon shell-ready launch config', () => {
   })
 
   it('extends the startup barrier to fish so launch commands queue until the prompt', async () => {
-    const { shellPathSupportsPtyStartupBarrier, supportsPtyStartupBarrier } =
-      await importFreshShellReady()
+    const { shellPathSupportsPtyStartupBarrier } = await importFreshShellReady()
 
     expect(shellPathSupportsPtyStartupBarrier('/opt/homebrew/bin/fish')).toBe(true)
-    expect(supportsPtyStartupBarrier({ SHELL: '/usr/local/bin/fish' })).toBe(true)
     // Why: unwrapped shells must stay off the barrier or their first command queues forever.
     expect(shellPathSupportsPtyStartupBarrier('/usr/bin/tcsh')).toBe(false)
   })
@@ -226,12 +224,20 @@ describePosix('daemon shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps markerless fish spawns unwrapped', async () => {
+  it('keeps markerless fish argv untouched and points it at the vendor snippet', async () => {
     const { getMarkerlessShellLaunchConfig } = await importFreshShellReady()
 
     const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
-    expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
+    expect(config.args).toBeNull()
+    expect(config.supportsReadyMarker).toBe(false)
+    const prefix = config.env.ORCA_FISH_XDG_DATA_DIRS_PREFIX
+    expect(prefix).toMatch(/\/fish-xdg-data:\/usr\/local\/share:\/usr\/share$/)
+    expect(config.env).toEqual({ XDG_DATA_DIRS: prefix, ORCA_FISH_XDG_DATA_DIRS_PREFIX: prefix })
+    const dataDir = prefix.split(':')[0]
+    expect(
+      readFileSync(`${dataDir}/fish/vendor_conf.d/orca-shell-integration.fish`, 'utf8')
+    ).toContain('set argv --no-daemon $argv')
   })
 
   itWithFish(
@@ -444,23 +450,6 @@ describePosix('daemon shell-ready launch config', () => {
     for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
       expect(existsSync(join(getShellReadyWrapperRoot(), 'zsh', name))).toBe(false)
     }
-  })
-
-  it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-
-    // Why .zshenv: the widget registration lives in the deferred hook, which the
-    // first prompt's precmd sweep calls exactly once.
-    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-    expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
-    expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
-    // Why: add-zle-hook-widget aborts its chain when an earlier hook exits non-zero, so don't register the marker through it.
-    expect(zshenv).not.toContain('add-zle-hook-widget line-init')
-    // Why: re-source guard — skip re-capturing when already the bound widget so the prior chain survives a second source.
-    expect(zshenv).toContain('== "user:__orca_prompt_mark"')
   })
 
   // Why: oh-my-zsh vi-mode's zle-line-init returns non-zero; add-zle-hook-widget then aborts the chain and the marker never fires.
@@ -700,22 +689,5 @@ describePosix('daemon shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
     }
-  })
-
-  it('sources the user .zshenv at wrapper top level, not inside a function', async () => {
-    // Why: PR #1737 sourced .zshenv in a wrapper function, breaking `typeset -U
-    // path`. Top-level sourcing is still the contract.
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-
-    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-
-    expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
-    // Every function the hook needs is defined above the source, so a user
-    // `emulate sh` cannot leave the rest of this file unparseable.
-    expect(zshenv.indexOf('__orca_deferred_init() {')).toBeLessThan(
-      zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
-    )
   })
 })

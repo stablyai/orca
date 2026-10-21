@@ -28,6 +28,7 @@ const LAZY_LOCALE_LOADERS: Record<
   fr: () => import('../../renderer/src/i18n/locales/fr.json'),
   ja: () => import('../../renderer/src/i18n/locales/ja.json'),
   ko: () => import('../../renderer/src/i18n/locales/ko.json'),
+  pt: () => import('../../renderer/src/i18n/locales/pt.json'),
   zh: () => import('../../renderer/src/i18n/locales/zh.json')
 }
 

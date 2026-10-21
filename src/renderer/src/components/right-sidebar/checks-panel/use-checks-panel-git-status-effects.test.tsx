@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
   getRuntimeGitUpstreamStatus: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => mocks)
+vi.mock('@/runtime/runtime-git-status-client', () => ({
+  getRuntimeGitStatus: mocks.getRuntimeGitStatus
+}))
+vi.mock('@/runtime/runtime-git-sync-client', () => ({
+  getRuntimeGitUpstreamStatus: mocks.getRuntimeGitUpstreamStatus
+}))
 
 import { useChecksPanelGitStatusEffects } from './use-checks-panel-git-status-effects'
 import { deferred, flush, mountProbe, unmountProbes } from '../source-control-hook-test-harness'
@@ -39,6 +44,7 @@ function Probe({
   worktreePath?: string
 }): null {
   panelContextKeyRef.current = contextKey
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the probe passes only the fields this effect reads.
   useChecksPanelGitStatusEffects({
     activeConnectionId: repoConnectionId,
     activeWorktreeId: worktreeId,
@@ -63,7 +69,7 @@ function Probe({
     linkedPR: null,
     fallbackGitHubPRNumber: null,
     localExecutionScope: 'host',
-    ownerSettings: null,
+    ownerTarget: { kind: 'local' },
     panelContextKey: contextKey,
     panelContextKeyRef,
     remoteStatus: undefined,

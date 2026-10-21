@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto'
 import {
   BROWSING_GUEST_POLICY,
   type BrowserGuestPolicy,
   type PopupOwnerContext
 } from './browser-manager-types'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
+import { allowPageUnload } from './browser-guest-unload-policy'
 import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -27,31 +27,22 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
-    // Why: only the primary embedded browser converts new-tab clicks to Orca tabs; OAuth child windows keep native link behavior.
-    const clickedLinkFrameName = inheritedOwnerContext
-      ? null
-      : `__orca_clicked_link_foreground_${randomUUID()}`
-    if (clickedLinkFrameName) {
-      this.clickedLinkFrameNameByGuestId.set(guest.id, clickedLinkFrameName)
-    }
-
-    // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
-    const disposeAntiDetection = this.injectAntiDetection(guest)
+    const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
-    const disposePopupPolicy = this.installGuestPopupPolicy(guest, clickedLinkFrameName)
+    const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeAntiDetection()
+      disposeDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
     })
   }
 
   /**
-   * A workspace document is not the web: no popups, no link routing, no anti-detection, and no
+   * A workspace document is not the web: no popups, no link routing, no auth-identity tracking, and no
    * navigation bookkeeping for chrome it does not have. What it does share with a browsing guest is
    * this method's teardown, so a retired preview drops its listeners on the same path.
    */
@@ -64,10 +55,12 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.cleanupGuestPolicyAttachment(guest.id)
     }
     guest.on('destroyed', handleDestroyed)
+    guest.on('will-prevent-unload', allowPageUnload)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
       try {
         guest.off('destroyed', handleDestroyed)
+        guest.off('will-prevent-unload', allowPageUnload)
       } catch {
         // guest may already be destroyed
       }

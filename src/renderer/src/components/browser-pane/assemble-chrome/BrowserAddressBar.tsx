@@ -9,6 +9,7 @@ import type { BrowserPageDocLocation } from '../../../../../shared/browser-works
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
 import { shouldOverlayBrowserAddressBar } from './browser-address-bar-expansion'
 import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
+import { useBrowserAddressBarClickSelect } from './use-browser-address-bar-click-select'
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
@@ -53,6 +54,7 @@ export default function BrowserAddressBar({
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const closingRef = useRef(false)
+  const addressBarClickSelect = useBrowserAddressBarClickSelect()
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
@@ -424,6 +426,8 @@ export default function BrowserAddressBar({
               ref={inputRef}
               value={value}
               onFocus={handleFocus}
+              onMouseDown={addressBarClickSelect.onMouseDown}
+              onClick={addressBarClickSelect.onClick}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               data-orca-browser-address-bar="true"

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 
 const PAGE: BrowserClientPageRendererIdentity = {
@@ -81,8 +81,9 @@ describe('browser client page retained registry', () => {
     expect(webview.getAttribute('src')).toBe('about:blank')
     expect(webview.getAttribute('partition')).toBe(PAGE.partition)
     expect(webview.getAttribute('webpreferences')).toBe(
-      ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE
+      ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE
     )
+    expect(webview.getAttribute('webpreferences')).toContain('transparent=false')
     expect(webview.hasAttribute('allowpopups')).toBe(false)
     expect(webview.parentElement?.parentElement?.parentElement).toBe(document.body)
     expect(webview.isConnected).toBe(true)
@@ -172,55 +173,6 @@ describe('browser client page retained registry', () => {
     expect(retainedHost?.style.cssText).toContain('left: -10000px')
     expect(webview.isConnected).toBe(true)
     expect(registry.getMemoryProfile().attachedPageCount).toBe(1)
-  })
-
-  it('tracks a pure pane move that fires no resize or scroll event', async () => {
-    const frames: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      frames.push(callback)
-      return frames.length
-    })
-    const cancelled = vi.fn()
-    vi.stubGlobal('cancelAnimationFrame', cancelled)
-    try {
-      const { registry, webviews } = createRig()
-      const mounting = registry.mountPage(PAGE)
-      attach(webviews[0]!)
-      await mounting
-      const retainedHost = webviews[0]!.parentElement as HTMLDivElement
-      const viewport = document.createElement('div')
-      const rect = (left: number): DOMRect =>
-        ({
-          bottom: 260,
-          height: 200,
-          left,
-          right: left + 300,
-          top: 60,
-          width: 300,
-          x: left,
-          y: 60,
-          toJSON: () => ({})
-        }) as DOMRect
-      const bounds = vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(rect(40))
-      document.body.appendChild(viewport)
-      const attachment = registry.attachPage(
-        { browserPageId: PAGE.browserPageId, pageHostGeneration: PAGE.pageHostGeneration },
-        viewport
-      )
-      expect(retainedHost.style.cssText).toContain('left: 40px')
-
-      // Why: dragging a tab across an even split moves the pane without resizing it.
-      bounds.mockReturnValue(rect(700))
-      frames.splice(0).forEach((callback) => callback(0))
-      expect(retainedHost.style.cssText).toContain('left: 700px')
-      expect(retainedHost.style.cssText).toContain('width: 300px')
-
-      attachment.detach()
-      expect(cancelled).toHaveBeenCalled()
-      expect(retainedHost.style.cssText).toContain('left: -10000px')
-    } finally {
-      vi.unstubAllGlobals()
-    }
   })
 
   it('keeps metadata revisions monotonic across visible detach and reattach', async () => {

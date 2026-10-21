@@ -24,8 +24,8 @@ export type TerminalComposerDraft = {
 
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
-const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
-const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
+const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
+const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
   context: TerminalCursorContext,
@@ -94,7 +94,7 @@ function isStockPlaceholder(
     .replace(/\s+/g, ' ')
     .trim()
   return (
-    /^Try\s+["“]/.test(text) ||
+    /^Try\s+["\u201C]/.test(text) ||
     text === 'Ask Codex to do anything' ||
     text === 'Ask a follow-up question'
   )
@@ -118,7 +118,8 @@ function detectTerminalComposer(
   const cursorText = `${context.beforeCursor}${afterCursor}`
   for (let index = cursorIndex; index >= 0; index -= 1) {
     const row = context.rows[index] ?? ''
-    const glyph = row.match(/^\s*([❯›»])/)?.[1] as '❯' | '›' | '»' | undefined
+    const matched = row.match(/^\s*([\u276F\u203A\u00BB])/)?.[1]
+    const glyph = (['❯', '›', '»'] as const).find((candidate) => candidate === matched)
     if (glyph) {
       if (glyph === '❯' && !COMPOSER_FRAME_LINE.test(context.rows[index - 1] ?? '')) {
         return null
@@ -131,10 +132,13 @@ function detectTerminalComposer(
       }
       const lines: { text: string; wrapped: boolean }[] =
         index === cursorIndex
-          ? [{ text: cursorText.replace(/^\s*[❯›»]\s?/, ''), wrapped: false }, ...continuationRows]
+          ? [
+              { text: cursorText.replace(/^\s*[\u276F\u203A\u00BB]\s?/, ''), wrapped: false },
+              ...continuationRows
+            ]
           : [
               {
-                text: (context.typedRows[index] ?? row).replace(/^\s*[❯›»]\s?/, ''),
+                text: (context.typedRows[index] ?? row).replace(/^\s*[\u276F\u203A\u00BB]\s?/, ''),
                 wrapped: false
               },
               ...context.typedRows.slice(index + 1, cursorIndex).map((text, offset) => ({

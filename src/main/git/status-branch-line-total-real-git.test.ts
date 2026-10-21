@@ -264,10 +264,7 @@ describe('branch line total against a real repository', () => {
     })
   })
 
-  // Documented deviation from a pure `git diff`: the untracked half is added on
-  // top of the tracked range, so a deleted-then-recreated path is counted twice.
-  // Locked in deliberately — changing it must be a deliberate spec change.
-  it('counts both the deletion and the recreated untracked file for the same path', async () => {
+  it('omits the total when a deleted base file is recreated as untracked', async () => {
     const repo = await createFixtureRepo()
     await write(repo, 'gone.txt', 'a\nb\nc\n')
     const mergeBase = commitAll(repo, 'base')
@@ -281,12 +278,6 @@ describe('branch line total against a real repository', () => {
       ['untracked', 'gone.txt']
     ])
     expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 0, removed: 3 })
-    expect(result.branchLineTotal).toEqual({
-      added: 2,
-      removed: 3,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
+    expect(result.branchLineTotal).toBeUndefined()
   })
 })

@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
@@ -42,7 +43,7 @@ export function buildObservedSetupCommand(
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'
   ].join('; ')
-  return { command: `bash -lc ${quotePosixArg(script)}` }
+  return { command: `bash -lc ${quotePosixShell(script)}` }
 }
 
 export function createSetupCompletionScanner(
@@ -77,8 +78,4 @@ export function createSetupCompletionScanner(
 
 function completionPrefix(completionToken: string): string {
   return `${SETUP_COMPLETION_PREFIX}${completionToken}:`
-}
-
-function quotePosixArg(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
 }

@@ -3,6 +3,8 @@
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
+  type NativeChatEditPatch,
+  type NativeChatEditPatchHunk,
   type NativeChatMessage
 } from '../../shared/native-chat-types'
 import {
@@ -13,22 +15,81 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
+import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
+
+const MAX_EDIT_PATCH_HUNKS = 40
+const MAX_EDIT_PATCH_HUNK_LINES = 400
+
+/** Claude reports an edit as a snippet pair on the call, which cannot locate the
+ *  change in the file. The result record carries the hunks it resolved against
+ *  the real file, so keep them for the renderer's line-number gutter. */
+function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch | null {
+  const result = asRecord(record.toolUseResult)
+  const raw = result?.structuredPatch
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return null
+  }
+  const hunks: NativeChatEditPatchHunk[] = []
+  for (const entry of raw.slice(0, MAX_EDIT_PATCH_HUNKS)) {
+    const hunk = asRecord(entry)
+    const lines = hunk?.lines
+    if (
+      typeof hunk?.oldStart !== 'number' ||
+      typeof hunk.newStart !== 'number' ||
+      !Array.isArray(lines)
+    ) {
+      continue
+    }
+    hunks.push({
+      oldStart: hunk.oldStart,
+      oldLines: typeof hunk.oldLines === 'number' ? hunk.oldLines : 0,
+      newStart: hunk.newStart,
+      newLines: typeof hunk.newLines === 'number' ? hunk.newLines : 0,
+      lines: lines
+        .slice(0, MAX_EDIT_PATCH_HUNK_LINES)
+        .flatMap((line) => (typeof line === 'string' ? [line] : []))
+    })
+  }
+  if (hunks.length === 0) {
+    return null
+  }
+  const filePath = extractString(result?.filePath)
+  return { ...(filePath ? { filePath } : {}), hunks }
+}
+
+/** Attaches the resolved hunks to the record's tool result, which is the only
+ *  block in a Claude result turn. */
+function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): NativeChatBlock[] {
+  let attached = false
+  return blocks.map((block) => {
+    if (attached || block.type !== 'tool-result') {
+      return block
+    }
+    attached = true
+    return { ...block, editPatch: patch }
+  })
+}
 
 export function decodeClaudeTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
-  if (!record) {
+  const parsed = parseJsonObject(line)
+  if (!parsed) {
     return null
   }
+  const record = claudeQueuedPromptAsUserRecord(parsed) ?? parsed
   const role = record.type
   if (role !== 'user' && role !== 'assistant') {
     return null
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
+  // Why: the row link pairs a local command's reply with its command row.
+  const parentUuid = extractString(record.parentUuid)
+  const parent = parentUuid ? { parentId: parentUuid } : {}
   if (claudeInterruptedMessageId(record)) {
     // Why: keep Claude's injected boilerplate out of the user-bubble path while
     // preserving the interruption as a quiet, replayable conversation status.
@@ -37,11 +98,14 @@ export function decodeClaudeTranscriptLine(
       role: 'system',
       blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
       timestamp,
-      source: 'transcript'
+      source: 'transcript',
+      ...parent
     }
   }
   const message = asRecord(record.message)
-  const decodedBlocks = claudeContentBlocks(message?.content)
+  const editPatch = claudeEditPatch(record)
+  const contentBlocks = claudeContentBlocks(message?.content)
+  const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
   if (decodedBlocks.length === 0) {
     return null
   }
@@ -67,10 +131,43 @@ export function decodeClaudeTranscriptLine(
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks),
-    blocks,
+    // Why: a `!` command's echo reads `!cmd`; left as harness markup the row was
+    // hidden as noise and the echo stayed pinned at the tail (#25956).
+    blocks:
+      role === 'user'
+        ? blocks.map((block) => unwrapClaudeBashInputBlock(unwrapClaudePastedContentBlock(block)))
+        : blocks,
     timestamp,
-    source: 'transcript'
+    source: 'transcript',
+    ...parent
   }
+}
+
+/** A prompt sent mid-turn is recorded only as a `queued_command` attachment, never
+ *  a `type:"user"` row; without one its echo had nothing to match and stayed
+ *  pinned below every later turn (#14308, #20846). Task notifications and
+ *  peer-agent messages share the attachment type but were not typed by the user. */
+function claudeQueuedPromptAsUserRecord(
+  record: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (record.type !== 'attachment') {
+    return null
+  }
+  const attachment = asRecord(record.attachment)
+  if (attachment?.type !== 'queued_command' || attachment.commandMode !== 'prompt') {
+    return null
+  }
+  // Why: older Claude versions omit `origin`; their prompt-mode queue entries
+  // were all typed by the user.
+  const originKind = asRecord(attachment.origin)?.kind
+  if (originKind !== undefined && originKind !== 'human') {
+    return null
+  }
+  const prompt = attachment.prompt
+  if (typeof prompt !== 'string' && !Array.isArray(prompt)) {
+    return null
+  }
+  return { ...record, type: 'user', message: { role: 'user', content: prompt } }
 }
 
 // Keep only genuine image companion records; a marker mixed with prose must

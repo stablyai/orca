@@ -3,8 +3,8 @@ import { sortCollectionsByOrder } from '../../../../shared/collections'
 import type { Collection } from '../../../../shared/collection-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
-import type { Row } from './worktree-list/grouping/row-types'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 
 export const COLLECTION_GROUP_META = {
   tone: 'text-foreground',
@@ -87,8 +87,7 @@ export function buildCollectionRows(input: {
       key: headerKey,
       label: collection.name,
       count: memberCount,
-      tone: COLLECTION_GROUP_META.tone,
-      icon: COLLECTION_GROUP_META.icon,
+      icon: { kind: 'collection' },
       collection
     })
     if (collapsedGroups.has(headerKey)) {
@@ -109,7 +108,7 @@ export function buildCollectionRows(input: {
         key: repoHeaderKey,
         label: repo?.displayName ?? repoId,
         count: members.length,
-        tone: COLLECTION_GROUP_META.tone,
+        icon: { kind: 'collection' },
         repo,
         collection
       })
@@ -125,7 +124,6 @@ export function buildCollectionRows(input: {
           repo,
           depth: 0,
           groupDepth: 1,
-          lineageTrail: [],
           isLastLineageChild: false,
           lineageChildCount: 0
         })

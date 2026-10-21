@@ -1,0 +1,4 @@
+# The bench writes a resume-credential bundle here. It carries a live device token and
+# resume token for a real paired desktop; it must never reach the repo.
+*.json
+state*

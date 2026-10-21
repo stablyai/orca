@@ -1,3 +1,9 @@
+import {
+  createMarkdownFenceRangeCursor,
+  createMarkdownFenceTracker,
+  getMarkdownFenceRanges
+} from './markdown-fence-scanner'
+
 type ReferenceLinkDefinition = {
   label: string
   title: string | null
@@ -65,25 +71,12 @@ function splitReferenceDefinitions(content: string): {
   markdown: string
 } {
   const definitions = new Map<string, ReferenceLinkDefinition>()
-  let activeFence: '`' | '~' | null = null
-  let activeFenceLength = 0
+  const fence = createMarkdownFenceTracker()
   let markdown = ''
 
   forEachReferenceDefinitionLine(content, (line, newline) => {
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
-    if (fenceMatch) {
-      const fenceChar = fenceMatch[1][0] as '`' | '~'
-      const fenceLength = fenceMatch[1].length
-      if (activeFence === null) {
-        activeFence = fenceChar
-        activeFenceLength = fenceLength
-      } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-        activeFence = null
-        activeFenceLength = 0
-      }
-    }
-
-    const definition = activeFence === null ? parseReferenceDefinition(line) : null
+    const isFenceLine = fence.consume(line)
+    const definition = isFenceLine || fence.insideFence ? null : parseReferenceDefinition(line)
     if (definition) {
       definitions.set(definition.label, definition)
       return
@@ -148,31 +141,11 @@ function replaceReferenceLinks(
 ): string {
   let result = ''
   let index = 0
-  let activeFence: '`' | '~' | null = null
-  let activeFenceLength = 0
-  let isLineStart = true
+  const isInsideFence = createMarkdownFenceRangeCursor(getMarkdownFenceRanges(markdown))
 
   while (index < markdown.length) {
-    if (isLineStart) {
-      const lineRest = markdown.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
-      if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
-        if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-          activeFence = null
-          activeFenceLength = 0
-        }
-      }
-    }
-
-    if (activeFence || markdown[index] !== '[' || isEscaped(markdown, index)) {
-      const nextChar = markdown[index]
-      result += nextChar
-      isLineStart = nextChar === '\n'
+    if (isInsideFence(index) || markdown[index] !== '[' || isEscaped(markdown, index)) {
+      result += markdown[index]
       index += 1
       continue
     }
@@ -180,7 +153,6 @@ function replaceReferenceLinks(
     const closingTextIndex = findClosingBracket(markdown, index + 1)
     if (closingTextIndex === -1) {
       result += markdown[index]
-      isLineStart = false
       index += 1
       continue
     }
@@ -189,7 +161,6 @@ function replaceReferenceLinks(
     const afterText = markdown[closingTextIndex + 1]
     if (afterText === '(') {
       result += markdown[index]
-      isLineStart = false
       index += 1
       continue
     }
@@ -202,7 +173,6 @@ function replaceReferenceLinks(
         const definition = definitions.get(label)
         if (definition) {
           result += formatInlineReferenceLink(text, definition)
-          isLineStart = false
           index = closingLabelIndex + 1
           continue
         }
@@ -211,14 +181,12 @@ function replaceReferenceLinks(
       const definition = definitions.get(normalizeReferenceLabel(text))
       if (definition) {
         result += formatInlineReferenceLink(text, definition)
-        isLineStart = false
         index = closingTextIndex + 1
         continue
       }
     }
 
     result += markdown[index]
-    isLineStart = false
     index += 1
   }
 

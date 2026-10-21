@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,12 +41,14 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
   const task = before.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
   const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   const cutoverQuestion = options?.seedCutoverQuestion
     ? before.insertMessage({
+        runId: 'run_legacy_local',
         from: WORKER_HANDLE,
         to: COORDINATOR_HANDLE,
         subject: 'Question',
@@ -60,6 +63,7 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
   const cutoverAnswer =
     cutoverQuestion && options?.seedCutoverAnswer
       ? before.insertMessage({
+          runId: 'run_legacy_local',
           from: COORDINATOR_HANDLE,
           to: WORKER_HANDLE,
           subject: 'Re: Question',
@@ -308,7 +312,10 @@ describe('legacy question takeover compatibility', () => {
       resumed as {
         result: {
           legacyCompatibility: {
-            answerAcknowledgement: { questionId: string; answerMessageId: string }
+            answerAcknowledgement: {
+              questionId: string
+              answerMessageId: string
+            }
           }
         }
       }

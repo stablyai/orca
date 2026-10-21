@@ -19,7 +19,11 @@ function getLineageSourceLabel(source: string): string {
   }
 }
 
-export function printLineageSummary(result: RuntimeWorktreeCreateResult, json: boolean): void {
+export function printLineageSummary(
+  result: Pick<RuntimeWorktreeCreateResult, 'lineage' | 'workspaceLineage'> &
+    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings'>>,
+  json: boolean
+): void {
   if (json) {
     return
   }

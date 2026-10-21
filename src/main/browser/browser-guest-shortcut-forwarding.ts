@@ -1,3 +1,4 @@
+import { isAgentInjectingInput } from './agent-input-injection'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
@@ -52,7 +53,7 @@ export function setupGuestShortcutForwarding(args: {
   ): void => {
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
-    renderer?.send('ui:zoomBrowserPage', direction)
+    renderer?.send('ui:zoomBrowserPage', { browserPageId: browserTabId, direction })
   }
 
   const forwardContext: GuestShortcutForwardContext = {
@@ -67,6 +68,10 @@ export function setupGuestShortcutForwarding(args: {
   }
 
   const handler = (event: Electron.Event, input: Electron.Input): void => {
+    // Why: agent-injected keys must not run Orca shortcuts or grab actions (#20595).
+    if (isAgentInjectingInput(guest)) {
+      return
+    }
     const keybindings = getKeybindings?.()
     if (
       input.type === 'keyDown' &&

@@ -6,6 +6,10 @@ import {
   type RuntimeTerminalProcessInspection
 } from '@/runtime/runtime-terminal-inspection'
 import { translate } from '@/i18n/i18n'
+import {
+  getCodexAccountDisplayLabel,
+  normalizeCodexAccountEmail
+} from './codex-account-display-label'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import {
   isCodexForegroundProcess,
@@ -19,14 +23,15 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
 // Why launchAgent: pty:spawn runs the managed-auth readiness gate and Codex
-// launch prep (project trust pre-mark) only for launchAgent 'codex', so without
-// it a restart respawn could race the account handoff and record a launch
-// account the pane does not actually read.
+// launch prep only for launchAgent 'codex', so without it a restart respawn
+// could race the account handoff and record a launch account the pane does not
+// actually read.
 export const CODEX_ACCOUNT_RESTART_STARTUP = {
   command: 'codex',
   startupCommandDelivery: 'shell-ready',
@@ -87,7 +92,6 @@ async function readRecordedCodexPaneLanes(
  * null (scan failed or unsupported) both keep today's ineligible outcome.
  */
 async function isConfirmedCodexForegroundDespiteShellReading(
-  state: AppState,
   ptyId: string,
   launchAgent: TuiAgent | undefined,
   inspection: RuntimeTerminalProcessInspection
@@ -100,7 +104,7 @@ async function isConfirmedCodexForegroundDespiteShellReading(
   ) {
     return false
   }
-  const confirmed = await confirmRuntimeTerminalForegroundProcess(state.settings, ptyId)
+  const confirmed = await confirmRuntimeTerminalForegroundProcess(ptyId)
   return isCodexForegroundProcess(confirmed)
 }
 
@@ -154,7 +158,7 @@ async function scanCodexPanes(
           laneSource: lane.source
         }
       }
-      const inspection = await inspectRuntimeTerminalProcess(state.settings, ptyId).then(
+      const inspection = await inspectRuntimeTerminalProcess(ptyId).then(
         (result) => result,
         // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
         () => null
@@ -162,12 +166,7 @@ async function scanCodexPanes(
       const eligible =
         inspection !== null &&
         (isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }) ||
-          (await isConfirmedCodexForegroundDespiteShellReading(
-            state,
-            ptyId,
-            tab.launchAgent,
-            inspection
-          )))
+          (await isConfirmedCodexForegroundDespiteShellReading(ptyId, tab.launchAgent, inspection)))
       return {
         ptyId,
         eligible,
@@ -198,6 +197,8 @@ export async function markLiveCodexSessionsForRestart(args: {
   previousAccountId?: string | null
   nextAccountId?: string | null
   target?: CodexAccountSelectionTarget | null
+  /** Host whose roster the change wrote; never inferred from focus. */
+  owner: RuntimeClientTarget
   /** Set when the change cleared the selection rather than pointing it somewhere. */
   clearsEveryWslDistro?: boolean
 }): Promise<void> {
@@ -205,7 +206,7 @@ export async function markLiveCodexSessionsForRestart(args: {
   const scans = await scanCodexPanes(state, {
     ptyIdFilter: null,
     isLaneInScope: getCodexAccountSwitchLaneMatcher({
-      settings: state.settings,
+      owner: args.owner,
       target: args.target,
       clearsEveryWslDistro: args.clearsEveryWslDistro
     })
@@ -251,8 +252,7 @@ export async function markLiveCodexSessionsForRestart(args: {
             previousAccountLabel: args.previousAccountLabel,
             nextAccountLabel: args.nextAccountLabel,
             previousAccountId: stalePane.launchAccountId,
-            nextAccountId: stalePane.activeAccountId,
-            homeRouteChanged: stalePane.reason === 'home-route-change'
+            nextAccountId: stalePane.activeAccountId
           }
         ]
       }
@@ -315,8 +315,7 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
       // Why the ids: main decided staleness by id, and the labels can collide.
       // Passing only labels hands the store a question it cannot answer.
       previousAccountId: pane.launchAccountId,
-      nextAccountId: pane.activeAccountId,
-      ...(pane.reason === 'home-route-change' ? { homeRouteChanged: true as const } : {})
+      nextAccountId: pane.activeAccountId
     }))
   )
   // Why not every stale pane: the bind sweep suppresses a "notified" pane for the
@@ -326,13 +325,7 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
   return scans.map((scan) => (notifiedPtyIds.has(scan.ptyId) ? { ...scan, notified: true } : scan))
 }
 
-/**
- * Names an account for the restart prompt.
- *
- * Why the collision check: one OpenAI login added under two ChatGPT workspaces
- * gives both accounts the same email, and "switch from x@y to x@y" names
- * neither. The workspace is appended only when it is what tells them apart.
- */
+// Same-email accounts need the same workspace or ID distinction as the switcher.
 export function resolveCodexRestartPromptAccountLabel(
   accounts: readonly { id: string; email: string; workspaceLabel?: string | null }[],
   accountId: string | null | undefined
@@ -344,12 +337,11 @@ export function resolveCodexRestartPromptAccountLabel(
   if (!account) {
     return translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
   }
+  const email = normalizeCodexAccountEmail(account.email)
   const sharesEmail = accounts.some(
-    (entry) => entry.id !== account.id && entry.email === account.email
+    (entry) => entry.id !== account.id && normalizeCodexAccountEmail(entry.email) === email
   )
-  return sharesEmail && account.workspaceLabel
-    ? `${account.email} (${account.workspaceLabel})`
-    : account.email
+  return sharesEmail ? getCodexAccountDisplayLabel(account, accounts) : account.email
 }
 
 async function createCodexAccountLabelResolver(): Promise<(accountId: string | null) => string> {

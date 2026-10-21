@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { HoverCard as HoverCardPrimitive } from 'radix-ui'
+import * as HoverCardPrimitive from 'radix-ui/hover-card'
+import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
@@ -13,12 +14,25 @@ function HoverCardTrigger({ ...props }: React.ComponentProps<typeof HoverCardPri
   return <HoverCardPrimitive.Trigger data-slot="hover-card-trigger" {...props} />
 }
 
+const hoverCardContentVariants = cva('', {
+  variants: {
+    variant: {
+      default: 'w-64 p-4',
+      'workspace-details':
+        'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek'
+    }
+  },
+  defaultVariants: { variant: 'default' }
+})
+
 function HoverCardContent({
   className,
+  variant,
   align = 'center',
   sideOffset = 4,
   ...props
-}: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
+}: React.ComponentProps<typeof HoverCardPrimitive.Content> &
+  VariantProps<typeof hoverCardContentVariants>) {
   return (
     <HoverCardPrimitive.Portal data-slot="hover-card-portal">
       <HoverCardPrimitive.Content
@@ -31,7 +45,8 @@ function HoverCardContent({
         // dark canvas (#171717 vs #0a0a0a, ~3% white lift) with a near-
         // invisible border.
         className={cn(
-          'z-50 w-64 origin-(--radix-hover-card-content-transform-origin) rounded-md border border-black/14 bg-[rgba(255,255,255,0.82)] p-4 text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-hidden dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          'z-50 origin-(--radix-hover-card-content-transform-origin) rounded-md border border-black/14 bg-[rgba(255,255,255,0.82)] text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-hidden dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          hoverCardContentVariants({ variant }),
           className
         )}
         {...props}

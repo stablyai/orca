@@ -4,14 +4,16 @@ import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { parseFormEncodedBody } from '../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { AgentHookServerLifecycle } from './server/server-lifecycle'
+import { AgentHookServerAgentPresence } from './server/server-agent-presence'
 import { isValidPaneKey } from './server/server-status-identity'
 
 export type {
   AgentHookAuthorityAttestation,
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
+  AgentHookStatusRowMutation,
   AgentHookStatusChangeEntry,
+  AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload
 } from './server/server-types'
 export type { AgentHookSource }
@@ -24,7 +26,7 @@ export {
 export { isValidPaneKey }
 
 /** Public composition seam for the loopback hook listener and relay status adapter. */
-export class AgentHookServer extends AgentHookServerLifecycle {}
+export class AgentHookServer extends AgentHookServerAgentPresence {}
 
 export const agentHookServer = new AgentHookServer()
 
@@ -40,6 +42,8 @@ export const _internals = {
   parseFormEncodedBody,
   resetCachesForTests: (): void => {
     clearAllListenerCaches(agentHookServer._getStateForTests())
+    agentHookServer._resetCanonicalStatusForTests()
+    agentHookServer._resetRowOwnershipForTests()
     agentHookServer._resetPromptSentDedupeForTests()
     agentHookServer._resetConnectionTimestampWatermarksForTests()
   }

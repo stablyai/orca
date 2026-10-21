@@ -1,10 +1,12 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { worktreeWorkspaceKey, folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { makeLineage, makeWorktree } from './worktrees-slice-test-fixtures'
+import { TEST_REPO, makeLineage, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
@@ -36,8 +38,14 @@ describe('createWorktree composer parent pick', () => {
   })
 
   function createParentPickStore(parent?: Worktree) {
-    const store = createTestStore()
-    store.setState({ worktreesByRepo: { repo1: parent ? [parent] : [] } } as Partial<AppState>)
+    const store = createRepoTestStore()
+    store.setState({
+      repos:
+        parent && parent.repoId !== TEST_REPO.id
+          ? [TEST_REPO, { ...TEST_REPO, id: parent.repoId }]
+          : [TEST_REPO],
+      worktreesByRepo: parent ? { [parent.repoId]: [parent] } : {}
+    })
     return store
   }
 
@@ -51,15 +59,22 @@ describe('createWorktree composer parent pick', () => {
     return createWorktree(...args)
   }
 
-  it('nests the new workspace under the picked parent worktree', async () => {
+  it('nests the new workspace under a picked parent in another repository on the same host', async () => {
     const parent = makeWorktree({
-      id: 'repo1::/path/parent',
-      repoId: 'repo1',
+      id: 'repo2::/path/parent',
+      repoId: 'repo2',
       path: '/path/parent',
       instanceId: 'parent-instance'
     })
     const store = createParentPickStore(parent)
-    store.setState({ activeWorkspaceKey: folderWorkspaceKey('folder-1') } as Partial<AppState>)
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      repos: [
+        ...store.getState().repos,
+        { ...TEST_REPO, id: parent.repoId, executionHostId: 'runtime:other' }
+      ],
+      settings: { ...getDefaultSettings('/test-home'), activeRuntimeEnvironmentId: 'other' }
+    })
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1', path: '/path/child' })
     })
@@ -211,7 +226,7 @@ describe('createWorktree parent pick on a remote runtime', () => {
   })
 
   function createRemoteStore() {
-    const store = createTestStore()
+    const store = createRepoTestStore()
     store.setState({
       repos: [
         {
@@ -386,3 +401,14 @@ describe('createWorktree parent pick on a remote runtime', () => {
     expect(toast.warning).not.toHaveBeenCalled()
   })
 })
+
+// Creation routes by the project row's own host, so every test seeds that row.
+function seedRepoHost(store: ReturnType<typeof createTestStore>, hostId: ExecutionHostId): void {
+  store.setState({ repos: [{ ...TEST_REPO, executionHostId: hostId }] })
+}
+
+function createRepoTestStore(): ReturnType<typeof createTestStore> {
+  const store = createTestStore()
+  seedRepoHost(store, 'local')
+  return store
+}

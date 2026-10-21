@@ -270,7 +270,9 @@ async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
 async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
-    store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+    store
+      ?.getState()
+      .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation', 'agent-session-search'])
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -347,7 +349,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()
-        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+        .markFeatureTipsSeen([
+          'orca-cli',
+          'cmd-j-palette',
+          'voice-dictation',
+          'agent-session-search'
+        ])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -409,7 +416,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()
-        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+        .markFeatureTipsSeen([
+          'orca-cli',
+          'cmd-j-palette',
+          'voice-dictation',
+          'agent-session-search'
+        ])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -482,7 +494,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()
-        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+        .markFeatureTipsSeen([
+          'orca-cli',
+          'cmd-j-palette',
+          'voice-dictation',
+          'agent-session-search'
+        ])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(

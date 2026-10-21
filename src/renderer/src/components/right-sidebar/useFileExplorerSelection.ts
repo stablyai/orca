@@ -66,7 +66,7 @@ export function useFileExplorerSelection(
   }, [])
 
   const moveSelection = useCallback((targetPath: string, mode: FileExplorerSelectionMode) => {
-    const orderedPaths = rowProjectionRef.current.getOrderedPaths()
+    const orderedPaths = mode === 'replace' ? [] : rowProjectionRef.current.getOrderedPaths()
     setSelectionState((prev) => updateFileExplorerSelection(prev, orderedPaths, targetPath, mode))
   }, [])
 

@@ -60,6 +60,8 @@ export class ClaimedAgentPtyOwnerRegistry {
       disposition?: AgentSessionClaimedSpawnResult['disposition']
     }>
     isLive?: (owner: LiveAgentSessionOwner) => boolean | Promise<boolean>
+    /** Called when this request waits on another request's start instead of starting its own. */
+    onJoin?: () => void
   }): Promise<AgentSessionClaimedSpawnResult> {
     // Why: callers retain their request objects across retries; snapshot them so
     // mutation during an awaited liveness/spawn check cannot change registry keys.
@@ -92,6 +94,7 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (reserved.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
         throw new Error('agent_session_conflict')
       }
+      args.onJoin?.()
       const result = await reserved.promise
       return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
     }

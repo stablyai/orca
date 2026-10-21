@@ -3,15 +3,11 @@ import type * as GitRunner from '../git/runner'
 
 const {
   commandExecFileAsyncMock,
-  getSshGitProviderGenerationMock,
-  getSshGitProviderMock,
   gitExecFileAsyncMock,
   resolveWithSshGMock,
   readLocalGitConfigSignatureMock
 } = vi.hoisted(() => ({
   commandExecFileAsyncMock: vi.fn(),
-  getSshGitProviderGenerationMock: vi.fn(() => 0),
-  getSshGitProviderMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   resolveWithSshGMock: vi.fn(),
   readLocalGitConfigSignatureMock: vi.fn(async () => 'sig-10284')
@@ -23,17 +19,11 @@ vi.mock('../git/runner', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'Remote connection dropped.'
-}))
-
 vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
-vi.mock('../ssh/ssh-g-config-resolution', () => ({
+vi.mock('../ssh/config/ssh-g-config-resolution', () => ({
   resolveWithSshG: resolveWithSshGMock
 }))
 
@@ -72,29 +62,10 @@ function mockRemoteUrl(url: string): void {
   })
 }
 
-function sshProvider(hostname: string, remoteUrl = 'git@github-work:team/orca.git') {
-  return {
-    exec: vi.fn().mockResolvedValue({
-      stdout: `${remoteUrl}\n`,
-      stderr: ''
-    }),
-    execNonInteractive: vi.fn().mockResolvedValue({
-      stdout: `hostname ${hostname}\nport 22\n`,
-      stderr: '',
-      exitCode: 0,
-      timedOut: false,
-      canceled: false
-    })
-  }
-}
-
 beforeEach(() => {
   _resetOwnerRepoCache()
   _resetSshHostnameResolutionCache()
   commandExecFileAsyncMock.mockReset()
-  getSshGitProviderGenerationMock.mockReset()
-  getSshGitProviderGenerationMock.mockReturnValue(0)
-  getSshGitProviderMock.mockReset()
   gitExecFileAsyncMock.mockReset()
   resolveWithSshGMock.mockReset()
   readLocalGitConfigSignatureMock.mockClear()
@@ -157,27 +128,7 @@ describe('#10284 SSH Host alias → github.com owner/repo', () => {
     expect(resolveWithSshGMock).not.toHaveBeenCalled()
   })
 
-  it('resolves aliases inside the repository SSH runtime', async () => {
-    const provider = sshProvider('github.com')
-    getSshGitProviderMock.mockReturnValue(provider)
-    getSshGitProviderGenerationMock.mockReturnValue(4)
-
-    await expect(getOwnerRepoForRemote('/remote/repo', 'origin', 'ssh-1')).resolves.toEqual({
-      owner: 'team',
-      repo: 'orca'
-    })
-    expect(provider.execNonInteractive).toHaveBeenCalledWith(
-      'ssh',
-      ['-G', '--', 'github-work'],
-      '/remote/repo',
-      5_000
-    )
-    expect(resolveWithSshGMock).not.toHaveBeenCalled()
-  })
-
   it('does not read an SSH repoPath locally when its provider is missing', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-
     await expect(
       getOwnerRepoForRemote(
         '/remote/repo',
@@ -189,53 +140,6 @@ describe('#10284 SSH Host alias → github.com owner/repo', () => {
         }
       )
     ).rejects.toThrow('Remote connection dropped.')
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('preserves a one-shot SSH remote failure through candidate discovery', async () => {
-    const failure = new Error('relay request failed')
-    const provider = {
-      exec: vi
-        .fn()
-        .mockRejectedValueOnce(failure)
-        .mockResolvedValueOnce({ stdout: 'git@github.com:team/orca.git\n', stderr: '' })
-    }
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    await expect(
-      getOwnerRepoForRemote(
-        '/remote/repo',
-        'origin',
-        'ssh-1',
-        {},
-        {
-          requireVerifiedSshProbe: true
-        }
-      )
-    ).rejects.toBe(failure)
-    await expect(getOwnerRepoForRemote('/remote/repo', 'origin', 'ssh-1')).resolves.toEqual({
-      owner: 'team',
-      repo: 'orca'
-    })
-    expect(provider.exec).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps failed SSH alias classification unverifiable', async () => {
-    const provider = sshProvider('')
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    await expect(
-      getOwnerRepoForRemote(
-        '/remote/repo',
-        'origin',
-        'ssh-1',
-        {},
-        {
-          requireVerifiedSshProbe: true
-        }
-      )
-    ).rejects.toThrow('Remote repository identity is unverifiable.')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -257,43 +161,6 @@ describe('#10284 SSH Host alias → github.com owner/repo', () => {
     ).resolves.toBeNull()
     expect(resolveWithSshGMock).toHaveBeenCalledTimes(1)
     expect(commandExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('invalidates alias resolution when an SSH provider reconnects', async () => {
-    const context = { repoPath: '/remote/repo', connectionId: 'ssh-1' }
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-    getSshGitProviderMock.mockReturnValue(sshProvider('github.com'))
-
-    await expect(
-      resolveGitHubOwnerRepoFromRemoteUrl('git@forge-work:team/orca.git', context)
-    ).resolves.toEqual({ owner: 'team', repo: 'orca' })
-
-    getSshGitProviderGenerationMock.mockReturnValue(2)
-    getSshGitProviderMock.mockReturnValue(sshProvider('gitlab.com'))
-    await expect(
-      resolveGitHubOwnerRepoFromRemoteUrl('git@forge-work:team/orca.git', context)
-    ).resolves.toBeNull()
-  })
-
-  it('invalidates owner/repo identity when an SSH provider reconnects', async () => {
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-    getSshGitProviderMock.mockReturnValue(
-      sshProvider('github.com', 'git@github-work:team/orca.git')
-    )
-
-    await expect(getOwnerRepoForRemote('/remote/repo', 'origin', 'ssh-1')).resolves.toEqual({
-      owner: 'team',
-      repo: 'orca'
-    })
-
-    getSshGitProviderGenerationMock.mockReturnValue(2)
-    getSshGitProviderMock.mockReturnValue(
-      sshProvider('github.com', 'git@github-work:acme/widgets.git')
-    )
-    await expect(getOwnerRepoForRemote('/remote/repo', 'origin', 'ssh-1')).resolves.toEqual({
-      owner: 'acme',
-      repo: 'widgets'
-    })
   })
 
   it('does not call ssh -G for literal github.com remotes', async () => {

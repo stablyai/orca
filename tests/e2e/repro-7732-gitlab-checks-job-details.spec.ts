@@ -141,9 +141,9 @@ test.describe('#7732 GitLab Checks panel job details', () => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true })
     await jobRow.click()
     const noDetails = orcaPage.getByText('No inline details are available for this check.')
-    const viewFullLogs = orcaPage.getByRole('button', { name: 'View full logs' })
+    const viewFullDetails = orcaPage.getByRole('button', { name: 'View full details' })
     for (let attempt = 0; attempt < 20; attempt++) {
-      if ((await noDetails.count()) > 0 || (await viewFullLogs.count()) > 0) {
+      if ((await noDetails.count()) > 0 || (await viewFullDetails.count()) > 0) {
         break
       }
       await orcaPage.waitForTimeout(500)
@@ -155,6 +155,6 @@ test.describe('#7732 GitLab Checks panel job details', () => {
     // Correct behavior: the stubbed gitlab:jobTrace log renders instead of the "no details" fallback.
     expect(await readJobTraceCallCount(electronApp)).toBeGreaterThan(0)
     await expect(noDetails).toHaveCount(0)
-    await expect(viewFullLogs).toBeVisible({ timeout: 10_000 })
+    await expect(viewFullDetails).toBeVisible({ timeout: 10_000 })
   })
 })

@@ -4,10 +4,8 @@ import type {
   AgentJournalPromptOption,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { boundInlineText } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { boundJournalPromptText } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import {
   CODEX_APPROVAL_DECISIONS,
   CODEX_COMMAND_APPROVAL_METHOD,
@@ -40,7 +38,7 @@ const PENDING = {
 
 const MAX_CODEX_PROMPT_QUESTIONS = 64
 const MAX_CODEX_PROMPT_OPTIONS = 64
-const PROMPT_OPTION_LIMITS = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1024 }
+const PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
 
 function readParams(params: unknown): Record<string, unknown> {
   return typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
@@ -51,8 +49,8 @@ function readString(source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+function boundNullablePromptText(value: string | null): string | null {
+  return value === null ? null : boundJournalPromptText(value)
 }
 
 function boundPromptOptionLabel(value: string): string {
@@ -96,10 +94,6 @@ export function codexApprovalItem(input: {
     options: codexApprovalOptions(input.params),
     resolution: { ...PENDING }
   }
-}
-
-function boundNullablePromptText(value: string | null): string | null {
-  return value === null ? null : boundPromptText(value)
 }
 
 function approvalDetail(params: Record<string, unknown>): string | null {
@@ -152,7 +146,7 @@ export function codexQuestionItems(input: {
       identity: codexPromptIdentity({ ...input, questionId }),
       body: {
         kind: 'question',
-        question: boundPromptText(prompt),
+        question: boundJournalPromptText(prompt),
         options: questionOptions(question, questionId),
         ...(questionAllowsFreeText(question)
           ? { freeTextQuestionId: codexJournalPromptIdPart(questionId) }

@@ -2,7 +2,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 
 export function isSupersededAgentCompletionSnapshot(
-  storedAgentStatus: Pick<AgentStatusEntry, 'state' | 'stateStartedAt'> | undefined,
+  storedAgentStatus: Pick<AgentStatusEntry, 'state' | 'stateStartedAt' | 'turnEndedAt'> | undefined,
   snapshot: AgentCompletionStatusSnapshot | undefined
 ): boolean {
   if (!storedAgentStatus || !snapshot) {
@@ -19,9 +19,12 @@ export function isSupersededAgentCompletionSnapshot(
   }
   const hasStampedTurn =
     typeof snapshot.turnCompletedAt === 'number' && Number.isFinite(snapshot.turnCompletedAt)
-  return (
-    storedAgentStatus.stateStartedAt === comparableStateStartedAt &&
-    storedAgentStatus.state !== snapshot.state &&
-    !hasStampedTurn
-  )
+  if (storedAgentStatus.stateStartedAt !== comparableStateStartedAt) {
+    return false
+  }
+  // Why: within one done segment, a later host turn end supersedes the delayed earlier one.
+  return storedAgentStatus.state !== snapshot.state
+    ? !hasStampedTurn
+    : snapshot.turnEndedAt !== undefined &&
+        (storedAgentStatus.turnEndedAt ?? 0) > snapshot.turnEndedAt
 }

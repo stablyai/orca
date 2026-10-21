@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 10 AutomationsPage specs, not shipped code, and it falls outside
+   the *.test / *.spec / tests glob set. Inlining these 13 stubs would duplicate them into all 10 specs and push the largest
+   past the max-lines ratchet. */
 /**
  * The mount rig for AutomationsPage tests: child stand-ins, the preload API
  * double, and the per-test store reset.
@@ -27,6 +30,7 @@ import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { AutomationListRow } from './automation-list-row-identity'
+import type { AutomationListViewItem } from './automation-list-view'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
@@ -39,13 +43,8 @@ export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
 export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
 
 export type ListPanelProps = {
-  filteredExternalAutomationEntries: ExternalAutomationListEntry[]
+  sortedListItems: readonly AutomationListViewItem[]
   selectedExternal: ExternalAutomationListEntry | null
-  openEditExternalDialog: (
-    manager: ExternalAutomationListEntry['manager'],
-    job: ExternalAutomationListEntry['job'],
-    scope: ExternalAutomationListEntry['scope']
-  ) => void
   externalActionKey: string | null
   requestExternalAction: (
     manager: ExternalAutomationListEntry['manager'],
@@ -55,7 +54,6 @@ export type ListPanelProps = {
   ) => void
   hasListItems: boolean
   hasFilteredListItems: boolean
-  filteredRows: readonly AutomationListRow[]
   selectedRowKey: string | null
   selectedExternalKey: string | null
   hostCatalog: AutomationHostCatalogView
@@ -84,13 +82,6 @@ export type DetailPaneProps = {
   toggleAutomation: (automation: Automation) => void
   requestDeleteAutomation: (automation: Automation) => void
   openEditDialog: (automation: Automation) => void
-  fetchExternalAutomationRuns: (input: {
-    scope: ExternalAutomationListEntry['scope']
-    manager: ExternalAutomationListEntry['manager']
-    job: ExternalAutomationListEntry['job']
-    page: number
-    pageSize: number
-  }) => Promise<unknown>
 }
 
 export type EditorDialogProps = {
@@ -161,10 +152,7 @@ vi.mock('@/store/selectors', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args),
-  // Matches the real matcher's contract: the code is a `: <token>` message tail.
-  hasRuntimeRpcErrorCode: (error: unknown, code: string) =>
-    error instanceof Error && error.message.trimEnd().endsWith(`: ${code}`)
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
 
 vi.mock('sonner', () => ({
@@ -211,30 +199,31 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
-        {props.filteredRows.map((row) => (
-          <button
-            type="button"
-            data-testid="automation-row"
-            key={row.key}
-            onClick={() => selectAutomationRow(row.key)}
-          >
-            {row.automation.name}
-          </button>
-        ))}
-        {props.filteredExternalAutomationEntries.map((entry) => (
-          <button
-            type="button"
-            data-testid="external-row"
-            key={entry.key}
-            onClick={() => {
-              props.selectAutomationRow(null)
-              props.selectExternalKey(entry.key)
-              props.onOpenDetail()
-            }}
-          >
-            {entry.job.name}
-          </button>
-        ))}
+        {props.sortedListItems.map((item) =>
+          item.kind === 'local' ? (
+            <button
+              type="button"
+              data-testid="automation-row"
+              key={item.id}
+              onClick={() => selectAutomationRow(item.id)}
+            >
+              {item.row.automation.name}
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="external-row"
+              key={item.id}
+              onClick={() => {
+                props.selectAutomationRow(null)
+                props.selectExternalKey(item.id)
+                props.onOpenDetail()
+              }}
+            >
+              {item.entry.job.name}
+            </button>
+          )
+        )}
         {props.hasListItems ? null : <div data-testid="empty-state" />}
       </div>
     )
@@ -285,9 +274,6 @@ export const api = {
     'runNow',
     'listScoped',
     'listExternalManagerForOwner',
-    'listExternalRunsForOwner',
-    'createExternalForOwner',
-    'updateExternalForOwner',
     'runExternalActionForOwner',
     'retainExternalScopes'
   ),
@@ -407,25 +393,13 @@ export async function refreshOnFocus(): Promise<void> {
   })
 }
 
-/**
- * The row the page actually listed for an ID, so tests act through the same
- * authority-qualified key the user's click carries rather than a synthesized one.
- */
-export function listedRow(automationId: string): AutomationListRow {
-  const row = mocks.listPanel?.filteredRows.find((entry) => entry.automation.id === automationId)
-  if (!row) {
-    throw new Error(`no listed row for ${automationId}`)
-  }
-  return row
-}
-
 export function rows(container: HTMLElement, testId: string): string[] {
   return [...container.querySelectorAll(`[data-testid="${testId}"]`)].map(
     (node) => node.textContent ?? ''
   )
 }
 
-/** Registers the reset both page test files depend on; call once per file. */
+/** Registers the per-case store reset and renderer cleanup for the current suite. */
 export function installAutomationsPageHarness(): void {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true

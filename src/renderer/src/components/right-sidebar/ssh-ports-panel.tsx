@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, Plus, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-port-actions'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
@@ -23,28 +23,23 @@ function normalizeHost(host: string | undefined): string {
   return host
 }
 
-export function SshPortsPanel(): React.JSX.Element {
+export function SshPortsPanel({
+  activeConnectionId
+}: {
+  /** The SSH target this client dials for the active workspace. */
+  activeConnectionId: string
+}): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  // Why: scope the panel to the active worktree's SSH connection so
-  // actions target the correct machine and the disconnected state
-  // reflects the active worktree, not some other SSH session.
   const activeWorktree = useActiveWorktree()
-  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const activeConnectionId = activeRepo?.connectionId ?? null
+  const isDisconnected = sshConnectionStates.get(activeConnectionId)?.status !== 'connected'
 
-  const isDisconnected = activeConnectionId
-    ? sshConnectionStates.get(activeConnectionId)?.status !== 'connected'
-    : true
-
-  const allForwards = useMemo(() => {
-    if (!activeConnectionId) {
-      return []
-    }
-    return portForwardsByConnection[activeConnectionId] ?? []
-  }, [portForwardsByConnection, activeConnectionId])
+  const allForwards = useMemo(
+    () => portForwardsByConnection[activeConnectionId] ?? [],
+    [portForwardsByConnection, activeConnectionId]
+  )
 
   const forwardedKeys = useMemo(() => {
     const set = new Set<string>()
@@ -55,9 +50,6 @@ export function SshPortsPanel(): React.JSX.Element {
   }, [allForwards])
 
   const allDetected = useMemo(() => {
-    if (!activeConnectionId) {
-      return []
-    }
     const ports = detectedPortsByConnection[activeConnectionId] ?? []
     return ports
       .filter((p) => !forwardedKeys.has(`${normalizeHost(p.host)}:${p.port}`))
@@ -147,7 +139,7 @@ export function SshPortsPanel(): React.JSX.Element {
           type="button"
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           onClick={() =>
-            setDialogState({ mode: 'add', defaults: { targetId: activeConnectionId ?? undefined } })
+            setDialogState({ mode: 'add', defaults: { targetId: activeConnectionId } })
           }
         >
           <Plus size={14} />
@@ -236,7 +228,7 @@ export function SshPortsPanel(): React.JSX.Element {
             onClick={() =>
               setDialogState({
                 mode: 'add',
-                defaults: { targetId: activeConnectionId ?? undefined }
+                defaults: { targetId: activeConnectionId }
               })
             }
           >

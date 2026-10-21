@@ -26,8 +26,12 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   },
   titleWrap: {
     flex: 1,
+    minWidth: 0
+  },
+  titleLine: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     minWidth: 0
   },
   title: {
@@ -94,6 +98,9 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   segmentSecondaryText: {
     fontSize: 12,
     color: colors.textSecondary
+  },
+  segmentDisabledText: {
+    color: colors.textMuted
   },
   searchBar: {
     paddingHorizontal: spacing.md,

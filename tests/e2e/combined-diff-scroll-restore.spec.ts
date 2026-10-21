@@ -370,26 +370,27 @@ async function clickVisibleDiffLine(page: Page): Promise<void> {
             return null
           }
           const containerRect = container.getBoundingClientRect()
-          const visibleLine = Array.from(
-            container.querySelectorAll<HTMLElement>('.monaco-diff-editor .view-line')
-          ).find((line) => {
+          for (const line of container.querySelectorAll<HTMLElement>(
+            '.monaco-diff-editor .view-line'
+          )) {
             const rect = line.getBoundingClientRect()
-            return (
-              rect.height > 0 &&
-              rect.bottom > containerRect.top &&
-              rect.top < containerRect.bottom &&
-              rect.right > containerRect.left &&
-              rect.left < containerRect.right
-            )
-          })
-          if (!visibleLine) {
-            return null
+            const left = Math.max(rect.left, containerRect.left)
+            const right = Math.min(rect.right, containerRect.right)
+            const top = Math.max(rect.top, containerRect.top)
+            const bottom = Math.min(rect.bottom, containerRect.bottom)
+            if (left >= right || top >= bottom) {
+              continue
+            }
+            const point = {
+              x: left + Math.min(12, (right - left) / 2),
+              y: (top + bottom) / 2
+            }
+            // Sticky headers can cover a line whose rectangle intersects the viewport.
+            if (line.contains(document.elementFromPoint(point.x, point.y))) {
+              return point
+            }
           }
-          const rect = visibleLine.getBoundingClientRect()
-          return {
-            x: rect.left + Math.min(12, Math.max(1, rect.width / 2)),
-            y: rect.top + rect.height / 2
-          }
+          return null
         })
         return linePoint !== null
       },

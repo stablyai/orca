@@ -5,102 +5,50 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   isPlainObject,
+  isSafeUnicodeWindowsBatchHookPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  quotePowerShellString,
   removeManagedCommands,
   wrapWindowsPowerShellEncodedCommand,
   type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
-import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
+import { getWindowsNativeHookAgent } from '../agent-hooks/windows-native-hook-executable'
+import {
+  wrapRuntimeHomeHookCommand,
+  wrapRuntimeHomePosixHookCommand
+} from '../agent-hooks/runtime-home-hook-command'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
-  usesWindowsPowerShellLauncher: boolean
+  configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
+  scriptBaseName:
+    | 'claude-hook'
+    | 'openclaude-hook'
+    | 'qoder-hook'
+    | 'qoder-cn-hook'
+    | 'qwen-code-hook'
+    | 'codebuddy-hook'
+  usesWindowsCompatLauncher: boolean
+  windowsHookShell?: 'powershell'
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
   scriptBaseName: 'claude-hook',
-  usesWindowsPowerShellLauncher: true
+  usesWindowsCompatLauncher: true
 }
 
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
   scriptBaseName: 'openclaude-hook',
-  usesWindowsPowerShellLauncher: false
+  usesWindowsCompatLauncher: false
 }
 
-export const CLAUDE_EVENTS = [
-  // Why: SessionStart is the only event a resumed/idle session emits before the
-  // first prompt; without it the sidebar row can't exist until the user types (STA-3386).
-  {
-    eventName: 'SessionStart',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'UserPromptSubmit',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'Stop',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
-  // StopFailure instead; without this hook Orca leaves the turn spinning.
-  {
-    eventName: 'StopFailure',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
-  // a pane 'working' while background children outlive the lead's turn.
-  // TeammateIdle parks turn-based teammates without trusting their permanently
-  // "running" background_tasks entry to gate the pane.
-  // Older Claude builds ignore unregistered event names (StopFailure precedent).
-  {
-    eventName: 'SubagentStart',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'SubagentStop',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'TeammateIdle',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  },
-  // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
-  // (name + input preview) before it completes.
-  {
-    eventName: 'PreToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUseFailure',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PermissionRequest',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  // Why: a manual /compact ends at an idle prompt without emitting Stop, so PostCompact is the only
-  // signal that can clear the pane (STA-2915). PreCompact is deliberately NOT registered: it fires
-  // before the compact is validated, and an aborted compact emits it alone — mapping it to 'working'
-  // would strand the pane exactly as this registration is meant to prevent (STA-4613).
-  {
-    eventName: 'PostCompact',
-    definition: { hooks: [{ type: 'command', command: '' }] }
-  }
-] as const
-
-export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return join(homedir(), settings.configDirName, 'settings.json')
+export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
+  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
 }
 
 export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -139,43 +87,91 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
+function getScriptBaseName(scriptPath: string): string {
+  const scriptFileName = basename(scriptPath)
+  const extension = extname(scriptFileName)
+  return extension ? scriptFileName.slice(0, -extension.length) : scriptFileName
+}
+
 export function getManagedCommand(
   scriptPath: string,
   options: { neutralJsonWhenMissing?: boolean } = {}
 ): string {
-  const scriptFileName = basename(scriptPath)
-  const extension = extname(scriptFileName)
-  return wrapRuntimeHomeHookCommand(
-    extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
-    options
-  )
+  return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
 }
 
+export function getManagedEventHook(
+  eventName: string,
+  scriptPath: string,
+  settings = CLAUDE_HOOK_SETTINGS,
+  nativeHookPath: string | null = null
+): HookCommandConfig {
+  return process.platform === 'win32'
+    ? getManagedLifecycleHook(scriptPath, settings, nativeHookPath)
+    : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
+}
+
+// Claude adds the full PostCompact command to the model's context after compaction.
+export function getRemoteManagedEventCommand(eventName: string, scriptPath: string): string {
+  return eventName === 'PostCompact'
+    ? wrapRuntimeHomePosixHookCommand(getScriptBaseName(scriptPath))
+    : getRemoteManagedCommand(scriptPath)
+}
+
+/** `nativeHookPath` is the installed orca-agent-hook.exe, or null to keep the `.cmd` form. */
 export function getManagedLifecycleHook(
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS
+  settings = CLAUDE_HOOK_SETTINGS,
+  nativeHookPath: string | null = null
 ): HookCommandConfig {
-  if (process.platform !== 'win32' || !settings.usesWindowsPowerShellLauncher) {
+  if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
+  }
+  // Why a bare exe path plus a plain word: Git Bash, PowerShell and CreateProcess all start
+  // `<exe> claude` the same way, without cmd.exe.
+  const nativeCommand = nativeHookPath ? wrapWindowsDirectCmdHookCommand(nativeHookPath) : null
+  if (nativeCommand) {
+    const agent = getWindowsNativeHookAgent(scriptPath)
+    return {
+      type: 'command',
+      command: `${nativeCommand} ${agent}`,
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  if (settings.windowsHookShell === 'powershell') {
+    return {
+      type: 'command',
+      command: getWindowsPowerShellLifecycleCommand(scriptPath),
+      shell: 'powershell',
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
   }
   return getWindowsManagedLifecycleHook(scriptPath)
 }
 
-// Why: some Claude-compatible consumers ignore `args`, so the invocation must be self-contained.
+// Some compatible consumers ignore args, so keep the invocation self-contained.
 export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+  const directCommand = wrapWindowsDirectCmdHookCommand(scriptPath)
+  if (directCommand) {
+    return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
+  }
+  return {
+    type: 'command',
+    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath), {
+      useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(scriptPath)
+    }),
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+}
+
+function getWindowsPowerShellLifecycleCommand(scriptPath: string): string {
   const scriptFileName = win32.basename(scriptPath)
-  // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
-  const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
-  // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
-  const innerCommand =
+  const quotedRelativePath = quotePowerShellLiteral(`.orca\\agent-hooks\\${scriptFileName}`)
+  return (
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
     'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
     "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
-  return {
-    type: 'command',
-    command: wrapWindowsPowerShellEncodedCommand(innerCommand),
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
-  }
+  )
 }
 
 export function hasSameManagedHookInvocation(
@@ -184,8 +180,34 @@ export function hasSameManagedHookInvocation(
 ): boolean {
   return (
     actual.command === expected.command &&
+    actual.shell === expected.shell &&
     JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])
   )
+}
+
+/** Per planned event, the index of the first of `formsFor(event)` it carries; unmatched are missing. */
+export function findManagedEventHookForms(
+  config: HooksConfig,
+  eventNames: string[],
+  formsFor: (eventName: string) => HookCommandConfig[]
+): { missing: string[]; matchedForms: number[] } {
+  const missing: string[] = []
+  const matchedForms: number[] = []
+  for (const eventName of eventNames) {
+    const definitions = config.hooks?.[eventName]
+    const hooks = Array.isArray(definitions)
+      ? definitions.flatMap((definition) => definition.hooks ?? [])
+      : []
+    const form = formsFor(eventName).findIndex((expected) =>
+      hooks.some((hook) => hasSameManagedHookInvocation(hook, expected))
+    )
+    if (form === -1) {
+      missing.push(eventName)
+    } else {
+      matchedForms.push(form)
+    }
+  }
+  return { missing, matchedForms }
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
@@ -194,20 +216,34 @@ export function getRemoteManagedCommand(scriptPath: string): string {
 
 export function applyManagedHooks(
   config: HooksConfig,
-  hook: HookCommandConfig,
-  scriptFileName = getManagedScriptFileName()
+  hookForEvent: (eventName: string) => HookCommandConfig,
+  scriptFileName: string,
+  plan: ClaudeManagedHookPlan
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
 
-  for (const event of CLAUDE_EVENTS) {
-    const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-    const cleaned = removeManagedCommands(current, isManagedCommand)
+  for (const event of plan.install) {
+    const current = nextHooks[event.eventName]
+    const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [hook]
+      hooks: [hookForEvent(event.eventName)]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
+  }
+
+  for (const event of plan.retire) {
+    const current = nextHooks[event.eventName]
+    if (!Array.isArray(current) || current.length === 0) {
+      continue
+    }
+    const cleaned = removeManagedCommands(current, isManagedCommand)
+    if (cleaned.length === 0) {
+      delete nextHooks[event.eventName]
+    } else {
+      nextHooks[event.eventName] = cleaned
+    }
   }
 
   return { ...config, hooks: nextHooks }

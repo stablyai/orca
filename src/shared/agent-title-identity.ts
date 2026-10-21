@@ -1,3 +1,5 @@
+import { isQoderTerminalTitle } from './qoder-terminal-title'
+import { getPiStateTitleBrand } from './pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
@@ -10,6 +12,7 @@ import {
   isPiAgentTitle,
   titleHasAgentName
 } from './agent-title-core'
+import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
@@ -31,6 +34,10 @@ function computeIsClaudeAgent(title: string): boolean {
   }
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
+  }
+  // Why: a working DeepSeek Build title uses Claude's braille frame.
+  if (isDeepSeekBuildTerminalTitle(title)) {
+    return false
   }
   if (containsAgentSpinnerGlyph(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
@@ -67,6 +74,17 @@ function computeAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  const piStateBrand = getPiStateTitleBrand(title)
+  if (piStateBrand) {
+    return piStateBrand
+  }
+  if (isQoderTerminalTitle(title)) {
+    return title.includes('Qoder CLI CN') ? 'Qoder CLI CN' : 'Qoder CLI'
+  }
+  // Why: the DSB matcher distinguishes native prefixes from glyphs inside task text.
+  if (isDeepSeekBuildTerminalTitle(title)) {
+    return 'DeepSeek Build'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -94,6 +112,9 @@ function computeAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
+  }
+  if (titleHasAgentName(title, 'jcode')) {
+    return 'Jcode'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'

@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 30
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
 
     steps:
       - name: Checkout

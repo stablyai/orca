@@ -9,26 +9,20 @@ import type {
 import {
   buildRemovedSshTargetCleanupPatch,
   collectSshTargetGenerations,
-  sshConnectionStatesEqual,
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
-
-export type RemoteWorkspaceSyncStatus = {
-  phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
-  direction?: 'pull' | 'push'
-  revision?: number
-  updatedAt?: number
-  hostObservationToken?: string
-  lastSyncedAt?: number
-  message?: string
-}
+import { sshConnectionStatesEqual } from './ssh-connection-state-equality'
+import { createBoundedGenerationMap } from '../../lib/bounded-generation-map'
 
 export type SshCredentialRequest = {
   requestId: string
   targetId: string
   kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
+  /** RFC 4256 echo flag for keyboard-interactive prompts: when true the
+   * server allows the typed response to be shown. */
+  echo?: boolean
 }
 
 export type SshSlice = {
@@ -55,8 +49,6 @@ export type SshSlice = {
    * client on a host without the ssh RPC), so absence from sshTargetLabels
    * only counts as removal evidence when this is set. */
   sshTargetsHydrated: boolean
-  remoteWorkspaceHydratedTargetIds: Set<string>
-  remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
   /** Incremented when an SSH target transitions to 'connected'. Allows
    * components like the file explorer to re-trigger data loads that failed
@@ -75,9 +67,6 @@ export type SshSlice = {
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
   setSshTargetsMetadata: (targets: SshTargetSummary[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
-  markRemoteWorkspaceHydrated: (targetId: string) => void
-  clearRemoteWorkspaceHydrated: (targetId: string) => void
-  setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
@@ -85,14 +74,10 @@ export type SshSlice = {
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
 
-const targetConnectionGeneration = new Map<string, number>()
+const localTargetConnectionGenerations = createBoundedGenerationMap(4096)
 
 export function getLocalSshTargetConnectionGeneration(targetId: string): number {
-  return targetConnectionGeneration.get(targetId) ?? 0
-}
-
-function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
-  targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
+  return localTargetConnectionGenerations.get(targetId)
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
@@ -101,8 +86,6 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshTargetGenerations: new Map(),
   removedSshTargetLabels: new Map(),
   sshTargetsHydrated: false,
-  remoteWorkspaceHydratedTargetIds: new Set(),
-  remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
@@ -115,7 +98,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
-      advanceLocalSshTargetConnectionGeneration(targetId)
+      localTargetConnectionGenerations.advance(targetId)
       next.set(targetId, state)
       const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
       let blockedConnections = s.transientClearedAgentStatusConnectionIds
@@ -156,25 +139,6 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     }),
   clearRemovedSshTargetState: (targetId) =>
     set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
-  markRemoteWorkspaceHydrated: (targetId) =>
-    set((s) => {
-      const next = new Set(s.remoteWorkspaceHydratedTargetIds)
-      next.add(targetId)
-      return { remoteWorkspaceHydratedTargetIds: next }
-    }),
-  clearRemoteWorkspaceHydrated: (targetId) =>
-    set((s) => {
-      const next = new Set(s.remoteWorkspaceHydratedTargetIds)
-      next.delete(targetId)
-      return { remoteWorkspaceHydratedTargetIds: next }
-    }),
-  setRemoteWorkspaceSyncStatus: (targetId, status) =>
-    set((s) => ({
-      remoteWorkspaceSyncStatusByTargetId: {
-        ...s.remoteWorkspaceSyncStatusByTargetId,
-        [targetId]: status
-      }
-    })),
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
   removeSshCredentialRequest: (requestId) =>

@@ -1,3 +1,5 @@
+import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import {
@@ -9,6 +11,7 @@ import { RESET_AFTER_BYTE_GAP } from '../../../../../shared/terminal-mode-reset-
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { registerPtyModelRestoreNeededHandler } from '../pty-model-restore-channel'
+import type { PtyModelRestoreNeededEvent } from '../../../../../shared/pty-model-restore-marker'
 import {
   acquireHiddenRendererPtyDeliveryClaim,
   declareRendererPtyDeliveryVisible
@@ -26,15 +29,15 @@ import {
   shouldWritePtyOutputForeground,
   consumeInactiveForegroundImmediateBudget
 } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+
+import { terminalInputEchoAllowanceMs } from './terminal-input-echo-delay'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function bindForegroundOutputRefresh(session: ConnectPanePtySession): void {
   // Extends the suppression window; every backpressure signal resets the timer so the deferred repaint fires once, SUPPRESS_MS after the last signal.
   session.noteHiddenOutputRestoreFloodBackpressure = function (): void {
-    session.hiddenOutputRestoreFloodSuppressedUntil =
-      Date.now() + HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS
+    session.extendHiddenOutputRestoreFloodSuppression()
     const ptyId = session.transport.getPtyId()
     if (ptyId === null) {
       return
@@ -51,9 +54,26 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
   }
 
   // Why: main reports dropped renderer-bound bytes out-of-band, routed per PTY by pty-model-restore-channel.ts.
-  function handleModelRestoreNeededMarker(): void {
+  function handleModelRestoreNeededMarker(event: PtyModelRestoreNeededEvent): void {
     if (session.disposed) {
       return
+    }
+    const episode = typeof event.hiddenDropEpisode === 'number' ? event.hiddenDropEpisode : null
+    const previousDropEpisode = session.hiddenOutputRestoreLatestDropEpisode
+    // Why: main's latch stays armed until a restore paints, so a gap it can never serve re-marks
+    // on every unhide. A repeat of the disclosed episode is that same gap; any other marker may
+    // be new loss and proceeds, failing toward recovery.
+    const disclosed = session.hiddenOutputRestoreDisclosedGap
+    if (
+      episode !== null &&
+      disclosed !== null &&
+      disclosed.ptyId === session.transport.getPtyId() &&
+      disclosed.episode === episode
+    ) {
+      return
+    }
+    if (episode !== null) {
+      session.hiddenOutputRestoreLatestDropEpisode = episode
     }
     recordTerminalFreezeBreadcrumb('restore-marker', {
       id: redactPtyIdForDiagnostics(session.transport.getPtyId() ?? '')
@@ -62,7 +82,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     session.transport.resetCrossChunkParserState?.()
     // Why gated (rc.7.perf loop): on a visible pane these markers come from our own restore starving ACKs; re-arming per marker kept the fetch loop alive all flood, so defer to one post-flood repaint.
     if (session.isForegroundRestoreBackpressureContext()) {
-      session.noteHiddenOutputRestoreFloodBackpressure()
+      unhideCoverage.handleUnhideRestoreBackpressure(session, event, previousDropEpisode)
       return
     }
     // Why the emulator too: it carries state across chunks exactly like the
@@ -90,6 +110,9 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     }
     session.unregisterModelRestoreNeeded?.()
     session.unregisterModelRestoreNeeded = null
+    // Marker bookkeeping is per PTY stream, like the restore state itself.
+    session.hiddenOutputRestoreLatestDropEpisode = null
+    session.hiddenOutputRestoreDisclosedGap = null
     session.modelRestoreSubscribedPtyId = ptyId
     // Why: markers exist only for PTYs whose bytes transit local main;
     // remote-runtime transports are structurally unaffected.
@@ -102,7 +125,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     )
   }
 
-  session.handleRemoteOutputPauseChanged = (paused, supported): void => {
+  session.handleRemoteOutputPauseChanged = (paused, supported, dropsReported): void => {
     const ptyId = session.transport.getPtyId()
     if (!ptyId || !isRemoteRuntimePtyId(ptyId)) {
       return
@@ -127,7 +150,24 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       session.registerSideEffectFactConsumerForPty(ptyId, true)
       session.remoteOutputFactConsumerPtyId = ptyId
     }
+    // Why: a host that reports drops lets a quiet pane reveal with zero snapshot fetches; others may have dropped anything.
+    if (!(supported && dropsReported)) {
+      session.markHiddenOutputRestoreNeeded()
+    }
+  }
+
+  session.handleRemotePausedOutputDropped = (): void => {
+    const ptyId = session.transport.getPtyId()
+    if (session.disposed || !ptyId || !isRemoteRuntimePtyId(ptyId)) {
+      return
+    }
+    // Why: the gap invalidates cross-chunk carry, exactly like a local drop marker.
+    session.transport.resetCrossChunkParserState?.()
+    const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
     session.markHiddenOutputRestoreNeeded()
+    if (restoreWasInFlight) {
+      session.hiddenOutputRestoreFreshSnapshotNeeded = true
+    }
   }
 
   session.syncHiddenRendererPtyDelivery = (): void => {
@@ -138,6 +178,13 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       if (!session.mainSideEffectAuthority) {
         session.dropSideEffectFactConsumer()
       }
+    }
+    // COMPAT(legacy-relay-bridge): main drops a hidden bridged pane's output and re-reads its relay screen on reveal.
+    if (ptyId && ptyId === session.legacyRelayBridgePtyId) {
+      session.transport.setOutputPaused?.(
+        !session.disposed && !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+      )
+      return
     }
     if (isRemoteRuntimePtyId(ptyId) && session.canUseHiddenOutputSnapshot(ptyId)) {
       session.transport.setOutputPaused?.(
@@ -151,6 +198,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       session.hiddenDeliverySyncedPtyId = null
     }
     if (
+      !ptyId ||
       !session.isHiddenDeliveryGateManagedPty(ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {
@@ -223,7 +271,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     }
     const recentInput =
       performance.now() - session.lastInteractiveRedrawInputAt <=
-      FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+      FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS + terminalInputEchoAllowanceMs(session.inputEchoDelay)
     if (
       recentInput &&
       data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
@@ -265,7 +313,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       session.foregroundRewriteOutputPrefersRenderRefresh(data)
     const recentInput =
       performance.now() - session.lastInteractiveRedrawInputAt <=
-      FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+      FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS + terminalInputEchoAllowanceMs(session.inputEchoDelay)
     if (session.foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
       return {
         refresh: true,

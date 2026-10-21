@@ -111,21 +111,6 @@ describe('cold-park store subscription narrowing', () => {
     expect(harness.renders).toBe(0)
   })
 
-  // Why: a blocked record never resumes, so it leaves the exempt set — and the
-  // narrowed subscription's compared value — unchanged.
-  it('ignores a sleeping-session write this worktree can never resume', () => {
-    act(() => {
-      useAppStore.setState({
-        sleepingAgentSessionsByPaneKey: {
-          'tab-1:1': sleepingRecord('tab-1:1', WORKTREE_ID, {
-            automaticResumeBlockedBy: 'legacy-orchestration-worker'
-          })
-        }
-      })
-    })
-    expect(harness.renders).toBe(0)
-  })
-
   it('still re-renders when this worktree gains a pending startup', () => {
     act(() => {
       useAppStore.setState({

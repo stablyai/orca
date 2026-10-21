@@ -7,6 +7,7 @@ import {
   sortCollectionsByOrder
 } from '../../../shared/collections'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { MetadataLineageOperations } from './metadata-lineage-operations'
 import type { WriteSchedulingOperations } from './write-scheduling'
@@ -99,22 +100,13 @@ export class CollectionOperations {
   }
 
   setWorktreeCollectionIds(
-    worktreeId: string,
+    target: HostWorktreeTarget,
     collectionIds: readonly string[] | undefined
   ): WorktreeMeta {
     // Why: route through setWorktreeMeta so every membership writer shares its
     // normalize-and-prune chokepoint; [] collapses to "no memberships".
-    return this[collectionOperationsContext].metadata.setWorktreeMeta(worktreeId, {
+    return this[collectionOperationsContext].metadata.setWorktreeMeta(target, {
       collectionIds: [...(collectionIds ?? [])]
     })
   }
-}
-
-export function installCollectionOperationsContext(
-  target: object,
-  source: CollectionOperations
-): void {
-  Object.defineProperty(target, collectionOperationsContext, {
-    value: source[collectionOperationsContext]
-  })
 }

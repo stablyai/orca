@@ -84,22 +84,6 @@ describe('gitlab project ref parsing', () => {
     ).toBeNull()
   })
 
-  it('matches an SCP-like self-hosted remote against a port-less known host', () => {
-    expect(
-      parseGitLabProjectRef('git@gitlab.example.com:team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-  })
-
-  it('keeps gitlab.com (no port) recognized as a default host', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-
   it('rejects single-segment paths (host root or user-only)', () => {
     expect(parseGitLabProjectRef('git@gitlab.com:foo.git')).toBeNull()
     expect(parseGitLabProjectRef('https://gitlab.com/foo.git')).toBeNull()

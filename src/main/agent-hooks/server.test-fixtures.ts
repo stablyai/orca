@@ -20,6 +20,7 @@ export type Body = {
   worktreeId?: string
   env?: string
   version?: string
+  agentProcess?: string
   payload: Record<string, unknown>
 }
 
@@ -56,6 +57,8 @@ export async function postHookEvent(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      // Fake-time advances must not expire a pooled socket before the next hook.
+      Connection: 'close',
       'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
     },
     body: JSON.stringify(body)

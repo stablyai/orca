@@ -1,4 +1,4 @@
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { recognizeAgentLaunchCommand } from './agent-command-line-intent'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 
 const GIT_CONFIG_PROTOCOL_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
@@ -23,7 +23,9 @@ export function applyTerminalGitCredentialPromptGuard(
   const shouldGuard =
     opts.isUnattended === true ||
     Boolean(
-      recognizeAgentProcessFromCommandLine(opts.launchCommand, { includeHeadlessOneShot: true })
+      recognizeAgentLaunchCommand(opts.launchCommand, {
+        includeHeadlessOneShot: true
+      })
     )
   if (!explicitlyGuarded && !shouldGuard) {
     return false

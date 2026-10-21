@@ -6,7 +6,7 @@
  * Centralized to stop local/relay listFiles from drifting on blocklist, ignores, exclusions,
  * timeouts, and buffering. See docs/design/share-quick-open-file-listing.md.
  */
-import { relativePathInsideRoot } from './cross-platform-path'
+import { isWindowsAbsolutePathLike, relativePathInsideRoot } from './cross-platform-path'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
     if (relativePath === null) {
       continue
     }
-    let rel = relativePath.replace(/\\/g, '/')
+    let rel = isWindowsAbsolutePathLike(rootPath) ? relativePath.replace(/\\/g, '/') : relativePath
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
@@ -119,7 +119,7 @@ export function shouldExcludeQuickOpenRelPath(
     if (relPath === prefix) {
       return true
     }
-    if (relPath.length > prefix.length && relPath.startsWith(`${prefix}/`)) {
+    if (relPath[prefix.length] === '/' && relPath.startsWith(prefix)) {
       return true
     }
   }
@@ -173,6 +173,7 @@ export function buildHiddenDirExcludeGlobs(): string[] {
 
 export type RgArgsOptions = {
   /** rg positional search target: absolute root (strip prefix from output) or `.` (cwd-relative); both need cwd: rootPath. */
+  followSymlinks?: boolean
   searchRoot: string
   /** Root-relative, `/`-separated prefixes (from buildExcludePathPrefixes). */
   excludePathPrefixes: readonly string[]
@@ -183,16 +184,17 @@ export type RgArgsOptions = {
 export type RgArgs = {
   /** Main pass: all non-ignored files, hidden dotfiles included. */
   primary: string[]
-  /** Second pass: ignored files, hidden dotfiles included. */
+  /** Broader pass: primary files plus gitignored files, hidden dotfiles included. */
   ignoredPass: string[]
 }
 
 /**
  * Build the two rg arg arrays for Quick Open. Caller must spawn with `cwd: rootPath` — root-relative
  * globs are evaluated against rg's cwd, so omitting it silently breaks nested-worktree exclusions.
- * Deliberately omits `--follow` so symlinks can't escape the authorized root or cause traversal loops.
+ * Symlink traversal is explicit opt-in; opening discovered paths still requires authorization.
  */
 export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
+  const followArgs = opts.followSymlinks ? ['--follow'] : []
   const sepArgs = opts.forceSlashSeparator ? ['--path-separator', '/'] : []
   const hiddenDirGlobs = buildHiddenDirExcludeGlobs()
   const excludeGlobs: string[] = []
@@ -204,7 +206,10 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
 
   const primary = [
     '--files',
+    '--no-config',
+    '--null',
     '--hidden',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
@@ -214,8 +219,11 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   // Ignored pass: --no-ignore-vcs broadens to gitignored/parent/global ignored files; blocklist globs still guard.
   const ignoredPass = [
     '--files',
+    '--no-config',
+    '--null',
     '--hidden',
     '--no-ignore-vcs',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
@@ -234,20 +242,18 @@ export type RgOutputMode =
   | { kind: 'cwd-relative' }
 
 /**
- * Convert one rg --files stdout line into a root-relative, `/`-separated path.
- * Returns `null` for lines that escape the root (symlink edge cases) or can't be normalized.
+ * Convert one NUL-delimited rg --files record into a root-relative, `/`-separated path.
+ * Returns `null` for records that escape the root (symlink edge cases) or can't be normalized.
  * Callers do any WSL translation first, keeping WSL out of the shared module.
  */
 export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMode): string | null {
-  let line = rawLine
-  // Strip CR so CRLF from rg on Windows doesn't leak into results.
-  if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) {
-    line = line.substring(0, line.length - 1)
-  }
+  const line = rawLine
   if (!line) {
     return null
   }
-  const normalized = line.replace(/\\/g, '/')
+  const windowsPath =
+    outputMode.kind === 'absolute' && isWindowsAbsolutePathLike(outputMode.rootPath)
+  const normalized = windowsPath ? line.replace(/\\/g, '/') : line
   if (outputMode.kind === 'cwd-relative') {
     let rel = normalized
     if (rel.startsWith('./')) {
@@ -262,7 +268,8 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   }
   // Absolute mode: strip the root prefix.
   // Why: only replace backslashes; collapsing repeated slashes would break Windows UNC roots (`\\server\share`).
-  const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
+  const root = windowsPath ? outputMode.rootPath.replace(/\\/g, '/') : outputMode.rootPath
+  const normalizedRoot = `${root.replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
     const rel = normalized.substring(normalizedRoot.length)
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {

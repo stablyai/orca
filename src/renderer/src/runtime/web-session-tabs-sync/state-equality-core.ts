@@ -4,6 +4,8 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
+import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsBatchRecordKey,
@@ -29,7 +31,8 @@ export function sameAgentStateHistory(
       entry.state === b[index]?.state &&
       entry.prompt === b[index]?.prompt &&
       entry.startedAt === b[index]?.startedAt &&
-      entry.interrupted === b[index]?.interrupted
+      entry.interrupted === b[index]?.interrupted &&
+      mainAgentStatusEqual(entry.mainAgent, b[index]?.mainAgent)
   )
 }
 
@@ -46,6 +49,9 @@ export function agentStatusEntryEqual(
     a.prompt === b.prompt &&
     a.updatedAt === b.updatedAt &&
     a.stateStartedAt === b.stateStartedAt &&
+    a.turnStartedAt === b.turnStartedAt &&
+    a.turnEndedAt === b.turnEndedAt &&
+    a.turnEndDisposition === b.turnEndDisposition &&
     a.agentType === b.agentType &&
     a.paneKey === b.paneKey &&
     a.worktreeId === b.worktreeId &&
@@ -57,8 +63,10 @@ export function agentStatusEntryEqual(
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.lastAssistantMessageIsToolOutput === b.lastAssistantMessageIsToolOutput &&
     a.interrupted === b.interrupted &&
+    mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    programStatusFacetsEqual(a.programStatus, b.programStatus) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )

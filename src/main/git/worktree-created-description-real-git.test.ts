@@ -112,16 +112,20 @@ describe('describeCreatedWorktree against the real Git binary', () => {
 
   // `mkfifo` stands in for a `.git` on a hung mount: the read never rejects on its own.
   it.skipIf(process.platform === 'win32')(
-    "still settles when the repo's .git blocks forever",
+    "settles with the unread witness named when the repo's .git blocks forever",
     async () => {
       const stalledRepo = join(scratchDir, 'stalled')
       await mkdir(stalledRepo, { recursive: true })
       const stalledDotGit = join(stalledRepo, '.git')
       await execFileAsync('mkfifo', [stalledDotGit])
       try {
+        // Rejecting, not resolving undefined: undefined becomes a bare "created worktree not found",
+        // which claims Git put the worktree somewhere else. A stalled mount proves no such thing.
+        const settledBy = Date.now() + 5_000
         await expect(
           describeCreatedWorktree(stalledRepo, worktreePath, 'feature', { timeout: 250 })
-        ).resolves.toBeUndefined()
+        ).rejects.toThrow(/^repo common dir unverifiable: could not read .*\.git: /)
+        expect(Date.now()).toBeLessThan(settledBy)
       } finally {
         // Release the pending read so the fifo does not pin a threadpool thread for the whole run.
         await writeFile(stalledDotGit, '')

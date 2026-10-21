@@ -3,12 +3,12 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import type { Tab } from '../../../shared/tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { acceptReplayedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-lifecycle'
 import {
-  acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   LEAF_ID,

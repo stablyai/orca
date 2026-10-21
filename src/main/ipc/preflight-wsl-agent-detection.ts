@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import path from 'node:path'
 import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
@@ -19,7 +20,7 @@ export async function detectWslCommandsOnPath(
     return new Set()
   }
 
-  const commandList = uniqueCommands.map(shellQuote).join(' ')
+  const commandList = uniqueCommands.map(quotePosixShell).join(' ')
   const lookupScript = buildPosixCommandPathLookupScript(
     { kind: 'shell-variable', name: 'cmd' },
     // Skip Windows mounts DURING the walk, not after it: WSL appends the
@@ -63,10 +64,6 @@ export async function detectWslCommandsOnPath(
   } catch {
     return new Set()
   }
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
 }
 
 function parseWslDetectedCommands(stdout: string): Set<string> {

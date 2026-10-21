@@ -51,9 +51,9 @@ import {
   resetRuntimeWatcherProcessForTest,
   resetWatcherProcessForTest,
   subscribeViaRuntimeWatcherProcess,
-  subscribeViaWatcherProcess,
-  type WatcherProcessEvent
+  subscribeViaWatcherProcess
 } from './parcel-watcher-process'
+import type { WatcherProcessEvent } from './parcel-watcher-process-protocol'
 
 describe('watcher-process root path rewrite', () => {
   let root: AliasedWatcherRoot | null = null

@@ -2,8 +2,7 @@ import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { cn } from '@/lib/utils'
 import {
   buildSummaryAgentGroups,
@@ -58,7 +57,8 @@ export function CompactAgentExpansion({
       aria-hidden={!expanded}
       inert={!expanded}
     >
-      <div className="min-h-0 overflow-hidden">
+      {/* Why: clip only the height animation; a gutter-hung chevron overflows horizontally. */}
+      <div className="min-h-0 min-w-0 overflow-x-visible overflow-y-clip">
         {shouldRenderChildren && (
           <div
             className={cn(
@@ -159,7 +159,7 @@ export function CompactAgentSummaryButton({
                         key={agent.paneKey}
                         className="inline-flex size-4 items-center justify-center rounded-full border border-worktree-sidebar-border/70 bg-worktree-sidebar"
                       >
-                        <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+                        <AgentTypeIcon agentType={agent.agentType} size={13} />
                       </span>
                     ))}
                   </span>

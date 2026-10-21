@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { DirCache } from './file-explorer-types'
-import { normalizeAbsolutePath, isPathEqualOrDescendant } from './file-explorer-paths'
+import { isPathEqualOrDescendant } from './file-explorer-paths'
 import { useAppStore } from '@/store'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
@@ -41,7 +41,8 @@ function createSubtreeMatcher(paths: ReadonlySet<string>): (candidatePath: strin
 
 export function purgeDirCacheSubtrees(
   setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>,
-  deletedPaths: ReadonlySet<string>
+  deletedPaths: ReadonlySet<string>,
+  snapshot?: { cache: Record<string, DirCache>; keys: readonly string[] }
 ): void {
   if (deletedPaths.size === 0) {
     return
@@ -50,7 +51,8 @@ export function purgeDirCacheSubtrees(
   setDirCache((prev) => {
     let changed = false
     const next: Record<string, DirCache> = {}
-    for (const key of Object.keys(prev)) {
+    const keys = prev === snapshot?.cache ? snapshot.keys : Object.keys(prev)
+    for (const key of keys) {
       if (shouldPurge(key)) {
         changed = true
       } else {
@@ -103,14 +105,10 @@ export function purgeExpandedDirsSubtrees(
 // would cause the reveal logic to expand stale ancestor directories.
 
 export function clearStalePendingReveal(deletedPath: string): void {
-  const normalized = normalizeAbsolutePath(deletedPath)
   useAppStore.setState((state) => {
     if (
       state.pendingExplorerReveal &&
-      isPathEqualOrDescendant(
-        normalizeAbsolutePath(state.pendingExplorerReveal.filePath),
-        normalized
-      )
+      isPathEqualOrDescendant(state.pendingExplorerReveal.filePath, deletedPath)
     ) {
       return { pendingExplorerReveal: null }
     }

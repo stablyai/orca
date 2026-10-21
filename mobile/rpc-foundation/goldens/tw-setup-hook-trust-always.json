@@ -1,0 +1,84 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "tasks.setup-hook-trust",
+  "family": "worktree.setup-hook-trust",
+  "namedDeltas": [],
+  "values": {
+    "229c35d1a4ba": {
+      "trust": "unapproved"
+    },
+    "b6a1b1ed0a08": {
+      "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "all": {
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f35a1e7f7cdb": {
+      "name": "ui.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"all\":{\"approvedAt\":1767225600000}}}}}"
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-setup-hook-trust-always",
+    "checkpoints": [
+      {
+        "id": "refused-empty-message",
+        "observation": {
+          "sender": ["b6a1b1ed0a08"],
+          "payloads": ["f35a1e7f7cdb"],
+          "settlements": {
+            "approve": "f3b516f62081"
+          },
+          "state": "229c35d1a4ba",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

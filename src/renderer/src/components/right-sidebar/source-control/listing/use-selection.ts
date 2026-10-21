@@ -12,22 +12,6 @@ export type FlatEntry = {
   area: 'unstaged' | 'staged' | 'untracked'
 }
 
-export function reconcileSelectionKeys(
-  selectedKeys: ReadonlySet<string>,
-  flatEntries: FlatEntry[]
-): Set<string> {
-  const validKeys = new Set(flatEntries.map((e) => e.key))
-  const nextSelected = new Set<string>()
-
-  for (const key of selectedKeys) {
-    if (validKeys.has(key)) {
-      nextSelected.add(key)
-    }
-  }
-
-  return nextSelected
-}
-
 export function reconcileSourceControlSelectionState(args: {
   selectedKeys: ReadonlySet<string>
   anchorKey: string | null
@@ -78,12 +62,12 @@ export function getSelectionRangeKeys(
 
 export function useSourceControlSelection({
   flatEntries,
-  onOpenDiff,
+  onOpenFile,
   shouldOpenAsSplit,
   containerRef
 }: {
   flatEntries: FlatEntry[]
-  onOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onOpenFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   shouldOpenAsSplit?: (event: SourceControlRowOpenEvent) => boolean
   containerRef: RefObject<HTMLElement | null>
 }) {
@@ -92,7 +76,7 @@ export function useSourceControlSelection({
   const flatEntriesRef = useRef(flatEntries)
   const anchorKeyRef = useRef<string | null>(anchorKey)
   const selectedKeysRef = useRef(selectedKeys)
-  const onOpenDiffRef = useRef(onOpenDiff)
+  const onOpenFileRef = useRef(onOpenFile)
   const shouldOpenAsSplitRef = useRef(shouldOpenAsSplit)
 
   useEffect(() => {
@@ -108,8 +92,8 @@ export function useSourceControlSelection({
   }, [selectedKeys])
 
   useEffect(() => {
-    onOpenDiffRef.current = onOpenDiff
-  }, [onOpenDiff])
+    onOpenFileRef.current = onOpenFile
+  }, [onOpenFile])
 
   useEffect(() => {
     shouldOpenAsSplitRef.current = shouldOpenAsSplit
@@ -134,7 +118,7 @@ export function useSourceControlSelection({
     if (shouldOpenAsSplitRef.current?.(e)) {
       setSelectedKeys((prev) => (prev.size > 0 ? new Set() : prev))
       setAnchorKey(null)
-      onOpenDiffRef.current(entry, e)
+      onOpenFileRef.current(entry, e)
       return
     }
 
@@ -154,7 +138,7 @@ export function useSourceControlSelection({
       // stale invisible anchor.
       setSelectedKeys(new Set())
       setAnchorKey(key)
-      onOpenDiffRef.current(entry)
+      onOpenFileRef.current(entry)
     } else if (isCmdOrCtrl) {
       if (selectedKeysRef.current.has(key)) {
         setSelectedKeys((prev) => {
@@ -179,7 +163,7 @@ export function useSourceControlSelection({
         return prev
       })
       setAnchorKey(key)
-      onOpenDiffRef.current(entry)
+      onOpenFileRef.current(entry)
     }
   }, [])
 

@@ -19,7 +19,6 @@ const NOW = 1_700_000_000_000
 const testState = vi.hoisted(() => ({
   appState: null as unknown as NoteSendAppState,
   callRuntimeRpc: vi.fn(),
-  getActiveRuntimeTarget: vi.fn(() => ({ kind: 'local' })),
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     readonly code: string
     readonly response: unknown
@@ -42,9 +41,8 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: testState.callRuntimeRpc,
-  getActiveRuntimeTarget: testState.getActiveRuntimeTarget,
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
 
@@ -52,8 +50,6 @@ describe('active agent note send', () => {
   beforeEach(() => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()
-    testState.getActiveRuntimeTarget.mockClear()
-    testState.getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
   })
 
   it('resolves the current worktree terminal pane from renderer state', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 
 const registryMocks = vi.hoisted(() => ({
   destroyPersistentWebview: vi.fn(),
@@ -56,7 +56,7 @@ describe('BrowserPane webview preferences', () => {
       'persist:orca-browser-session-profile-1'
     )
     expect(ensuredWebview?.webview.getAttribute('webpreferences')).toBe(
-      ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE
+      ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE
     )
     expect(registryMocks.registerPersistentWebview).toHaveBeenCalledWith(
       'browser-page-1',

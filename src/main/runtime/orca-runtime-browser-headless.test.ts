@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 const {
@@ -105,7 +105,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('closes a headless tab via the offscreen backend without a renderer round-trip', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     const closeTab = vi.fn(async () => {})
     const retireRuntimeOwnedBrowserSessionTab = vi.fn()
@@ -142,7 +142,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('closes the active headless tab on an implicit close', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     const closeTab = vi.fn(async () => {})
     const bridge = {
@@ -165,7 +165,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('reports not-closed when no headless tab can be resolved', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const closeTab = vi.fn(async () => {})
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map()),
@@ -187,7 +187,7 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   })
 
   it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),

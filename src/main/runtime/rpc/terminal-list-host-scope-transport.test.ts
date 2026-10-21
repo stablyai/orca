@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import { RpcDispatcher } from './dispatcher'

@@ -1,4 +1,5 @@
-import { app, clipboard, dialog, type BrowserWindow, type Tray } from 'electron'
+import { app, clipboard, dialog, type BrowserWindow, type Tray, type WebContents } from 'electron'
+import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
@@ -11,12 +12,18 @@ import {
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
+import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
+import { markUserQuitWindowClose } from '../window/user-quit-window-close'
 import { loadMainWindow } from '../window/createMainWindow'
 import {
   describeInstallDirAclPoison,
   isBlockingInstallDirAclRepairInFlight
 } from './windows-install-dir-acl-recovery'
-import { presentRendererRecoveryPrompt } from '../window/renderer-recovery-prompt'
+import {
+  presentRendererRecoveryPrompt,
+  type RendererRecoveryPromptFailure
+} from '../window/renderer-recovery-prompt'
+import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -31,7 +38,7 @@ export function focusExistingWindow(): void {
     app,
     getWindow: () => state.mainWindow,
     openWindow,
-    // Why: a 20s blank launch invites a second double-click, and icacls is rewriting
+    // Why: a 20s blank launch invites a second double-click, and the repair is rewriting
     // the per-file DACLs a fresh renderer would read. The gated launch opens the window.
     canOpenWindow: () => !isBlockingInstallDirAclRepairInFlight(),
     warn: console.warn
@@ -59,12 +66,33 @@ export function openSettingsFromSystemMenu(): void {
   state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
 }
 
+/**
+ * A user Quit (menu, tray, renderer-recovery prompt). Under `orca serve` the process is the
+ * server its paired clients use, so a user Quit only closes the desktop windows (#15537);
+ * signals, supervisor stops and update installs still quit through app.quit().
+ */
+export function quitFromUserCommand(): void {
+  if (state.isServeMode) {
+    // Why not getAllWindows(): offscreen browser-automation windows belong to the runtime.
+    for (const window of [state.mainWindow, getDashboardPopoutWindow()]) {
+      if (window && !window.isDestroyed()) {
+        if (window === state.mainWindow) {
+          markUserQuitWindowClose(window)
+        }
+        window.close()
+      }
+    }
+    return
+  }
+  state.isQuitting = true
+  app.quit()
+}
+
 export function quitFromSystemTray(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
-  state.isQuitting = true
-  app.quit()
+  quitFromUserCommand()
 }
 
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
@@ -122,36 +150,39 @@ export function createSystemTrayDeferred(
   }
 }
 
+function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebContents | undefined {
+  // Why: a native browser popup is a BrowserWindow hosting a web page, not Orca's renderer.
+  return targetWindow && !targetWindow.isDestroyed() && !isNativeBrowserPopupWindow(targetWindow)
+    ? targetWindow.webContents
+    : state.mainWindow?.webContents
+}
+
 export function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openFeatureTour')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openFeatureTour')
 }
 
 export function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openSetupGuide')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openSetupGuide')
 }
 
 export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openCrashReport')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openCrashReport')
 }
 
-// Why: on renderer crash-loop the breaker stops auto-reloading and the window goes blank, so a main-process dialog is the only retry/quit surface.
-export async function showRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
+// Why: once auto-recovery gives up the window stays blank, so a main-process dialog is the only retry/quit surface.
+export async function showRendererRecoveryPrompt(
+  recentRecoveryCount: number,
+  failure?: RendererRecoveryPromptFailure,
+  retry?: () => void,
+  availableCommitMB?: number
+): Promise<void> {
   await presentRendererRecoveryPrompt({
     recentRecoveryCount,
+    ...(failure ? { failure } : {}),
+    ...(availableCommitMB === undefined ? {} : { availableCommitMB }),
     isQuitting: () => state.isQuitting,
     diagnose: describeInstallDirAclPoison,
+    probeLaunchCapacity: () => probeRendererLaunchCapacity(),
     showMessageBox: (options) => {
       const window =
         state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
@@ -164,11 +195,14 @@ export async function showRendererRecoveryPrompt(recentRecoveryCount: number): P
       }
       recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
       // Why: leave the breaker open so a re-crash re-raises this prompt instead of resuming the auto-reload loop.
+      // Why watched: Reload is the dialog's default button, and an unwatched retry that stalls returns the user to
+      // the same silent hang with no further prompt — the watchdog re-raises this dialog instead.
+      if (retry) {
+        retry()
+        return
+      }
       loadMainWindow(state.mainWindow)
     },
-    quit: () => {
-      state.isQuitting = true
-      app.quit()
-    }
+    quit: quitFromUserCommand
   })
 }

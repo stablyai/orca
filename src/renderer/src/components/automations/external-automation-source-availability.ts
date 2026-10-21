@@ -1,7 +1,4 @@
-import type {
-  ExternalAutomationManager,
-  ExternalAutomationProvider
-} from '../../../../shared/automations-types'
+import type { ExternalAutomationManager } from '../../../../shared/automations-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
@@ -22,7 +19,7 @@ export function getExternalAutomationActionDisabledMessage(args: {
   if (args.manager.canManage) {
     return null
   }
-  const providerLabel = args.providerLabel ?? getProviderLabel(args.manager.provider)
+  const providerLabel = args.providerLabel ?? 'OpenClaw'
   const targetKindLabel =
     args.targetKindLabel ?? (args.manager.target.type === 'ssh' ? 'SSH host' : 'Local')
   if (args.manager.target.type === 'ssh') {
@@ -44,10 +41,6 @@ export function getExternalAutomationActionDisabledMessage(args: {
     args.manager.error ??
     `${providerLabel} cannot manage automations on this ${targetKindLabel.toLowerCase()}.`
   )
-}
-
-function getProviderLabel(provider: ExternalAutomationProvider): string {
-  return provider === 'hermes' ? 'Hermes' : 'OpenClaw'
 }
 
 function isSshDisconnectedError(message: string): boolean {

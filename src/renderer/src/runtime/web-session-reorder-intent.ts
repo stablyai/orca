@@ -13,6 +13,8 @@
 // rejected RPC) from pinning a stale order forever.
 
 const REORDER_INTENT_TTL_MS = 10_000
+export const MAX_REORDER_INTENT_PARTITIONS = 512
+export const MAX_REORDER_INTENTS_PER_PARTITION = 256
 
 type ReorderIntent = { order: string[]; recordedAt: number }
 
@@ -53,7 +55,24 @@ export function recordWebSessionReorderIntent(
     byGroup = new Map()
     pendingReorderByOwnerAndWorktree.set(partitionKey, byGroup)
   }
+  byGroup.delete(groupId)
   byGroup.set(groupId, { order: [...order], recordedAt: now })
+  while (byGroup.size > MAX_REORDER_INTENTS_PER_PARTITION) {
+    const oldest = byGroup.keys().next()
+    if (oldest.done || oldest.value === groupId) {
+      break
+    }
+    byGroup.delete(oldest.value)
+  }
+  pendingReorderByOwnerAndWorktree.delete(partitionKey)
+  pendingReorderByOwnerAndWorktree.set(partitionKey, byGroup)
+  while (pendingReorderByOwnerAndWorktree.size > MAX_REORDER_INTENT_PARTITIONS) {
+    const oldest = pendingReorderByOwnerAndWorktree.keys().next()
+    if (oldest.done || oldest.value === partitionKey) {
+      break
+    }
+    pendingReorderByOwnerAndWorktree.delete(oldest.value)
+  }
 }
 
 /**

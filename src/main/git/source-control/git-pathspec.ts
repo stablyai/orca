@@ -2,7 +2,11 @@ import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
 } from '../../../shared/windows-command-line-budget'
-import { resolveGitCommandWithoutProbe } from '../command-runner/git-command-resolution'
+import {
+  resolveGitCommandWithoutProbe,
+  wslDistroForCommand
+} from '../command-runner/git-command-resolution'
+import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
@@ -16,22 +20,16 @@ const BULK_CHUNK_SIZE = 100
  */
 const POSIX_COMMAND_LINE_BUDGET = 128_000
 
-function normalizeGitPathForCompare(filePath: string): string {
-  return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-export function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
+export function literalPathspec(
+  filePath: string,
+  worktreePath: string,
+  options: GitRuntimeOptions
+): string {
   // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
-  const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
+  // The runner also routes a WSL-UNC cwd into WSL when options carry no distro, so check the cwd too.
+  const runsInWsl = options.wslDistro || wslDistroForCommand(worktreePath)
+  const runtimePath = runsInWsl ? filePath.replace(/\\/g, '/') : filePath
   return `:(literal)${runtimePath}`
-}
-
-export function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
-  const normalized = normalizeGitPathForCompare(filePath)
-  return trackedPaths.some((trackedPath) => {
-    const normalizedTracked = normalizeGitPathForCompare(trackedPath)
-    return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-  })
 }
 
 /**
@@ -49,7 +47,9 @@ function finishedCommandLineLength(
   worktreePath: string,
   options: GitRuntimeOptions
 ): number {
-  const resolved = resolveGitCommandWithoutProbe([...args], {
+  // Why worst case: the Windows-checkout config can be prepended at spawn, after this chunking.
+  const budgetArgs = options.wslDistro ? [...WINDOWS_CHECKOUT_GIT_CONFIG_ARGS, ...args] : [...args]
+  const resolved = resolveGitCommandWithoutProbe(budgetArgs, {
     cwd: worktreePath,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
   })
@@ -85,7 +85,7 @@ export function bulkPathspecCommands(
   let pathspecs: string[] = []
   let length = baseLength
   for (const filePath of filePaths) {
-    const pathspec = literalPathspec(filePath, options)
+    const pathspec = literalPathspec(filePath, worktreePath, options)
     const cost =
       finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
     if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {

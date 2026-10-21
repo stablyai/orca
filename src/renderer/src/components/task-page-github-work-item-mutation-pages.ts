@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
 import { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
 import {
   getStickyHideEntry,
@@ -16,27 +17,29 @@ export function patchTaskPageGitHubWorkItemPages(
   patch: Partial<GitHubWorkItem>,
   shouldPatch?: (item: GitHubWorkItem) => boolean
 ): (GitHubWorkItem[] | null)[] {
-  let changed = false
-  const nextPages = pages.map((page) => {
+  let nextPages: (GitHubWorkItem[] | null)[] | undefined
+  pages.forEach((page, pageIndex) => {
     if (!page) {
-      return null
+      return
     }
-    let pageChanged = false
-    const nextPage = page.map((item) => {
+    let nextPage: GitHubWorkItem[] | undefined
+    page.forEach((item, itemIndex) => {
       if (
         item.id !== itemKey.id ||
         item.repoId !== itemKey.repoId ||
         (shouldPatch && !shouldPatch(item))
       ) {
-        return item
+        return
       }
-      changed = true
-      pageChanged = true
-      return { ...item, ...patch }
+      nextPage ??= page.slice()
+      nextPage[itemIndex] = { ...item, ...patch }
     })
-    return pageChanged ? nextPage : page
+    if (nextPage) {
+      nextPages ??= pages.slice()
+      nextPages[pageIndex] = nextPage
+    }
   })
-  return changed ? nextPages : (pages as (GitHubWorkItem[] | null)[])
+  return nextPages ?? (pages as (GitHubWorkItem[] | null)[])
 }
 
 /** Match each item to pending/confirmed authority by repoId + itemId + remembered sourceScope. */
@@ -72,7 +75,10 @@ export function reapplyPendingTaskPageGitHubMutationsToCache(args: {
         autoMergeEnabled: merged.autoMergeEnabled
       },
       item.repoId,
-      { sourceContext: args.sourceContextByRepoId?.get(item.repoId) }
+      {
+        sourceContext: args.sourceContextByRepoId?.get(item.repoId),
+        ownerRepo: parseGitHubIssueOrPRLink(item.url)?.slug
+      }
     )
   }
 }

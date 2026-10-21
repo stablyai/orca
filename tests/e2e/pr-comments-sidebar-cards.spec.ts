@@ -138,15 +138,21 @@ test.describe('PR comments sidebar cards view', () => {
     await orcaPage.screenshot({ path: testInfo.outputPath('reaction-before.png') })
     await threadReactionButton.click()
     await expect(orcaPage.getByRole('group', { name: 'Add reaction' })).toBeFocused()
-    await orcaPage.waitForTimeout(300)
-    await orcaPage.screenshot({ path: testInfo.outputPath('reaction-picker.png') })
+    await expect(orcaPage.getByRole('button', { name: 'Add rocket reaction' })).toBeVisible()
+    await orcaPage.screenshot({
+      path: testInfo.outputPath('reaction-picker.png'),
+      animations: 'disabled'
+    })
     await orcaPage.getByRole('button', { name: 'Add rocket reaction' }).click()
     await expect(orcaPage.getByRole('group', { name: 'Add reaction' })).toBeHidden()
     const selectedRocket = reviewThreadCard.getByRole('button', { name: '1 rocket reaction' })
     await expect(selectedRocket).toHaveAttribute('aria-pressed', 'true')
     await selectedRocket.focus()
-    await orcaPage.waitForTimeout(300)
-    await orcaPage.screenshot({ path: testInfo.outputPath('reaction-after.png') })
+    await expect(selectedRocket).toBeFocused()
+    await orcaPage.screenshot({
+      path: testInfo.outputPath('reaction-after.png'),
+      animations: 'disabled'
+    })
     await selectedRocket.press('Enter')
     await expect(selectedRocket).toHaveCount(0)
     await expect(threadReactionButton).toBeFocused()

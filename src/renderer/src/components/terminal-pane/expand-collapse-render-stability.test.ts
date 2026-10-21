@@ -2,9 +2,9 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { useExpandCollapseActions } from './expand-collapse'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 
 type ExpandCollapseHookState = Parameters<typeof useExpandCollapseActions>[0]
 type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]
@@ -87,6 +87,7 @@ describe('terminal keyboard effect registration stability', () => {
       fallbackCwd: '',
       expandedPaneIdRef: { current: null },
       setSearchOpen: vi.fn(),
+      focusSearchInput: vi.fn(),
       onSearchSelectedText: vi.fn(),
       onRequestClosePane: vi.fn(),
       onClearPaneScrollback: vi.fn(),

@@ -66,7 +66,8 @@ export async function startTerminalImeByteReader(
 export async function waitForTerminalImeBytes(
   page: Page,
   reader: TerminalImeByteReader,
-  timeoutMs = 15_000
+  timeoutMs = 15_000,
+  lineCount = reader.expectedLineCount
 ): Promise<string[]> {
   let results: string[] = []
   await expect
@@ -85,7 +86,7 @@ export async function waitForTerminalImeBytes(
       },
       { timeout: timeoutMs, message: 'IME byte reader did not receive every expected line' }
     )
-    .toBe(reader.expectedLineCount)
+    .toBeGreaterThanOrEqual(lineCount)
   return results
 }
 

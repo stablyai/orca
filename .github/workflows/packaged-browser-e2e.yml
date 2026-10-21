@@ -1,0 +1,118 @@
+name: Packaged browser compatibility
+# Both jobs pair the current build with a pinned released one. `layout-compat` holds all the layout
+# rework baselines (P3), compared with the shapes recorded on main in
+# tests/e2e/layout-compat-baselines.json; its artifact carries the observed shapes for re-recording.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA or ref to validate (defaults to the selected revision)
+        type: string
+        required: false
+  schedule:
+    - cron: '20 8 * * 1'
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Download pinned old release
+        uses: ./.github/actions/download-pinned-orca-release
+        with:
+          version: 1.4.188
+          sha512: uGONFUDfinYggxcT9ac72wnnlofLQaqasDDeP0HWOSqarBwTi1Ax3khmzKUY3vUnvuYOpSCEmsH4InzLZ2vg6g==
+          github-token: ${{ github.token }}
+      - name: Build current Electron app
+        env:
+          VITE_EXPOSE_STORE: 'true'
+        run: |
+          pnpm run build:wsl-guest
+          pnpm exec electron-vite build --mode e2e
+          pnpm run build:web-from-renderer
+      - name: Run both mixed-version directions
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/packaged-browser-results.json
+        run: >-
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
+          pnpm exec playwright test --config tests/playwright.config.ts
+          tests/e2e/packaged-mixed-version-browser-placement.spec.ts
+          --project=electron-headless --workers=1 --retries=0 --repeat-each=3 --reporter=list,json
+      - name: Require all six compatibility executions
+        if: always()
+        run: node config/scripts/verify-packaged-browser-participation.mjs test-results/packaged-browser-results.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: packaged-mixed-version-audit
+          path: test-results/
+          retention-days: 3
+  layout-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Download pinned old release
+        uses: ./.github/actions/download-pinned-orca-release
+        with:
+          version: 1.4.224
+          sha512: +/VyaYSgqSAuSSWe1ySrCKRjHHJ6REXqmz58g69bxvoUdV41iH9vlobM18xdxWTkgJF2kbu/tSKFvH0jMnZ0+Q==
+          github-token: ${{ github.token }}
+      - name: Build current Electron app
+        env:
+          VITE_EXPOSE_STORE: 'true'
+        run: |
+          pnpm run build:wsl-guest
+          pnpm exec electron-vite build --mode e2e
+          pnpm run build:cli
+          pnpm run build:web-from-renderer
+      # The two specs without a released build ride along, so one dispatch reruns every baseline.
+      - name: Run the layout baselines
+        env:
+          ORCA_LAYOUT_COMPAT_REPORT_DIR: test-results/layout-compat
+        run: >-
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
+          pnpm exec playwright test --config tests/playwright.config.ts
+          tests/e2e/layout-compat-old-desktop-on-new-server.spec.ts
+          tests/e2e/layout-compat-new-desktop-on-old-server.spec.ts
+          tests/e2e/layout-compat-old-phone-on-new-server.spec.ts
+          tests/e2e/layout-compat-serve-restart-keeps-at-at-terminals.spec.ts
+          --project=electron-headless --workers=1 --retries=0 --reporter=list
+      - name: Require every layout scenario to have run
+        if: always()
+        # A missing env skips the specs and passes; each run writes its observation first.
+        run: |
+          for scenario in old-desktop-on-new-server old-cli-terminal-create new-desktop-on-old-server old-phone-on-new-server serve-restart-keeps-@@-terminals; do
+            test -f "test-results/layout-compat/$scenario.linux.json" || { echo "::error::$scenario did not run"; exit 1; }
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: packaged-layout-compat
+          path: test-results/
+          retention-days: 7

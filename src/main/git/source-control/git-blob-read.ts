@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
+import { isMissingGitBlobPath } from '../../../shared/git-blob-absence'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../runner'
@@ -20,28 +21,17 @@ export type GitBlobReadResult = {
   failed?: boolean
 }
 
-/**
- * Tell "Git ran and said the path is not there" apart from "the read never got
- * an answer". Git exits 128 for a missing path in a tree or the index; a WSL
- * relay that never reached Git exits with anything else, or with a spawn errno.
- */
-function isProvenAbsentError(error: unknown): boolean {
-  return (error as { code?: unknown } | null)?.code === 128
-}
-
 export async function readUnstagedLeftBlob(
   worktreePath: string,
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
   const indexBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
-  if (indexBlob.exists) {
+  if (indexBlob.exists || indexBlob.failed) {
     return indexBlob
   }
 
-  const headBlob = await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-  // Why: if the index read never got an answer, falling back to HEAD is a guess, not a proof.
-  return indexBlob.failed ? { ...headBlob, failed: true } : headBlob
+  return readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
 }
 
 export async function readGitBlobAtIndexPath(
@@ -62,7 +52,12 @@ export async function readGitBlobAtIndexPath(
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: true, exists: true }
     }
-    return { content: '', isBinary: false, exists: false, failed: !isProvenAbsentError(error) }
+    return {
+      content: '',
+      isBinary: false,
+      exists: false,
+      failed: !isMissingGitBlobPath(error, gitPath)
+    }
   }
 }
 
@@ -88,7 +83,12 @@ export async function readGitBlobAtOidPath(
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: true, exists: true }
     }
-    return { content: '', isBinary: false, exists: false, failed: !isProvenAbsentError(error) }
+    return {
+      content: '',
+      isBinary: false,
+      exists: false,
+      failed: !isMissingGitBlobPath(error, gitPath, oid)
+    }
   }
 }
 

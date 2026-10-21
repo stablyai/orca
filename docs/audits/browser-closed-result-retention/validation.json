@@ -1,0 +1,228 @@
+{
+  "tests": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-command-retention.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
+    "passed": 77,
+    "files": 5,
+    "newRegressionCases": 2,
+    "exitCode": 0
+  },
+  "baselineOverlay": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_BROWSER_CACHE_VARIANT=before pnpm exec vitest run --config docs/audits/browser-closed-result-retention/vitest.config.mjs src/main/browser/browser-client-host-command-retention.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+    "passed": 16,
+    "expectedFailed": 2,
+    "failures": [
+      "32 completed result objects remain reachable while native navigation stays pending.",
+      "The first late closed input remains reachable while a sibling handler stays pending."
+    ],
+    "exitCode": 1
+  },
+  "typecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node",
+    "exitCode": 0
+  },
+  "publicationQuality": {
+    "scans": [
+      {
+        "label": "code quality",
+        "command": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--report-unused-disable-directives-severity",
+          "warn",
+          "src/main/browser/browser-client-host-command-dispatcher.ts",
+          "src/main/browser/browser-client-host-command-result-cache.ts",
+          "src/main/browser/browser-client-host-command-retention.test.ts",
+          "docs/audits/browser-closed-result-retention/sources.cjs",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "casting code quality",
+        "command": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--config",
+          "config/oxlint-code-quality-casting.json",
+          "src/main/browser/browser-client-host-command-dispatcher.ts",
+          "src/main/browser/browser-client-host-command-result-cache.ts",
+          "src/main/browser/browser-client-host-command-retention.test.ts",
+          "docs/audits/browser-closed-result-retention/sources.cjs",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "type-aware code quality",
+        "command": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--type-aware",
+          "--config",
+          "config/oxlint-code-quality-type-aware.json",
+          "src/main/browser/browser-client-host-command-dispatcher.ts",
+          "src/main/browser/browser-client-host-command-result-cache.ts",
+          "src/main/browser/browser-client-host-command-retention.test.ts",
+          "docs/audits/browser-closed-result-retention/sources.cjs",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "React Doctor",
+        "command": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--config",
+          "config/oxlint-react-doctor.json",
+          "src/main/browser/browser-client-host-command-dispatcher.ts",
+          "src/main/browser/browser-client-host-command-result-cache.ts",
+          "src/main/browser/browser-client-host-command-retention.test.ts",
+          "docs/audits/browser-closed-result-retention/sources.cjs",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "label": "design system",
+        "command": [
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--no-ignore",
+          "--deny-warnings",
+          "--config",
+          "config/oxlint-design-system.json",
+          "src/main/browser/browser-client-host-command-dispatcher.ts",
+          "src/main/browser/browser-client-host-command-result-cache.ts",
+          "src/main/browser/browser-client-host-command-retention.test.ts",
+          "docs/audits/browser-closed-result-retention/sources.cjs",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      }
+    ]
+  },
+  "changedQuality": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_CODE_QUALITY_BASE=HEAD pnpm run check:code-quality:changed",
+    "exitCode": 0,
+    "note": "The five explicit-file scans include all six TS/CJS/MJS publication paths. The ordinary changed gate does not see ignored new artifacts before staging."
+  },
+  "proofs": {
+    "runs": [
+      {
+        "runtime": "node",
+        "variant": "before",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "--config",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "runtime": "node",
+        "variant": "fixed",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "--config",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "runtime": "electron",
+        "variant": "before",
+        "command": [
+          "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      },
+      {
+        "runtime": "electron",
+        "variant": "fixed",
+        "command": [
+          "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "docs/audits/browser-closed-result-retention/vitest.config.mjs",
+          "docs/audits/browser-closed-result-retention/scenario.test.mjs"
+        ],
+        "exitCode": 0
+      }
+    ],
+    "casesPerVariantPerRuntime": 4,
+    "variants": ["before", "fixed"],
+    "node": "26.6.0",
+    "electron": "43.7.0",
+    "electronNode": "24.21.0",
+    "controlledPendingNativePorts": 1,
+    "smallCompletedResults": 32,
+    "crlfReadControl": 24,
+    "environment": {
+      "ORCA_BACKGROUND_LAUNCH": "1",
+      "ELECTRON_RUN_AS_NODE": "1 for Electron runs",
+      "ORCA_BROWSER_CACHE_VARIANT": "before or fixed"
+    },
+    "outputOverride": "ORCA_BROWSER_CACHE_OUTPUT"
+  },
+  "sourceParity": {
+    "canonicalLF": true,
+    "mainCheckpoint": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+    "historicalVersion": "v1.4.198",
+    "historicalRef": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+    "namedBaselineTargetMatches": 2,
+    "mainCheckpointCitedSourceMatches": 23,
+    "historicalCitedSourceMatches": 21,
+    "citedSourceCount": 23,
+    "hashCoverage": "Two product targets plus 21 cited caller/dependency modules, not all transitive imports.",
+    "historicalApplicationReplay": false
+  },
+  "scope": {
+    "trigger": "A handler outlives the dispatcher close join (default 5 seconds).",
+    "nativeSettlementAuthorityPreserved": true,
+    "retirePageCachePolicyChanged": false,
+    "incidentAttribution": false,
+    "measuredRSS": false
+  },
+  "format": "All 14 publication files except fix.patch checked with oxfmt stdin mode; a second pass produced identical bytes.",
+  "gitDiffCheckExitCode": 0,
+  "publicationWhitespace": {
+    "commandTemplate": "git diff --no-index --check <empty-file> <promoted-path>",
+    "files": 14,
+    "expectedExitCode": 1,
+    "diagnostics": 0,
+    "note": "The complete content of every publication path is checked, including ignored new artifacts. Exit 1 only means the content differs from an empty file. fix.patch uses zero-context hunks."
+  }
+}

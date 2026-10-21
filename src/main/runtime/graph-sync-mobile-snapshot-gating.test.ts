@@ -610,8 +610,9 @@ describe('graph-sync mobile snapshot gating', () => {
     vi.advanceTimersByTime(300)
     expect(events).toHaveLength(1)
     expect(webClientAccepts(events[0]!)).toBe(true)
+    // The renderer sent no groups, so the serve tab keeps its group's lead and the strip follows.
     expect(events[0]?.tabs.map((tab) => ('parentTabId' in tab ? tab.parentTabId : tab.id))).toEqual(
-      ['tab-1', 'serve-tab']
+      ['serve-tab', 'tab-1']
     )
 
     // Desktop closes the renderer tab, so the next graph omits the worktree

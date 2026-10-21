@@ -1,4 +1,6 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
+import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
   clearTerminalLiveInputFocusTimer,
   scheduleTerminalLiveInputFocus
@@ -12,7 +14,6 @@ import { countTerminalGestureInputSequences } from '../terminal/terminal-gesture
 import {
   isGestureMouseTrackingMode,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
-  TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
   TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
@@ -110,8 +111,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalGestureInputInFlightRef.current.add(handle)
     try {
       // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      await rpc.sendRequest(
-        'terminal.send',
+      const response = await terminalInputSend.request(
+        rpc,
         buildTerminalSendParams({
           terminal: handle,
           text: queued.bytes,
@@ -120,6 +121,9 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
+      if (terminalInputSend.interpret(response) === true) {
+        reportWorkerTerminalUserInput(rpc, handle)
+      }
     } catch {
       // Transient failure
     } finally {
@@ -149,6 +153,9 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         current.bytes += bytes
         current.sequenceCount += sequenceCount
         current.lastUpdatedMs = now
+        if (!terminalGestureInputInFlightRef.current.has(handle)) {
+          void flushTerminalGestureInput(handle)
+        }
         return
       }
 
@@ -163,10 +170,6 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
           current.bytes += bytes
           current.sequenceCount += sequenceCount
           current.lastUpdatedMs = now
-          current.timer = setTimeout(() => {
-            current.timer = null
-            void flushTerminalGestureInput(handle)
-          }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
           return
         }
       }
@@ -177,11 +180,11 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         timer: null,
         lastUpdatedMs: now
       }
-      queued.timer = setTimeout(() => {
-        queued.timer = null
-        void flushTerminalGestureInput(handle)
-      }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
       terminalGestureInputQueuesRef.current.set(handle, queued)
+      // Send the leading edge now; an in-flight request's acknowledgement drains later movement.
+      if (!terminalGestureInputInFlightRef.current.has(handle)) {
+        void flushTerminalGestureInput(handle)
+      }
     },
     [flushTerminalGestureInput]
   )
@@ -229,9 +232,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     }
     getTerminalRef(target.handle)?.clear()
     try {
-      await client.sendRequest('terminal.clearBuffer', {
-        terminal: target.handle
-      })
+      // The reply is unread: main toasted success on any fulfilled envelope, refusal included.
+      await terminalBufferClear.request(client, { terminal: target.handle })
       showToast('Terminal cleared')
     } catch {
       showToast("Couldn't clear terminal", 1500)

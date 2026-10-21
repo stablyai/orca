@@ -3,6 +3,21 @@ import type { BrowserMouseModifier } from './agent-browser-bridge-types'
 
 type CdpMouseButton = 'left' | 'middle' | 'right'
 
+// Why: bit positions and iteration order are CDP's `buttons` mask, not arbitrary.
+const CDP_POINTER_BUTTON_ORDER = ['left', 'right', 'middle', 'back', 'forward'] as const
+
+// Why: coordinate down/up carries X1/X2 through as real back/forward presses; the
+// element-click path below deliberately coerces them to left instead.
+export type CdpPointerButton = (typeof CDP_POINTER_BUTTON_ORDER)[number]
+
+const CDP_POINTER_BUTTON_MASKS = {
+  left: 1,
+  right: 2,
+  middle: 4,
+  back: 8,
+  forward: 16
+} as const satisfies Record<CdpPointerButton, number>
+
 type BrowserClickPoint = {
   x: number
   y: number
@@ -14,14 +29,21 @@ export function normalizeCdpMouseButton(button?: string): CdpMouseButton {
   return button === 'middle' || button === 'right' ? button : 'left'
 }
 
-export function cdpMouseButtonMask(button: CdpMouseButton): number {
-  if (button === 'right') {
-    return 2
+export function normalizeCdpPointerButton(button?: string): CdpPointerButton {
+  return button === 'back' || button === 'forward' ? button : normalizeCdpMouseButton(button)
+}
+
+export function cdpPointerButtonMask(button: CdpPointerButton): number {
+  return CDP_POINTER_BUTTON_MASKS[button]
+}
+
+export function cdpPointerButtonFromMask(buttons: number): CdpPointerButton | 'none' {
+  for (const button of CDP_POINTER_BUTTON_ORDER) {
+    if ((buttons & CDP_POINTER_BUTTON_MASKS[button]) !== 0) {
+      return button
+    }
   }
-  if (button === 'middle') {
-    return 4
-  }
-  return 1
+  return 'none'
 }
 
 export function cdpMouseModifierMask(modifiers: BrowserMouseModifier[] | undefined): number {

@@ -1,15 +1,21 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   getOpenFilesForExternalFileChange,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
   ORCA_EDITOR_FILE_SAVED_EVENT,
   type EditorFileSavedDetail,
   type EditorPathMutationTarget
 } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
+import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
+import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
+import { hasRecentSelfWrite } from './editor-self-write-registry'
+import { editorModelSiblingTabs, isEditorModelDirty } from './editor-save-disk-precondition'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
@@ -63,6 +69,50 @@ export function useEditorPanelExternalContentEvents({
   setDiffContents
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
+    const reloads = createEditorWatcherReloadCoalescer()
+    // Why: a coalesced follow-up starts later; re-check the tab. A closed tab is skipped; one that
+    // left the screen is marked stale so its queued change reloads on reveal; one edited meanwhile
+    // keeps its draft but records that disk moved, so autosave can't silently overwrite it.
+    const resolveReloadTarget = (fileId: string): OpenFile | 'stale' | null => {
+      const file = openFilesRef.current.find((candidate) => candidate.id === fileId)
+      if (!file) {
+        return null
+      }
+      const state = useAppStore.getState()
+      if (file.isDirty) {
+        if (!hasRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)) {
+          markFileChangedOnDisk(useAppStore.getState(), file, {
+            connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+            origin: 'live'
+          })
+        }
+        return 'stale'
+      }
+      // Why: a clean tab of a model another tab is editing shows that buffer; never reload it alone.
+      if (isEditorModelDirty(state, file)) {
+        return null
+      }
+      return isVisibleRef.current && file.id === activeContentFileIdRef.current ? file : 'stale'
+    }
+    const runContentReload = async (fileId: string, eventGeneration: number): Promise<void> => {
+      const target = resolveReloadTarget(fileId)
+      if (target === 'stale') {
+        invalidateContent([fileId])
+      } else if (target) {
+        await loadFileContent(target.filePath, target.id, target.worktreeId, target.relativePath, {
+          force: true,
+          externalEventGeneration: eventGeneration
+        })
+      }
+    }
+    const runDiffReload = async (fileId: string, eventGeneration: number): Promise<void> => {
+      const target = resolveReloadTarget(fileId)
+      if (target === 'stale') {
+        invalidateDiffContent([fileId])
+      } else if (target) {
+        await loadDiffContent(target, { force: true, externalEventGeneration: eventGeneration })
+      }
+    }
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
       if (!detail) {
@@ -71,11 +121,26 @@ export function useEditorPanelExternalContentEvents({
       const eventGeneration = getExternalEventGeneration(event)
       const invalidatedDiffFileIds: string[] = []
       const invalidatedFileIds: string[] = []
-      for (const file of getOpenFilesForExternalFileChange(openFilesRef.current, detail)) {
+      const storeState = useAppStore.getState()
+      const matched = getOpenFilesForExternalFileChange(openFilesRef.current, detail)
+      // Why: a tab of another workspace showing the same model is stale too.
+      const siblingIds = new Set(
+        matched.flatMap((file) =>
+          storeState?.openFiles?.some((tab) => tab.id === file.id)
+            ? editorModelSiblingTabs(storeState, file).map((tab) => tab.id)
+            : [file.id]
+        )
+      )
+      for (const file of openFilesRef.current.filter((tab) => siblingIds.has(tab.id))) {
         // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
         // marked changed-on-disk upstream and resolves via the editor banner,
-        // a save, or a later clean reload. Reloading here would clobber it.
-        if (file.isDirty) {
+        // a save, or a later clean reload. Reloading here would clobber it. A
+        // clean tab of a model another tab is editing shows that buffer too.
+        if (
+          file.isDirty ||
+          (storeState.openFiles.some((tab) => tab.id === file.id) &&
+            isEditorModelDirty(storeState, file))
+        ) {
           continue
         }
         if (!isVisibleRef.current || file.id !== activeContentFileIdRef.current) {
@@ -85,23 +150,14 @@ export function useEditorPanelExternalContentEvents({
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           // Why: external writes must replace any in-flight pre-change read so
           // the tab shows the new on-disk content, not a stale dedupe result.
-          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
+          reloads.run(`content:${file.id}`, () => runContentReload(file.id, eventGeneration))
           if (editorViewModeRef.current[file.id] === 'changes') {
-            void loadDiffContent(file, {
-              force: true,
-              externalEventGeneration: eventGeneration
-            })
+            reloads.run(`diff:${file.id}`, () => runDiffReload(file.id, eventGeneration))
           } else {
             invalidatedDiffFileIds.push(file.id)
           }
         } else if (isReloadableSingleFileDiffTab(file)) {
-          void loadDiffContent(file, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
+          reloads.run(`diff:${file.id}`, () => runDiffReload(file.id, eventGeneration))
         }
       }
       if (invalidatedFileIds.length > 0) {
@@ -112,8 +168,10 @@ export function useEditorPanelExternalContentEvents({
       }
     }
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
-    return () =>
+    return () => {
+      reloads.dispose()
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+    }
   }, [
     activeContentFileIdRef,
     editorViewModeRef,
@@ -153,9 +211,41 @@ export function useEditorPanelExternalContentEvents({
         return { ...prev, [file.id]: { ...existing, modifiedContent: detail.content } }
       })
     }
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
-    return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
-  }, [openFilesRef, setDiffContents, setFileContents])
+    // Why evict, not mark stale: stale bytes kept for display could be mounted into the live model.
+    const onCacheStale = (event: Event): void => {
+      if (event instanceof CustomEvent && typeof event.detail?.fileId === 'string') {
+        const fileId: string = event.detail.fileId
+        setFileContents((prev) => {
+          if (!(fileId in prev)) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next[fileId]
+          return next
+        })
+        // Why: the visible tab has no other trigger to reload; hidden tabs load lazily on reveal.
+        const file = openFilesRef.current.find((candidate) => candidate.id === fileId)
+        if (file && isVisibleRef.current && fileId === activeContentFileIdRef.current) {
+          void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
+            force: true
+          })
+        }
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler)
+    window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onCacheStale)
+    return () => {
+      window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler)
+      window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onCacheStale)
+    }
+  }, [
+    activeContentFileIdRef,
+    isVisibleRef,
+    loadFileContent,
+    openFilesRef,
+    setDiffContents,
+    setFileContents
+  ])
 }
 
 function updateSavedPreviewTabs(

@@ -1,4 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -191,7 +204,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('hello')
+    expect(onReplayData).toHaveBeenCalledWith('hello', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
   })
@@ -523,7 +536,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
       send.mockClear()
 
-      expect(transport.sendInput('ls\r')).toBe(true)
+      expect(transport.sendInput('ls\r', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
       expect(runtimeCall).not.toHaveBeenCalled()
       const inputFrame = decodeTerminalStreamFrame(send.mock.calls[0][0])

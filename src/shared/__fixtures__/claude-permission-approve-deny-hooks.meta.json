@@ -1,0 +1,18 @@
+{
+  "source_scenario": "permission-approve-then-deny",
+  "claude_version": "2.1.301 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/tmp/c28186/scripts/settings.json",
+    "--permission-mode",
+    "default",
+    "Use the Bash tool to run exactly: touch first-file.txt . After it finishes, use the Bash tool to run exactly: touch second-file.txt . Use no other tools and do not batch them."
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-10-16",
+  "clock": "t is seconds since the first record",
+  "note": "Claude Code driven over a real PTY (config/scripts/capture-agent-pty-transcript.mjs) with every hook logged from stdin. The first Bash request is approved with Enter, the second is rejected with Esc. PermissionRequest carries no tool_use_id; the approved request ends with PostToolUse carrying the PreToolUse id; the rejected one fires no hook at all. Scrubbed: session and prompt ids replaced by the placeholder UUID, username by a same-length placeholder."
+}

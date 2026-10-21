@@ -1,3 +1,4 @@
+import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
 // Pure tree projection for the mobile file explorer. Mobile mirrors desktop
 // browse semantics by flattening cached files.readDir results as folders open.
 import { compareFileNames } from '../../../src/shared/file-name-sort'
@@ -39,6 +40,7 @@ export type FileExplorerRow = TreeNode | InlineStatusNode
 
 const DESKTOP_EXCLUDED_NAMES = new Set(['.git', 'node_modules'])
 const BINARY_EXTENSIONS = new Set([
+  ...Object.keys(MEDIA_FILE_MIME_TYPES),
   '.avif',
   '.bmp',
   '.gif',

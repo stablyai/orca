@@ -1,3 +1,4 @@
+import type { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 const PROXY_PROBE_URL = 'http://browser-route-probe.invalid/'
 
 export type BrowserRouteElectronSession = {
@@ -15,14 +16,16 @@ export type BrowserRouteProxyEndpoint = Readonly<{ host: '127.0.0.1'; port: numb
 type BrowserRouteSessionPolicyDependencies = {
   getSession(partition: string): BrowserRouteElectronSession
   setupPolicies(input: {
+    profileMetadata?: BrowserClientProfileMetadata
     partition: string
     browserProfileId: string
     session: BrowserRouteElectronSession
-  }): void
+  }): void | Promise<void>
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
 }
 
 export async function prepareBrowserRouteSessionPolicy(input: {
+  profileMetadata?: BrowserClientProfileMetadata
   partition: string
   browserProfileId: string
   proxyEndpoint: BrowserRouteProxyEndpoint
@@ -36,7 +39,8 @@ export async function prepareBrowserRouteSessionPolicy(input: {
       proxyRules: `socks5://${input.proxyEndpoint.host}:${input.proxyEndpoint.port}`,
       proxyBypassRules: '<-loopback>'
     })
-    input.dependencies.setupPolicies({
+    await input.dependencies.setupPolicies({
+      ...(input.profileMetadata ? { profileMetadata: input.profileMetadata } : {}),
       partition: input.partition,
       browserProfileId: input.browserProfileId,
       session

@@ -1,3 +1,8 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
 // STA-3442: httpProxyUrl is the only network setting stored via safeStorage.
 // On macOS a keychain reset/denial makes decryptString throw at load, and the
 // raw ciphertext then masqueraded as a configured proxy: applyElectronProxySettings
@@ -6,7 +11,7 @@
 // or destroyed), plaintext values survive as the upgrade path, and safeStorage
 // failures cannot expose the proxy secret or kill unrelated saves.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, mkdirSync, readFileSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -14,7 +19,7 @@ import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-port
 
 const testState = { dir: '' }
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -41,7 +46,6 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 }))
 
 async function createStore() {
-  vi.resetModules()
   const { setSecretStore } = await import('../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => {
@@ -64,11 +68,9 @@ async function createStore() {
     describeProtectionGap: () => null
   })
   const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 function dataFile(): string {
@@ -87,7 +89,8 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -103,7 +106,8 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
   it('persists the configured proxy across a restart and applies it as fixed_servers', async () => {
     await seedConfiguredProxy()
 
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
       settings: { httpProxyUrl: string; httpProxyBypassRules: string }
     }
     // On disk the URL is ciphertext (base64 of the mock's enc: payload), never plaintext.
@@ -139,7 +143,7 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
 
   it('seals an undecryptable httpProxyUrl without destroying its ciphertext', async () => {
     await seedConfiguredProxy()
-    const originalCiphertext = JSON.parse(readFileSync(dataFile(), 'utf-8')).settings.httpProxyUrl
+    const originalCiphertext = JSON.parse(readPersistedStateJson(dataFile())).settings.httpProxyUrl
 
     // Keychain reset/denial: every decrypt now fails.
     cipherState.decryptAlwaysThrows = true
@@ -153,7 +157,8 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     reloaded.updateSettings({ httpProxyBypassRules: 'localhost' })
     vi.advanceTimersByTime(2000)
     await reloaded.waitForPendingWrite()
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
       settings: { httpProxyUrl: string }
     }
     expect(persisted.settings.httpProxyUrl).toBe(originalCiphertext)
@@ -180,8 +185,9 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
 
-    expect(existsSync(dataFile())).toBe(true)
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
+    expect(existsSync(join(testState.dir, 'profile-state.db'))).toBe(true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
       settings: { httpProxyUrl: string; httpProxyBypassRules: string }
     }
     expect(persisted.settings.httpProxyUrl).toBe('')

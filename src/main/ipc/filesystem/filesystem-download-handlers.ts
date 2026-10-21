@@ -1,10 +1,9 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
-import { getRuntimePathBasename } from '../../../shared/cross-platform-path'
-import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { sanitizeLocalDownloadFilename } from '../../local-download-filename'
-import { registerFilesystemDownloadFolderHandlers } from '../filesystem-download-folder'
+import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {
   cleanupLocalTransferPath,
@@ -24,53 +23,26 @@ function validateRequiredString(value: unknown, label: string): string {
 }
 
 export function registerFilesystemDownloadHandlers(context: FilesystemHandlerContext): void {
-  const { downloadSessions, closeDownloadSession, cleanupDownloadSessionsForSender } = context
+  const { downloadSessions, closeDownloadSession } = context
 
   ipcMain.handle(
     'fs:downloadFile',
-    async (
-      event,
-      args: { filePath?: string; connectionId?: string }
-    ): Promise<DownloadFileResult> => {
-      const filePath = validateRequiredString(args?.filePath, 'filePath')
+    async (_event, args: { filePath?: string; connectionId?: string }): Promise<never> => {
+      validateRequiredString(args?.filePath, 'filePath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
-      const provider = requireSshFilesystemProvider(connectionId)
-      const remoteStat = await provider.stat(filePath)
-      if (remoteStat.type === 'directory') {
-        throw new Error('Cannot download a directory')
-      }
-      if (!provider.downloadFile) {
-        throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
-      }
-
-      const remoteBasename = getRuntimePathBasename(filePath)
-      const defaultPath = sanitizeLocalDownloadFilename(remoteBasename)
-      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
-      const dialogResult = parentWindow
-        ? await dialog.showSaveDialog(parentWindow, { defaultPath })
-        : await dialog.showSaveDialog({ defaultPath })
-      if (dialogResult.canceled || !dialogResult.filePath) {
-        return { canceled: true }
-      }
-
-      const destinationPath = dialogResult.filePath
-      const { existed } = await inspectDownloadDestination(destinationPath)
-      const tempPath = createSiblingTransferPath(destinationPath, 'download')
-      let promoted = false
-      try {
-        await provider.downloadFile(filePath, tempPath)
-        await promoteDownloadedFile(tempPath, destinationPath, existed)
-        promoted = true
-        return { canceled: false, destinationPath }
-      } finally {
-        if (!promoted) {
-          await cleanupLocalTransferPath(tempPath)
-        }
-      }
+      // Why: only SSH targets downloaded through here, and this process serves none.
+      throw new SshHostNotServedError(connectionId)
     }
   )
 
-  registerFilesystemDownloadFolderHandlers()
+  ipcMain.handle(
+    'fs:downloadFolder',
+    async (_event, args: { dirPath?: string; connectionId?: string }): Promise<never> => {
+      validateRequiredString(args?.dirPath, 'dirPath')
+      const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
+      throw new SshHostNotServedError(connectionId)
+    }
+  )
 
   ipcMain.handle(
     'fs:saveDownloadedFile',
@@ -122,21 +94,42 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
       )
-      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
-      const dialogResult = parentWindow
-        ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
-        : await dialog.showSaveDialog({ defaultPath: suggestedName })
-      if (dialogResult.canceled || !dialogResult.filePath) {
+      if (event.sender.isDestroyed()) {
         return { canceled: true }
       }
-
-      const destinationPath = dialogResult.filePath
-      const { existed } = await inspectDownloadDestination(destinationPath)
-      const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      const lifetime = abortWhenRendererGone(event.sender)
       const transferId = randomUUID()
+      const disposeRendererLifetime = (): void => {
+        lifetime.signal.removeEventListener('abort', onRendererGone)
+        lifetime.dispose()
+      }
+      const onRendererGone = (): void => {
+        disposeRendererLifetime()
+        void closeDownloadSession(transferId, true)
+      }
+      lifetime.signal.addEventListener('abort', onRendererGone, { once: true })
+      let admitted = false
+      let tempPath: string | null = null
+      let handle: Awaited<ReturnType<typeof open>> | null = null
       try {
-        const handle = await open(tempPath, 'wx')
-        const senderId = typeof event.sender.id === 'number' ? event.sender.id : Number.NaN
+        const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+        const dialogResult = parentWindow
+          ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
+          : await dialog.showSaveDialog({ defaultPath: suggestedName })
+        if (lifetime.signal.aborted || dialogResult.canceled || !dialogResult.filePath) {
+          return { canceled: true }
+        }
+
+        const destinationPath = dialogResult.filePath
+        const { existed } = await inspectDownloadDestination(destinationPath)
+        if (lifetime.signal.aborted) {
+          return { canceled: true }
+        }
+        tempPath = createSiblingTransferPath(destinationPath, 'download')
+        handle = await open(tempPath, 'wx')
+        if (lifetime.signal.aborted) {
+          return { canceled: true }
+        }
         const cleanupTimer = setTimeout(() => {
           void closeDownloadSession(transferId, true)
         }, DOWNLOAD_SESSION_TTL_MS)
@@ -149,13 +142,16 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
           destinationExisted: existed,
           handle,
           cleanupTimer,
-          senderId
+          disposeRendererLifetime
         })
-        event.sender.once?.('destroyed', () => cleanupDownloadSessionsForSender(senderId))
+        admitted = true
         return { canceled: false, transferId, destinationPath }
-      } catch (error) {
-        await cleanupLocalTransferPath(tempPath)
-        throw error
+      } finally {
+        if (!admitted) {
+          disposeRendererLifetime()
+          await handle?.close().catch(() => {})
+          await cleanupLocalTransferPath(tempPath)
+        }
       }
     }
   )

@@ -21,19 +21,18 @@ import { SshStatusSegment } from './SshStatusSegment'
 type StoreState = {
   sshConnectionStates: Map<string, { status: SshConnectionStatus }>
   sshTargetLabels: Map<string, string>
-  remoteWorkspaceSyncStatusByTargetId: Record<string, { phase: string }>
 }
 
 let storeState: StoreState = {
   sshConnectionStates: new Map(),
-  sshTargetLabels: new Map(),
-  remoteWorkspaceSyncStatusByTargetId: {}
+  sshTargetLabels: new Map()
 }
 
 vi.mock('../../store', () => {
   const state = (): Record<string, unknown> => ({
     ...storeState,
     settings: null,
+    repos: [],
     runtimeEnvironments: [],
     runtimeStatusByEnvironmentId: new Map(),
     setRuntimeEnvironmentStatus: vi.fn(),
@@ -52,14 +51,11 @@ vi.mock('../../store', () => {
 })
 
 function setSshTargets(
-  entries: { id: string; label: string; status: SshConnectionStatus; syncPhase?: string }[]
+  entries: { id: string; label: string; status: SshConnectionStatus }[]
 ): void {
   storeState = {
     sshConnectionStates: new Map(entries.map((entry) => [entry.id, { status: entry.status }])),
-    sshTargetLabels: new Map(entries.map((entry) => [entry.id, entry.label])),
-    remoteWorkspaceSyncStatusByTargetId: Object.fromEntries(
-      entries.flatMap((entry) => (entry.syncPhase ? [[entry.id, { phase: entry.syncPhase }]] : []))
-    )
+    sshTargetLabels: new Map(entries.map((entry) => [entry.id, entry.label]))
   }
 }
 
@@ -162,22 +158,9 @@ describe('status-bar copy under a non-English UI language', () => {
     expect(triggerText()).toContain('1 台のホスト')
   })
 
-  it('translates the connecting and workspace-sync states', () => {
+  it('translates the connecting state', () => {
     setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connecting' }])
     render(<SshStatusSegment compact={false} iconOnly={false} />)
     expect(triggerText()).toContain('接続中…')
-    cleanup()
-
-    setSshTargets([
-      { id: 'ssh-1', label: 'builder', status: 'connected', syncPhase: 'conflict' },
-      { id: 'ssh-2', label: 'openclaw', status: 'connected', syncPhase: 'error' }
-    ])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(triggerText()).toContain('ワークスペースの競合')
-    cleanup()
-
-    setSshTargets([{ id: 'ssh-1', label: 'builder', status: 'connected', syncPhase: 'error' }])
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(triggerText()).toContain('ワークスペースの同期エラー')
   })
 })

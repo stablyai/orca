@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -327,11 +328,15 @@ describe('terminal multiplex RPC', () => {
     )
 
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'echo one\necho two\r\n',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        {
+          text: 'echo one\necho two\r\n',
+          enter: false,
+          interrupt: false
+        },
+        { inputKind: 'driving' }
+      )
     )
 
     runtime.cleanupSubscription('terminal-multiplex:conn-byte-preserving')
@@ -403,11 +408,15 @@ describe('terminal multiplex RPC', () => {
     )
 
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'printf a\nprintf b\r\n',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        {
+          text: 'printf a\nprintf b\r\n',
+          enter: false,
+          interrupt: false
+        },
+        { inputKind: 'driving' }
+      )
     )
 
     runtime.cleanupSubscription('terminal-1:desktop-1')

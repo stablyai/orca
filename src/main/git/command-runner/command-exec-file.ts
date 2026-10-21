@@ -1,13 +1,8 @@
 import { isWindowsBatchScript, resolveWindowsCommand } from '../../win32-utils'
+import { isMissingCommandBinaryError } from '../exec-error'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import { execFileCapture } from './exec-file-capture'
 import { spawnCommandCapture, type CommandExecOptions } from './spawn-command-capture'
-
-function isMissingCommandError(error: unknown): boolean {
-  return Boolean(
-    error && typeof error === 'object' && (error as { code?: unknown }).code === 'ENOENT'
-  )
-}
 
 function hasPathSeparator(command: string): boolean {
   return command.includes('/') || command.includes('\\')
@@ -17,7 +12,7 @@ function shouldRetryWindowsCommandShim(error: unknown, resolved: ResolvedCommand
   return (
     process.platform === 'win32' &&
     resolved.wsl === null &&
-    isMissingCommandError(error) &&
+    isMissingCommandBinaryError(error) &&
     !hasPathSeparator(resolved.binary) &&
     !/\.[A-Za-z0-9]+$/.test(resolved.binary)
   )

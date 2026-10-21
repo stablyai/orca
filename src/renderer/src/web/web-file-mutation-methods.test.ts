@@ -22,7 +22,7 @@ function connectedSshState(targetId: string, connectionGeneration: number): SshC
 }
 
 describe('paired web file mutation methods', () => {
-  const assertMutationSupported = vi.fn(async () => {})
+  const assertMutationSupported = vi.fn(async (): Promise<readonly string[]> => [])
   const callRuntimeResult = vi.fn(async () => ({ ok: true }))
   const getSshState = vi.fn(async () => connectedSshState('hub-private-target', 17))
   const filesByPath = new Map([
@@ -285,14 +285,15 @@ describe('paired web file mutation methods', () => {
   it('keeps path resolution, capability, and mutation on one captured pairing session', async () => {
     const replacementCall = vi.fn(async () => ({ ok: true }))
     const replacementSession = {
-      assertMutationSupported: vi.fn(async () => {}),
+      assertMutationSupported: vi.fn(async (): Promise<readonly string[]> => []),
       callRuntimeResult: replacementCall,
       getSshState,
       resolveFilePath
     }
     const capturedSession = {
-      assertMutationSupported: vi.fn(async () => {
+      assertMutationSupported: vi.fn(async (): Promise<readonly string[]> => {
         captureSession.mockReturnValue(replacementSession)
+        return []
       }),
       callRuntimeResult,
       getSshState,

@@ -1,4 +1,5 @@
 import { ipcMain, app } from 'electron'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -16,11 +17,8 @@ import {
   finishAutomationWorkspaceProvenanceRequest
 } from '../../../automations/workspace-provenance'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import {
-  createRemoteWorktree,
-  createLocalWorktree,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
+import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
 import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
@@ -31,6 +29,8 @@ import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -45,9 +45,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
-
-        const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
-        const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
+        assertWslMoveRepoWritable(store, repo)
 
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
@@ -61,6 +59,18 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
 
         let result: CreateWorktreeResult
+        // The handler owns the events so a failed create can still say where it died.
+        const telemetry = beginWorkspaceCreateTelemetry({
+          source: args.telemetrySource,
+          entryPoint: 'app',
+          repoPath: repo.path,
+          fromExistingBranch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
+          isFolder: isFolderRepo(repo)
+        })
+        const creation = runtime.workspaceCreations?.open({
+          creationId: args.creationId,
+          repoId: repo.id
+        })
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           if (isFolderRepo(repo)) {
@@ -71,19 +81,27 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             // row read as local here and ran `git worktree add` on the client against a remote path,
             // while the runtime sibling on the same repo already resolved.
             const createRoute = requireWorktreeCreateRoute(repo)
-            result =
-              createRoute.kind === 'ssh'
-                ? await createRemoteWorktree(createArgs, createRoute.repo, store, mainWindow)
-                : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+            if (createRoute.kind === 'ssh') {
+              // Tagged before the refusal so the failed-create event keeps naming its host.
+              telemetry.timing.recordExecutionHost('ssh')
+              throw new SshHostNotServedError(createRoute.connectionId)
+            }
+            result = await createLocalWorktree(
+              createArgs,
+              repo,
+              store,
+              mainWindow,
+              runtime,
+              telemetry.timing,
+              creation?.named
+            )
           }
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
-          track('workspace_create_failed', {
-            source,
-            error_class: classifyWorkspaceCreateError(error),
-            ...getCohortAtEmit()
-          })
+          telemetry.failed(error)
           throw error
+        } finally {
+          creation?.close()
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
         if (result.timing) {
@@ -91,14 +109,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
 
         // Why: reaching here means create succeeded (helpers throw); skip a separate workspace_initialized (telemetry-plan.md§Deferred); never send the branch name.
-        track('workspace_created', {
-          source,
-          from_existing_branch:
-            !isFolderRepo(repo) &&
-            typeof args.baseBranch === 'string' &&
-            args.baseBranch.length > 0,
-          ...getCohortAtEmit()
-        })
+        telemetry.succeeded(result.timing)
 
         if (isFolderRepo(repo)) {
           notifyWorktreesChanged(mainWindow, repo.id)
@@ -111,7 +122,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           branch: result.worktree.branch
         })
 
-        return result
+        // Why stamped last: the create's own change notification bumped the generation, so this
+        // names the catalog that contains the new worktree.
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )
@@ -125,6 +138,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         if (!repo || isFolderRepo(repo)) {
           throw new Error('Provisioned-root repository ownership is missing or ambiguous.')
         }
+        assertWslMoveRepoWritable(store, repo)
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
         const automationProvenance = resolveAutomationWorkspaceProvenance({
@@ -164,7 +178,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           path: result.worktree.path,
           branch: result.worktree.branch
         })
-        return result
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )

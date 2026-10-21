@@ -135,6 +135,30 @@ describe('parseMarkdownBlocks tables', () => {
     ])
   })
 
+  it('keeps an escaped pipe that ends a row carrying no closing pipe', () => {
+    const md = ['A | B', '--- | ---', 'x | y \\|'].join('\n')
+    expect(parseMarkdownBlocks(md)).toEqual([
+      {
+        kind: 'table',
+        headers: ['A', 'B'],
+        align: ['left', 'left'],
+        rows: [['x', 'y |']]
+      }
+    ])
+  })
+
+  it('ends a cell at the pipe following an escaped backslash', () => {
+    const md = ['| A | B |', '| --- | --- |', '| x\\\\|y |'].join('\n')
+    expect(parseMarkdownBlocks(md)).toEqual([
+      {
+        kind: 'table',
+        headers: ['A', 'B'],
+        align: ['left', 'left'],
+        rows: [['x\\', 'y']]
+      }
+    ])
+  })
+
   it('does not treat prose containing a pipe as a table (no delimiter row)', () => {
     expect(parseMarkdownBlocks('this | that is just text')).toEqual([
       { kind: 'paragraph', text: 'this | that is just text' }

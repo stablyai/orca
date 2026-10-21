@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import {
@@ -17,6 +17,7 @@ import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
+import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 
 type ForgetSshWorkspaceModalData = {
   worktreeId: string
@@ -47,6 +48,18 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   })
   const [busy, setBusy] = useState<null | 'reconnect' | 'forget'>(null)
   const mountedRef = useMountedRef()
+  const unsavedTargets = useMemo(
+    () =>
+      isForgetModalData(modalData) && modalData.resolution.kind !== 'not-ssh'
+        ? [
+            {
+              id: modalData.worktreeId,
+              hostId: toSshExecutionHostId(modalData.resolution.targetId)
+            }
+          ]
+        : [],
+    [modalData]
+  )
 
   if (!isForgetModalData(modalData)) {
     return null
@@ -129,7 +142,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open onOpenChange={(open) => (!open ? closeModal() : undefined)}>
-      <DialogContent className="sm:max-w-md gap-3 p-5" showCloseButton={false}>
+      <DialogContent surface="security" className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader className="gap-1">
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
             <ServerOff className="size-4 text-muted-foreground" />
@@ -159,6 +172,8 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
           <Server className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-xs font-medium">{hostLabel}</span>
         </div>
+
+        <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled />
 
         {/* Why: the ghost-host description already states files are untouched, so
             only repeat the reassurance on the reconnect (disconnected) path. */}

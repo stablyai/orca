@@ -1,3 +1,4 @@
+import type { PendingEditorReveal } from '../types/pending-editor-reveal'
 import type { AppState } from '../../../types'
 import { EDITOR_FOCUS_REQUEST_TTL_MS } from '../types/pending-editor-reveal'
 
@@ -44,19 +45,28 @@ export function scheduleEditorLineReveal(
   filePath: string,
   line: number,
   column?: number,
-  fileId?: string
+  fileId?: string,
+  options?: Pick<PendingEditorReveal, 'viewStateId' | 'canApply' | 'onApplied'> & {
+    beforePublish?: () => void
+  }
 ): void {
   // Why: openFile may remount Monaco async; the reveal must land after remount or the old editor clears it.
   cancelPendingEditorLineRevealFrames()
   get().setPendingEditorReveal(null)
   requestTrackedEditorLineRevealFrame(() => {
     requestTrackedEditorLineRevealFrame(() => {
+      if (options?.canApply?.() === false) {
+        return
+      }
+      const { beforePublish, ...revealOptions } = options ?? {}
+      beforePublish?.()
       get().setPendingEditorReveal({
         filePath,
         fileId,
         line,
         column: column ?? 1,
-        matchLength: 0
+        matchLength: 0,
+        ...revealOptions
       })
     })
   })

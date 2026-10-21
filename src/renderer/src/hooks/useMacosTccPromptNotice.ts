@@ -20,7 +20,7 @@ export function useMacosTccPromptNotice(): void {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const uiLanguage = useAppStore((s) => s.settings?.uiLanguage ?? null)
-  const pluginLanguagePacks = usePluginLanguagePackStore((s) => s.packs)
+  const pluginLanguagePacks = usePluginLanguagePackStore((s) => s.entries)
   const pluginLanguagePacksLoaded = usePluginLanguagePackStore((s) => s.loaded)
   const { i18n } = useTranslation()
   const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)

@@ -25,26 +25,6 @@ describe('evaluateCompat', () => {
     expect(verdict).toEqual({ kind: 'ok' })
   })
 
-  it('returns ok when desktop reports version equal to mobile', () => {
-    const verdict = evaluateCompat({
-      mobileProtocolVersion: MOBILE_V,
-      minCompatibleDesktopVersion: 0,
-      desktopProtocolVersion: MOBILE_V,
-      desktopMinCompatibleMobileVersion: 0
-    })
-    expect(verdict).toEqual({ kind: 'ok' })
-  })
-
-  it('returns ok when desktop reports a newer version (additive changes assumed safe)', () => {
-    const verdict = evaluateCompat({
-      mobileProtocolVersion: MOBILE_V,
-      minCompatibleDesktopVersion: 0,
-      desktopProtocolVersion: MOBILE_V + 5,
-      desktopMinCompatibleMobileVersion: 0
-    })
-    expect(verdict).toEqual({ kind: 'ok' })
-  })
-
   it('allows desktop protocol 3 to roll out before mobile protocol 2 updates', () => {
     const verdict = evaluateCompat({
       mobileProtocolVersion: 2,

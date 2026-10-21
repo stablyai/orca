@@ -1,3 +1,6 @@
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../../shared/claude-sign-in-link'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
+
 export function getCodexAccountErrorDescription(error: unknown): string {
   const message = String((error as Error)?.message ?? error)
     .replace(/^Error occurred in handler for 'codexAccounts:[^']+':\s*/i, '')
@@ -38,7 +41,14 @@ export function getClaudeAccountErrorDescription(error: unknown): string {
       .replace(/^Error occurred in handler for 'claudeAccounts:[^']+':\s*/i, '')
       .replace(/^Error invoking remote method 'claudeAccounts:[^']+':\s*/i, '')
       .replace(/^Error:\s*/i, '')
-      .trim() || 'Claude sign-in failed. Please try again.'
+      .trim() || CLAUDE_SIGN_IN_FAILED_MESSAGE
+  )
+}
+
+export function isCodexAccountCancellation(error: unknown): boolean {
+  return (
+    getCodexAccountErrorDescription(error).toLowerCase() ===
+    CODEX_LOGIN_CANCELLED_MESSAGE.toLowerCase()
   )
 }
 

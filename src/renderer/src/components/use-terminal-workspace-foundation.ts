@@ -10,6 +10,7 @@ import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reus
 import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-pane/terminal-hidden-view-parking'
 import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export function useTerminalWorkspaceFoundation() {
   const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
@@ -25,7 +26,7 @@ export function useTerminalWorkspaceFoundation() {
   const terminalWorktreeParkCooldownUntilRef = useRef(new Map<string, number>())
   const terminalWorktreeParkingTimersRef = useRef(new Map<string, number>())
   const worktreesById = useWorktreeMap()
-  const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
+  const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
   const activeWorktreeDeferralHostId = useAppStore((state) =>
@@ -37,15 +38,19 @@ export function useTerminalWorkspaceFoundation() {
     parseWorkspaceKey(renderedActiveWorktreeId ?? '')?.type === 'folder'
       ? activeWorktreeDeferralHostId
       : null
+  // Why gate the id on the host: the projection reads `activeWorkspaceId` only behind a
+  // truthy resolved host, so without one every active id yields the same surfaces — and a
+  // worktree switch must not re-project (and re-identify) every surface to rediscover that.
+  const activeFolderSurfaceId = activeFolderSurfaceHostId ? renderedActiveWorktreeId : null
   const workspaceSurfaces = useMemo(
     () =>
       projectWorkspaceSurfaces({
         worktreesById,
         folderWorkspaces,
-        activeWorkspaceId: renderedActiveWorktreeId,
+        activeWorkspaceId: activeFolderSurfaceId,
         activeWorkspaceResolvedHostId: activeFolderSurfaceHostId
       }),
-    [worktreesById, folderWorkspaces, renderedActiveWorktreeId, activeFolderSurfaceHostId]
+    [worktreesById, folderWorkspaces, activeFolderSurfaceId, activeFolderSurfaceHostId]
   )
   // Why split the ids out: every mount/park/activation pass reads only `.id`, but
   // the surface array is re-identified on any worktree write. Reusing the previous

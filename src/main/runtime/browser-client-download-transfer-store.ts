@@ -21,7 +21,11 @@ type RuntimeFileChannelHost = {
   statRuntimeFile(worktree: string, relativePath: string): Promise<unknown>
 }
 
-const stores = new WeakMap<object, BrowserClientDownloadTransferStore>()
+// Release runs from the lease registry, which only knows the runtime by id; the store itself is
+// only ever created for a file-channel host.
+type DownloadTransferRuntime = RuntimeFileChannelHost | { getRuntimeId(): string }
+
+const stores = new WeakMap<DownloadTransferRuntime, BrowserClientDownloadTransferStore>()
 
 /**
  * Drops every staged download a page still owns.
@@ -31,10 +35,11 @@ const stores = new WeakMap<object, BrowserClientDownloadTransferStore>()
  * opened a file channel.
  */
 export function releaseBrowserClientDownloadTransfersForPage(
-  runtime: object,
-  browserPageId: string
+  runtime: DownloadTransferRuntime,
+  browserPageId: string,
+  pageHostGeneration?: number
 ): Promise<void> {
-  return stores.get(runtime)?.releasePage(browserPageId) ?? Promise.resolve()
+  return stores.get(runtime)?.releasePage(browserPageId, pageHostGeneration) ?? Promise.resolve()
 }
 
 export function getBrowserClientDownloadTransferStore(

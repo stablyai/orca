@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 11 agent-status ipc-events specs, not shipped code, and it falls
+   outside the *.test / *.spec / tests glob set. Inlining stubReactSyncEffect and stubAuxiliaryModules would duplicate them
+   into all 11 specs and push several past the max-lines ratchet. */
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type {
@@ -15,7 +18,6 @@ export function buildWindowApi(args: {
   getSnapshot?: () => Promise<AgentStatusSetData[]>
   getMigrationUnsupportedSnapshot?: () => Promise<MigrationUnsupportedPtyEntry[]>
   drop?: (paneKey: string) => void
-  remoteWorkspace?: Record<string, unknown>
   runtime?: Record<string, unknown>
   ssh?: Record<string, unknown>
   ui?: Record<string, unknown>
@@ -48,6 +50,9 @@ export function buildWindowApi(args: {
         onActivateWorktree: () => () => {},
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},
+        onPublishAgentLaunchTab: () => () => {},
+        onRevealTerminalPane: () => () => {},
+        onAgentLaunchPaneVerdict: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},
@@ -66,6 +71,7 @@ export function buildWindowApi(args: {
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
+        onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: () => () => {},
         replyTabClose: () => {},
@@ -127,6 +133,7 @@ export function buildWindowApi(args: {
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
+      notifications: { dispatch: vi.fn(async () => ({ delivered: false })) },
       agentStatus: {
         onSet: args.onSet,
         onClear: args.onClear ?? vi.fn(() => () => {}),
@@ -137,8 +144,7 @@ export function buildWindowApi(args: {
           ? { getMigrationUnsupportedSnapshot: args.getMigrationUnsupportedSnapshot }
           : {}),
         drop: args.drop ?? vi.fn()
-      },
-      remoteWorkspace: args.remoteWorkspace
+      }
     }
   }
 }

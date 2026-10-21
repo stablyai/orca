@@ -12,7 +12,8 @@ import {
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { translate } from '@/i18n/i18n'
 import type { Collection } from '../../../../../../shared/collection-types'
-import type { GroupHeaderRow } from '../grouping/row-types'
+import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
+import { COLLECTION_GROUP_META } from '../../worktree-list-collections'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { ProjectHeaderActions } from '../../ProjectHeaderActions'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
@@ -26,6 +27,8 @@ import {
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
 import { getWorktreeOptionId } from './option-dom'
+
+const CollectionIcon = COLLECTION_GROUP_META.icon
 
 export type CollectionSectionHeaderContext = {
   collapsedGroups: Set<string>
@@ -92,17 +95,17 @@ export function renderCollectionSectionHeaderRow(args: {
                 iconClassName="size-3.5"
               />
             </div>
-          ) : row.icon ? (
+          ) : (
             <div
               className={cn(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                row.tone
+                COLLECTION_GROUP_META.tone
               )}
               style={collection.color ? { color: collection.color } : undefined}
             >
-              <row.icon className="size-3" />
+              <CollectionIcon className="size-3" />
             </div>
-          ) : null}
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
               <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
@@ -166,7 +169,9 @@ export function renderCollectionSectionHeaderRow(args: {
                     'Add worktrees…'
                   )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => ctx.onRenameCollection(collection.id, row.label)}>
+                <DropdownMenuItem
+                  onSelect={() => ctx.onRenameCollection(collection.id, collection.name)}
+                >
                   {translate(
                     'auto.components.sidebar.WorktreeList.collectionRenameItem',
                     'Rename collection'
@@ -174,7 +179,7 @@ export function renderCollectionSectionHeaderRow(args: {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() => ctx.onDeleteCollection(collection.id, row.label)}
+                  onSelect={() => ctx.onDeleteCollection(collection.id, collection.name)}
                 >
                   {translate(
                     'auto.components.sidebar.WorktreeList.collectionDeleteItem',

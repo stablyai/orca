@@ -1,4 +1,5 @@
 import { escapeMarkdownLinkDestination } from './adf-media-destination'
+import { applyAdfTextMarks, joinAdfInlineMarkdown } from './adf-text-marks'
 
 type JiraAdfRecord = Record<string, unknown>
 
@@ -130,7 +131,12 @@ function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
     return node
   }
   if (Array.isArray(node)) {
-    return node.map((child) => renderInline(child, options)).join('')
+    return joinAdfInlineMarkdown(
+      node.map((child) => ({
+        markdown: renderInline(child, options),
+        marks: asRecord(child).marks
+      }))
+    )
   }
   if (typeof node !== 'object') {
     return ''
@@ -138,7 +144,7 @@ function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
 
   const record = node as JiraAdfRecord
   if (typeof record.text === 'string') {
-    return record.text
+    return applyAdfTextMarks(record.text, record.marks)
   }
   if (record.type === 'hardBreak') {
     return '\n'

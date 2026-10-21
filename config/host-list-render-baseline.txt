@@ -1,0 +1,16 @@
+# JSX mapped straight over a host collection, per file, outside components/host-picker.
+# This is a RATCHET: counts may only go DOWN. Draw host lists with HostCombobox or
+# useBoundedHostRows. Prune after a fix: pnpm check:host-list-render-ratchet --prune
+1 src/renderer/src/components/automations/AutomationRunsDashboard.tsx
+1 src/renderer/src/components/editor/ReviewNotesSendMenuContent.tsx
+1 src/renderer/src/components/right-sidebar/AiVaultPanelControls.tsx
+1 src/renderer/src/components/right-sidebar/SourceControlAgentActionDialogForm.tsx
+1 src/renderer/src/components/settings/BrowserSessionCookiesSection.tsx
+1 src/renderer/src/components/settings/BrowserSshWorkspaceRoutingSetting.tsx
+1 src/renderer/src/components/settings/QuickCommandsToolbar.tsx
+1 src/renderer/src/components/settings/RepositoryHostSetupsSection.tsx
+1 src/renderer/src/components/sidebar/AddRemoteHostSshConfigPicker.tsx
+4 src/renderer/src/components/status-bar/SshStatusSegment.tsx
+1 src/renderer/src/components/status-bar/resource-usage-popover-body.tsx
+1 src/renderer/src/components/tab-bar/TabBarQuickCommandAddActions.tsx
+2 src/renderer/src/components/terminal-pane/TerminalQuickCommandsSubmenu.tsx

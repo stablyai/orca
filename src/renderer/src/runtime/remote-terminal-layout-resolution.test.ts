@@ -69,6 +69,94 @@ describe('resolveTerminalLayoutRoot', () => {
     expect(resolveTerminalLayoutRoot({ leafIds: [] })).toBeNull()
   })
 
+  it('prunes a superset tree to the live leaves instead of re-guessing its directions', () => {
+    // A stale/extra leaf in the known tree used to fail the exact-cover check and
+    // collapse the whole tab to a guessed chain.
+    const onSynthesize = vi.fn()
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: {
+        type: 'split',
+        direction: 'horizontal',
+        first: verticalSplit,
+        second: { type: 'leaf', leafId: 'stale' }
+      },
+      leafIds: ['a', 'b'],
+      onSynthesize
+    })
+    expect(root).toEqual(verticalSplit)
+    expect(onSynthesize).not.toHaveBeenCalled()
+  })
+
+  it('collapses a split that loses one child and keeps the outer direction', () => {
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: {
+        type: 'split',
+        direction: 'vertical',
+        first: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: 'a' },
+          second: { type: 'leaf', leafId: 'b' }
+        },
+        second: { type: 'leaf', leafId: 'c' }
+      },
+      leafIds: ['a', 'c']
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: 'a' },
+      second: { type: 'leaf', leafId: 'c' }
+    })
+  })
+
+  it('grafts a genuinely new leaf without disturbing the directions already known', () => {
+    // Only the new leaf's placement is a guess; the vertical split must survive it.
+    const onSynthesize = vi.fn()
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: verticalSplit,
+      leafIds: ['a', 'b', 'c'],
+      onSynthesize
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: verticalSplit,
+      second: { type: 'leaf', leafId: 'c' }
+    })
+    expect(onSynthesize).toHaveBeenCalledWith(1)
+  })
+
+  it('keeps the prior client tree when the host tree places fewer of the leaves', () => {
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: { type: 'leaf', leafId: 'a' },
+      existingRoot: verticalSplit,
+      leafIds: ['a', 'b', 'c']
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: verticalSplit,
+      second: { type: 'leaf', leafId: 'c' }
+    })
+  })
+
+  it('still degenerates when no known tree places any of the leaves', () => {
+    const onSynthesize = vi.fn()
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: verticalSplit,
+      leafIds: ['x', 'y'],
+      onSynthesize
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', leafId: 'x' },
+      second: { type: 'leaf', leafId: 'y' }
+    })
+    expect(onSynthesize).toHaveBeenCalledWith(2)
+  })
+
   it('prefers authoritative over an also-covering existing tree', () => {
     const horizontalSplit: TerminalPaneLayoutNode = {
       type: 'split',

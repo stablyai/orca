@@ -13,7 +13,7 @@ import { getSourceControlDirectoryActionPaths } from './directory-action-paths'
 import { SourceControlTreeDirectoryRow } from './tree-directory-rows'
 import { SubmodulePlaceholderRow } from './submodule-placeholder-row'
 import { UncommittedEntryRow } from './uncommitted-entry-row'
-import { SourceControlVirtualFileList } from './virtual-file-list'
+import { VirtualizedList } from '../../../virtualized-list'
 
 export function SourceControlSectionFileList({
   sourceControlViewMode,
@@ -37,7 +37,7 @@ export function SourceControlSectionFileList({
   handleContextMenu,
   revealInExplorer,
   activeConnectionId,
-  handleOpenDiff,
+  openUncommittedFile,
   handleStage,
   handleUnstage,
   requestDiscardEntry,
@@ -64,14 +64,14 @@ export function SourceControlSectionFileList({
   handleContextMenu: (key: string) => void
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  openUncommittedFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
-  handleUnstage: (path: string) => Promise<void>
+  handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
   return sourceControlViewMode === 'tree' ? (
-    <SourceControlVirtualFileList
+    <VirtualizedList
       rows={treeRows}
       scrollElement={fileListScrollElement}
       getRowKey={(node) => node.key}
@@ -122,7 +122,7 @@ export function SourceControlSectionFileList({
             onContextMenu={handleContextMenu}
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
-            onOpen={handleOpenDiff}
+            onOpen={openUncommittedFile}
             onStage={handleStage}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}
@@ -134,7 +134,7 @@ export function SourceControlSectionFileList({
       }}
     />
   ) : (
-    <SourceControlVirtualFileList
+    <VirtualizedList
       rows={listRows}
       scrollElement={fileListScrollElement}
       getRowKey={(row) =>
@@ -173,7 +173,7 @@ export function SourceControlSectionFileList({
             onContextMenu={handleContextMenu}
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
-            onOpen={handleOpenDiff}
+            onOpen={openUncommittedFile}
             onStage={handleStage}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}

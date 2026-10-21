@@ -7,6 +7,12 @@ export type HashAddressedPluginContent = {
 
 export type PluginContentIntegrityResult = { ok: true } | { ok: false; error: string }
 
+/** Whether a computed tree hash is the recorded identity. Early P0 installs used a
+ * 128-bit SHA-256 prefix as the directory name; new installs use the full digest. */
+export function pluginTreeHashMatches(actual: string, expected: string): boolean {
+  return actual === expected || (expected.length === 32 && actual.startsWith(expected))
+}
+
 /** Dev trees are intentionally mutable; installed hash-addressed trees are not. */
 export async function verifyHashAddressedPluginContent(
   plugin: HashAddressedPluginContent
@@ -18,12 +24,7 @@ export async function verifyHashAddressedPluginContent(
   if (!actual.ok) {
     return { ok: false, error: actual.error }
   }
-  const matchesCurrentHash = actual.hash === plugin.contentHash
-  // Early P0 installs used a 128-bit SHA-256 prefix as the directory name.
-  // Honor that existing address while all new installs use the full digest.
-  const matchesLegacyPrefix =
-    plugin.contentHash.length === 32 && actual.hash.startsWith(plugin.contentHash)
-  if (!matchesCurrentHash && !matchesLegacyPrefix) {
+  if (!pluginTreeHashMatches(actual.hash, plugin.contentHash)) {
     return {
       ok: false,
       error: `content hash mismatch (expected ${plugin.contentHash}, got ${actual.hash})`

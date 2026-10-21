@@ -5,11 +5,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { TERMINAL_QUERY_METHODS } from './terminal-query-methods'
-import { TerminalHandle, TerminalInspectProcess } from './unary-schemas'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import { eraseRpcMethods } from '../../core'
 
 /** The method as registered, so a schema swap on the definition cannot pass unseen. */
 function inspectProcessMethod() {
-  const method = TERMINAL_QUERY_METHODS.find((entry) => entry.name === 'terminal.inspectProcess')
+  const method = eraseRpcMethods(TERMINAL_QUERY_METHODS).find(
+    (entry) => entry.name === 'terminal.inspectProcess'
+  )
   if (!method) {
     throw new Error('terminal.inspectProcess is not registered')
   }
@@ -25,7 +28,7 @@ async function callRegisteredHandler(
     foregroundProcess: null,
     hasChildProcesses: false
   }))
-  await method.handler(parsed, { runtime: { inspectTerminalProcess } } as never, undefined as never)
+  await method.handler(parsed, { runtime: { inspectTerminalProcess } } as never)
   const [terminal, options] = inspectTerminalProcess.mock.calls[0] as unknown as [string, unknown]
   return { terminal, options }
 }
@@ -61,27 +64,6 @@ describe('terminal.inspectProcess registration', () => {
 })
 
 describe('terminal.inspectProcess params', () => {
-  it('preserves scanChildProcesses', () => {
-    expect(TerminalInspectProcess.parse({ terminal: 'term_1', scanChildProcesses: true })).toEqual({
-      terminal: 'term_1',
-      scanChildProcesses: true
-    })
-  })
-
-  it('preserves it alongside the incarnation fence', () => {
-    expect(
-      TerminalInspectProcess.parse({
-        terminal: 'term_1',
-        expectedIncarnationId: 'inc-1',
-        scanChildProcesses: true
-      })
-    ).toEqual({ terminal: 'term_1', expectedIncarnationId: 'inc-1', scanChildProcesses: true })
-  })
-
-  it('leaves it absent for a polling caller', () => {
-    expect(TerminalInspectProcess.parse({ terminal: 'term_1' })).toEqual({ terminal: 'term_1' })
-  })
-
   // The shape that produced the bug, pinned so nobody "simplifies" the method back onto the shared
   // handle schema: TerminalHandle drops the option on the floor without complaining.
   it('shows why the shared handle schema could not carry it', () => {

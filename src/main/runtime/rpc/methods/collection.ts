@@ -1,34 +1,20 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { defineMethod } from '../core'
+import {
+  CollectionCreate,
+  CollectionSelector,
+  CollectionUpdate
+} from '../../../../shared/rpc-contract/collection-params'
 
-const CollectionCreate = z.object({
-  name: requiredString('Missing collection name'),
-  color: z.string().nullable().optional()
-})
-
-const CollectionUpdate = z.object({
-  collectionId: requiredString('Missing collection id'),
-  updates: z.object({
-    name: OptionalString,
-    color: z.string().nullable().optional(),
-    isCollapsed: z.boolean().optional(),
-    order: OptionalFiniteNumber
-  })
-})
-
-const CollectionSelector = z.object({
-  collectionId: requiredString('Missing collection id')
-})
-
-export const COLLECTION_METHODS: RpcMethod[] = [
+export const COLLECTION_METHODS = [
   defineMethod({
     name: 'collection.list',
+    permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => ({ collections: runtime.listCollections() })
   }),
   defineMethod({
     name: 'collection.create',
+    permission: 'workspace',
     params: CollectionCreate,
     handler: async (params, { runtime }) => ({
       collection: await runtime.createCollection(params)
@@ -36,6 +22,7 @@ export const COLLECTION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'collection.update',
+    permission: 'workspace',
     params: CollectionUpdate,
     handler: async (params, { runtime }) => ({
       collection: await runtime.updateCollection(params.collectionId, params.updates)
@@ -43,6 +30,7 @@ export const COLLECTION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'collection.delete',
+    permission: 'workspace',
     params: CollectionSelector,
     handler: async (params, { runtime }) => runtime.deleteCollection(params.collectionId)
   })

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
 import { REACT_NESTED_UPDATE_LIMIT } from '../../../shared/react-update-depth-attribution'
 import {
-  REACT_CASCADING_LANES,
   setReactCommitCascadeRendererSurface,
   REACT_COMMIT_CASCADE_ARM_COMMITS,
   REACT_COMMIT_CASCADE_BREADCRUMB,
@@ -67,7 +66,6 @@ describe('cascade thresholds', () => {
   it('derives arm and notice limits from React commit budget', () => {
     expect(REACT_COMMIT_CASCADE_NOTICE_LIMIT).toBeLessThan(REACT_NESTED_UPDATE_LIMIT)
     expect(REACT_COMMIT_CASCADE_ARM_COMMITS).toBeLessThan(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-    expect(REACT_CASCADING_LANES).toBe(42)
   })
 })
 

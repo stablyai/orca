@@ -1,12 +1,12 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
-import type { RpcSuccess } from '../transport/types'
+import { sessionTerminalListRead } from './mobile-session-read-operations'
+import type { Terminal } from './mobile-session-route-types'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,
   pruneTerminalKeyboardMetrics,
   resolveRetainedTerminalHandles
 } from './mobile-terminal-prune-decision'
-import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
 import type { MobileTerminalInventoryRefreshOptions } from './use-mobile-terminal-inventory-recovery'
@@ -25,7 +25,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     setTerminalKeyboardMetrics,
     terminalRefs,
     terminalUnsubsRef,
-    initializedHandlesRef,
     viewportResubscribeBudgetRef,
     activeHandleRef,
     showNativeChatRef,
@@ -54,14 +53,17 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         allowEmptyLoaded,
         async (allowsEmpty, isCurrent) => {
           try {
-            const response = await client.sendRequest('terminal.list', {
-              worktree: `id:${worktreeId}`,
-              includeVisualLayouts: false
-            })
-            if (!isCurrent() || !response.ok) {
+            const response = sessionTerminalListRead.interpret(
+              await sessionTerminalListRead.request(client, {
+                worktree: `id:${worktreeId}`,
+                includeVisualLayouts: false
+              })
+            )
+            if (!isCurrent() || !response.accepted) {
               return false
             }
-            const result = (response as RpcSuccess).result as { terminals: Terminal[] }
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checked the array and each row's handle; the rest of a row is the host's terminal record, which this module reads but does not re-declare.
+            const result = response.value as { terminals: Terminal[] }
             if (result.terminals.length === 0 && !allowsEmpty()) {
               return true
             }
@@ -92,7 +94,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               }
               unsubscribeTerminal(handle)
               terminalRefs.current.delete(handle)
-              initializedHandlesRef.current.delete(handle)
               viewportResubscribeBudgetRef.current.forget(handle)
               clearTerminalLiveInputDefault(handle)
             }

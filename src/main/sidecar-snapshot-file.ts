@@ -21,13 +21,16 @@ export function sidecarSnapshotFile(snapshotDirectory: string, fileName: string)
 export function withSidecarSnapshotQueue<T>(file: string, task: () => Promise<T>): Promise<T> {
   const previous = queues.get(file) ?? Promise.resolve()
   const run = previous.then(task, task)
-  queues.set(
-    file,
-    run.then(
-      () => undefined,
-      () => undefined
-    )
+  const queued = run.then(
+    () => undefined,
+    () => undefined
   )
+  queues.set(file, queued)
+  void queued.then(() => {
+    if (queues.get(file) === queued) {
+      queues.delete(file)
+    }
+  })
   return run
 }
 
@@ -45,7 +48,16 @@ export async function writeSidecarSnapshot(file: string, payload: unknown): Prom
   if (!cleanup) {
     cleanup = removeStaleDurableWriteTempFiles(file, { minimumAgeMs: STALE_TEMP_AGE_MS })
     staleTempCleanups.set(file, cleanup)
+    void cleanup.then(() => {
+      if (staleTempCleanups.get(file) === cleanup) {
+        staleTempCleanups.delete(file)
+      }
+    })
   }
   await cleanup
   await writeFileDurable(durableWriteTempPath(file), file, JSON.stringify(payload))
+}
+
+export function _getSidecarSnapshotPendingFileCountForTests(): number {
+  return queues.size + staleTempCleanups.size
 }

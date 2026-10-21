@@ -17,6 +17,8 @@ import {
   compareAutomationRunsNewestFirst,
   paginateAutomationRuns
 } from '../../../shared/automation-run-cursor'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -28,6 +30,7 @@ import {
 export type AutomationRunOperations = {
   state: PersistedState
   flush: () => void
+  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
   recordManualRun: () => void
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
 }
@@ -110,6 +113,7 @@ export function createAutomationRun(
     ...(operations.state.automationRuns ?? []),
     run
   ])
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns ?? [])
   if (trigger === 'manual') {
     operations.recordManualRun()
   }
@@ -149,6 +153,7 @@ export function recordRepeatedAutomationSkip(
   }
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = runs.map((run) => (run.id === latest.id ? updated : run))
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   touchAutomation(operations.state, automationId, now)
   operations.flush()
   return updated
@@ -196,12 +201,14 @@ export function updateAutomationRun(
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
     error: result.error ?? null,
     startedAt: current.startedAt ?? now,
-    dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+    dispatchedAt:
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
   }
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
     run.id === result.runId ? updated : run
   )
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   if (!isFinalAutomationRunStatus(current.status) && isFinalAutomationRunStatus(updated.status)) {
     // Why: only a non-final run pins its workspace, so finishing releases the claim (#17775).
     invalidateLocalWorktreeMetadataPruneInputs()
@@ -213,22 +220,30 @@ export function updateAutomationRun(
 
 export function snapshotAutomationRunWorkspaceDisplayName(
   operations: AutomationRunOperations,
-  workspaceId: string,
+  target: HostWorktreeTarget,
   displayName: string
 ): number {
   const normalizedDisplayName = normalizeAutomationRunWorkspaceDisplayName(displayName)
   if (!normalizedDisplayName) {
     return 0
   }
+  // Folder ids are minted UUIDs (one row per id), and a run's project host may differ from it.
+  const hostScoped = parseWorkspaceKey(target.id)?.type !== 'folder'
   let updatedCount = 0
   operations.state.automationRuns = (operations.state.automationRuns ?? []).map((run) => {
-    if (run.workspaceId !== workspaceId || run.workspaceDisplayName === normalizedDisplayName) {
+    if (
+      run.workspaceId !== target.id ||
+      // A same-id twin's run names its own host; a run from before host context has none.
+      (hostScoped && run.runContext && run.runContext.hostId !== target.hostId) ||
+      run.workspaceDisplayName === normalizedDisplayName
+    ) {
       return run
     }
     updatedCount += 1
     return { ...run, workspaceDisplayName: normalizedDisplayName }
   })
   if (updatedCount > 0) {
+    operations.recordAutomationRunsMutation?.(operations.state.automationRuns ?? [])
     operations.flush()
   }
   return updatedCount

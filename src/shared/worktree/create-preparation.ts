@@ -3,8 +3,29 @@ export const WORKTREE_CREATE_PREPARATION_LOCK_PREFIX = 'orca-create-preparation:
 const WORKTREE_CREATE_PREPARATION_ID_PATTERN =
   /^(\d+)-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-export function createWorktreePreparationLockReason(sessionId: string): string {
-  return `${WORKTREE_CREATE_PREPARATION_LOCK_PREFIX}${process.pid}:${sessionId}`
+// Appended last so older builds, which read only the pid field, still parse the reason.
+const WORKTREE_CREATE_PREPARATION_MACHINE_FIELD = ':machine='
+
+/** The machine is what makes the pid meaningful: a repo on a shared disk is seen by other hosts. */
+export function createWorktreePreparationLockReason(
+  sessionId: string,
+  machineIdentity?: string | null
+): string {
+  const machine = machineIdentity
+    ? `${WORKTREE_CREATE_PREPARATION_MACHINE_FIELD}${machineIdentity}`
+    : ''
+  return `${WORKTREE_CREATE_PREPARATION_LOCK_PREFIX}${process.pid}:${sessionId}${machine}`
+}
+
+/** Null for reasons older builds wrote, or a writer that could not read its machine identity. */
+export function parseWorktreePreparationOwnerMachine(lockReason?: string): string | null {
+  if (!lockReason || parseWorktreePreparationOwnerPid(lockReason) === null) {
+    return null
+  }
+  const at = lockReason.indexOf(WORKTREE_CREATE_PREPARATION_MACHINE_FIELD)
+  return at === -1
+    ? null
+    : lockReason.slice(at + WORKTREE_CREATE_PREPARATION_MACHINE_FIELD.length) || null
 }
 
 export function parseWorktreePreparationOwnerPid(lockReason?: string): number | null {

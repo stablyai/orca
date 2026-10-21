@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import {
   classifyRelayServiceDescribeFailure,
   readRelayServingRegionalPlacementVersion
@@ -67,7 +69,7 @@ test('reads the exact version from the sole traffic-serving revision', () => {
     }
   })
 
-  assert.deepEqual(result, { version: '11' })
+  assert.deepEqual(result, { version: '11', cohort_percent: '0', reserve_placement: '', shadow_seat_feed_cells: '' })
   assert.equal(calls[1][3], 'relay-serving')
 })
 
@@ -78,7 +80,7 @@ test('reads the gcloud v1 secret reference shape by bare id and by full resource
   ]) {
     assert.deepEqual(readRelayServingRegionalPlacementVersion(input, {
       run: (args) => args[1] === 'services' ? serving() : v1Revision(name, '1')
-    }), { version: '1' })
+    }), { version: '1', cohort_percent: '0', reserve_placement: '', shadow_seat_feed_cells: '' })
   }
 })
 
@@ -100,12 +102,12 @@ test('falls back only when the service or setting is absent', () => {
   notFound.code = 'NOT_FOUND'
   assert.deepEqual(readRelayServingRegionalPlacementVersion(input, {
     run: () => { throw notFound }
-  }), { version: '7' })
+  }), { version: '7', cohort_percent: '0', reserve_placement: '', shadow_seat_feed_cells: '' })
   assert.deepEqual(readRelayServingRegionalPlacementVersion(input, {
     run: (args) => args[1] === 'services'
       ? { status: { traffic: [{ revisionName: 'relay-serving', percent: 100 }] } }
       : { spec: { containers: [{ env: [] }] } }
-  }), { version: '7' })
+  }), { version: '7', cohort_percent: '0', reserve_placement: '', shadow_seat_feed_cells: '' })
 })
 
 test('classifies real absent-service stderr without weakening revision failures', () => {
@@ -135,4 +137,73 @@ test('rejects ambiguous traffic, malformed references, and read failures', () =>
   assert.throws(() => readRelayServingRegionalPlacementVersion(input, {
     run: () => { throw denied }
   }), denied)
+})
+
+
+test('preserves the serving cohort including explicit disable across later Terraform plans', () => {
+  for (const value of ['0', '1', '17', '100']) {
+    const servingRevision = revision()
+    servingRevision.spec.containers[0].env.push({ name: 'ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT', value })
+    assert.deepEqual(readRelayServingRegionalPlacementVersion(input, {
+      run: (args) => args[1] === 'services' ? serving() : servingRevision
+    }), { version: '11', cohort_percent: value, reserve_placement: '', shadow_seat_feed_cells: '' })
+  }
+})
+
+test('fails closed on malformed, secret-backed or duplicate cohorts rather than resetting them', () => {
+  const name = 'ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT'
+  const cases = [
+    [{ name, value: '101' }], [{ name, value: '-1' }], [{ name, value: '1.5' }],
+    [{ name, value: '' }], [{ name, value: '01' }], [{ name, value: 1 }],
+    [{ name, valueFrom: { secretKeyRef: { name: 'unexpected', key: '1' } } }],
+    [{ name, value: '1' }, { name, value: '2' }]
+  ]
+  for (const settings of cases) {
+    const servingRevision = revision()
+    servingRevision.spec.containers[0].env.push(...settings)
+    assert.throws(() => readRelayServingRegionalPlacementVersion(input, {
+      run: (args) => args[1] === 'services' ? serving() : servingRevision
+    }), /cohort is invalid/)
+  }
+})
+
+test('carries the deploy-owned placement and shadow cells, so an apply keeps them', () => {
+  const servingRevision = revision()
+  servingRevision.spec.containers[0].env.push(
+    { name: 'ORCA_RELAY_RESERVE_PLACEMENT', value: 'on' },
+    { name: 'ORCA_RELAY_SHADOW_SEAT_FEED_CELLS', value: 'production-gce-c1,production-gce-c2' }
+  )
+  assert.deepEqual(readRelayServingRegionalPlacementVersion(input, {
+    run: (args) => args[1] === 'services' ? serving() : servingRevision
+  }), {
+    version: '11',
+    cohort_percent: '0',
+    reserve_placement: 'on',
+    shadow_seat_feed_cells: 'production-gce-c1,production-gce-c2'
+  })
+})
+
+test('fails closed on a malformed, secret-backed or duplicate placement or shadow-cell setting', () => {
+  const cases = [
+    [{ name: 'ORCA_RELAY_RESERVE_PLACEMENT', value: 'yes' }],
+    [{ name: 'ORCA_RELAY_RESERVE_PLACEMENT', value: 'on' }, { name: 'ORCA_RELAY_RESERVE_PLACEMENT', value: 'off' }],
+    [{ name: 'ORCA_RELAY_RESERVE_PLACEMENT', valueFrom: { secretKeyRef: { name: 'x', key: '1' } } }],
+    [{ name: 'ORCA_RELAY_SHADOW_SEAT_FEED_CELLS', value: 'c1;c2' }],
+    [{ name: 'ORCA_RELAY_SHADOW_SEAT_FEED_CELLS', value: '' }]
+  ]
+  for (const settings of cases) {
+    const servingRevision = revision()
+    servingRevision.spec.containers[0].env.push(...settings)
+    assert.throws(() => readRelayServingRegionalPlacementVersion(input, {
+      run: (args) => args[1] === 'services' ? serving() : servingRevision
+    }), /is invalid/)
+  }
+})
+
+test('Terraform sets the carried settings only when the serving revision has them', () => {
+  const terraform = readFileSync(fileURLToPath(new URL('../../infra/terraform/relay.tf', import.meta.url)), 'utf8')
+  const block = /dynamic "env" \{([\s\S]*?)\n {6}\}/.exec(terraform)?.[1] ?? ''
+  assert.match(block, /ORCA_RELAY_RESERVE_PLACEMENT *= data\.external\.relay_serving_regional_placement_version\.result\.reserve_placement/)
+  assert.match(block, /ORCA_RELAY_SHADOW_SEAT_FEED_CELLS *= data\.external\.relay_serving_regional_placement_version\.result\.shadow_seat_feed_cells/)
+  assert.match(block, /if value != ""/)
 })

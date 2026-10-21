@@ -7,6 +7,7 @@ import {
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 
 export async function gitSyncForkDefaultBranch(
   worktreePath: string,
@@ -15,9 +16,7 @@ export async function gitSyncForkDefaultBranch(
 ): Promise<GitForkSyncResult> {
   // Compose the caller's cancel signal with the 60s timeout so neither is lost —
   // the caller's signal was previously clobbered by the timeout controller.
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, AbortSignal.timeout(60_000)])
-    : AbortSignal.timeout(60_000)
+  const signal = abortSignalWithTimeout(options.signal, 60_000)
   try {
     return await syncForkDefaultBranch(
       (args) =>

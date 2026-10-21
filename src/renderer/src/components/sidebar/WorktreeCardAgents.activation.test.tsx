@@ -70,6 +70,7 @@ function buildMockStoreState(): Record<string, unknown> {
   return {
     agentActivityDisplayMode: mockAgentActivityDisplayMode,
     acknowledgedAgentsByPaneKey: {},
+    retainedAgentsByPaneKey: {},
     cacheTimerByKey: {},
     dropAgentStatus: vi.fn(),
     dismissRetainedAgent: vi.fn(),
@@ -98,6 +99,10 @@ const activationMocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn()
 }))
 
+const ownerActivationMocks = vi.hoisted(() => ({
+  activateTerminalTabOnOwner: vi.fn()
+}))
+
 const staleAgentRowMocks = vi.hoisted(() => ({
   dismissStaleAgentRowByKey: vi.fn()
 }))
@@ -121,6 +126,10 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: activationMocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/terminal-tab-owner-activation', () => ({
+  activateTerminalTabOnOwner: ownerActivationMocks.activateTerminalTabOnOwner
 }))
 
 vi.mock('../terminal-pane/stale-agent-row', () => ({
@@ -199,6 +208,54 @@ describe('WorktreeCardAgents activation', () => {
       worktreeId: 'wt-1',
       tabId
     })
+    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
+  })
+
+  it('tells the owning server which tab a row opens (#12739, #22196)', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'web-terminal-host-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'codex', prompt: 'Remote', worktreeId: 'wt-1' })
+    ]
+    mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith(
+      'wt-1',
+      tabId,
+      LEAF_A
+    )
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(
+      tabId,
+      LEAF_A,
+      expect.anything()
+    )
+  })
+
+  it('asks the owner to focus a live row whose tab has not reached this window yet', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'web-terminal-unhydrated'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({ paneKey, tabId, agentType: 'codex', prompt: 'Remote', worktreeId: 'wt-1' })
+    ]
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith(
+      'wt-1',
+      tabId,
+      LEAF_A
+    )
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
   })

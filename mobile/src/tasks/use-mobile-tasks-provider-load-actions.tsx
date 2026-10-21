@@ -1,4 +1,5 @@
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
+import { readJiraConnection, reconcileJiraConnection } from './jira-mobile-connection'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   type GitHubIssueSourceError,
@@ -7,32 +8,63 @@ import {
   type RpcClient,
   extractGitHubIssueSourceError,
   extractGitHubIssueSourceFallback,
+  getTaskPagePerRepoLimit,
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
+  taskPageToGitHubApiPage,
   useCallback
 } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   type GitHubRepoSources,
   type GitHubWorkItem,
-  type LinearStatusResponse,
   type LinearTeam,
   type RepoSummary,
   type TaskItem,
   createGitHubTask,
-  isSuccess,
   mapWithConcurrency,
   reconcileTeamSelection,
-  scopeGitHubTaskSearch,
-  taskTime
+  scopeGitHubTaskSearch
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubWorkItemCountRead,
+  linearAccountStatusRead,
+  linearWorkspaceTeamListRead
+} from './mobile-task-list-operations'
+import { githubWorkItemSearchRead } from './mobile-task-source-search-operations'
+import { taskSettingsWrite } from './mobile-task-runtime-operations'
 
-export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) {
+export type ProviderLoadActionsInput = Pick<
+  RuntimeHydrationModel,
+  | 'appliedQuery'
+  | 'client'
+  | 'clientRef'
+  | 'connState'
+  | 'defaultLinearTeamSelectionRef'
+  | 'githubKind'
+  | 'setJiraConnection'
+  | 'jiraStatusRequestIdRef'
+  | 'setLinearConnected'
+  | 'setLinearTeams'
+  | 'setLinearWorkspaces'
+  | 'setSelectedLinearTeamIds'
+  | 'setSelectedLinearWorkspaceId'
+  | 'taskUiReady'
+  | 'tasksSupported'
+>
+
+export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActionsInput>(
+  model: Model
+) {
   const {
     appliedQuery,
     client,
+    clientRef,
     connState,
     defaultLinearTeamSelectionRef,
     githubKind,
+    setJiraConnection,
+    jiraStatusRequestIdRef,
     setLinearConnected,
     setLinearTeams,
     setLinearWorkspaces,
@@ -41,15 +73,24 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     taskUiReady,
     tasksSupported
   } = model
+  // Desktop connection changes need an explicit status refresh on mobile.
+  const refreshJiraConnection = useCallback(async (): Promise<void> => {
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
+    const requestId = ++jiraStatusRequestIdRef.current
+    const next = await readJiraConnection(client)
+    if (clientRef.current === client && jiraStatusRequestIdRef.current === requestId) {
+      setJiraConnection((current) => reconcileJiraConnection(current, next))
+    }
+  }, [client, clientRef, connState, tasksSupported, setJiraConnection, jiraStatusRequestIdRef])
+
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const statusResponse = await client.sendRequest('linear.status')
-    if (!isSuccess(statusResponse)) {
-      throw new Error(statusResponse.error.message)
-    }
-    const status = statusResponse.result as LinearStatusResponse
+    const statusReply = await linearAccountStatusRead.request(client)
+    const status = linearAccountStatusRead.interpret(statusReply)
     setLinearConnected(status.connected === true)
     if (status.connected !== true) {
       setLinearWorkspaces([])
@@ -64,13 +105,10 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     setLinearWorkspaces(workspaces)
     setSelectedLinearWorkspaceId(workspaceId)
 
-    const teamsResponse = await client.sendRequest('linear.listTeams', {
+    const teamsReply = await linearWorkspaceTeamListRead.request(client, {
       workspaceId: workspaceId ?? undefined
     })
-    if (!isSuccess(teamsResponse)) {
-      throw new Error(teamsResponse.error.message)
-    }
-    const teams = teamsResponse.result as LinearTeam[]
+    const teams = linearWorkspaceTeamListRead.interpret(teamsReply)
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
   }, [client, connState, tasksSupported])
@@ -82,8 +120,9 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      void client
-        .sendRequest('settings.update', { defaultLinearTeamSelection: selection })
+      // Fire-and-forget: the reply is never interpreted, so no acceptance policy applies here.
+      void taskSettingsWrite
+        .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
           // Best-effort preference persistence; the local picker state already changed.
         })
@@ -95,7 +134,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     async (
       requestClient: RpcClient,
       queriedRepos: RepoSummary[],
-      before?: string
+      taskPage = 0
     ): Promise<{
       items: Array<Extract<TaskItem, { provider: 'github' }>>
       failedCount: number
@@ -103,21 +142,25 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       sourceErrors: GitHubIssueSourceError[]
       sourceFallbacks: GitHubIssueSourceFallback[]
     }> => {
+      const perRepoLimit = getTaskPagePerRepoLimit(
+        queriedRepos.length,
+        PER_REPO_FETCH_LIMIT,
+        CROSS_REPO_DISPLAY_LIMIT
+      )
       const results = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest('github.listWorkItems', {
+            // Same paging as desktop's task page: numbered pages, the display budget split per repo.
+            const reply = await githubWorkItemSearchRead.request(requestClient, {
               repo: `id:${repo.id}`,
-              limit: PER_REPO_FETCH_LIMIT,
+              limit: perRepoLimit,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
-              before
+              page: taskPageToGitHubApiPage(taskPage)
             })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const envelope = response.result as {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
+            const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources
               errors?: { issues?: { message: string } }
@@ -163,10 +206,11 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       }
 
       return {
+        // Why: the host pages by issue number, so the merge must order the same way
+        // (desktop's sortWorkItemsByNumber) or rows reshuffle across page boundaries.
         items: results
           .flatMap((result) => result.items)
-          .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
-          .slice(0, CROSS_REPO_DISPLAY_LIMIT),
+          .sort((a, b) => b.source.number - a.source.number),
         failedCount: results.filter((result) => result.error).length,
         sourcesByRepoId,
         sourceErrors,
@@ -176,25 +220,25 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     [appliedQuery, githubKind]
   )
 
-  const countGitHubItems = useCallback(
+  const countGitHubItemPages = useCallback(
     async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest(
-              'github.countWorkItems',
+            const reply = await githubWorkItemCountRead.request(
+              requestClient,
               {
                 repo: `id:${repo.id}`,
                 query: scopeGitHubTaskSearch(appliedQuery, githubKind)
               },
               { timeoutMs: 30_000 }
             )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            return typeof response.result === 'number' ? response.result : 0
+            // The reader answers the number, so the `typeof` fallback this call site kept is gone:
+            // a reply that is not one reaches the catch below, which already counts a failed repo
+            // as zero and now says which repo and why.
+            return githubWorkItemCountRead.interpret(reply)
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
             const logWorkItemCountFailure = isExpectedSshSkip ? console.log : console.warn
@@ -207,16 +251,22 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
           }
         }
       )
-      return counts.reduce((sum, count) => sum + count, 0)
+      return getWorkItemCountedTotalPages(
+        counts,
+        getTaskPagePerRepoLimit(queriedRepos.length, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT)
+      )
     },
     [appliedQuery, githubKind]
   )
   return Object.assign(model, {
+    refreshJiraConnection,
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,
-    countGitHubItems
+    countGitHubItemPages
   })
 }
 
-export type ProviderLoadActionsModel = ReturnType<typeof useMobileTasksProviderLoadActions>
+export type ProviderLoadActionsModel = ReturnType<
+  typeof useMobileTasksProviderLoadActions<RuntimeHydrationModel>
+>

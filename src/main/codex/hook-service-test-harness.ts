@@ -8,9 +8,12 @@ import {
   normalizeCodexHookSourcePath
 } from './config-toml-trust'
 import { _internals as grantInternals } from './codex-hook-trust-grant'
-import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
+import { _internals as lookupInternals } from './codex-hook-hash-lookup'
+import { computeOrcaCodexHookHashes } from './codex-hook-definition'
+import type { CodexHookAnswer } from './codex-hook-trust-derivation'
+import { CODEX_VERSION_FOR_TESTS } from './codex-hook-trust-derivation.test-fixture'
 
-// Why (#16441): the grant/rebase sessions now run in-process instead of in a
+// Why (#16441): the grant session now runs in-process instead of in a
 // forked bundle that never existed under vitest. Without this stub these
 // suites spawn the developer's real `codex app-server`, so they pass in CI
 // (no codex installed) and fail on any machine that has one. Stand in for the
@@ -24,18 +27,24 @@ export type CodexHookHomes = {
   userDataDir: string
 }
 
-/** Mutable holder: fields are re-pointed at fresh temp dirs by the registered beforeEach. */
-/** Applies the stub above; for suites that build their own temp homes. */
+/** The answer a real Codex gives about Orca's entry. */
+export function codexHookAnswerForTests(): CodexHookAnswer {
+  return {
+    kind: 'hashes',
+    codexVersion: CODEX_VERSION_FOR_TESTS,
+    hashes: computeOrcaCodexHookHashes()
+  }
+}
+
+/** Applies the stubs above; for suites that build their own temp homes. */
 export function stubCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(stubMissingCodexBinary)
-  rebaseInternals.setSessionRunner(stubMissingCodexBinary)
 }
 
 export function restoreCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(null)
   grantInternals.resetDiagnostics()
-  rebaseInternals.setSessionRunner(null)
-  rebaseInternals.resetRetryState()
+  lookupInternals.resetForTesting()
 }
 
 export function setupCodexHookHomes(

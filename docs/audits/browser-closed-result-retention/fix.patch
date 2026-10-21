@@ -1,0 +1,16 @@
+--- a/src/main/browser/browser-client-host-command-dispatcher.ts
++++ b/src/main/browser/browser-client-host-command-dispatcher.ts
+@@ -165,0 +166 @@
++      this.resultCache.releasePage(page)
+@@ -300 +301 @@
+-      this.resultCache.record(page, record)
++      this.resultCache.record(page, record, !this.closed)
+--- a/src/main/browser/browser-client-host-command-result-cache.ts
++++ b/src/main/browser/browser-client-host-command-result-cache.ts
+@@ -11 +11,5 @@
+-  record(page: PageState, record: CommandRecord): void {
++  record(page: PageState, record: CommandRecord, retain = true): void {
++    if (!retain) {
++      this.evict(page, record.event.commandSequence, record)
++      return
++    }

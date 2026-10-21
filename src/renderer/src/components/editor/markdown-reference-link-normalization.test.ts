@@ -1,5 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { marked } from 'marked'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
+
+// Offsets marked itself treats as fenced code, so the sweep below compares the
+// normalizer against the parser that decides what the file really means.
+function markedCodeRanges(markdown: string): [number, number][] {
+  const ranges: [number, number][] = []
+  let offset = 0
+  for (const token of marked.lexer(markdown.replace(/\r\n|\r/g, '\n'))) {
+    if (token.type === 'code') {
+      ranges.push([offset, offset + token.raw.length])
+    }
+    offset += token.raw.length
+  }
+  return ranges
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -24,6 +39,25 @@ describe('normalizeMarkdownReferenceLinks', () => {
     const markdown = ['```md', '[docs]: https://example.com/docs', '```', '', '[Docs]'].join('\n')
 
     expect(normalizeMarkdownReferenceLinks(markdown)).toBe(markdown)
+  })
+
+  it('never removes a definition marked keeps inside a fenced code block', () => {
+    const definition = '[docs]: https://example.com/docs'
+    const survivors: string[] = []
+    for (const outer of ['```', '````', '~~~', '~~~~']) {
+      // Fence-shaped lines that do and do not close `outer`.
+      for (const inner of ['```', '````', '~~~', '````js', '``` ', '```` trailing', '~~~a`b']) {
+        const markdown = `${outer}\ncode\n${inner}\n${definition}\n[Docs]\n${outer}\n`
+        const offset = markdown.indexOf(definition)
+        const insideCode = markedCodeRanges(markdown).some(
+          ([start, end]) => offset >= start && offset < end
+        )
+        if (insideCode && !normalizeMarkdownReferenceLinks(markdown).includes(definition)) {
+          survivors.push(markdown)
+        }
+      }
+    }
+    expect(survivors).toEqual([])
   })
 
   it('scans newline-heavy documents without splitting into line arrays', () => {

@@ -1,0 +1,53 @@
+{
+  "node": "v26.6.0",
+  "samples": [
+    {
+      "producedMiB": 16,
+      "bufferedBytes": 16778240,
+      "readyState": 1,
+      "rss": 86884352
+    },
+    {
+      "producedMiB": 32,
+      "bufferedBytes": 32507840,
+      "readyState": 1,
+      "rss": 134807552
+    },
+    {
+      "producedMiB": 48,
+      "bufferedBytes": 49286080,
+      "readyState": 1,
+      "rss": 160497664
+    },
+    {
+      "producedMiB": 64,
+      "bufferedBytes": 66064320,
+      "readyState": 1,
+      "rss": 177618944
+    },
+    {
+      "producedMiB": 80,
+      "bufferedBytes": 82842560,
+      "readyState": 1,
+      "rss": 194740224
+    },
+    {
+      "producedMiB": 96,
+      "bufferedBytes": 99620800,
+      "readyState": 1,
+      "rss": 211877888
+    },
+    {
+      "producedMiB": 112,
+      "bufferedBytes": 116399040,
+      "readyState": 1,
+      "rss": 235634688
+    },
+    {
+      "producedMiB": 128,
+      "bufferedBytes": 133177280,
+      "readyState": 1,
+      "rss": 264519680
+    }
+  ]
+}

@@ -104,7 +104,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
+      <DialogContent surface="security" className="max-w-md sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
             {previouslyApproved

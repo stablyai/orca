@@ -1,10 +1,36 @@
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from './relay-protocol'
+import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../shared/relay-frame-decoder'
 import { SshMultiplexerWriterLaneScheduler } from './ssh-multiplexer-writer-lane-scheduler'
+import type { WriteAmbiguityReason, WriteRefusalReason } from '../../shared/pty-write-settlement'
 
-export type MultiplexerWriteSettlement = { ok: true } | { ok: false; error: Error }
+/** All the socket itself can prove: it took the buffer, or the attempt failed. */
+export type MultiplexerTransportWriteResult = { ok: true } | { ok: false; error: Error }
+
+/**
+ * A `WriteSettlement` refined with the transport error the writer needs to fail the session.
+ * Only this writer knows whether an entry was still queued or already handed to the
+ * transport, so it is the boundary that mints `refused` versus `unverifiable`.
+ */
+export type MultiplexerWriteSettlement =
+  | { outcome: 'accepted' }
+  | { outcome: 'refused'; reason: WriteRefusalReason; error: Error }
+  | {
+      outcome: 'unverifiable'
+      reason: WriteAmbiguityReason
+      bytesHandedToTransport: true
+      error: Error
+    }
+
+const ACCEPTED: MultiplexerWriteSettlement = { outcome: 'accepted' }
+
+function transportRefusal(reason: WriteRefusalReason, error: Error): MultiplexerWriteSettlement {
+  return { outcome: 'refused', reason, error }
+}
 
 export type MultiplexerTransport = {
-  write: (data: Buffer, onSettled?: (result: MultiplexerWriteSettlement) => void) => boolean | void
+  write: (
+    data: Buffer,
+    onSettled?: (result: MultiplexerTransportWriteResult) => void
+  ) => boolean | void
   onData: (cb: (data: Buffer) => void) => void
   onClose: (cb: () => void) => void
   onDrain?: (cb: () => void) => void | (() => void)
@@ -75,7 +101,7 @@ export class SshMultiplexerTransportWriter {
   ): boolean {
     const settle = onceSettlement(onSettled)
     if (this.closed) {
-      settle({ ok: false, error: new Error('Multiplexer writer is closed') })
+      settle(transportRefusal('transport_disposed', new Error('Multiplexer writer is closed')))
       return false
     }
     if (lane === 'liveness' && this.livenessOutstanding) {
@@ -83,7 +109,7 @@ export class SshMultiplexerTransportWriter {
     }
     const admissionError = this.admissionError(data.length, lane)
     if (admissionError) {
-      settle({ ok: false, error: admissionError })
+      settle(transportRefusal('transport_queue_full', admissionError))
       this.fail(admissionError)
       return false
     }
@@ -107,10 +133,10 @@ export class SshMultiplexerTransportWriter {
     this.removeDrainListener?.()
     this.removeDrainListener = null
     for (const entry of this.scheduler.clear()) {
-      this.release(entry, { ok: false, error })
+      this.release(entry, transportRefusal('transport_rejected_before_handoff', error))
     }
     for (const entry of Array.from(this.inFlight)) {
-      this.release(entry, { ok: false, error })
+      this.release(entry, transportRefusal('transport_rejected_before_handoff', error))
     }
     this.settleOnDrain.clear()
   }
@@ -149,12 +175,15 @@ export class SshMultiplexerTransportWriter {
     this.inFlight.add(entry)
     let callbackResult: MultiplexerWriteSettlement | undefined
     let writeReturned = false
-    const onWriteSettled = (result: MultiplexerWriteSettlement): void => {
+    const onWriteSettled = (result: MultiplexerTransportWriteResult): void => {
+      const settlement = result.ok
+        ? ACCEPTED
+        : transportRefusal('transport_rejected_before_handoff', result.error)
       if (!writeReturned) {
-        callbackResult = result
+        callbackResult = settlement
         return
       }
-      this.handleWriteSettlement(entry, result)
+      this.handleWriteSettlement(entry, settlement)
     }
     try {
       this.writing = true
@@ -170,10 +199,10 @@ export class SshMultiplexerTransportWriter {
         if (this.transport.supportsWriteSettlement !== true && this.saturated) {
           this.settleOnDrain.add(entry)
         } else if (this.transport.supportsWriteSettlement !== true) {
-          this.handleWriteSettlement(entry, { ok: true })
+          this.handleWriteSettlement(entry, ACCEPTED)
         }
       } else if (this.transport.supportsWriteSettlement !== true) {
-        this.handleWriteSettlement(entry, { ok: true })
+        this.handleWriteSettlement(entry, ACCEPTED)
       }
       if (callbackResult) {
         this.handleWriteSettlement(entry, callbackResult)
@@ -193,7 +222,7 @@ export class SshMultiplexerTransportWriter {
       return
     }
     this.release(entry, result)
-    if (!result.ok) {
+    if (result.outcome !== 'accepted') {
       this.fail(result.error)
       return
     }
@@ -213,7 +242,7 @@ export class SshMultiplexerTransportWriter {
     }
     this.setSaturated(false)
     for (const entry of Array.from(this.settleOnDrain)) {
-      this.release(entry, { ok: true })
+      this.release(entry, ACCEPTED)
     }
     this.settleOnDrain.clear()
     this.pump()
@@ -237,6 +266,16 @@ export class SshMultiplexerTransportWriter {
       return
     }
     entry.settled = true
+    // A transport failure after write started cannot prove the peer received no bytes.
+    const settlement: MultiplexerWriteSettlement =
+      result.outcome === 'refused' && this.inFlight.has(entry)
+        ? {
+            outcome: 'unverifiable',
+            reason: 'transport_settlement_lost',
+            bytesHandedToTransport: true,
+            error: result.error
+          }
+        : result
     this.inFlight.delete(entry)
     this.settleOnDrain.delete(entry)
     if (entry.lane === 'ordinary') {
@@ -249,7 +288,7 @@ export class SshMultiplexerTransportWriter {
     if (entry.lane === 'liveness') {
       this.livenessOutstanding = false
     }
-    entry.onSettled(result)
+    entry.onSettled(settlement)
   }
 
   private setSaturated(saturated: boolean): void {

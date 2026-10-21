@@ -1,3 +1,4 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -107,6 +108,22 @@ describe('resolveOrcadInstallRoot', () => {
     expect(resolveOrcadInstallRoot(join('out', 'orcad', 'orcad.js'))).toBe(
       join(process.cwd(), 'out', 'orcad')
     )
+  })
+
+  // STA-5495: siblings such as the watcher entry ship beside the bundle, not beside the link.
+  it.skipIf(process.platform === 'win32')('follows a symlinked script to the real bundle', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orcad-install-root-')))
+    try {
+      const bundle = join(root, 'slot')
+      const bin = join(root, 'bin')
+      mkdirSync(bundle)
+      mkdirSync(bin)
+      writeFileSync(join(bundle, 'orcad.js'), '')
+      symlinkSync(join(bundle, 'orcad.js'), join(bin, 'orcad'))
+      expect(resolveOrcadInstallRoot(join(bin, 'orcad'))).toBe(bundle)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('refuses instead of guessing when the process has no main script', () => {

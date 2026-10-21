@@ -12,7 +12,8 @@ import {
   recordWebSessionTerminalPlacement,
   resetWebSessionTerminalPlacementsForTests
 } from './web-session-terminal-placement'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { reconcileClientOwnedTabPlacement } from './web-session-client-owned-tab-placement'
 import {
   ENV,
@@ -241,15 +242,13 @@ describe('client-owned tab placement for paired worktrees', () => {
       groupId: PREVIEW_GROUP
     })
 
-    const patch = applyWebSessionTabsSnapshot(
-      splitClientState(),
-      ambientSplitSnapshot(),
-      ENV,
-      NOW
-    ) as Partial<WebSessionTabsSyncState>
+    const state = splitClientState()
+    const patch = applyWebSessionTabsSnapshot(state, ambientSplitSnapshot(), ENV, NOW)
+    // An omitted groups patch means the snapshot left every group as it was.
+    const next = { ...state, ...patch }
 
-    expect(groupById(patch, HOST_GROUP)?.activeTabId).toBe(T2)
-    expect(groupById(patch, PREVIEW_GROUP)?.activeTabId).toBe(BROWSER_HOST_TAB)
+    expect(groupById(next, HOST_GROUP)?.activeTabId).toBe(T2)
+    expect(groupById(next, PREVIEW_GROUP)?.activeTabId).toBe(BROWSER_HOST_TAB)
   })
 
   it('keeps the client-focused group focused across repeated ambient snapshots', () => {

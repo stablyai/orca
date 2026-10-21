@@ -26,12 +26,15 @@ function readDaemonEndpointIdentity(
 
 export async function holdDaemonAdoptionLease(
   handle: DaemonProcessHandle,
-  socketPath: string,
-  tokenPath: string,
-  connectedClient?: DaemonClient,
-  expectedIdentity?: DaemonEndpointIdentity,
-  pidPath?: string
+  options: {
+    socketPath: string
+    tokenPath: string
+    pidPath: string
+    connectedClient?: DaemonClient
+    expectedIdentity?: DaemonEndpointIdentity
+  }
 ): Promise<DaemonProcessHandle> {
+  const { socketPath, tokenPath, pidPath, connectedClient, expectedIdentity } = options
   const client = connectedClient ?? new DaemonClient({ socketPath, tokenPath })
   try {
     await client.ensureConnected()

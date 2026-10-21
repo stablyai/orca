@@ -91,7 +91,7 @@ export async function waitForAgentReady(
     }
 
     try {
-      const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
+      const process = await inspectRuntimeTerminalProcess(ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return { ready: true, reason: 'foreground-match' }

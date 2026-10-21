@@ -1,5 +1,5 @@
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'

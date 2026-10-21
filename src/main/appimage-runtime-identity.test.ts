@@ -161,12 +161,6 @@ describe.skipIf(process.platform === 'win32')('resolveAppImageRuntimeIdentity', 
     expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
   })
 
-  it('rejects forged AppImage variables around an ordinary packaged layout', () => {
-    const fixture = createFixture()
-    rmSync(join(fixture.appDirPath, 'AppRun'))
-    expect(resolveAppImageRuntimeIdentity(fixture.identity)).toBeNull()
-  })
-
   it('rejects a package marker for a different application', () => {
     const fixture = createFixture()
     writeFileSync(

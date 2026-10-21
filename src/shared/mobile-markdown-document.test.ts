@@ -3,6 +3,7 @@ import {
   hashMarkdownContent,
   isMarkdownContentByteLengthOverLimit,
   MOBILE_MARKDOWN_EDIT_MAX_BYTES,
+  MOBILE_MARKDOWN_READ_MAX_BYTES,
   utf8ByteLength
 } from './mobile-markdown-document'
 
@@ -44,5 +45,10 @@ describe('mobile markdown document byte accounting', () => {
 
   it('keeps content hashes prefixed with exact byte length', () => {
     expect(hashMarkdownContent('😀')).toMatch(/^content:4:/)
+  })
+
+  it('keeps the read budget above the edit budget', () => {
+    // Behavioural pin for truncated => not editable: the bridge's over-budget read test.
+    expect(MOBILE_MARKDOWN_READ_MAX_BYTES).toBeGreaterThan(MOBILE_MARKDOWN_EDIT_MAX_BYTES)
   })
 })

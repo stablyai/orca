@@ -68,7 +68,8 @@ function Harness({
   onSelect = vi.fn(),
   onJump = vi.fn(),
   onMarkRead = vi.fn(),
-  onMarkUnread = vi.fn()
+  onMarkUnread = vi.fn(),
+  onClear
 }: {
   thread: AgentPaneThread
   selected?: boolean
@@ -76,6 +77,7 @@ function Harness({
   onJump?: () => void
   onMarkRead?: () => void
   onMarkUnread?: () => void
+  onClear?: (thread: AgentPaneThread) => void
 }): ReactElement {
   return (
     <TooltipProvider>
@@ -86,6 +88,7 @@ function Harness({
         onJump={onJump}
         onMarkRead={onMarkRead}
         onMarkUnread={onMarkUnread}
+        onClear={onClear}
         canJump={true}
         compactMode={false}
       />
@@ -148,6 +151,30 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('clears from a keyboard-reachable row action without selecting the row', async () => {
+    const thread = createTestThread()
+    const onClear = vi.fn()
+    const onSelect = vi.fn()
+
+    await act(async () => {
+      root.render(<Harness thread={thread} onClear={onClear} onSelect={onSelect} />)
+    })
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear notification"]'
+    )
+    expect(clearButton).not.toBeNull()
+    expect(clearButton?.className).toContain('focus-visible:opacity-100')
+    expect(clearButton?.className).toContain('can-hover:pointer-events-none')
+    expect(clearButton?.className).toContain('can-hover:group-hover:pointer-events-auto')
+    expect(clearButton?.className).not.toContain('invisible')
+
+    act(() => clearButton?.click())
+
+    expect(onClear).toHaveBeenCalledWith(thread)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('renders hover card content with workspace info, host, task details, and notes', async () => {
     const thread = createTestThread({
       worktree: {
@@ -186,6 +213,23 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     // Notes
     expect(content).toContain('Notes')
     expect(content).toContain('Performance investigation notes')
+  })
+
+  it('keeps the preview closed while suppressed by the row menu', async () => {
+    const renderCard = (suppressed: boolean) =>
+      root.render(
+        <TooltipProvider>
+          <ActivityThreadHoverCard thread={createTestThread()} suppressed={suppressed}>
+            <div data-testid="hover-trigger">Hover Target</div>
+          </ActivityThreadHoverCard>
+        </TooltipProvider>
+      )
+
+    await act(async () => renderCard(true))
+    expect(container.querySelector('[data-testid="hover-card-content"]')).toBeNull()
+
+    await act(async () => renderCard(false))
+    expect(container.querySelector('[data-testid="hover-card-content"]')).not.toBeNull()
   })
 
   it('allows clicking row while preventing inner hover interactions from bubbling', async () => {
@@ -234,5 +278,36 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     })
 
     expect(onJump).toHaveBeenCalledWith(thread)
+  })
+
+  it('flattens code blocks and tables in the reply preview so the line clamp cuts them', async () => {
+    const thread = createTestThread({
+      currentAgentState: null,
+      responsePreview:
+        'KK1-START\n\n```\n| metric | base median |\n| --- | --- |\n| p2 | 12 |\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |'
+    })
+
+    await act(async () => {
+      root.render(<Harness thread={thread} />)
+    })
+
+    const pre = container.querySelector('pre')
+    const table = container.querySelector('table')
+    expect(pre).not.toBeNull()
+    expect(table).not.toBeNull()
+    const preview = pre?.closest<HTMLElement>('.line-clamp-3')
+    expect(preview).not.toBeNull()
+    expect(preview?.contains(table ?? null)).toBe(true)
+    // Why: the compact renderers draw both as scroll boxes; the row must undo that.
+    const previewClasses = preview?.className.split(/\s+/) ?? []
+    expect(previewClasses).toEqual(
+      expect.arrayContaining([
+        '[&_pre]:!max-h-none',
+        '[&_pre]:!overflow-visible',
+        '[&_pre]:!whitespace-normal',
+        '[&_div]:!overflow-visible',
+        '[&_:is(table,thead,tbody,tr,th,td)]:!inline'
+      ])
+    )
   })
 })

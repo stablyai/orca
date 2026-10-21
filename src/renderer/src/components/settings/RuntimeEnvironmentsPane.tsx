@@ -2,27 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
 import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
-import { CloudVmSetupGuide } from './CloudVmSetupGuide'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
 } from './runtime-environments-search'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import { RuntimeServersConnectSection } from './runtime-servers-connect-section'
-import { RuntimeActiveServerSection } from './runtime-active-server-section'
 import {
   RuntimeEnvironmentRemoveDialog,
   RuntimeEnvironmentSwitchDialog
 } from './runtime-environment-dialogs'
-import {
-  RuntimeServerShareSection,
-  RuntimeServerTroubleshooting,
-  RuntimeServerWorkflowPicker,
-  type RemoteServerWorkflow
-} from './runtime-server-workflow-sections'
+import { RuntimeAddServerDialog } from './runtime-add-server-dialog'
+import { RuntimeDefaultHostRow } from './runtime-default-host-row'
+import { RuntimeInstallServerDialog } from './runtime-install-server-dialog'
+import { RuntimeServerList } from './runtime-server-list'
+import { useRuntimeServersPage } from './runtime-servers-page-context'
+import { WslHostsSection } from './WslHostsSection'
+import { useManagedServerCatalog } from './use-managed-server-catalog'
 import { useRuntimeEnvironmentCatalog } from './use-runtime-environment-catalog'
 import { useRuntimeEnvironmentConnectionActions } from './use-runtime-environment-connection-actions'
 import { useRuntimeEnvironmentMutationActions } from './use-runtime-environment-mutation-actions'
@@ -56,14 +54,10 @@ export function RuntimeEnvironmentsPane({
   allowLocalRuntime = true,
   addServerIntentSignal
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
+  const { dialog, setDialog } = useRuntimeServersPage()
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
-  const [addServerFormOpen, setAddServerFormOpen] = useState(false)
-  const [shareServerFormOpen, setShareServerFormOpen] = useState(true)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [workflow, setWorkflow] = useState<RemoteServerWorkflow>('connect')
   const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
-  const remoteServerUpdatesChecking = useAppStore((state) => state.remoteServerUpdatesChecking)
   const remoteServerUpdatesRunning = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refreshRemoteServerUpdates = useAppStore((state) => state.refreshRemoteServerUpdates)
   const setRemoteServerUpdateDialogOpen = useAppStore(
@@ -78,15 +72,23 @@ export function RuntimeEnvironmentsPane({
     mountedRef,
     loadEnvironments
   } = useRuntimeEnvironmentCatalog()
+  const managedCatalog = useManagedServerCatalog(environments, () => void loadEnvironments())
 
   const getEnvironmentLabel = (value: string): string => {
     if (value === LOCAL_RUNTIME_VALUE) {
-      return 'Local desktop'
+      return translate('auto.components.settings.serverList.thisComputer', 'This computer')
     }
     if (value === NO_RUNTIME_VALUE) {
-      return 'No server connected'
+      return translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.b07070ed3c',
+        'No server connected'
+      )
     }
-    return environments.find((environment) => environment.id === value)?.name ?? 'remote server'
+    // Why the store: the default may be a WSL host, which the listed servers leave out.
+    return (
+      useAppStore.getState().runtimeEnvironments.find((environment) => environment.id === value)
+        ?.name ?? 'remote server'
+    )
   }
   const {
     connectingId,
@@ -119,11 +121,10 @@ export function RuntimeEnvironmentsPane({
     addEnvironment,
     removeEnvironment
   } = useRuntimeEnvironmentMutationActions({
-    environments,
     settings,
     allowLocalRuntime,
     mountedRef,
-    setAddServerFormOpen,
+    setAddServerFormOpen: (open) => setDialog(open ? 'add' : null),
     loadEnvironments,
     connectEnvironment
   })
@@ -140,10 +141,16 @@ export function RuntimeEnvironmentsPane({
       return
     }
     consumedAddServerIntentSignalRef.current = addServerIntentSignal
-    // Why: composer deep-links should land on the existing pairing form, not just
-    // the server list.
-    setAddServerFormOpen(true)
-  }, [addServerIntentSignal])
+    // Why: composer deep-links should land on the pairing form, not just the server list.
+    setDialog('add')
+  }, [addServerIntentSignal, setDialog])
+  const managedReload = managedCatalog.reload
+  useEffect(() => {
+    // Why: SSH hosts and unfinished moves change on the SSH Hosts page while this one is mounted.
+    if (dialog === 'install') {
+      void managedReload().catch(() => {})
+    }
+  }, [dialog, managedReload])
 
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
@@ -160,12 +167,11 @@ export function RuntimeEnvironmentsPane({
   const searchEntry = canGeneratePairingUrl
     ? getRuntimeEnvironmentsSearchEntry()
     : getWebRuntimeEnvironmentsSearchEntry()
-  const visibleWorkflow: RemoteServerWorkflow = addServerFormOpen ? 'connect' : workflow
-
-  const openRemoveDialog = (environment: PublicKnownRuntimeEnvironment): void => {
-    setRemoveError(null)
-    setPendingRemove(environment)
+  const reloadAll = (): void => {
+    void loadEnvironments()
+    void managedCatalog.reload().catch(() => {})
   }
+
   const confirmSwitch = (): void => {
     const value = pendingSwitchValue
     if (!value) {
@@ -176,6 +182,10 @@ export function RuntimeEnvironmentsPane({
         setPendingSwitchValue(null)
       }
     })
+  }
+  const requestSwitch = (value: string): void => {
+    setSwitchError(null)
+    setPendingSwitchValue(value)
   }
   const confirmRemove = (): void => {
     const environment = pendingRemove
@@ -194,79 +204,87 @@ export function RuntimeEnvironmentsPane({
       title={searchEntry.title}
       description={searchEntry.description}
       keywords={searchEntry.keywords}
-      className="space-y-4 py-2"
+      className="max-w-none space-y-6"
     >
-      <RuntimeServerWorkflowPicker
-        canGeneratePairingUrl={canGeneratePairingUrl}
-        visibleWorkflow={visibleWorkflow}
-        onCloseAddServerForm={closeAddServerForm}
-        onWorkflowChange={setWorkflow}
+      <RuntimeDefaultHostRow
+        allowLocalRuntime={allowLocalRuntime}
+        activeValue={activeValue}
+        environments={environments}
+        isBusy={isBusy}
+        onValueChange={requestSwitch}
       />
 
-      <RuntimeServersConnectSection
-        visible={visibleWorkflow === 'connect'}
+      <RuntimeServerList
         environments={environments}
         detailsByEnvironmentId={detailsByEnvironmentId}
         activeRuntimeEnvironmentId={settings.activeRuntimeEnvironmentId}
-        addServerFormOpen={addServerFormOpen}
-        name={name}
-        pairingCode={pairingCode}
-        addServerFailure={addServerFailure}
-        isBusy={isBusy}
         remoteServerUpdates={remoteServerUpdates}
-        remoteServerUpdatesChecking={remoteServerUpdatesChecking}
         remoteServerUpdatesRunning={remoteServerUpdatesRunning}
         connectingId={connectingId}
         switchingValue={switchingValue}
         disconnectingId={disconnectingId}
         removingId={removingId}
-        onOpenAddServerForm={() => setAddServerFormOpen(true)}
-        onCloseAddServerForm={closeAddServerForm}
+        isBusy={isBusy}
+        managedCatalog={managedCatalog}
+        onOpenUpdate={() => setRemoteServerUpdateDialogOpen(true)}
+        onConnect={(environment) => void connectEnvironment(environment)}
+        onDisconnect={(environment) => void disconnectEnvironment(environment)}
+        onRemove={(environment) => {
+          setRemoveError(null)
+          setPendingRemove(environment)
+        }}
+        onMakeDefault={(environment) => requestSwitch(environment.id)}
+        onCheckForUpdates={(options) => {
+          setRemoteServerUpdateDialogOpen(true)
+          void refreshRemoteServerUpdates(options)
+        }}
+        onRecheck={() => void loadEnvironments()}
+        rechecking={isLoading}
+        onChanged={reloadAll}
+      />
+
+      {managedCatalog.loadFailed ? (
+        <p className="text-xs text-destructive">
+          {translate(
+            'auto.components.settings.managedServers.loadFailed',
+            'Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.'
+          )}
+        </p>
+      ) : null}
+
+      {/* Why gated on the managed API: WSL hosts, like managed servers, need the desktop. */}
+      {managedCatalog.api ? <WslHostsSection onChanged={reloadAll} /> : null}
+
+      <EphemeralVmRuntimesSection />
+
+      <RuntimeAddServerDialog
+        open={dialog === 'add'}
+        name={name}
+        accessLink={pairingCode}
+        busy={isBusy}
+        failure={addServerFailure}
         onNameChange={setName}
-        onPairingCodeChange={(value) => {
+        onAccessLinkChange={(value) => {
           setPairingCode(value)
           setAddServerFailure(null)
         }}
-        onAddEnvironment={(allowLoopback) => void addEnvironment(allowLoopback)}
-        onOpenUpdateDialog={() => setRemoteServerUpdateDialogOpen(true)}
-        refreshRemoteServerUpdates={refreshRemoteServerUpdates}
-        onConnect={(environment) => void connectEnvironment(environment)}
-        onDisconnect={(environment) => void disconnectEnvironment(environment)}
-        onRemove={openRemoveDialog}
+        onClose={closeAddServerForm}
+        onSubmit={(allowLoopback) => void addEnvironment(allowLoopback)}
       />
 
-      <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
-        <CloudVmSetupGuide />
-        <EphemeralVmRuntimesSection active={visibleWorkflow === 'cloud-vm'} />
-      </div>
-
-      <RuntimeActiveServerSection
-        visible={visibleWorkflow === 'connect'}
-        advancedOpen={advancedOpen}
-        allowLocalRuntime={allowLocalRuntime}
-        localRuntimeValue={LOCAL_RUNTIME_VALUE}
-        noRuntimeValue={NO_RUNTIME_VALUE}
-        activeValue={activeValue}
-        environments={environments}
-        detailsByEnvironmentId={detailsByEnvironmentId}
-        isBusy={isBusy}
-        isLoading={isLoading}
-        onToggleAdvanced={() => setAdvancedOpen((current) => !current)}
-        onValueChange={(value) => {
-          setSwitchError(null)
-          setPendingSwitchValue(value)
-        }}
-        onRefresh={() => void loadEnvironments()}
-      />
-
-      {visibleWorkflow === 'share' && canGeneratePairingUrl ? (
-        <RuntimeServerShareSection
-          shareServerFormOpen={shareServerFormOpen}
-          onToggleShareServerForm={() => setShareServerFormOpen((open) => !open)}
+      {managedCatalog.api ? (
+        <RuntimeInstallServerDialog
+          open={dialog === 'install'}
+          api={managedCatalog.api}
+          emptyTargets={managedCatalog.emptyTargets}
+          loadFailed={managedCatalog.loadFailed}
+          onOpenChange={(open) => setDialog(open ? 'install' : null)}
+          onDeployed={async () => {
+            void loadEnvironments()
+            await managedCatalog.reload()
+          }}
         />
       ) : null}
-
-      {visibleWorkflow === 'connect' ? <RuntimeServerTroubleshooting /> : null}
 
       <RuntimeEnvironmentSwitchDialog
         pendingSwitchValue={pendingSwitchValue}

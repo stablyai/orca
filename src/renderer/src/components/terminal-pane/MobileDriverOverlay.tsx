@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
-import { Smartphone } from 'lucide-react'
+import { Minimize2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
@@ -92,26 +93,22 @@ export function MobileDriverOverlay({
   if (isHeldAtPhoneFit) {
     return (
       <LoudOverlay
-        eyebrow={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.f2a8b9c1d3',
-          'From your phone'
-        )}
         title={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.faa367dc74',
-          'Your phone left this at phone size'
+          'auto.components.terminal.pane.MobileDriverOverlay.4b7e1c9a20',
+          'Still sized for your phone'
         )}
         body={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.a6b1d8f3e2',
-          'Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size.'
+          'auto.components.terminal.pane.MobileDriverOverlay.9d2f6a3e58',
+          'Your phone session ended. Restore to fit this window.'
         )}
         actionLabel={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.b3d8e1f42a',
-          'Restore this terminal'
+          'auto.components.terminal.pane.MobileDriverOverlay.1e5c8b7d43',
+          'Restore'
         )}
         actionPending={actionPending}
         allActionLabel={translate(
-          'auto.components.terminal.pane.MobileDriverOverlay.e8c4f2a91b',
-          'Restore all terminals'
+          'auto.components.terminal.pane.MobileDriverOverlay.6a3d9f2c71',
+          'Restore all'
         )}
         allActionPending={allActionPending}
         onAction={handleAction}
@@ -137,26 +134,22 @@ export function MobileDriverOverlay({
 
   return (
     <LoudOverlay
-      eyebrow={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.f2a8b9c1d3',
-        'From your phone'
-      )}
       title={translate(
         'auto.components.terminal.pane.MobileDriverOverlay.c7e4a2b8f1',
         'Your phone is in control'
       )}
       body={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.d9f3c6e2a4',
-        'Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.'
+        'auto.components.terminal.pane.MobileDriverOverlay.8c1a5e9f36',
+        'Desktop typing is paused. Output keeps streaming.'
       )}
       actionLabel={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.c8f2e1a4b9',
-        'Take back this terminal'
+        'auto.components.terminal.pane.MobileDriverOverlay.c6460cf584',
+        'Take back'
       )}
       actionPending={actionPending}
       allActionLabel={translate(
-        'auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d',
-        'Take back all terminals'
+        'auto.components.terminal.pane.MobileDriverOverlay.2f7b4d1e95',
+        'Take back all'
       )}
       allActionPending={allActionPending}
       onAction={handleAction}
@@ -170,7 +163,6 @@ export function MobileDriverOverlay({
 }
 
 type LoudOverlayProps = {
-  eyebrow: string
   title: string
   body: string
   actionLabel: string
@@ -186,7 +178,6 @@ type LoudOverlayProps = {
 }
 
 function LoudOverlay({
-  eyebrow,
   title,
   body,
   actionLabel,
@@ -201,6 +192,10 @@ function LoudOverlay({
   rootClassName
 }: LoudOverlayProps): ReactElement {
   const titleId = useId()
+  const collapseLabel = translate(
+    'auto.components.terminal.pane.MobileDriverOverlay.3a9c5f7e12',
+    'Minimize'
+  )
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
   const actionRef = useRef<HTMLButtonElement>(null)
@@ -236,68 +231,67 @@ function LoudOverlay({
         rootClassName
       )}
     >
-      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
-        <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              'flex size-10 shrink-0 items-center justify-center rounded-full border border-border',
-              tone === 'driving' ? 'bg-muted' : 'bg-muted/60'
-            )}
-          >
-            <Smartphone className="size-5 text-foreground" aria-hidden="true" />
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div
-              className={cn(
-                'flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide',
-                tone === 'driving' ? 'text-foreground' : 'text-muted-foreground'
-              )}
-            >
-              {tone === 'driving' ? (
-                <span aria-hidden="true" className="size-1.5 rounded-full bg-foreground" />
-              ) : null}
-              <span>{eyebrow}</span>
-            </div>
-            <div id={titleId} className="text-base font-semibold leading-tight">
-              {title}
-            </div>
-          </div>
+      <div className="pointer-events-auto relative flex w-full max-w-sm gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-floating">
+        <div className="relative mt-0.5 shrink-0">
+          <Smartphone className="size-4 text-muted-foreground" aria-hidden="true" />
+          {tone === 'driving' ? (
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 size-1.5 animate-pulse rounded-full bg-foreground ring-2 ring-card"
+            />
+          ) : null}
         </div>
-        <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {body}
-        </div>
-        <div className="mt-1 flex flex-wrap justify-end gap-2">
-          {onCollapse && (
-            <Button type="button" variant="outline" size="sm" onClick={onCollapse}>
-              {translate(
-                'auto.components.terminal.pane.MobileDriverOverlay.7cffad954c',
-                'Collapse'
-              )}
-            </Button>
-          )}
-          {onAllAction && allActionLabel ? (
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div id={titleId} className="pr-6 text-sm font-semibold leading-5">
+            {title}
+          </div>
+          <div id={bodyId} className="mt-0.5 text-sm text-muted-foreground">
+            {body}
+          </div>
+          <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+            {onAllAction && allActionLabel ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onAllAction}
+                disabled={actionPending || allActionPending}
+              >
+                {allActionLabel}
+              </Button>
+            ) : null}
+            {/* Focus is moved to this button only when no user input is active; see effect above. */}
             <Button
+              ref={actionRef}
               type="button"
-              variant="outline"
+              variant="default"
               size="sm"
-              onClick={onAllAction}
+              onClick={onAction}
               disabled={actionPending || allActionPending}
             >
-              {allActionLabel}
+              {actionLabel}
             </Button>
-          ) : null}
-          {/* Focus is moved to this button only when no user input is active; see effect above. */}
-          <Button
-            ref={actionRef}
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={onAction}
-            disabled={actionPending || allActionPending}
-          >
-            {actionLabel}
-          </Button>
+          </div>
         </div>
+        {onCollapse && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="absolute right-2 top-2"
+                aria-label={collapseLabel}
+                onClick={onCollapse}
+              >
+                <Minimize2 />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {collapseLabel}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   )

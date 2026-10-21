@@ -8,7 +8,11 @@ export class BrowserClientHostCommandResultCache {
     private readonly maxTotal: number
   ) {}
 
-  record(page: PageState, record: CommandRecord): void {
+  record(page: PageState, record: CommandRecord, retain = true): void {
+    if (!retain) {
+      this.evict(page, record.event.commandSequence, record)
+      return
+    }
     page.settledSequences.push(record.event.commandSequence)
     this.pagesByRecord.set(record, page)
     while (page.settledSequences.length > this.maxPerPage) {

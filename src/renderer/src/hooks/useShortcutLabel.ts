@@ -94,6 +94,20 @@ export function formatOptionalShortcutLabel(
   })
 }
 
+// Why: primary-only companion to formatOptionalShortcutLabel, for menus that list
+// one alias — null instead of the 'Unassigned' sentinel keeps callers from
+// comparing against formatter copy.
+export function formatOptionalPrimaryShortcutLabel(
+  actionId: KeybindingActionId,
+  overrides?: KeybindingOverrides
+): string | null {
+  const platform = getShortcutPlatform()
+  return memoizeShortcut('optionalPrimary', actionId, platform, overrides, () => {
+    const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+    return binding ? formatKeybindingList([binding], platform) : null
+  })
+}
+
 export function useOptionalShortcutLabel(actionId: KeybindingActionId): string | null {
   const keybindings = useAppStore((state) => state.keybindings)
   return formatOptionalShortcutLabel(actionId, keybindings)

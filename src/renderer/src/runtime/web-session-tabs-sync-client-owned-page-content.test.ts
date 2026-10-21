@@ -3,11 +3,9 @@ import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-work
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
-import {
-  applyWebSessionTabsSnapshot,
-  resolveHostSessionTabIdForWebSessionTab,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { resetBrowserClientHostIdForTests } from './browser-client-host-identity'
 import {
   ENV,
@@ -256,24 +254,6 @@ describe('browser rows this client hosts own their page content', () => {
     const state = stateWithLocalRow()
 
     expect(syncedPage(applyStaleSnapshot(state), state)?.url).toBe(GUEST_URL)
-  })
-
-  it('keeps the local loading flag instead of the host create-time value', () => {
-    const state = stateWithLocalRow()
-
-    expect(syncedPage(applyStaleSnapshot(state), state)?.loading).toBe(false)
-  })
-
-  it('keeps local canGoBack instead of the host default', () => {
-    const state = stateWithLocalRow()
-
-    expect(syncedPage(applyStaleSnapshot(state), state)?.canGoBack).toBe(true)
-  })
-
-  it('keeps local canGoForward instead of the host default', () => {
-    const state = stateWithLocalRow()
-
-    expect(syncedPage(applyStaleSnapshot(state), state)?.canGoForward).toBe(true)
   })
 
   // Why a real title is covered separately: a host that has learned the title publishes a

@@ -12,8 +12,12 @@ export type RightSidebarState = {
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarRouteRequestId: number
+  /** Set to ask the Agent Session Search panel to widen to all computers and focus its box. */
+  aiVaultSearchFocusRequested: boolean
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
+  /** In memory: the tab the mounted sidebar renders, which differs from rightSidebarTab when that tab is hidden here. */
+  rightSidebarEffectiveTab: ActiveRightSidebarTab | null
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -25,6 +29,9 @@ export type RightSidebarState = {
     query?: string | null
     includePattern?: string | null
   }) => void
+  showAiVaultSearch: () => void
+  clearAiVaultSearchFocusRequest: () => void
+  setRightSidebarEffectiveTab: (tab: ActiveRightSidebarTab | null) => void
   setActivityBarPosition: (position: ActivityBarPosition) => void
 }
 
@@ -35,8 +42,10 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarRouteRequestId: 0,
+    aiVaultSearchFocusRequested: false,
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
+    rightSidebarEffectiveTab: null,
     activityBarPosition: 'top',
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
@@ -124,6 +133,17 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
           }
         }
       }),
+    // Settings sends the user here; the panel owns scope, so this asks rather than writes.
+    showAiVaultSearch: () =>
+      set((s) => ({
+        rightSidebarOpen: true,
+        rightSidebarTab: 'vault' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+        aiVaultSearchFocusRequested: true
+      })),
+    clearAiVaultSearchFocusRequest: () => set({ aiVaultSearchFocusRequested: false }),
+    setRightSidebarEffectiveTab: (tab) =>
+      set((s) => (s.rightSidebarEffectiveTab === tab ? {} : { rightSidebarEffectiveTab: tab })),
     setActivityBarPosition: (position) => set({ activityBarPosition: position })
   }
 }

@@ -1,3 +1,7 @@
+import type {
+  AgentSubjectRead,
+  AgentSubjectReadIntent
+} from '@/attention/agent-subject-read-actions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -39,6 +43,8 @@ export type AgentSendPopoverTargetMode = {
   sendingPaneKey?: string
   error?: string
   onPromptDelivered?: () => void
+  /** Told the send's own result the moment the prompt is handed to an agent. */
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export type OpenAgentSendPopoverTargetModeArgs = {
@@ -49,6 +55,7 @@ export type OpenAgentSendPopoverTargetModeArgs = {
   label: string
   launchSource: LaunchSource
   onPromptDelivered?: () => void
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export type TaskPageData = {
@@ -99,6 +106,9 @@ export type NewWorkspaceDraft = {
   linkedGitLabMR?: number | null
   // Why: repo-scoped start ref from the "Start from" picker; absent means "use the repo's effective base ref".
   baseBranch?: string
+  // Why: false when `baseBranch` came from the base-ref picker rather than a branch pick, so restoring the
+  // draft doesn't turn it back into a name-field pill. Absent on pre-flag drafts, which restore as a pick.
+  baseBranchNamesWorkspace?: boolean
   // Why: review worktrees start from a head ref/SHA while Source Control compares against the provider target branch.
   compareBaseRef?: string
 }
@@ -131,7 +141,12 @@ export type UISliceCore = {
   consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
   /** Per-agent "I've looked at this" timestamps (paneKey → ts). A row is unvisited when no ack exists or stateStartedAt is newer than the last ack. Persisted so visited rows don't return bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
-  acknowledgeAgents: (paneKeys: string[]) => void
+  /** `explicit` only from a user action on the row (Mark read, a jump, a dashboard ack). */
+  acknowledgeAgents: (
+    paneKeys: string[],
+    reads?: readonly AgentSubjectRead[],
+    intent?: AgentSubjectReadIntent
+  ) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   /** Per-pane cutoffs used to hide activity entries cleared by the user. */
   activityClearedAtByPaneKey: Record<string, number>

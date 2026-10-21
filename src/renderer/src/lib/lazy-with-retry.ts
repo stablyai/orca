@@ -1,4 +1,12 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import {
+  createElement,
+  lazy,
+  useState,
+  type ComponentProps,
+  type ComponentType,
+  type LazyExoticComponent,
+  type ReactNode
+} from 'react'
 
 import {
   requestLazyChunkRecoveryReload,
@@ -255,4 +263,46 @@ export function lazyWithRetry<T extends AnyComponent>(
   options?: LazyWithRetryOptions
 ): LazyExoticComponent<T> {
   return lazy(() => loadLazyWithRetry(factory, options))
+}
+
+export type PreloadableLazyComponent<T extends AnyComponent> = ComponentType<ComponentProps<T>> & {
+  /** Loads the chunk ahead of first render; failures stay silent so the real render owns recovery. */
+  preload: () => void
+}
+
+/**
+ * lazyWithRetry plus preload(). Once preloaded, the component renders the loaded module
+ * directly instead of through React.lazy, so its first render never suspends: React holds
+ * a newly resolved Suspense reveal for up to 300 ms, which is what made first opens slow.
+ */
+export function lazyWithPreload<T extends AnyComponent>(
+  factory: LazyFactory<T>,
+  options?: LazyWithRetryOptions
+): PreloadableLazyComponent<T> {
+  let loaded: T | null = null
+  const LazyComponent = lazyWithRetry(
+    () =>
+      factory().then((module) => {
+        loaded ??= module.default
+        return module
+      }),
+    options
+  )
+  function PreloadableComponent(props: ComponentProps<T>): ReactNode {
+    // Why: pinned per mount so a module resolving mid-life cannot swap the element type and remount the subtree.
+    const [Component] = useState(() => loaded ?? LazyComponent)
+    return createElement(Component, props)
+  }
+  PreloadableComponent.preload = (): void => {
+    if (loaded) {
+      return
+    }
+    factory().then(
+      (module) => {
+        loaded ??= module.default
+      },
+      () => undefined
+    )
+  }
+  return PreloadableComponent
 }

@@ -14,6 +14,7 @@ import type { AutomationOwnerPrecondition } from '../shared/automation-owner-pre
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
 import { formatAutomationSchedule } from '../shared/automation-schedules'
+import { quoteCliCommandArgument } from './shell-command-quote'
 
 export type AutomationListPayload = {
   automations: Automation[]
@@ -76,6 +77,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `id: ${automation.id}`,
     `name: ${automation.name}`,
     `provider: ${automation.agentId}`,
+    ...(automation.extraAgentArgs ? [`extraAgentArgs: ${automation.extraAgentArgs}`] : []),
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,
@@ -105,17 +107,72 @@ export function formatAutomationRemoved(result: { removed: boolean; id: string }
     : `Automation ${result.id} not removed.`
 }
 
-export function formatAutomationRun(result: { run: AutomationRun }): string {
+function formatAutomationRunAcknowledgement(run: { id: string; status: string }): string {
+  switch (run.status) {
+    case 'pending':
+      return `Queued run ${run.id} (pending).`
+    case 'dispatching':
+      return `Accepted run ${run.id}; launch is still in progress (dispatching).`
+    case 'dispatched':
+      return `Started run ${run.id} (dispatched).`
+    case 'completed':
+      return `Completed run ${run.id}.`
+    case 'dispatch_failed':
+      return `Run ${run.id} failed (dispatch_failed).`
+    case 'skipped_precheck':
+    case 'skipped_missed':
+    case 'skipped_unavailable':
+    case 'skipped_needs_interactive_auth':
+      return `Skipped run ${run.id} (${run.status}).`
+    default:
+      return `Run ${run.id}: ${run.status}.`
+  }
+}
+
+type AutomationRunFollowUpTarget = {
+  environment?: string
+  preserveConnectionSettings?: boolean
+}
+
+function formatAutomationRunFollowUp(
+  automationId: string,
+  target: AutomationRunFollowUpTarget
+): string {
+  const command = ['orca', 'automations', 'runs', '--id', quoteCliCommandArgument(automationId)]
+  // Windows shells can expand a label even inside double quotes.
+  const safeEnvironment =
+    target.environment &&
+    !target.environment.startsWith('--') &&
+    (process.platform !== 'win32' || /^[a-zA-Z0-9._:/@ -]+$/.test(target.environment))
+  if (target.environment && safeEnvironment) {
+    command.push('--environment', quoteCliCommandArgument(target.environment))
+  }
+  const prefix =
+    target.preserveConnectionSettings || (target.environment && !safeEnvironment)
+      ? 'Follow up on the same host and profile (preserve your connection/profile settings)'
+      : 'Follow up'
+  return `${prefix}: ${command.join(' ')}`
+}
+
+export function formatAutomationRun(
+  result: { run: AutomationRun },
+  target: AutomationRunFollowUpTarget = {}
+): string {
   return [
+    formatAutomationRunAcknowledgement(result.run),
     `id: ${result.run.id}`,
     `automationId: ${result.run.automationId}`,
     `title: ${result.run.title}`,
     `status: ${result.run.status}`,
     `trigger: ${result.run.trigger}`,
     `scheduledFor: ${new Date(result.run.scheduledFor).toISOString()}`,
-    `workspaceId: ${result.run.workspaceId ?? 'null'}`,
-    `precheck: ${formatAutomationRunPrecheck(result.run)}`,
-    `error: ${result.run.error ?? 'null'}`
+    ...(result.run.workspaceId ? [`workspaceId: ${result.run.workspaceId}`] : []),
+    ...(result.run.terminalSessionId ? [`terminalSessionId: ${result.run.terminalSessionId}`] : []),
+    ...(result.run.terminalPaneKey ? [`terminalPaneKey: ${result.run.terminalPaneKey}`] : []),
+    ...(result.run.terminalPtyId ? [`terminalPtyId: ${result.run.terminalPtyId}`] : []),
+    ...(result.run.precheckResult ? [`precheck: ${formatAutomationRunPrecheck(result.run)}`] : []),
+    ...(result.run.error ? [`error: ${result.run.error}`] : []),
+    formatAutomationRunFollowUp(result.run.automationId, target)
   ].join('\n')
 }
 
@@ -131,6 +188,14 @@ function formatAutomationRunPrecheck(run: AutomationRun): string {
       : `exit ${result.exitCode ?? 'unknown'}`
   const output = result.stderr.trim() || result.stdout.trim()
   return output ? `${outcome}; ${output}` : outcome
+}
+
+export function formatAutomationRunsPage(result: {
+  runs: AutomationRun[]
+  nextCursor: string | null
+}): string {
+  const runs = formatAutomationRuns(result)
+  return result.nextCursor ? `${runs}\n\nNext page: --cursor ${result.nextCursor}` : runs
 }
 
 export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {

@@ -57,7 +57,7 @@ const baseCtx = (overrides: Partial<MergeContext> = {}): MergeContext => ({
   workspaceSessionReady: true,
   repoDisplayNameById: new Map(),
   repoConnectionIdById: new Map(),
-  repoRuntimeScopedById: new Map(),
+  repoRuntimeHostIdById: new Map(),
   ...overrides
 })
 
@@ -432,10 +432,7 @@ describe('mergeSnapshotAndSessions', () => {
         ['runtime-repo', null],
         ['ssh-repo', 'ssh-target-1']
       ]),
-      repoRuntimeScopedById: new Map([
-        ['runtime-repo', true],
-        ['ssh-repo', false]
-      ])
+      repoRuntimeHostIdById: new Map([['runtime-repo', 'runtime:env-1']])
     })
 
     const out = mergeSnapshotAndSessions(makeSnapshot([runtimeWt]), sessions, ctx)
@@ -460,6 +457,68 @@ describe('mergeSnapshotAndSessions', () => {
     expect(orphan.worktrees[0].sessions[0]).toMatchObject({
       sessionId: 'opaque-local-orphan',
       bound: false
+    })
+  })
+
+  it("lists a paired server's own samples under the projects it hosts, read-only", () => {
+    const serverWt: WorktreeMemory = {
+      worktreeId: 'runtime-repo::/srv/Wt',
+      worktreeName: 'Wt',
+      repoId: 'runtime-repo',
+      repoName: 'server-name',
+      cpu: 7,
+      memory: 700,
+      history: [600, 700],
+      sessions: [{ sessionId: 'server-pty', paneKey: null, pid: 9, cpu: 7, memory: 700 }]
+    }
+    const strangerWt: WorktreeMemory = {
+      ...serverWt,
+      worktreeId: 'local-repo::/srv/Other',
+      repoId: 'local-repo',
+      repoName: 'Other',
+      sessions: [{ sessionId: 'stranger-pty', paneKey: null, pid: 10, cpu: 1, memory: 10 }]
+    }
+    const localWt: WorktreeMemory = {
+      ...serverWt,
+      worktreeId: 'local-repo::/Users/me/Wt',
+      repoId: 'local-repo',
+      repoName: 'local',
+      sessions: [{ sessionId: 'local-pty', paneKey: null, pid: 11, cpu: 1, memory: 10 }]
+    }
+    const ctx = baseCtx({
+      repoDisplayNameById: new Map([['runtime-repo', 'Server Project']]),
+      repoRuntimeHostIdById: new Map([['runtime-repo', 'runtime:env-1']]),
+      runtimeHostResources: [
+        { hostId: 'runtime:env-1', hostLabel: 'Lab box', worktrees: [serverWt, strangerWt] }
+      ]
+    })
+
+    // Why: this machine's sweep of the same id must not render under the server's project.
+    const out = mergeSnapshotAndSessions(makeSnapshot([localWt, serverWt]), [], ctx)
+
+    const server = out.find((repo) => repo.repoId === 'runtime-repo')!
+    expect(server).toMatchObject({ repoName: 'Server Project', cpu: 7, memory: 700 })
+    expect(server.worktrees).toHaveLength(1)
+    expect(server.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime-repo::/srv/Wt',
+      isRemote: true,
+      hostLabel: 'Lab box',
+      history: [600, 700]
+    })
+    expect(server.worktrees[0].sessions[0]).toMatchObject({
+      sessionId: 'server-pty',
+      readOnly: true
+    })
+
+    const local = out.find((repo) => repo.repoId === 'local-repo')!
+    expect(local.worktrees.map((wt) => wt.worktreeId)).toEqual(['local-repo::/Users/me/Wt'])
+    expect(local.worktrees[0].sessions[0].readOnly).toBeUndefined()
+
+    // A server row this client places elsewhere keeps its own host-qualified group.
+    const stranger = out.find((repo) => repo.repoId === 'runtime:env-1|local-repo')!
+    expect(stranger.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime:env-1|local-repo::/srv/Other',
+      hostLabel: 'Lab box'
     })
   })
 
@@ -572,4 +631,131 @@ describe('mergeSnapshotAndSessions', () => {
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], ctx)
     expect(out[0].worktrees[0].sessions[0].bound).toBe(false)
   })
+})
+
+it('indexes tab labels when merging a large resource inventory', () => {
+  let reads = 0
+  const tabs = Array.from({ length: 1000 }, (_, i) => ({
+    ...makeTab(`tab-${i}`, `Terminal ${i}`),
+    get id() {
+      reads++
+      return `tab-${i}`
+    },
+    ptyId: `pty-${i}`
+  }))
+  const sessions: DaemonSession[] = tabs.map((_, i) => ({
+    id: `pty-${i}`,
+    cwd: '/repo',
+    title: '',
+    agentOwnership: 'unknown'
+  }))
+  const result = mergeSnapshotAndSessions(
+    null,
+    sessions,
+    baseCtx({ tabsByWorktree: { 'repo::/repo': tabs } })
+  )
+  expect(reads).toBeLessThan(5000)
+  expect(result[0].worktrees[0].sessions.map((session) => session.label)).toEqual(
+    Array.from({ length: 1000 }, (_, i) => `Terminal ${i}`)
+  )
+})
+
+it('does not scan accumulated worktree rows for unrelated daemon sessions', () => {
+  const sessions: DaemonSession[] = Array.from({ length: 1000 }, (_, i) => ({
+    id: `opaque-${i}`,
+    cwd: '',
+    title: '',
+    agentOwnership: 'unknown'
+  }))
+  const find = Array.prototype.find
+  let scanned = 0
+  Array.prototype.find = function (this: unknown[], ...args: Parameters<typeof find>) {
+    const first = this[0] as { sessions?: unknown; hasLocalSamples?: unknown } | undefined
+    if (first?.sessions && first.hasLocalSamples !== undefined) {
+      scanned += this.length
+    }
+    return find.apply(this, args)
+  }
+  let merged: ReturnType<typeof mergeSnapshotAndSessions>
+  try {
+    merged = mergeSnapshotAndSessions(null, sessions, baseCtx())
+  } finally {
+    Array.prototype.find = find
+  }
+  expect(scanned).toBe(0)
+  expect(merged[0].worktrees).toHaveLength(1000)
+  expect(merged[0].worktrees.every((row) => row.sessions[0].agentOwnership === 'unknown')).toBe(
+    true
+  )
+})
+
+const LEAF = '11111111-1111-4111-8111-111111111111'
+
+// The tab index replaces `tabs.findIndex`, which resolves to the first match; a duplicated tab id
+// must not start resolving to the last one and relabel a session with a stranger's title.
+it('resolves a duplicated tab id to the first tab, as the replaced scan did', () => {
+  const first = makeTab('dup', 'First tab')
+  const second = makeTab('dup', 'Second tab')
+  const wt: WorktreeMemory = {
+    worktreeId: 'orca::/Users/me/Triton',
+    worktreeName: 'Triton',
+    repoId: 'orca',
+    repoName: 'ORCA',
+    cpu: 0,
+    memory: 0,
+    history: [],
+    sessions: [{ sessionId: 'pty-1', paneKey: `dup:${LEAF}`, pid: 5, cpu: 0, memory: 0 }]
+  }
+  const out = mergeSnapshotAndSessions(
+    makeSnapshot([wt]),
+    [],
+    baseCtx({ tabsByWorktree: { 'orca::/Users/me/Triton': [first, second] } })
+  )
+  expect(out[0].worktrees[0].sessions[0].label).toBe('First tab')
+})
+
+// A tab id present in another worktree must not leak a label across worktrees.
+it('keeps tab labels scoped to their own worktree', () => {
+  const wt: WorktreeMemory = {
+    worktreeId: 'orca::/Users/me/Triton',
+    worktreeName: 'Triton',
+    repoId: 'orca',
+    repoName: 'ORCA',
+    cpu: 0,
+    memory: 0,
+    history: [],
+    sessions: [{ sessionId: 'pty-1', paneKey: `shared:${LEAF}`, pid: 5, cpu: 0, memory: 0 }]
+  }
+  const out = mergeSnapshotAndSessions(
+    makeSnapshot([wt]),
+    [],
+    baseCtx({ tabsByWorktree: { 'orca::/Users/me/Other': [makeTab('shared', 'Elsewhere')] } })
+  )
+  expect(out[0].worktrees[0].sessions[0].label).toBe('pid 5')
+})
+
+// findWorktreeRow replaces `repo.worktrees.find`, which returns the first row; a snapshot that
+// repeats a worktree must keep later daemon sessions landing on that same first row.
+it('attaches later daemon sessions to the first row of a duplicated worktree', () => {
+  const wt = (name: string): WorktreeMemory => ({
+    worktreeId: 'orca::/Users/me/Triton',
+    worktreeName: name,
+    repoId: 'orca',
+    repoName: 'ORCA',
+    cpu: 0,
+    memory: 0,
+    history: [],
+    sessions: []
+  })
+  const out = mergeSnapshotAndSessions(
+    makeSnapshot([wt('first'), wt('second')]),
+    [{ id: 'orca::/Users/me/Triton@@late', cwd: '', title: '', agentOwnership: 'unknown' }],
+    baseCtx()
+  )
+  expect(out[0].worktrees).toHaveLength(2)
+  expect(out[0].worktrees[0].worktreeName).toBe('first')
+  expect(out[0].worktrees[0].sessions.map((s) => s.sessionId)).toEqual([
+    'orca::/Users/me/Triton@@late'
+  ])
+  expect(out[0].worktrees[1].sessions).toEqual([])
 })

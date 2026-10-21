@@ -221,4 +221,69 @@ describe('createWorktreeChangeRefreshQueue', () => {
 
     expect(handler).not.toHaveBeenCalled()
   })
+
+  it.each([
+    [true, true, true],
+    [true, undefined, undefined],
+    [undefined, true, undefined],
+    [true, false, undefined]
+  ] as const)(
+    'coalesces order hints conservatively (%s followed by %s)',
+    async (firstHint, secondHint, expectedHint) => {
+      const firstRefresh = deferred()
+      const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
+      const queue = createWorktreeChangeRefreshQueue(handler)
+      queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+      queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1', sortOrderOnly: firstHint })
+      queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1', sortOrderOnly: secondHint })
+      firstRefresh.resolve()
+      await flushPromises()
+      expect(handler).toHaveBeenCalledTimes(2)
+      expect(handler).toHaveBeenLastCalledWith('repo', undefined, {
+        forceLocalOwner: undefined,
+        executionHostId: 'runtime:env-1',
+        ...(expectedHint ? { sortOrderOnly: true } : {})
+      })
+    }
+  )
+
+  it('merges queued published order saves and drops the values once any refresh needs a refetch', async () => {
+    const firstRefresh = Promise.withResolvers<void>()
+    const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
+    const queue = createWorktreeChangeRefreshQueue(handler)
+    const owner = { repoId: 'repo', executionHostId: 'runtime:env-1' as const, sortOrderOnly: true }
+    queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+    queue.enqueue({
+      ...owner,
+      sortOrders: [
+        { worktreeId: 'a', sortOrder: 1 },
+        { worktreeId: 'b', sortOrder: 2 }
+      ]
+    })
+    queue.enqueue({ ...owner, sortOrders: [{ worktreeId: 'b', sortOrder: 3 }] })
+    firstRefresh.resolve()
+    await flushPromises()
+    expect(handler).toHaveBeenLastCalledWith('repo', undefined, {
+      forceLocalOwner: undefined,
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true,
+      sortOrders: [
+        { worktreeId: 'a', sortOrder: 1 },
+        { worktreeId: 'b', sortOrder: 3 }
+      ]
+    })
+
+    const held = Promise.withResolvers<void>()
+    handler.mockReturnValueOnce(held.promise)
+    queue.enqueue({ repoId: 'repo', executionHostId: 'runtime:env-1' })
+    queue.enqueue({ ...owner, sortOrders: [{ worktreeId: 'a', sortOrder: 4 }] })
+    queue.enqueue(owner)
+    held.resolve()
+    await flushPromises()
+    expect(handler).toHaveBeenLastCalledWith('repo', undefined, {
+      forceLocalOwner: undefined,
+      executionHostId: 'runtime:env-1',
+      sortOrderOnly: true
+    })
+  })
 })

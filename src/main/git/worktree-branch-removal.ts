@@ -1,11 +1,14 @@
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
-  getBranchCleanupTargetRefs
+  getBranchCleanupTargetRefs,
+  type GitBranchCleanupExecOptions
 } from '../../shared/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
+import { createLocalGitObjectQuarantine } from './local-git-object-quarantine'
+import { isBranchReservedByWorktreeOperation } from '../../shared/git-worktree-admin'
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import { isBranchCheckedOutInWorktreeError } from '../../shared/git-branch-delete-refusal'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
@@ -107,11 +110,16 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   branchHead: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const runGit = (args: string[], execOptions?: { stdin?: string }) =>
-    gitExecFileAsync(args, {
-      ...gitExecOptions(repoPath, options),
-      ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
-    })
+  const quarantine = createLocalGitObjectQuarantine(repoPath, options)
+  const runGit = (args: string[], execOptions?: GitBranchCleanupExecOptions) => {
+    const run = (env: NodeJS.ProcessEnv | undefined) =>
+      gitExecFileAsync(args, {
+        ...gitExecOptions(repoPath, options),
+        ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {}),
+        ...(env ? { env } : {})
+      })
+    return execOptions?.discardWrittenObjects ? quarantine.run(run) : run(undefined)
+  }
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
   const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(
@@ -122,8 +130,12 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   if (!hasNoUnmergedChanges) {
     return false
   }
-  await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>
-    gitExecFileAsync(args, gitExecOptions(cwd, options))
+  await forceDeleteLocalBranch(
+    repoPath,
+    branchName,
+    branchHead,
+    (args, cwd) => gitExecFileAsync(args, gitExecOptions(cwd, options)),
+    options
   )
   return true
 }
@@ -135,7 +147,8 @@ export async function forceDeleteLocalBranch(
   runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }> = (
     args,
     cwd
-  ) => gitExecFileAsync(args, { cwd })
+  ) => gitExecFileAsync(args, gitExecOptions(cwd, options)),
+  options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   if (!branchName || branchName.includes('\0')) {
     throw new Error('Invalid branch name')
@@ -145,7 +158,7 @@ export async function forceDeleteLocalBranch(
       `Cannot force-delete local branch "${branchName}" without the commit Git preserved.`
     )
   }
-  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit, options)) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
   // Why: stale toast actions must not delete a branch that moved; `update-ref -d` deletes only if the ref still == expectedHead.
@@ -160,7 +173,11 @@ export async function forceDeleteLocalBranch(
       `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
     )
   }
-  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+  try {
+    if (await isLocalBranchCheckedOut(repoPath, branchName, runGit, options)) {
+      throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
+    }
+  } catch (error) {
     try {
       await runGit(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
     } catch (restoreError) {
@@ -169,7 +186,7 @@ export async function forceDeleteLocalBranch(
         restoreError
       )
     }
-    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
+    throw error
   }
   try {
     await runGit(['config', '--remove-section', `branch.${branchName}`], repoPath)
@@ -181,10 +198,13 @@ export async function forceDeleteLocalBranch(
 async function isLocalBranchCheckedOut(
   repoPath: string,
   branchName: string,
-  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>,
+  options: GitWorktreeExecOptions
 ): Promise<boolean> {
   const { stdout } = await runGit(['worktree', 'list', '--porcelain'], repoPath)
-  return parseWorktreeList(stdout).some(
-    (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
+  const worktrees = parseWorktreeList(stdout)
+  return (
+    worktrees.some((worktree) => normalizeLocalBranchRef(worktree.branch) === branchName) ||
+    isBranchReservedByWorktreeOperation(repoPath, branchName, worktrees, options)
   )
 }

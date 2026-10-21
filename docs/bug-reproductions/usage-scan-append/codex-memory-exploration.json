@@ -1,0 +1,63 @@
+{
+  "status": "historical exploratory parser-retention comparison, not the final pinned-source benchmark",
+  "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "sourceProvenance": {
+    "baseline": "Only codex-rollout-file-parse.ts was loaded with git show from this commit; other bundled project dependencies came from the worktree.",
+    "current": "Actual worktree parser and project dependencies at the time of the exploratory run.",
+    "sourceHashes": null,
+    "limitation": "Source hashes and individual heap snapshots were not saved during this run. Later hashes cannot establish the earlier source. Use the reproducible full-graph comparison for final evidence."
+  },
+  "environment": {
+    "node": "v24.20.0",
+    "v8": "13.6.233.17-node.53",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "timeZone": "America/Los_Angeles"
+  },
+  "instrumentation": {
+    "fixture": "100,000 event_msg/token_count rows with distinct one-second timestamps, model gpt-5-codex, last usage input 100/output 10/total 110, and one session_meta row; written in batches of 5,000.",
+    "clockOrigin": 1791547200000,
+    "metric": "heapUsed after two forced full GCs before parse, every 35 ms during parse, and after parse",
+    "isolation": "Each measurement had its own async function scope; result held on globalThis through the final sample, removed at function end, with setImmediate before the next baseline sample.",
+    "ownership": "baseline claimEventKey and current canClaimEventKey accept queryIndex++ % stride === 0; current commitEventKey is a no-op",
+    "interpretation": "Sampled retained memory, not absolute process peak. Timings are not a speed benchmark."
+  },
+  "measurements": [
+    {
+      "arm": "baseline",
+      "stride": 1,
+      "samples": 9,
+      "claimedKeys": 100000,
+      "countedEvents": 100000,
+      "sampledRetainedPeakDeltaMiB": 45.45518493652344,
+      "finalRetainedDeltaMiB": 6.44708251953125
+    },
+    {
+      "arm": "current",
+      "stride": 1,
+      "samples": 10,
+      "claimedKeys": 100000,
+      "countedEvents": 100000,
+      "sampledRetainedPeakDeltaMiB": 7.5893402099609375,
+      "finalRetainedDeltaMiB": 6.328620910644531
+    },
+    {
+      "arm": "baseline",
+      "stride": 10,
+      "samples": 4,
+      "claimedKeys": 10000,
+      "countedEvents": 10000,
+      "sampledRetainedPeakDeltaMiB": 3.7055206298828125,
+      "finalRetainedDeltaMiB": 0.6778564453125
+    },
+    {
+      "arm": "current",
+      "stride": 10,
+      "samples": 5,
+      "claimedKeys": 10000,
+      "countedEvents": 10000,
+      "sampledRetainedPeakDeltaMiB": 0.91009521484375,
+      "finalRetainedDeltaMiB": 0.66552734375
+    }
+  ]
+}

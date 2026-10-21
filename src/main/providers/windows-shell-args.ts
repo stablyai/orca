@@ -3,9 +3,9 @@ import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   buildWslExecArgs,
-  buildWslInteractiveLoginShellCommand,
-  quotePosixShell
+  buildWslInteractiveLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
@@ -29,11 +29,9 @@ const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call 
 // `&&`) keeps startup working even if chcp.com is missing.
 const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
-function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
-  if (!codexLaunchPreflightCommand) {
-    return GIT_BASH_UTF8_LOGIN_COMMAND
-  }
-
+// Why every pane gets the rcfile: it defines the claude function that follows the selected
+// account (and the codex wrapper), as bash panes elsewhere get; it sources the login chain itself.
+function getGitBashLaunchCommand(): string {
   ensureShellReadyWrappersAt()
   const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
@@ -102,9 +100,9 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
  * large payloads return the bootstrap alone so stdin delivery remains available.
  */
 function getPowerShellRestoreCwdCommand(cwd: string): string {
+  // Why: profiles can change location, so restore the PTY cwd after profile loading.
   return [
     '',
-    '# Profiles can change location; restore the PTY cwd after profile loading.',
     `try { Set-Location -LiteralPath ${quoteStartupArg(cwd, 'powershell')} -ErrorAction Stop } catch { Write-Warning "Failed to restore working directory: $_" }`
   ].join('\n')
 }
@@ -216,7 +214,7 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['-c', getGitBashLaunchCommand(codexLaunchPreflightCommand)],
+      shellArgs: ['-c', getGitBashLaunchCommand()],
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

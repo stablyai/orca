@@ -1,0 +1,902 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "accounts.codex-reset-credit",
+  "family": "components.codex-reset-credit",
+  "namedDeltas": [],
+  "values": {
+    "055241a84f48": {
+      "settled": {
+        "outcome": "reset"
+      }
+    },
+    "0a07efb53f1e": {
+      "settled": {
+        "$rpc": "null"
+      }
+    },
+    "2e062b25a583": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "4eeea010019a": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "525eb01c77c0": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "52d5e56d067b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "outcome": "reset",
+        "scope": {
+          "accountId": "codex-1",
+          "accountRevision": 1700000000000,
+          "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+          "target": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          }
+        },
+        "snapshot": {
+          "claude": {
+            "accounts": [],
+            "activeAccountId": {
+              "$rpc": "null"
+            }
+          },
+          "codex": {
+            "accounts": [
+              {
+                "email": "codex@example.test",
+                "id": "codex-1",
+                "updatedAt": 1700000000000
+              }
+            ],
+            "activeAccountId": "codex-1",
+            "activeAccountIdsByRuntime": {
+              "host": "codex-1",
+              "wsl": {}
+            }
+          },
+          "rateLimits": {
+            "claude": {
+              "$rpc": "null"
+            },
+            "claudeTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "codex": {
+              "error": {
+                "$rpc": "null"
+              },
+              "provider": "codex",
+              "rateLimitResetCredits": {
+                "availableCount": 1
+              },
+              "session": {
+                "$rpc": "null"
+              },
+              "status": "ok",
+              "updatedAt": 1700000000000,
+              "weekly": {
+                "$rpc": "null"
+              }
+            },
+            "codexTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "inactiveClaudeAccounts": [],
+            "inactiveCodexAccounts": []
+          }
+        }
+      }
+    },
+    "5b8c42552b2b": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "7a2c95a7922f": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "837dbb2a3452": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "944a34b7acd6": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b88c06607a7c": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "outcome": "reset",
+            "scope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "snapshot": {
+              "claude": {
+                "accounts": [],
+                "activeAccountId": {
+                  "$rpc": "null"
+                }
+              },
+              "codex": {
+                "accounts": [
+                  {
+                    "email": "codex@example.test",
+                    "id": "codex-1",
+                    "updatedAt": 1700000000000
+                  }
+                ],
+                "activeAccountId": "codex-1",
+                "activeAccountIdsByRuntime": {
+                  "host": "codex-1",
+                  "wsl": {}
+                }
+              },
+              "rateLimits": {
+                "claude": {
+                  "$rpc": "null"
+                },
+                "codex": {
+                  "error": {
+                    "$rpc": "null"
+                  },
+                  "provider": "codex",
+                  "rateLimitResetCredits": {
+                    "availableCount": 1
+                  },
+                  "session": {
+                    "$rpc": "null"
+                  },
+                  "status": "ok",
+                  "updatedAt": 1700000000000,
+                  "weekly": {
+                    "$rpc": "null"
+                  }
+                },
+                "inactiveClaudeAccounts": [],
+                "inactiveCodexAccounts": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c46a04f8b760": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "cd0919959fcb": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "de0c9a811224": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "e1ee0a1ae721": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Invalid reset response from host",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "e5c0751c0745": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "ff72153558d8": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-components.codex-reset-credit-accounts.consumecodexresetcredit-1",
+    "checkpoints": [
+      {
+        "id": "codex-reset-credit-consumed.prelude:requested",
+        "observation": {
+          "sender": ["de0c9a811224"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "9270aeb7d9c6"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.normal:consumed",
+        "observation": {
+          "sender": ["b88c06607a7c"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "52d5e56d067b"
+          },
+          "state": "055241a84f48",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.result-absent:consumed",
+        "observation": {
+          "sender": ["2e062b25a583"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "e1ee0a1ae721"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.result-null:consumed",
+        "observation": {
+          "sender": ["e5c0751c0745"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "e1ee0a1ae721"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.inner-ok-missing:consumed",
+        "observation": {
+          "sender": ["5b8c42552b2b"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "e1ee0a1ae721"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.inner-false-string-error:consumed",
+        "observation": {
+          "sender": ["837dbb2a3452"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "e1ee0a1ae721"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.inner-false-object-error:consumed",
+        "observation": {
+          "sender": ["ff72153558d8"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "e1ee0a1ae721"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.outer-refused:consumed",
+        "observation": {
+          "sender": ["7a2c95a7922f"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "32a7c0ae7918"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.outer-refused-no-message:consumed",
+        "observation": {
+          "sender": ["cd0919959fcb"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "f3b516f62081"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.method-not-found:consumed",
+        "observation": {
+          "sender": ["525eb01c77c0"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "b948e8307e81"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.transport-rejection:consumed",
+        "observation": {
+          "sender": ["c46a04f8b760"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "a947768bc0ed"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "codex-reset-credit-consumed.transport-rejection-no-message:consumed",
+        "observation": {
+          "sender": ["4eeea010019a"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "c7584e82c72f"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

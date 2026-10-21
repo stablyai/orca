@@ -3,15 +3,11 @@ import { toast } from 'sonner'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
-type HookRuntimeSettings = { activeRuntimeEnvironmentId: string | null }
-
 export function useRepositoryIssueCommand({
-  hookRuntimeSettings,
   repoId,
   repoHostIdentity,
   selectedHostId
 }: {
-  hookRuntimeSettings: HookRuntimeSettings
   repoId: string
   repoHostIdentity: string
   selectedHostId: ExecutionHostId
@@ -37,7 +33,7 @@ export function useRepositoryIssueCommand({
     updateIssueCommandDraft('')
     setHasSharedIssueCommand(false)
     setIssueCommandSaveError(null)
-    void readRuntimeIssueCommand(hookRuntimeSettings, repoId, selectedHostId)
+    void readRuntimeIssueCommand(selectedHostId, repoId)
       .then((result) => {
         if (cancelled) {
           return
@@ -60,23 +56,18 @@ export function useRepositoryIssueCommand({
       cancelled = true
       const draft = issueCommandDraftRef.current.trim()
       if (draft !== lastCommittedIssueCommandRef.current) {
-        void writeRuntimeIssueCommand(hookRuntimeSettings, repoId, draft, selectedHostId).catch(
-          (error) => {
-            console.error(
-              '[RepositoryHooksSection] Failed to save issue command on unmount:',
-              error
-            )
-          }
-        )
+        void writeRuntimeIssueCommand(selectedHostId, repoId, draft).catch((error) => {
+          console.error('[RepositoryHooksSection] Failed to save issue command on unmount:', error)
+        })
       }
     }
-  }, [hookRuntimeSettings, repoHostIdentity, repoId, selectedHostId, updateIssueCommandDraft])
+  }, [repoHostIdentity, repoId, selectedHostId, updateIssueCommandDraft])
 
   const commitIssueCommand = useCallback(async (): Promise<void> => {
     const trimmed = issueCommandDraft.trim()
     updateIssueCommandDraft(trimmed)
     try {
-      await writeRuntimeIssueCommand(hookRuntimeSettings, repoId, trimmed, selectedHostId)
+      await writeRuntimeIssueCommand(selectedHostId, repoId, trimmed)
       lastCommittedIssueCommandRef.current = trimmed
       setIssueCommandSaveError(null)
     } catch (error) {
@@ -86,7 +77,7 @@ export function useRepositoryIssueCommand({
       setIssueCommandSaveError(message)
       toast.error(message)
     }
-  }, [hookRuntimeSettings, issueCommandDraft, repoId, selectedHostId, updateIssueCommandDraft])
+  }, [issueCommandDraft, repoId, selectedHostId, updateIssueCommandDraft])
 
   return {
     issueCommandDraft,

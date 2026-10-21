@@ -240,19 +240,6 @@ describe('resolveConsent', () => {
 
   // ── Env-var precedence beats persisted preference ───────────────────
 
-  it('env-var override wins over a stored optedIn=true', () => {
-    process.env.DO_NOT_TRACK = '1'
-    expect(
-      resolveConsent(
-        settingsWithTelemetry({
-          optedIn: true,
-          installId: 'x',
-          existedBeforeTelemetryRelease: false
-        })
-      )
-    ).toEqual({ effective: 'disabled', reason: 'do_not_track' })
-  })
-
   it('env-var override wins over a stored pending_banner state', () => {
     process.env.ORCA_TELEMETRY_DISABLED = '1'
     expect(

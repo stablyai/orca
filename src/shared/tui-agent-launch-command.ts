@@ -3,6 +3,7 @@ import {
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
 import type { SessionOptionValue } from './native-chat-session-options'
+import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   planAgentCliArgsSuffix,
@@ -81,6 +82,7 @@ export function resolveAgentLaunchCommand(args: {
   const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
   const overrideTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(
+        args.agent,
         removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
         resolvedOptions.args
       )
@@ -100,10 +102,11 @@ export function resolveAgentLaunchCommand(args: {
   }
 }
 
-function insertBeforeTerminator(tokens: readonly string[], inserted: readonly string[]): string[] {
-  const terminator = tokens.indexOf('--')
-  if (terminator === -1) {
-    return [...tokens, ...inserted]
-  }
+function insertBeforeTerminator(
+  agent: TuiAgent,
+  tokens: readonly string[],
+  inserted: readonly string[]
+): string[] {
+  const terminator = agentArgTerminatorIndex(agent, tokens)
   return [...tokens.slice(0, terminator), ...inserted, ...tokens.slice(terminator)]
 }

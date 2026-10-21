@@ -7,8 +7,15 @@ import {
   RelayHostIdSchema
 } from './wire-scalars.js'
 import { RelayRegionSchema } from './relay-regions.js'
+import {
+  RegionCorrectionRequestSchema,
+  RegionCorrectionResponseSchema
+} from './region-correction.js'
 
-const SignedAssignmentLeaseSchema = z.string().min(1).max(8 * 1024)
+const SignedAssignmentLeaseSchema = z
+  .string()
+  .min(1)
+  .max(8 * 1024)
 
 export const AssignmentRequestSchema = z
   .object({
@@ -17,7 +24,8 @@ export const AssignmentRequestSchema = z
     // Client-declared reconnection; the director verifies it against the
     // durable assignment before granting fast-lane admission.
     reconnect: z.boolean().optional(),
-    preferredRegion: RelayRegionSchema.optional()
+    preferredRegion: RelayRegionSchema.optional(),
+    regionCorrection: RegionCorrectionRequestSchema.optional()
   })
   .strict()
 
@@ -26,7 +34,8 @@ export const AssignmentResponseSchema = z
     v: z.literal(1),
     cellUrl: CanonicalHttpsOriginSchema,
     assignmentEpoch: GenerationSchema,
-    lease: SignedAssignmentLeaseSchema
+    lease: SignedAssignmentLeaseSchema,
+    regionCorrection: RegionCorrectionResponseSchema.optional()
   })
   .strict()
 

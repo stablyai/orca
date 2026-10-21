@@ -21,14 +21,6 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
 }
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export {
-  computeBranchName,
-  getConfiguredBranchPrefix,
-  computeValidatedBranchName
-} from './worktree-branch-name'
-export { mergeWorktree } from './worktree-metadata-merge'
-export { areWorktreePathsEqual } from './worktree-path-comparison'
-
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
  * Strips unsafe characters and collapses runs of special chars to a single hyphen.
@@ -67,14 +59,6 @@ function containsEmoji(input: string): boolean {
   )
 }
 
-export {
-  resolveWorktreeCreateDisplayName,
-  resolveWorktreeCreateDisplayNameRequest,
-  resolveWorktreeCreateDisplayNameMeta,
-  sanitizeWorktreeDisplayName,
-  shouldSetDisplayName
-} from './worktree-display-name'
-
 /**
  * Ensure a target path is within the workspace directory (prevent path traversal).
  */
@@ -103,12 +87,13 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings
+  settings: WorktreePathSettings,
+  workspaceRoot?: string
 ): string {
   return computeWorktreePathFromWorkspaceRoot(
     sanitizedName,
     repoPath,
-    computeWorkspaceRoot(repoPath, settings),
+    workspaceRoot ?? computeWorkspaceRoot(repoPath, settings),
     settings.nestWorkspaces
   )
 }
@@ -130,7 +115,7 @@ function computeWorktreePathFromWorkspaceRoot(
 }
 
 /** Async twin of computeWorktreePath. Same result; resolves the WSL home without blocking the main
- *  thread, so callers off the create path never freeze the app on a stopped distro. */
+ *  thread, so callers never freeze the app on a stopped distro. */
 export async function computeWorktreePathAsync(
   sanitizedName: string,
   repoPath: string,
@@ -147,7 +132,7 @@ export async function computeWorktreePathAsync(
 /** Async twin of computeWorkspaceRoot. Same result; the WSL home probe spawns `wsl.exe`, so
  *  background preparation uses this variant rather than blocking the Electron main thread for up
  *  to the probe timeout. The sync twin below still serves callers that cannot await (allowed-roots
- *  resolution, the create click, CLI create, watch targets, worktree trash). */
+ *  resolution, CLI create, watch targets, worktree trash). */
 export async function computeWorkspaceRootAsync(
   repoPath: string,
   settings: { workspaceDir: string; wslMirrorDistro?: string }

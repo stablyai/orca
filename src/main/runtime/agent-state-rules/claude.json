@@ -1,0 +1,27 @@
+{
+  "id": "claude",
+  "engineVersion": 1,
+  "anchors": [
+    {
+      "id": "idle_title_glyph",
+      "why": "Claude Code prefixes its title with `✳` at rest; a working title carries a spinner instead.",
+      "when": { "region": "title", "match": { "regex": "^✳" } },
+      "answer": { "state": "idle" }
+    },
+    {
+      "id": "idle_title_ascii",
+      "why": "Claude Code's ASCII rest prefix, `* ` (`. ` while working).",
+      "when": { "region": "title", "match": { "regex": "^\\* " } },
+      "answer": { "state": "idle" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "idle_title",
+      "why": "Claude announces rest with its own `✳` title, while a shell auto-title (`claude`, `claude ~/repo`) names it from launch, over the workspace-trust dialog or a busy turn alike, so a bare name counts only once quiet (#6011).",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": true }
+    }
+  ]
+}

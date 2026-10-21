@@ -9,6 +9,10 @@ import { runBatchDeletion, selectDeletionRoots } from './file-explorer-batch-del
 import type { TreeNode } from './file-explorer-types'
 import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 import {
+  getFileExplorerDeletionEditors,
+  type FileExplorerDeletionEditor
+} from './file-explorer-deletion-editors'
+import {
   getFileDeleteErrorMessage,
   isLocalDeleteNode,
   needsRemoteDeleteConfirmation
@@ -18,20 +22,17 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 import {
-  deleteRuntimePath,
-  readRuntimeFileContent,
-  writeRuntimeFile
-} from '@/runtime/runtime-file-client'
+  assertFileWriteApplied,
+  missingOrIdenticalPrecondition
+} from '../../../../shared/file-write-disk-precondition'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
-  openFiles: {
-    id: string
-    filePath: string
-    isDirty?: boolean
-  }[]
+  openFiles: FileExplorerDeletionEditor[]
   closeFile: (fileId: string) => void
   refreshDir: (dirPath: string) => Promise<void>
   setSelectedPaths: (paths: Set<string>) => void
@@ -106,8 +107,12 @@ export function useFileDeletion({
           }
         }
 
-        const filesToClose = openFiles.filter((file) =>
-          isPathEqualOrDescendant(file.filePath, node.path)
+        const operationRoute = operationGuard.assertCurrent()
+        const filesToClose = getFileExplorerDeletionEditors(
+          useAppStore.getState(),
+          openFiles,
+          node.path,
+          operationRoute
         )
         // Why: force-save any dirty buffers before trashing so the undo snapshot
         // reads the user's latest edits from disk — not an older version that
@@ -122,11 +127,11 @@ export function useFileDeletion({
         await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
         // Why: confirmation and autosave can outlive a reconnect or graph replacement; mutations require the owner generation that produced the row.
-        const operationRoute = operationGuard.assertCurrent()
+        operationGuard.assertCurrent()
         const state = useAppStore.getState()
         const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
         const fileContext = {
-          settings: operationRoute.settings,
+          target: operationRoute.target,
           worktreeId: activeWorktreeId,
           worktreePath: worktree?.path ?? null,
           connectionId: operationRoute.connectionId,
@@ -143,7 +148,7 @@ export function useFileDeletion({
         if (!node.isDirectory) {
           try {
             const rf = await readRuntimeFileContent({
-              settings: fileContext.settings,
+              target: fileContext.target,
               filePath: node.path,
               relativePath: node.relativePath,
               worktreeId: activeWorktreeId ?? undefined,
@@ -165,14 +170,19 @@ export function useFileDeletion({
           commitFileExplorerOp({
             undo: async () => {
               const currentRoute = operationGuard.assertCurrent()
-              await writeRuntimeFile(
-                {
-                  ...fileContext,
-                  settings: currentRoute.settings,
-                  connectionId: currentRoute.connectionId
-                },
-                node.path,
-                undoContent
+              // Why: something may have recreated the path since the delete; undo must not replace it.
+              assertFileWriteApplied(
+                await writeRuntimeFile(
+                  {
+                    ...fileContext,
+                    target: currentRoute.target,
+                    connectionId: currentRoute.connectionId
+                  },
+                  node.path,
+                  undoContent,
+                  undefined,
+                  missingOrIdenticalPrecondition(undoContent)
+                )
               )
               await refreshDir(parentDir)
             },
@@ -181,7 +191,7 @@ export function useFileDeletion({
               await deleteRuntimePath(
                 {
                   ...fileContext,
-                  settings: currentRoute.settings,
+                  target: currentRoute.target,
                   connectionId: currentRoute.connectionId
                 },
                 node.path,

@@ -28,6 +28,8 @@ export const agentStatusApi = {
     ipcRenderer.invoke('agentStatus:getSnapshot'),
   inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferInterrupt', request),
+  hasVerifiableAgentProcess: (paneKey: string): Promise<boolean> =>
+    ipcRenderer.invoke('agentStatus:hasVerifiableAgentProcess', paneKey),
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferQuestionAnswered', request),
   onMigrationUnsupported: (
@@ -80,8 +82,8 @@ export const agentStatusApi = {
   dropByTabPrefix: (tabId: string): void => {
     ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
   },
-  retirePaneAuthority: (paneKey: string): void => {
-    ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+  retirePaneAuthority: (paneKey: string, retirementId?: string): void => {
+    ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey, retirementId)
   },
   restorePaneAuthority: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:restorePaneAuthority', paneKey)

@@ -72,7 +72,8 @@ export function createHarness() {
   let subscribeAttempts = 0
   let closeBeforeNextSubscribeRejects = false
 
-  const callRpc = (async (_target: unknown, method: string) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake answers each method with the reply shape its caller reads.
+  const callRpc = (async (_target: unknown, method: string, params?: { page?: string }) => {
     rpcLog.push(method)
     if (method === 'status.get') {
       if (statusGate) {
@@ -87,6 +88,10 @@ export function createHarness() {
         const gate = tabShowGate
         tabShowGate = null
         await gate.wait
+      }
+      // The host holds only pages it created or the pane was handed; the row id is not one.
+      if (params?.page === identity.tabId) {
+        throw rpcError('browser_tab_not_found', 'Browser page was not found')
       }
       return { tab: { url: 'https://example.test/', title: 'Example' } }
     }
@@ -104,7 +109,7 @@ export function createHarness() {
       await gate.wait
     }
     // Models the host closing the subscription and only then rejecting the request, which is what
-    // src/main/ipc/runtime-environments.ts does on a stale pairing.
+    // src/main/ipc/runtime-environments/runtime-environments.ts does on a stale pairing.
     if (closeBeforeNextSubscribeRejects) {
       closeBeforeNextSubscribeRejects = false
       callbacks.onClose?.()

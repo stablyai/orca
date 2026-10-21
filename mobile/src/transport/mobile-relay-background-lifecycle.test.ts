@@ -4,7 +4,8 @@ import {
   FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
@@ -23,7 +24,7 @@ describe('mobile Relay background lifecycle', () => {
   it('retains a relay session across a quick background and foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -40,10 +41,38 @@ describe('mobile Relay background lifecycle', () => {
     supervisor.stop()
   })
 
+  it('probes a retained relay once when the app really returns from the background', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const session = new FakeRelaySession('connected')
+    const deps = dependencies({
+      openDirect: vi.fn(() => new FakeSession('disconnected')),
+      openRelay: vi.fn(() => session)
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+    expect(logical.getActivePath()).toBe('relay')
+
+    // A foreground nudge (iOS inactive→active, manual reconnect) is not a background return.
+    supervisor.nudge('app-resume')
+    expect(session.probeAfterBackground).not.toHaveBeenCalled()
+
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(5_000)
+    supervisor.setForeground(true)
+    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+
+    // Past the grace the relay is already released, so there is nothing to probe.
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(30_000)
+    supervisor.setForeground(true)
+    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+    supervisor.stop()
+  })
+
   it('releases a retained relay after 30 seconds and recovers only on foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -64,7 +93,7 @@ describe('mobile Relay background lifecycle', () => {
   it('enforces an overdue grace on foreground when the background timer was suspended', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -81,7 +110,7 @@ describe('mobile Relay background lifecycle', () => {
   it('recovers after a retained relay fails while backgrounded', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -101,7 +130,7 @@ describe('mobile Relay background lifecycle', () => {
   it('does not retain or suspend a healthy direct session in the background', async () => {
     const logical = new FakeLogicalClient('connected', 'tailscale')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -120,7 +149,7 @@ describe('mobile Relay background lifecycle', () => {
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     await vi.advanceTimersByTimeAsync(40_000)
@@ -147,7 +176,7 @@ describe('mobile Relay background lifecycle', () => {
       openRelay,
       writeBundle: vi.fn(() => writeStarted)
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     const starting = supervisor.start()
     await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledOnce())
 

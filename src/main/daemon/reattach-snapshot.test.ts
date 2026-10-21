@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { HeadlessEmulator } from './headless-emulator'

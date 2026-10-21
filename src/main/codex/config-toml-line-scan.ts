@@ -95,8 +95,18 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
 }
 
 export function getTomlTableHeader(line: string): string | null {
-  const match = /^(\s*\[\[?.+\]\]?\s*)(?:#.*)?$/.exec(line)
-  return match?.[1] ?? null
+  let index = 0
+  while (index < line.length && line[index] !== '#') {
+    if (line[index] === '"') {
+      index = skipTomlBasicString(line, index + 1)
+    } else if (line[index] === "'") {
+      index = skipTomlLiteralString(line, index + 1)
+    } else {
+      index++
+    }
+  }
+  const header = line.slice(0, index).trimEnd()
+  return /^\s*\[\[?.+\]\]?$/.test(header) ? header : null
 }
 
 export function parseTomlSingleLineStringValue(
@@ -295,4 +305,22 @@ function parseTomlUnicodeEscape(
   } catch {
     return null
   }
+}
+
+export function withTrailingCr(originalLine: string, rendered: string): string {
+  return originalLine.endsWith('\r') ? `${rendered}\r` : rendered
+}
+
+export function withCrLine(rendered: string, usesCrlf: boolean): string {
+  return usesCrlf ? `${rendered}\r` : rendered
+}
+
+// Why: a missing trailing newline is restored in the file's own EOL so a
+// preamble-only or table-appended rewrite matches the source's newline behavior.
+export function joinPreservingTrailingNewline(lines: string[], usesCrlf: boolean): string {
+  const result = lines.join('\n')
+  if (result.endsWith('\n') || result.length === 0) {
+    return result
+  }
+  return result.endsWith('\r') ? `${result}\n` : `${result}${usesCrlf ? '\r\n' : '\n'}`
 }

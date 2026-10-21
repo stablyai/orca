@@ -122,7 +122,8 @@ describe('Codex WSL scan gate', () => {
     await expect(
       resolveSessionFilePath('codex', 'session-id', {
         transcriptPath: `${WSL_SESSIONS_DIR}\\2026\\rollout-1-session-id.jsonl`,
-        codexSessionsDirs: [DEBIAN_SESSIONS_DIR]
+        codexSessionsDirs: [DEBIAN_SESSIONS_DIR],
+        wslDistro: 'Ubuntu'
       })
     ).rejects.toBe(refusal)
     expect(mocks.walk).not.toHaveBeenCalled()

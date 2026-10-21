@@ -126,7 +126,7 @@ test.describe('Tab Rename (Inline)', () => {
     expect(originalTitle.length).toBeGreaterThan(0)
 
     await tabLocatorByTitle(orcaPage, originalTitle).click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Change Title', exact: true }).click()
+    await orcaPage.getByRole('menuitem', { name: /^Change Title(?:\s|$)/ }).click()
 
     const renameInput = orcaPage.getByRole('textbox', {
       name: `Rename tab ${originalTitle}`,

@@ -286,31 +286,6 @@ describe('hasUsableHostedReviewPushTarget', () => {
 })
 
 describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', () => {
-  it('does not synthesize hasUpstream:false when the real upstream is the review head', () => {
-    const realUpstream = {
-      hasUpstream: true,
-      upstreamName: 'origin/mobile-resume-suspected-fixes',
-      ahead: 7,
-      behind: 2
-    }
-    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
-      hasResolvableHostedReviewPushTargetLink: true,
-      branchName: 'mobile-resume-suspected-fixes',
-      upstreamStatus: realUpstream
-    })
-    expect(canUseHostedReviewPushTarget).toBe(true)
-    expect(
-      resolveHostedReviewActionUpstreamStatus({
-        hasHostedReviewLink: true,
-        hasResolvableHostedReviewPushTargetLink: true,
-        hostedReviewState: 'open',
-        isHostedReviewStateLoading: false,
-        canUseHostedReviewPushTarget,
-        upstreamStatus: realUpstream
-      })
-    ).toBe(realUpstream)
-  })
-
   it('does not block push for a queue-discovered open PR whose upstream tracks the branch', () => {
     // Why: a child worktree with no persisted linkedPR discovers its open PR via
     // the queue (fallbackGitHubPR). Before the fix, that PR counted as a hosted

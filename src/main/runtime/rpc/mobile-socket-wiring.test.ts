@@ -9,8 +9,8 @@ import {
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
   type MobileSocketTransport,
@@ -92,16 +92,16 @@ describe('MobileSocketWiring', () => {
     const detachDirect = wiring.attachTransport(direct)
     wiring.attachTransport(relay)
 
-    expect(wiring.terminateDeviceConnections('valid-token')).toBe(3)
-    expect(direct.terminateClientConnections).toHaveBeenCalledWith('valid-token')
-    expect(relay.terminateClientConnections).toHaveBeenCalledWith('valid-token')
+    expect(wiring.terminateDeviceConnections('device-1')).toBe(3)
+    expect(direct.terminateClientConnections).toHaveBeenCalledWith('device-1')
+    expect(relay.terminateClientConnections).toHaveBeenCalledWith('device-1')
 
     detachDirect()
     direct.terminateClientConnections.mockClear()
     relay.terminateClientConnections.mockClear()
-    expect(wiring.terminateDeviceConnections('valid-token')).toBe(2)
+    expect(wiring.terminateDeviceConnections('device-1')).toBe(2)
     expect(direct.terminateClientConnections).not.toHaveBeenCalled()
-    expect(relay.terminateClientConnections).toHaveBeenCalledWith('valid-token')
+    expect(relay.terminateClientConnections).toHaveBeenCalledWith('device-1')
   })
 
   it('releases detached transports from revocation fanout under origin churn', () => {
@@ -128,7 +128,7 @@ describe('MobileSocketWiring', () => {
     }
 
     expect(wiring['transports'].size).toBe(1)
-    expect(wiring.terminateDeviceConnections('valid-token')).toBe(0)
+    expect(wiring.terminateDeviceConnections('device-1')).toBe(0)
     expect(live.terminateClientConnections).toHaveBeenCalledOnce()
     expect(
       retired.every((transport) => transport.terminateClientConnections.mock.calls.length === 0)
@@ -176,10 +176,17 @@ describe('MobileSocketWiring', () => {
     )
     transport.receive(ws, encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
 
-    expect(transport.setClientId).toHaveBeenCalledWith(ws, 'valid-token')
+    // Socket bookkeeping keys on the device id; legacy rows keep their token as the client id.
+    expect(transport.setClientId).toHaveBeenCalledWith(ws, 'device-1')
     expect(onText).toHaveBeenCalledOnce()
     expect(onText.mock.calls[0]?.[0]).toMatchObject({
-      device: { deviceId: 'device-1', deviceToken: 'valid-token', scope: 'runtime' },
+      device: {
+        deviceId: 'device-1',
+        deviceToken: 'valid-token',
+        scope: 'runtime',
+        clientId: 'valid-token',
+        credentialRevision: 0
+      },
       clientCapabilities: ['session-tabs.close-intent.v1'],
       transport: { transport: 'direct' }
     })
@@ -188,6 +195,99 @@ describe('MobileSocketWiring', () => {
     expect(onClose).toHaveBeenCalledWith(expect.objectContaining({ ws }), false)
     expect(wiring.channelCount).toBe(0)
     expect(wiring.connectionCount).toBe(0)
+  })
+
+  it('reports other live sockets of the same device on close', () => {
+    const desktop = generateKeyPair()
+    const transport = new FakeTransport()
+    const onClose = vi.fn()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onClose
+    })
+    wiring.attachTransport(transport)
+    const sockets = [new FakeSocket(), new FakeSocket()]
+    for (const ws of sockets) {
+      const phone = generateKeyPair()
+      transport.receive(
+        ws,
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+        })
+      )
+      transport.receive(
+        ws,
+        encrypt(
+          JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }),
+          deriveSharedKey(phone.secretKey, desktop.publicKey)
+        )
+      )
+    }
+
+    transport.disconnect(sockets[0]!)
+    expect(onClose).toHaveBeenLastCalledWith(expect.objectContaining({ ws: sockets[0] }), true)
+    transport.disconnect(sockets[1]!)
+    expect(onClose).toHaveBeenLastCalledWith(expect.objectContaining({ ws: sockets[1] }), false)
+  })
+
+  it('lets the capability RPC write capabilities back onto the socket', () => {
+    // `runtime.clientCapabilities.update` stores the advertised set by assigning
+    // `authenticatedSocket.clientCapabilities`. A read-only socket makes that a
+    // TypeError, the RPC answers `runtime_error`, and every structured
+    // agent-session tab is then projected away from a capable phone.
+    const desktop = generateKeyPair()
+    const phone = generateKeyPair()
+    const ws = new FakeSocket()
+    const transport = new FakeTransport()
+    const onText = vi.fn()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token', 'mobile'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText,
+      onBinary: vi.fn(),
+      onClose: vi.fn()
+    })
+    wiring.attachTransport(transport)
+
+    transport.receive(
+      ws,
+      JSON.stringify({
+        type: 'e2ee_hello',
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+      })
+    )
+    const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
+    transport.receive(
+      ws,
+      encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
+    )
+    transport.receive(ws, encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
+
+    const socket = onText.mock.calls[0]?.[0]
+    expect(socket).toBeDefined()
+    expect(socket.clientCapabilities).toEqual([])
+
+    expect(() => {
+      socket.clientCapabilities = ['agent-session.structured.v1']
+    }).not.toThrow()
+    expect(socket.clientCapabilities).toEqual(['agent-session.structured.v1'])
+
+    // Later requests on the same connection must see the updated set, so the
+    // channel is the single source of truth rather than a detached copy.
+    transport.receive(ws, encrypt('{"id":"rpc-2","method":"status.get"}', sharedKey))
+    expect(onText.mock.calls[1]?.[0].clientCapabilities).toEqual(['agent-session.structured.v1'])
   })
 
   it('closes an unknown-token socket even when reporting the failure throws', () => {
@@ -347,5 +447,87 @@ describe('MobileSocketWiring', () => {
 
     expect(transport.setClientId).not.toHaveBeenCalled()
     expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
+  })
+
+  it('keeps post-auth v2 capability-shaped frames on the RPC path', () => {
+    const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
+    const phone = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
+    const ws = new FakeSocket()
+    const transport = new FakeTransport()
+    const onText = vi.fn()
+    const metadata: MobileSocketTransportMetadata = {
+      transport: 'relay',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      relayDeviceId: 'device-1',
+      basisConnId: 'connection-1',
+      credentialKind: 'resume'
+    }
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registryFor('device-1', 'valid-token'),
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText,
+      onBinary: vi.fn(),
+      onClose: vi.fn()
+    })
+    wiring.attachTransport(transport, () => metadata)
+    const hello: MobileE2EEV2Hello = {
+      type: 'e2ee_hello',
+      v: 2,
+      clientPublicKeyB64: Buffer.from(phone.publicKey).toString('base64'),
+      clientNonceB64: Buffer.from(new Uint8Array(32).fill(3)).toString('base64'),
+      capabilities: { framing: [2], payloadKinds: ['text', 'binary'] },
+      context: {
+        protocol: 'orca-mobile-e2ee',
+        initiator: 'mobile',
+        responder: 'desktop',
+        transport: 'relay',
+        relayHostId: metadata.relayHostId
+      }
+    }
+    transport.receive(ws, JSON.stringify(hello))
+    const ready = JSON.parse(ws.sent[0]!.toString()) as MobileE2EEV2Ready
+    const handshake = validateMobileE2EEV2Handshake(hello, ready)!
+    const schedule = deriveMobileE2EEV2KeySchedule({
+      sharedSecret: deriveSharedKey(phone.secretKey, desktop.publicKey),
+      transcript: encodeMobileE2EEV2Transcript(handshake),
+      clientNonce: handshake.clientNonce,
+      desktopNonce: handshake.desktopNonce
+    })
+    const send = (value: unknown, counter: bigint): void => {
+      const frame = sealMobileE2EEV2Frame({
+        payload: new TextEncoder().encode(JSON.stringify(value)),
+        key: schedule.mobileToDesktopKey,
+        sessionId: schedule.sessionId,
+        direction: 'mobile-to-desktop',
+        payloadKind: 'text',
+        counter
+      })
+      transport.receive(ws, Buffer.from(frame).toString('base64'))
+    }
+    send(
+      {
+        type: 'e2ee_auth',
+        v: 2,
+        transcriptHashB64: Buffer.from(schedule.transcriptHash).toString('base64'),
+        deviceToken: 'valid-token'
+      },
+      0n
+    )
+    const capabilityFrame = {
+      type: 'e2ee_client_capabilities',
+      v: 1,
+      clientCapabilities: ['agent-session.structured.v1']
+    }
+    send(capabilityFrame, 1n)
+    send({ id: 'rpc-1', method: 'agentSession.history', params: {} }, 2n)
+
+    expect(onText).toHaveBeenCalledTimes(2)
+    expect(onText.mock.calls[0]?.[0].clientCapabilities).toEqual([])
+    expect(JSON.parse(onText.mock.calls[0]?.[1] ?? '')).toEqual(capabilityFrame)
+    expect(onText.mock.calls[1]?.[0].clientCapabilities).toEqual([])
   })
 })

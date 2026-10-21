@@ -1,0 +1,162 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "clipboard.image-upload",
+  "family": "clipboard.image-upload",
+  "namedDeltas": [],
+  "values": {
+    "8e6c4f65042a": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-2\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "b49be31d506e": {
+      "failure": "Upload slot expired",
+      "path": "unsaved"
+    },
+    "bdd08542c5fc": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":null}}"
+    },
+    "c81557ea67fa": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "upload_expired",
+            "message": "Upload slot expired"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "ca96681f306d": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": {
+              "$rpc": "null"
+            },
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-2"
+          }
+        }
+      }
+    },
+    "cd036aabcfa0": {
+      "name": "clipboard.abortImageUpload#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.abortImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "aborted": true
+          }
+        }
+      }
+    },
+    "e6cb8187ff0a": {
+      "name": "clipboard.abortImageUpload#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.abortImageUpload\",\"params\":{\"uploadId\":\"upload-2\"}}"
+    },
+    "ead0111942f4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Upload slot expired",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-upload-aborts-on-chunk-failure",
+    "checkpoints": [
+      {
+        "id": "aborted",
+        "observation": {
+          "sender": ["ca96681f306d", "c81557ea67fa", "cd036aabcfa0"],
+          "payloads": ["bdd08542c5fc", "8e6c4f65042a", "e6cb8187ff0a"],
+          "settlements": {
+            "local": "ead0111942f4"
+          },
+          "state": "b49be31d506e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

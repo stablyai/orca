@@ -13,12 +13,16 @@ import {
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
-function pairingCode(endpoint = 'ws://127.0.0.1:6768', pairedDeviceId?: string): string {
+function pairingCode(
+  endpoint = 'ws://127.0.0.1:6768',
+  pairedDeviceId?: string,
+  keyFill = 1
+): string {
   return encodePairingOffer({
     v: 2,
     endpoint,
     deviceToken: 'device-token',
-    publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+    publicKeyB64: Buffer.from(new Uint8Array(32).fill(keyFill)).toString('base64'),
     ...(pairedDeviceId ? { pairedDeviceId } : {})
   })
 }
@@ -41,6 +45,57 @@ describe('runtime environment store', () => {
     }
   })
 
+  function writeProfileKeypair(userDataPath: string, fill: number): void {
+    const publicKeyB64 = Buffer.from(new Uint8Array(32).fill(fill)).toString('base64')
+    writeFileSync(
+      join(userDataPath, 'orca-e2ee-keypair.json'),
+      JSON.stringify({ v: 1, publicKeyB64, secretKeyB64: publicKeyB64 })
+    )
+  }
+
+  it('refuses a pairing code that this same Orca profile issued', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    writeProfileKeypair(userDataPath, 1)
+
+    expect(() =>
+      addEnvironmentFromPairingCode(userDataPath, {
+        name: 'myself',
+        pairingCode: pairingCode('ws://192.0.2.10:6768')
+      })
+    ).toThrow(/this Orca itself/)
+    expect(listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('refuses re-pairing a saved server with a code this same Orca profile issued', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode()
+    })
+    writeProfileKeypair(userDataPath, 1)
+
+    expect(() =>
+      updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+        pairingCode: pairingCode('ws://192.0.2.10:6768')
+      })
+    ).toThrow(RuntimeEnvironmentStoreError)
+    expect(listEnvironments(userDataPath)).toEqual([environment])
+  })
+
+  it('pairs a server with a different key even at a loopback address', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    writeProfileKeypair(userDataPath, 2)
+
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'tunnel',
+      pairingCode: pairingCode('ws://127.0.0.1:6768')
+    })
+    expect(listEnvironments(userDataPath)).toEqual([environment])
+  })
+
   it('rejects duplicate server names instead of silently replacing the saved server', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
@@ -53,9 +108,29 @@ describe('runtime environment store', () => {
     expect(() =>
       addEnvironmentFromPairingCode(userDataPath, {
         name: 'dev box',
-        pairingCode: pairingCode('ws://192.0.2.10:6768')
+        pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
       })
     ).toThrow(RuntimeEnvironmentStoreError)
+    expect(listEnvironments(userDataPath)).toEqual([first])
+  })
+
+  it('rejects a name that differs only in case or surrounding spaces, as --environment resolves it', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+
+    const first = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'build',
+      pairingCode: pairingCode('ws://127.0.0.1:6768')
+    })
+
+    for (const name of ['Build', ' build ', '"build"']) {
+      expect(() =>
+        addEnvironmentFromPairingCode(userDataPath, {
+          name,
+          pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
+        })
+      ).toThrow('A server named "build" already exists.')
+    }
     expect(listEnvironments(userDataPath)).toEqual([first])
   })
 
@@ -105,7 +180,7 @@ describe('runtime environment store', () => {
 
     const direct = addEnvironmentFromPairingCode(userDataPath, {
       name: 'direct box',
-      pairingCode: pairingCode('ws://192.0.2.11:6768'),
+      pairingCode: pairingCode('ws://192.0.2.11:6768', undefined, 2),
       connectionDependency: 'ssh-tunnel'
     })
     expect(direct).not.toHaveProperty('connectionDependency')
@@ -162,13 +237,14 @@ describe('runtime environment store', () => {
     })
     const legacy = addEnvironmentFromPairingCode(userDataPath, {
       name: 'legacy box',
-      pairingCode: pairingCode('ws://192.0.2.10:6768'),
+      pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2),
       now: 1_000
     })
 
     expect(paired.pairedDeviceId).toBe('device-from-offer')
     markEnvironmentUsed(userDataPath, legacy.id, {
       pairedDeviceId: 'device-from-status',
+      pairingDeviceToken: legacy.endpoints[0]!.deviceToken,
       now: 2_000
     })
     expect(listEnvironments(userDataPath).find((entry) => entry.id === legacy.id)).toMatchObject({
@@ -198,7 +274,7 @@ describe('runtime environment store', () => {
     expect(() =>
       addEnvironmentFromPairingCode(userDataPath, {
         name: 'x'.repeat(MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES),
-        pairingCode: pairingCode('ws://192.0.2.10:6768')
+        pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
       })
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])

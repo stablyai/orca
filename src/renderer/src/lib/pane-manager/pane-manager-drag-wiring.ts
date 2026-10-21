@@ -7,7 +7,8 @@ export function createManagedPaneDivider(host: PaneManagerHost, isVertical: bool
   return createDivider(isVertical, host.getStyleOptions(), {
     refitPanesUnder: (el) => refitPanesUnder(el, host.panes),
     onLayoutChanged: host.options.onLayoutChanged,
-    onDragActiveChange: host.options.onPaneDragActiveChange
+    onDragActiveChange: host.options.onPaneDragActiveChange,
+    onDividerRatiosCommitted: host.options.onDividerRatiosCommitted
   })
 }
 
@@ -28,6 +29,8 @@ export function createPaneDragCallbacks(host: PaneManagerHost): DragReorderCallb
     onLayoutChanged: host.options.onLayoutChanged,
     onDragActiveChange: host.options.onPaneDragActiveChange,
     resolveExternalDropTarget: host.options.resolveExternalPaneDropTarget,
-    onExternalPaneDrop: host.options.onExternalPaneDrop
+    onExternalPaneDrop: host.options.onExternalPaneDrop,
+    onDividerRatiosCommitted: host.options.onDividerRatiosCommitted,
+    takePaneDrop: host.options.takePaneDrop
   }
 }

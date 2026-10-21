@@ -1,3 +1,4 @@
+import { emitPtyListeners } from './daemon-pty-listener-emission'
 import { existsSync } from 'node:fs'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -6,7 +7,7 @@ import { isDaemonGoneError } from './daemon-endpoint-errors'
 import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
-import type { PtyBackgroundStreamEvent } from '../providers/types'
+import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
   // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
@@ -69,6 +70,15 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
         }
       })
     this.writeRecoveryPromise = recovery
+  }
+
+  // Why: a dropped daemon socket is the earliest signal, and waiting for a keystroke to find it left
+  // every pane frozen on stale output until then. Reconnecting first means a live daemon keeps its
+  // sessions; only a refused connect (isDaemonGoneError) respawns.
+  protected recoverAfterEndpointLoss(): void {
+    if (this.activeSessionIds.size > 0) {
+      this.reconnectAfterWriteFailure()
+    }
   }
 
   protected notifyActiveSessionsWriteUnavailable(): void {
@@ -259,10 +269,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
   }
 
   protected emitBackgroundStreamEvent(payload: PtyBackgroundStreamEvent): void {
-    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-    for (const listener of [...this.backgroundStreamListeners]) {
-      listener(payload)
-    }
+    emitPtyListeners(this.backgroundStreamListeners, (listener) => listener(payload))
   }
 
   protected async doRespawn(

@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -24,7 +25,7 @@ export function formatAutomationTimeInput(hour: number, minute: number): string 
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
-export function getAutomationClockParts(time: string): AutomationClockParts {
+function getAutomationClockParts(time: string): AutomationClockParts {
   const { hour, minute } = parseAutomationTime(time)
   return {
     hour12: hour % 12 === 0 ? 12 : hour % 12,
@@ -33,7 +34,7 @@ export function getAutomationClockParts(time: string): AutomationClockParts {
   }
 }
 
-export function formatAutomationTimeFromClockParts(parts: AutomationClockParts): string {
+function formatAutomationTimeFromClockParts(parts: AutomationClockParts): string {
   const hour24 =
     parts.period === 'AM'
       ? parts.hour12 === 12
@@ -125,7 +126,7 @@ function TimeDigitInput({
   }
 
   return (
-    <input
+    <ImeInput
       type="text"
       inputMode="numeric"
       autoComplete="off"

@@ -1,0 +1,18 @@
+diff --git a/src/main/browser/browser-manager-viewport.ts b/src/main/browser/browser-manager-viewport.ts
+index ce31dbe37e..3f1fbb68fb 100644
+--- a/src/main/browser/browser-manager-viewport.ts
++++ b/src/main/browser/browser-manager-viewport.ts
+@@ -165,0 +166,3 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
++        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
++          return false
++        }
+@@ -184,0 +188,3 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
++        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
++          return false
++        }
+@@ -205 +211,4 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
+-          if (trackedMobile !== undefined) {
++          if (
++            trackedMobile !== undefined &&
++            this.webContentsIdByTabId.get(browserTabId) === webContentsId
++          ) {

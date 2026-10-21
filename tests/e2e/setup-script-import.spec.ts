@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -108,7 +108,7 @@ async function addAndActivateRepo(page: Page, repoPath: string): Promise<string>
     state.setActiveWorktree(worktree.id)
     state.setSidebarOpen(true)
     return addedRepo.id
-  }, repoPath)
+  }, realpathSync.native(repoPath))
 }
 
 async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {

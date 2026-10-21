@@ -62,4 +62,38 @@ describe('resolveProjectCloneUrlPrefill', () => {
       )
     ).toBe('https://github.com/acme/second.git')
   })
+  it('stops on the first usable source and indexes later misses only once', () => {
+    let reads = 0
+    const repos = Array.from({ length: 1000 }, (_, i) => ({
+      ...repo(`repo-${i}`, 'https://gitlab.com/acme/repo.git'),
+      get id() {
+        reads++
+        return `repo-${i}`
+      }
+    }))
+    const sourceIds = Array.from({ length: 1000 }, (_, i) => `repo-${i}`)
+    expect(resolveProjectCloneUrlPrefill([project(sourceIds)], repos, 'project-orca')).toBe(
+      'https://gitlab.com/acme/repo.git'
+    )
+    expect(reads).toBe(1)
+    reads = 0
+    expect(
+      resolveProjectCloneUrlPrefill(
+        [project(sourceIds.map((id) => `missing-${id}`))],
+        repos,
+        'project-orca'
+      )
+    ).toBe('')
+    expect(reads).toBeLessThanOrEqual(2000)
+  })
+
+  it('keeps the first duplicate repo authoritative when building the fallback index', () => {
+    expect(
+      resolveProjectCloneUrlPrefill(
+        [project(['missing', 'duplicate'])],
+        [repo('duplicate', ''), repo('duplicate', 'https://gitlab.com/acme/repo.git')],
+        'project-orca'
+      )
+    ).toBe('')
+  })
 })

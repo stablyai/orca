@@ -1,6 +1,17 @@
-import type { TerminalPaneLayoutNode } from '../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
-import { makeTerminalTab } from './persistence-test-harness'
+
+export const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
+  id: 'tab1',
+  ptyId: 'pty1',
+  worktreeId: 'repo1::/worktree',
+  title: 'Terminal',
+  customTitle: null,
+  color: null,
+  sortOrder: 0,
+  createdAt: 1,
+  ...overrides
+})
 
 export const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
 export const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'

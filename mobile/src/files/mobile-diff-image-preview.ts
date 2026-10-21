@@ -3,8 +3,10 @@ import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 // modifiedDeleted marks a proven deletion (modified side genuinely absent); an
 // empty modifiedContent alone can't, since a relay/SSH read failure also arrives
 // empty with modifiedIsBinary false.
+// Kind is not named here: the reply reader admits any arm but `text`, so a host arm this build has
+// not heard of reaches the same projection main's `kind !== 'text'` sent it to.
 export type MobileBinaryDiffResult = {
-  kind: 'binary'
+  kind?: string
   originalContent?: string
   modifiedContent?: string
   originalIsBinary?: boolean

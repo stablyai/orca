@@ -183,7 +183,6 @@ async function runReconciliationFailureJourney(args: {
         () => (window as FaultWindow).__webRuntimeBrowserCreationFault?.release() ?? false
       )
     ).toBe(true)
-
     await expect(
       page.getByText('The paired runtime could not create a managed browser tab.')
     ).toBeVisible({ timeout: 30_000 })

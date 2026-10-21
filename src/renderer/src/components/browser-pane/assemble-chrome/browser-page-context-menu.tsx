@@ -1,3 +1,4 @@
+import { windowDipToCssPx } from '@/lib/ui-zoom'
 import {
   useCallback,
   useEffect,
@@ -10,7 +11,9 @@ import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 // `focus:` rather than `focus-visible:` — items are only ever focused programmatically
 // while the menu is open, so every focus here is keyboard navigation.
@@ -42,9 +45,8 @@ export function BrowserPageContextMenu({
         return
       }
       // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
-      const zoomFactor = 1.2 ** window.api.ui.getZoomLevel()
-      const x = Math.round((event.screenX - window.screenX) / zoomFactor)
-      const y = Math.round((event.screenY - window.screenY) / zoomFactor)
+      const x = Math.round(windowDipToCssPx(event.screenX - window.screenX))
+      const y = Math.round(windowDipToCssPx(event.screenY - window.screenY))
       setContextMenu({
         x,
         y,
@@ -93,8 +95,8 @@ export function BrowserPageContextMenu({
         closeMenu()
       }
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [closeMenu, contextMenu])
 
   // Why: role="menu" is unreachable by keyboard unless focus moves in on open.
@@ -186,8 +188,18 @@ export function BrowserPageContextMenu({
               role="menuitem"
               className={MENU_ITEM_CLASS}
               onClick={() => {
+                const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+                  useAppStore.getState(),
+                  browserPageId,
+                  worktreeId
+                )
                 createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                  title: contextMenu.linkUrl!
+                  title: contextMenu.linkUrl!,
+                  activate: false,
+                  ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
+                  ...(sourceUnifiedTab?.executionHostId
+                    ? { executionHostId: sourceUnifiedTab.executionHostId }
+                    : {})
                 })
                 closeMenu()
               }}

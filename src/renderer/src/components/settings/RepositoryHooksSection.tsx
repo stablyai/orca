@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   HookCommandSourcePolicy,
@@ -8,7 +8,7 @@ import type {
   SetupRunPolicy
 } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -61,12 +61,6 @@ export function RepositoryHooksSection({
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const selectedHostId = getRepoExecutionHostId(repo)
   const repoHostIdentity = `${selectedHostId}\0${repo.id}`
-  const hookRuntimeSettings = useMemo(() => {
-    const parsedHost = parseExecutionHostId(selectedHostId)
-    return {
-      activeRuntimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
-    }
-  }, [selectedHostId])
   const yamlState = yamlHooks
     ? 'loaded'
     : hasHooksFile
@@ -82,7 +76,6 @@ export function RepositoryHooksSection({
     updateHookSettingsPolicyDraft
   } = useRepositoryHookSettingsDraft({ repo, repoHostIdentity, onUpdateHookSettings })
   const issueCommand = useRepositoryIssueCommand({
-    hookRuntimeSettings,
     repoId: repo.id,
     repoHostIdentity,
     selectedHostId

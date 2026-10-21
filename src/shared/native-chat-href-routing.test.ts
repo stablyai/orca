@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { routeNativeChatHref } from './native-chat-href-routing'
+import { createNativeChatFileHref, routeNativeChatHref } from './native-chat-href-routing'
 
 describe('routeNativeChatHref', () => {
   it('classifies web and mail links', () => {
@@ -45,6 +45,86 @@ describe('routeNativeChatHref', () => {
       pathText: String.raw`C:\repo\src\index.ts`,
       line: null
     })
+  })
+
+  it('routes encoded renderer file targets without treating Windows drives as schemes', () => {
+    expect(
+      routeNativeChatHref(createNativeChatFileHref(String.raw`C:\repo\report.docx:12`))
+    ).toEqual({
+      kind: 'file',
+      pathText: String.raw`C:\repo\report.docx:12`,
+      line: null
+    })
+    expect(routeNativeChatHref(createNativeChatFileHref('/tmp/report.html'))).toEqual({
+      kind: 'file',
+      pathText: '/tmp/report.html',
+      line: null
+    })
+  })
+
+  it('bounds nested renderer file target decoding', () => {
+    let href = '/tmp/report.html'
+    for (let depth = 0; depth < 4; depth += 1) {
+      href = createNativeChatFileHref(` ${href}`)
+    }
+    expect(routeNativeChatHref(href)).toEqual({
+      kind: 'file',
+      pathText: '/tmp/report.html',
+      line: null
+    })
+
+    expect(routeNativeChatHref(createNativeChatFileHref(` ${href}`))).toEqual({ kind: 'none' })
+  })
+
+  it('keeps wrapped location text literal', () => {
+    expect(routeNativeChatHref(createNativeChatFileHref('My C# App/Program.cs'))).toEqual({
+      kind: 'file',
+      pathText: 'My C# App/Program.cs',
+      line: null
+    })
+    expect(routeNativeChatHref(createNativeChatFileHref('assets/icon%20big.png?v'))).toEqual({
+      kind: 'file',
+      pathText: 'assets/icon%20big.png?v',
+      line: null
+    })
+  })
+
+  it.each([
+    '/repo/report:12',
+    '/repo/report:0',
+    '/repo/report:12:4',
+    ' leading and trailing ',
+    '/repo/ leading ',
+    'notes%23?#.md',
+    'https:notes.md',
+    'file:notes.md',
+    '#orca-native-chat-file=notes.md'
+  ])('preserves the exact literal path %j without URL or location interpretation', (pathText) => {
+    expect(routeNativeChatHref(createNativeChatFileHref(pathText, 'literal'))).toEqual({
+      kind: 'file',
+      pathText,
+      line: null,
+      pathKind: 'literal'
+    })
+  })
+
+  it('rejects an empty or malformed literal-path wrapper', () => {
+    expect(routeNativeChatHref(createNativeChatFileHref('', 'literal'))).toEqual({ kind: 'none' })
+    expect(routeNativeChatHref('#orca-native-chat-file-path=%ZZ')).toEqual({ kind: 'none' })
+  })
+
+  it('reads a bare file name with a line suffix as a file, not a scheme', () => {
+    expect(routeNativeChatHref('README.md:5')).toEqual({
+      kind: 'file',
+      pathText: 'README.md:5',
+      line: null
+    })
+    expect(routeNativeChatHref('App.tsx:12:3')).toEqual({
+      kind: 'file',
+      pathText: 'App.tsx:12:3',
+      line: null
+    })
+    expect(routeNativeChatHref('localhost:3000')).toEqual({ kind: 'none' })
   })
 
   it('drops anchors, unknown schemes, malformed file URIs, and empty hrefs', () => {

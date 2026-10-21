@@ -6,7 +6,12 @@ import {
   WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
 } from './wsl-transcript-fs-gate'
-import { WSL_TRANSCRIPT_FS_ROUTE_STRIKE_DECAY_MS } from './wsl-transcript-fs-route-quarantine'
+import {
+  _getBlockedRouteCountForTests,
+  quarantineRoute,
+  resetRouteQuarantinesForTests,
+  WSL_TRANSCRIPT_FS_ROUTE_STRIKE_DECAY_MS
+} from './wsl-transcript-fs-route-quarantine'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -148,4 +153,13 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
       vi.useRealTimers()
     }
   })
+})
+
+it('bounds retired route entries', () => {
+  resetRouteQuarantinesForTests()
+  for (let index = 0; index < 600; index += 1) {
+    quarantineRoute(`route-${index}`, 1_000, 0)
+  }
+
+  expect(_getBlockedRouteCountForTests()).toBeLessThanOrEqual(512)
 })

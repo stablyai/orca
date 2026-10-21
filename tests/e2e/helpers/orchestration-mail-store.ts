@@ -3,8 +3,8 @@
  *
  * Why read SQLite instead of `orchestration.check`: check is itself a consumer —
  * it marks rows read and backfills `delivered_at` — so using it to observe would
- * destroy the distinction these specs test. A pointer stamps only `delivered_at`;
- * an out-of-band read proves notification and consumption independently.
+ * destroy the distinction these specs test. An out-of-band read proves pointer,
+ * pending-Enter, and consumption state independently.
  */
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -19,6 +19,7 @@ export type MailRow = {
   subject: string
   read: number
   delivered_at: string | null
+  pointer_enter_pending: number
 }
 
 export type MailDisposition = 'pending' | 'pushed' | 'pulled'
@@ -36,7 +37,8 @@ export function readMailRow(userDataDir: string, id: string): MailRow | undefine
   return withMailDb(userDataDir, (db) =>
     db
       .prepare(
-        `SELECT id, run_id, delivery_contract, type, to_handle, subject, read, delivered_at
+        `SELECT id, run_id, delivery_contract, type, to_handle, subject, read, delivered_at,
+                pointer_enter_pending
          FROM messages WHERE id = ?`
       )
       .get(id)
@@ -47,7 +49,8 @@ export function readMailbox(userDataDir: string, toHandle: string): MailRow[] {
   return withMailDb(userDataDir, (db) =>
     db
       .prepare(
-        `SELECT id, run_id, delivery_contract, type, to_handle, subject, read, delivered_at
+        `SELECT id, run_id, delivery_contract, type, to_handle, subject, read, delivered_at,
+                pointer_enter_pending
          FROM messages WHERE to_handle = ? ORDER BY sequence`
       )
       .all(toHandle)

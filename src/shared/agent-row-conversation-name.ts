@@ -1,7 +1,8 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
 // (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
+// semantic session title → provider session title → Orca's generated title →
+// the agent-set live title.
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
@@ -9,13 +10,14 @@ import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
+import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -96,6 +98,10 @@ function conversationNameFromLiveTitle(
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
     isClaudeManagementTitle(stripped) ||
+    // Why: jcode repaints `jcode <codename> · +N -M · last ~23s` every second. The
+    // tail is live status and the head is its own identity, so accepting it as a
+    // name pins a row to "jcode Puppy…" where every other agent shows the prompt.
+    isJcodeIdentityTerminalTitle(stripped) ||
     isCwdLikeTitle(stripped)
   ) {
     return null
@@ -119,7 +125,8 @@ export function getAgentRowConversationName(
   // this row's own pane title, or `null` when none resolves; `undefined` (a
   // single-pane tab) keeps the tab title. Tab-owned names above are unaffected:
   // the user gave those to the whole tab and they do not flip on focus.
-  paneLiveTitle?: string | null
+  paneLiveTitle?: string | null,
+  providerSessionId?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -133,6 +140,17 @@ export function getAgentRowConversationName(
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
+  }
+  // Provider titles belong to their session, not every pane in the tab.
+  const aiVaultTitle = tab.aiVaultTitle
+  const providerTitle = aiVaultTitle?.title.trim()
+  if (
+    aiVaultTitle &&
+    providerTitle &&
+    aiVaultTitle.agent === agentType &&
+    aiVaultTitle.sessionId === providerSessionId
+  ) {
+    return providerTitle
   }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {

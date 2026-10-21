@@ -22,7 +22,8 @@ import {
   observeHibernationPtyBindings
 } from './agent-hibernation-pane-age'
 import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { resolveTerminalPtyOwner } from './terminal-worktree-route'
+import { toAgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
@@ -30,6 +31,7 @@ import type {
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from './window-park-visibility'
+import { getEntryTabId } from './agent-hibernation-pane-eligibility'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -79,7 +81,17 @@ function snapshotFromState(
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
     runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
-    runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
+    // Why: a workspace can gain tabs or resolve its runtime owner while the inventory above
+    // is in flight, and the plan is built from this later state. Union the fresh targets in
+    // so such a workspace is required-but-absent and the planner skips it, rather than
+    // answering for the execution host from client PTYs. Union, never replace: dropping a
+    // pre-await target would narrow the fail-closed set instead of widening it.
+    runtimeLivenessRequiredWorktreeIds: [
+      ...new Set([
+        ...runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
+        ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
+      ])
+    ],
     mobileLockedPtyIds: [...getAllDrivers()]
       .filter(([, driver]) => driver.kind === 'mobile')
       .map(([ptyId]) => ptyId),
@@ -96,20 +108,27 @@ function snapshotFromState(
   }
 }
 
+function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string) {
+  const tabs = state.tabsByWorktree[worktreeId] ?? []
+  const ptyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+  return toAgentHibernationRuntimeOwner(resolveTerminalPtyOwner(state, worktreeId), ptyIds)
+}
+
+/** Worktree → owning runtime; `null` means liveness is required but no host can be asked. */
 function getRuntimeLivenessTargetWorktrees(
   state: AppState,
   targetWorktreeId?: string
-): Map<string, string> {
-  const targets = new Map<string, string>()
+): Map<string, string | null> {
+  const targets = new Map<string, string | null>()
   const worktreeIds = targetWorktreeId
     ? Object.hasOwn(state.tabsByWorktree, targetWorktreeId)
       ? [targetWorktreeId]
       : []
     : Object.keys(state.tabsByWorktree)
   for (const worktreeId of worktreeIds) {
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    if (runtimeEnvironmentId) {
-      targets.set(worktreeId, runtimeEnvironmentId)
+    const owner = resolveAgentHibernationRuntimeOwner(state, worktreeId)
+    if (owner.kind !== 'non-runtime') {
+      targets.set(worktreeId, owner.kind === 'runtime' ? owner.environmentId : null)
     }
   }
   return targets
@@ -132,8 +151,26 @@ async function collectRuntimePtyLiveness(
   const targets = getRuntimeLivenessTargetWorktrees(state, targetWorktreeId)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
+  if (targets.size === 0) {
+    // Why: an all-local install has nothing to ask, so it must not pay the status scan below.
+    return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
+  }
+  const completedTabIds = new Set<string>()
+  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+    const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
+    if (tabId) {
+      completedTabIds.add(tabId)
+    }
+  }
   await Promise.all(
     [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
+      if (
+        !runtimeEnvironmentId ||
+        !state.tabsByWorktree[worktreeId]?.some((tab) => completedTabIds.has(tab.id))
+      ) {
+        // Skipped owners still require host evidence if an agent completes during this pass.
+        return
+      }
       try {
         const result = await callRuntimeRpc<RuntimeTerminalListResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -184,11 +221,11 @@ async function currentCandidates(now: number, targetWorktreeId?: string) {
     snapshotFromState(freshState, now, runtimeLiveness, targetWorktreeId)
   )
     .filter((candidate) => {
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
-        freshState,
-        candidate.worktreeId
+      const owner = resolveAgentHibernationRuntimeOwner(freshState, candidate.worktreeId)
+      return (
+        owner.kind === 'non-runtime' ||
+        (owner.kind === 'runtime' && candidate.expectedRuntimePtyIds.length === 1)
       )
-      return !runtimeEnvironmentId || candidate.expectedRuntimePtyIds.length === 1
     })
     .map((candidate) => ({
       ...candidate,
@@ -218,13 +255,13 @@ async function hibernatePaneIfStillEligible(
   coordinator.shuttingDownCandidateIds.add(id)
   try {
     const state = useAppStore.getState()
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    const owner = resolveAgentHibernationRuntimeOwner(state, worktreeId)
     await state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
       paneKey: confirmedCandidate.paneKey,
       tabId: confirmedCandidate.tabId,
       leafId: confirmedCandidate.leafId,
       ptyId: confirmedCandidate.targetPtyIds[0],
-      ...(runtimeEnvironmentId
+      ...(owner.kind === 'runtime'
         ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
         : {})
     })

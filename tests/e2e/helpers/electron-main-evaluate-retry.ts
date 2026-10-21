@@ -1,13 +1,13 @@
 const MAIN_EVALUATE_ATTEMPTS = 5
 const MAIN_EVALUATE_RETRY_MS = 200
 
-/**
- * Playwright raises this message for any main-process CDP failure that is neither
- * a JS error nor a closed session, so it does not mean anything navigated — it is
- * also what a handle the main process has not finished publishing looks like.
- */
+// Startup can invalidate the CDP context or collect a pending evaluation promise.
 function isTransientMainEvaluateError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('Execution context was destroyed')
+  return (
+    error instanceof Error &&
+    (error.message.includes('Execution context was destroyed') ||
+      error.message.includes('Resulting promise was garbage collected'))
+  )
 }
 
 function waitBeforeRetry(): Promise<void> {

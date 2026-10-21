@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileSessionTabSnapshots, registerRuntimeTerminalTab } from './sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
+import { registerRuntimeTerminalTab } from './mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
 
 // Why: getBrowserTabsByWorktree reads this slice once per worktree inside the build loop,

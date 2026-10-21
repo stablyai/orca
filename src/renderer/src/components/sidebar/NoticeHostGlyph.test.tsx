@@ -83,12 +83,24 @@ describe('NoticeHostGlyph', () => {
     )
   })
 
-  it('marks a paired runtime with no live status as disconnected', async () => {
+  it('marks a paired runtime a probe found unreachable as disconnected', async () => {
+    runtimeStatusByEnvironmentId.set('openclaw-env', { status: null })
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
       'openclaw disconnected'
     )
+  })
+
+  it('does not call a host disconnected before its first probe answers', async () => {
+    // No entry means "not asked yet", not "asked and unreachable" — collapsing the two
+    // painted every remote row destructive between launch and the first probe.
+    const container = await render('runtime:openclaw-env')
+
+    expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
+      'Project on openclaw'
+    )
+    expect(container.querySelector('svg')?.getAttribute('class')).not.toContain('text-destructive')
   })
 
   it('gives the local host the monitor glyph the run-target rows use', async () => {

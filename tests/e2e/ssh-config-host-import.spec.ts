@@ -23,6 +23,8 @@ import {
   type SeededSshConfigHost
 } from './helpers/ssh-config-host-picker'
 
+test.use({ seedTestRepo: false })
+
 // Why: afterEach deletes every target carrying this prefix; workers loading the
 // module in the same millisecond must not collide on a shared Date.now().
 const HOST_PREFIX = makeSshConfigHostPrefix()
@@ -185,7 +187,10 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
   })
 
   // ── P9 ─────────────────────────────────────────────────────────────
-  test('P9: Settings Import re-adopts deleted config hosts', async ({ electronApp, orcaPage }) => {
+  test('P9: Sync keeps deleted config hosts; Restore removed hosts re-adopts them', async ({
+    electronApp,
+    orcaPage
+  }) => {
     const hosts = await importPairThenDeleteAlias(
       orcaPage,
       electronApp,
@@ -197,7 +202,19 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
     await expectSshHostListedInSettings(sshSection, hosts.bravo)
     await expectSshHostAbsentFromSettings(sshSection, hosts.alpha)
 
-    await sshSection.getByRole('button', { name: 'Import' }).click()
+    // Sync never lifts a removal, so bulk removal sticks.
+    await sshSection.getByRole('button', { name: 'Sync ~/.ssh/config' }).click()
+    await expect(orcaPage.getByText(/already in sync|Synced \d+ servers?/i).first()).toBeVisible({
+      timeout: 15_000
+    })
+    await expectSshHostAbsentFromSettings(sshSection, hosts.alpha)
+
+    await sshSection.getByRole('button', { name: 'More SSH host actions' }).click()
+    // The label carries the removed count once ~/.ssh/config is read; click waits for it to enable.
+    await orcaPage.getByRole('menuitem', { name: /^Restore removed hosts \(\d+\)…$/ }).click()
+    const restoreDialog = orcaPage.getByRole('dialog', { name: 'Restore removed hosts?' })
+    await expect(restoreDialog.getByText(hosts.alpha.alias)).toBeVisible({ timeout: 15_000 })
+    await restoreDialog.getByRole('button', { name: 'Restore' }).click()
     await expect(orcaPage.getByText(/Synced \d+ servers?/i)).toBeVisible({ timeout: 15_000 })
 
     await expectSshHostListedInSettings(sshSection, hosts.alpha)

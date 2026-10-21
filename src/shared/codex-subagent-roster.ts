@@ -1,11 +1,14 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   type AgentSubagentSnapshot
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLiveness
+} from './agent-status-child-work-liveness'
 
 const CODEX_SUBAGENT_ID_MAX_LENGTH = 64
 
@@ -43,9 +46,6 @@ export function upsertCodexSubagent(
     existing.description = description ?? existing.description
     existing.model = model ?? existing.model
     existing.state = fields.state
-    return
-  }
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
     return
   }
   roster.set(normalizedId, {
@@ -123,17 +123,15 @@ export function codexRosterToSnapshots(
   return snapshots
 }
 
-export function codexRosterEffectiveState(
-  roster: CodexSubagentRoster | undefined,
-  leadState: 'working' | 'waiting' | 'done'
-): 'working' | 'waiting' | 'done' {
-  if (!roster || roster.size === 0) {
-    return leadState
-  }
-  for (const tracked of roster.values()) {
-    if (tracked.state === 'waiting') {
-      return 'waiting'
-    }
-  }
-  return leadState === 'done' ? 'working' : leadState
+/** The roster as child-work evidence for the shared fold. Every tracked child is a spawned
+ *  agent thread, classified by the one kind test the other lanes use, so a waiting child
+ *  reads `waiting` and a live one `working`; nothing here is a watch loop. */
+export function codexRosterChildWorkLiveness(
+  roster: CodexSubagentRoster | undefined
+): AgentChildWorkLiveness {
+  return agentChildWorkLiveness(
+    roster
+      ? Array.from(roster.values(), (tracked) => ({ kind: 'agent' as const, state: tracked.state }))
+      : undefined
+  )
 }

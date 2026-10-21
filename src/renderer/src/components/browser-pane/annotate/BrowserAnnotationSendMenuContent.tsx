@@ -6,13 +6,15 @@ export type BrowserAnnotationSendMenuContentProps = {
   groupId: string
   prompt: string
   onPromptDelivered?: () => void
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
 export function BrowserAnnotationSendMenuContent({
   worktreeId,
   groupId,
   prompt,
-  onPromptDelivered
+  onPromptDelivered,
+  onPromptHandedOff
 }: BrowserAnnotationSendMenuContentProps): React.JSX.Element {
   return (
     <ReviewNotesSendMenuContent
@@ -24,6 +26,7 @@ export function BrowserAnnotationSendMenuContent({
       promptDelivery="submit-after-ready"
       launchSource="notes_send"
       onPromptDelivered={onPromptDelivered}
+      onPromptHandedOff={onPromptHandedOff}
     />
   )
 }

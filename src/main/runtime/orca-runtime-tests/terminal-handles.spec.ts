@@ -82,6 +82,7 @@ describe('OrcaRuntimeService', () => {
     if (!mobileHandle) {
       throw new Error('expected mobile terminal handle')
     }
+    expect(mobileHandle).toBe(terminals.terminals[0].handle)
 
     const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
     runtime.setPtyController({
@@ -101,7 +102,7 @@ describe('OrcaRuntimeService', () => {
         (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'started'
       )
     ).toMatchObject({
-      terminalHandles: [terminals.terminals[0].handle, mobileHandle].sort()
+      terminalHandles: [...new Set([terminals.terminals[0].handle, mobileHandle])].sort()
     })
   })
 
@@ -542,8 +543,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('matches an SSH pane against its own lease across the relay/app id forms', async () => {
-    // Leases are stored in RELAY form: upsertSshRemotePtyLease and markSshRemotePtyLease both run
-    // ids through toStoredPtyId -> toRelaySshPtyId ("pty-3"). The runtime holds the APP form
+    // Leases are stored in RELAY form: the relay-era writers ran ids through
+    // toStoredPtyId -> toRelaySshPtyId ("pty-3"). The runtime holds the APP form
     // ("ssh:ssh-target@@pty-3"). getRecentExpiredSshLease compared the two raw, so this branch was
     // unreachable for exactly the panes it names; it now normalizes before comparing.
     const tabId = 'tab-id-form'

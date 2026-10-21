@@ -47,6 +47,9 @@ jobs:
     timeout-minutes: 75
     environment: production
     env:
+      # These drains are unpaced, but restart-safe still waits out the production pace window
+      # from the drain, the same one the same-cap drain uses.
+      RESTART_SAFE_PACE_WINDOW_MS: '300000'
       GCP_PROJECT_ID: onorca-cloud
       GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
       DIRECTOR_SERVICE_NAME: orca-cloud-relay
@@ -157,9 +160,10 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.monitor-run-id }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         with:
-          package_json_file: cloud/package.json
+          package-json-file: cloud/package.json
+          install: false
 
       - uses: actions/setup-node@v4
         with:
@@ -237,6 +241,8 @@ jobs:
           id_token_include_email: true
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:
@@ -565,6 +571,7 @@ jobs:
             --draining required \
             --activity restart-safe \
             --runtime required \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" \
             --timeout-ms 450000 \
             --expected-image-digests \
               "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}" \
@@ -615,6 +622,7 @@ jobs:
             --draining required \
             --activity restart-safe \
             --runtime required \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" \
             --timeout-ms 450000 \
             --expected-image-digests \
               "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
@@ -676,6 +684,8 @@ jobs:
             --draining required \
             --activity restart-safe \
             --runtime required \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" \
+            --timeout-ms 480000 \
             --expected-image-digests \
               "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
 

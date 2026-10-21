@@ -154,7 +154,7 @@ async function activateTerminalTab(page: Page, worktreeId: string, tabId: string
       state.setActiveWorktree(worktreeId)
       state.setActiveTabForWorktree(worktreeId, tabId)
       state.setActiveTab(tabId)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     },
     { tabId, worktreeId }
   )

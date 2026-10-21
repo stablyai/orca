@@ -106,6 +106,10 @@ describe('loadMobilePrBranchContext', () => {
       return { ok: false, error: { message: `unexpected ${method}` } }
     })
     const out = await loadMobilePrBranchContext({ sendRequest } as never, 'repo::/wt')
+    expect(sendRequest).toHaveBeenCalledWith('git.branchCompare', {
+      worktree: 'id:repo::/wt',
+      baseRef: 'main'
+    })
     expect(out).toEqual({
       branch: 'feat',
       headSha: 'sha-status',

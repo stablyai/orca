@@ -1,12 +1,5 @@
 import type { Collection } from './collection-types'
-
-function createCollectionId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID
-  if (randomUUID) {
-    return randomUUID.call(globalThis.crypto)
-  }
-  return `collection-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
 export function normalizeCollectionName(name: string, fallback = 'Untitled collection'): string {
   const trimmed = name.trim()
@@ -21,7 +14,7 @@ export function createCollection(input: {
 }): Collection {
   const now = input.now ?? Date.now()
   return {
-    id: createCollectionId(),
+    id: createNonSecureContextUuid(),
     name: normalizeCollectionName(input.name),
     color: input.color ?? null,
     isCollapsed: false,

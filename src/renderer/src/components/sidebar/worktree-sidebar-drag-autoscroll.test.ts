@@ -19,6 +19,7 @@ const SESSION: WorktreeSidebarDragSession = {
   draggingWorktreeId: 'b',
   sourceGroupKey: 'repo:one',
   draggedIds: ['b'],
+  draggedCopies: [],
   reorderDraggedIds: ['b'],
   reorderUnitDraggedIds: ['b'],
   rects: [{ worktreeId: 'b', groupIndex: 1, top: 48, bottom: 88 }],

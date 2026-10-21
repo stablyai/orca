@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { parseArgs } from '../../tests/tools/win-crash-survival-e2e/cli-args.mjs'
 import { buildCrashAssertions } from '../../tests/tools/win-crash-survival-e2e/crash-assertions.mjs'
@@ -13,26 +12,6 @@ import { closeApp, resolveElectronMainPid } from '../../tests/tools/win-update-e
 import { isPidAlive } from '../../tests/tools/win-update-e2e/daemon-processes.mjs'
 
 describe('win-crash-survival-e2e proof contracts', () => {
-  it('keeps the packaged proof manually dispatchable without a PR trigger', () => {
-    const workflow = readFileSync('.github/workflows/win-crash-survival-e2e.yml', 'utf8')
-    expect(workflow).not.toMatch(/^  pull_request:/m)
-    expect(workflow).toMatch(/^  workflow_dispatch:/m)
-    expect(workflow).not.toMatch(/^  push:/m)
-    expect(workflow).toContain('--expect "$env:EXPECT"')
-    expect(workflow).toContain('exit $LASTEXITCODE')
-    expect(workflow).toContain("'!config/**/*.test.*'")
-    expect(workflow).toContain("'!src/**/*.test.*'")
-    expect(workflow).toContain("'!src/**/*.bench.*'")
-    expect(workflow).toContain("'!config/reliability-gates.jsonc'")
-    expect(workflow).toContain("'resources/**'")
-    expect(workflow).toContain('cache: pnpm')
-    expect(workflow.indexOf('- name: Setup Node.js')).toBeGreaterThan(
-      workflow.indexOf('- name: Setup pnpm')
-    )
-    expect(workflow).toContain("if: steps.cache-installer.outputs.cache-hit != 'true'")
-    expect(workflow).toContain('crash-survival-electron-builder-')
-  })
-
   it('requires the full survival oracle, including daemon identity and reattach', () => {
     const base = {
       profile: 'survival',
@@ -56,15 +35,6 @@ describe('win-crash-survival-e2e proof contracts', () => {
         entry.name.startsWith('reattached UI')
       )?.pass
     ).toBe(false)
-  })
-
-  it('scans for FailFast only after the post-crash input probe', () => {
-    const harness = readFileSync('tests/tools/win-crash-survival-e2e/run.mjs', 'utf8')
-    const scanIndex = harness.indexOf('const { events: failFastEvents }')
-    const probeIndex = harness.indexOf('reattachProven = await proveReattachedShell')
-    expect(scanIndex).not.toBe(-1)
-    expect(probeIndex).not.toBe(-1)
-    expect(scanIndex).toBeGreaterThan(probeIndex)
   })
 
   it('fails closed when the Windows event log query fails', () => {
@@ -162,11 +132,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
     expect(reattachSentinelMatches('1660|canary|extra', 'canary', 1660)).toBe(false)
   })
 
-  it('requires the real packaged main for the crash proof but permits fallback cleanup', async () => {
-    const harness = readFileSync('tests/tools/win-crash-survival-e2e/run.mjs', 'utf8')
-    expect(harness).toContain(
-      'resolveElectronMainPid(session.app, { allowLauncherFallback: false })'
-    )
+  it('resolves the real packaged main but permits fallback cleanup', async () => {
     expect(
       await resolveElectronMainPid({
         evaluate: async () => 222,

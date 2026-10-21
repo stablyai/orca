@@ -1,0 +1,77 @@
+name: Windows native preparation comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      comparison:
+        description: Bounded comparison to run on the existing Windows slots.
+        type: choice
+        default: native-preparation
+        options: [native-preparation, windows-security]
+      source_sha:
+        description: Exact commit containing this benchmark and the Windows compiler candidate.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-native-preparation-comparison-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  compare:
+    name: Native preparation comparison (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        os: [windows-2022, windows-11-arm]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Record measurement start and validate source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          mkdir -p .build/windows-native-benchmark
+          node -e 'require("node:fs").writeFileSync(".build/windows-native-benchmark/job-start.json", JSON.stringify({startedAt:new Date().toISOString()}))'
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          node-version: '24.21.0'
+          native-runtime: none
+          cache-pnpm-store: 'false'
+          cache-pnpm-verification: 'false'
+      - name: Compare isolated cold and same-build warm preparation
+        if: inputs.comparison != 'windows-security'
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BENCHMARK_RUNNER: ${{ matrix.os }}
+        run: node config/scripts/benchmark-windows-native-preparation.mjs
+      - name: Compare warm Windows security builds and qualify fallback
+        if: inputs.comparison == 'windows-security'
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BENCHMARK_RUNNER: ${{ matrix.os }}
+        run: node config/scripts/benchmark-windows-security-reuse.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-native-preparation-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/windows-native-benchmark/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

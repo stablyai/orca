@@ -1,0 +1,101 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "tasks.workspace-ssh-local",
+  "family": "tasks.workspace-ssh-local",
+  "namedDeltas": [],
+  "values": {
+    "11405363c62d": {
+      "name": "workspaceAgent",
+      "ordinal": 1,
+      "value": "claude"
+    },
+    "5da628eecd2f": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "7400f4eebe66": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex", "claude"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "9637248df9cb": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 3,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "9fdd4a87eb0b": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
+    },
+    "a9ec92743b9e": {
+      "name": "workspaceAgentOverridden",
+      "ordinal": 2,
+      "value": false
+    },
+    "d68cba3b57e1": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": ["codex", "claude"]
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-ssh-local-agents",
+    "checkpoints": [
+      {
+        "id": "local-agents-detected",
+        "observation": {
+          "sender": ["9fdd4a87eb0b"],
+          "payloads": ["5da628eecd2f"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7400f4eebe66",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "d68cba3b57e1"]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,646 @@
+{
+  "sourcePath": "src/shared/terminal-osc133-command-finished.ts",
+  "baselineSha256": "1790083b5200d11e68257556dffb49d2e8700841dccc6ccbbaa2c30b11b1efcd",
+  "fixedSha256": "92bc1aa5eb975672c3b8761cce0da37d7ff6263c8f38c69d0715f73bd8e075d0",
+  "sourceHashLineEndings": "canonical LF",
+  "dependencies": {
+    "src/shared/terminal-osc133-command-finished.ts": "92bc1aa5eb975672c3b8761cce0da37d7ff6263c8f38c69d0715f73bd8e075d0",
+    "src/shared/agent-name-token-match.ts": "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8",
+    "src/shared/agent-title-decoration.ts": "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41",
+    "src/shared/pi-state-title-marker.ts": "c398ce62a0f0dc72b23d106742833c1d60807f4dee92c78adb428a0b0031dce8",
+    "src/shared/pi-compatible-synthetic-title.ts": "99b401985234b242229f9f7eb244b041ffe98f0e463cf90a74c1c248943b820f",
+    "src/shared/terminal-title-classification-memo.ts": "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda",
+    "src/shared/terminal-title-wrapper-segments.ts": "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78",
+    "src/shared/agent-title-core.ts": "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d",
+    "src/shared/opencode-terminal-title.ts": "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec",
+    "src/shared/agent-title-identity.ts": "613c6284eb31aaa381db438c47d2ccf2c726ad150ae62ef269a2cfb762a03453",
+    "src/shared/synthetic-agent-title.ts": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922",
+    "src/shared/tui-agent-display-names.ts": "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296",
+    "src/shared/agent-title-evidence.ts": "5ea226cea3867f5421cd45ac54d37f57fc2d1364cb0eafa4a5ff71ddda5fc7ea",
+    "src/shared/pane-agent-evidence-sources.ts": "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f",
+    "src/shared/pane-agent-identity-adapter.ts": "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9",
+    "src/shared/terminal-title-agent-type.ts": "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864",
+    "src/shared/agent-title-status.ts": "570a4710ebd0a7626dbdccff795efd087997853ac7c0fdb82c015976760b70bb",
+    "src/shared/osc-title-extraction.ts": "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a",
+    "src/shared/shell-process-detection.ts": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f",
+    "src/shared/agent-detection.ts": "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651",
+    "src/shared/terminal-bell-detector.ts": "fffa4e0717222ea3059b4aab06a3403b6c972398d5fa9e4acf3316159d18dc05",
+    "src/shared/terminal-color-scheme-protocol.ts": "b8d1ee7693ae5053a8e3c9c099b8ab81032aed1f9a984de6eaad59e8c10c1700",
+    "src/shared/github/links.ts": "3a7bdfabed6fa37272df8c60c6933bf1bb3b783d7ca4adddf9c8d4c579295da7",
+    "src/shared/terminal-github-pr-link-detector.ts": "7c9509c50cfe733b5f9b29bcbd5c684825b3c18b2fac82275bd9047e7026100e",
+    "src/shared/terminal-output-side-effects.ts": "f609970e2ea7e53fc9e1ab0e0caca038b910dee3c092a9297377689871845f49",
+    "src/main/daemon/daemon-background-transient-facts.ts": "6be5c76683a0beb46a205d2f3d343f4e5570ff61b330b73213c72b62a7e7c5b2",
+    "src/shared/owned-utf16-suffix.ts": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+    "src/shared/own-retained-string.ts": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2"
+  },
+  "callerHashes": [
+    {
+      "path": "src/main/daemon/daemon-stream-data-batcher.ts",
+      "sha256": "56d4e6b8b461d45791ce1d4cc2185109554ecc57cc3163e68ad43c3001e91fbe",
+      "acceptedSha256": [
+        "56d4e6b8b461d45791ce1d4cc2185109554ecc57cc3163e68ad43c3001e91fbe",
+        "958a01e69c8e24f6eeebe44d0ba0e4e3fe50cb27e7c2302ee8582827633ee26f"
+      ]
+    },
+    {
+      "path": "src/main/daemon/daemon-terminal-admission.ts",
+      "sha256": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251",
+      "acceptedSha256": ["14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251"]
+    },
+    {
+      "path": "src/main/daemon/pty-subprocess/subprocess-handle.ts",
+      "sha256": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a",
+      "acceptedSha256": [
+        "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a",
+        "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e"
+      ]
+    },
+    {
+      "path": "src/main/daemon/session.ts",
+      "sha256": "ddd71285f6e72bcee012e7a9955170be4fb59c8e41e70971bc629c13504a4338",
+      "acceptedSha256": [
+        "ddd71285f6e72bcee012e7a9955170be4fb59c8e41e70971bc629c13504a4338",
+        "fcf79c354e29bf73549b3fdd4d905d431c210699391f45916bd27dbe858f86b4"
+      ]
+    },
+    {
+      "path": "src/main/runtime/orca-runtime-apply-tracked-pty-title.ts",
+      "sha256": "3c2ba07ff330875c5a9a07e44c0ffbcb1ebee1ae4af1952502ec733d6c7f7bea",
+      "acceptedSha256": ["3c2ba07ff330875c5a9a07e44c0ffbcb1ebee1ae4af1952502ec733d6c7f7bea"]
+    },
+    {
+      "path": "src/main/runtime/orca-runtime-get-unpersisted-tracked-title-for-pty.ts",
+      "sha256": "107666bcc7e4bc744db51e9a023d659425947b134b9f420a0f11fb9ff0a7ba33",
+      "acceptedSha256": ["107666bcc7e4bc744db51e9a023d659425947b134b9f420a0f11fb9ff0a7ba33"]
+    },
+    {
+      "path": "src/shared/terminal-mode-2031-final-state.test.ts",
+      "sha256": "42f3ff8839969f36a98f05c36d93abb7da291a9c3d2923a185a4933f4f245e10",
+      "acceptedSha256": ["42f3ff8839969f36a98f05c36d93abb7da291a9c3d2923a185a4933f4f245e10"]
+    }
+  ],
+  "namedSourceProvenance": [
+    {
+      "path": "src/main/daemon/daemon-background-transient-facts.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "6be5c76683a0beb46a205d2f3d343f4e5570ff61b330b73213c72b62a7e7c5b2",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "6be5c76683a0beb46a205d2f3d343f4e5570ff61b330b73213c72b62a7e7c5b2",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "6be5c76683a0beb46a205d2f3d343f4e5570ff61b330b73213c72b62a7e7c5b2"
+    },
+    {
+      "path": "src/main/daemon/daemon-stream-data-batcher.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "958a01e69c8e24f6eeebe44d0ba0e4e3fe50cb27e7c2302ee8582827633ee26f",
+          "matchesAuditedBefore": false
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "1c90541151cb3b4a2c77b731db1d2da9cf69f19ad3cd6e673555c7f652edc9ba",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "56d4e6b8b461d45791ce1d4cc2185109554ecc57cc3163e68ad43c3001e91fbe"
+    },
+    {
+      "path": "src/main/daemon/daemon-terminal-admission.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "14d1d8bbf4b662c98db123719741daffc3d0fe911d3a6a08d3516be666068251"
+    },
+    {
+      "path": "src/main/daemon/pty-subprocess/subprocess-handle.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e",
+          "matchesAuditedBefore": false
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "4623b60a0e362bb3cf218787573966aa056ee5fd1bdefc39fb5293446e4af70b",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a"
+    },
+    {
+      "path": "src/main/daemon/session.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "fcf79c354e29bf73549b3fdd4d905d431c210699391f45916bd27dbe858f86b4",
+          "matchesAuditedBefore": false
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "fcf79c354e29bf73549b3fdd4d905d431c210699391f45916bd27dbe858f86b4",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "ddd71285f6e72bcee012e7a9955170be4fb59c8e41e70971bc629c13504a4338"
+    },
+    {
+      "path": "src/main/runtime/orca-runtime-apply-tracked-pty-title.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "3c2ba07ff330875c5a9a07e44c0ffbcb1ebee1ae4af1952502ec733d6c7f7bea",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "afee7baf9568d05298c7a3b7b25057130f6ef21555f2e9079f6fa0bcef8f0084",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "3c2ba07ff330875c5a9a07e44c0ffbcb1ebee1ae4af1952502ec733d6c7f7bea"
+    },
+    {
+      "path": "src/main/runtime/orca-runtime-get-unpersisted-tracked-title-for-pty.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "107666bcc7e4bc744db51e9a023d659425947b134b9f420a0f11fb9ff0a7ba33",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "107666bcc7e4bc744db51e9a023d659425947b134b9f420a0f11fb9ff0a7ba33",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "107666bcc7e4bc744db51e9a023d659425947b134b9f420a0f11fb9ff0a7ba33"
+    },
+    {
+      "path": "src/shared/agent-detection.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "b1d519786b07515e6518f8ab9e8bf826fb6879ac4d8866fb54f59918d3098651"
+    },
+    {
+      "path": "src/shared/agent-name-token-match.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "27062a92d08e38aa140496d026e3e355cf5ad19f6ccdc18f1c06f4bbb9fef6f8"
+    },
+    {
+      "path": "src/shared/agent-title-core.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "9827730762f0118274d98defd86ff8989238bb5fd4e0ef8012003ea00468301d"
+    },
+    {
+      "path": "src/shared/agent-title-decoration.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "85cbebb6ca78a7d0a93f247f85da1efbce5584d5ade9154acb4a2b168c782b41"
+    },
+    {
+      "path": "src/shared/agent-title-evidence.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "5ea226cea3867f5421cd45ac54d37f57fc2d1364cb0eafa4a5ff71ddda5fc7ea",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "792a16e01191e3659e487352b21e6df8898db6cd2ab57c1363f3ec3ea1fd49fa",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "5ea226cea3867f5421cd45ac54d37f57fc2d1364cb0eafa4a5ff71ddda5fc7ea"
+    },
+    {
+      "path": "src/shared/agent-title-identity.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "613c6284eb31aaa381db438c47d2ccf2c726ad150ae62ef269a2cfb762a03453",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "c7876bbf40e0e14676f9829e9b9800baa527fe9f5d63ea7f721e293405ea18f9",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "613c6284eb31aaa381db438c47d2ccf2c726ad150ae62ef269a2cfb762a03453"
+    },
+    {
+      "path": "src/shared/agent-title-status.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "570a4710ebd0a7626dbdccff795efd087997853ac7c0fdb82c015976760b70bb",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "8df0706f4074d06909d1264e22203f431a09118e056e934b96758d963a69f1bd",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "570a4710ebd0a7626dbdccff795efd087997853ac7c0fdb82c015976760b70bb"
+    },
+    {
+      "path": "src/shared/github/links.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "3a7bdfabed6fa37272df8c60c6933bf1bb3b783d7ca4adddf9c8d4c579295da7",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "3a7bdfabed6fa37272df8c60c6933bf1bb3b783d7ca4adddf9c8d4c579295da7",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "3a7bdfabed6fa37272df8c60c6933bf1bb3b783d7ca4adddf9c8d4c579295da7"
+    },
+    {
+      "path": "src/shared/opencode-terminal-title.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "2af51932ca77ae4d4b6edcc1d25ab181b3fdf392056f75c9defb6a14a93cc5ec"
+    },
+    {
+      "path": "src/shared/osc-title-extraction.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "862f2e9f5d05e3b588143e18752dbffe9b7635174abc31893ba0da4f04c9230a"
+    },
+    {
+      "path": "src/shared/own-retained-string.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": null,
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "addea88bc11c725192be2ff617b91315a875113844c95de03e5529cf3d7ef2e2"
+    },
+    {
+      "path": "src/shared/owned-utf16-suffix.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "1ca0bb35dfff2d9f3c02caee3d05b0e0c97378df71c878622acf703524d2c475"
+    },
+    {
+      "path": "src/shared/pane-agent-evidence-sources.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "26673ce2168f819d3c6c41a0e05544457f0c65ac4d70eb4b5e791bb05b239a8f"
+    },
+    {
+      "path": "src/shared/pane-agent-identity-adapter.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "0d27d248d6cd86eaca4d8f046cbfeae0ee1934fc67bd2cb0bb9d7e8e630cdfb9"
+    },
+    {
+      "path": "src/shared/pi-compatible-synthetic-title.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "99b401985234b242229f9f7eb244b041ffe98f0e463cf90a74c1c248943b820f",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "2c43b6aa0b26f328bc7d51bfc8b4f7a8937156f91b430ccedc945827808e188d",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "99b401985234b242229f9f7eb244b041ffe98f0e463cf90a74c1c248943b820f"
+    },
+    {
+      "path": "src/shared/pi-state-title-marker.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "c398ce62a0f0dc72b23d106742833c1d60807f4dee92c78adb428a0b0031dce8",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "5cccf1bb0e00d362e9a824996a6755cf101c71a895413e6862c7a3d68e8828af",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "c398ce62a0f0dc72b23d106742833c1d60807f4dee92c78adb428a0b0031dce8"
+    },
+    {
+      "path": "src/shared/shell-process-detection.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f"
+    },
+    {
+      "path": "src/shared/synthetic-agent-title.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "8944067df16920a6ed068a251d6cf4c270263db68e9b489708d0ae467ae9326c",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922"
+    },
+    {
+      "path": "src/shared/terminal-bell-detector.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "fffa4e0717222ea3059b4aab06a3403b6c972398d5fa9e4acf3316159d18dc05",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "fffa4e0717222ea3059b4aab06a3403b6c972398d5fa9e4acf3316159d18dc05",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "fffa4e0717222ea3059b4aab06a3403b6c972398d5fa9e4acf3316159d18dc05"
+    },
+    {
+      "path": "src/shared/terminal-color-scheme-protocol.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "b8d1ee7693ae5053a8e3c9c099b8ab81032aed1f9a984de6eaad59e8c10c1700",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "b8d1ee7693ae5053a8e3c9c099b8ab81032aed1f9a984de6eaad59e8c10c1700",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "b8d1ee7693ae5053a8e3c9c099b8ab81032aed1f9a984de6eaad59e8c10c1700"
+    },
+    {
+      "path": "src/shared/terminal-github-pr-link-detector.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "7c9509c50cfe733b5f9b29bcbd5c684825b3c18b2fac82275bd9047e7026100e",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "7c9509c50cfe733b5f9b29bcbd5c684825b3c18b2fac82275bd9047e7026100e",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "7c9509c50cfe733b5f9b29bcbd5c684825b3c18b2fac82275bd9047e7026100e"
+    },
+    {
+      "path": "src/shared/terminal-mode-2031-final-state.test.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "42f3ff8839969f36a98f05c36d93abb7da291a9c3d2923a185a4933f4f245e10",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "42f3ff8839969f36a98f05c36d93abb7da291a9c3d2923a185a4933f4f245e10",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "42f3ff8839969f36a98f05c36d93abb7da291a9c3d2923a185a4933f4f245e10"
+    },
+    {
+      "path": "src/shared/terminal-osc133-command-finished.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "1790083b5200d11e68257556dffb49d2e8700841dccc6ccbbaa2c30b11b1efcd",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "1790083b5200d11e68257556dffb49d2e8700841dccc6ccbbaa2c30b11b1efcd",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "1790083b5200d11e68257556dffb49d2e8700841dccc6ccbbaa2c30b11b1efcd"
+    },
+    {
+      "path": "src/shared/terminal-output-side-effects.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "f609970e2ea7e53fc9e1ab0e0caca038b910dee3c092a9297377689871845f49",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "c1666a54339ece63e4180ab7e3eceec244f5bdd686c6dc3a0eed6e9ab93abcd4",
+          "matchesAuditedBefore": false
+        }
+      },
+      "auditedBeforeSha256": "f609970e2ea7e53fc9e1ab0e0caca038b910dee3c092a9297377689871845f49"
+    },
+    {
+      "path": "src/shared/terminal-title-agent-type.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "d7734bdfbd4d3151ae5bef3545f670c5ea931f1b17758cbbab8476b83b448864"
+    },
+    {
+      "path": "src/shared/terminal-title-classification-memo.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "e587a8cbfd3cf6d5fdf95400020a9346f87518e8b9d8476039d6a88a7b99beda"
+    },
+    {
+      "path": "src/shared/terminal-title-wrapper-segments.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "f2eb6fc485e519263f3e9394a9f3dc7004aa70373e3e36d42eba3ec509e2cb78"
+    },
+    {
+      "path": "src/shared/tui-agent-display-names.ts",
+      "namedRefs": {
+        "main291b": {
+          "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+          "sha256": "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296",
+          "matchesAuditedBefore": true
+        },
+        "v1.4.198": {
+          "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+          "sha256": "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296",
+          "matchesAuditedBefore": true
+        }
+      },
+      "auditedBeforeSha256": "1a4b102bb7e8c13a48344c6da22f531e1ebf77329bd868f2580b7729684c7296"
+    }
+  ],
+  "historicalScope": "Scanner baseline is identical at main291b and v1.4.198. Current caller/helper dependencies are evaluated; own-retained-string is absent in v1.4.198. This is not a complete historical-release replay.",
+  "callerScope": "Non-evaluated supporting caller provenance accepts only recorded audited-before or named main291b bytes; each runtime report records the actual selected hash. Evaluated bundle dependencies require the single fixed hash."
+}

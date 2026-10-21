@@ -4,7 +4,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+/** Startup commands published with the created tabs, in creation order. */
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 
 type StoreRepo = {
   id: string
@@ -35,7 +38,14 @@ const store = {
   repos: [] as StoreRepo[],
   folderWorkspaces: [] as unknown[],
   projectGroups: [] as unknown[],
-  sshConnectionStates: new Map<string, { status: string }>(),
+  sshConnectionStates: new Map<string, { status: string; remotePlatform?: string }>([
+    ['openclaw', { status: 'connected', remotePlatform: 'linux' }],
+    ['m4air', { status: 'connected', remotePlatform: 'linux' }]
+  ]),
+  sshStateByEnvironment: new Map([
+    ['vm-1', { connectionStates: new Map([['nested', { remotePlatform: 'linux' }]]) }]
+  ]),
+  runtimeStatusByEnvironmentId: new Map([['vm-1', { status: { hostPlatform: 'linux' } }]]),
   transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {} as Record<string, StoreWorktree[]>,
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1'] ?? []),
@@ -50,7 +60,6 @@ const store = {
   ptyIdsByTabId: {} as Record<string, string[]>,
   createTab: mockCreateTab,
   closeTab: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: vi.fn(),
   setTabBarOrder: vi.fn(),
   setAgentStatus: vi.fn(),
@@ -80,9 +89,13 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: vi.fn(() => false),
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
+}))
+vi.mock('../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
@@ -92,11 +105,16 @@ function worktreeOn(hostId: string, path: string): StoreWorktree {
 
 async function launchOnLinux(): Promise<void> {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  launchAgentInNewTab({ agent: 'claude-agent-teams', worktreeId: 'wt-1', launchPlatform: 'linux' })
+  launchAgentInNewTab({
+    requestId: 'request-1',
+    agent: 'claude-agent-teams',
+    worktreeId: 'wt-1',
+    launchPlatform: 'linux'
+  })
 }
 
 function queuedCommand(): string {
-  return mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command
+  return queuedStartups()[0]?.command
 }
 
 describe('launchAgentInNewTab execution host resolution', () => {

@@ -59,10 +59,9 @@ export function getProcessStartedAtMs(pid: number): number | null {
   }
 
   if (process.platform === 'win32') {
-    // Why: the only OS source is a CIM query costing a powershell spawn —
-    // too slow for this sync path. Windows pid files instead carry the
-    // daemon's self-reported start time from its ready message, and
-    // isDaemonProcess verifies it against CIM CreationDate asynchronously.
+    // Why: Windows pid files carry the daemon's self-reported start time from
+    // its ready message, and inspectDaemonProcessIdentity verifies it against
+    // the process table's creation time asynchronously.
     return null
   }
 

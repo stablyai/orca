@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const readRuntimeDirectory = vi.fn()
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-mutation-client', () => ({
   readRuntimeDirectory: (...args: unknown[]) => readRuntimeDirectory(...args)
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
@@ -29,4 +29,13 @@ describe('readFileExplorerDirectory', () => {
       '100 - b.txt'
     ])
   })
+})
+
+it('preserves the host directory classification with default Quick Open preferences', async () => {
+  readRuntimeDirectory.mockResolvedValueOnce([
+    { name: 'linked', isDirectory: true, isSymlink: true }
+  ])
+  const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w')
+  expect(entries).toEqual([{ name: 'linked', isDirectory: true, isSymlink: true }])
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', undefined)
 })

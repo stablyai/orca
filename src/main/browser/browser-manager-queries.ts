@@ -21,19 +21,13 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.tabIdByWebContentsId.get(webContentsId) ?? null
   }
 
-  getWorktreeIdForTab(browserTabId: string): string | undefined {
-    return this.worktreeIdByTabId.get(browserTabId)
+  /** The page a guest belongs to, following popups back to the page that opened them. */
+  getOwningTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
+    return this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
   }
 
-  getRendererContextForGuest(
-    guestWebContentsId: number
-  ): { browserPageId: string; renderer: Electron.WebContents } | null {
-    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    if (!browserPageId) {
-      return null
-    }
-    const renderer = this.resolveRendererForBrowserTab(browserPageId)
-    return renderer ? { browserPageId, renderer } : null
+  getWorktreeIdForTab(browserTabId: string): string | undefined {
+    return this.worktreeIdByTabId.get(browserTabId)
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {

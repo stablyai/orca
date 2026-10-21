@@ -8,17 +8,15 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useImmediateMutation, useRepoAssignees } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import {
   parseOwnerRepoFromItemUrl,
+  resolvePullRequestRepo,
   type GitHubWorkItemProjectOrigin
 } from '@/components/github/github-work-item-identity'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
@@ -46,18 +44,8 @@ export function PRAssigneesPanel({
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
 
@@ -82,16 +70,17 @@ export function PRAssigneesPanel({
   )
   const assigneeLogins = useMemo(() => localAssignees.map((user) => user.login), [localAssignees])
   const assigneeSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
   const slugOwner = projectOrigin?.owner ?? assigneeSlug?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? assigneeSlug?.repo ?? null
   const repoAssigneesBySlug = useRepoAssigneesBySlug(
     slugOwner,
     slugRepo,
     assigneeLogins,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host ?? assigneeSlug?.host
   )
-  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
   const canEditAssignees = Boolean(projectOrigin || repoPath)
   const assigneesByLogin = useMemo(
@@ -118,17 +107,24 @@ export function PRAssigneesPanel({
             repoPath,
             sourceContext,
             projectOrigin,
+            issueRepo: prRepo,
             number: item.number,
             updates: isAssigned ? { removeAssignees: [login] } : { addAssignees: [login] }
           }),
         onOptimistic: () => {
           setLocalAssignees(nextAssignees)
-          patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId, { sourceContext })
+          patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId, {
+            sourceContext,
+            ownerRepo: prRepo
+          })
           patchProjectRowIfNeeded(nextLogins)
         },
         onRevert: () => {
           setLocalAssignees(prevAssignees)
-          patchWorkItem(item.id, { assignees: prevAssignees }, item.repoId, { sourceContext })
+          patchWorkItem(item.id, { assignees: prevAssignees }, item.repoId, {
+            sourceContext,
+            ownerRepo: prRepo
+          })
           patchProjectRowIfNeeded(prevLogins)
         },
         onSuccess: () => {
@@ -147,6 +143,7 @@ export function PRAssigneesPanel({
       onMutated,
       patchProjectRowIfNeeded,
       patchWorkItem,
+      prRepo,
       projectOrigin,
       repoPath,
       run,

@@ -1,5 +1,24 @@
 import { z } from 'zod'
 
+export const MobileDiffReviewSchema = z.object({
+  version: z.literal(1),
+  updatedAt: z.number().finite().optional(),
+  completedAt: z.number().finite().optional(),
+  files: z.record(
+    z.string(),
+    z.object({
+      key: z.string(),
+      filePath: z.string(),
+      oldPath: z.string().optional(),
+      scope: z.enum(['unstaged', 'staged', 'branch']),
+      lastOpenedAt: z.number().finite().optional(),
+      lastSeenDiffIdentity: z.string().optional(),
+      reviewedAt: z.number().finite().optional(),
+      reviewDiffIdentity: z.string().optional()
+    })
+  )
+})
+
 export const DiffCommentSchema = z.object({
   id: z.string(),
   worktreeId: z.string(),

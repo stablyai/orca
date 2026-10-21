@@ -5,10 +5,13 @@ import { useDaemonActions } from '../shared/useDaemonActions'
 import type { UnifiedSessionRow } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import type { SortOption } from './resource-usage-resource-tree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageBrowserTabsByWorktree,
   getResourceUsageDeferredSshSessionIdsByTabId,
+  getResourceUsageFolderWorkspaces,
+  getResourceUsageProjectGroups,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -22,6 +25,13 @@ import {
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 import { useResourceUsageActions } from './use-resource-usage-actions'
 import { useResourceUsageDerivedModel } from './use-resource-usage-derived-model'
+import { useRuntimeHostResources } from './use-runtime-host-resources'
+import {
+  collectRuntimeResourceEnvironmentIds,
+  getRuntimeHostResourceNotices,
+  toRuntimeHostResourceSamples
+} from './runtime-host-resources'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 const POLL_MS = 2_000
 
@@ -67,7 +77,13 @@ export function useResourceUsageStatusController() {
     getResourceUsageRuntimePaneTitlesByTabId(s, open)
   )
   const repos = useAppStore((s) => getResourceUsageRepos(s, open))
-  const allWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
+  const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
+  const folders = useAppStore((s) => getResourceUsageFolderWorkspaces(s, open))
+  const projectGroups = useAppStore((s) => getResourceUsageProjectGroups(s, open))
+  const allWorktrees = useMemo(
+    () => [...gitWorktrees, ...folders.map(folderWorkspaceToWorktree)],
+    [gitWorktrees, folders]
+  )
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
   const browserTabsByWorktree = useAppStore((s) => getResourceUsageBrowserTabsByWorktree(s, open))
   // Why: full binding maps stay behind open sentinels so unchanged counts don't rerender the closed segment.
@@ -78,6 +94,25 @@ export function useResourceUsageStatusController() {
     getResourceUsageDeferredSshSessionIdsByTabId(s, open)
   )
   const resourceSnapshot = snapshot
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentIds = useMemo(
+    () =>
+      collectRuntimeResourceEnvironmentIds([
+        ...repos.map(getRepoExecutionHostId),
+        ...allWorktrees.map((worktree) => worktree.hostId)
+      ]),
+    [repos, allWorktrees]
+  )
+  const runtimeHostResults = useRuntimeHostResources(open, runtimeEnvironmentIds, POLL_MS)
+  const { runtimeHostResources, runtimeHostNotices } = useMemo(() => {
+    const hostLabel = (environmentId: string): string =>
+      runtimeEnvironments.find((environment) => environment.id === environmentId)?.name ||
+      environmentId
+    return {
+      runtimeHostResources: toRuntimeHostResourceSamples(runtimeHostResults, hostLabel),
+      runtimeHostNotices: getRuntimeHostResourceNotices(runtimeHostResults, hostLabel)
+    }
+  }, [runtimeHostResults, runtimeEnvironments])
   // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
     () => ({
@@ -181,11 +216,13 @@ export function useResourceUsageStatusController() {
   const derived = useResourceUsageDerivedModel({
     open,
     resourceSnapshot,
+    runtimeHostResources,
     sessions,
     resourceSessionBindings,
     runtimePaneTitlesByTabId,
     repos,
     allWorktrees,
+    projectGroups,
     browserTabsByWorktree,
     workspaceSessionReady,
     sessionCount: sessionInventory.count,
@@ -233,6 +270,7 @@ export function useResourceUsageStatusController() {
     setPopoverBodyNode,
     daemonActions,
     resourceSnapshot,
+    runtimeHostNotices,
     spaceScanReady,
     recordFeatureInteraction,
     ...derived,

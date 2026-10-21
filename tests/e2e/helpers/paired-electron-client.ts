@@ -25,6 +25,8 @@ import {
 import { createPairedWebClientUrl, type PairedWebClientOptions } from './paired-web-client-url'
 import { selectPairedRuntimeEnvironment } from './paired-client-runtime-environment'
 
+export { rePairPairedElectronClient } from './paired-client-runtime-environment'
+
 export type { SameIdPairingReplacement } from './nested-runtime-same-id-pairing'
 
 export type PairedElectronClient = {
@@ -32,7 +34,15 @@ export type PairedElectronClient = {
   page: Page
   environmentId: string
   captureDirectSshAttempts: () => Promise<void>
+  /** Closes the app AND deletes the profile. For a restart, use `quitPreservingProfile`. */
   dispose: () => Promise<void>
+  /** Quit for a relaunch on the same profile: everything `dispose` does except `removeProfile`.
+   *  Why named rather than left to callers: composing it wrong is silent and expensive. Calling
+   *  `dispose` and relaunching with `reuseUserDataDir` yields a FIRST RUN on an empty profile, so
+   *  every persistence assertion after it reads empty and looks exactly like data loss — that
+   *  produced a phantom data-loss report once. Reaching for a bare `app.close()` instead hangs:
+   *  it lacks the timeout and force-kill fallback that `closeElectronAppForE2E` wraps around it. */
+  quitPreservingProfile: () => Promise<void>
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
   replacePairingInPlace: (offer: RuntimeDesktopPairingOffer) => Promise<SameIdPairingReplacement>
@@ -92,6 +102,22 @@ export async function createRuntimeDesktopPairingOffer(
       pairingUrl: offer.pairingUrl,
       ...(offer.webClientUrl ? { webClientUrl: offer.webClientUrl } : {})
     }
+  })
+}
+
+/** The phone QR a desktop shows in Settings, minted LAN-only so no Relay is involved. */
+export async function createDesktopMobilePairingOffer(
+  desktopPage: Page
+): Promise<RuntimeDesktopPairingOffer> {
+  return desktopPage.evaluate(async () => {
+    const offer = await window.api.mobile.getPairingQR({
+      address: '127.0.0.1',
+      connectionMode: 'local-only'
+    })
+    if (!offer.available) {
+      throw new Error(`Desktop did not mint a mobile pairing offer: ${JSON.stringify(offer)}`)
+    }
+    return { pairingUrl: offer.pairingUrl }
   })
 }
 
@@ -222,13 +248,13 @@ export async function launchPairedElectronClient(
       replacementOffer: RuntimeDesktopPairingOffer
     ): Promise<SameIdPairingReplacement> =>
       replaceRuntimePairingInPlace({
-        environmentId,
+        environmentId: client.environmentId,
         page,
         pairingUrl: replacementOffer.pairingUrl,
         userDataDir
       })
 
-    return {
+    const client: PairedElectronClient = {
       app,
       page,
       environmentId,
@@ -237,6 +263,10 @@ export async function launchPairedElectronClient(
         await closeElectronAppForE2E(app)
         await cleanupE2EDaemons(userDataDir)
         await removeProfile(userDataDir)
+      },
+      quitPreservingProfile: async () => {
+        await closeElectronAppForE2E(app)
+        await cleanupE2EDaemons(userDataDir)
       },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(
@@ -247,66 +277,11 @@ export async function launchPairedElectronClient(
       replacePairingInPlace,
       userDataDir
     }
+    return client
   } catch (error) {
     await closeElectronAppForE2E(app)
     await cleanupE2EDaemons(userDataDir)
     await removeProfile(userDataDir)
     throw error
-  }
-}
-
-export async function rePairPairedElectronClient(
-  client: PairedElectronClient,
-  offer: RuntimeDesktopPairingOffer,
-  name: string
-): Promise<void> {
-  await client.captureDirectSshAttempts()
-  const environmentId = await client.page.evaluate(
-    async ({ currentEnvironmentId, name, pairingUrl }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Paired desktop store is unavailable')
-      }
-      await window.api.runtimeEnvironments.remove({ selector: currentEnvironmentId })
-      const result = await window.api.runtimeEnvironments.addFromPairingCode({
-        name,
-        pairingCode: pairingUrl
-      })
-      store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-      if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
-        throw new Error('Re-paired desktop could not reach the HUB runtime')
-      }
-      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
-        throw new Error('Re-paired desktop could not select the HUB runtime')
-      }
-      return result.environment.id
-    },
-    {
-      currentEnvironmentId: client.environmentId,
-      name,
-      pairingUrl: offer.pairingUrl
-    }
-  )
-  client.environmentId = environmentId
-  // Why: removing and re-adding the same HUB changes the environment identity; remount so no pane keeps the retired transport wrapper.
-  await client.page.reload()
-  await client.page.waitForFunction(
-    () => window.__store?.getState().workspaceSessionReady === true,
-    null,
-    { timeout: 30_000 }
-  )
-  await client.installDirectSshAttemptProbe()
-  const reachable = await client.page.evaluate(async (nextEnvironmentId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Re-paired desktop store is unavailable after reload')
-    }
-    if (!(await store.getState().refreshRuntimeEnvironmentStatus(nextEnvironmentId))) {
-      return false
-    }
-    return store.getState().setActiveRuntimeEnvironmentPreference(nextEnvironmentId)
-  }, environmentId)
-  if (!reachable) {
-    throw new Error('Re-paired desktop could not reach the HUB after reload')
   }
 }

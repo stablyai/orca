@@ -87,6 +87,7 @@ describe('openLinearIssueWorkspaceOrStart', () => {
 
     expect(openLinearIssueWorkspaceOrStart({ identifier: 'ENG-1' }, vi.fn())).toBe('opened')
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
+      navigationIntent: 'user-open',
       executionHostId: 'ssh:builder'
     })
   })
@@ -97,6 +98,7 @@ describe('openLinearIssueWorkspaceOrStart', () => {
 
     expect(openLinearIssueWorkspaceOrStart({ identifier: 'ENG-1' }, startWorkspace)).toBe('opened')
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-1', {
+      navigationIntent: 'user-open',
       executionHostId: 'local'
     })
     expect(startWorkspace).not.toHaveBeenCalled()

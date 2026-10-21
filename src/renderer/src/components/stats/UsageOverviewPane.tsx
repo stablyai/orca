@@ -36,22 +36,29 @@ export function UsageOverviewPane(): React.JSX.Element {
   const openCodeScanState = useAppStore((state) => state.openCodeUsageScanState)
   const openCodeSummary = useAppStore((state) => state.openCodeUsageSummary)
   const openCodeDaily = useAppStore((state) => state.openCodeUsageDaily)
+  const museScanState = useAppStore((state) => state.museUsageScanState)
+  const museSummary = useAppStore((state) => state.museUsageSummary)
+  const museDaily = useAppStore((state) => state.museUsageDaily)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
+  const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
+  const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
+  const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
     void fetchClaudeUsage()
     void fetchCodexUsage()
     void fetchOpenCodeUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage])
+    void fetchMuseUsage()
+  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
 
   const overview = useMemo(
     () =>
@@ -70,6 +77,11 @@ export function UsageOverviewPane(): React.JSX.Element {
           scanState: openCodeScanState,
           summary: openCodeSummary,
           daily: openCodeDaily
+        },
+        muse: {
+          scanState: museScanState,
+          summary: museSummary,
+          daily: museDaily
         }
       }),
     [
@@ -79,6 +91,9 @@ export function UsageOverviewPane(): React.JSX.Element {
       codexDaily,
       codexScanState,
       codexSummary,
+      museDaily,
+      museScanState,
+      museSummary,
       openCodeDaily,
       openCodeScanState,
       openCodeSummary
@@ -94,7 +109,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     void Promise.all([
       claudeScanState?.enabled ? refreshClaudeUsage() : Promise.resolve(),
       codexScanState?.enabled ? refreshCodexUsage() : Promise.resolve(),
-      openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve()
+      openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve(),
+      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve()
     ])
   }
 
@@ -187,6 +203,16 @@ export function UsageOverviewPane(): React.JSX.Element {
                     'Enable OpenCode'
                   )}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableMuseUsage()
+                  }}
+                >
+                  {translate('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
+                </Button>
               </div>
             </div>
           </div>
@@ -227,8 +253,8 @@ export function UsageOverviewPane(): React.JSX.Element {
             {!overview.hasAnyData ? (
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {translate(
-                  'auto.components.stats.UsageOverviewPane.60002bb22f',
-                  'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.'
+                  'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
+                  'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
               </div>
             ) : (
@@ -272,8 +298,10 @@ export function UsageOverviewPane(): React.JSX.Element {
                   void enableClaudeUsage()
                 } else if (provider.id === 'codex') {
                   void enableCodexUsage()
-                } else {
+                } else if (provider.id === 'opencode') {
                   void enableOpenCodeUsage()
+                } else {
+                  void enableMuseUsage()
                 }
               }}
             />

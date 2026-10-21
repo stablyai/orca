@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  DAEMON_GONE_PROOFS,
   probeDaemonProcessIdentity,
   WINDOWS_CREATION_TIME_TOLERANCE_MS,
   type DaemonProcessProbeDependencies,
@@ -48,18 +47,6 @@ function linuxDependencies(
 }
 
 describe('daemon process identity evidence', () => {
-  it('pins the dated conclusive-gone oracle contract', () => {
-    expect(DAEMON_GONE_PROOFS).toEqual({
-      linux: ['pid_missing', 'linux_boot_changed', 'linux_start_ticks_mismatch', 'linux_zombie'],
-      darwin: ['pid_missing'],
-      win32: [
-        'windows_process_missing',
-        'windows_creation_time_mismatch',
-        'windows_named_pipe_missing'
-      ]
-    })
-  })
-
   it('proves Linux pid reuse from native start ticks without derived milliseconds', async () => {
     const readProcessStartedAtMs = vi.fn(async () => exactIncarnation.identity.startedAtMs)
 

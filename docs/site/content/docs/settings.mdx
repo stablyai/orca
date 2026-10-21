@@ -44,6 +44,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Ghostty import.
 - Warp theme import — bring in your Warp YAML themes with **Import themes from Warp** (auto-discovers Warp's themes folder per OS) or **Import from YAML** for any folder of Warp-format theme files.
 - JIS Yen (¥) to Backslash (\\) for macOS Japanese keyboards.
+- **Terminal shell** (local macOS / Linux) — system shell or a custom executable, with login startup by default. **Custom shell → Advanced → Custom args** requests replacement arguments for ordinary local panes. See [startup files and argument limits](/docs/terminal#macos-and-linux-shell).
 - Windows default shell (PowerShell or CMD).
 - **Allow TUI Clipboard Writes (OSC 52)** — **on by default**. Lets Zellij, tmux, Neovim, fzf, Grok (and similar) write the system clipboard over the PTY, including over SSH. Turn off if you prefer the older lockdown.
 
@@ -132,6 +133,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 
 - Full keymap — every binding remappable.
 - Toggle Sleeping Workspaces ships unbound; assign it here if you want a direct shortcut for the sidebar sleeping-worktree filter.
+- **Toggle Child Workspaces** ships unbound; assign it here to show or hide a parent worktree's nested children, the same as clicking its **N children** chip. It targets the hovered worktree, or the active one when nothing is hovered.
 - **Toggle Workspace Board** ships unbound; assign it here to open or close the Workspace Board with one shortcut. Existing bindings for `workspace.openBoard` continue to work.
 - Close all editor tabs defaults to `Cmd+Option+W` on macOS and `Ctrl+Alt+W` on Windows / Linux.
 - **Tab navigation defaults (new installs):** next/previous tab **across all types** is `Cmd+Shift+]` / `Cmd+Shift+[` (Ctrl on Linux/Windows). Same-type next/previous is `Cmd+Option+]` / `Cmd+Option+[`. Previous recent tab is `Ctrl+Tab`. Existing installs keep customized overrides under `~/.orca/keybindings.json`.

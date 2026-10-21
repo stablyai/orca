@@ -154,22 +154,6 @@ function exposeFaultApi(): void {
 
 exposeFaultApi()
 
-export function observeE2eWebRuntimeBrowserCreation(result: Promise<boolean>): void {
-  if (!e2eConfig.exposeStore || !settleCreation) {
-    return
-  }
-  const settle = settleCreation
-  settleCreation = null
-  void result.then(
-    (created) => settle({ status: 'fulfilled', created }),
-    (error) =>
-      settle({
-        status: 'rejected',
-        error: error instanceof Error ? error.message : String(error)
-      })
-  )
-}
-
 export function throwIfE2eWebRuntimeBrowserCapabilityUnavailable(): void {
   if (!e2eConfig.exposeStore || !capabilityRejectionArmed) {
     return

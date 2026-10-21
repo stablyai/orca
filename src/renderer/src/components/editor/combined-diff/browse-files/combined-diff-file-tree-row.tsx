@@ -2,10 +2,11 @@ import { createElement, memo } from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
 import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type {
   GitFileStatus,
@@ -35,6 +36,7 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
   node,
   mode,
   worktreePath,
+  sourceWorkspaceId,
   activeSectionKey,
   sectionIndexByKey,
   isCollapsed,
@@ -45,6 +47,7 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
   node: CombinedDiffTreeNode
   mode: CombinedDiffFileTreeMode
   worktreePath: string
+  sourceWorkspaceId?: string
   activeSectionKey: string | null
   sectionIndexByKey: ReadonlyMap<string, number>
   isCollapsed: boolean
@@ -62,6 +65,9 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
         draggable
         onDragStart={(event) => {
           event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, joinPath(worktreePath, node.path))
+          if (sourceWorkspaceId) {
+            writeWorkspaceFileDragSourceForWorkspace(event.dataTransfer, sourceWorkspaceId)
+          }
           event.dataTransfer.effectAllowed = 'copy'
         }}
       >
@@ -89,7 +95,6 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
   }
 
   const sectionKey = getCombinedDiffFileTreeSectionKey(mode, node.entry)
-  const FileIcon = getFileTypeIcon(node.entry.path)
   const fileName = basename(node.entry.path)
   const parentDir = dirname(node.entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -117,11 +122,15 @@ export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
           WORKSPACE_FILE_PATH_MIME,
           joinPath(worktreePath, node.entry.path)
         )
+        if (sourceWorkspaceId) {
+          writeWorkspaceFileDragSourceForWorkspace(event.dataTransfer, sourceWorkspaceId)
+        }
         event.dataTransfer.effectAllowed = 'copy'
       }}
       onClick={() => onNavigate(node.entry)}
     >
-      {createElement(FileIcon, {
+      {createElement(FileTypeIcon, {
+        filePath: node.entry.path,
         className: 'size-3.5 shrink-0',
         style: { color: STATUS_COLORS[status] }
       })}

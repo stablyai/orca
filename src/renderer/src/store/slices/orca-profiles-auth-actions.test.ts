@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from './store-test-helpers'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,
@@ -9,6 +8,21 @@ import type {
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
 } from '../../../../shared/orca-profiles'
+import { createTestStore } from './store-test-helpers'
+
+const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+  toastSuccessMock: vi.fn()
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: toastErrorMock,
+    info: vi.fn(),
+    success: toastSuccessMock,
+    warning: vi.fn()
+  }
+}))
 
 const listState: OrcaProfileListState = {
   activeProfileId: 'local-default',
@@ -73,6 +87,8 @@ const orcaProfilesApi = {
 describe('orca profile auth actions slice', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    toastErrorMock.mockReset()
+    toastSuccessMock.mockReset()
     orcaProfilesApi.authStatus.mockResolvedValue(localAuthStatus)
     vi.stubGlobal('window', {
       api: {
@@ -98,13 +114,51 @@ describe('orca profile auth actions slice', () => {
     orcaProfilesApi.connectCurrent.mockResolvedValue(result)
     const store = createTestStore()
 
-    const pending = store.getState().connectCurrentOrcaProfile()
-
-    expect(store.getState().orcaProfileConnecting).toBe(true)
-    await expect(pending).resolves.toEqual(result)
-    expect(store.getState().orcaProfileConnecting).toBe(false)
+    await expect(store.getState().connectCurrentOrcaProfile()).resolves.toEqual(result)
     expect(store.getState().orcaProfileAuthStatus).toEqual(connectedAuthStatus)
     expect(store.getState().orcaProfiles).toEqual(connectedProfiles)
+    expect(toastSuccessMock).toHaveBeenCalledOnce()
+  })
+
+  it('starts a second sign-in while the first browser wait is still open', async () => {
+    const connectedProfiles = [
+      {
+        ...listState.profiles[0],
+        kind: 'cloud-linked' as const,
+        cloud: connectedAuthStatus.cloud
+      }
+    ]
+    const connected: ConnectCurrentOrcaProfileResult = {
+      status: 'connected',
+      auth: connectedAuthStatus,
+      activeProfileId: 'local-default',
+      profiles: connectedProfiles
+    }
+    const cancelled: ConnectCurrentOrcaProfileResult = {
+      status: 'cancelled',
+      auth: connectedAuthStatus
+    }
+    let finishFirst!: (value: ConnectCurrentOrcaProfileResult) => void
+    orcaProfilesApi.connectCurrent
+      .mockReturnValueOnce(
+        new Promise<ConnectCurrentOrcaProfileResult>((resolve) => {
+          finishFirst = resolve
+        })
+      )
+      .mockResolvedValueOnce(connected)
+    const store = createTestStore()
+
+    const first = store.getState().connectCurrentOrcaProfile()
+    const second = store.getState().connectCurrentOrcaProfile()
+
+    expect(orcaProfilesApi.connectCurrent).toHaveBeenCalledTimes(2)
+    await expect(second).resolves.toEqual(connected)
+    expect(toastSuccessMock).toHaveBeenCalledOnce()
+    finishFirst(cancelled)
+    await expect(first).resolves.toEqual(cancelled)
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(toastSuccessMock).toHaveBeenCalledOnce()
+    expect(store.getState().orcaProfileAuthStatus).toEqual(connectedAuthStatus)
   })
 
   it('refreshes current profile auth and stores fresh capability flags', async () => {

@@ -1,5 +1,5 @@
 import { e2eConfig } from '@/lib/e2e-config'
-import type { PtyBufferSnapshot } from '../pty-transport'
+import type { PtyBufferSnapshot } from '../pty-transport-types'
 import type { PtyDataMeta } from '../pty-dispatcher'
 
 type E2eTerminalPtyDataInjectionApi = {

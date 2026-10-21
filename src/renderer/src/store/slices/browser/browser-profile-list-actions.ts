@@ -5,6 +5,7 @@ import type {
   BrowserProfileDeleteResult,
   BrowserProfileListResult
 } from '../../../../../shared/runtime-types'
+import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getBrowserProfilesForHost,
@@ -22,9 +23,11 @@ export function createBrowserProfileListActions(
   'fetchBrowserSessionProfiles' | 'createBrowserSessionProfile' | 'deleteBrowserSessionProfile'
 > {
   return {
-    fetchBrowserSessionProfiles: async () => {
-      const hostId = getBrowserSettingsHostId(get())
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+    fetchBrowserSessionProfiles: async (requestedHostId) => {
+      const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileListResult>(
@@ -58,7 +61,7 @@ export function createBrowserProfileListActions(
       }
     },
 
-    createBrowserSessionProfile: async (scope, label, options) => {
+    createBrowserSessionProfile: async (scope, label) => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
       if (runtimeEnvironmentId) {
@@ -66,7 +69,7 @@ export function createBrowserProfileListActions(
           const result = await callRuntimeRpc<BrowserProfileCreateResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileCreate',
-            { scope, label, ...options },
+            { scope, label },
             { timeoutMs: 15_000 }
           )
           const profile = result.profile
@@ -85,11 +88,10 @@ export function createBrowserProfileListActions(
         }
       }
       try {
-        const profile = (await window.api.browser.sessionCreateProfile({
+        const profile = await window.api.browser.sessionCreateProfile({
           scope,
-          label,
-          ...options
-        })) as BrowserSessionProfile | null
+          label
+        })
         if (profile) {
           set((s) => ({
             ...profileListByHostUpdate(

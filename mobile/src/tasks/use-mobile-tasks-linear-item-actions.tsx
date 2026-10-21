@@ -2,12 +2,13 @@ import type { GithubReplyMergeActionsModel } from './use-mobile-tasks-github-rep
 import { useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
-  type LinearIssue,
   type LinearIssueChild,
   type TaskItem,
-  createLinearTask,
-  isSuccess
+  createLinearTask
 } from './mobile-tasks-legacy-foundation'
+import { linearIssueRead } from './mobile-task-item-detail-operations'
+import { linearIssueCommentWrite } from './mobile-task-item-comment-operations'
+import { linearIssueCreate } from './mobile-task-item-state-operations'
 
 export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsModel) {
   const {
@@ -34,8 +35,8 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'linear.addIssueComment',
+        const reply = await linearIssueCommentWrite.request(
+          client,
           {
             issueId: item.source.id,
             workspaceId: item.source.workspaceId,
@@ -43,10 +44,7 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; id?: string; error?: string }
+        const result = linearIssueCommentWrite.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add comment')
         }
@@ -79,15 +77,12 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'linear.getIssue',
+        const reply = await linearIssueRead.request(
+          client,
           { id: child.id, workspaceId },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const issue = response.result as LinearIssue | null
+        const issue = linearIssueRead.interpret(reply)
         if (!issue) {
           throw new Error('Sub-issue not found')
         }
@@ -113,8 +108,8 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'linear.createIssue',
+        const reply = await linearIssueCreate.request(
+          client,
           {
             teamId: item.source.team.id,
             title,
@@ -124,17 +119,7 @@ export function useMobileTasksLinearItemActions(model: GithubReplyMergeActionsMo
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          id?: string
-          identifier?: string
-          title?: string
-          url?: string
-          error?: string
-        }
+        const result = linearIssueCreate.interpret(reply)
         if (result.ok === false || !result.id || !result.identifier) {
           throw new Error(result.error ?? 'Failed to create sub-issue')
         }

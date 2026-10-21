@@ -71,24 +71,6 @@ describe('SourceControl commit failure recovery prompt', () => {
     expect(appendCommitFailureCustomInstruction(prompt, '   ')).toBe(prompt)
   })
 
-  it('leaves blank launch templates blank so the launcher can reject them', () => {
-    expect(
-      buildCommitFailureAgentCommandInput({
-        commandInputTemplate: '   ',
-        basePrompt: 'Fix this commit failure.'
-      })
-    ).toBe('')
-  })
-
-  it('falls back to the base commit-failure prompt when no launch template is saved', () => {
-    expect(
-      buildCommitFailureAgentCommandInput({
-        commandInputTemplate: undefined,
-        basePrompt: 'Fix this commit failure.'
-      })
-    ).toBe('Fix this commit failure.')
-  })
-
   it('trims custom launch overrides before the direct launch path uses them', () => {
     expect(
       buildCommitFailureAgentCommandInput({

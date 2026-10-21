@@ -117,7 +117,10 @@ export function createMobileRpcSurfaceRuntime() {
     .fn()
     .mockResolvedValue({ ok: true, id: 'comment-1' })
   const runtime = {
+    configureNotificationDismissalStore: () => {},
     getRuntimeId: () => 'test-runtime',
+    getStartedAt: () => 1,
+    machineNameReady: async () => undefined,
     getStatus,
     pushRuntimeGit,
     selectClaudeAccount,

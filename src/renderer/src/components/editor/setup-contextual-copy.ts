@@ -3,7 +3,11 @@ import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { monaco } from '@/lib/monaco-setup'
 import { useAppStore } from '@/store'
 import { editorShortcutMatches } from './editor-shortcuts'
-import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
+import {
+  canCopySelectionWithContext,
+  formatCopiedSelectionWithContext,
+  getContextualCopyLineRange
+} from './selection-copy'
 import {
   PRIMARY_SELECTION_MAX_LENGTH,
   isPrimarySelectionEnabled,
@@ -87,8 +91,10 @@ export function setupContextualCopy({
 
   const updateCopyHint = (): void => {
     updateCopyHintLabel()
-    const contextualCopyText = getContextualCopyText()
-    if (!contextualCopyText) {
+    const model = editorInstance.getModel()
+    const selection = editorInstance.getSelection()
+    // Why: hint ticks need selection bounds; extracting the selected text scales with file size.
+    if (!model || !selection || selection.isEmpty() || !canCopySelectionWithContext(selection)) {
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
       editorInstance.layoutContentWidget(copyHintWidget)
@@ -96,15 +102,6 @@ export function setupContextualCopy({
     }
 
     if (lastCopiedSelectionKey !== null && lastCopiedSelectionKey === getSelectionKey()) {
-      copyHintNode.style.display = 'none'
-      copyHintWidgetPosition = null
-      editorInstance.layoutContentWidget(copyHintWidget)
-      return
-    }
-
-    const model = editorInstance.getModel()
-    const selection = editorInstance.getSelection()
-    if (!model || !selection) {
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
       editorInstance.layoutContentWidget(copyHintWidget)

@@ -29,6 +29,12 @@ export function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
   )
 }
 
+export function isUnsupportedWorktreeAddLockReasonError(error: unknown): boolean {
+  return /\b(?:unknown|invalid|unrecognized) (?:switch|option)[^\r\n]*(?:--)?reason\b/i.test(
+    getGitErrorText(error)
+  )
+}
+
 export function hasUnsupportedRevParsePathFormatEcho(output: string): boolean {
   return output.split(/\r?\n/).some((line) => line.startsWith('--path-format'))
 }

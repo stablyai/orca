@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PROVIDER_SIGKILL_GRACE_MS } from './macos-native-provider-process-reaping'
 
 const {
   chmodSyncMock,
@@ -63,8 +64,15 @@ class FakeSocket extends EventEmitter {
 }
 
 class FakeProvider extends EventEmitter {
+  exitCode: number | null = null
+  signalCode: string | null = null
   kill = vi.fn()
   unref = vi.fn()
+
+  exit(code = 0): void {
+    this.exitCode = code
+    this.emit('exit', code, null)
+  }
 }
 
 function pendingConnectThatRejectsOnAbort(signal?: AbortSignal): Promise<never> {
@@ -107,6 +115,11 @@ describe('MacOSNativeProviderClient', () => {
   })
 
   afterEach(() => {
+    for (const result of spawnMock.mock.results) {
+      if (result.value instanceof FakeProvider) {
+        result.value.exit()
+      }
+    }
     chmodSyncMock.mockReset()
     connectMacOSProviderSocketMock.mockReset()
     mkdtempSyncMock.mockReset()
@@ -115,6 +128,76 @@ describe('MacOSNativeProviderClient', () => {
     spawnMock.mockReset()
     writeFileSyncMock.mockReset()
     vi.useRealTimers()
+  })
+
+  it('does not rescan a growing fragmented screenshot reply', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+    const call = client.snapshot({ app: 'fixture' })
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const handshake = JSON.parse(socket.writes[0]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({ id: handshake.id, ok: true, result: macOSProviderCapabilities() })}\n`
+    )
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+    const request = JSON.parse(socket.writes[1]!) as { id: number }
+    const result = { screenshot: { data: 'A'.repeat(1_200_000) }, text: 'fixture' }
+    const reply = `${JSON.stringify({ id: request.id, ok: true, result })}\n`
+    const originalIndexOf = String.prototype.indexOf
+    const originalIncludes = String.prototype.includes
+    let searchedUnits = 0
+    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+      this: string,
+      needle: string,
+      fromIndex?: number
+    ) {
+      if (needle === '\n') {
+        searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
+      }
+      return originalIndexOf.call(this, needle, fromIndex)
+    })
+    const includes = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
+      this: string,
+      needle: string,
+      fromIndex?: number
+    ) {
+      if (needle === '\n') {
+        searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
+      }
+      return originalIncludes.call(this, needle, fromIndex)
+    })
+    try {
+      for (let offset = 0; offset < reply.length; offset += 4096) {
+        socket.emit('data', reply.slice(offset, offset + 4096))
+      }
+    } finally {
+      search.mockRestore()
+      includes.mockRestore()
+    }
+    await expect(call).resolves.toEqual(result)
+    expect(searchedUnits).toBeLessThanOrEqual(reply.length * 3)
+    client.shutdown()
+  })
+
+  it('retries buffered replies on an empty chunk after a malformed reply throws', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+    void client.capabilities().catch(() => {})
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+    const first = JSON.parse(socket.writes[0]!) as { id: number }
+    const second = JSON.parse(socket.writes[1]!) as { id: number }
+    const malformed = JSON.stringify({ id: first.id, ok: false })
+    const valid = JSON.stringify({ id: second.id, ok: true, result: macOSProviderCapabilities() })
+    expect(() => socket.emit('data', `${malformed}\n${valid}\n`)).toThrow(TypeError)
+    socket.emit('data', '')
+    await expect(secondCall).resolves.toEqual(macOSProviderCapabilities())
+    client.shutdown()
   })
 
   it('ignores stale socket data, close, and error after a replacement socket starts', async () => {
@@ -128,6 +211,7 @@ describe('MacOSNativeProviderClient', () => {
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     const firstSocket = sockets[0]!
 
+    firstSocket.emit('data', '{"id":999,"result":"partial')
     await vi.advanceTimersByTimeAsync(60_000)
     await firstRejection
     expect(firstSocket.destroyed).toBe(true)
@@ -170,6 +254,7 @@ describe('MacOSNativeProviderClient', () => {
     const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
     await vi.waitFor(() => expect(firstSocket.writes).toHaveLength(1))
 
+    firstSocket.emit('data', '{"id":999,"result":"partial')
     firstSocket.emit('error', new Error('active helper failed'))
     await firstRejection
     expect(firstSocket.destroyed).toBe(true)
@@ -425,15 +510,15 @@ describe('MacOSNativeProviderClient', () => {
   })
 
   it('terminates the helper process when socket startup fails', async () => {
-    const providerKill = vi.fn()
-    spawnMock.mockReturnValueOnce({ unref: vi.fn(), kill: providerKill })
+    const provider = new FakeProvider()
+    spawnMock.mockReturnValueOnce(provider)
     connectMacOSProviderSocketMock.mockRejectedValueOnce(new Error('socket did not open'))
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
 
     await expect(client.capabilities()).rejects.toThrow('socket did not open')
 
-    expect(providerKill).toHaveBeenCalledWith('SIGTERM')
+    expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
     expect(rmSyncMock).toHaveBeenCalledWith(expect.stringContaining('orca-computer-use-'), {
       recursive: true,
       force: true
@@ -478,6 +563,162 @@ describe('MacOSNativeProviderClient', () => {
     await expect(call).rejects.toThrow('native macOS helper app exited before connecting: code 13')
     expect(connectSignal.aborted).toBe(true)
     expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
+  })
+
+  it('escalates to SIGKILL when a helper ignores terminate and SIGTERM', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    const rejection = expect(call).rejects.toThrow('native macOS provider handshake timed out')
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await rejection
+
+    const provider = providers[0]!
+    // Why: a wedged helper never reads `terminate`, so the socket write alone
+    // is what used to leak the process on every request timeout.
+    expect(socket.writes.at(-1)).toContain('"method":"terminate"')
+    expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
+
+    await vi.advanceTimersByTimeAsync(PROVIDER_SIGKILL_GRACE_MS)
+    expect(provider.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('does not escalate to SIGKILL when the helper exits after SIGTERM', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    const rejection = expect(call).rejects.toThrow('native macOS provider handshake timed out')
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await rejection
+
+    const provider = providers[0]!
+    expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
+    provider.exit(0)
+
+    await vi.advanceTimersByTimeAsync(PROVIDER_SIGKILL_GRACE_MS * 2)
+    expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('reaps the previous helper process before a replacement is started', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const firstCall = client.capabilities()
+    const firstRejection = expect(firstCall).rejects.toThrow('active helper failed')
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
+    sockets[0]!.emit('error', new Error('active helper failed'))
+    await firstRejection
+
+    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
+
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(providers).toHaveLength(2))
+    // Why: the replacement must not inherit the previous generation's teardown.
+    expect(providers[1]!.kill).not.toHaveBeenCalled()
+
+    const secondSocket = sockets[1]!
+    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
+    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
+    secondSocket.emit(
+      'data',
+      `${JSON.stringify({
+        id: secondRequest.id,
+        ok: true,
+        result: { protocolVersion: 1, supports: {} }
+      })}\n`
+    )
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+  })
+
+  it('reaps the helper process when the active socket closes on its own', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    const rejection = expect(call).rejects.toThrow('native macOS helper app connection closed')
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
+
+    // Why: a helper that dies takes its socket down with a bare 'close', with no
+    // preceding 'error' — the teardown path most likely to run in the wild.
+    sockets[0]!.emit('close')
+    await rejection
+
+    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
+  })
+
+  it('does not signal a helper that already exited before teardown', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    const rejection = expect(call).rejects.toThrow('native macOS helper app connection closed')
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
+
+    const provider = providers[0]!
+    provider.exitCode = 0
+    sockets[0]!.emit('close')
+    await rejection
+
+    // Why: signalling a reaped pid is how a recycled pid gets hit.
+    expect(provider.kill).not.toHaveBeenCalled()
+  })
+
+  it('reaps the helper process of a superseded startup', async () => {
+    const pendingConnects: {
+      resolve: (socket: FakeSocket) => void
+    }[] = []
+    connectMacOSProviderSocketMock.mockImplementation(
+      async () =>
+        await new Promise<FakeSocket>((resolve) => {
+          pendingConnects.push({ resolve })
+        })
+    )
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const firstCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(1))
+
+    client.shutdown()
+
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(2))
+    const secondSocket = new FakeSocket()
+    pendingConnects[1]!.resolve(secondSocket)
+    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
+    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
+
+    pendingConnects[0]!.resolve(new FakeSocket())
+    await expect(firstCall).rejects.toThrow('native macOS provider startup was superseded')
+
+    // Why: the superseded throw is caught by this function's own catch, so the
+    // helper must be reaped exactly once, not once per handler.
+    expect(providers[0]!.kill).toHaveBeenCalledTimes(1)
+    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(providers[1]!.kill).not.toHaveBeenCalled()
+
+    secondSocket.emit(
+      'data',
+      `${JSON.stringify({
+        id: secondRequest.id,
+        ok: true,
+        result: { protocolVersion: 1, supports: {} }
+      })}\n`
+    )
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
   })
 })
 

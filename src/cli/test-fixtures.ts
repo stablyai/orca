@@ -25,6 +25,8 @@ type WorktreeFixture = {
   }
   displayName: string
   comment: string
+  hostId?: string
+  identity?: { key: string }
 }
 
 export function buildWorktree(

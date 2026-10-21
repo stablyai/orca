@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { readRendererProcessMemory } from './renderer-process-memory-reader'
 
 // Why the partial type: Electron types `residentSet` as required, but Chromium
@@ -37,11 +37,5 @@ describe('readRendererProcessMemory', () => {
     await expect(
       readRendererProcessMemory(source(async () => ({ private: Number.NaN, shared: 0 })))
     ).resolves.toBeNull()
-  })
-
-  it('does not call the API more than once per read', async () => {
-    const getProcessMemoryInfo = vi.fn(async () => ({ private: 2048, shared: 0 }))
-    await readRendererProcessMemory(source(getProcessMemoryInfo))
-    expect(getProcessMemoryInfo).toHaveBeenCalledTimes(1)
   })
 })

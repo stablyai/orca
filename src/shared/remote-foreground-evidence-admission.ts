@@ -40,7 +40,16 @@ export function admitRemoteForegroundEvidence(
     0,
     admission.receivedAtMonotonic - admission.requestStartedAtMonotonic
   )
-  if (value.capturedAgeMs + receiveDelay > REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS) {
+  // The larger of the two, never their sum: `ps` runs INSIDE this round trip, so its duration is
+  // already in `receiveDelay`, and `capturedAgeMs` -- stamped at capture start -- is that same
+  // duration measured on the host's clock. Adding them charged the capture twice and halved the
+  // budget this ceiling actually grants a host, from ~2.0s of `ps` to ~1.0s: a 1.2s capture
+  // stamped 1200 and arrived at 1300, summed to 2500, and was refused as too old at 1.3s.
+  //
+  // Not the same shape as the sweep's gate, which sums deliberately and correctly:
+  // `evidenceAgeSinceListingMs` is stamped AFTER the listing arrives, so it measures only
+  // planning time and overlaps nothing.
+  if (Math.max(value.capturedAgeMs, receiveDelay) > REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS) {
     return null
   }
   if (

@@ -1,5 +1,9 @@
-import { realpath, stat } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { readFile, realpath, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
 import { isWorktreeCreatePreparation } from '../../shared/worktree/create-preparation'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -20,8 +24,6 @@ import {
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
-import { resolveGitCommonDir } from './worktree-sparse-state'
-import { resolveGitDir } from './source-control/resolve-git-dir'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -35,17 +37,7 @@ export async function listWorktreeGraph(
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
   } catch (err) {
-    if (getErrorCode(err) === 'ENOENT') {
-      try {
-        await stat(repoPath)
-      } catch (statErr) {
-        if (getErrorCode(statErr) === 'ENOENT') {
-          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
-          return []
-        }
-      }
-    }
-    if (isNotGitRepositoryError(err)) {
+    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
     console.warn(`[git/worktree] listWorktreeGraph failed for ${repoPath}:`, err)
@@ -64,23 +56,31 @@ export async function listWorktreesUnshared(
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
     return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
-    if (getErrorCode(err) === 'ENOENT') {
-      try {
-        await stat(repoPath)
-      } catch (statErr) {
-        if (getErrorCode(statErr) === 'ENOENT') {
-          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
-          return []
-        }
-      }
-    }
-    if (isNotGitRepositoryError(err)) {
+    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
     // Why: don't swallow git-compat/repo-state failures — else they resurface as opaque "created but not found in listing" errors.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
+}
+
+/**
+ * The two failures where an empty listing is the repo's true answer, not a broken scan: the repo
+ * path is gone, or it is not a Git repo. Every other failure means the scan could not read Git.
+ */
+async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
+  if (getErrorCode(err) === 'ENOENT') {
+    try {
+      await stat(repoPath)
+    } catch (statErr) {
+      if (getErrorCode(statErr) === 'ENOENT') {
+        console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+        return true
+      }
+    }
+  }
+  return isNotGitRepositoryError(err)
 }
 
 export async function listWorktreesStrict(
@@ -97,6 +97,28 @@ export async function listWorktreesStrict(
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
+/**
+ * Strict except for the two true empties above.
+ *
+ * Why: a Git or host failure (dead WSL distro, hung mount) softened to `[]` reaches the detected
+ * listing as an *authoritative* empty scan, which then permanently prunes the repo's worktrees and
+ * the agent tabs attached to them. Rejecting keeps that listing non-authoritative, while a deleted
+ * repo still reports empty so real removals prune.
+ */
+export async function listWorktreesStrictAllowingTrueEmpty(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  try {
+    return await listWorktreesStrict(repoPath, options)
+  } catch (err) {
+    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
+      return []
+    }
+    throw err
+  }
+}
+
 export async function annotateSparseCheckoutStatus(
   repoPath: string,
   worktrees: GitWorktreeInfo[],
@@ -107,6 +129,7 @@ export async function annotateSparseCheckoutStatus(
 
   async function detectNext(): Promise<void> {
     while (nextIndex < worktrees.length) {
+      throwIfSignalAborted(options.signal)
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
@@ -114,6 +137,7 @@ export async function annotateSparseCheckoutStatus(
         continue
       }
       const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
+      throwIfSignalAborted(options.signal)
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }
@@ -122,7 +146,11 @@ export async function annotateSparseCheckoutStatus(
 
   // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
   const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
-  await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
+  await waitForPromiseWithSignal(
+    Promise.all(Array.from({ length: workerCount }, () => detectNext())),
+    options.signal
+  )
+  throwIfSignalAborted(options.signal)
   return annotated
 }
 
@@ -131,25 +159,75 @@ export async function annotateSparseCheckoutStatus(
  *
  * Deadlined because a `.git` on a hung mount (dead NFS/SSHFS, stalled WSL 9p) never rejects, and an
  * unbounded read here would leave the whole create IPC pending instead of failing like it used to.
+ *
+ * A missing `.git` is a real "no candidate"; every other read failure is unverifiable and rejects.
  */
 async function readRepoCommonDirFromDisk(
   repoPath: string,
   timeoutMs: number
 ): Promise<string | undefined> {
+  const dotGit = join(repoPath, '.git')
   try {
-    const dotGit = join(repoPath, '.git')
-    // A bare repo has no `.git`, and resolveGitDir would fabricate one; offer no candidate instead.
-    await withDeadline(stat(dotGit), timeoutMs)
-    const commonDir = await withDeadline(
-      resolveGitDir(repoPath).then(resolveGitCommonDir),
-      timeoutMs
-    )
-    // Node answers in the caller's space, Git in the distro's. Without this the WSL candidate is a UNC
-    // path that can never equal Git's `/home/...`, leaving this witness inert on exactly the fallback
-    // path that needs it (realpath cannot bridge the two: a Linux path has no local inode).
-    return toWslExecutionSpace(commonDir)
-  } catch {
-    return undefined
+    const commonDir = await withDeadline(resolveRepoCommonDirFromDisk(repoPath, dotGit), timeoutMs)
+    return commonDir ? toWslExecutionSpace(commonDir) : undefined
+  } catch (error) {
+    // A bare repo has no `.git`; do not fabricate a candidate for it.
+    if (isDefinitiveAbsence(error)) {
+      return undefined
+    }
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`repo common dir unverifiable: could not read ${dotGit}: ${reason}`, {
+      cause: error
+    })
+  }
+}
+
+async function resolveRepoCommonDirFromDisk(
+  repoPath: string,
+  dotGit: string
+): Promise<string | undefined> {
+  // The general metadata resolvers are intentionally best effort; a witness must preserve read failures.
+  const dotGitStats = await stat(dotGit)
+  let gitDir = dotGit
+  if (!dotGitStats.isDirectory()) {
+    const pointer = parseGitdirMarkerPayload(await readFile(dotGit, 'utf8'))
+    if (!pointer) {
+      return undefined
+    }
+    gitDir = resolveGitMetadataPath(repoPath, pointer) ?? dotGit
+    await assertGitDirIsDirectory(gitDir)
+  }
+
+  return readCommonDirMarker(gitDir)
+}
+
+/**
+ * A marker target that is missing or is not a directory is unverifiable, not an absent `.git`:
+ * without this, `commondir`'s own ENOENT/ENOTDIR would pass as absence and hand the caller the
+ * pointer target as a common dir it never proved exists.
+ */
+async function assertGitDirIsDirectory(gitDir: string): Promise<void> {
+  let gitDirStats
+  try {
+    gitDirStats = await stat(gitDir)
+  } catch (error) {
+    // Rewrapped so the outer absence check cannot read this errno as a bare repo's missing `.git`.
+    throw new Error(`gitdir marker target unreadable: ${gitDir}`, { cause: error })
+  }
+  if (!gitDirStats.isDirectory()) {
+    throw new Error(`gitdir marker target is not a directory: ${gitDir}`)
+  }
+}
+
+async function readCommonDirMarker(gitDir: string): Promise<string> {
+  try {
+    const pointer = await readFile(join(gitDir, 'commondir'), 'utf8')
+    return resolveGitMetadataPath(gitDir, pointer) ?? gitDir
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+    return gitDir
   }
 }
 
@@ -188,33 +266,13 @@ async function isSameRepoCommonDir(
   candidates: readonly (string | undefined)[]
 ): Promise<boolean> {
   const present = candidates.filter((candidate): candidate is string => Boolean(candidate))
-  if (present.some((candidate) => isSameCommonDirPath(createdCommonDir, candidate))) {
+  if (present.some((candidate) => areWorktreePathsEqual(createdCommonDir, candidate))) {
     return true
   }
   const [canonicalCreated, ...canonicalCandidates] = await Promise.all(
     [createdCommonDir, ...present].map(canonicalizeLocalPath)
   )
-  return canonicalCandidates.some((candidate) => isSameCommonDirPath(canonicalCreated, candidate))
-}
-
-/**
- * Why not areWorktreePathsEqual alone: it folds case for every path once the host is Windows, so on
- * a Windows desktop two WSL repos differing only in case would be accepted as the same object store.
- */
-export function isSameCommonDirPath(
-  left: string,
-  right: string,
-  platform = process.platform
-): boolean {
-  const leftIsPosix = isPosixAbsolutePath(left)
-  if (leftIsPosix || isPosixAbsolutePath(right)) {
-    return leftIsPosix && isPosixAbsolutePath(right) && posix.resolve(left) === posix.resolve(right)
-  }
-  return areWorktreePathsEqual(left, right, platform)
-}
-
-function isPosixAbsolutePath(pathValue: string): boolean {
-  return pathValue.startsWith('/') && !pathValue.startsWith('//')
+  return canonicalCandidates.some((candidate) => areWorktreePathsEqual(canonicalCreated, candidate))
 }
 
 /**

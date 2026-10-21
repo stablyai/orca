@@ -1,5 +1,5 @@
 /**
- * Stress test for dead-terminal reproduction (setup-split flow).
+ * Stress test for dead-terminal reproduction (manual-split flow).
  *
  * Why @headful: the dead-terminal bug is a WebGL canvas staleness issue — after
  * wrapInSplit() reparents the existing pane's container, the WebGL canvas can
@@ -22,7 +22,7 @@ import {
 } from './helpers/store'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import {
-  createAndActivateWorktreeWithSetup,
+  createAndActivateWorktreeWithManualSplit,
   removeWorktreeViaStore,
   waitForAllPanesToHaveContent,
   checkWebglState
@@ -37,14 +37,6 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
-
-    await orcaPage.evaluate(async () => {
-      const state = window.__store?.getState()
-      if (!state) {
-        return
-      }
-      state.updateSettings({ setupScriptLaunchMode: 'split-vertical' })
-    })
   })
 
   test.afterEach(async ({ orcaPage }) => {
@@ -54,7 +46,7 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     createdWorktreeIds.length = 0
   })
 
-  test('@headful setup-split flow does not produce dead terminals', async ({ orcaPage }) => {
+  test('@headful manual-split flow does not produce dead terminals', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
@@ -62,7 +54,11 @@ test.describe('Dead Terminal Reproduction @headful', () => {
 
     for (let i = 0; i < STRESS_ITERATIONS; i++) {
       const direction = i % 2 === 0 ? 'vertical' : 'horizontal'
-      const newId = await createAndActivateWorktreeWithSetup(orcaPage, `setup-${i}`, direction)
+      const newId = await createAndActivateWorktreeWithManualSplit(
+        orcaPage,
+        `setup-${i}`,
+        direction
+      )
       createdWorktreeIds.push(newId)
 
       await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
@@ -81,13 +77,13 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     }
   })
 
-  test('@headful setup-split then switch-back does not leave panes dead', async ({ orcaPage }) => {
+  test('@headful manual-split then switch-back does not leave panes dead', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     for (let i = 0; i < STRESS_ITERATIONS; i++) {
-      const newId = await createAndActivateWorktreeWithSetup(
+      const newId = await createAndActivateWorktreeWithManualSplit(
         orcaPage,
         `switchback-${i}`,
         'vertical'
@@ -122,14 +118,18 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     }
   })
 
-  test('@headful rapid switching between many setup-split worktrees', async ({ orcaPage }) => {
+  test('@headful rapid switching between many manual-split worktrees', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const worktreeIds = [homeWorktreeId]
     for (let i = 0; i < 4; i++) {
-      const newId = await createAndActivateWorktreeWithSetup(orcaPage, `multi-${i}`, 'vertical')
+      const newId = await createAndActivateWorktreeWithManualSplit(
+        orcaPage,
+        `multi-${i}`,
+        'vertical'
+      )
       createdWorktreeIds.push(newId)
       worktreeIds.push(newId)
 

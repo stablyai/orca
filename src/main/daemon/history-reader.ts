@@ -27,32 +27,19 @@ import {
 } from './terminal-history-metadata'
 import {
   coldRestoreInfoFromSnapshot,
-  type ColdRestoreInfo
+  type ColdRestoreDetection,
+  type ColdRestoreInfo,
+  type IncrementalLogRestore
 } from './terminal-history-cold-restore-info'
 import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 
-export type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
+export type { ColdRestoreDetection, ColdRestoreInfo } from './terminal-history-cold-restore-info'
 
 export type RestorableHistoryProbe =
   | { status: 'none' }
   | { status: 'restorable'; sessionId: string }
   | { status: 'unreadable'; sessionId: string }
-
-export type ColdRestoreDetection =
-  | { status: 'none' }
-  | {
-      status: 'restored'
-      sessionId: string
-      restoreInfo: ColdRestoreInfo
-      hasUnreadableRecovery: boolean
-    }
-  | { status: 'unreadable'; sessionId: string }
-
-type IncrementalLogRestore = {
-  restoreInfo: ColdRestoreInfo | null
-  readFailed: boolean
-}
 
 // Why: parallel pane mounts should interleave with main-process work without multiplying replay slices per turn.
 const coldRestoreReplaySemaphore = new PrioritySemaphore(1)
@@ -138,7 +125,8 @@ export class HistoryReader {
         status: 'restored',
         sessionId,
         restoreInfo: logRestore.restoreInfo,
-        hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed
+        hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed,
+        ...(logRestore.cwdFromSpawn ? { cwdFromSpawn: true } : {})
       }
     }
 
@@ -157,7 +145,8 @@ export class HistoryReader {
           status: 'restored',
           sessionId,
           restoreInfo: legacyRestore,
-          hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed
+          hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed,
+          cwdFromSpawn: true
         }
       }
       return checkpointReadFailed || logRestore.readFailed || legacyExists
@@ -169,7 +158,8 @@ export class HistoryReader {
       status: 'restored',
       sessionId,
       restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
-      hasUnreadableRecovery: logRestore.readFailed
+      hasUnreadableRecovery: logRestore.readFailed,
+      ...((checkpoint.cwd ?? null) === null ? { cwdFromSpawn: true } : {})
     }
   }
 
@@ -318,13 +308,15 @@ export class HistoryReader {
         }
         const snapshot = emulator.getSnapshot()
         const lastBatch = log.batches.at(-1)!
+        const cwd = snapshot.cwd ?? checkpoint?.cwd ?? null
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(
             { ...snapshot, pendingOutputSeq: lastBatch.seq },
-            snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
+            cwd,
             meta
           ),
-          readFailed: log.truncatedTail
+          readFailed: log.truncatedTail,
+          ...(cwd === null ? { cwdFromSpawn: true } : {})
         }
       } catch {
         // Why: a replay failure must degrade to checkpoint-only restore, never

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
@@ -49,6 +49,9 @@ describe('web session terminal orphan recovery', () => {
             truncated: false
           }
         }
+      }
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: adoptedSnapshot }
       }
       return await new Promise((resolve) => {
         resolveAdoption = resolve as (value: never) => void
@@ -110,7 +113,8 @@ describe('web session terminal orphan recovery', () => {
     } as never)
 
     await expect(recovery).resolves.toEqual(adoptedSnapshot)
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({
@@ -243,7 +247,10 @@ describe('web session terminal orphan recovery', () => {
           }
         : {
             ok: true as const,
-            result: { adopted: true, topologyRevision: 9, snapshot: adoptedSnapshot }
+            result:
+              method === 'session.tabs.list'
+                ? adoptedSnapshot
+                : { adopted: true, topologyRevision: 9, snapshot: adoptedSnapshot }
           }
     )
     const state = {
@@ -349,7 +356,8 @@ describe('web session terminal orphan recovery', () => {
         }
       ]
     })
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({
@@ -442,7 +450,10 @@ describe('web session terminal orphan recovery', () => {
           }
         : {
             ok: true as const,
-            result: { adopted: true, topologyRevision: 3, snapshot: adoptedSnapshot }
+            result:
+              method === 'session.tabs.list'
+                ? adoptedSnapshot
+                : { adopted: true, topologyRevision: 3, snapshot: adoptedSnapshot }
           }
     )
     const state = {
@@ -497,7 +508,8 @@ describe('web session terminal orphan recovery', () => {
         params: expect.objectContaining({ handles: ['term_orphan'] })
       })
     )
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({

@@ -4,9 +4,11 @@ import type { CustomAgentId } from './commit-message-agent-spec'
 import type {
   SourceControlAiActionDefaults,
   SourceControlActionId,
-  SourceControlTextActionId
+  SourceControlTextActionId,
+  AiTextActionId
 } from './source-control-ai-actions'
 
+export type AiTextOperation = AiTextActionId
 export type SourceControlAiOperation = SourceControlTextActionId
 
 export type SourceControlAiModelChoice = {
@@ -34,8 +36,8 @@ export type SourceControlAiSettings = {
   >
   selectedThinkingByModel: Record<string, string>
   customAgentCommand: string
-  instructionsByOperation: Partial<Record<SourceControlAiOperation, string>>
-  modelOverridesByOperation?: Partial<Record<SourceControlAiOperation, SourceControlAiModelChoice>>
+  instructionsByOperation: Partial<Record<AiTextOperation, string>>
+  modelOverridesByOperation?: Partial<Record<AiTextOperation, SourceControlAiModelChoice>>
   prCreationDefaults?: SourceControlAiPrCreationDefaults
   /** @deprecated use actions instead. Kept for automatic migration and rollback compatibility. */
   launchActionDefaults?: SourceControlAiActionDefaults

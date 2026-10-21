@@ -1,106 +1,71 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  isNativeChatDefaultFor,
+  resolveStructuredNativeChatSupport,
+  type NativeChatDefaultSettings,
+  type StructuredNativeChatBlocker
+} from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  getTuiAgentDefaultArgs,
-  getTuiAgentDefaultEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import {
-  decideInitialAgentTabViewMode,
-  type NativeChatLaunchPromptDelivery
-} from '@/lib/native-chat-initial-view-mode'
+import type { WorkspaceLaunchKind } from '../../../shared/workspace-launch-kind'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 
-export type AgentLaunchRoute = 'structured-native-chat' | 'legacy-native-chat' | 'terminal-tui'
+export type AgentLaunchRoute = 'structured-native-chat' | 'terminal-tui'
 
 export type AgentLaunchRoutingInput = {
   agent: TuiAgent
-  settings:
-    | Pick<
-        GlobalSettings,
-        | 'experimentalNativeChat'
-        | 'experimentalStructuredNativeChat'
-        | 'openAgentTabsInChatByDefault'
-      >
-    | null
-    | undefined
+  settings: NativeChatDefaultSettings | null | undefined
   executionHostId: string
-  platform: NodeJS.Platform
-  hostCapabilities: readonly string[]
-  workspaceKind?: 'git-worktree' | 'folder' | 'floating'
+  /** Capabilities of the target host; `null` = not yet established. */
+  hostCapabilities: readonly string[] | null
+  /** What this client advertises to a paired host. */
+  clientCapabilities?: readonly string[]
+  workspaceKind?: WorkspaceLaunchKind
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
-  requiresTuiLaunchCustomization?: boolean
-  initialSessionOptions?: Readonly<Record<string, unknown>>
-}
-
-export function hasExplicitTuiLaunchCustomization(
-  settings:
-    | Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
-    | null
-    | undefined,
-  agent: TuiAgent
-): boolean {
-  const configuredArgs = settings?.agentDefaultArgs?.[agent]
-  const configuredEnv = settings?.agentDefaultEnv?.[agent]
-  const defaultEnv = getTuiAgentDefaultEnv(agent)
-  const envIsCustomized =
-    configuredEnv !== undefined &&
-    (Object.keys(configuredEnv).length !== Object.keys(defaultEnv).length ||
-      Object.entries(configuredEnv).some(([key, value]) => defaultEnv[key] !== value))
-  return (
-    Boolean(settings?.agentCmdOverrides?.[agent]?.trim()) ||
-    hasExplicitTuiAgentArgs(agent, configuredArgs) ||
-    envIsCustomized
-  )
-}
-
-export function hasSemanticallyNonEmptyAgentArgs(value: string | null | undefined): boolean {
-  return Boolean(value?.trim())
-}
-
-export function hasExplicitTuiAgentArgs(
-  agent: TuiAgent,
-  value: string | null | undefined
-): boolean {
-  const trimmed = value?.trim() ?? ''
-  return trimmed.length > 0 && trimmed !== getTuiAgentDefaultArgs(agent).trim()
+  startsOutsideWorkspaceRoot?: boolean
+  /** The agents the target host listed as structured; absent until it has. */
+  hostStructuredAgents?: readonly string[]
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
-  const initialViewMode = decideInitialAgentTabViewMode({
-    experimentalNativeChat: input.settings?.experimentalNativeChat,
-    openAgentTabsInChatByDefault: input.settings?.openAgentTabsInChatByDefault,
+  return isNativeChatDefaultFor(input.settings, input.agent) &&
+    structuredAgentLaunchSupported(input)
+    ? 'structured-native-chat'
+    : 'terminal-tui'
+}
+
+// Explicit chat requests (resume history in a new chat) do not depend on the Chat UI switch.
+export function structuredAgentLaunchSupported(
+  input: Omit<AgentLaunchRoutingInput, 'launchText'>
+): boolean {
+  return structuredAgentLaunchSupport(input).supported
+}
+
+/** Whether the target host could open this agent as a chat, and why not; the settings aside. */
+export function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput, 'launchText'>) {
+  return resolveStructuredNativeChatSupport({
     agent: input.agent,
-    promptDelivery: input.promptDelivery,
-    launchDraftText: input.launchText,
-    nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable
+    executionHostId: input.executionHostId,
+    hostCapabilities: input.hostCapabilities,
+    ...(input.clientCapabilities ? { clientCapabilities: input.clientCapabilities } : {}),
+    workspaceKind: input.workspaceKind,
+    projectRuntime: input.projectRuntime,
+    startsOutsideWorkspaceRoot: input.startsOutsideWorkspaceRoot,
+    ...(input.hostStructuredAgents ? { hostStructuredAgents: input.hostStructuredAgents } : {})
   })
-  if (initialViewMode !== 'chat') {
-    return 'terminal-tui'
-  }
-  if (input.settings?.experimentalStructuredNativeChat !== true) {
-    return 'legacy-native-chat'
-  }
+}
 
-  const projectRuntime = input.projectRuntime
-  const runtimeRefused =
-    projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl'
-  const hasInitialSessionOptions = Boolean(
-    input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0
-  )
-  const structuredSupported =
-    input.agent === 'codex' &&
-    input.promptDelivery !== 'draft' &&
-    input.workspaceKind !== 'floating' &&
-    input.requiresTuiLaunchCustomization !== true &&
-    !hasInitialSessionOptions &&
-    input.executionHostId === 'local' &&
-    input.platform !== 'win32' &&
-    !runtimeRefused &&
-    input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-
-  return structuredSupported ? 'structured-native-chat' : 'legacy-native-chat'
+/** Why a launch the user wanted as a chat did not route to it; null when it did, or when the user's
+ *  default for this agent is a terminal. Diagnostics only: the route itself is `resolveAgentLaunchRoute`. */
+export function structuredAgentLaunchDowngrade(
+  input: AgentLaunchRoutingInput,
+  route: AgentLaunchRoute
+): StructuredNativeChatBlocker | null {
+  if (route === 'structured-native-chat' || !isNativeChatDefaultFor(input.settings, input.agent)) {
+    return null
+  }
+  const support = structuredAgentLaunchSupport(input)
+  return support.supported ? null : support.blocker
 }

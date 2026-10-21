@@ -164,8 +164,21 @@ describe('generate-terminal-perf-html-report', () => {
     const html = readFileSync(outputPath, 'utf8')
     expect(result.budgetFailureCount).toBe(5)
     expect(html).toContain('Fail')
-    expect(html).toContain('medianMs 80 &gt; 75')
+    expect(html).toContain('medianMs 80 &gt; 25')
+    expect(html).toContain('worstMs 301 &gt; 300')
     expect(html).toContain('Cross-workspace hidden panes')
+  })
+
+  it('continues to flag slow hidden restores', () => {
+    const reportPath = writeReport(
+      'panes=18 restore=1640.7ms',
+      'opencode-hidden-real-pty-restore-latin'
+    )
+    const outputPath = join(makeTempDir(), 'report.html')
+
+    const result = generateTerminalPerfHtmlReport({ inputPaths: [reportPath], outputPath })
+
+    expect(result.budgetFailureCount).toBe(1)
   })
 
   it('renders ordered revisions with trend charts and baseline deltas', () => {

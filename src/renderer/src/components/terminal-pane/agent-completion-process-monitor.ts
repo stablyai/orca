@@ -18,7 +18,6 @@ export function createAgentCompletionProcessMonitor({
   establishAgentEvidence,
   clearAgentRunEvidence,
   hasPendingHookDone,
-  hasPendingCodexAttention,
   dispatchCompletion
 }: ProcessMonitorOptions) {
   const remoteInspection: RemoteInspectionState = {
@@ -47,7 +46,7 @@ export function createAgentCompletionProcessMonitor({
     createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
-    state.pendingProcessExitAgent = null
+    state.pendingProcessExit = null
     const replayIdentity = identityScope.getLast()
     if (
       !state.lastForegroundAgent &&
@@ -108,11 +107,19 @@ export function createAgentCompletionProcessMonitor({
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
-          const result = await (expectedIncarnationIdAtRequest
-            ? options.inspectProcess(options.getSettings(), ptyId, {
-                expectedIncarnationId: expectedIncarnationIdAtRequest
-              })
-            : options.inspectProcess(options.getSettings(), ptyId))
+          // Only a cadence tick on a local pane reads nothing but the name; every other read
+          // (pending-title, remote) needs the full capture and must not ask for the cheap one.
+          const inspectOptions = {
+            ...(expectedIncarnationIdAtRequest
+              ? { expectedIncarnationId: expectedIncarnationIdAtRequest }
+              : {}),
+            ...(priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
+              ? { steadyState: true }
+              : {})
+          }
+          const result = await (Object.keys(inspectOptions).length > 0
+            ? options.inspectProcess(ptyId, inspectOptions)
+            : options.inspectProcess(ptyId))
           if (
             !state.disposed &&
             generationAtRequest === state.inspectionGeneration &&
@@ -131,7 +138,6 @@ export function createAgentCompletionProcessMonitor({
                 identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
-                hasPendingCodexAttention,
                 scheduleNextPoll,
                 handleRecognizedProcess,
                 dispatchCompletion,
@@ -141,7 +147,7 @@ export function createAgentCompletionProcessMonitor({
             inspectionSucceeded = true
           }
         } catch {
-          state.pendingProcessExitAgent = null
+          state.pendingProcessExit = null
           state.consecutiveInspectionErrors += 1
         } finally {
           state.inspectionInFlight = false
@@ -178,6 +184,11 @@ export function createAgentCompletionProcessMonitor({
     requestInspection,
     scheduleNextPoll,
     clearPollTimer,
+    observeRecognizedProcess: (process: RecognizedAgentProcess) => {
+      if (!state.disposed) {
+        handleRecognizedProcess(process)
+      }
+    },
     start: () => {
       state.pollTrackingStarted = true
       scheduleNextPoll()

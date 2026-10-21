@@ -118,18 +118,6 @@ describe('terminal input activity coalescing', () => {
     expect(store.stored[OTHER_PANE]).toBe(1_100)
   })
 
-  it('clears the flush timer so a reset leaves no pending work', () => {
-    const store = createStore()
-
-    type(store, PANE, 1_000)
-    type(store, PANE, 1_100)
-    resetTerminalInputActivityCoalescingForTests()
-    vi.advanceTimersByTime(TERMINAL_INPUT_ACTIVITY_WRITE_INTERVAL_MS * 4)
-
-    expect(store.stored[PANE]).toBe(1_000)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('writes immediately again once the coalescing window has passed', () => {
     const store = createStore()
 

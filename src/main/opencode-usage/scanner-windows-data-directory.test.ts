@@ -9,7 +9,12 @@ import { scanOpenCodeUsageDatabases } from './scanner'
 vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
   const { listOpenCodeSqliteSessions } =
     await import('../ai-vault/session-scanner-opencode-sqlite-list')
-  return { listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions }
+  const { listOpenCode2SqliteSessions } =
+    await import('../ai-vault/session-scanner-opencode2-sqlite-list')
+  return {
+    listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+    listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions
+  }
 })
 
 describe('OpenCode usage discovery on Windows', () => {

@@ -4,6 +4,7 @@ import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-ty
 import type { JiraIssue } from '../../../shared/jira-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   normalizeTaskSourceContext,
@@ -12,7 +13,11 @@ import {
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import type { TaskSourceHostAvailability } from './task-source-context-summary'
+import {
+  getAccountBackedTaskSourceSummary,
+  type TaskSourceContextSummary,
+  type TaskSourceHostAvailability
+} from './task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
@@ -54,13 +59,16 @@ export function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
 }
 export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
   return (
-    getLinkedWorkItemWorkspaceName({
-      type: 'issue',
-      provider: 'jira',
-      number: 0,
-      title: `${issue.key} ${issue.title}`,
-      jiraIdentifier: issue.key
-    })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+    getLinkedWorkItemWorkspaceName(
+      {
+        type: 'issue',
+        provider: 'jira',
+        number: 0,
+        title: `${issue.key} ${issue.title}`,
+        jiraIdentifier: issue.key
+      },
+      getJiraIssueKeyCasingSeedOptions()
+    )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
 export function getTaskPageRepoSourceContext(
@@ -134,10 +142,27 @@ export function getTaskSourceHostAvailabilityForHost(
     status: host.connectionStatus
   }
 }
+/** Projects boards have no source row: name the shared row-less host, not the selected repos. */
+export function getGitHubProjectSourceSummary(args: {
+  providerLabel: string
+  hostId: TaskSourceContext['hostId']
+  host: ExecutionHostRegistryEntry | null | undefined
+  hostLabelById: ReadonlyMap<string, string>
+}): TaskSourceContextSummary {
+  const availability = getTaskSourceHostAvailabilityForHost(args.host, args.hostId)
+  return getAccountBackedTaskSourceSummary(args.providerLabel, {
+    accountLabel: null,
+    accountHostId: args.hostId,
+    hostLabelById: args.hostLabelById,
+    // Why: boards need no task-source capability, so only host health applies.
+    hostAvailability: availability && !availability.reason ? [availability] : []
+  })
+}
 export function getTaskPageRepoCacheInput(repo: Repo): {
   id: string
   path: string
   executionHostId?: string | null
+  connectionId?: string | null
   sourceCacheScope?: string | null
 } {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
@@ -145,6 +170,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
     id: repo.id,
     path: repo.path,
     executionHostId: repo.executionHostId,
+    connectionId: repo.connectionId,
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

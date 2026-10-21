@@ -14,8 +14,19 @@ export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
   isScrolling: boolean
   now: number
   suppressUntil: number
+  itemStart: number
+  itemEnd: number
+  scrollOffset: number
+  isFirstMeasurement: boolean
+  scrollDirection: 'forward' | 'backward' | null
 }): boolean {
-  return !args.isScrolling && args.now >= args.suppressUntil
+  if (args.isScrolling || args.now < args.suppressUntil) {
+    return false
+  }
+  // Preserve TanStack's fold rule so below-anchor growth cannot invent a scroll offset.
+  return args.isFirstMeasurement
+    ? args.itemStart < args.scrollOffset
+    : args.itemEnd <= args.scrollOffset && args.scrollDirection !== 'backward'
 }
 
 export type WorktreeSidebarScrollSuppression = ReturnType<

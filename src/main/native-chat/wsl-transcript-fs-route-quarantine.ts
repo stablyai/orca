@@ -10,6 +10,7 @@ export const WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS = 5_000
 // Strikes older than this stop escalating: a distro that wakes slowly once a
 // day must restart from the base window, not resume yesterday's back-off.
 export const WSL_TRANSCRIPT_FS_ROUTE_STRIKE_DECAY_MS = 5 * 60_000
+const MAX_BLOCKED_ROUTES = 512
 
 type RouteQuarantine = { until: number; strikes: number; setAt: number }
 // Monotonic clock: wall time would misjudge the window across sleep/NTP steps.
@@ -46,6 +47,18 @@ export function quarantineRoute(route: string, deadlineMs: number, taskStartedAt
     strikes,
     setAt: sameIncident ? seed.setAt : now
   })
+  for (const [key, entry] of blockedRoutes) {
+    if (now - entry.until > WSL_TRANSCRIPT_FS_ROUTE_STRIKE_DECAY_MS) {
+      blockedRoutes.delete(key)
+    }
+  }
+  while (blockedRoutes.size > MAX_BLOCKED_ROUTES) {
+    const oldest = blockedRoutes.keys().next()
+    if (oldest.done) {
+      break
+    }
+    blockedRoutes.delete(oldest.value)
+  }
 }
 
 /** A real filesystem answer proves the mount is alive: forget the strikes. */
@@ -55,4 +68,8 @@ export function liftRouteQuarantine(route: string): void {
 
 export function resetRouteQuarantinesForTests(): void {
   blockedRoutes.clear()
+}
+
+export function _getBlockedRouteCountForTests(): number {
+  return blockedRoutes.size
 }

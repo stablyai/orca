@@ -189,4 +189,19 @@ describe('mobile session-tabs agent-status heartbeat', () => {
     expect(emitted).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('keeps a direct status heartbeat queued when an unrelated PTY is removed', () => {
+    const emitted: string[] = []
+    const heartbeat = createMobileSessionTabsAgentStatusHeartbeat(
+      () => [],
+      (worktreeId) => emitted.push(worktreeId)
+    )
+
+    heartbeat.scheduleWorktreeHeartbeat('worktree-1')
+    heartbeat.removePty('unrelated-pty')
+    vi.runAllTimers()
+
+    expect(emitted).toEqual(['worktree-1'])
+    heartbeat.dispose()
+  })
 })

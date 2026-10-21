@@ -40,7 +40,7 @@ describe('electron-builder dev-channel identity', () => {
     expect(config.win.signtoolOptions.publisherName).toBe('SignPath Foundation')
     expect(config.win.verifyUpdateCodeSignature).toBeUndefined()
     expect(config.publish.repo).toBe('orca')
-    expect(config.publish.releaseType).toBe('release')
+    expect(config.publish.releaseType).toBe('draft')
   })
 
   // The whole point of the change: an unsigned build that advertised a

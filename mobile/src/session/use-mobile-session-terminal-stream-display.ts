@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { terminalDisplayModeSet } from './mobile-session-write-operations'
 import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
 import type { MobileSessionTerminalSubscriptionModel } from './use-mobile-session-terminal-subscription'
 
@@ -15,7 +16,6 @@ export function useMobileSessionTerminalStreamDisplay(
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
-    initializedHandlesRef,
     webReadyHandlesRef,
     activeSessionTab,
     nativeChatInputLeaseReady,
@@ -33,7 +33,6 @@ export function useMobileSessionTerminalStreamDisplay(
     subscribingRef: subscribingHandlesRef,
     leaseOnlyRef: leaseOnlyHandlesRef,
     webReadyRef: webReadyHandlesRef,
-    initializedRef: initializedHandlesRef,
     subscribe: subscribeToTerminal,
     unsubscribe: unsubscribeTerminal
   })
@@ -54,7 +53,8 @@ export function useMobileSessionTerminalStreamDisplay(
         current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
       toggleInFlightRef.current.add(handle)
       try {
-        await client.sendRequest('terminal.setDisplayMode', {
+        // The reply is unread: the server resizes and reports it on the existing subscription.
+        await terminalDisplayModeSet.request(client, {
           terminal: handle,
           mode: next,
           // Why: presence-lock take-floor — requesting 'auto' is the explicit "drive at phone dims" gesture.

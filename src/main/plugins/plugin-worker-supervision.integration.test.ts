@@ -97,8 +97,9 @@ describe('real plugin worker supervision', () => {
     const spec = await createPluginSpec(`
       export default function activate(orca) {
         orca.commands.register('disconnect', async () => {
-          process.disconnect?.()
+          process.removeAllListeners('disconnect')
           setInterval(() => {}, 1_000)
+          process.disconnect?.()
           await new Promise(() => {})
         })
       }
@@ -107,7 +108,7 @@ describe('real plugin worker supervision', () => {
     const manager = new PluginWorkerManager({
       entryPath: hostEntryPath,
       executeHostCall: async () => ({ ok: true, value: null }),
-      log: vi.fn(),
+      log: () => vi.fn(),
       onWorkerStateChange: notifications.notify,
       onWorkerGone: vi.fn()
     })
@@ -131,7 +132,7 @@ describe('real plugin worker supervision', () => {
     const manager = new PluginWorkerManager({
       entryPath: hostEntryPath,
       executeHostCall: async () => ({ ok: true, value: null }),
-      log: (_pluginKey, level, line) => logs.push({ at: performance.now(), level, line }),
+      log: (_pluginKey) => (level, line) => logs.push({ at: performance.now(), level, line }),
       onWorkerStateChange: notifications.notify,
       onWorkerGone: vi.fn()
     })

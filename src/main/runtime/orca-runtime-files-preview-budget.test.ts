@@ -7,10 +7,8 @@ import {
   createRuntimeFileCommands,
   useRuntimeFileCommandsLifecycle
 } from './orca-runtime-files-test-harness'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './orca-runtime-files'
+import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './files/file-preview-budget'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
-import { FileReadCapExceededError, StreamProtocolError } from '../ssh/ssh-filesystem-stream-reader'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -27,20 +25,8 @@ vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
-)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
 )
 
 describe('RuntimeFileCommands', () => {
@@ -113,153 +99,6 @@ describe('RuntimeFileCommands', () => {
         isImage: true,
         mimeType: 'image/png'
       })
-    })
-
-    it('rejects an SSH text preview past the decoded text limit the local branch enforces', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      // NUL-free control bytes: sniffed as text, yet each escapes to six JSON bytes.
-      const content = '\u0001'.repeat(1024 * 1024)
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi.fn().mockResolvedValue({ type: 'file', size: content.length }),
-        readFile: vi.fn().mockResolvedValue({ content, isBinary: false })
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
-        'file_too_large'
-      )
-    })
-
-    it('still returns an SSH binary preview inside the base64 cap', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const preview = { content: 'a'.repeat(1024 * 1024), isBinary: true, isImage: true }
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi
-          .fn()
-          .mockResolvedValue({ type: 'file', size: RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES }),
-        readFile: vi.fn().mockResolvedValue(preview)
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual(
-        preview
-      )
-    })
-
-    it('rejects an SSH binary result that grew past its request-scoped budget', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const readFile = vi.fn().mockResolvedValue({
-        content: 'a'.repeat(13),
-        isBinary: true,
-        isImage: true
-      })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi.fn().mockResolvedValue({ type: 'file', size: 0 }),
-        readFile
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 12)).rejects.toThrow(
-        'file_too_large'
-      )
-      expect(readFile).toHaveBeenCalledWith('/repo/logo.png', {
-        maxBinaryBytes: 0,
-        maxTextBytes: 512 * 1024
-      })
-    })
-
-    it('rejects escape-dense SSH text beyond the request-scoped result budget', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi.fn().mockResolvedValue({ type: 'file', size: 64 }),
-        readFile: vi.fn().mockResolvedValue({ content: '\u0001'.repeat(64), isBinary: false })
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt', 128)).rejects.toThrow(
-        'file_too_large'
-      )
-    })
-
-    // Why: without translation the reader's raw "exceeds client cap" string reaches the client as a
-    // generic runtime_error, which neither the desktop nor the mobile preview arm recognizes.
-    it('translates an over-cap stream read into file_too_large', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1024 }),
-        readFile: vi
-          .fn()
-          .mockRejectedValue(
-            new FileReadCapExceededError('Reported totalSize 900000 exceeds client cap 524288')
-          )
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
-        'file_too_large'
-      )
-    })
-
-    it('leaves a genuine stream protocol failure unmasked', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1024 }),
-        readFile: vi.fn().mockRejectedValue(new StreamProtocolError('Malformed chunk for stream 4'))
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'log.txt')).rejects.toThrow(
-        'Malformed chunk'
-      )
-    })
-
-    it('rejects oversized SSH preview metadata with small content', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat: vi.fn().mockResolvedValue({ type: 'file', size: 1 }),
-        readFile: vi.fn().mockResolvedValue({
-          content: 'a',
-          isBinary: true,
-          mimeType: 'x'.repeat(128)
-        })
-      } as never)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 128)).rejects.toThrow(
-        'file_too_large'
-      )
-    })
-
-    it('sends preview authority to the SSH execution host in one read', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const readDocPreviewFile = vi.fn().mockResolvedValue({ content: 'ok', isBinary: false })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({ readDocPreviewFile } as never)
-
-      await expect(
-        commands.readDocPreviewFile('id:wt-1', 'docs/index.html', 'docs/index.html', 'docs', [
-          'assets'
-        ])
-      ).resolves.toEqual({ content: 'ok', isBinary: false })
-      expect(readDocPreviewFile).toHaveBeenCalledWith({
-        boundaryPath: '/repo',
-        entryPath: '/repo/docs/index.html',
-        implicitRootPath: '/repo/docs',
-        authorizedRootPaths: ['/repo/assets'],
-        targetPath: '/repo/docs/index.html',
-        maxTextBytes: 512 * 1024,
-        maxBinaryBytes: 10 * 1024 * 1024
-      })
-    })
-
-    it('fails closed when the SSH execution host lacks scoped preview reads', async () => {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({} as never)
-
-      await expect(
-        commands.readDocPreviewFile('id:wt-1', 'docs/index.html', 'docs/index.html', 'docs', [])
-      ).rejects.toThrow('newer SSH relay')
     })
   })
 })

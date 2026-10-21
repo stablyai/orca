@@ -17,6 +17,7 @@ const mutationRoutes = [
   '/v1/admin/admission-selector/apply',
   '/v1/admin/admission-selector/add-migration-cells',
   '/v1/admin/cell-state',
+  '/v1/admin/cell-admit-mode',
   '/v1/admin/cell-fence-adopt-legacy',
   '/v1/admin/cell-fence-commit-legacy-adoption',
   '/v1/admin/cell-fence-attest',
@@ -67,6 +68,13 @@ describe('Relay admin route authorization', () => {
       expect(relayAdminIdentityMayAccess('monitor', route)).toBe(false)
     }
     expect(RELAY_MONITOR_ADMIN_ROUTES).toContain('/v1/admin/evacuation-status')
+    // Read-only on-call lookup: monitor and fence read it, capacity and asia-proof do not.
+    for (const identity of ['monitor', 'fence', 'fence-broker', 'deploy'] as const) {
+      expect(relayAdminIdentityMayAccess(identity, '/v1/admin/host-whereabouts')).toBe(true)
+    }
+    for (const identity of ['capacity', 'asia-proof'] as const) {
+      expect(relayAdminIdentityMayAccess(identity, '/v1/admin/host-whereabouts')).toBe(false)
+    }
   })
 
   it('allows only reviewed fence evidence mutations beyond aggregate reads', () => {

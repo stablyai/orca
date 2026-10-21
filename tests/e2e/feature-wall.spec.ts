@@ -179,9 +179,40 @@ test.describe('Feature tour modal', () => {
   })
 
   test('does not pre-check configured workflows until the user visits them', async ({
-    orcaPage
+    orcaPage,
+    electronApp
   }) => {
-    await orcaPage.evaluate(() => {
+    await electronApp.evaluate(
+      ({ ipcMain }, preflightStatus) => {
+        ipcMain.removeHandler('preflight:check')
+        ipcMain.handle('preflight:check', () => preflightStatus)
+        ipcMain.removeHandler('linear:status')
+        ipcMain.handle('linear:status', () => ({ connected: false, viewer: null }))
+        ipcMain.removeHandler('jira:status')
+        ipcMain.handle('jira:status', () => ({ connected: false, viewer: null }))
+      },
+      {
+        git: { installed: true },
+        gh: { installed: true, authenticated: true },
+        glab: { installed: false, authenticated: false },
+        bitbucket: { configured: false, authenticated: false, account: null },
+        azureDevOps: {
+          configured: false,
+          authenticated: false,
+          account: null,
+          baseUrl: null,
+          tokenConfigured: false
+        },
+        gitea: {
+          configured: false,
+          authenticated: false,
+          account: null,
+          baseUrl: null,
+          tokenConfigured: false
+        }
+      }
+    )
+    await orcaPage.evaluate(async () => {
       for (const key of [
         'orca.featureWall.visitedWorkflows.v1',
         'orca.featureWall.visitedAgentSteps.v1',
@@ -198,32 +229,12 @@ test.describe('Feature tour modal', () => {
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      store.setState({
-        preflightStatus: {
-          git: { installed: true },
-          gh: { installed: true, authenticated: true },
-          glab: { installed: false, authenticated: false },
-          bitbucket: { configured: false, authenticated: false, account: null },
-          azureDevOps: {
-            configured: false,
-            authenticated: false,
-            account: null,
-            baseUrl: null,
-            tokenConfigured: false
-          },
-          gitea: {
-            configured: false,
-            authenticated: false,
-            account: null,
-            baseUrl: null,
-            tokenConfigured: false
-          }
-        },
-        preflightStatusChecked: true,
-        preflightStatusLoading: false,
-        linearStatus: { connected: false, viewer: null },
-        linearStatusChecked: true
-      })
+      // Seed through the status actions so each result gets the current execution context.
+      await Promise.all([
+        store.getState().refreshPreflightStatus({ force: true }),
+        store.getState().checkLinearConnection(true),
+        store.getState().checkJiraConnection()
+      ])
       store.getState().openModal('feature-wall', { source: 'help_menu' })
     })
 

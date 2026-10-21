@@ -3,12 +3,12 @@ import {
   serializePaneTree
 } from '@/components/terminal-pane/layout-serialization'
 import type { AppState } from '@/store/types'
-import type {
-  RegisteredTerminalTab,
-  MobileSessionWorktreeInputs,
-  MountedTerminalSurfaceCapture
-} from './types'
-import { EMPTY_NARROWED_BY_KEY, findRegisteredTerminalTab, jsonContentEquals } from './graph-state'
+import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
+import { EMPTY_NARROWED_BY_KEY, jsonContentEquals } from './graph-state'
+import {
+  findRegisteredTerminalTab,
+  type RegisteredTerminalTab
+} from '../mounted-terminal-tab-registry'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 
 export function narrowRecordByKeys<T>(

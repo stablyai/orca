@@ -1,5 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { isAgentStateRulesTag } from '../../config/scripts/release-tag-patterns.mjs'
 
 const repository = process.env.GITHUB_REPOSITORY ?? 'stablyai/orca'
 const token = process.env.GITHUB_TOKEN
@@ -24,6 +26,22 @@ async function fetchJson(url) {
   return response.json()
 }
 
+// Why rules releases are excluded: every running app fetches them every few hours, so they
+// count fetches, not installs.
+export function countReleaseDownloads(releases) {
+  let total = 0
+  for (const release of releases) {
+    if (release.draft || isAgentStateRulesTag(release.tag_name ?? '')) {
+      continue
+    }
+
+    for (const asset of release.assets ?? []) {
+      total += asset.download_count ?? 0
+    }
+  }
+  return total
+}
+
 async function getTotalReleaseDownloads() {
   let page = 1
   let total = 0
@@ -37,16 +55,7 @@ async function getTotalReleaseDownloads() {
       return total
     }
 
-    for (const release of releases) {
-      if (release.draft) {
-        continue
-      }
-
-      for (const asset of release.assets ?? []) {
-        total += asset.download_count ?? 0
-      }
-    }
-
+    total += countReleaseDownloads(releases)
     page += 1
   }
 }
@@ -104,9 +113,11 @@ function renderBadge(value) {
 `
 }
 
-const total = await getTotalReleaseDownloads()
-const badge = renderBadge(formatDownloads(total))
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const total = await getTotalReleaseDownloads()
+  const badge = renderBadge(formatDownloads(total))
 
-await mkdir(dirname(outputPath), { recursive: true })
-await writeFile(outputPath, badge)
-console.log(`Rendered ${outputPath} from ${total} downloads.`)
+  await mkdir(dirname(outputPath), { recursive: true })
+  await writeFile(outputPath, badge)
+  console.log(`Rendered ${outputPath} from ${total} downloads.`)
+}

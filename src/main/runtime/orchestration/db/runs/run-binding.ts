@@ -3,13 +3,21 @@ import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import {
+  mailboxAddressOf,
+  runBoundToCoordinator,
+  runCoordinatorKey
+} from '../../orchestration-caller-identity'
 
 export function bindRun(
   this: OrchestrationDb,
   params: {
     runId: string
-    coordinatorHandle: string
-    coordinatorPaneKey: string
+    coordinatorHandle: string | null
+    coordinatorPaneKey: string | null
+    /** The coordinator's bare Orca session id when it is a structured session; see orca-session-address. */
+    coordinatorOrcaSessionId?: OrcaSessionId | null
     takeoverLegacy?: boolean
     legacyCoordinatorAuthority?: {
       runId: string
@@ -20,6 +28,11 @@ export function bindRun(
     }
   }
 ): RunRow | undefined {
+  const coordinator = {
+    terminalHandle: params.coordinatorHandle,
+    paneKey: params.coordinatorPaneKey,
+    orcaSessionId: params.coordinatorOrcaSessionId ?? null
+  }
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const run = this.getRunRaw(params.runId)
@@ -27,9 +40,7 @@ export function bindRun(
       this.db.exec('ROLLBACK')
       return undefined
     }
-    const sameBinding =
-      run.coordinator_pane_key !== null &&
-      isEquivalentPaneKey(run.coordinator_pane_key, params.coordinatorPaneKey)
+    const sameBinding = runBoundToCoordinator(run, coordinator)
     const adoption = this.getLegacyAdoption()
     const adoptedRun = adoption?.adopted_run_id === params.runId
     const legacyAuthority = params.legacyCoordinatorAuthority
@@ -49,6 +60,7 @@ export function bindRun(
       legacyPrincipal.terminal_handle === legacyAuthority.terminalHandle &&
       isEquivalentPaneKey(legacyPrincipal.pane_key, legacyAuthority.paneKey) &&
       params.coordinatorHandle === legacyAuthority.terminalHandle &&
+      params.coordinatorPaneKey !== null &&
       isEquivalentPaneKey(params.coordinatorPaneKey, legacyAuthority.paneKey)
     )
     if (legacyAuthority && !provenLegacyBinding) {
@@ -109,14 +121,17 @@ export function bindRun(
         }
       )
     }
-    this.unbindOtherRunsForPane(params.coordinatorPaneKey, params.runId)
-    for (const handle of new Set(
-      [run.coordinator_handle, params.coordinatorHandle].filter((value): value is string =>
-        Boolean(value)
-      )
-    )) {
-      this.rememberRunCoordinatorHandle(params.runId, handle)
-      this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, handle)
+    this.unbindOtherRunsForCoordinator(coordinator, params.runId)
+    // The mailbox address of the coordinator being replaced and of the one binding now.
+    for (const address of new Set([
+      mailboxAddressOf(runCoordinatorKey(run)),
+      mailboxAddressOf(coordinator)
+    ])) {
+      if (address === null) {
+        continue
+      }
+      this.rememberRunCoordinatorHandle(params.runId, address)
+      this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address)
     }
     if (
       (params.takeoverLegacy && !takeoverAlreadyApplied) ||
@@ -128,6 +143,7 @@ export function bindRun(
           coordinatorPrincipal?.status === 'committed' &&
           (params.takeoverLegacy ||
             coordinatorPrincipal.terminal_handle !== params.coordinatorHandle ||
+            params.coordinatorPaneKey === null ||
             !isEquivalentPaneKey(coordinatorPrincipal.pane_key, params.coordinatorPaneKey))
         ) {
           this.setLegacyCompatibilityPrincipalStatus(coordinatorPrincipal.id, 'revoked')
@@ -136,16 +152,31 @@ export function bindRun(
       this.db
         .prepare(
           `UPDATE runs
-           SET coordinator_handle = ?, coordinator_pane_key = ?,
+           SET coordinator_handle = ?, coordinator_pane_key = ?, coordinator_orca_session_id = ?,
+               coordinator_orca_session_id_generation = consumer_generation + 1,
                consumer_generation = consumer_generation + 1,
                updated_at = datetime('now')
            WHERE id = ?`
         )
-        .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
-      this.fenceOutstandingDelivery(params.runId)
+        .run(
+          coordinator.terminalHandle,
+          coordinator.paneKey,
+          coordinator.orcaSessionId,
+          params.runId
+        )
+      this.fenceUnacknowledgedMailboxDeliveries(`run:${params.runId}`)
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
       }
+    } else if (runCoordinatorKey(run).orcaSessionId !== coordinator.orcaSessionId) {
+      // Same coordinator, so no new consumer: correct an Orca session id a writer without the column left.
+      this.db
+        .prepare(
+          `UPDATE runs SET coordinator_orca_session_id = ?,
+             coordinator_orca_session_id_generation = consumer_generation
+           WHERE id = ?`
+        )
+        .run(coordinator.orcaSessionId, params.runId)
     }
     this.db.exec('COMMIT')
   } catch (error) {

@@ -11,6 +11,7 @@ import type { Worktree } from '../../shared/worktree/types'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { AutomationListParams, AutomationListResult } from '../../shared/automation-list-scope'
 import type {
+  AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
   AutomationDestination
 } from '../../shared/automation-owner-precondition'
@@ -53,6 +54,11 @@ export class RuntimeAutomationController {
 
   setService(service: AutomationService): void {
     this.service = service
+  }
+
+  /** Completed automation run terminals no client used, closed before an update; 0 off-headless. */
+  releaseFinishedRunTerminals(): Promise<number> {
+    return this.service?.releaseFinishedRunTerminals?.() ?? Promise.resolve(0)
   }
 
   /** Keep runtime-owned automation work ahead of queued external probes. */
@@ -113,13 +119,14 @@ export class RuntimeAutomationController {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.createAutomation(
+    const automation = this.store.createAutomation(
       {
         creationKey: input.creationKey,
         name: input.name,
         prompt: input.prompt,
         precheck: input.precheck,
         agentId: input.agentId,
+        extraAgentArgs: input.extraAgentArgs,
         runContext: input.runContext,
         sourceContext: input.sourceContext,
         projectId: target.projectId,
@@ -138,6 +145,8 @@ export class RuntimeAutomationController {
         ? { destination: destination ?? input.destination }
         : undefined
     )
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    return automation
   }
 
   async update(
@@ -179,18 +188,21 @@ export class RuntimeAutomationController {
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.updateAutomation(id, patch, options)
+    const automation = this.store.updateAutomation(id, patch, options)
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    return automation
   }
 
-  delete(
+  async delete(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
-  ): { removed: boolean; id: string } {
+  ): Promise<{ removed: boolean; id: string }> {
     if (!this.store?.deleteAutomation) {
       throw new Error('runtime_unavailable')
     }
     this.show(id)
     this.store.deleteAutomation(id, expectedOwner ? { expectedOwner } : undefined)
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     return { removed: true, id }
   }
 
@@ -198,24 +210,25 @@ export class RuntimeAutomationController {
     if (!this.service) {
       throw new Error('runtime_unavailable')
     }
-    const service = this.service
     return await runAutomationNowFenced({
       automationId: id,
-      service,
-      fence: () => {
-        if (!this.store?.assertAutomationOwnerFence) {
-          if (expectedOwner) {
-            throw new Error('runtime_unavailable')
-          }
-          return
-        }
-        this.store.assertAutomationOwnerFence({
-          id,
-          expectedOwner,
-          operation: 'execute'
-        })
-      }
+      service: this.service,
+      fence: () => this.assertOwner(id, expectedOwner, 'execute')
     })
+  }
+
+  assertOwner(
+    id: string,
+    expectedOwner: AutomationOwnerPrecondition | undefined,
+    operation: AutomationOwnerFenceOperation
+  ): void {
+    if (!this.store?.assertAutomationOwnerFence) {
+      if (expectedOwner) {
+        throw new Error('runtime_unavailable')
+      }
+      return
+    }
+    this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
   }
 
   private copyPatchValues(
@@ -227,6 +240,7 @@ export class RuntimeAutomationController {
       'prompt',
       'precheck',
       'agentId',
+      'extraAgentArgs',
       'runContext',
       'sourceContext',
       'baseBranch',

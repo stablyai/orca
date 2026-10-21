@@ -8,6 +8,12 @@ import { UI_STORAGE_KEY, writeJson } from './web-storage'
 export function createWebAppApi(): Partial<PreloadApi> {
   return {
     app: {
+      // Browser preferences do not use the desktop profile writer.
+      isProfileStateSaveDelayed: () => Promise.resolve(false),
+      onProfileStateSaveDelayChanged: () => () => undefined,
+      getWindowsAdministratorStatus: () => Promise.resolve(null),
+      restartAsAdministrator: () =>
+        Promise.reject(new Error('Administrator restart requires the Windows desktop app.')),
       getIdentity: () =>
         Promise.resolve({
           name: 'Orca',
@@ -35,6 +41,9 @@ export function createWebAppApi(): Partial<PreloadApi> {
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       awaitGitEnvironmentStartupBarrier: () => Promise.resolve(),
       prepareTerminalStartupRestoration: () => Promise.resolve(),
+      // The browser client has no runtime of its own.
+      holdsStructuredAgentSessions: () => Promise.resolve(false),
+      onStructuredAgentSessionsHeldChanged: () => () => undefined,
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),

@@ -1,4 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import {
+  getWorkspaceJiraIssueKey,
+  prefixJiraReviewTitle
+} from '../../../../shared/jira-review-title'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlAiForOperation
@@ -11,6 +15,7 @@ import {
   resolveCreateReviewDefaultBaseRef,
   stripBaseRef
 } from './create-pull-request-base-ref-normalization'
+import { resolveCreateReviewSeedText } from './create-review-draft-title'
 import {
   createInitialPullRequestFieldRevisions,
   type GenerationSeed,
@@ -20,6 +25,7 @@ import {
 import { useCreatePullRequestFieldSeeding } from './use-create-pull-request-field-seeding'
 import { useCreatePullRequestBaseRefDiscovery } from './use-create-pull-request-base-ref-discovery'
 import { useCreatePullRequestFieldGeneration } from './use-create-pull-request-field-generation'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export function useCreatePullRequestDialogFields({
   open,
@@ -27,10 +33,12 @@ export function useCreatePullRequestDialogFields({
   worktreeId,
   worktreePath,
   branch,
+  workspace,
   eligibility,
   currentBaseRef,
   repo,
   settings,
+  target: targetInput,
   submitting,
   prCreationDefaults,
   sourceControlAiActionsVisible = true,
@@ -38,6 +46,13 @@ export function useCreatePullRequestDialogFields({
   onBranchChangedByGeneration,
   generation
 }: UseCreatePullRequestDialogFieldsOptions) {
+  // Why: effects key on the host, not on the object, so a caller's fresh literal can't loop them.
+  const hasTarget = targetInput !== null
+  const targetEnvironmentId = targetInput?.kind === 'environment' ? targetInput.environmentId : null
+  const target = useMemo(
+    () => (hasTarget ? runtimeTargetForOwnerEnvironment(targetEnvironmentId) : null),
+    [hasTarget, targetEnvironmentId]
+  )
   const resolvedPullRequestAi = settings
     ? resolveSourceControlAiForOperation({
         settings,
@@ -75,6 +90,11 @@ export function useCreatePullRequestDialogFields({
   const hasExternalGeneration = Boolean(generation)
   const currentEligibilityKey =
     open && eligibility ? `${repoId}:${worktreeId ?? worktreePath}:${branch}` : null
+  const jiraIssueKey =
+    eligibility?.provider === 'github' || eligibility?.provider === 'gitlab'
+      ? getWorkspaceJiraIssueKey(workspace)
+      : null
+  const seedText = resolveCreateReviewSeedText({ branch, eligibility, jiraIssueKey })
   const resolvedDefaultBaseRef = resolveCreateReviewDefaultBaseRef({
     currentBaseRef,
     eligibilityDefaultBaseRef: eligibility?.defaultBaseRef
@@ -132,9 +152,12 @@ export function useCreatePullRequestDialogFields({
         setBaseQuery('')
         setBaseResults([])
       }
-      if (currentRevisions.title === seedRevisions.title) {
-        nextFields.title = fields.title
-        setTitle(fields.title)
+      if (
+        currentRevisions.title === seedRevisions.title &&
+        (!jiraIssueKey || currentRevisions.title === 0)
+      ) {
+        nextFields.title = prefixJiraReviewTitle(fields.title, jiraIssueKey)
+        setTitle(nextFields.title)
       }
       if (currentRevisions.body === seedRevisions.body) {
         nextFields.body = fields.body
@@ -146,7 +169,7 @@ export function useCreatePullRequestDialogFields({
       }
       return nextFields
     },
-    [base, body, draft, title]
+    [base, body, draft, jiraIssueKey, title]
   )
 
   useCreatePullRequestFieldSeeding({
@@ -156,6 +179,7 @@ export function useCreatePullRequestDialogFields({
     worktreePath,
     branch,
     eligibility,
+    jiraIssueKey,
     hasExternalGeneration,
     retainDraftWhenClosed,
     currentEligibilityKey,
@@ -187,7 +211,6 @@ export function useCreatePullRequestDialogFields({
   const repoDefaultBaseRef = useCreatePullRequestBaseRefDiscovery({
     open,
     repoId,
-    settings,
     base,
     baseQuery,
     setBase,
@@ -214,6 +237,7 @@ export function useCreatePullRequestDialogFields({
     worktreeId,
     worktreePath,
     settings,
+    target,
     eligibility,
     resolvedPrDefaults,
     generation,
@@ -243,6 +267,7 @@ export function useCreatePullRequestDialogFields({
     setBody: setUserBody,
     draft,
     setDraft: setUserDraft,
+    fieldsAreSeedPlaceholders: title === seedText.title && body === seedText.body,
     stackedCreationSupported: eligibility?.stackedCreationSupported === true,
     repoDefaultBaseRef,
     fieldRevisions: fieldRevisionsRef.current,

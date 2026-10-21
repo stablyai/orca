@@ -7,16 +7,18 @@ import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
+import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
@@ -27,6 +29,7 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
@@ -36,6 +39,8 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -95,7 +100,7 @@ export function registerSettingsHandlers(
   })
 
   ipcMain.handle('settings:get', () => {
-    return store.getSettings()
+    return readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
   })
 
   ipcMain.handle(
@@ -117,7 +122,7 @@ export function registerSettingsHandlers(
   // synchronously or pre-hydration bindings would always pick main authority
   // (terminal-side-effect-authority.md, migration switch).
   ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = store.getSettings()
+    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
@@ -150,15 +155,12 @@ export function registerSettingsHandlers(
         args.floatingTerminalCwd
       )
     }
-    if ('httpProxyUrl' in args) {
-      const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
-      sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
-    }
-    if ('httpProxyBypassRules' in args) {
-      sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)
-    }
+    sanitizeNetworkSettings(args, sanitizedArgs)
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
+    }
+    if ('aiVaultSearch' in args) {
+      sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
     }
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
@@ -192,10 +194,15 @@ export function registerSettingsHandlers(
     // (e.g. blur after a no-op edit), and a `settings_changed` event for a
     // no-op flip would inflate the experimental-feature-adoption signal.
     const before = store.getSettings()
-    const result = store.updateSettings(sanitizedArgs, {
+    const updateOptions = {
       notifyListeners: true,
       originWebContentsId: event.sender.id
-    })
+    }
+    const result =
+      'alwaysForceDeleteWorktrees' in sanitizedArgs ||
+      'alwaysForceDeletePreservedBranches' in sanitizedArgs
+        ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
+        : store.updateSettings(sanitizedArgs, updateOptions)
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&
@@ -237,13 +244,7 @@ export function registerSettingsHandlers(
           userInitiated: true,
           shouldHydrateShellPath: app.isPackaged,
           onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) => {
-            const settings = store.getSettings()
-            return (
-              settings.agentStatusHooksEnabled !== false &&
-              !settings.disabledTuiAgents.includes(agent)
-            )
-          }
+          shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
         })
       } catch (error) {
         console.warn('[settings] failed to reconcile managed agent hooks:', error)
@@ -252,6 +253,7 @@ export function registerSettingsHandlers(
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
       await setMainUiLanguage(result.uiLanguage)
       rebuildAppMenu()
+      rebuildSystemTrayMenu()
     }
     if (
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
@@ -265,6 +267,9 @@ export function registerSettingsHandlers(
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
+    }
+    if ('aiVaultSearch' in sanitizedArgs) {
+      applySessionSearchSettingsChange(before, result)
     }
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for
@@ -294,7 +299,7 @@ export function registerSettingsHandlers(
       })
     }
 
-    return result
+    return store.getSettings()
   })
 
   ipcMain.handle(
@@ -302,7 +307,7 @@ export function registerSettingsHandlers(
     (event, args: { environmentId?: unknown }): GlobalSettings => {
       const requestedEnvironmentId = args?.environmentId
       if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
-        throw new Error('Invalid Active Server preference')
+        throw new Error('Invalid default host for new projects')
       }
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =

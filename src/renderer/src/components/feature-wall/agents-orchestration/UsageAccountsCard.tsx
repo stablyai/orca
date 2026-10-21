@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import { cn } from '@/lib/utils'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   ClaudeRateLimitAccountsState,
@@ -97,14 +98,8 @@ export function UsageAccountsCard(props: {
   const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
   const mountedRef = useMountedRef()
 
-  const [claudeAccounts, setClaudeAccounts] = useState<ClaudeRateLimitAccountsState>({
-    accounts: [],
-    activeAccountId: null
-  })
-  const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
-    accounts: [],
-    activeAccountId: null
-  })
+  const [claudeAccounts, setClaudeAccounts] = useState<ClaudeRateLimitAccountsState>()
+  const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>()
   const [claudeAction, setClaudeAction] = useState<ConnectAction>('idle')
   const [codexAction, setCodexAction] = useState<ConnectAction>('idle')
 
@@ -121,7 +116,7 @@ export function UsageAccountsCard(props: {
           setClaudeAccounts(next)
         }
       } catch {
-        // Silent — empty list is the right fallback for the inline pitch.
+        // Leave the account state unknown.
       }
     })()
     void (async () => {
@@ -131,7 +126,7 @@ export function UsageAccountsCard(props: {
           setCodexAccounts(next)
         }
       } catch {
-        // Silent — same reason as above.
+        // Leave the account state unknown.
       }
     })()
     return () => {
@@ -140,11 +135,11 @@ export function UsageAccountsCard(props: {
   }, [fetchRateLimits])
 
   const claudeConnection = getFeatureWallUsageProviderConnection({
-    managedAccountCount: claudeAccounts.accounts.length,
+    managedAccountCount: claudeAccounts?.accounts.length,
     provider: rateLimits.claude
   })
   const codexConnection = getFeatureWallUsageProviderConnection({
-    managedAccountCount: codexAccounts.accounts.length,
+    managedAccountCount: codexAccounts?.accounts.length,
     provider: rateLimits.codex
   })
 
@@ -178,7 +173,7 @@ export function UsageAccountsCard(props: {
             'Claude sign-in failed.'
           ),
           {
-            description: String((error as Error)?.message ?? error)
+            description: readIpcErrorMessage(error)
           }
         )
       }
@@ -219,7 +214,7 @@ export function UsageAccountsCard(props: {
             'Codex sign-in failed.'
           ),
           {
-            description: String((error as Error)?.message ?? error)
+            description: readIpcErrorMessage(error)
           }
         )
       }

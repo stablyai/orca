@@ -1,7 +1,9 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, Circle, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Circle, Info, XCircle } from 'lucide-react'
 import type { SkillFreshnessGroupModel } from './skill-freshness-grouping'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { chipLabel, chipTooltip } from './skill-location-chip-copy'
@@ -28,8 +30,27 @@ function StateIcon({ state }: { state: SkillRowState }): React.JSX.Element | nul
   }
 }
 
+function notFromOrcaTooltip(lockSource: string | null): string {
+  return lockSource
+    ? translate(
+        'auto.components.skills.SkillUpdateRow.notFromOrcaSourceTip',
+        'Installed from {{value0}}. Selecting it replaces it with Orca’s version.',
+        { value0: lockSource }
+      )
+    : translate(
+        'auto.components.skills.SkillUpdateRow.notFromOrcaNoRecordTip',
+        'No Orca install record for this copy. Selecting it replaces it with Orca’s version.'
+      )
+}
+
 /** Sits immediately right of the name, so the label reads as part of it. */
-function StateBadge({ state }: { state: SkillRowState }): React.JSX.Element | null {
+function StateBadge({
+  state,
+  group
+}: {
+  state: SkillRowState
+  group: SkillFreshnessGroupModel
+}): React.JSX.Element | null {
   if (state === 'blocked') {
     return (
       <Badge
@@ -38,6 +59,25 @@ function StateBadge({ state }: { state: SkillRowState }): React.JSX.Element | nu
       >
         {translate('auto.components.skills.SkillFreshnessRow.statusCantUpdate', 'Skipped')}
       </Badge>
+    )
+  }
+  if (state === 'available' && !group.orcaOwned) {
+    // Why: quiet on purpose; the copy is offered, not recommended.
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="inline-flex shrink-0 cursor-help items-center gap-1 rounded-sm text-xs font-normal text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {translate('auto.components.skills.SkillUpdateRow.notFromOrca', 'Not from Orca')}
+            <Info className="size-3" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-pretty">
+          {notFromOrcaTooltip(group.lockSource)}
+        </TooltipContent>
+      </Tooltip>
     )
   }
   if (state === 'available') {
@@ -66,10 +106,13 @@ function StateBadge({ state }: { state: SkillRowState }): React.JSX.Element | nu
  */
 export function SkillUpdateRow({
   group,
-  state
+  state,
+  selection
 }: {
   group: SkillFreshnessGroupModel
   state: SkillRowState
+  /** Present only while the user is choosing what to update. */
+  selection?: { checked: boolean; onCheckedChange: (checked: boolean) => void }
 }): React.JSX.Element {
   const locationCount = group.locations.length
   return (
@@ -80,29 +123,46 @@ export function SkillUpdateRow({
       // name itself still lines up with the dialog's other content.
       className="-mx-1.5 border-t border-border/60 py-0.5 first:border-t-0"
     >
-      <CollapsibleTrigger
-        className={`group flex w-full min-w-0 items-center gap-3 rounded-md px-1.5 py-2 text-left transition-opacity hover:bg-accent/60 ${
-          state === 'pending' ? 'opacity-60' : ''
-        }`}
+      <div
+        className={cn(
+          'flex min-w-0 items-center transition-opacity',
+          state === 'pending' && 'opacity-60'
+        )}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <StateIcon state={state} />
-          <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
-            {group.name}
+        {/* Why: outside the trigger, so ticking a row never toggles its disclosure. */}
+        {selection ? (
+          <Checkbox
+            className="ml-1.5"
+            checked={selection.checked}
+            onCheckedChange={(checked) => selection.onCheckedChange(checked === true)}
+            aria-label={translate(
+              'auto.components.skills.SkillUpdateRow.includeSkill',
+              'Include {{value0}}',
+              { value0: group.name }
+            )}
+          />
+        ) : null}
+        <CollapsibleTrigger variant="row" className="min-w-0">
+          {/* Margins, not trigger padding, inset the content inside the hover surface. */}
+          <span className="ml-1.5 flex min-w-0 flex-1 items-center gap-2">
+            <StateIcon state={state} />
+            <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+              {group.name}
+            </span>
+            <StateBadge state={state} group={group} />
           </span>
-          <StateBadge state={state} />
-        </span>
-        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-          {locationCount === 1
-            ? translate('auto.components.skills.SkillUpdateRow.oneLocation', '1 location')
-            : translate(
-                'auto.components.skills.SkillUpdateRow.manyLocations',
-                '{{value0}} locations',
-                { value0: locationCount }
-              )}
-        </span>
-        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-      </CollapsibleTrigger>
+          <span className="shrink-0 text-[11px] font-normal tabular-nums text-muted-foreground">
+            {locationCount === 1
+              ? translate('auto.components.skills.SkillUpdateRow.oneLocation', '1 location')
+              : translate(
+                  'auto.components.skills.SkillUpdateRow.manyLocations',
+                  '{{value0}} locations',
+                  { value0: locationCount }
+                )}
+          </span>
+          <ChevronDown className="mr-1.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        </CollapsibleTrigger>
+      </div>
 
       {state === 'failed' ? (
         <p className="px-1.5 pb-1.5 text-xs leading-5 text-muted-foreground">
@@ -118,7 +178,7 @@ export function SkillUpdateRow({
           nor on a mount-time `defaultOpen` that a re-scan can't re-fire. */}
       {state === 'blocked' ? (
         <p className="px-1.5 pb-1.5 text-xs leading-5 text-muted-foreground">
-          {skippedReason(group.locations, group.name)}
+          {skippedReason(group.locations)}
         </p>
       ) : null}
 

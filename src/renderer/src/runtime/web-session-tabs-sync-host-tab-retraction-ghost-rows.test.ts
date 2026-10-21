@@ -38,9 +38,9 @@ import {
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import {
   applyFreshWebSessionTabsSnapshot,
-  applyFreshWebSessionTabsSnapshots,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from './web-session-tabs-sync'
+  applyFreshWebSessionTabsSnapshots
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import {
   buildRetainedAgentsSyncSnapshot,
   collectRetainedAgentsOnDisappear

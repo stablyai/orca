@@ -228,4 +228,49 @@ describe('BrowserRoutePartitionBindingStore', () => {
       'browser_route_partition_binding_invalid'
     )
   })
+
+  it('answers to an alias beside the fingerprint older builds read', () => {
+    const store = new BrowserRoutePartitionBindingStore({ filePath: createPath() })
+    store.set(partition, fingerprint, 'e'.repeat(64))
+
+    store.rebind(partition, fingerprint, 'e'.repeat(64), 'b'.repeat(64))
+    store.rebind(partition, fingerprint, 'e'.repeat(64), 'b'.repeat(64))
+
+    expect(store.findPartitionByFingerprint('b'.repeat(64))).toBe(partition)
+    expect(store.findPartitionByFingerprint(fingerprint)).toBe(partition)
+    // Why: older builds read only `fingerprint`, so an alias must leave it in place.
+    expect(store.get(partition)).toBe(fingerprint)
+    expect(store.listBindings().get(partition)?.aliasFingerprints).toEqual(['b'.repeat(64)])
+    store.set(partition, fingerprint, 'f'.repeat(64))
+    expect(store.findPartitionByFingerprint('b'.repeat(64))).toBe(partition)
+  })
+
+  it('keeps aliases bounded and drops malformed ones without rejecting the file', () => {
+    const filePath = createPath()
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        version: 2,
+        bindings: {
+          [partition]: {
+            fingerprint,
+            storageScope: 'e'.repeat(64),
+            lastUsedAt: 1,
+            aliasFingerprints: ['not-a-fingerprint', 7, 'b'.repeat(64)]
+          }
+        }
+      })
+    )
+    const store = new BrowserRoutePartitionBindingStore({ filePath })
+    expect(store.listBindings().get(partition)?.aliasFingerprints).toEqual(['b'.repeat(64)])
+
+    store.rebind(partition, fingerprint, 'e'.repeat(64), 'c'.repeat(64))
+    store.rebind(partition, fingerprint, 'e'.repeat(64), 'd'.repeat(64))
+
+    expect(store.listBindings().get(partition)?.aliasFingerprints).toEqual([
+      'c'.repeat(64),
+      'd'.repeat(64)
+    ])
+    expect(store.findPartitionByFingerprint('b'.repeat(64))).toBeNull()
+  })
 })

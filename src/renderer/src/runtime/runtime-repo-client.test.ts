@@ -38,7 +38,7 @@ afterEach(() => {
 describe('runtime repo client search bounds', () => {
   it('rejects oversized local base-ref searches before IPC', async () => {
     await expect(
-      searchRuntimeRepoBaseRefs(null, 'repo-1', 'x'.repeat(3 * 1024), 20)
+      searchRuntimeRepoBaseRefs('local', 'repo-1', 'x'.repeat(3 * 1024), 20)
     ).resolves.toEqual([])
 
     expect(searchBaseRefs).not.toHaveBeenCalled()
@@ -48,7 +48,7 @@ describe('runtime repo client search bounds', () => {
   it('rejects oversized runtime base-ref detail searches before RPC', async () => {
     await expect(
       searchRuntimeRepoBaseRefDetails(
-        { activeRuntimeEnvironmentId: 'env-1' },
+        'runtime:env-1',
         'repo-1',
         'secret-token-value'.repeat(256),
         20
@@ -63,8 +63,8 @@ describe('runtime repo client search bounds', () => {
     getBaseRefDefault.mockResolvedValue({ defaultBaseRef: 'origin/main', remoteCount: 1 })
     searchBaseRefs.mockResolvedValue(['origin/main'])
 
-    await getRuntimeRepoBaseRefDefault(null, 'same-repo', 'ssh:server')
-    await searchRuntimeRepoBaseRefs(null, 'same-repo', 'main', 20, 'ssh:server')
+    await getRuntimeRepoBaseRefDefault('ssh:server', 'same-repo')
+    await searchRuntimeRepoBaseRefs('ssh:server', 'same-repo', 'main', 20)
 
     expect(getBaseRefDefault).toHaveBeenCalledWith({
       repoId: 'same-repo',

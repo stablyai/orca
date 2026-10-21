@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   attachTerminalMouseWheelMultiplier,
   createTerminalTuiMouseWheelDistanceState,
   normalizeTerminalTuiMouseWheelMultiplier,
@@ -77,10 +76,6 @@ function wheelEvent(
 describe('terminal mouse wheel multiplier', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('uses a one-report multiplier for TUI mouse wheel scrolling', () => {
-    expect(TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER).toBe(1)
   })
 
   it('normalizes TUI wheel multipliers to the supported report range', () => {

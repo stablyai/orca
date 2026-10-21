@@ -22,6 +22,7 @@ import {
   finalizeWorkspaceCleanupScan,
   isLatestWorkspaceCleanupScan
 } from './workspace-cleanup-scan-progress'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type SetState = (
   partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
@@ -54,7 +55,7 @@ export async function scanWorkspaceCleanup(
     ],
     // Broad scan identity belongs to this store request; caller-provided IDs
     // are reserved for focused scans and can collide across refresh variants.
-    scanId: crypto.randomUUID()
+    scanId: createBrowserUuid()
   }
   const scanKey = getWorkspaceCleanupScanKey(scanArgs)
 

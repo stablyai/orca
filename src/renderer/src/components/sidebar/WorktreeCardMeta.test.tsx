@@ -27,27 +27,6 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 describe('WorktreeCardDetailsHover', () => {
-  it('wraps workspace and branch identity so long names stay readable in the hover panel', () => {
-    const markup = renderToStaticMarkup(
-      <WorktreeCardDetailsHover
-        branchName="bug-hold-to-talk-speech-to-text-option-no-longer-works"
-        workspaceTitle="[Bug]: Hold-to-talk speech-to-text option no longer works"
-        issue={null}
-        linearIssue={null}
-        review={null}
-        comment={null}
-        onEditIssue={vi.fn()}
-        onEditComment={vi.fn()}
-      >
-        <span>Workspace card</span>
-      </WorktreeCardDetailsHover>
-    )
-
-    expect(markup).toContain('break-words')
-    expect(markup).not.toContain('truncate font-mono')
-    expect(markup).not.toContain('truncate text-[13px]')
-  })
-
   it('puts workspace title before branch identity and metadata details', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
@@ -76,39 +55,6 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('feature/local-branch')
     expect(markup.indexOf('Fix stale GH PR')).toBeLessThan(markup.indexOf('feature/local-branch'))
     expect(markup.indexOf('feature/local-branch')).toBeLessThan(markup.indexOf('PR #456'))
-  })
-
-  it('keeps the hover title unruled and inline editable while section bodies stay inset', () => {
-    const markup = renderToStaticMarkup(
-      <WorktreeCardDetailsHover
-        branchName="feature/local-branch"
-        workspaceTitle="Fix stale GH PR"
-        issue={{
-          number: 5518,
-          title: 'Agent monitor lists ephemeral headless subprocesses',
-          state: 'open',
-          url: 'https://github.com/acme/orca/issues/5518',
-          labels: []
-        }}
-        linearIssue={null}
-        review={null}
-        comment={null}
-        onRenameWorkspaceTitle={vi.fn()}
-        onEditIssue={vi.fn()}
-        onEditComment={vi.fn()}
-      >
-        <span>Fix stale GH PR</span>
-      </WorktreeCardDetailsHover>
-    )
-    const identityHeaderTag =
-      markup.match(/<div[^>]*data-worktree-hover-identity-header=""[^>]*>/)?.[0] ?? ''
-
-    expect(identityHeaderTag).not.toContain('border-l')
-    expect(identityHeaderTag).not.toContain('pl-2')
-    expect(markup).toContain('data-worktree-title-inline-rename=""')
-    expect(markup).toContain('cursor-text text-[13px] font-semibold')
-    expect(markup).toContain('Fix stale GH PR')
-    expect(markup).toContain('border-l border-border/70 pl-3')
   })
 
   it('puts unlink behind the first PR actions menu and keeps GitHub last', () => {

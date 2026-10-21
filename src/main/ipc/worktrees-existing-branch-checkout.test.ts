@@ -10,6 +10,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -34,18 +38,11 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -91,7 +88,12 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -146,7 +148,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-bug-0',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-bug-0', hostId: 'local' }),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -204,7 +206,7 @@ describe('registerWorktreeHandlers', () => {
       { checkoutExistingBranch: true }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/my-folder',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/my-folder', hostId: 'local' }),
       expect.objectContaining({ preserveBranchOnDelete: true })
     )
     expect(result).toMatchObject({
@@ -295,7 +297,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-something-2',
       'feature/something-2',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -312,7 +316,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     getPRForBranchMock.mockResolvedValueOnce({
       number: 42,
       title: 'Selected PR',
@@ -338,14 +342,16 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title',
       'feature/fix',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
       { cwd: '/workspace/fix-title' }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-title', hostId: 'local' }),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedPR: 42
@@ -371,7 +377,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -384,7 +390,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/fix-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/fix-title', hostId: 'local' }),
       expect.objectContaining({
         baseRef: 'refs/remotes/origin/main',
         linkedGitLabMR: 7
@@ -405,7 +411,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     getHostedReviewForBranchMock.mockResolvedValueOnce({
       provider: 'bitbucket',
       number: 11,
@@ -431,10 +437,12 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/bitbucket-title',
       'feature/bitbucket',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/bitbucket-title', hostId: 'local' }),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
@@ -485,10 +493,12 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/bitbucket-title-2',
       'feature/bitbucket-2',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/bitbucket-title-2',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/bitbucket-title-2', hostId: 'local' }),
       expect.objectContaining({ linkedBitbucketPR: 11 })
     )
   })
@@ -520,7 +530,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -552,7 +564,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -594,7 +608,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -628,7 +644,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -721,7 +739,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/fix-title-2',
       'feature/fix-2',
       'abc123',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -763,7 +783,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard-3',
       'improve-dashboard-3',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({

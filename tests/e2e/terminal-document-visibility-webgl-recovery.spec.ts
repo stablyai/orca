@@ -281,7 +281,7 @@ async function dispatchDocumentVisibilityCycle(page: Page): Promise<void> {
 }
 
 test.describe('terminal document visibility WebGL recovery', () => {
-  test('preserves the WebGL atlas and keeps terminal text painted after document visibility resumes', async ({
+  test('@headful preserves the WebGL atlas and keeps terminal text painted after document visibility resumes', async ({
     electronApp,
     orcaPage
   }, testInfo) => {

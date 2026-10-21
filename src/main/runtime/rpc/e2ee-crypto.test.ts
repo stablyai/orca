@@ -9,7 +9,7 @@ import {
   decryptBytes,
   MAX_E2EE_ENCRYPTED_BASE64_CHARACTERS,
   publicKeyFromBase64
-} from './e2ee-crypto'
+} from '../../../shared/e2ee-crypto'
 import { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../shared/mobile-e2ee-legacy-fixtures'
 
 describe('e2ee-crypto', () => {

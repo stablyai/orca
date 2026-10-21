@@ -1,7 +1,10 @@
 import { useCallback, useState } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
-import { bulkUnstageRuntimeGitPaths, type RuntimeGitContext } from '@/runtime/runtime-git-client'
+import { basename } from '@/lib/path'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {
@@ -9,11 +12,17 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import { discardDeletesEntryFile } from './discard-confirmation'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
+import {
+  dismissSourceControlEntryFailureToast,
+  showSourceControlEntryFailureToast
+} from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
 import type { SourceControlEntryGroups } from '../listing/section-order'
 
 export function useSourceControlDiscardConfirmation({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   grouped,
@@ -24,7 +33,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle,
   refreshActiveGitStatusAfterMutation
 }: {
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   grouped: SourceControlEntryGroups
@@ -44,15 +53,28 @@ export function useSourceControlDiscardConfirmation({
   }
 
   const handleDiscard = useCallback(
-    async (filePath: string) => {
+    async (entry: GitStatusEntry): Promise<void> => {
+      // Why: only the discard itself is caught here — a refresh rejection would otherwise be
+      // reported as "Failed to discard" for a discard that already landed.
       try {
-        await discardSingle(filePath)
-        await refreshActiveGitStatusAfterMutation()
-      } catch {
-        // Why: per-row discard is fire-and-forget; bulk callers use discardSingle directly to aggregate failures into one toast.
+        await discardSingle(entry.path)
+      } catch (error) {
+        console.error('[SourceControl] discard failed', error)
+        // Why: bulk callers use discardSingle directly so they can aggregate failures into one toast.
+        showSourceControlEntryFailureToast({
+          operation: 'discard',
+          filePath: entry.path,
+          deletesFile: discardDeletesEntryFile(entry),
+          error,
+          worktreeId: activeWorktreeId,
+          worktreeName: worktreePath ? basename(worktreePath) : null
+        })
+        return
       }
+      dismissSourceControlEntryFailureToast(activeWorktreeId)
+      await refreshActiveGitStatusAfterMutation()
     },
-    [discardSingle, refreshActiveGitStatusAfterMutation]
+    [activeWorktreeId, discardSingle, refreshActiveGitStatusAfterMutation, worktreePath]
   )
 
   // Why: "Discard all" skips unresolved/resolved_locally rows (discarding can re-create the conflict or lose the resolution; no v1 UX for it).
@@ -76,7 +98,7 @@ export function useSourceControlDiscardConfirmation({
             bulkUnstageRuntimeGitPaths(
               {
                 // Why: route unstaging by the repo OWNER host, not the focused runtime.
-                settings: activeRepoSettings,
+                target: requireGitOwnerTarget(activeRepoTarget),
                 worktreeId: activeWorktreeId,
                 worktreePath,
                 connectionId
@@ -96,11 +118,11 @@ export function useSourceControlDiscardConfirmation({
               'auto.components.right.sidebar.SourceControl.a5e5a11090',
               'Discard all failed — unable to unstage files before discard'
             ),
-            { description: errors[0] instanceof Error ? errors[0].message : undefined }
+            { description: readIpcErrorMessage(errors[0]) }
           )
         } else if (result.failed.length > 0) {
           // Why: show only the first error + a sample of failed paths to avoid a huge toast body on bulk failures.
-          const firstMsg = errors[0] instanceof Error ? errors[0].message : undefined
+          const firstMsg = readIpcErrorMessage(errors[0])
           const sample = result.failed.slice(0, 3).join(', ')
           const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
           toast.error(
@@ -129,7 +151,7 @@ export function useSourceControlDiscardConfirmation({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       worktreePath,
       activeWorktreeId,
       grouped,
@@ -182,7 +204,7 @@ export function useSourceControlDiscardConfirmation({
     }
     setPendingDiscard(null)
     if (pending.kind === 'entry') {
-      void handleDiscard(pending.entry.path)
+      void handleDiscard(pending.entry)
       return
     }
     void handleRevertAllInArea(pending.area, pending.paths)

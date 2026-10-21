@@ -44,6 +44,7 @@ export function buildMobileMarkdownTab(
     sourceFileId: sourceFile.id,
     sourceFilePath: sourceFile.filePath,
     sourceRelativePath: sourceFile.relativePath,
+    ...(sourceFile.isUntitled ? { isUntitled: true as const } : {}),
     documentVersion: draftVersion ?? `file:${sourceFile.id}`,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true

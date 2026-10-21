@@ -1,8 +1,9 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
-import { captureScreenshot } from './cdp-screenshot'
+import { captureScreenshot, type CapturePaintHold } from './cdp-screenshot'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
+import { readRemoteCliAdmittedPage } from './remote-cli-page-admission'
 
 /**
  * Page capture output: Electron-native Page.printToPDF (inline and ReturnAsStream),
@@ -13,7 +14,8 @@ export class CdpPageCaptureCommands {
 
   constructor(
     private readonly webContents: WebContents,
-    private readonly responder: CdpClientResponseWriter
+    private readonly responder: CdpClientResponseWriter,
+    private readonly holdPaint: CapturePaintHold
   ) {}
 
   clear(): void {
@@ -34,7 +36,9 @@ export class CdpPageCaptureCommands {
       return
     }
     try {
-      const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      const pdf = await readRemoteCliAdmittedPage(this.webContents.id, () =>
+        this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      )
       // Why: printToPDF can resolve after the client disconnected (or was
       // replaced). Bail before registering a stream so its buffer isn't
       // orphaned in pdfStreams past the disconnect's clear() until the TTL.
@@ -71,12 +75,16 @@ export class CdpPageCaptureCommands {
     this.responder.sendResult(clientId, {}, client)
   }
 
-  handleScreenshot(client: WebSocket, clientId: number, params?: Record<string, unknown>): void {
-    captureScreenshot(
-      this.webContents,
-      params,
-      (result) => this.responder.sendResult(clientId, result, client),
-      (message) => this.responder.sendError(clientId, message, client)
-    )
+  async handleScreenshot(
+    client: WebSocket,
+    clientId: number,
+    params?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      const result = await captureScreenshot(this.webContents, params, this.holdPaint)
+      this.responder.sendResult(clientId, result, client)
+    } catch (err) {
+      this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 }

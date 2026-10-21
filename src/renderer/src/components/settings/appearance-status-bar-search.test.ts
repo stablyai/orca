@@ -31,6 +31,16 @@ describe('getStatusBarToggles', () => {
     )
   })
 
+  it('includes ZCode quota in Appearance search', () => {
+    const toggle = getStatusBarToggles().find((entry) => entry.id === 'zcode')
+
+    expect(toggle).toMatchObject({
+      title: 'ZCode Usage',
+      toggleDescription: 'Show ZCode Coding Plan quota usage.'
+    })
+    expect(toggle?.keywords).toEqual(expect.arrayContaining(['zcode', 'zai', 'glm']))
+  })
+
   it('includes MiniMax usage so Appearance can toggle the default-on status item', () => {
     const miniMaxToggle = getStatusBarToggles().find((entry) => entry.id === 'minimax')
 

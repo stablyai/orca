@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { isBlockingJiraUrlIntent } from './smart-workspace-source-results'
+import { isBlockingJiraUrlIntent } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace-emoji-shortcodes'
@@ -192,6 +192,8 @@ export function renderSmartWorkspaceNameInput(
             applyEmojiReplacement(completedEmoji)
             return
           }
+          // A pending emoji caret frame would otherwise yank the caret back mid-typing.
+          cancelLocalInputFocusFrame()
           onValueChange(nextValue)
           setEmojiCursor(nextCursor)
           if (!disabled && mode !== 'text') {

@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
+  disabled: boolean
   repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   advancedOpen: boolean
   selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
@@ -43,6 +44,7 @@ function getScopeSummaryLabel({
 }
 
 export function TerminalQuickCommandAdvancedSection({
+  disabled,
   repos,
   advancedOpen,
   selectedScope,
@@ -98,6 +100,7 @@ export function TerminalQuickCommandAdvancedSection({
             )}
           >
             <TerminalQuickCommandScopeField
+              disabled={disabled}
               repos={repos}
               selectedScope={selectedScope}
               selectedRepoId={selectedRepoId}

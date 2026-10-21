@@ -78,11 +78,13 @@ export function buildWindowsHostInteractiveLoginSpawn(
     'powershell.exe'
   )
   const script = buildPidRelayScript(spawnCmd, spawnArgs, pidFilePath)
+  // Why: `-EncodedCommand` is not execution-policy gated (only `-File` is), so `-ExecutionPolicy
+  // Bypass` was a no-op — and it is one of the most heavily EDR-flagged PowerShell tokens. The
+  // base64 stays: `wrapWindowsStartWait` sends this through `cmd.exe /c start`, whose
+  // `assertWindowsCmdSafeTokens` guard rejects the `&` and `"` the raw relay script contains.
   const wrapped = wrapWindowsStartWait(powershell, [
     '-NoLogo',
     '-NoProfile',
-    '-ExecutionPolicy',
-    'Bypass',
     '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')
   ])

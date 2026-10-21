@@ -12,7 +12,6 @@ import { isWslShellName } from '../../../../shared/local-windows-terminal-runtim
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
-import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -84,40 +83,10 @@ export function buildSkillCommandForRuntime(
   currentPlatform = getSkillCommandPlatform()
 ): string {
   const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
-  const normalizedCommand = normalizeWindowsSkillUpdateCommand(
-    command,
-    resolvedRuntime,
-    currentPlatform
-  )
   if (resolvedRuntime.runtime !== 'wsl') {
-    return wrapWindowsSkillCommandWithNpxPrerequisite(
-      normalizedCommand,
-      currentPlatform,
-      'copied-command'
-    )
+    return wrapWindowsSkillCommandWithNpxPrerequisite(command, currentPlatform, 'copied-command')
   }
-  return normalizedCommand
-}
-
-function normalizeWindowsSkillUpdateCommand(
-  command: string,
-  runtime: LocalAgentRuntime,
-  currentPlatform: NodeJS.Platform
-): string {
-  if (runtime.runtime === 'wsl' || currentPlatform !== 'win32') {
-    return command
-  }
-
-  const trimmedCommand = command.trim()
-  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
-  if (!updateMatch) {
-    return command
-  }
-
-  // Why: the `skills update` subcommand is currently unreliable on native
-  // Windows, while reinstalling from the same repo source is idempotent and
-  // keeps the setup affordance working.
-  return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
+  return command
 }
 
 /**
@@ -227,7 +196,7 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
     // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
     // starting an interactive cmd session instead of running the payload.
     (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
-    !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
+    !/^npx\s+skills(?:@[\w.-]+)?\s+add\b/i.test(trimmedCommand)
   ) {
     return command
   }

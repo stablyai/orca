@@ -550,6 +550,14 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
   })
 })
 
+function rowsFrom(byId: ReadonlyMap<string, Worktree>) {
+  const rowsFor = (worktreeId: string): Worktree[] => {
+    const row = byId.get(worktreeId)
+    return row ? [row] : []
+  }
+  return { status: rowsFor, order: rowsFor }
+}
+
 describe('workspace kanban sidebar drop updates', () => {
   it('writes a status-only update for cross-lane drops outside Manual sort', () => {
     const worktreeById = new Map([
@@ -565,7 +573,7 @@ describe('workspace kanban sidebar drop updates', () => {
         { key: 'todo', worktreeIds: ['todo-a'] },
         { key: 'doing', worktreeIds: ['doing-a'] }
       ],
-      worktreeById,
+      rowsFor: rowsFrom(worktreeById),
       allWorktreeIds: [...worktreeById.keys()],
       rankByWorktreeId: new Map(),
       workspaceStatuses,
@@ -594,7 +602,7 @@ describe('workspace kanban sidebar drop updates', () => {
         { key: 'todo', worktreeIds: ['todo-a'] },
         { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
       ],
-      worktreeById,
+      rowsFor: rowsFrom(worktreeById),
       allWorktreeIds: [...worktreeById.keys()],
       rankByWorktreeId: new Map(),
       workspaceStatuses,
@@ -660,7 +668,7 @@ describe('workspace kanban sidebar drop updates', () => {
         { key: 'todo', worktreeIds: ['todo-a'] },
         { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
       ],
-      worktreeById,
+      rowsFor: rowsFrom(worktreeById),
       allWorktreeIds: ['todo-a', 'filtered', 'doing-a', 'doing-b'],
       rankByWorktreeId,
       workspaceStatuses,

@@ -503,12 +503,19 @@ describePostgres('PostgreSQL transaction recovery', () => {
     const directorLockOrder: string[] = []
     const assignmentDatabase = new TransactionProbeDatabase(database, async (phase, sql) => {
       if (phase === 'before') {
-        if (sql.includes('FROM relay_assignments WHERE user_id = ?')) {
+        // Only locked statements reach this hook, so classifying the pin read
+        // is what proves it stays unlocked: if it ever grows a FOR UPDATE it
+        // shows up in the order below instead of silently joining the queue.
+        if (sql.includes('SELECT cell_id FROM relay_assignments')) {
+          directorLockOrder.push('pin-read')
+        } else if (sql.includes('FROM relay_assignments WHERE user_id = ?')) {
           directorLockOrder.push('assignment')
         } else if (sql.includes('FROM relay_assignment_activity_leases')) {
           directorLockOrder.push('activity')
         } else if (sql.includes('FROM relay_cells ORDER BY')) {
           directorLockOrder.push('cell-inventory')
+        } else if (sql.includes('FROM relay_cells WHERE cell_id IN')) {
+          directorLockOrder.push('cell-rows')
         } else if (sql.includes('FROM relay_cells WHERE cell_id = ?')) {
           directorLockOrder.push('cell')
         }
@@ -530,11 +537,14 @@ describePostgres('PostgreSQL transaction recovery', () => {
     })
     await expect(legacyTransaction).resolves.toBeUndefined()
     expect(assignmentDatabase.attempts).toBe(2)
+    // The retry still takes a cell row before the assignment row — the order
+    // that avoids the legacy cycle — but only the pinned row, never the
+    // inventory.
     expect(directorLockOrder).toEqual([
       'assignment',
       'activity',
       'cell',
-      'cell-inventory',
+      'cell-rows',
       'assignment',
       'activity'
     ])
@@ -781,6 +791,57 @@ describePostgres('PostgreSQL transaction recovery', () => {
     expect(reservations).toEqual([
       { cell_id: 'reconcile-cell-a', reserved_requests: '8', lease_units: '8' },
       { cell_id: 'reconcile-cell-b', reserved_requests: '6', lease_units: '6' }
+    ])
+  }, 15_000)
+
+  it('keeps a unit placed between reconciliation reading leases and locking cells', async () => {
+    const now = 1_350_000_000_000
+    const cells = [
+      { id: 'reconcile-cell-a', url: 'https://reconcile-a.example.com', capacityRequests: 100 },
+      { id: 'reconcile-cell-b', url: 'https://reconcile-b.example.com', capacityRequests: 100 }
+    ]
+    const seedStore = new RelayAssignmentStore(database, () => now)
+    await seedStore.reconcileCells(cells)
+
+    const leasesRead = signal()
+    const continueReconciliation = signal()
+    let gateReconciliation = true
+    const reconcileDatabase = new TransactionProbeDatabase(database, async (phase, sql) => {
+      if (
+        gateReconciliation &&
+        phase === 'after' &&
+        sql.includes('SELECT lease.* FROM relay_assignment_activity_leases lease')
+      ) {
+        gateReconciliation = false
+        leasesRead.resolve()
+        await continueReconciliation.promise
+      }
+    })
+    const reconciliation = new RelayAssignmentStore(
+      reconcileDatabase,
+      () => now
+    ).cellEvacuationStatus('reconcile-cell-a', 'reconcile-cell-b', true)
+    await leasesRead.promise
+    // A brand-new host holds no row reconciliation locked, so it commits in the gap.
+    const grant = await seedStore.assign({
+      userId: 'reconcile-user-gap',
+      relayHostId: 'reconcilehostgap'
+    })
+    continueReconciliation.resolve()
+    await reconciliation
+
+    expect(['reconcile-cell-a', 'reconcile-cell-b']).toContain(grant.cellId)
+    const reservations = await database.query(
+      `SELECT cell.cell_id, cell.reserved_requests,
+         COALESCE(SUM(lease.request_units), 0) AS lease_units
+       FROM relay_cells cell
+       LEFT JOIN relay_assignment_activity_leases lease ON lease.cell_id = cell.cell_id
+       WHERE cell.cell_id = ?
+       GROUP BY cell.cell_id, cell.reserved_requests`,
+      [grant.cellId]
+    )
+    expect(reservations).toEqual([
+      { cell_id: grant.cellId, reserved_requests: '1', lease_units: '1' }
     ])
   }, 15_000)
 

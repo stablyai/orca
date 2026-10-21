@@ -2,7 +2,7 @@
 // Known limitation: upgrade_backfill's "completed" shape (persistence.ts:362-369) is also written by live completion, so an existing live-completer flips fresh_install→upgrade_backfill; dashboards forward-fill cohort from _started. TODO: a wasBackfilledByMigration sentinel would disambiguate.
 // Never throws: returns { cohort: undefined } on any read/uninit error, which the schema's .optional() cohort still validates. Mirrors sibling getCohortAtEmit's never-crash contract.
 
-import { ONBOARDING_FINAL_STEP } from '../../shared/constants'
+import { ONBOARDING_FINAL_STEP } from '../../shared/onboarding-defaults'
 import type { OnboardingCohort } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
 

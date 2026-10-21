@@ -5,7 +5,10 @@ import type {
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
-import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import {
+  requestedAiVaultSessionDepth,
+  truncateAiVaultListResult
+} from '../../shared/ai-vault-session-depth'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
@@ -59,9 +62,10 @@ export function restampAiVaultListResult(
 export function mergeAiVaultListResults(
   results: readonly AiVaultListResult[],
   rawLimit: number | undefined,
-  unlimited = false
+  unlimited = false,
+  scopePaths: readonly string[] = []
 ): AiVaultListResult {
-  const limit = aiVaultScanLimit({ limit: rawLimit, unlimited })
+  const depth = requestedAiVaultSessionDepth({ limit: rawLimit, unlimited })
   const byId = new Map<string, AiVaultSession>()
   const issues: AiVaultScanIssue[] = []
   for (const result of results) {
@@ -70,16 +74,20 @@ export function mergeAiVaultListResults(
     }
     issues.push(...result.issues)
   }
-  return {
-    sessions: [...byId.values()]
-      .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-      .slice(0, limit),
-    issues,
-    // Why: a merge is not a new scan. Reminting here made every all-host cache
-    // hit look fresh to the renderer, which only skipped apply when scannedAt
-    // matched. Keep the latest input stamp so identical legs stay a no-op.
-    scannedAt: latestAiVaultScannedAt(results)
-  }
+  return truncateAiVaultListResult(
+    {
+      sessions: [...byId.values()].sort(
+        (left, right) => sessionSortTime(right) - sessionSortTime(left)
+      ),
+      issues,
+      // Why: a merge is not a new scan. Reminting here made every all-host cache
+      // hit look fresh to the renderer, which only skipped apply when scannedAt
+      // matched. Keep the latest input stamp so identical legs stay a no-op.
+      scannedAt: latestAiVaultScannedAt(results)
+    },
+    depth,
+    scopePaths
+  )
 }
 
 function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {

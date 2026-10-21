@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addPreviewMessage,
   createAccumulator,
@@ -34,7 +35,8 @@ const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
 
 export async function parseGrokSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
@@ -42,8 +44,8 @@ export async function parseGrokSessionFile(
   }
   const info = asRecord(record.info)
   const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-  const accumulator = createAccumulator({ agent: 'grok', file, sessionId })
-  accumulator.cwd = extractString(info?.cwd)
+  const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
+  accumulator.cwd = grokSessionCwd(record)
   accumulator.title =
     normalizeTitleText(extractString(record.generated_title) ?? '') ??
     normalizeTitleText(extractString(record.session_summary) ?? '')
@@ -56,6 +58,11 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.last_active_at))
   await consumeGrokChatHistory(accumulator, dirname(file.path))
   return finalizeSession(accumulator, platform)
+}
+
+/** The session's cwd; a scope walk reads it from summary.json without the history. */
+export function grokSessionCwd(summary: Record<string, unknown>): string | null {
+  return extractString(asRecord(summary.info)?.cwd)
 }
 
 async function consumeGrokChatHistory(

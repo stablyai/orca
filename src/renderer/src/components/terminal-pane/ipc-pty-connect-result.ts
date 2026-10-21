@@ -16,6 +16,10 @@ export function projectIpcPtyConnectResult(
       snapshot: spawnResult.snapshot,
       snapshotCols: spawnResult.snapshotCols,
       snapshotRows: spawnResult.snapshotRows,
+      ...(spawnResult.snapshotSeq !== undefined ? { snapshotSeq: spawnResult.snapshotSeq } : {}),
+      ...(spawnResult.snapshotKittyKeyboardFlags !== undefined
+        ? { snapshotKittyKeyboardFlags: spawnResult.snapshotKittyKeyboardFlags }
+        : {}),
       ...(spawnResult.snapshotPrefixAnsi !== undefined
         ? { snapshotPrefixAnsi: spawnResult.snapshotPrefixAnsi }
         : {}),
@@ -33,6 +37,9 @@ export function projectIpcPtyConnectResult(
       coldRestore: spawnResult.coldRestore,
       replay: spawnResult.replay,
       pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
+      ...(spawnResult.startupCwdFallback
+        ? { startupCwdFallback: spawnResult.startupCwdFallback }
+        : {}),
       ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
     }
   }

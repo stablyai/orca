@@ -16,7 +16,8 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
   }
 }))
 
-import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
+import { MobileRelayE2eeLink, RelayOuterError } from './mobile-relay-e2ee-link'
 
 class ThrowingSocket {
   static readonly OPEN = 1
@@ -26,7 +27,7 @@ class ThrowingSocket {
   onopen: (() => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
   onerror: (() => void) | null = null
-  onclose: ((event: { code: number }) => void) | null = null
+  onclose: ((event: { code: number; reason?: string }) => void) | null = null
   send = vi.fn(() => {
     throw new Error('relay auth write failed')
   })
@@ -224,4 +225,70 @@ describe('MobileRelayE2eeLink', () => {
       vi.useRealTimers()
     }
   })
+
+  it('carries the close reason of a relay-hello refusal that arrives first', async () => {
+    vi.useFakeTimers()
+    try {
+      const socket = new ThrowingSocket()
+      const onError = vi.fn()
+      openLink(socket, onError)
+      socket.onmessage?.({ data: JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }) })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onError).not.toHaveBeenCalled()
+
+      socket.onclose?.({ code: 4404, reason: MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT })
+
+      const error: unknown = onError.mock.calls[0]?.[0]
+      expect(error).toBeInstanceOf(RelayOuterError)
+      expect(error).toMatchObject({
+        code: 4404,
+        rejectedByRelayHello: true,
+        closeReason: 'attach-timeout'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails a relay-hello refusal whose close never arrives', async () => {
+    vi.useFakeTimers()
+    try {
+      const socket = new ThrowingSocket()
+      const onError = vi.fn()
+      openLink(socket, onError)
+      socket.onmessage?.({ data: JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }) })
+      await vi.advanceTimersByTimeAsync(249)
+      expect(onError).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(onError).toHaveBeenCalledOnce()
+      expect(onError.mock.calls[0]?.[0]).toMatchObject({
+        code: 4404,
+        rejectedByRelayHello: true,
+        closeReason: ''
+      })
+      expect(socket.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
+
+function openLink(socket: ThrowingSocket, onError: (error: Error) => void): MobileRelayE2eeLink {
+  return new MobileRelayE2eeLink({
+    endpoint: {
+      cellUrl: 'https://relay-c1.onorca.dev',
+      relayHostId: 'AbCdEf0123_-xyZ9'
+    },
+    credential: 'credential',
+    expectedCredentialKind: 'resume',
+    deviceToken: 'device-token',
+    desktopPublicKeyB64: 'desktop-key',
+    onAuthenticated: vi.fn(),
+    onText: vi.fn(),
+    onBinary: vi.fn(),
+    onError,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link only calls send/close and assigns handlers on this stub.
+    createSocket: () => socket as unknown as WebSocket
+  })
+}

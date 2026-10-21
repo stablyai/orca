@@ -1,9 +1,12 @@
-import React from 'react'
+import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
+import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
+import ProjectBoard from './ProjectBoard'
+import ProjectRoadmap from './ProjectRoadmap'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { ProjectMissingRepoDialog } from './ProjectMissingRepoDialog'
 import { ProjectViewToolbar } from './ProjectViewToolbar'
@@ -14,17 +17,41 @@ import {
 } from './ProjectViewStates'
 import { useProjectRowActions } from './useProjectRowActions'
 import { useProjectViewTable } from './useProjectViewTable'
+import type {
+  GitHubProjectFieldMutationValue,
+  GitHubProjectRow
+} from '../../../../shared/github/project-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 
-type Props = { selectedRepoIds: ReadonlySet<string> }
+type Props = {
+  selectedRepoIds: ReadonlySet<string>
+  /** Row-less source host (shared with Linear and Jira): the board, picker and unmatched rows read from it. */
+  sourceHostId: ExecutionHostId
+}
 
-export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {
-  const tableState = useProjectViewTable(selectedRepoIds)
+export default function ProjectViewWrapper({
+  selectedRepoIds,
+  sourceHostId
+}: Props): React.JSX.Element {
+  const sourceTarget = useMemo(
+    () => taskSourceRuntimeTarget({ hostId: sourceHostId }),
+    [sourceHostId]
+  )
+  const tableState = useProjectViewTable(selectedRepoIds, sourceTarget)
   const rowActions = useProjectRowActions({
     table: tableState.table,
     currentCacheKey: tableState.currentCacheKey,
     selectedRepoIds
   })
   const addRepo = useAppStore((state) => state.addRepo)
+  const slugOrigin = rowActions.missingDialogs.slugDialog?.origin ?? null
+  const slugCacheKey = slugOrigin?.cacheKey ?? null
+  // Why: an open dialog keeps writing to the host its row was loaded from, even if the board's source moves.
+  const slugSourceTarget = useMemo(
+    () => (slugCacheKey ? projectViewCacheKeyTarget(slugCacheKey) : null),
+    [slugCacheKey]
+  )
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -38,8 +65,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       ) : null}
       <ProjectViewBody tableState={tableState} rowActions={rowActions} />
       <ProjectItemSlugDialog
-        projectOrigin={rowActions.missingDialogs.slugDialog?.origin ?? null}
-        sourceSettings={tableState.settings}
+        projectOrigin={slugOrigin}
+        sourceTarget={slugSourceTarget ?? tableState.sourceTarget}
         onClose={() => rowActions.setSlugDialog(null)}
       />
       <ProjectMissingRepoDialog
@@ -59,6 +86,13 @@ function ProjectViewBody({
   rowActions: ReturnType<typeof useProjectRowActions>
 }): React.JSX.Element | null {
   const { activeProject, error, loading, table, visibleTable } = tableState
+  // Keep the board's document drop subscription stable across wrapper renders.
+  const { editField } = rowActions
+  const onEditField = useCallback(
+    (row: GitHubProjectRow, fieldId: string, value: GitHubProjectFieldMutationValue | null) =>
+      void editField(row, fieldId, value),
+    [editField]
+  )
   if (!activeProject) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
@@ -123,11 +157,11 @@ function ProjectViewBody({
   if (!visibleTable) {
     return null
   }
-  return (
+  const list = (
     <ProjectViewList
       table={visibleTable}
       onOpenDialog={rowActions.openDialog}
-      onEditField={(row, fieldId, value) => void rowActions.editField(row, fieldId, value)}
+      onEditField={onEditField}
       onEditAssignees={(row, add, remove) => void rowActions.editAssignees(row, add, remove)}
       onEditLabels={(row, add, remove) => void rowActions.editLabels(row, add, remove)}
       onEditIssueType={(row, issueType) => void rowActions.editIssueType(row, issueType)}
@@ -137,7 +171,23 @@ function ProjectViewBody({
         }
       }}
       onStartWork={rowActions.startWork}
-      sourceSettings={tableState.settings}
+      sourceTarget={tableState.sourceTarget}
     />
   )
+  if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {
+    return (
+      <ProjectRoadmap table={visibleTable} onOpenDialog={rowActions.openDialog} fallback={list} />
+    )
+  }
+  if (visibleTable.selectedView.layout === 'BOARD_LAYOUT') {
+    return (
+      <ProjectBoard
+        table={visibleTable}
+        onOpenDialog={rowActions.openDialog}
+        onEditField={onEditField}
+        fallback={list}
+      />
+    )
+  }
+  return list
 }

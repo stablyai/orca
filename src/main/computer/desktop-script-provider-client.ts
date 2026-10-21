@@ -35,6 +35,7 @@ import type {
   BridgeResponse,
   NativeActionMethod
 } from './desktop-script-provider-types'
+import { DesktopScriptRuntimeHost, isRuntimeHostUnavailable } from './desktop-script-runtime-host'
 import { DesktopScriptSnapshotStore } from './desktop-script-snapshot-store'
 import { normalizeBridgeApp, renderSnapshot } from './desktop-script-snapshot-rendering'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
@@ -51,12 +52,17 @@ export class DesktopScriptProviderClient {
 
   constructor(
     private readonly platform: DesktopScriptPlatform = requiredPlatform(),
-    private readonly scriptPath: string = requiredScriptPath()
+    private readonly scriptPath: string = requiredScriptPath(),
+    private readonly runtimeHost: DesktopScriptRuntimeHost | null = defaultRuntimeHost(
+      platform,
+      scriptPath
+    )
   ) {}
 
   shutdown(): void {
     this.snapshotStore.clear()
     this.providerCapabilities = null
+    this.runtimeHost?.dispose()
   }
 
   async listApps(): Promise<ComputerListAppsResult> {
@@ -203,6 +209,23 @@ export class DesktopScriptProviderClient {
   }
 
   private async callBridge(request: BridgeRequest): Promise<BridgeResponse> {
+    const host = this.runtimeHost
+    if (host) {
+      try {
+        return checkedBridgeResponse(await host.request(request), '')
+      } catch (error) {
+        // Only a helper that cannot start falls back; operation errors surface.
+        // The host is kept: it re-probes after its cooldown, so a transient bad
+        // spawn cannot strand the session on one powershell.exe per operation.
+        if (!isRuntimeHostUnavailable(error)) {
+          throw error
+        }
+      }
+    }
+    return await this.callOneShotBridge(request)
+  }
+
+  private async callOneShotBridge(request: BridgeRequest): Promise<BridgeResponse> {
     const operationDirectory = await mkdtemp(join(tmpdir(), 'orca-computer-use-'))
     const operationPath = join(operationDirectory, 'operation.json')
     try {
@@ -217,10 +240,7 @@ export class DesktopScriptProviderClient {
           `desktop provider returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
         )
       }
-      if (!response.ok) {
-        throw mapBridgeError(response.error ?? stderr)
-      }
-      return response
+      return checkedBridgeResponse(response, stderr)
     } finally {
       await rm(operationDirectory, { force: true, recursive: true })
     }
@@ -253,6 +273,21 @@ export class DesktopScriptProviderClient {
     this.snapshotStore.remember(app, response.snapshot, params)
     return renderSnapshot(response.snapshot, noScreenshot)
   }
+}
+
+function checkedBridgeResponse(response: BridgeResponse, stderr: string): BridgeResponse {
+  if (!response.ok) {
+    throw mapBridgeError(response.error ?? stderr)
+  }
+  return response
+}
+
+// Why Windows only: the Linux provider is a python3 one-shot with no serve mode.
+function defaultRuntimeHost(
+  platform: DesktopScriptPlatform,
+  scriptPath: string
+): DesktopScriptRuntimeHost | null {
+  return platform === 'windows' ? new DesktopScriptRuntimeHost(scriptPath) : null
 }
 
 function requiredPlatform(): DesktopScriptPlatform {

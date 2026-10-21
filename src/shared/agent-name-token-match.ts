@@ -22,11 +22,14 @@ export const AGENT_NAMES = [
   'gemini',
   'antigravity',
   'opencode',
+  'opencode2',
   'mimo',
   'openclaw',
   'aider',
   'grok',
-  'devin'
+  'devin',
+  'zcode',
+  'jcode'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as

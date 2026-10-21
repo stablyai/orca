@@ -7,6 +7,13 @@ export function shouldPruneLargeDiffContent(
   return renderLimit?.limited === true
 }
 
+const prunedTextDiffResults = new WeakSet<GitDiffResult>()
+
+/** Whether this stored result dropped its bodies, so its '' is not the file's text. */
+export function isPrunedTextDiffResult(result: GitDiffResult): boolean {
+  return prunedTextDiffResults.has(result)
+}
+
 export function getStoredTextDiffResult(
   result: GitDiffResult,
   renderLimit: LargeDiffRenderLimit | null | undefined
@@ -17,11 +24,9 @@ export function getStoredTextDiffResult(
 
   // Why: after the fallback has enough metadata, retaining multi-MB bodies in
   // section/view caches recreates the memory pressure the fallback avoids.
-  return {
-    ...result,
-    originalContent: '',
-    modifiedContent: ''
-  }
+  const pruned: GitDiffResult = { ...result, originalContent: '', modifiedContent: '' }
+  prunedTextDiffResults.add(pruned)
+  return pruned
 }
 
 export function getStoredTextDiffContent(

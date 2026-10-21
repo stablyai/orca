@@ -1,4 +1,14 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -11,7 +21,39 @@ import {
   formatNodePtyPreconditionReport,
   probeLocalBuildToolchainHints
 } from './node-pty-precondition'
-import { detectNativeHostAbi } from './native-host-abi'
+import { detectNativeHostAbi, hostNodeApiVersion, type NativeHostAbi } from './native-host-abi'
+
+/** A schema 2 manifest listing whatever the test staged in `slot`, for this host. */
+function writeHostSlotManifest(prebuildsDir: string, slot: string, abi: NativeHostAbi): void {
+  const files = Object.fromEntries(
+    readdirSync(join(prebuildsDir, slot)).map((file) => [
+      file,
+      createHash('sha256')
+        .update(readFileSync(join(prebuildsDir, slot, file)))
+        .digest('hex')
+    ])
+  )
+  const napi = hostNodeApiVersion() ?? 8
+  writeFileSync(
+    join(prebuildsDir, 'manifest.json'),
+    JSON.stringify({
+      schemaVersion: 2,
+      module: 'node-pty',
+      version: '1.1.0',
+      napi,
+      slots: {
+        [slot]: {
+          platform: abi.platform,
+          arch: abi.arch,
+          libc: abi.libc,
+          glibc: null,
+          napi,
+          files
+        }
+      }
+    })
+  )
+}
 
 const require = createRequire(import.meta.url)
 const REAL_NODE_PTY = dirname(require.resolve('node-pty/package.json'))
@@ -301,6 +343,7 @@ describe('checkNodePtyPrecondition', () => {
     if (process.platform !== 'win32') {
       writeFileSync(join(prebuildsDir, slot, 'spawn-helper'), '#!/bin/sh\nexit 0\n')
     }
+    writeHostSlotManifest(prebuildsDir, slot, abi)
 
     const verdict = checkNodePtyPrecondition({ nodePtyDir: dir, prebuildsDir })
 
@@ -327,6 +370,7 @@ describe('checkNodePtyPrecondition', () => {
       if (process.platform !== 'win32' && existsSync(helper)) {
         cpSync(helper, join(prebuildsDir, slot, 'spawn-helper'))
       }
+      writeHostSlotManifest(prebuildsDir, slot, abi)
 
       const verdict = checkNodePtyPrecondition({ nodePtyDir: dir, prebuildsDir })
 

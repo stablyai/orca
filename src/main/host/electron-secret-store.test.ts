@@ -18,6 +18,24 @@ describe('ElectronSecretStore', () => {
     safeStorageMock.getSelectedStorageBackend.mockReturnValue('gnome_libsecret')
   })
 
+  function withDesktop<T>(desktop: string | undefined, run: () => T): T {
+    const original = process.env.XDG_CURRENT_DESKTOP
+    if (desktop === undefined) {
+      delete process.env.XDG_CURRENT_DESKTOP
+    } else {
+      process.env.XDG_CURRENT_DESKTOP = desktop
+    }
+    try {
+      return run()
+    } finally {
+      if (original === undefined) {
+        delete process.env.XDG_CURRENT_DESKTOP
+      } else {
+        process.env.XDG_CURRENT_DESKTOP = original
+      }
+    }
+  }
+
   function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
     const original = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -98,6 +116,52 @@ describe('ElectronSecretStore', () => {
       safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
       withPlatform('linux', () => {
         expect(new ElectronSecretStore().describeProtectionGap()).toMatch(/keyring is unavailable/)
+      })
+    })
+
+    // Why these three: on Hyprland/sway/river/niri the desktop is unrecognised, so the
+    // backend is basic_text AND sealing is unavailable — and the old text told those users
+    // to install a keyring that gnome-keyring was already serving the whole time.
+    it('does not blame a missing keyring when the desktop was simply not recognised', () => {
+      safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+      safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
+      withPlatform('linux', () => {
+        const gap = new ElectronSecretStore().describeProtectionGap()
+        expect(gap).toMatch(/could not tell which keyring service/)
+        expect(gap).toMatch(/already running/)
+        expect(gap).not.toMatch(/Install and unlock/)
+      })
+    })
+
+    it('names the desktop in the unrecognised-desktop gap, so support can act on the log', () => {
+      safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+      safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
+      withDesktop('Hyprland', () => {
+        withPlatform('linux', () => {
+          expect(new ElectronSecretStore().describeProtectionGap()).toContain(
+            'XDG_CURRENT_DESKTOP=Hyprland'
+          )
+        })
+      })
+    })
+
+    it('omits the parenthetical when no desktop is set rather than printing an empty one', () => {
+      safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+      safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
+      withDesktop(undefined, () => {
+        withPlatform('linux', () => {
+          const gap = new ElectronSecretStore().describeProtectionGap()
+          expect(gap).not.toMatch(/XDG_CURRENT_DESKTOP/)
+          expect(gap).toContain('this desktop uses, so secrets')
+        })
+      })
+    })
+
+    it('still blames the keyring when a real backend was selected but cannot seal', () => {
+      safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+      safeStorageMock.getSelectedStorageBackend.mockReturnValue('gnome_libsecret')
+      withPlatform('linux', () => {
+        expect(new ElectronSecretStore().describeProtectionGap()).toMatch(/Install and unlock/)
       })
     })
   })

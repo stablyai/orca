@@ -12,7 +12,7 @@ import { BranchEntryRow } from './branch-entry-row'
 import { SectionHeader } from './section-header'
 import { formatSourceControlRefLabel } from '../panel/branch-context-stats'
 import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
-import { SourceControlVirtualFileList } from './virtual-file-list'
+import { VirtualizedList } from '../../../virtualized-list'
 
 export function SourceControlBranchSection({
   branchSummary,
@@ -29,7 +29,7 @@ export function SourceControlBranchSection({
   worktreePath,
   revealInExplorer,
   activeConnectionId,
-  openCommittedDiff,
+  openBranchFile,
   openBranchAllDiffs,
   diffCommentCountByPath
 }: {
@@ -47,7 +47,7 @@ export function SourceControlBranchSection({
   worktreePath: string
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openCommittedDiff: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
+  openBranchFile: (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => void
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -91,8 +91,8 @@ export function SourceControlBranchSection({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+            size="xs"
+            className="px-1.5 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation()
               if (currentWorktreeId && worktreePath && branchSummary) {
@@ -106,7 +106,7 @@ export function SourceControlBranchSection({
       />
       {!collapsedSections.has('branch') &&
         (sourceControlViewMode === 'tree' ? (
-          <SourceControlVirtualFileList
+          <VirtualizedList
             rows={visibleBranchTreeRows}
             scrollElement={fileListScrollElement}
             getRowKey={(node) => node.key}
@@ -130,7 +130,7 @@ export function SourceControlBranchSection({
                   depth={node.depth}
                   onRevealInExplorer={revealInExplorer}
                   connectionId={activeConnectionId}
-                  onOpen={(event) => openCommittedDiff(node.entry, event)}
+                  onOpen={(event) => openBranchFile(node.entry, event)}
                   commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                   showPathHint={false}
                 />
@@ -138,7 +138,7 @@ export function SourceControlBranchSection({
             }}
           />
         ) : (
-          <SourceControlVirtualFileList
+          <VirtualizedList
             rows={filteredBranchEntries}
             scrollElement={fileListScrollElement}
             getRowKey={(entry) => `branch:${entry.path}`}
@@ -150,7 +150,7 @@ export function SourceControlBranchSection({
                 worktreePath={worktreePath}
                 onRevealInExplorer={revealInExplorer}
                 connectionId={activeConnectionId}
-                onOpen={(event) => openCommittedDiff(entry, event)}
+                onOpen={(event) => openBranchFile(entry, event)}
                 commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
               />
             )}

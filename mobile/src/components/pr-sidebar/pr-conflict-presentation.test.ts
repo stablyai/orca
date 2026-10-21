@@ -104,23 +104,4 @@ describe('resolveConflictDisplay', () => {
     expect(display?.mergeabilityRefreshCommands).toContain('git fetch origin')
     expect(display?.mergeabilityRefreshCommands).toContain('git commit --allow-empty --only')
   })
-
-  it('does not interpolate shell-sensitive base refs into copyable commands', () => {
-    const display = resolveConflictDisplay(
-      pr({
-        mergeable: 'CONFLICTING',
-        conflictSummary: {
-          baseRef: 'release/$USER;echo unsafe',
-          baseCommit: 'x',
-          commitsBehind: 1,
-          files: [],
-          localMergeState: 'clean'
-        }
-      })
-    )
-
-    expect(display?.mergeabilityRefreshCommands).toContain('git fetch origin')
-    expect(display?.mergeabilityRefreshCommands).not.toContain('$USER')
-    expect(display?.mergeabilityRefreshCommands).not.toContain('echo unsafe')
-  })
 })

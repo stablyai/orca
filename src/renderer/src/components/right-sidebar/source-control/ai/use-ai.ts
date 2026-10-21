@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client'
+import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/commit-message-host-key'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
@@ -28,16 +28,17 @@ import { useSourceControlRecoveryAi } from './use-recovery-ai'
 import { translate } from '@/i18n/i18n'
 
 export function getSourceControlAiControllerDiscoveryHostKey(
-  settings: SourceControlAiControllerParams['settings'],
+  target: SourceControlAiControllerParams['target'],
   activeConnectionId: string | null | undefined
 ): string {
   return getCommitMessageModelDiscoveryHostKeyForScope(
-    getRuntimeGitScope(settings, activeConnectionId)
+    getRuntimeGitScope(target ?? { kind: 'local' }, activeConnectionId)
   )
 }
 
 export function useSourceControlAi({
   settings,
+  target,
   activeRepo,
   activeWorktreeId,
   activeConnectionId,
@@ -61,8 +62,8 @@ export function useSourceControlAi({
   const [pullRequestGenerationDialogOpen, setPullRequestGenerationDialogOpen] = useState(false)
 
   const sourceControlAiDiscoveryHostKey = useMemo(
-    () => getSourceControlAiControllerDiscoveryHostKey(settings, activeConnectionId),
-    [activeConnectionId, settings]
+    () => getSourceControlAiControllerDiscoveryHostKey(target, activeConnectionId),
+    [activeConnectionId, target]
   )
   const sourceControlAiActionsVisible = useMemo(
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo: activeRepo }) : false),

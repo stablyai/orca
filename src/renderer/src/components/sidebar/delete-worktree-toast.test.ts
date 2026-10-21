@@ -50,6 +50,39 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
+  // Why: the structured sweep now CLOSES an attached session on the ordinary delete, so reaching
+  // this toast means the close was attempted and did not settle — not that Orca declined to try.
+  it('offers force delete when an agent session could not be confirmed closed', () => {
+    expect(
+      toastCopyForRemovalError(
+        'feature/foo',
+        'Refusing to remove worktree with running agent sessions: repo-1::/w — could not confirm these closed: 1 agent session (claude). Retry with force delete (--force) to remove it anyway.'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
+      isDestructive: false
+    })
+  })
+
+  // Why: the same split the PTY pair above draws. Force Delete proceeds either way, and telling a
+  // user "could not confirm" about a conversation Orca watched stay attached asks them to waive a
+  // doubt that does not exist — the work in that conversation goes with the delete.
+  it('names the running agent sessions when the close left them attached', () => {
+    expect(
+      toastCopyForRemovalError(
+        'feature/foo',
+        'Refusing to remove worktree with running agent sessions: repo-1::/w — still live: 2 agent sessions (claude, codex). Retry with force delete (--force) to remove it anyway.'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold.',
+      isDestructive: false
+    })
+  })
+
   // Why: a sweep that never answered wedges removal the same way, and the waiver clears
   // both — so it must reach the same force affordance instead of a dead end.
   it('offers force delete when the teardown sweep itself timed out', () => {

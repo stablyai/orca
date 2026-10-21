@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
+import {
+  canCopySelectionWithContext,
+  formatCopiedSelectionWithContext,
+  getContextualCopyLineRange
+} from './selection-copy'
+
+describe('contextual copy eligibility', () => {
+  it('matches formatting eligibility for line boundaries and whitespace-only selections', () => {
+    for (const startLineNumber of [1, 2, 44]) {
+      for (const endLineNumber of [1, 2, 3, 44, 45]) {
+        for (const endColumn of [1, 2, 15]) {
+          const selection = { startLineNumber, startColumn: 1, endLineNumber, endColumn }
+          const expected =
+            endLineNumber !== startLineNumber &&
+            (endColumn === 1 ? endLineNumber - 1 : endLineNumber) >= startLineNumber
+          expect(canCopySelectionWithContext(selection)).toBe(expected)
+          expect(
+            formatCopiedSelectionWithContext({
+              relativePath: '',
+              language: 'plaintext',
+              selection,
+              selectedText: ' \n'
+            }) !== null
+          ).toBe(expected)
+        }
+      }
+    }
+  })
+})
 
 describe('formatCopiedSelectionWithContext', () => {
   it('formats multi-line selections with file and line context', () => {

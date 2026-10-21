@@ -1,13 +1,8 @@
 import { MonitorCog } from 'lucide-react'
 import {
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  COMPUTER_USE_SKILL_NAME,
-  COMPUTER_USE_SKILL_UPDATE_COMMAND
+  COMPUTER_USE_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -15,11 +10,7 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { translate } from '@/i18n/i18n'
 
 export function ComputerUseSkillSetupPanel(): React.JSX.Element {
@@ -30,12 +21,6 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
         activeSkillRuntime.agentRuntime
       )
     : COMPUTER_USE_SKILL_INSTALL_COMMAND
-  const updateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        COMPUTER_USE_SKILL_UPDATE_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : COMPUTER_USE_SKILL_UPDATE_COMMAND
   const {
     installed: computerUseSkillDetected,
     loading: computerUseSkillLoading,
@@ -54,7 +39,6 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
         'Enables agents to inspect and operate local desktop apps.'
       )}
       command={installCommand}
-      installedCommand={updateCommand}
       terminalTitle="Computer Use setup"
       terminalAriaLabel="Computer Use skill install terminal"
       terminalWorktreeId="settings-computer-use-skill-terminal"
@@ -65,19 +49,8 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
       error={activeSkillRuntime.installDisabledReason ?? computerUseSkillError}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       icon={<MonitorCog className="size-5" />}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-      getPrerequisiteStatus={() =>
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? window.api.cli.getWslInstallStatus(
-              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-            )
-          : window.api.cli.getInstallStatus()
-      }
-      onBeforeOpenTerminal={async () => {
+      onBeforeOpenTerminal={() => {
         useAppStore.getState().recordFeatureInteraction('computer-use-setup')
-        await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-          : ensureOrcaCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={refreshComputerUseSkill}
       freshnessSkillName={

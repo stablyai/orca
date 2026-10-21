@@ -11,7 +11,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { HostCombobox } from '../host-picker/HostCombobox'
 import { SearchableSetting } from './SearchableSetting'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -171,21 +171,18 @@ export function WorkspaceDirectorySetting({
                 'Apply to'
               )}
             </span>
-            <Select
+            <HostCombobox
               value={activeScope}
-              onValueChange={(next) => setScope(next as HostSettingScope)}
-            >
-              <SelectTrigger size="sm" className="h-7 w-44 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {choices.map((choice) => (
-                  <SelectItem key={choice.scope} value={choice.scope} className="text-xs">
-                    {choice.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(next) => {
+                const choice = choices.find((candidate) => candidate.scope === next)
+                if (choice) {
+                  setScope(choice.scope)
+                }
+              }}
+              options={choices.map((choice) => ({ id: choice.scope, label: choice.label }))}
+              size="xs"
+              className="w-44"
+            />
           </div>
         )}
       </div>

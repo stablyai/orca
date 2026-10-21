@@ -49,7 +49,7 @@ function manager(
     maxActive: options.maxActive,
     idleReapMs: options.idleReapMs,
     executeHostCall: async () => ({ ok: true, value: null }),
-    log: vi.fn(),
+    log: () => vi.fn(),
     onWorkerStateChange: vi.fn(),
     onWorkerGone: vi.fn()
   })
@@ -66,6 +66,17 @@ afterEach(() => {
 })
 
 describe('PluginWorkerManager capacity', () => {
+  it('releases generations for removed plugin keys', async () => {
+    const subject = manager(vi.fn<PluginWorkerFactory>(async () => worker()))
+
+    for (let index = 0; index < 600; index += 1) {
+      await subject.deactivate(`removed-${index}`)
+    }
+
+    expect(subject.generationCountForTests()).toBe(0)
+    await subject.disposeAll()
+  })
+
   it('atomically counts in-flight starts against maxActive', async () => {
     const starts: { key: string; resolve: (handle: TestWorker) => void }[] = []
     const factory = vi.fn<PluginWorkerFactory>(
@@ -142,24 +153,29 @@ describe('PluginWorkerManager capacity', () => {
   })
 
   it('cancels an in-flight start without allowing its generation to land', async () => {
-    const factory = vi.fn<PluginWorkerFactory>(
-      ({ signal }) =>
-        new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(new Error('factory cancelled')), {
-            once: true
-          })
-        })
-    )
+    let finishStart!: (handle: PluginWorkerHandle) => void
+    const pendingStart = new Promise<PluginWorkerHandle>((resolve) => {
+      finishStart = resolve
+    })
+    const factory = vi.fn<PluginWorkerFactory>(() => pendingStart)
     const subject = manager(factory)
+    const lateWorker = worker()
     const activation = subject.ensureActive(spec('starting'))
     await flush()
 
-    await subject.deactivate('starting')
+    try {
+      const deactivation = subject.deactivate('starting')
+      finishStart(lateWorker)
+      await deactivation
 
-    await expect(activation).rejects.toThrow('cancelled')
-    expect(subject.runState('starting')).toBe('inactive')
-    expect(subject.trackedSpecs().has('starting')).toBe(false)
-    await subject.disposeAll()
+      await expect(activation).rejects.toThrow('cancelled')
+      expect(lateWorker.dispose).toHaveBeenCalledOnce()
+      expect(subject.runState('starting')).toBe('inactive')
+      expect(subject.trackedSpecs().has('starting')).toBe(false)
+    } finally {
+      finishStart(lateWorker)
+      await subject.disposeAll()
+    }
   })
 
   it('disposes running workers and rejects queued waiters', async () => {

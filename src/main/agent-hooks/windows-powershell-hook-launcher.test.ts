@@ -46,7 +46,6 @@ describe('windows PowerShell hook launcher', () => {
     // it. Restoring either denied switch re-breaks every hook on an AV host.
     const command = wrapWindowsPowerShellEncodedCommand('exit 0')
 
-    expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).toBe('-NoProfile')
     expect(command).toMatch(/ -NoProfile -EncodedCommand [A-Za-z0-9+/=]+$/)
   })
 
@@ -56,6 +55,21 @@ describe('windows PowerShell hook launcher', () => {
     // Process scope is exactly what the switch used to set.
     expect(decodePayload(wrapWindowsPowerShellEncodedCommand('exit 0'))).toContain(
       'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue'
+    )
+  })
+
+  it('can set the same process policy without loading the cmdlet', () => {
+    const command = '& $scriptPath'
+    const options = { useProcessPolicyEnvironment: true }
+    expect(decodePayload(wrapWindowsPowerShellEncodedCommand(command, options))).toBe(
+      "$ProgressPreference='SilentlyContinue'; $env:PSExecutionPolicyPreference='Bypass'; & $scriptPath"
+    )
+    expect(
+      Buffer.from(encodeWindowsPowerShellHookCommand(command, options), 'base64').toString(
+        'utf16le'
+      )
+    ).toBe(
+      "$ProgressPreference='SilentlyContinue'; $env:PSExecutionPolicyPreference='Bypass'; & $scriptPath"
     )
   })
 

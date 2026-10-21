@@ -1,0 +1,276 @@
+--- a/src/main/plugins/plugin-log-buffer.ts
++++ b/src/main/plugins/plugin-log-buffer.ts
+@@ -6 +6 @@
+-  private readonly logs = new Map<string, PluginLogLine[]>()
++  private readonly logs = new Map<string, { token: object; lines: PluginLogLine[] }>()
+@@ -9 +9,23 @@
+-    return this.logs.get(pluginKey) ?? []
++    return this.logs.get(pluginKey)?.lines ?? []
++  }
++
++  capture(pluginKey: string): (level: PluginLogLine['level'], line: string) => void {
++    const token = this.ensure(pluginKey).token
++    return (level, line) => {
++      if (this.logs.get(pluginKey)?.token === token) {
++        this.append(pluginKey, level, line)
++      }
++    }
++  }
++
++  clear(pluginKey: string): void {
++    this.logs.delete(pluginKey)
++  }
++
++  private ensure(pluginKey: string): { token: object; lines: PluginLogLine[] } {
++    let entry = this.logs.get(pluginKey)
++    if (!entry) {
++      entry = { token: {}, lines: [] }
++      this.logs.set(pluginKey, entry)
++    }
++    return entry
+@@ -13 +35 @@
+-    const ring = this.logs.get(pluginKey) ?? []
++    const ring = this.ensure(pluginKey).lines
+@@ -18 +39,0 @@
+-    this.logs.set(pluginKey, ring)
+--- a/src/main/plugins/plugin-worker-manager.ts
++++ b/src/main/plugins/plugin-worker-manager.ts
+@@ -34,1 +34,1 @@
+-  log: (pluginKey: string, level: 'info' | 'warn' | 'error', line: string) => void
++  log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
+@@ -75,1 +75,4 @@
+-  async ensureActive(spec: PluginWorkerSpawnSpec): Promise<PluginWorkerHandle> {
++  async ensureActive(
++    spec: PluginWorkerSpawnSpec,
++    assertApproved: () => void = () => undefined
++  ): Promise<PluginWorkerHandle> {
+@@ -82,0 +86,2 @@
++      // Removal may finish while a stale revision waits for its worker to stop.
++      assertApproved()
+@@ -133,0 +139,1 @@
++    const log = this.options.log(spec.pluginKey)
+@@ -148,1 +154,1 @@
+-          log: (level, line) => this.options.log(spec.pluginKey, level, line),
++          log,
+@@ -196,2 +202,1 @@
+-      this.options.log(
+-        pluginKey,
++      this.options.log(pluginKey)(
+@@ -202,1 +207,1 @@
+-      this.options.log(pluginKey, 'error', `${context}; marked errored after repeated failures`)
++      this.options.log(pluginKey)('error', `${context}; marked errored after repeated failures`)
+@@ -251,1 +256,1 @@
+-      this.options.log(pluginKey, 'info', 'worker reaped after idle period')
++      this.options.log(pluginKey)('info', 'worker reaped after idle period')
+--- a/src/main/plugins/plugin-worker-controller.ts
++++ b/src/main/plugins/plugin-worker-controller.ts
+@@ -35,1 +35,1 @@
+-  log: (pluginKey: string, level: 'info' | 'warn' | 'error', line: string) => void
++  log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
+@@ -83,1 +83,1 @@
+-      const handle = await this.manager.ensureActive(spec)
++      const handle = await this.manager.ensureActive(spec, () => this.assertCurrentApproved(plugin))
+--- a/src/main/plugins/plugin-panel-controller.ts
++++ b/src/main/plugins/plugin-panel-controller.ts
+@@ -28 +28 @@
+-  log: (pluginKey: string, line: string) => void
++  log: (pluginKey: string) => (line: string) => void
+@@ -139,0 +140 @@
++    const log = this.options.log(pluginKey)
+@@ -163,2 +164 @@
+-      this.options.log(
+-        pluginKey,
++      log(
+--- a/src/main/plugins/plugin-event-delivery.ts
++++ b/src/main/plugins/plugin-event-delivery.ts
+@@ -17 +17 @@
+-  logWarning: (pluginKey: string, line: string) => void
++  logWarning: (pluginKey: string) => (line: string) => void
+@@ -30,0 +31 @@
++      const logWarning = options.logWarning(plugin.pluginKey)
+@@ -35,2 +36 @@
+-          options.logWarning(
+-            plugin.pluginKey,
++          logWarning(
+--- a/src/main/plugins/plugin-service.ts
++++ b/src/main/plugins/plugin-service.ts
+@@ -11,4 +11 @@
+-import {
+-  createPluginExtensionRegistry,
+-  type PluginExtensionRegistry
+-} from '../../shared/plugins/plugin-extension-registry'
++import { createPluginExtensionRegistry } from '../../shared/plugins/plugin-extension-registry'
+@@ -19 +15,0 @@
+-  isInvalidDiscoveredPlugin,
+@@ -28 +23,0 @@
+-import { PluginLogBuffer, type PluginLogLine } from './plugin-log-buffer'
+@@ -40,0 +36 @@
++import { PluginInstallationState } from './plugin-installation-state'
+@@ -48 +44 @@
+-  private readonly registry: PluginExtensionRegistry = createPluginExtensionRegistry()
++  private readonly registry = createPluginExtensionRegistry()
+@@ -52 +47,0 @@
+-  private readonly logBuffer = new PluginLogBuffer()
+@@ -58 +52,0 @@
+-  private discovered: DiscoveredPlugin[] = []
+@@ -63,0 +58,5 @@
++  private readonly installed = new PluginInstallationState({
++    pluginsDir: () => getUserPluginsDir(this.options.userDataPath),
++    deactivate: (pluginKey) => this.workerController.deactivate(pluginKey),
++    notifyChanged: () => this.notifyChanged(false)
++  })
+@@ -74 +73 @@
+-        return plugin && this.isRuntimeApproved(plugin) ? plugin : null
++        return plugin && this.canStartPluginWork(plugin) ? plugin : null
+@@ -79 +78 @@
+-      log: (pluginKey, line) => this.logBuffer.append(pluginKey, 'error', line)
++      log: (pluginKey) => this.installed.captureLog(pluginKey, 'error')
+@@ -90 +89 @@
+-        this.findValidPlugin(plugin.pluginKey) === plugin && this.isRuntimeApproved(plugin),
++        this.findValidPlugin(plugin.pluginKey) === plugin && this.canStartPluginWork(plugin),
+@@ -94 +93 @@
+-      log: (pluginKey, level, line) => this.logBuffer.append(pluginKey, level, line),
++      log: (pluginKey) => this.installed.logs.capture(pluginKey),
+@@ -164 +163 @@
+-    this.discovered = next
++    this.installed.discovered = next
+@@ -188,5 +187,5 @@
+-    return this.discovered
+-  }
+-
+-  getLogs(pluginKey: string): PluginLogLine[] {
+-    return this.logBuffer.get(pluginKey)
++    return this.installed.discovered
++  }
++
++  getLogs(pluginKey: string) {
++    return this.installed.logs.get(pluginKey)
+@@ -196,6 +195 @@
+-    for (const plugin of this.discovered) {
+-      if (!isInvalidDiscoveredPlugin(plugin) && plugin.pluginKey === pluginKey) {
+-        return plugin
+-      }
+-    }
+-    return null
++    return this.installed.findValid(pluginKey)
+@@ -213,0 +208,4 @@
++  }
++
++  private canStartPluginWork(plugin: ValidDiscoveredPlugin): boolean {
++    return !this.installed.isRemoving(plugin) && this.isRuntimeApproved(plugin)
+@@ -242,4 +240,3 @@
+-    if (!plugin || !this.isRuntimeApproved(plugin)) {
+-      return null
+-    }
+-    return capabilityKinds(plugin.manifest.capabilities)
++    return plugin && this.isRuntimeApproved(plugin)
++      ? capabilityKinds(plugin.manifest.capabilities)
++      : null
+@@ -276 +273 @@
+-    if (!plugin || !this.isRuntimeApproved(plugin)) {
++    if (!plugin || !this.canStartPluginWork(plugin)) {
+@@ -294 +291 @@
+-      plugins: this.discovered,
++      plugins: this.installed.discovered,
+@@ -297,3 +294,9 @@
+-      isRuntimeApproved: (plugin) => this.isRuntimeApproved(plugin),
+-      logWarning: (pluginKey, line) => this.logBuffer.append(pluginKey, 'warn', line)
+-    })
++      isRuntimeApproved: (plugin) => this.canStartPluginWork(plugin),
++      logWarning: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
++    })
++  }
++
++  removePlugin(pluginKey: string, remove: () => Promise<void>): Promise<void> {
++    const removal = this.refreshChain.then(() => this.installed.remove(pluginKey, remove))
++    this.refreshChain = removal.catch(() => undefined)
++    return removal
+@@ -318 +321 @@
+-      this.discovered,
++      this.installed.discovered,
+@@ -323 +326 @@
+-    const nextSpecs = collectApprovedWorkerSpecs(this.discovered, (plugin) =>
++    const nextSpecs = collectApprovedWorkerSpecs(this.installed.discovered, (plugin) =>
+--- a/src/main/ipc/plugins.ts
++++ b/src/main/ipc/plugins.ts
+@@ -218,6 +218,7 @@
+-    await pluginService.deactivatePlugin(parsed.pluginKey)
+-    await removeInstalledPlugin({
+-      pluginsDir,
+-      pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
+-      pluginKey: parsed.pluginKey
+-    })
++    await pluginService.removePlugin(parsed.pluginKey, () =>
++      removeInstalledPlugin({
++        pluginsDir,
++        pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
++        pluginKey: parsed.pluginKey
++      })
++    )
+--- a/src/main/plugins/plugin-install.ts
++++ b/src/main/plugins/plugin-install.ts
+@@ -280,0 +281,4 @@
++    const lock = await readPluginLockfile(input.pluginsDir)
++    if (lock.plugins[input.pluginKey]?.source.kind === 'bundled') {
++      throw new Error(`cannot remove protected plugin ${input.pluginKey}`)
++    }
+--- a/src/main/plugins/plugin-installation-state.ts
++++ b/src/main/plugins/plugin-installation-state.ts
+@@ -0,0 +1,57 @@
++import {
++  isInvalidDiscoveredPlugin,
++  type DiscoveredPlugin,
++  type ValidDiscoveredPlugin
++} from './plugin-discovery'
++import { readPluginLockfile } from './plugin-install'
++import { PluginLogBuffer, type PluginLogLine } from './plugin-log-buffer'
++
++export class PluginInstallationState {
++  discovered: DiscoveredPlugin[] = []
++  readonly logs = new PluginLogBuffer()
++  private removing: DiscoveredPlugin | null = null
++
++  constructor(
++    private readonly options: {
++      pluginsDir: () => string
++      deactivate: (pluginKey: string) => Promise<void>
++      notifyChanged: () => void
++    }
++  ) {}
++
++  isRemoving(plugin: DiscoveredPlugin): boolean {
++    return plugin === this.removing
++  }
++
++  findValid(pluginKey: string): ValidDiscoveredPlugin | null {
++    for (const plugin of this.discovered) {
++      if (!isInvalidDiscoveredPlugin(plugin) && plugin.pluginKey === pluginKey) {
++        return plugin
++      }
++    }
++    return null
++  }
++
++  captureLog(pluginKey: string, level: PluginLogLine['level']): (line: string) => void {
++    const log = this.logs.capture(pluginKey)
++    return (line) => log(level, line)
++  }
++
++  async remove(pluginKey: string, remove: () => Promise<void>): Promise<void> {
++    const lock = await readPluginLockfile(this.options.pluginsDir())
++    const plugin = this.discovered.find((entry) => entry.pluginKey === pluginKey && !entry.isDev)
++    if (!plugin || lock.plugins[pluginKey]?.source.kind === 'bundled') {
++      throw new Error(`cannot remove protected or non-installed plugin ${pluginKey}`)
++    }
++    this.removing = plugin
++    try {
++      await this.options.deactivate(pluginKey)
++      await remove()
++      this.logs.clear(pluginKey)
++      this.discovered = this.discovered.filter((entry) => entry !== plugin)
++      this.options.notifyChanged()
++    } finally {
++      this.removing = null
++    }
++  }
++}

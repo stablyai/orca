@@ -1,15 +1,26 @@
 import { useCallback, useMemo, useState } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
 import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
-import { getStageAllPaths, isStageableStatusEntry } from './discard-all-sequence'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+  stageRuntimeGitWorktreeScope
+} from '@/runtime/runtime-git-working-tree-client'
+import {
+  getStageAllPaths,
+  getUnstageAllPaths,
+  isStageableStatusEntry
+} from './discard-all-sequence'
+import type {
+  SourceControlDisplaySectionId,
+  SourceControlEntryGroups
+} from '../listing/section-order'
 import type { FlatEntry } from '../listing/use-selection'
+import type { GitStageWorktreeScope } from '../../../../../../shared/git-stage-worktree-scope'
 
 /** Why: every bulk handler is invoked with `void`, so a Git failure would otherwise be an unhandled rejection with no user feedback. */
 function reportBulkMutationFailure(error: unknown): void {
@@ -19,26 +30,29 @@ function reportBulkMutationFailure(error: unknown): void {
       'auto.components.right.sidebar.use.source.control.bulk.actions.2f67630884',
       'Bulk stage/unstage failed'
     ),
-    { description: error instanceof Error ? error.message : undefined }
+    { description: readIpcErrorMessage(error) }
   )
 }
 
 export function useSourceControlBulkActions({
   selectedKeys,
   flatEntriesByKey,
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   grouped,
+  isStatusTruncated,
   clearSelection,
   refreshActiveGitStatusAfterMutation
 }: {
   selectedKeys: ReadonlySet<string>
   flatEntriesByKey: ReadonlyMap<string, FlatEntry>
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   grouped: SourceControlEntryGroups
+  /** The status read hit its entry cap, so `grouped` holds only the first rows. */
+  isStatusTruncated: boolean
   clearSelection: () => void
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
@@ -66,11 +80,7 @@ export function useSourceControlBulkActions({
   )
 
   const bulkUnstagePaths = useMemo(
-    () =>
-      selectedEntries
-        // Why: submodule-internal rows are read-only from the parent worktree.
-        .filter((entry) => entry.area === 'staged' && !entry.entry.submoduleRoot)
-        .map((entry) => entry.entry.path),
+    () => getUnstageAllPaths(selectedEntries.map((entry) => entry.entry)),
     [selectedEntries]
   )
 
@@ -86,7 +96,7 @@ export function useSourceControlBulkActions({
       await bulkStageRuntimeGitPaths(
         {
           // Why: route staging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+          target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -101,7 +111,7 @@ export function useSourceControlBulkActions({
       setIsExecutingBulk(false)
     }
   }, [
-    activeRepoSettings,
+    activeRepoTarget,
     worktreePath,
     bulkStagePaths,
     clearSelection,
@@ -120,7 +130,7 @@ export function useSourceControlBulkActions({
       await bulkUnstageRuntimeGitPaths(
         {
           // Why: route unstaging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
+          target: requireGitOwnerTarget(activeRepoTarget),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId
@@ -135,7 +145,7 @@ export function useSourceControlBulkActions({
       setIsExecutingBulk(false)
     }
   }, [
-    activeRepoSettings,
+    activeRepoTarget,
     worktreePath,
     bulkUnstagePaths,
     clearSelection,
@@ -144,24 +154,24 @@ export function useSourceControlBulkActions({
     refreshActiveGitStatusAfterMutation
   ])
 
-  const handleStageAllPaths = useCallback(
-    async (paths: readonly string[]) => {
-      if (!worktreePath || isExecutingBulk || paths.length === 0) {
+  // Why: a scope replaces the paths; a capped listing cannot name every change, so the host resolves them.
+  const stagePaths = useCallback(
+    async (paths: readonly string[], scope?: GitStageWorktreeScope) => {
+      if (!worktreePath || isExecutingBulk || (paths.length === 0 && !scope)) {
         return
       }
       setIsExecutingBulk(true)
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await bulkStageRuntimeGitPaths(
-          {
-            // Why: route staging by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          [...paths]
-        )
+        const context = {
+          // Why: route staging by the repo OWNER host, not the focused runtime.
+          target: requireGitOwnerTarget(activeRepoTarget),
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: getConnectionId(activeWorktreeId ?? null) ?? undefined
+        }
+        await (scope
+          ? stageRuntimeGitWorktreeScope(context, scope)
+          : bulkStageRuntimeGitPaths(context, [...paths]))
         await refreshActiveGitStatusAfterMutation()
         clearSelection()
       } catch (error) {
@@ -171,13 +181,25 @@ export function useSourceControlBulkActions({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       clearSelection,
       isExecutingBulk,
       refreshActiveGitStatusAfterMutation,
       worktreePath
     ]
+  )
+
+  const handleStageAllPaths = useCallback(
+    (paths: readonly string[]) => stagePaths(paths),
+    [stagePaths]
+  )
+
+  // Why: a capped listing holds only the first rows, so "all" must be resolved by the host.
+  const handleStageSectionPaths = useCallback(
+    (sectionId: SourceControlDisplaySectionId, paths: readonly string[]) =>
+      stagePaths(paths, isStatusTruncated && sectionId === 'unstaged' ? 'tracked' : undefined),
+    [isStatusTruncated, stagePaths]
   )
 
   const handleUnstagePaths = useCallback(
@@ -191,7 +213,7 @@ export function useSourceControlBulkActions({
         await bulkUnstageRuntimeGitPaths(
           {
             // Why: route unstaging by the repo OWNER host, not the focused runtime.
-            settings: activeRepoSettings,
+            target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -207,7 +229,7 @@ export function useSourceControlBulkActions({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktreeId,
       clearSelection,
       isExecutingBulk,
@@ -218,45 +240,15 @@ export function useSourceControlBulkActions({
 
   // Why: bypasses handleActionInvoke because that handler is typed to DropdownActionKind and 'stage' is intentionally not in the dropdown union.
   const handleStageAllPrimary = useCallback(async (): Promise<void> => {
-    if (!worktreePath || isExecutingBulk) {
-      return
-    }
     const filePaths = [
       ...getStageAllPaths(grouped.unstaged, 'unstaged'),
       ...getStageAllPaths(grouped.untracked, 'untracked')
     ]
-    if (filePaths.length === 0) {
-      return
-    }
-    setIsExecutingBulk(true)
-    try {
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await bulkStageRuntimeGitPaths(
-        {
-          // Why: route staging by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        filePaths
-      )
-      await refreshActiveGitStatusAfterMutation()
-      clearSelection()
-    } catch (error) {
-      reportBulkMutationFailure(error)
-    } finally {
-      setIsExecutingBulk(false)
-    }
-  }, [
-    activeRepoSettings,
-    worktreePath,
-    isExecutingBulk,
-    grouped,
-    activeWorktreeId,
-    clearSelection,
-    refreshActiveGitStatusAfterMutation
-  ])
+    await stagePaths(filePaths, isStatusTruncated ? 'all' : undefined)
+  }, [grouped, isStatusTruncated, stagePaths])
+
+  // Why: once the capped prefix is all staged, no row or primary action can reach the hidden rest.
+  const handleStageWorktreeChanges = useCallback(() => stagePaths([], 'all'), [stagePaths])
 
   return {
     isExecutingBulk,
@@ -267,7 +259,9 @@ export function useSourceControlBulkActions({
     handleBulkStage,
     handleBulkUnstage,
     handleStageAllPaths,
+    handleStageSectionPaths,
     handleUnstagePaths,
-    handleStageAllPrimary
+    handleStageAllPrimary,
+    handleStageWorktreeChanges
   }
 }

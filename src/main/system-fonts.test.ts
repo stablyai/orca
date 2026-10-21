@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const { runProcessMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
@@ -8,7 +9,7 @@ const { runProcessMock } = vi.hoisted(() => ({
 // Why mock the chokepoint rather than child_process: the timeout, the output
 // cap and the hidden console are runProcess's contract now, so this suite
 // asserts what font discovery asks for, not how a process gets started.
-vi.mock('../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
 
@@ -67,6 +68,22 @@ describe('listSystemFontFamilies', () => {
       expect(script.trim().split(/\r?\n/)[0]).toBe(
         '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
       )
+    })
+  })
+
+  it('spawns the Windows font script without an -ExecutionPolicy switch', async () => {
+    // Why: execution policy gates script *files*, never -Command, so the switch
+    // was a no-op -- and it is the highest-weighted token on the command lines
+    // Defender flags (#17858).
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      expect(args).toContain('-Command')
+      expect(args).not.toContain('-ExecutionPolicy')
+      expect(args).not.toContain('Bypass')
     })
   })
 

@@ -1,17 +1,23 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type {
+  ExpectedRuntimeSource,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
+import { runtimeAccessDeniedError } from './runtime-access-denied'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  // Why separate from the envelope: federation forwards envelopes to other runtimes.
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
@@ -31,7 +37,7 @@ export async function sendRequest<TResult>(
       return
     }
     const socket = createConnection(transport.endpoint)
-    let buffer = ''
+    let lineSegments: string[] = []
     let settled = false
     const requestId = randomUUID()
 
@@ -40,6 +46,7 @@ export async function sendRequest<TResult>(
         return
       }
       settled = true
+      lineSegments = []
       socket.destroy()
       reject(
         new RuntimeClientError(
@@ -56,6 +63,7 @@ export async function sendRequest<TResult>(
         return
       }
       settled = true
+      lineSegments = []
       clearTimeout(timeout)
       socket.end()
       if (result.ok === false) {
@@ -66,13 +74,16 @@ export async function sendRequest<TResult>(
     }
 
     socket.setEncoding('utf8')
-    socket.once('error', () => {
+    socket.once('error', (error) => {
       finish({
         ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
-        )
+        // Why: a sandbox denying the socket/pipe is not a dead app, so restart advice would mislead.
+        error:
+          runtimeAccessDeniedError(error, metadata.pid) ??
+          new RuntimeClientError(
+            'runtime_unavailable',
+            'Could not connect to the running Orca app. Restart Orca and try again.'
+          )
       })
     })
     // Why: a clean peer close (FIN, no 'error') before a terminal frame never
@@ -89,18 +100,27 @@ export async function sendRequest<TResult>(
       })
     })
     socket.on('data', (chunk: string) => {
-      buffer += chunk
       // Why: the server may interleave `{"_keepalive":true}\n` frames with the
       // final success/failure frame to keep both idle timers alive during a
       // long-poll (see design doc §3.1). Read frames in a loop until we see a
       // terminal frame. Each keepalive refreshes the client-side timer so a
       // 10 min wait doesn't trip the 60 s default ceiling.
-      let newlineIndex = buffer.indexOf('\n')
-      while (newlineIndex !== -1 && !settled) {
-        const line = buffer.slice(0, newlineIndex)
-        buffer = buffer.slice(newlineIndex + 1)
+      let cursor = 0
+      while (cursor < chunk.length && !settled) {
+        const newlineIndex = chunk.indexOf('\n', cursor)
+        if (newlineIndex === -1) {
+          lineSegments.push(chunk.slice(cursor))
+          return
+        }
+        const segment = chunk.slice(cursor, newlineIndex)
+        let line = segment
+        if (lineSegments.length > 0) {
+          lineSegments.push(segment)
+          line = lineSegments.join('')
+          lineSegments = []
+        }
+        cursor = newlineIndex + 1
         if (line.trim().length === 0) {
-          newlineIndex = buffer.indexOf('\n')
           continue
         }
 
@@ -124,7 +144,6 @@ export async function sendRequest<TResult>(
         // major). See §7 risk #9.
         if (isKeepaliveFrame(raw)) {
           timeout.refresh()
-          newlineIndex = buffer.indexOf('\n')
           continue
         }
 
@@ -150,7 +169,6 @@ export async function sendRequest<TResult>(
         const frame = parsed.data
         if ('_keepalive' in frame) {
           timeout.refresh()
-          newlineIndex = buffer.indexOf('\n')
           continue
         }
 
@@ -190,7 +208,8 @@ export async function sendRequest<TResult>(
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          expectedRuntimeSource
         })}\n`
       )
     })

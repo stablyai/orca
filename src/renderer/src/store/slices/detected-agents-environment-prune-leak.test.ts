@@ -50,7 +50,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: {} }
 
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeDetectedAgentsPairingTestStore as createTestStore } from './runtime-detected-agents-pairing.test-fixture'
 
 function env(id: string): PublicKnownRuntimeEnvironment {
   return { id } as unknown as PublicKnownRuntimeEnvironment

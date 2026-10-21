@@ -1,3 +1,10 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  makeRepo
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -5,7 +12,6 @@ import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { ExternalWorktreeVisibility } from '../shared/repo-types'
 import { getDefaultPersistedState } from '../shared/constants'
-import { testState, createStore, writeDataFile, makeRepo } from './persistence-test-harness'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -13,7 +19,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -55,7 +61,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('updateRepo stamps legacy external-worktree visibility before changing old repos', async () => {
@@ -68,7 +75,7 @@ describe('Store', () => {
       })
     )
 
-    const updated = store.updateRepo('r1', { externalWorktreeVisibility: 'hide' })
+    const updated = store.updateRepo({ id: 'r1' }, { externalWorktreeVisibility: 'hide' })
 
     expect(updated!.externalWorktreeVisibility).toBe('hide')
     expect(updated!.externalWorktreeVisibilityLegacy).toBe(true)
@@ -165,7 +172,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ externalWorktreeVisibility: 'hide' }))
 
-    const updated = store.updateRepo('r1', { agentWorktreeVisibility: 'show' })
+    const updated = store.updateRepo({ id: 'r1' }, { agentWorktreeVisibility: 'show' })
 
     expect(updated).toMatchObject({
       externalWorktreeVisibility: 'hide',
@@ -190,16 +197,19 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      customWorktreeVisibilitySources: [
-        { id: 'team', rootPath: ' /srv/team-worktrees ' },
-        { id: 'invalid', rootPath: '../relative' }
-      ],
-      worktreeVisibilitySourcePreferences: {
-        builtIn: { claude: 'show', gsd: 'hide' },
-        custom: { team: 'show' }
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        customWorktreeVisibilitySources: [
+          { id: 'team', rootPath: ' /srv/team-worktrees ' },
+          { id: 'invalid', rootPath: '../relative' }
+        ],
+        worktreeVisibilitySourcePreferences: {
+          builtIn: { claude: 'show', gsd: 'hide' },
+          custom: { team: 'show' }
+        }
       }
-    })
+    )
 
     expect(updated).toMatchObject({
       customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
@@ -225,7 +235,7 @@ describe('Store', () => {
       })
     )
 
-    const updated = store.updateRepo('r1', { externalWorktreeVisibility: null })
+    const updated = store.updateRepo({ id: 'r1' }, { externalWorktreeVisibility: null })
 
     expect(updated?.externalWorktreeVisibility).toBeUndefined()
     expect(updated?.externalWorktreeVisibilityLegacy).toBe(false)
@@ -274,10 +284,13 @@ describe('Store', () => {
       })
     )
 
-    store.updateRepo('r1', {
-      issueSourcePreference: undefined,
-      sourceControlAi: undefined
-    })
+    store.updateRepo(
+      { id: 'r1' },
+      {
+        issueSourcePreference: undefined,
+        sourceControlAi: undefined
+      }
+    )
 
     expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
     expect(store.getRepo('r1')!.sourceControlAi).toBeUndefined()
@@ -299,9 +312,12 @@ describe('Store', () => {
       })
     )
 
-    store.updateRepo('r1', {
-      sourceControlAi: null
-    })
+    store.updateRepo(
+      { id: 'r1' },
+      {
+        sourceControlAi: null
+      }
+    )
 
     expect(store.getRepo('r1')!.sourceControlAi).toBeUndefined()
 
@@ -314,29 +330,32 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
 
-    const updated = store.updateRepo('r1', {
-      sourceControlAi: {
-        instructionsByOperation: {
-          commitMessage: 'Repo style',
-          pullRequest: 42,
-          unknown: 'ignored'
-        },
-        prCreationDefaults: {
-          draft: true,
-          useTemplate: null,
-          openAfterCreate: 'yes'
-        },
-        modelOverridesByOperation: {
-          commitMessage: {
-            selectedModelByAgent: { codex: 'gpt-5.4', claude: false },
-            selectedThinkingByModel: { 'gpt-5.4': 'high', bad: true }
+    const updated = store.updateRepo(
+      { id: 'r1' },
+      {
+        sourceControlAi: {
+          instructionsByOperation: {
+            commitMessage: 'Repo style',
+            pullRequest: 42,
+            unknown: 'ignored'
           },
-          unknown: {
-            selectedModelByAgent: { codex: 'ignored' }
+          prCreationDefaults: {
+            draft: true,
+            useTemplate: null,
+            openAfterCreate: 'yes'
+          },
+          modelOverridesByOperation: {
+            commitMessage: {
+              selectedModelByAgent: { codex: 'gpt-5.4', claude: false },
+              selectedThinkingByModel: { 'gpt-5.4': 'high', bad: true }
+            },
+            unknown: {
+              selectedModelByAgent: { codex: 'ignored' }
+            }
           }
-        }
-      } as never
-    })
+        } as never
+      }
+    )
 
     expect(updated!.sourceControlAi).toEqual({
       instructionsByOperation: {
@@ -370,7 +389,8 @@ describe('Store', () => {
       })
     )
 
-    const updated = store.updateRepo('r1', { sourceControlAi: 'bad' as never })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: feeds the sanitizer a value its type forbids, on purpose.
+    const updated = store.updateRepo({ id: 'r1' }, { sourceControlAi: 'bad' as never })
 
     expect(updated!.sourceControlAi).toEqual({
       instructionsByOperation: { commitMessage: 'Keep me' },

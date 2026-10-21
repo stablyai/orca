@@ -29,19 +29,23 @@ type BrowserTabPageIdSource = {
   pageIds?: readonly string[] | null
 }
 
+// Why: a stable identity keeps the disabled branch from re-running downstream shallow compares.
+const NO_BROWSER_PAGE_IDS: readonly string[] = []
+
 export function collectBrowserPageIds(
   tabs: readonly BrowserTabPageIdSource[] | null | undefined
-): string[] {
-  return (tabs ?? []).flatMap((tab) =>
+): readonly string[] {
+  // Why the early return: no browser tabs is the common case, and this runs on every store write.
+  if (!tabs || tabs.length === 0) {
+    return NO_BROWSER_PAGE_IDS
+  }
+  return tabs.flatMap((tab) =>
     tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
   )
 }
-
-// Why: a stable identity keeps the disabled branch from re-running downstream shallow compares.
-const NO_BROWSER_PAGE_IDS: string[] = []
 const NO_BROWSER_TABS_BY_WORKTREE: Record<string, BrowserTabPageIdSource[]> = {}
 
-export function useWorktreeBrowserPageIds(worktreeId: string): string[] {
+export function useWorktreeBrowserPageIds(worktreeId: string): readonly string[] {
   return useAppStore(
     useShallow((state) => collectBrowserPageIds(state.browserTabsByWorktree[worktreeId]))
   )
@@ -57,7 +61,6 @@ export function useBrowserGuestPaintRetention(browserPageIds: readonly string[])
 // Why one exported predicate rather than the same OR-list at each site: a hand-rolled copy stays
 // green when a term is added — nothing typechecks a site that never names the new signal — and the
 // remote-viewer term reached the panes while four copies in Terminal.tsx still had three terms.
-// browser-guest-retention-site-census.test.ts holds the sites to this function.
 export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
   return (
     isBrowserAutomationVisible(browserPageId) ||

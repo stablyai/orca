@@ -30,20 +30,24 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
 // cards render one while a linked review is loading or its details failed) has no
 // state glyph to contradict, so it still flags problems — but never claims success,
 // since emerald would assert an open review we have not confirmed.
-function getCheckTone(review: WorktreeCardPrDisplay): string | null {
-  if (review.state && review.state !== 'open') {
-    return null
-  }
-  if (review.status === 'failure') {
+export function getReviewChecksTone(status: WorktreeCardPrDisplay['status']): string | null {
+  if (status === 'failure') {
     return 'text-rose-500/85'
   }
-  if (review.status === 'pending') {
+  if (status === 'pending') {
     return 'text-amber-500/85'
   }
-  if (review.state === 'open' && review.status === 'success') {
+  if (status === 'success') {
     return 'text-emerald-500/80'
   }
   return null
+}
+
+function getCheckTone(review: WorktreeCardPrDisplay): string | null {
+  if ((review.state && review.state !== 'open') || (!review.state && review.status === 'success')) {
+    return null
+  }
+  return getReviewChecksTone(review.status)
 }
 
 function getStateTone(state: WorktreeCardPrDisplay['state']): string {

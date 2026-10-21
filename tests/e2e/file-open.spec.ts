@@ -32,7 +32,7 @@ async function switchToTerminal(
     if (terminalTab) {
       state.setActiveTab(terminalTab.id)
     }
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
 }
 
@@ -49,7 +49,7 @@ async function switchToEditor(
     const state = store.getState()
     if (state.openFiles.some((file) => file.id === targetFileId)) {
       state.setActiveFile(targetFileId)
-      state.setActiveTabType('editor')
+      state.setActiveTabType('editor', store.getState().activeWorktreeId)
     }
   }, fileId)
 }

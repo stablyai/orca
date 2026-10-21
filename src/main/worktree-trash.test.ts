@@ -1,18 +1,12 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import {
   collectWorktreeTrashSweepRoots,
-  getWorktreeTrashRoot,
-  isWorktreeTrashEntryName,
-  moveWorktreeDirectoryToTrash,
-  restoreWorktreeDirectoryFromTrash,
-  scheduleWorktreeTrashDeletion,
   sweepStaleWorktreeTrash,
-  whenWorktreeTrashDeletionsSettled,
   WORKTREE_TRASH_DIR_NAME
 } from './worktree-trash'
 
@@ -23,7 +17,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await whenWorktreeTrashDeletionsSettled()
   await rm(scratchDir, { recursive: true, force: true })
 })
 
@@ -31,92 +24,6 @@ async function createWorktreeDirectory(worktreePath: string): Promise<void> {
   await mkdir(join(worktreePath, 'node_modules', 'pkg'), { recursive: true })
   await writeFile(join(worktreePath, 'node_modules', 'pkg', 'index.js'), 'module.exports = 1\n')
 }
-
-describe('moveWorktreeDirectoryToTrash', () => {
-  it('renames the checkout into a hidden sibling trash root', async () => {
-    const worktreePath = join(scratchDir, 'repo', 'feature')
-    await createWorktreeDirectory(worktreePath)
-
-    const trashPath = await moveWorktreeDirectoryToTrash(worktreePath)
-
-    expect(trashPath).toBeDefined()
-    expect(existsSync(worktreePath)).toBe(false)
-    expect(trashPath!.startsWith(join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME))).toBe(true)
-    expect(existsSync(join(trashPath!, 'node_modules', 'pkg', 'index.js'))).toBe(true)
-  })
-
-  it('generates sweepable, collision-free entry names', async () => {
-    const first = await moveWorktreeDirectoryToTrash(await seededWorktree('one'))
-    const second = await moveWorktreeDirectoryToTrash(await seededWorktree('two'))
-
-    expect(first).not.toEqual(second)
-    expect(await readdir(join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME))).toHaveLength(2)
-    for (const entry of await readdir(join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME))) {
-      expect(isWorktreeTrashEntryName(entry)).toBe(true)
-    }
-  })
-
-  it('reports the rename as unavailable and leaves no trash root when the checkout is missing', async () => {
-    const worktreePath = join(scratchDir, 'repo', 'gone')
-
-    expect(await moveWorktreeDirectoryToTrash(worktreePath)).toBeUndefined()
-    expect(existsSync(getWorktreeTrashRoot(worktreePath))).toBe(false)
-  })
-
-  it.skipIf(process.platform === 'win32')('refuses a symlinked trash root', async () => {
-    const worktreePath = join(scratchDir, 'repo', 'feature')
-    const externalRoot = join(scratchDir, 'external')
-    await createWorktreeDirectory(worktreePath)
-    await mkdir(externalRoot)
-    await symlink(externalRoot, getWorktreeTrashRoot(worktreePath))
-
-    expect(await moveWorktreeDirectoryToTrash(worktreePath)).toBeUndefined()
-    expect(existsSync(worktreePath)).toBe(true)
-    expect(await readdir(externalRoot)).toEqual([])
-  })
-
-  async function seededWorktree(name: string): Promise<string> {
-    const worktreePath = join(scratchDir, 'repo', name)
-    await createWorktreeDirectory(worktreePath)
-    return worktreePath
-  }
-})
-
-describe('restoreWorktreeDirectoryFromTrash', () => {
-  it('puts the checkout back where Git registered it', async () => {
-    const worktreePath = join(scratchDir, 'repo', 'feature')
-    await createWorktreeDirectory(worktreePath)
-    const trashPath = await moveWorktreeDirectoryToTrash(worktreePath)
-
-    expect(await restoreWorktreeDirectoryFromTrash(trashPath!, worktreePath)).toBe(true)
-    expect(existsSync(join(worktreePath, 'node_modules', 'pkg', 'index.js'))).toBe(true)
-    expect(existsSync(trashPath!)).toBe(false)
-  })
-
-  it('reports failure instead of throwing when the trashed path is gone', async () => {
-    const trashRoot = getWorktreeTrashRoot(join(scratchDir, 'repo', 'feature'))
-    expect(
-      await restoreWorktreeDirectoryFromTrash(
-        join(trashRoot, 'wt-1-abcdef01'),
-        join(scratchDir, 'repo', 'feature')
-      )
-    ).toBe(false)
-  })
-})
-
-describe('scheduleWorktreeTrashDeletion', () => {
-  it('deletes trashed checkouts in the background', async () => {
-    const worktreePath = join(scratchDir, 'repo', 'feature')
-    await createWorktreeDirectory(worktreePath)
-    const trashPath = await moveWorktreeDirectoryToTrash(worktreePath)
-
-    scheduleWorktreeTrashDeletion(trashPath!)
-    await whenWorktreeTrashDeletionsSettled()
-
-    expect(existsSync(trashPath!)).toBe(false)
-    expect(existsSync(getWorktreeTrashRoot(worktreePath))).toBe(true)
-  })
-})
 
 describe('sweepStaleWorktreeTrash', () => {
   it('removes leftover entries from both workspace layouts and nothing else', async () => {
@@ -138,6 +45,9 @@ describe('sweepStaleWorktreeTrash', () => {
     expect(existsSync(join(nestedTrashRoot, 'unrelated-directory'))).toBe(true)
     expect(existsSync(join(nestedTrashRoot, 'wt-notes.txt'))).toBe(true)
     expect(existsSync(join(liveWorktree, 'node_modules', 'pkg', 'index.js'))).toBe(true)
+    // Nothing refills a trash root, so an emptied one goes; one still holding foreign entries stays.
+    expect(existsSync(flatTrashRoot)).toBe(false)
+    expect(existsSync(nestedTrashRoot)).toBe(true)
   })
 
   it('ignores workspace roots that do not exist', async () => {

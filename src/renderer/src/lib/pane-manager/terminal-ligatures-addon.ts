@@ -111,6 +111,7 @@ export class TerminalLigaturesAddon extends LigaturesAddon {
             target.refresh(start, end)
           }
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         const value = Reflect.get(target, property, target) as unknown
         return typeof value === 'function' ? value.bind(target) : value
       }

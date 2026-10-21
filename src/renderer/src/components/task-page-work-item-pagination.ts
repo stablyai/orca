@@ -32,10 +32,6 @@ export function workItemIdentity(item: Pick<GitHubWorkItem, 'id' | 'repoId'>): s
   return `${item.repoId}:${item.id}`
 }
 
-export function taskPageToGitHubApiPage(taskPage: number): number {
-  return Math.max(0, Math.floor(taskPage)) + 1
-}
-
 export type EmptyPageOutcome = {
   reason: 'window-unreachable' | 'load-failed' | 'end-of-data'
   /** New advertised page count, or null to leave the current count alone.
@@ -153,17 +149,6 @@ export function buildSelectedReposKey<
         )}`
     )
     .join(',')
-}
-
-// Why: provider pages cannot spill truncated rows into the next page. Divide
-// the display budget up front so every fetched row remains reachable.
-export function getTaskPagePerRepoLimit(
-  repoCount: number,
-  maxPerRepo: number,
-  displayLimit: number
-): number {
-  const normalizedRepoCount = Math.max(1, Math.floor(repoCount))
-  return Math.max(1, Math.min(maxPerRepo, Math.floor(displayLimit / normalizedRepoCount)))
 }
 
 export type WorkItemPageFetchResult = { items: GitHubWorkItem[] }

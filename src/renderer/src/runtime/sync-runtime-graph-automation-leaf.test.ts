@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
@@ -11,6 +12,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 const { warnTerminalLifecycleAnomaly } = vi.hoisted(() => ({
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
@@ -105,6 +107,26 @@ async function captureGraph(): Promise<RuntimeSyncWindowGraph> {
   return graph as RuntimeSyncWindowGraph
 }
 
+/**
+ * What this publication reports of the window's terminal panes. A window-owned build lists them;
+ * with the switch on, main lists this app's panes and the window reports only what it shows or
+ * parks (mountedLeaves), so the PTY id is main's binding and is not reported here.
+ */
+function reportedPanes(graph: RuntimeSyncWindowGraph): Record<string, unknown>[] {
+  return ORCA_LAYOUT_OWNER_IS_MAIN ? (graph.mountedLeaves ?? []) : graph.leaves
+}
+
+function reportedTabIds(graph: RuntimeSyncWindowGraph): string[] {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? (graph.mountedLeaves ?? []).map((leaf) => leaf.tabId)
+    : graph.tabs.map((tab) => tab.tabId)
+}
+
+/** The window's PTY claim, which only a window-owned build reports. */
+function withPty(ptyId: string): { ptyId?: string } {
+  return ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { ptyId }
+}
+
 describe('syncRuntimeGraph background automation tabs', () => {
   it('publishes an unmounted automation tab leaf when its PTY is still live (eager buffer present)', async () => {
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
@@ -113,10 +135,10 @@ describe('syncRuntimeGraph background automation tabs', () => {
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).toContainEqual(
-      expect.objectContaining({ tabId: 'auto-tab-1', leafId: LEAF, ptyId: AUTO_PTY })
+    expect(reportedPanes(graph)).toContainEqual(
+      expect.objectContaining({ tabId: 'auto-tab-1', leafId: LEAF, ...withPty(AUTO_PTY) })
     )
-    expect(graph.tabs).toContainEqual(expect.objectContaining({ tabId: 'auto-tab-1' }))
+    expect(reportedTabIds(graph)).toContain('auto-tab-1')
     // Why: the no-live-transport anomaly must stay scoped to mounted tabs; an
     // unmounted background tab legitimately has no live transport yet.
     expect(warnTerminalLifecycleAnomaly).not.toHaveBeenCalled()
@@ -127,7 +149,9 @@ describe('syncRuntimeGraph background automation tabs', () => {
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: 'auto-tab-1' }))
-    expect(graph.tabs).not.toContainEqual(expect.objectContaining({ tabId: 'auto-tab-1' }))
+    expect(reportedPanes(graph)).not.toContainEqual(
+      expect.objectContaining({ tabId: 'auto-tab-1' })
+    )
+    expect(reportedTabIds(graph)).not.toContain('auto-tab-1')
   })
 })

@@ -1,0 +1,321 @@
+{
+  "comparison": "Actual BrowserManager registration, destroyed-event handler, callback maps and unregisterAll; Electron methods use EventEmitter fixtures. Baseline removes only the exact-primary destruction cleanup in a temporary source transform.",
+  "provenance": {
+    "node": "v26.6.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "sourceHashes": {
+    "src/main/browser/browser-manager-guest-navigation-policy.ts": {
+      "before": "35aee2b5665a49535897fd0589853248f902061f77b3e142f94e90eabeb7332c",
+      "after": "741ac6d9f30fcf82993fa5c11f40093ba8a75483866407776c983538453f9b32"
+    },
+    "src/main/browser/browser-manager-destroyed-guest.test.ts": {
+      "current": "25806188a208952a1bebd042ec0dc4552784179ed3b738a5d5336789604ef314",
+      "observed": "8e59825237dea1b53294361122f0ea681947d4e6e9ea8fa771b5e15e080d88a6"
+    },
+    "src/main/browser/browser-manager-destroyed-guest-test-fixture.ts": {
+      "current": "4e6bf3589a3888860e6cfa8b6c83e8e50b4344650a5aaa85f221930ee8f9c0fd"
+    },
+    "src/main/browser/browser-manager-state.ts": {
+      "current": "1d82e875461984b3bee2d9dc9b477be7518e9394ace77b24e9b513766cc8a210"
+    },
+    "src/main/browser/browser-manager-registration.ts": {
+      "current": "55d66285b1d3ad29a7be596b1ca3536f333f2e3b2580e4d2a41090928ca8edd1"
+    },
+    "src/main/browser/browser-manager-download-lifecycle.ts": {
+      "current": "8c8d0dd488d31f6098f7ea1000ed8d6ffd8b23704a097db974207c9732d77c2a"
+    }
+  },
+  "before": {
+    "exitCode": 1,
+    "passed": 6,
+    "failed": 3,
+    "counts": [
+      {
+        "test": "browser guest destruction ownership > releases registered callbacks and ownership after 1000 distinct guest destructions",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 1000,
+          "grabShortcuts": 1000,
+          "appShortcuts": 1000,
+          "wheelHandlers": 1000,
+          "renderers": 1000,
+          "workspaces": 1000,
+          "worktrees": 1000,
+          "profiles": 1000,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > leaves no dead-guest callbacks for the window-close unregisterAll path",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 1000,
+          "grabShortcuts": 1000,
+          "appShortcuts": 1000,
+          "wheelHandlers": 0,
+          "renderers": 1000,
+          "workspaces": 1000,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > keeps explicit unregister before destruction idempotent",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 0,
+          "grabShortcuts": 0,
+          "appShortcuts": 0,
+          "wheelHandlers": 0,
+          "renderers": 0,
+          "workspaces": 0,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > does not let a captured old destroyed callback retire a replacement guest",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > cleans a popup without retiring its live primary page",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > cleans policies for a guest destroyed before registration",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 0,
+          "grabShortcuts": 0,
+          "appShortcuts": 0,
+          "wheelHandlers": 0,
+          "renderers": 0,
+          "workspaces": 0,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > preserves live guest ownership when its renderer process needs reload recovery",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > rebuilds ownership when a restored page registers its fresh guest",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > preserves a sibling page using the same browser session profile",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 2,
+          "grabShortcuts": 2,
+          "appShortcuts": 2,
+          "wheelHandlers": 2,
+          "renderers": 2,
+          "workspaces": 2,
+          "worktrees": 2,
+          "profiles": 2,
+          "policies": 1
+        }
+      }
+    ],
+    "failedCases": [
+      "browser guest destruction ownership releases registered callbacks and ownership after 1000 distinct guest destructions",
+      "browser guest destruction ownership leaves no dead-guest callbacks for the window-close unregisterAll path",
+      "browser guest destruction ownership preserves a sibling page using the same browser session profile"
+    ]
+  },
+  "after": {
+    "exitCode": 0,
+    "passed": 9,
+    "failed": 0,
+    "counts": [
+      {
+        "test": "browser guest destruction ownership > releases registered callbacks and ownership after 1000 distinct guest destructions",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 0,
+          "grabShortcuts": 0,
+          "appShortcuts": 0,
+          "wheelHandlers": 0,
+          "renderers": 0,
+          "workspaces": 0,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > leaves no dead-guest callbacks for the window-close unregisterAll path",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 0,
+          "grabShortcuts": 0,
+          "appShortcuts": 0,
+          "wheelHandlers": 0,
+          "renderers": 0,
+          "workspaces": 0,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > keeps explicit unregister before destruction idempotent",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 0,
+          "grabShortcuts": 0,
+          "appShortcuts": 0,
+          "wheelHandlers": 0,
+          "renderers": 0,
+          "workspaces": 0,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > does not let a captured old destroyed callback retire a replacement guest",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > cleans a popup without retiring its live primary page",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > cleans policies for a guest destroyed before registration",
+        "counts": {
+          "guests": 0,
+          "contextMenus": 0,
+          "grabShortcuts": 0,
+          "appShortcuts": 0,
+          "wheelHandlers": 0,
+          "renderers": 0,
+          "workspaces": 0,
+          "worktrees": 0,
+          "profiles": 0,
+          "policies": 0
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > preserves live guest ownership when its renderer process needs reload recovery",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > rebuilds ownership when a restored page registers its fresh guest",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      },
+      {
+        "test": "browser guest destruction ownership > preserves a sibling page using the same browser session profile",
+        "counts": {
+          "guests": 1,
+          "contextMenus": 1,
+          "grabShortcuts": 1,
+          "appShortcuts": 1,
+          "wheelHandlers": 1,
+          "renderers": 1,
+          "workspaces": 1,
+          "worktrees": 1,
+          "profiles": 1,
+          "policies": 1
+        }
+      }
+    ],
+    "failedCases": []
+  },
+  "passed": true
+}

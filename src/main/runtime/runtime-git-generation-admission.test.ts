@@ -1,3 +1,4 @@
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RuntimeGitCommandHost, RuntimeGitTarget } from './runtime-git-command-target'
@@ -7,12 +8,13 @@ const mocks = vi.hoisted(() => ({
   gitExecFileAsync: vi.fn(),
   getPullRequestDraftContext: vi.fn(),
   loadPullRequestLinkedIssue: vi.fn(),
-  getSshGitProvider: vi.fn(),
   prepareLocalCommitMessageAgentEnv: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn()
 }))
+
+const linkedLookup = vi.hoisted(() => ({ run: (): Promise<null> => Promise.resolve(null) }))
 
 vi.mock('../git/status', () => ({ getStagedCommitContext: mocks.getStagedCommitContext }))
 vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
@@ -20,11 +22,11 @@ vi.mock('../text-generation/pull-request-context', () => ({
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
 vi.mock('../source-control/pull-request-linked-issue', () => ({
-  loadPullRequestLinkedIssue: mocks.loadPullRequestLinkedIssue
-}))
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: mocks.getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'provider unavailable'
+  loadPullRequestLinkedIssue: (...args: unknown[]) => {
+    mocks.loadPullRequestLinkedIssue(...args)
+    // A mock return observer would handle the rejection being tested.
+    return linkedLookup.run()
+  }
 }))
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepareLocalCommitMessageAgentEnv
@@ -37,6 +39,7 @@ vi.mock('../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
 }))
 
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { RuntimeGitGenerationCommands } from './runtime-git-generation-commands'
 
 const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
@@ -77,7 +80,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.gitExecFileAsync.mockResolvedValue({ stdout: '', stderr: '' })
-    mocks.loadPullRequestLinkedIssue.mockResolvedValue(null)
+    linkedLookup.run = () => Promise.resolve(null)
     mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
     mocks.prepareLocalCommitMessageAgentEnv.mockResolvedValue({ ok: true, env: {} })
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'feat' })
@@ -133,38 +136,117 @@ describe('RuntimeGitGenerationCommands admission', () => {
     })
     expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
       expect.objectContaining({
-        connectionId: undefined,
         localGitOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' }
       })
     )
   })
 
-  it('keeps SSH pull-request context reads on the remote provider', async () => {
-    const exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    mocks.getSshGitProvider.mockReturnValue({ exec, executeCommitMessagePlan: vi.fn() })
-    mocks.getPullRequestDraftContext.mockImplementation(async (execute) => {
-      await execute(['log', '--oneline'])
-      await execute(['show-ref', '--verify'], { maxBuffer: 456, timeoutMs: 789 })
-      return pullRequestContext
-    })
-    const commands = makeCommands(
-      makeTarget('/remote/repo', {
-        executionHostId: 'ssh:conn-1',
-        localGitOptions: { wslDistro: 'Ubuntu' }
-      })
-    )
+  it('reports an SSH pull-request target unserved without reading git anywhere', async () => {
+    const commands = makeCommands(makeTarget('/remote/repo', { executionHostId: 'ssh:conn-1' }))
 
-    await commands.generateRuntimePullRequestFields(
-      'id:wt-1',
-      { base: 'main', title: '', body: '', draft: false },
-      settingsOverride
-    )
-
-    expect(exec).toHaveBeenCalledWith(['log', '--oneline'], '/remote/repo')
-    expect(exec).toHaveBeenCalledWith(['show-ref', '--verify'], '/remote/repo', { timeoutMs: 789 })
+    await expect(
+      commands.generateRuntimePullRequestFields(
+        'id:wt-1',
+        { base: 'main', title: '', body: '', draft: false },
+        settingsOverride
+      )
+    ).resolves.toEqual({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
+    expect(mocks.getPullRequestDraftContext).not.toHaveBeenCalled()
     expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
-    expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'conn-1', localGitOptions: {} })
+    expect(mocks.loadPullRequestLinkedIssue).not.toHaveBeenCalled()
+  })
+
+  describe('linked-issue lifetime', () => {
+    function commands(): RuntimeGitGenerationCommands {
+      return makeCommands(makeTarget('/repo'))
+    }
+
+    const input = { base: 'main', title: '', body: '', draft: false, provider: 'gitlab' as const }
+
+    it.each(['no changes', 'context error', 'template error'])(
+      'observes a late lookup rejection after %s',
+      async (outcome) => {
+        const issue = Promise.withResolvers<null>()
+        linkedLookup.run = () => issue.promise
+        const preparationError = new Error('preparation failed')
+        mocks.getPullRequestDraftContext.mockResolvedValue(pullRequestContext)
+        if (outcome === 'no changes') {
+          mocks.getPullRequestDraftContext.mockResolvedValue(null)
+        } else if (outcome === 'context error') {
+          mocks.getPullRequestDraftContext.mockRejectedValue(preparationError)
+        } else {
+          mocks.resolveHostedReviewBodyForGeneration.mockRejectedValue(preparationError)
+        }
+        const unhandled = vi.fn()
+        process.on('unhandledRejection', unhandled)
+        try {
+          await expect(
+            commands().generateRuntimePullRequestFields('id:wt-1', input, settingsOverride)
+          ).resolves.toEqual({
+            success: false,
+            error:
+              outcome === 'no changes'
+                ? 'No branch changes to summarize.'
+                : preparationError.message
+          })
+          expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledOnce()
+          issue.reject(new Error('Timed out waiting for a GitLab operation slot.'))
+          await nextTurn()
+          expect(unhandled).not.toHaveBeenCalled()
+          expect(mocks.generatePullRequestFieldsFromContext).not.toHaveBeenCalled()
+        } finally {
+          issue.resolve(null)
+          void issue.promise.catch(() => undefined)
+          process.off('unhandledRejection', unhandled)
+        }
+      }
     )
+
+    it('observes rejection during preparation and preserves the later caller error', async () => {
+      const issue = Promise.withResolvers<null>()
+      const preparation = Promise.withResolvers<typeof pullRequestContext>()
+      const failure = new Error('lookup admission failed')
+      linkedLookup.run = () => issue.promise
+      mocks.getPullRequestDraftContext.mockReturnValue(preparation.promise)
+      const unhandled = vi.fn()
+      process.on('unhandledRejection', unhandled)
+      const result = commands()
+        .generateRuntimePullRequestFields('id:wt-1', input, settingsOverride)
+        .catch((error: unknown) => error)
+      try {
+        await nextTurn()
+        expect(mocks.getPullRequestDraftContext).toHaveBeenCalledOnce()
+        issue.reject(failure)
+        await nextTurn()
+        expect(unhandled).not.toHaveBeenCalled()
+        preparation.resolve(pullRequestContext)
+        expect(await result).toBe(failure)
+        expect(mocks.generatePullRequestFieldsFromContext).not.toHaveBeenCalled()
+      } finally {
+        issue.resolve(null)
+        preparation.resolve(pullRequestContext)
+        await result
+        process.off('unhandledRejection', unhandled)
+      }
+    })
+
+    it('still rejects the caller after successful preparation when the lookup fails', async () => {
+      const issue = Promise.withResolvers<null>()
+      const failure = new Error('lookup failed')
+      linkedLookup.run = () => issue.promise
+      mocks.getPullRequestDraftContext.mockResolvedValue(pullRequestContext)
+      const result = commands()
+        .generateRuntimePullRequestFields('id:wt-1', input, settingsOverride)
+        .catch((error: unknown) => error)
+      try {
+        await nextTurn()
+        issue.reject(failure)
+        expect(await result).toBe(failure)
+        expect(mocks.generatePullRequestFieldsFromContext).not.toHaveBeenCalled()
+      } finally {
+        issue.resolve(null)
+        await result
+      }
+    })
   })
 })

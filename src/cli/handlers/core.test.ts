@@ -130,4 +130,50 @@ describe('orca claude-teams CLI handler', () => {
       expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
     }
   )
+
+  it.skipIf(isWindows)('removes managed auth variables before spawning Claude', async () => {
+    const previousApiKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-inherited'
+    callMock.mockResolvedValueOnce({
+      result: {
+        launch: {
+          env: {
+            CLAUDE_CONFIG_DIR: '/managed/claude',
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'
+          },
+          envToDelete: ['ANTHROPIC_API_KEY']
+        }
+      }
+    })
+    try {
+      await runClaudeTeams()
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousApiKey
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ANTHROPIC_API_KEY).toBeUndefined()
+    expect(spawnEnv.CLAUDE_CONFIG_DIR).toBe('/managed/claude')
+  })
+
+  it.skipIf(isWindows)('preserves API-key auth when no managed deletion is requested', async () => {
+    const previousApiKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-system'
+    try {
+      await runClaudeTeams()
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousApiKey
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ANTHROPIC_API_KEY).toBe('sk-ant-system')
+  })
 })

@@ -5,9 +5,8 @@
  * Why all three streams and not just `message` + `stderr`: the errors Orca classifies
  * do not all come straight out of `execFile`. Node puts Git's stderr in both `message`
  * and `stderr`, but Orca also throws its own failures with the Git output on `stdout`
- * (`worktree remove`'s submodule retry attaches `git status --porcelain` output that
- * way on both the local runner and the relay). Reading all three is what keeps the
- * local and relay classifiers from disagreeing about the same error object.
+ * (the removal dirty check attaches `git status --porcelain` output that way). Reading
+ * all three is what keeps the classifiers from disagreeing about the same error object.
  *
  * Against a real binary this reads no differently: Git emits every refusal this module
  * classifies through `error()`/`die()`, i.e. stderr only, on 2.25 through 2.55.
@@ -24,4 +23,17 @@ export function readGitCommandFailureText(error: unknown): string {
     }
   }
   return parts.join('\n')
+}
+
+export function readGitCommandFailureStderr(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('stderr' in error)) {
+    return null
+  }
+  if (typeof error.stderr === 'string') {
+    return error.stderr
+  }
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(error.stderr)) {
+    return error.stderr.toString('utf8')
+  }
+  return null
 }

@@ -1,12 +1,12 @@
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { cancelRuntimeGeneratePullRequestFields } from '@/runtime/runtime-git-client'
+import { cancelRuntimeGeneratePullRequestFields } from '@/runtime/runtime-git-generation-client'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
 import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
 } from '@/store/slices/pull-request-generation'
-import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
+import { resolveCreateReviewSeedText } from './create-review-draft-title'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import {
   createInitialPullRequestFieldRevisions,
@@ -21,6 +21,7 @@ type CreatePullRequestFieldSeedingOptions = {
   worktreePath: string
   branch: string
   eligibility: HostedReviewCreationEligibility | null
+  jiraIssueKey: string | null
   hasExternalGeneration: boolean
   retainDraftWhenClosed: boolean
   currentEligibilityKey: string | null
@@ -56,6 +57,7 @@ export function useCreatePullRequestFieldSeeding({
   worktreePath,
   branch,
   eligibility,
+  jiraIssueKey,
   hasExternalGeneration,
   retainDraftWhenClosed,
   currentEligibilityKey,
@@ -146,8 +148,9 @@ export function useCreatePullRequestFieldSeeding({
     baseEditedByUserRef.current = false
     syncedDefaultBaseRef.current = resolvedDefaultBaseRef || null
     setBase(resolvedDefaultBaseRef)
-    setTitle(resolveCreateReviewDraftTitle({ branch, eligibilityTitle: eligibility.title }))
-    setBody(eligibility.body ?? '')
+    const seedText = resolveCreateReviewSeedText({ branch, eligibility, jiraIssueKey })
+    setTitle(seedText.title)
+    setBody(seedText.body)
     setDraft(resolvedPrDefaults.draft)
     setBaseQuery('')
     setBaseResults([])
@@ -165,6 +168,7 @@ export function useCreatePullRequestFieldSeeding({
     generationSeedRef,
     hasExternalGeneration,
     initializedFromEligibilityRef,
+    jiraIssueKey,
     open,
     repoId,
     resolvedDefaultBaseRef,

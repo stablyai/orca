@@ -43,19 +43,10 @@ describe('reading whether a snapshot answers for client-hosted pages', () => {
     ).toBe(false)
   })
 
-  // Only the epoch+version pair marks a synthesized frame; each half alone is a legitimate state.
+  // Only the placeholder epoch marks a synthesized frame; version zero alone is a legitimate state.
   it('affirms a real epoch at version zero', () => {
     expect(
       hostSnapshotAffirmsClientHostedPages({ publicationEpoch: REAL_EPOCH, snapshotVersion: 0 })
-    ).toBe(true)
-  })
-
-  it('affirms the placeholder epoch once it carries a version', () => {
-    expect(
-      hostSnapshotAffirmsClientHostedPages({
-        publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
-        snapshotVersion: 1
-      })
     ).toBe(true)
   })
 

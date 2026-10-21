@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
+// Shape captured from omp 17.0.5: `approvalMode` is the ambient tools.approvalMode
+// (always-ask | write | yolo), and `reason` is the tool's own override reason.
 const APPROVAL_REQUEST = {
   toolName: 'bash',
-  reason: 'tools.approval.bash: prompt',
-  approvalMode: 'prompt'
+  reason: 'Critical pattern detected',
+  approvalMode: 'always-ask'
 }
 
 describe('OMP approval forwarding', () => {
@@ -30,8 +32,8 @@ describe('OMP approval forwarding', () => {
       {
         hook_event_name: 'tool_approval_requested',
         tool_name: 'bash',
-        reason: 'tools.approval.bash: prompt',
-        approval_mode: 'prompt'
+        reason: 'Critical pattern detected',
+        approval_mode: 'always-ask'
       },
       {
         hook_event_name: 'tool_approval_resolved',

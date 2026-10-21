@@ -1,10 +1,6 @@
 import type { Cookie } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  removeTransplantableCookies,
-  type CookieClearIdentity,
-  type CookieClearSession
-} from './browser-cookie-import-clear'
+import { removeTransplantableCookies, type CookieClearSession } from './browser-cookie-import-clear'
 import { importedDomainScope } from './browser-cookie-import-policy'
 
 /**
@@ -56,27 +52,6 @@ const coordinatesOf = (calls: readonly [string, string][]): string[] =>
   calls.map(([url, name]) => `${url}|${name}`)
 
 describe('removeTransplantableCookies — preserved families on a POPULATED jar', () => {
-  it('clears every in-scope domain through per-coordinate removals when nothing is preserved', async () => {
-    const target = jar([
-      cookie('.mixed.example', 'live-session'),
-      cookie('.other.example', 'stale')
-    ])
-
-    await removeTransplantableCookies(
-      target.session,
-      new Set(),
-      importedDomainScope(['mixed.example', 'other.example'])
-    )
-
-    expect(target.names()).toEqual([])
-    // Why (STA-4797): the bulk clearData shortcut is gone — an import with nothing preserved still
-    // clears one coordinate at a time, drawn from the frozen plan the snapshot is taken from.
-    expect(coordinatesOf(target.removeMock.mock.calls)).toEqual([
-      'https://mixed.example/|live-session',
-      'https://other.example/|stale'
-    ])
-  })
-
   it('leaves a preserved family untouched while clearing everything else', async () => {
     const target = jar([
       cookie('.mixed.example', 'apex-session'),
@@ -121,58 +96,10 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
     expect(snapshotted).toEqual(removed)
   })
 
-  it('never submits a preserved coordinate to a removal', async () => {
-    const target = jar([
-      cookie('.mixed.example', 'apex-session'),
-      cookie('sub.mixed.example', 'sub-session'),
-      cookie('.other.example', 'stale')
-    ])
-
-    await removeTransplantableCookies(
-      target.session,
-      new Set(['mixed.example']),
-      importedDomainScope(['mixed.example', 'sub.mixed.example', 'other.example'])
-    )
-
-    const removedNames = target.removeMock.mock.calls.map((call) => call[1])
-    expect(removedNames).toEqual(['stale'])
-  })
-
-  it('never submits a preserved coordinate to the restore set either', async () => {
-    // Why: the CDP snapshot is taken FROM the removal plan, so filtering the plan filters the
-    // restore set with it. That is what keeps a preserved cookie out of every mutation — including
-    // the unconditional Network.setCookie that rollback performs.
-    const snapshotted: string[] = []
-    const target = jar([
-      cookie('.mixed.example', 'live-session'),
-      cookie('.other.example', 'stale')
-    ])
-    const session = {
-      ...target.session,
-      snapshotClearIdentities: async (items: { cookie: Cookie; url: string }[]) => {
-        snapshotted.push(...items.map((i) => i.cookie.name))
-        return items.map(({ cookie: c, url }) => ({
-          url,
-          name: c.name,
-          value: c.value,
-          domain: c.domain,
-          path: c.path
-        })) as CookieClearIdentity[]
-      }
-    } as unknown as CookieClearSession
-
-    await removeTransplantableCookies(
-      session,
-      new Set(['mixed.example']),
-      importedDomainScope(['mixed.example', 'other.example'])
-    )
-
-    expect(snapshotted).toEqual(['stale'])
-  })
-
   it('preserves a family named by an IPv4 literal', async () => {
-    // Why: psl reads 127.0.0.1 as the dotted DNS name '0.1'. If registrableFamily returned that,
-    // the live 127.0.0.1 session would not match the preserve set and would be erased.
+    // Why: an IPv4 literal has no registrable domain, so the family must come from the IP branch.
+    // If registrableFamily fell through to the suffix parser, the live 127.0.0.1 session would not
+    // match the preserve set and would be erased.
     const target = jar([cookie('127.0.0.1', 'loopback-session'), cookie('.other.example', 'stale')])
 
     await removeTransplantableCookies(
@@ -194,18 +121,6 @@ describe('removeTransplantableCookies — preserved families on a POPULATED jar'
     )
 
     expect(target.names()).toEqual(['dev-session'])
-  })
-
-  it('does not preserve a different family that merely shares a suffix', async () => {
-    const target = jar([cookie('.kept.example', 'kept'), cookie('.other.example', 'stale')])
-
-    await removeTransplantableCookies(
-      target.session,
-      new Set(['kept.example']),
-      importedDomainScope(['kept.example', 'other.example'])
-    )
-
-    expect(target.names()).toEqual(['kept'])
   })
 
   it('keeps skip-path removals at concurrency eight', async () => {

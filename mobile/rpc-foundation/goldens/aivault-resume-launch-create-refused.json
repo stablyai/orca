@@ -1,0 +1,82 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "aiVault.resume-launch",
+  "family": "aiVault.resume-launch",
+  "namedDeltas": [],
+  "values": {
+    "3e6273f4fe55": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "worktree_busy",
+            "message": "Workspace is busy"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "62643ed38326": {
+      "failure": "Workspace is busy",
+      "launched": "unlaunched"
+    },
+    "6e913cd7b306": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Workspace is busy",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "88cd0d2b1302": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-launch-create-refused",
+    "checkpoints": [
+      {
+        "id": "create-refused",
+        "observation": {
+          "sender": ["3e6273f4fe55"],
+          "payloads": ["88cd0d2b1302"],
+          "settlements": {
+            "bare": "6e913cd7b306"
+          },
+          "state": "62643ed38326",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

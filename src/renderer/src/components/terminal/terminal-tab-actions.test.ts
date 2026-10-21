@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   activateWebRuntimeSessionTabMock,
+  createBrowserUuidMock,
   closeWebRuntimeSessionTabMock,
   createWebRuntimeSessionTerminalMock,
   getLatestWebSessionTabsPublicationEpochMock,
@@ -12,6 +13,7 @@ const {
   toHostSessionTabIdMock
 } = vi.hoisted(() => ({
   activateWebRuntimeSessionTabMock: vi.fn(),
+  createBrowserUuidMock: vi.fn(() => 'tab-1'),
   closeWebRuntimeSessionTabMock: vi.fn(),
   createWebRuntimeSessionTerminalMock: vi.fn(),
   getLatestWebSessionTabsPublicationEpochMock: vi.fn(() => 'epoch-1'),
@@ -28,17 +30,29 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/lib/browser-uuid', () => ({
+  createBrowserUuid: createBrowserUuidMock
+}))
+
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
-  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock,
-  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
-  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
+  closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+}))
+vi.mock('../../../../shared/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: isWebTerminalSurfaceTabIdMock,
   toHostSessionTabId: toHostSessionTabIdMock
 }))
 
-vi.mock('@/runtime/web-session-tabs-sync', () => ({
-  getLatestWebSessionTabsPublicationEpoch: getLatestWebSessionTabsPublicationEpochMock,
+vi.mock('@/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
+  getLatestWebSessionTabsPublicationEpoch: getLatestWebSessionTabsPublicationEpochMock
+}))
+vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
@@ -48,6 +62,7 @@ import {
   closeTerminalTabsToRight
 } from './terminal-tab-actions'
 import { createNewTerminalTab } from './terminal-tab-create'
+import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
 describe('createNewTerminalTab', () => {
   beforeEach(() => {
@@ -62,7 +77,7 @@ describe('createNewTerminalTab', () => {
     const setTabBarOrder = vi.fn()
     getStateMock
       .mockReturnValueOnce({
-        settings: { activeRuntimeEnvironmentId: null },
+        ...terminalOwnerRows(null),
         createTab,
         setActiveTabType,
         setTabBarOrder
@@ -76,10 +91,33 @@ describe('createNewTerminalTab', () => {
 
     createNewTerminalTab('wt-1', 'zsh')
 
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', { id: 'tab-1' })
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps open browser tabs before the new terminal when no order is saved yet', () => {
+    createBrowserUuidMock.mockReturnValueOnce('term-new')
+    const setTabBarOrder = vi.fn()
+    getStateMock
+      .mockReturnValueOnce({
+        ...terminalOwnerRows(null),
+        createTab: vi.fn(() => ({ id: 'term-new' })),
+        setActiveTabType: vi.fn(),
+        setTabBarOrder
+      })
+      .mockReturnValueOnce({
+        tabsByWorktree: { 'wt-1': [{ id: 'term-a' }, { id: 'term-new' }] },
+        openFiles: [],
+        browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
+        tabBarOrderByWorktree: {},
+        setTabBarOrder
+      })
+
+    createNewTerminalTab('wt-1')
+
+    expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['term-a', 'browser-1', 'term-new'])
   })
 
   it('delegates terminal creation to the host runtime in paired web clients', () => {
@@ -87,7 +125,7 @@ describe('createNewTerminalTab', () => {
     const setActiveTabType = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       createTab,
       setActiveTabType
     })
@@ -97,7 +135,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
-      command: 'pwsh',
+      shell: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -121,7 +159,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
-      command: 'pwsh',
+      shell: 'pwsh',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -133,7 +171,7 @@ describe('createNewTerminalTab', () => {
     const setTabBarOrder = vi.fn()
     getStateMock
       .mockReturnValueOnce({
-        settings: { activeRuntimeEnvironmentId: null },
+        ...terminalOwnerRows(null),
         createTab,
         setActiveTabType,
         setTabBarOrder
@@ -148,16 +186,17 @@ describe('createNewTerminalTab', () => {
     createNewTerminalTab('wt-1', undefined, { startupCwd: '/repo/packages/app' })
 
     expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      id: 'tab-1',
       startupCwd: '/repo/packages/app'
     })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
 
   it('delegates requested startup cwd to host runtime terminals', () => {
     const createTab = vi.fn(() => ({ id: 'tab-1' }))
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       createTab,
       setActiveTabType: vi.fn()
     })
@@ -239,7 +278,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
       },
@@ -268,7 +307,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
       },
@@ -292,7 +331,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
       },
@@ -320,7 +359,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
       },
@@ -371,7 +410,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
       },
@@ -396,7 +435,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
       },
@@ -417,7 +456,7 @@ describe('closeTerminalTab', () => {
     const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: null },
+      ...terminalOwnerRows(null),
       tabsByWorktree: {},
       unifiedTabsByWorktree: {
         'wt-1': [
@@ -459,7 +498,7 @@ describe('closeTerminalTab', () => {
     const closeUnifiedTab = vi.fn()
     const setActiveTab = vi.fn()
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: null },
+      ...terminalOwnerRows(null),
       tabsByWorktree: {},
       unifiedTabsByWorktree: {
         'wt-1': [
@@ -522,7 +561,7 @@ describe('closeTerminalTab', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue(null)
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'plain-uuid-tab' }, { id: 'local-tab-2' }]
       },
@@ -553,6 +592,7 @@ describe('closeTerminalTab', () => {
     const { confirmClosePinnedTab, ...rest } = overrides
     return {
       settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab },
+      ...terminalOwnerRows(null),
       tabsByWorktree: {},
       unifiedTabsByWorktree: {
         'wt-1': [
@@ -716,7 +756,7 @@ describe('closeTerminalTab', () => {
   it('threads the PTY-exit reason through to closeTab', () => {
     const closeTab = vi.fn()
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: null },
+      ...terminalOwnerRows(null),
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
       },
@@ -739,7 +779,7 @@ describe('closeTerminalTab', () => {
   it('threads parked-exit history suppression through to closeTab', () => {
     const closeTab = vi.fn()
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: null },
+      ...terminalOwnerRows(null),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }] },
       unifiedTabsByWorktree: {},
       activeWorktreeId: 'wt-1',
@@ -758,7 +798,7 @@ describe('closeTerminalTab', () => {
   it('keeps the plain user-close call shape when no close options are given', () => {
     const closeTab = vi.fn()
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: null },
+      ...terminalOwnerRows(null),
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
       },
@@ -788,7 +828,7 @@ describe('closeOtherTerminalTabs', () => {
     const closeTab = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'keep' }, { id: 'close-a' }, { id: 'close-b' }]
       },
@@ -829,7 +869,7 @@ describe('closeTerminalTabsToRight', () => {
     const closeFile = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      ...terminalOwnerRows('web-runtime'),
       tabsByWorktree: {
         'wt-1': [{ id: 'term-a' }, { id: 'term-b' }, { id: 'term-c' }]
       },

@@ -11,18 +11,19 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
-import { defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
+import { defineStreamingMethod } from '../core'
 
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
 export function createBrowserNetworkTunnelMethods(
   memoryBudgets: BrowserNetworkTunnelOutboundMemoryBudgetRegistry = outboundMemoryBudgets,
   resolveExecutionRoute: BrowserNetworkExecutionRouteResolver = resolveBrowserNetworkExecutionRoute
-): RpcAnyMethod[] {
+) {
   return [
     defineStreamingMethod({
       name: 'network.browserTunnel',
+      permission: 'host-admin',
       params: BrowserNetworkTunnelAttachParams,
       handler: async (
         params,

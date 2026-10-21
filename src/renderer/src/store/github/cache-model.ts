@@ -18,6 +18,7 @@ export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
 export type CacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  fetchedHeadOid?: string | null
   headSha?: string
   sources?: WorkItemsCacheSources
   error?: WorkItemsCacheError
@@ -61,4 +62,5 @@ export type ProjectRowContentPatch = {
 
 export type GitHubPatchWorkItemOptions = {
   sourceContext?: TaskSourceContext | null
+  ownerRepo?: GitHubOwnerRepo | null
 }

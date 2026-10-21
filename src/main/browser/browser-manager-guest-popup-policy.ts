@@ -1,154 +1,62 @@
 import { shell } from 'electron'
-import { randomUUID } from 'node:crypto'
-import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
+import { normalizeExternalBrowserUrl, redactKagiSessionToken } from '../../shared/browser-url'
+import { trackBrowserGuestInputGesture } from './browser-guest-input-gesture'
 import {
-  normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl,
-  redactKagiSessionToken
-} from '../../shared/browser-url'
-import {
-  BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
-  buildBrowserClickedLinkRoutingScript,
-  buildBrowserIframeClickedLinkRoutingScript
-} from './browser-clicked-link-routing'
-import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
+  isNewBrowserTabPopupIntent,
+  isBrowserTabPopupRequest,
+  normalizeBrowserPopupUrl
+} from './browser-popup-new-tab-intent'
 import { SAFE_POPUP_WINDOW_OPTIONS, safeOrigin } from './browser-manager-types'
-import type { PopupChildWindowOptions } from './popup-origin-bar-window'
+import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
 import { BrowserManagerNavigation } from './browser-manager-navigation'
+import {
+  allowNativeBrowserPopup,
+  discardBrowserPopupContents,
+  isNativeBrowserPopupRequest
+} from './browser-popup-native-window'
+import { isBrowserRouteGuestPopup } from './browser-route-guest-popup-ownership'
+import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
-  protected installGuestPopupPolicy(
-    guest: Electron.WebContents,
-    clickedLinkFrameName: string | null
-  ): () => void {
-    let clickedLinkRoutingActive = Boolean(clickedLinkFrameName)
-    const installClickedLinkRouting = (): void => {
-      if (!clickedLinkRoutingActive || !clickedLinkFrameName || guest.isDestroyed()) {
-        return
-      }
-      // Why: an isolated-world listener labels real anchor clicks without exposing the frame name to page scripts.
-      void guest
-        .executeJavaScriptInIsolatedWorld(
-          BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
-          [
-            {
-              // Why: mobile emulation spoofs the UA as iOS, so use the real host platform from main for modifier routing.
-              code: buildBrowserClickedLinkRoutingScript(
-                clickedLinkFrameName,
-                process.platform === 'darwin'
-              )
-            }
-          ],
-          false
-        )
-        .catch(() => {})
-    }
-    if (clickedLinkFrameName) {
-      guest.on('dom-ready', installClickedLinkRouting)
-    }
-    const pendingIframeRoutingInstalls = new Map<Electron.WebFrameMain, () => void>()
-    const iframeFrameNameByFrame = new Map<Electron.WebFrameMain, string>()
-    const iframeFrameByFrameName = new Map<string, Electron.WebFrameMain>()
-    const clearIframeFrameName = (frame: Electron.WebFrameMain): void => {
-      const name = iframeFrameNameByFrame.get(frame)
-      if (!name) {
-        return
-      }
-      iframeFrameNameByFrame.delete(frame)
-      iframeFrameByFrameName.delete(name)
-    }
-    const installIframeClickedLinkRouting = (frame: Electron.WebFrameMain): void => {
-      clearIframeFrameName(frame)
-      if (!clickedLinkRoutingActive || frame.isDestroyed()) {
-        return
-      }
-      const name = `__orca_clicked_link_iframe_foreground_${randomUUID()}`
-      iframeFrameNameByFrame.set(frame, name)
-      iframeFrameByFrameName.set(name, frame)
-      // Why: child-frame tokens live in the page world, so consume after one trusted click and replace before the next.
-      void frame
-        .executeJavaScript(
-          buildBrowserIframeClickedLinkRoutingScript(name, process.platform === 'darwin'),
-          false
-        )
-        .catch(() => {
-          if (iframeFrameNameByFrame.get(frame) === name) {
-            clearIframeFrameName(frame)
-          }
-        })
-    }
-    const handleFrameCreated = (
-      _event: Electron.Event,
-      { frame }: Electron.FrameCreatedDetails
-    ): void => {
-      if (!clickedLinkFrameName || !frame || frame.parent === null) {
-        return
-      }
-      for (const knownFrame of iframeFrameNameByFrame.keys()) {
-        if (knownFrame.isDestroyed()) {
-          clearIframeFrameName(knownFrame)
-        }
-      }
-      const installAfterDomReady = (): void => {
-        pendingIframeRoutingInstalls.delete(frame)
-        installIframeClickedLinkRouting(frame)
-      }
-      pendingIframeRoutingInstalls.set(frame, installAfterDomReady)
-      frame.once('dom-ready', installAfterDomReady)
-    }
-    if (clickedLinkFrameName) {
-      guest.on('frame-created', handleFrameCreated)
-    }
+  protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
+    // Why: a fresh input marks a click, which bypasses the page-initiated tab budget.
+    const gesture = trackBrowserGuestInputGesture(guest)
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Why: popup descendants inherit the opener's owner context but must not replace its primary registration.
-      this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
+      if (!isBrowserRouteGuestPopup(window.webContents.id)) {
+        this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
+      }
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
+    guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
+      // Why: as in Chrome, every open spends the click, so a popup's click cannot fund a later tab.
+      const clicked = gesture.consume()
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
       const browserTabId = ownerContext?.browserTabId ?? null
-      const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
-      const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
-      const iframeFrame = frameName ? iframeFrameByFrameName.get(frameName) : undefined
-      let isClickedLink = Boolean(
-        expectedClickedLinkFrameName && frameName === expectedClickedLinkFrameName
-      )
-      if (!isClickedLink && iframeFrame) {
-        isClickedLink = true
-        clearIframeFrameName(iframeFrame)
-        queueMicrotask(() => installIframeClickedLinkRouting(iframeFrame))
-      }
-
-      if (isClickedLink) {
-        if (browserTabId && browserUrl && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
-          this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(browserUrl),
-            action: 'opened-in-orca'
-          })
-        }
-        // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
-        return { action: 'deny' }
-      }
-
-      // Why: an unnamed, featureless window.open() is Chromium's own new-tab shape, so an Orca tab is
-      // the honest presentation; a floating origin-bar window is not. Opener-dependent shapes are
-      // excluded by isNewBrowserTabPopupIntent and still get a real child window below.
+      // Why: one rule for every link and window.open; opener-dependent shapes are excluded by
+      // isNewBrowserTabPopupIntent and still get a real child window below.
       if (
         ownerContext &&
         externalUrl &&
-        isNewBrowserTabPopupIntent({ frameName, disposition, features })
+        isNewBrowserTabPopupIntent({ url, frameName, disposition, postBody })
       ) {
         // Why: one activation lets a page loop window.open, and each routed tab persists into
-        // workspace session state, so it survives the quit that used to clear popup windows.
-        if (!this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
+        // workspace session state, so only opens beyond the observed clicks draw on the budget.
+        if (!clicked && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
           this.forwardOrQueuePopupEvent(guest.id, {
             origin: safeOrigin(externalUrl),
             action: 'blocked'
           })
           return { action: 'deny' }
         }
-        if (this.openLinkInOrcaTab(ownerContext.browserTabId, externalUrl)) {
+        if (
+          this.openLinkInOrcaTab(
+            ownerContext.browserTabId,
+            externalUrl,
+            disposition !== 'background-tab'
+          )
+        ) {
           this.forwardOrQueuePopupEvent(guest.id, {
             origin: safeOrigin(externalUrl),
             action: 'opened-in-orca'
@@ -159,24 +67,55 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       }
 
       // Why: file URLs are fine for in-pane previews, but must not spawn native child windows targeting local paths.
-      const canOpenAsChild = Boolean(externalUrl || browserUrl === ORCA_BROWSER_BLANK_URL)
+      const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
       if (browserTabId && canOpenAsChild) {
+        // Why: the OAuth rule keeps a tab-shaped GET out of tabs only to save its opener. A plain link
+        // has none and a Cmd/Ctrl+Shift-click hands over no page at all, so both are ordinary tabs.
+        const tabUrl =
+          externalUrl && isBrowserTabPopupRequest({ frameName, disposition, postBody })
+            ? externalUrl
+            : null
+        const openAsTabWithoutOpener = (
+          options: PopupChildWindowOptions
+        ): Electron.WebContents | null =>
+          tabUrl && !(options.nativeWindow?.webContents ?? options.webContents)?.opener
+            ? this.openPopupAsBrowserTab(guest, tabUrl, options, {
+                clicked,
+                activate: disposition !== 'background-tab'
+              })
+            : null
+        if (isNativeBrowserPopupRequest({ disposition, features, frameName })) {
+          return allowNativeBrowserPopup({
+            opener: guest,
+            options: SAFE_POPUP_WINDOW_OPTIONS,
+            background: disposition === 'background-tab',
+            canPresent: () => Boolean(this.resolvePopupOwnerContext(guest.id)),
+            onCreated: (options) =>
+              openAsTabWithoutOpener(options) ??
+              this.createPopupChildWindowWithOriginBar(guest, url, options)
+          })
+        }
         // Why: OAuth may request size/position, but content must not create deceptive or inescapable native chrome.
         return {
           action: 'allow',
           overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS,
           // Why: default child windows lack an address bar; host in an Orca origin-bar window so the destination is verifiable.
           createWindow: (options: PopupChildWindowOptions) =>
-            this.createPopupChildWindowWithOriginBar(guest, url, options)
+            openAsTabWithoutOpener(options) ??
+            this.createPopupChildWindowWithOriginBar(guest, url, {
+              ...options,
+              // Link-created contents have no inherited session until we bind the opener's jar.
+              webPreferences: { ...options.webPreferences, session: guest.session }
+            })
         }
-      } else if (externalUrl) {
+      } else if (externalUrl && !postBody) {
         // Why: Kagi target=_blank popup URLs still contain the bearer token; redact before handing to the OS browser.
         void shell.openExternal(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
           action: 'opened-external'
         })
-      } else {
+      } else if (!this.requestExternalAppLaunch(guest, url, () => referrer.url || null)) {
         // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(url),
@@ -187,24 +126,52 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     })
 
     return () => {
-      clickedLinkRoutingActive = false
+      gesture.dispose()
       try {
         guest.off('did-create-window', handleDidCreateWindow)
-        if (clickedLinkFrameName) {
-          guest.off('dom-ready', installClickedLinkRouting)
-          guest.off('frame-created', handleFrameCreated)
-          for (const [frame, install] of pendingIframeRoutingInstalls) {
-            if (!frame.isDestroyed()) {
-              frame.off('dom-ready', install)
-            }
-          }
-          pendingIframeRoutingInstalls.clear()
-          iframeFrameNameByFrame.clear()
-          iframeFrameByFrameName.clear()
-        }
       } catch {
         // guest may already be destroyed
       }
     }
+  }
+
+  /** Every route from a page into another app ends here, so they all share one prompt. */
+  requestExternalAppLaunch(
+    guest: Electron.WebContents,
+    rawUrl: string | undefined,
+    requestingUrl: () => string | null
+  ): boolean {
+    // Why: the top page's URL would credit an embedded frame's request to the site the user trusts.
+    return requestBrowserExternalAppLaunch({
+      requester: guest,
+      target: this.resolvePagePromptTarget(guest),
+      rawUrl,
+      requestingUrl
+    })
+  }
+
+  /** The tab loads the URL itself, so Chromium's page ends before its first request. */
+  private openPopupAsBrowserTab(
+    opener: Electron.WebContents,
+    url: string,
+    options: PopupChildWindowOptions,
+    tab: { clicked: boolean; activate: boolean }
+  ): Electron.WebContents {
+    const owner = this.resolvePopupOwnerContext(opener.id)
+    // Same budget as any routed tab: opens beyond the observed clicks draw on it.
+    const opened =
+      owner !== null &&
+      (tab.clicked || this.tryConsumePageInitiatedTab(owner.rootGuestWebContentsId)) &&
+      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate)
+    this.forwardOrQueuePopupEvent(opener.id, {
+      origin: safeOrigin(url),
+      action: opened ? 'opened-in-orca' : 'blocked'
+    })
+    if (options.webContents && !options.nativeWindow) {
+      // Why: discarding directly avoids flashing an origin-bar window that would close at once.
+      discardBrowserPopupContents(options.webContents)
+      return options.webContents
+    }
+    return openPopupWithOriginBar(options, url, () => false).contentWebContents
   }
 }

@@ -50,7 +50,9 @@ function createHarness() {
       },
       getState: () => state
     },
-    persist: (payload) => persisted.push(payload)
+    persist: (payload) => {
+      persisted.push(payload)
+    }
   })
   return {
     dispose,
@@ -90,6 +92,34 @@ afterEach(() => {
 })
 
 describe('session write subscriber allocation', () => {
+  it.each(['tabsByWorktree', 'unifiedTabsByWorktree'] as const)(
+    'remembers an equivalent %s source before unrelated writes',
+    (field) => {
+      const harness = createHarness()
+      try {
+        harness.write(() => ({ [field]: { 'wt-1': [] } }))
+        vi.advanceTimersByTime(500)
+        harness.persisted.length = 0
+
+        harness.write(() => ({ [field]: { 'wt-1': [] } }))
+        const calls = countFilterCalls(() => {
+          for (let write = 0; write < 200; write += 1) {
+            harness.write(() => ({ runtimePaneTitlesByTabId: {} }))
+          }
+        })
+        expect(calls).toBe(0)
+        vi.advanceTimersByTime(500)
+        expect(harness.persisted).toHaveLength(0)
+
+        harness.write(() => ({ activeTabId: 'next-tab' }))
+        vi.advanceTimersByTime(500)
+        expect(harness.persisted).toHaveLength(1)
+      } finally {
+        harness.dispose()
+      }
+    }
+  )
+
   it('allocates nothing for store writes that touch no session field', () => {
     const harness = createHarness()
     try {
@@ -137,7 +167,7 @@ describe('session write subscriber allocation', () => {
     let state = makeSessionState()
     const listeners: ((next: AppState) => void)[] = []
     const persisted: unknown[] = []
-    let gateOpen = false
+    let refuse = true
     const dispose = createSessionWriteSubscriber({
       store: {
         subscribe: (listener) => {
@@ -146,9 +176,12 @@ describe('session write subscriber allocation', () => {
         },
         getState: () => state
       },
-      persist: (payload) => persisted.push(payload),
-      shouldSchedulePersist: () => gateOpen,
-      subscribeToPersistGateOpen: () => () => {}
+      persist: (payload) => {
+        if (refuse) {
+          throw new Error('write refused')
+        }
+        persisted.push(payload)
+      }
     })
     const write = (patch: Partial<AppState>): void => {
       state = { ...state, ...patch } as AppState
@@ -157,14 +190,14 @@ describe('session write subscriber allocation', () => {
       }
     }
     try {
-      // A real session change lands while the gate is closed, so the write is owed but deferred.
+      // A real session change whose write is refused, so the write is owed but deferred.
       write({ activeTabId: 'tab-1' })
       vi.advanceTimersByTime(500)
       expect(persisted).toHaveLength(0)
 
-      // An unrelated write with the gate open must re-arm it even though nothing session-relevant
-      // moved — the identity-scan fast path must not swallow this wake-up.
-      gateOpen = true
+      // An unrelated write must re-arm it even though nothing session-relevant moved — the
+      // identity-scan fast path must not swallow this wake-up.
+      refuse = false
       write({ agentStatusByPaneKey: { a: {} } as never })
       vi.advanceTimersByTime(500)
       expect(persisted).toHaveLength(1)
@@ -182,6 +215,7 @@ describe('session write subscriber allocation', () => {
         if (typeof property === 'string') {
           read.add(property)
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
     })

@@ -22,7 +22,6 @@ export function applyBrowserSessionTabSelection(args: {
   tabId: string
   targetGroupId?: string
   focusesHost: boolean
-  publicationEpoch: string
 }): BrowserSessionTabSelectionResult {
   const { snapshot, tabId, targetGroupId, focusesHost } = args
   const groups = snapshot.tabGroups ?? []
@@ -56,7 +55,6 @@ export function applyBrowserSessionTabSelection(args: {
     placedInTargetGroup,
     snapshot: {
       ...snapshot,
-      publicationEpoch: args.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion + 1,
       ...(placedInTargetGroup && focusesHost ? { activeGroupId: targetGroupId } : {}),
       ...(focusesHost

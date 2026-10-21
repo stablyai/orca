@@ -4,6 +4,7 @@ import {
   assertAutomationDestination,
   assertExecutionTargetMatchesDestination
 } from '../../shared/automation-owner-precondition'
+import { RuntimeClientError } from '../runtime/types'
 import { AUTOMATION_HANDLERS } from './automations'
 
 type SshRegistration = { id: string; label: string; generation?: number }
@@ -24,6 +25,8 @@ function authority(options: {
   generationAtWrite?: number
   repoConnectionId?: string | null
   targetSummaryError?: Error
+  /** A host predating `ssh.listTargetSummaries`, which answers only `ssh.listTargets`. */
+  legacyHost?: boolean
 }): { call: ReturnType<typeof vi.fn>; writes: { method: string; params: unknown }[] } {
   const writes: { method: string; params: unknown }[] = []
   const connectionId = options.repoConnectionId ?? null
@@ -37,7 +40,13 @@ function authority(options: {
     if (method === 'repo.show') {
       return ok({ repo: { id: 'r1', connectionId } })
     }
+    if (method === 'ssh.listTargets' && options.legacyHost) {
+      return ok({ targets: options.registered })
+    }
     if (method === 'ssh.listTargetSummaries') {
+      if (options.legacyHost) {
+        throw new RuntimeClientError('method_not_found', 'Unknown method: ssh.listTargetSummaries')
+      }
       if (options.targetSummaryError) {
         throw options.targetSummaryError
       }
@@ -172,6 +181,28 @@ describe('CLI automation writes fence the host they land on', () => {
       json: true
     })
 
+    expect(writes[0]?.params).toMatchObject({
+      destination: { selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 7 } }
+    })
+  })
+
+  it('fences a create on an older host that only answers the legacy SSH listing', async () => {
+    const { call, writes } = authority({
+      registered: [{ id: 'box-1', label: 'box 1', generation: 7 }],
+      generationAtWrite: 7,
+      repoConnectionId: 'box-1',
+      legacyHost: true
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await AUTOMATION_HANDLERS['automations create']!({
+      client: { call } as never,
+      cwd: '/tmp',
+      flags: new Map([...CREATE_FLAGS, ['repo', 'repo-on-box-1']]),
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('ssh.listTargets')
     expect(writes[0]?.params).toMatchObject({
       destination: { selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 7 } }
     })

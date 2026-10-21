@@ -1,4 +1,4 @@
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 /** Checks both PTY projections without allocating a dedupe set on each store notification. */
 export function hasRemoteRuntimePtyForTab(

@@ -49,7 +49,14 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
   // Powers GitLabItemDialog's tabs.
   ipcMain.handle(
     'gitlab:workItemDetails',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number; type: 'issue' | 'mr' }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        type: 'issue' | 'mr'
+        includeReviewDetails?: boolean
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return getWorkItemDetails(
         repo.path,
@@ -58,7 +65,8 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
         repo.issueSourcePreference,
         repoConnectionId(repo),
         undefined,
-        ...localGitOptionArgs(store, repo)
+        localGitOptionArgs(store, repo)[0] ?? {},
+        { includeReviewDetails: args.includeReviewDetails }
       )
     }
   )

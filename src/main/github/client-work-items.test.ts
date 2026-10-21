@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GithubApiRepositoryModule from './github-api-repository'
 
+// Keep legacy REST request/failure coverage; API-boundary suites exercise the GraphQL path.
+vi.mock('./client/list/work-item-search-page', () => ({ usesGraphqlWorkItemSearch: () => false }))
+
 const {
   execFileAsyncMock,
   ghExecFileAsyncMock,
@@ -106,13 +109,12 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   }
 })
 
-import {
-  countWorkItems,
-  listWorkItems,
-  _resetMergeQueueCacheForTests,
-  _resetOwnerRepoCache
-} from './client'
+import { countWorkItems } from './client/list/count-work-items'
+import { listWorkItems } from './client/list/list-work-items'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github/work-items-query-bounds'
+import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
@@ -153,6 +155,7 @@ describe('listWorkItems', () => {
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
     )
     _resetOwnerRepoCache()
+    _resetRemoteNameListingCache()
     _resetMergeQueueCacheForTests()
   })
 
@@ -377,6 +380,31 @@ describe('listWorkItems', () => {
     )
     expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
       true
+    )
+  })
+
+  it('skips upstream PR source probing when the clone only has origin', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue({ owner: 'fork', repo: 'orca' })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\n' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await expect(listWorkItems('/origin-only-repo', 10, 'is:pr')).resolves.toMatchObject({
+      items: [],
+      sources: {
+        issues: null,
+        prs: { owner: 'fork', repo: 'orca' },
+        originCandidate: { owner: 'fork', repo: 'orca' },
+        upstreamCandidate: null
+      }
+    })
+
+    expect(getOwnerRepoForRemoteMock.mock.calls.map(([, remote]) => remote)).not.toContain(
+      'upstream'
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['remote'],
+      expect.objectContaining({ cwd: '/origin-only-repo' })
     )
   })
 

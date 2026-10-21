@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 /**
  * Drop a removed row from the local persisted cleanup snapshots.
@@ -16,7 +17,7 @@ export async function recordRemovedWorktreeSnapshotPrune(args: {
       // Why: an unknown batch id degrades to an immediate one-off prune. The id
       // must stay bounded — main rejects batch ids over 128 chars, so it cannot
       // embed the unbounded worktreeId.
-      batchId: args.snapshotPruneBatchId ?? `single-removal:${crypto.randomUUID()}`,
+      batchId: args.snapshotPruneBatchId ?? `single-removal:${createBrowserUuid()}`,
       worktreeId: args.worktreeId,
       ...(args.hostId ? { executionHostId: args.hostId } : {})
     })

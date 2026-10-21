@@ -96,8 +96,20 @@ export class HermesHookService {
       }
     }
 
+    const next = updateConfigContent(parsed.content, enablePlugin)
+    if (next.content === null) {
+      return {
+        agent: 'hermes',
+        state: 'error',
+        configPath,
+        managedHooksPresent: getPluginFilesState().managed,
+        detail: `Could not update Hermes config.yaml: ${next.detail ?? 'unknown error'}`
+      }
+    }
     writePluginFiles()
-    writeConfigFile(configPath, enablePlugin(parsed.config))
+    if (next.content !== parsed.content) {
+      writeConfigFile(configPath, next.content)
+    }
     return this.getStatus()
   }
 
@@ -150,11 +162,23 @@ export class HermesHookService {
         detail: `Could not parse Hermes config.yaml: ${parsed.detail}`
       }
     }
+    const next = updateConfigContent(parsed.content, disablePlugin)
+    if (next.content === null) {
+      return {
+        agent: 'hermes',
+        state: 'error',
+        configPath,
+        managedHooksPresent: getPluginFilesState().managed,
+        detail: `Could not update Hermes config.yaml: ${next.detail ?? 'unknown error'}`
+      }
+    }
+    if (next.content !== parsed.content) {
+      writeConfigFile(configPath, next.content)
+    }
     const pluginDir = getPluginDir()
     if (getPluginFilesState(pluginDir).managed) {
       rmSync(pluginDir, { recursive: true, force: true })
     }
-    writeConfigFile(configPath, disablePlugin(parsed.config))
     return this.getStatus()
   }
 }

@@ -192,6 +192,9 @@ class AudioEngine (context: Context) {
 
     @SuppressLint("NewApi")
     private fun requestAudioFocus() {
+        // Every resume re-requests; without abandoning first the previous listener stays on the focus stack.
+        abandonAudioFocus()
+
         val listener = AudioManager.OnAudioFocusChangeListener { focusChange ->
             when (focusChange) {
                 AudioManager.AUDIOFOCUS_LOSS -> {
@@ -201,6 +204,8 @@ class AudioEngine (context: Context) {
                     } else {
                         stopRecording()
                         stopPlayback()
+                        // Pre-Q stops for good rather than pausing, so the focus goes back too.
+                        abandonAudioFocus()
                     }
                     onAudioInterruptionCallback?.let { it("blocked") }
                 }
@@ -235,6 +240,18 @@ class AudioEngine (context: Context) {
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
             throw RuntimeException("Audio focus request failed")
         }
+    }
+
+    @SuppressLint("NewApi")
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioFocusChangeListener?.let { audioManager.abandonAudioFocus(it) }
+        }
+        audioFocusChangeListener = null
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -300,7 +317,11 @@ class AudioEngine (context: Context) {
         }
     }
 
-    private fun stopRecording() {
+    private fun stopRecording(clearPauseResume: Boolean = true) {
+        // Only the activity-pause stop keeps the resume flag; every other stop ends the recording for good.
+        if (clearPauseResume) {
+            isRecordingBeforePause = false
+        }
         if (!isRecording) return
         isRecording = false
         if (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -311,13 +332,12 @@ class AudioEngine (context: Context) {
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    fun toggleRecording(value: Boolean): Boolean {
-        if (value == isRecording) return isRecording
-
+    fun toggleRecording(value: Boolean, clearPauseResume: Boolean = true): Boolean {
         if (value) {
-            startRecording()
+            if (!isRecording) startRecording()
         } else {
-            stopRecording()
+            // Runs even when already stopped, so a stop issued while paused still clears the resume flag.
+            stopRecording(clearPauseResume)
         }
 
         isRecording = value
@@ -378,14 +398,21 @@ class AudioEngine (context: Context) {
     @RequiresApi(Build.VERSION_CODES.Q)
     fun pauseRecordingAndPlayer() {
         isRecordingBeforePause = isRecording
-        isRecording = toggleRecording(false)
+        isRecording = toggleRecording(false, clearPauseResume = false)
         audioTrack.pause()
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun resumeRecordingAndPlayer() {
         requestAudioFocus()
-        isRecording = toggleRecording(isRecordingBeforePause)
+        // Consume the flag: a second resume without an intervening pause must not reopen the microphone.
+        val shouldResumeRecording = isRecordingBeforePause
+        isRecordingBeforePause = false
+        // Only ever reopens: a false flag means the pause closed the mic, so no stop is owed, and a
+        // recording JS started while paused (a start straddling the permission activity) stays live.
+        if (shouldResumeRecording) {
+            isRecording = toggleRecording(true)
+        }
         audioTrack.play()
     }
 
@@ -430,14 +457,7 @@ class AudioEngine (context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let { request ->
-                audioManager.abandonAudioFocusRequest(request)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.abandonAudioFocus(audioFocusChangeListener)
-        }
+        abandonAudioFocus()
         executorServiceMicrophone.shutdownNow()
         executorServicePlayback.shutdownNow()
     }

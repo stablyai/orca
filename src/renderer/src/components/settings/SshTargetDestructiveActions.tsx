@@ -1,51 +1,53 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
-import {
-  isSshTargetConnecting,
-  shouldClearPendingSshReset,
-  type SshTargetBusyAction
-} from './ssh-target-action-state'
+import type { SshTargetBusyAction } from './ssh-target-action-state'
 import { translate } from '@/i18n/i18n'
 
 type PendingTargetAction = { id: string; label: string }
 
+export type SshBulkRemoveRequest = {
+  targets: PendingTargetAction[]
+  /** Connected hosts lose their remote terminals; the confirm says how many. */
+  connectedCount: number
+}
+
+export type SshBulkRemoveResult = {
+  removed: PendingTargetAction[]
+  failed: { target: PendingTargetAction; error: unknown }[]
+}
+
 type SshTargetDestructiveActionsRenderProps = {
   busyActionForTarget: (targetId: string) => SshTargetBusyAction | undefined
   requestRemove: (target: PendingTargetAction) => void
-  requestResetRelay: (target: PendingTargetAction) => void
-  requestTerminateSessions: (target: PendingTargetAction) => void
+  requestBulkRemove: (request: SshBulkRemoveRequest) => void
 }
 
 type SshTargetDestructiveActionsProps = {
-  connectionStates: Map<string, SshConnectionState>
   onRemove: (targetId: string) => Promise<void>
-  onResetRelay: (targetId: string) => Promise<void>
-  onTerminateSessions: (targetId: string) => Promise<void>
+  /** One removal inside a bulk run; throws on failure and leaves reporting to the summary. */
+  removeQuietly?: (targetId: string) => Promise<void>
+  onBulkRemoveFinished?: (result: SshBulkRemoveResult) => void | Promise<void>
   children: (actions: SshTargetDestructiveActionsRenderProps) => ReactNode
 }
 
 export function SshTargetDestructiveActions({
-  connectionStates,
   onRemove,
-  onResetRelay,
-  onTerminateSessions,
+  removeQuietly,
+  onBulkRemoveFinished,
   children
 }: SshTargetDestructiveActionsProps): React.JSX.Element {
   const [pendingRemove, setPendingRemove] = useState<PendingTargetAction | null>(null)
-  const [pendingReset, setPendingReset] = useState<PendingTargetAction | null>(null)
-  const [pendingTerminate, setPendingTerminate] = useState<PendingTargetAction | null>(null)
+  const [pendingBulk, setPendingBulk] = useState<SshBulkRemoveRequest | null>(null)
+  const [bulkProgress, setBulkProgress] = useState<number | null>(null)
   const mountedRef = useMountedRef()
-  // Why: confirmed SSH actions keep running after the dialog click, so this
-  // state blocks overlapping relay/session teardown for the same target.
+  // Why: a confirmed removal keeps running after the dialog click, so this
+  // state blocks an overlapping removal of the same target.
   const targetActionsInFlightRef = useRef(new Map<string, SshTargetBusyAction>())
   const [targetActionsInFlight, setTargetActionsInFlight] = useState<
     Map<string, SshTargetBusyAction>
   >(new Map())
-  const connectionStatesRef = useRef(connectionStates)
-  connectionStatesRef.current = connectionStates
 
   const beginTargetAction = useCallback(
     (targetId: string, action: SshTargetBusyAction): boolean => {
@@ -95,44 +97,39 @@ export function SshTargetDestructiveActions({
     }
   }
 
+  const runBulkRemove = async (): Promise<void> => {
+    if (!pendingBulk || bulkProgress !== null) {
+      return
+    }
+    // Why sequential: each removal tears down the host's PTYs and rewrites the same store file.
+    const claimed = pendingBulk.targets.filter((target) => beginTargetAction(target.id, 'remove'))
+    const result: SshBulkRemoveResult = { removed: [], failed: [] }
+    const remove = removeQuietly ?? onRemove
+    try {
+      for (const [index, target] of claimed.entries()) {
+        if (mountedRef.current) {
+          setBulkProgress(index + 1)
+        }
+        try {
+          await remove(target.id)
+          result.removed.push(target)
+        } catch (err) {
+          result.failed.push({ target, error: err })
+        } finally {
+          finishTargetAction(target.id)
+        }
+      }
+    } finally {
+      if (mountedRef.current) {
+        setBulkProgress(null)
+        setPendingBulk(null)
+      }
+    }
+    await onBulkRemoveFinished?.(result)
+  }
+
   const pendingRemoveIsBusy =
     pendingRemove !== null && targetActionsInFlight.get(pendingRemove.id) === 'remove'
-  const pendingResetIsBusy =
-    pendingReset !== null && targetActionsInFlight.get(pendingReset.id) === 'reset'
-  const pendingResetStatus =
-    pendingReset !== null
-      ? (connectionStates.get(pendingReset.id)?.status ?? 'disconnected')
-      : 'disconnected'
-  const pendingResetBlockedByConnection =
-    pendingReset !== null && isSshTargetConnecting(pendingResetStatus)
-  const pendingTerminateIsBusy =
-    pendingTerminate !== null && targetActionsInFlight.get(pendingTerminate.id) === 'terminate'
-  const shouldClearReset = shouldClearPendingSshReset({
-    pendingTargetId: pendingReset?.id ?? null,
-    pendingResetIsBusy,
-    connectionStatus: pendingResetStatus
-  })
-  if (shouldClearReset) {
-    // Why: a reconnecting target cannot safely reset its relay; clear the
-    // pending dialog before it paints stale destructive UI.
-    setPendingReset(null)
-  }
-  const dialogPendingReset = shouldClearReset ? null : pendingReset
-
-  const confirmResetRelay = async (): Promise<void> => {
-    if (!pendingReset) {
-      return
-    }
-
-    const latestStatus = connectionStatesRef.current.get(pendingReset.id)?.status ?? 'disconnected'
-    if (isSshTargetConnecting(latestStatus)) {
-      setPendingReset(null)
-      return
-    }
-
-    await runConfirmedTargetAction(pendingReset, 'reset', onResetRelay, () => setPendingReset(null))
-  }
-
   const actions: SshTargetDestructiveActionsRenderProps = {
     busyActionForTarget: (targetId) => targetActionsInFlight.get(targetId),
     requestRemove: (target) => {
@@ -140,18 +137,16 @@ export function SshTargetDestructiveActions({
         setPendingRemove(target)
       }
     },
-    requestResetRelay: (target) => {
-      const status = connectionStatesRef.current.get(target.id)?.status ?? 'disconnected'
-      if (!isSshTargetConnecting(status) && !targetActionsInFlightRef.current.has(target.id)) {
-        setPendingReset(target)
-      }
-    },
-    requestTerminateSessions: (target) => {
-      if (!targetActionsInFlightRef.current.has(target.id)) {
-        setPendingTerminate(target)
+    requestBulkRemove: (request) => {
+      const targets = request.targets.filter(
+        (target) => !targetActionsInFlightRef.current.has(target.id)
+      )
+      if (targets.length > 0 && bulkProgress === null) {
+        setPendingBulk({ ...request, targets })
       }
     }
   }
+  const bulkCount = pendingBulk?.targets.length ?? 0
 
   return (
     <>
@@ -185,57 +180,57 @@ export function SshTargetDestructiveActions({
       />
 
       <SshDestructiveActionDialog
-        open={!!dialogPendingReset && (!pendingResetBlockedByConnection || pendingResetIsBusy)}
-        title={translate(
-          'auto.components.settings.SshTargetDestructiveActions.570a7a0574',
-          'Reset Remote Relay?'
-        )}
-        description={translate(
-          'auto.components.settings.SshTargetDestructiveActions.26be00392d',
-          'This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.'
-        )}
-        targetLabel={dialogPendingReset?.label}
-        actionLabel="Reset Relay"
-        busyLabel="Resetting"
-        isBusy={pendingResetIsBusy}
-        onOpenChange={(open) => {
-          if (pendingResetIsBusy) {
-            return
-          }
-          if (!open) {
-            setPendingReset(null)
-          }
-        }}
-        onConfirm={confirmResetRelay}
-      />
-
-      <SshDestructiveActionDialog
-        open={!!pendingTerminate}
-        title={translate(
-          'auto.components.settings.SshTargetDestructiveActions.accf177a03',
-          'End Remote Terminals?'
-        )}
-        description={translate(
-          'auto.components.settings.SshTargetDestructiveActions.7e66942808',
-          'This will stop active terminal sessions on this SSH target. Reconnecting will not restore them.'
-        )}
-        targetLabel={pendingTerminate?.label}
-        actionLabel="End Terminals"
-        busyLabel="Ending"
-        isBusy={pendingTerminateIsBusy}
-        onOpenChange={(open) => {
-          if (pendingTerminateIsBusy) {
-            return
-          }
-          if (!open) {
-            setPendingTerminate(null)
-          }
-        }}
-        onConfirm={() =>
-          runConfirmedTargetAction(pendingTerminate, 'terminate', onTerminateSessions, () =>
-            setPendingTerminate(null)
-          )
+        open={!!pendingBulk}
+        title={
+          bulkCount === 1
+            ? translate(
+                'auto.components.settings.SshTargetDestructiveActions.bulkTitleSingular',
+                'Remove {{count}} SSH host?',
+                { count: bulkCount }
+              )
+            : translate(
+                'auto.components.settings.SshTargetDestructiveActions.bulkTitlePlural',
+                'Remove {{count}} SSH hosts?',
+                { count: bulkCount }
+              )
         }
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.bulkDescription',
+          'Removed hosts disappear from host pickers in workspaces, automations and the sidebar. Your ~/.ssh/config is not changed, and later syncs won’t bring them back.'
+        )}
+        targetLabels={pendingBulk?.targets.map((target) => target.label)}
+        notice={
+          !pendingBulk || pendingBulk.connectedCount === 0
+            ? undefined
+            : pendingBulk.connectedCount === 1
+              ? translate(
+                  'auto.components.settings.SshTargetDestructiveActions.bulkConnectedSingular',
+                  '{{count}} host is connected. Its remote terminals will be closed.',
+                  { count: 1 }
+                )
+              : translate(
+                  'auto.components.settings.SshTargetDestructiveActions.bulkConnectedPlural',
+                  '{{count}} hosts are connected. Their remote terminals will be closed.',
+                  { count: pendingBulk.connectedCount }
+                )
+        }
+        actionLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.bulkAction',
+          'Remove {{count}}',
+          { count: bulkCount }
+        )}
+        busyLabel={translate(
+          'auto.components.settings.SshTargetDestructiveActions.bulkProgress',
+          'Removing {{done}} of {{count}}…',
+          { done: bulkProgress ?? 0, count: bulkCount }
+        )}
+        isBusy={bulkProgress !== null}
+        onOpenChange={(open) => {
+          if (!open && bulkProgress === null) {
+            setPendingBulk(null)
+          }
+        }}
+        onConfirm={runBulkRemove}
       />
     </>
   )

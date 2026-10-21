@@ -3,12 +3,23 @@ import { parsePaneKey, makePaneKey, isTerminalLeafId } from '../../../../shared/
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
-import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
 import { buildRetiredTerminalTabStateSweepPatch } from '../../store/slices/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
+
+export function isMirroredAgentStatusOwnedBy(
+  entry: AgentStatusEntry,
+  environmentId: string,
+  worktreeId: string
+): boolean {
+  return (
+    entry.worktreeId === worktreeId &&
+    (entry.connectionId === environmentId || entry.connectionId == null)
+  )
+}
 
 export function toMirroredPaneKey(
   surface: TerminalSurface,
@@ -57,7 +68,11 @@ export function isMirroredAgentPaneKeyForTabs(
  *  interactive question cards reach the host over its HTTP agent hook, never
  *  through PTY bytes, so they must pierce the client-authority fence. */
 export function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): boolean {
-  return entry.state === 'blocked' || entry.interactivePrompt != null
+  // Why: a row restored across a host restart is unverifiable, so it never outranks live bytes.
+  return (
+    entry.restoredUnconfirmed !== true &&
+    (entry.state === 'blocked' || entry.interactivePrompt != null)
+  )
 }
 
 /** True while this renderer's own byte-derived status owns the pane: it claimed
@@ -150,13 +165,13 @@ export function buildRemirroredClosedTabMarkerLiftPatch(
  */
 export function buildRetractedMirroredTabSweepPatch(
   state: WebSessionTabsSyncState,
-  worktreeId: string,
   nextTabsByWorktree: WebSessionTabsSyncState['tabsByWorktree'],
   agentStatusPatch: Pick<
     WebSessionTabsSyncState,
     'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
   > | null,
   removedTerminalResourceIds: readonly string[],
+  scopedPaneKeysByTabId: ReadonlyMap<string, ReadonlySet<string>>,
   batchContext?: WebSessionTabsBatchContext
 ): Partial<WebSessionTabsSyncState> | null {
   // Why: only a mirrored id the host stopped publishing is a retraction — a local or provisional
@@ -165,7 +180,7 @@ export function buildRetractedMirroredTabSweepPatch(
   if (retractedTabIds.length === 0) {
     return null
   }
-  const sweepState: RetiredTerminalTabSweepState = {
+  let sweepState: RetiredTerminalTabSweepState = {
     acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},
     activityClearedAtByPaneKey: state.activityClearedAtByPaneKey ?? {},
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? {},
@@ -179,15 +194,28 @@ export function buildRetractedMirroredTabSweepPatch(
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
     retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
     sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
-    // Why: the drop's completed-orphan rule reads "keyed under a tab this worktree no longer has",
-    // so it must see the post-removal tab list, not the one the snapshot replaced.
-    tabsByWorktree: nextTabsByWorktree
+    // Keep the sweep state consistent with the accepted host inventory.
+    tabsByWorktree: nextTabsByWorktree,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree
   }
   // Why: a retraction can be a reconnect re-key, not pane death (ssh-execution-boundary); keeping
   // cutoffs means a republished pane cannot replay activity the user cleared on this client.
-  const sweep = buildRetiredTerminalTabStateSweepPatch(sweepState, retractedTabIds, worktreeId, {
-    preserveActivityClearedState: true
-  })
+  // The host retracts exact tab ids; a worktree-wide orphan sweep could erase a sibling host.
+  // A colliding host tab id cannot authorize global tombstones or tab registry cleanup.
+  const previousAgentStatuses = sweepState.agentStatusByPaneKey
+  let sweep: Partial<RetiredTerminalTabSweepState> | null = null
+  for (const tabId of retractedTabIds) {
+    const paneKeys = scopedPaneKeysByTabId.get(tabId)
+    const patch = buildRetiredTerminalTabStateSweepPatch(sweepState, [tabId], undefined, {
+      preserveActivityClearedState: true,
+      ...(paneKeys ? { paneKeys } : {})
+    })
+    if (patch) {
+      sweep ??= {}
+      Object.assign(sweep, patch)
+      sweepState = { ...sweepState, ...patch }
+    }
+  }
   if (!sweep?.agentStatusByPaneKey || !batchContext) {
     return sweep ?? null
   }
@@ -195,7 +223,7 @@ export function buildRetractedMirroredTabSweepPatch(
   const mutableState = state as unknown as Record<string, unknown>
   mutableState.agentStatusByPaneKey = sweep.agentStatusByPaneKey
   batchContext.changedRecords.add('agentStatusByPaneKey')
-  for (const paneKey of Object.keys(sweepState.agentStatusByPaneKey)) {
+  for (const paneKey of Object.keys(previousAgentStatuses)) {
     if (!(paneKey in sweep.agentStatusByPaneKey)) {
       updateBatchAgentPaneKey(paneKey, false, batchContext)
     }

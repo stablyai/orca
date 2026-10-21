@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { WorktreeCreate } from './worktree-create-schemas'
-import { WorktreeActivate, WorktreeSet } from './worktree-schemas'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
+import { WorktreeActivate, WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 
 describe('worktree RPC schemas', () => {
   it('accepts optional display-name provenance values', () => {

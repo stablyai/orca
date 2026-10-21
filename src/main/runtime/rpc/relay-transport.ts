@@ -104,6 +104,10 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.generation = generation
   }
 
+  hasConnection(connectionId: string): boolean {
+    return this.socketsByConnectionId.has(connectionId)
+  }
+
   terminateClientConnections(clientId: string): number {
     const sockets = Array.from(this.clientIds.entries())
       .filter(([, candidate]) => candidate === clientId)

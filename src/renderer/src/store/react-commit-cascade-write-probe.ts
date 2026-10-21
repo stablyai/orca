@@ -16,22 +16,38 @@ import {
 } from '@/lib/react-commit-cascade-store-write-samples'
 import type { StateCreator } from 'zustand'
 
+/** zustand's two `setState` call shapes, as a union so a wrapper can forward them uncast. */
+export type StoreSetArgs<TState> =
+  | [
+      partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
+      replace?: false
+    ]
+  | [state: TState | ((state: TState) => TState), replace: true]
+
 export function withReactCommitCascadeWriteProbe<TState>(
   createState: StateCreator<TState, [], []>
 ): StateCreator<TState, [], []> {
   return (set, get, api) => {
-    const wrapped = ((partial: unknown, replace?: unknown): void => {
-      if (reactCommitCascadeWriteProbe.armed) {
-        try {
-          noteReactCommitCascadeStoreWrite(wrapped, partial)
-        } catch {
-          // This is the app's universal write path: a diagnostic that throws here
-          // would drop the write itself.
+    const probe = (write: typeof set): typeof set => {
+      const wrapped = (...args: StoreSetArgs<TState>): void => {
+        if (reactCommitCascadeWriteProbe.armed) {
+          try {
+            noteReactCommitCascadeStoreWrite(wrapped, args[0])
+          } catch {
+            // This is the app's universal write path: a diagnostic that throws here
+            // would drop the write itself.
+          }
+        }
+        if (args[1] === true) {
+          write(...args)
+        } else {
+          write(...args)
         }
       }
-      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
-    }) as typeof set
-    api.setState = wrapped as typeof api.setState
-    return createState(wrapped, get, api)
+      return wrapped
+    }
+    // Why separately: an outer middleware may hand slices a different `set` than api.setState.
+    api.setState = probe(api.setState)
+    return createState(probe(set), get, api)
   }
 }

@@ -19,7 +19,7 @@ import {
 
 type RefusableAutomationService = {
   runNow: (automationId: string) => Promise<AutomationRun>
-  recordRefusedRun: (automationId: string) => void
+  recordRefusedRun: (automationId: string) => void | Promise<void>
 }
 
 export async function runAutomationNowFenced(input: {
@@ -34,7 +34,7 @@ export async function runAutomationNowFenced(input: {
       error instanceof AutomationOwnerConflictError &&
       error.code === AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved
     ) {
-      input.service.recordRefusedRun(input.automationId)
+      await input.service.recordRefusedRun(input.automationId)
     }
     throw error
   }

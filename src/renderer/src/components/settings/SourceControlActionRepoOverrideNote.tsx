@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import type {
   SourceControlActionRecipeOverrideField,
   SourceControlActionRecipeOverrideSummary
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../../shared/source-control-launch-agent-selection'
 import { translate } from '@/i18n/i18n'
 
 type SourceControlActionRepoOverrideNoteProps = {

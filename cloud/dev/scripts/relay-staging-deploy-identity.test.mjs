@@ -22,12 +22,13 @@ const stagingTfvars = readFileSync(
   'utf8'
 )
 
-// The exact five staging Relay workflows the relay-owned deploy identity serves.
+// The exact six staging Relay workflows the relay-owned deploy identity serves.
 const DEPLOY_WORKFLOWS = [
   'bootstrap-relay-staging-capacity.yml',
   'deploy-relay-staging-gce-candidate.yml',
   'deploy-relay-staging.yml',
   'operate-relay-asia-admission.yml',
+  'operate-relay-staging-cell-flags.yml',
   'power-relay-staging.yml'
 ]
 
@@ -74,7 +75,7 @@ test('no Relay workflow authenticates as the shared staging deploy identity', ()
   }
 })
 
-test('the five staging Relay workflows name the relay deploy pair', () => {
+test('the six staging Relay workflows name the relay deploy pair', () => {
   for (const name of DEPLOY_WORKFLOWS) {
     const source = workflow(name)
     assert.match(source, /vars\.STAGING_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER\b/, name)
@@ -90,7 +91,7 @@ test('the Asia admission production arm keeps the production deploy pair', () =>
   assert.match(source, /vars\.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT\b/)
 })
 
-test('the provider allowlists exactly those five workflow refs', () => {
+test('the provider allowlists exactly those six workflow refs', () => {
   const files = providerWorkflowFiles()
   assert.deepEqual([...files].sort(), [...DEPLOY_WORKFLOWS].sort())
   for (const file of files) {
@@ -137,7 +138,7 @@ test('the rendered attribute condition stays inside the provider limit', () => {
     `(${workflowRefs.map((ref) => `assertion.workflow_ref == '${ref}'`).join(' || ')})`
   ].join(' && ')
   assert.ok(rendered.length < 4096, `rendered condition is ${rendered.length} characters`)
-  assert.equal(rendered.length, 791)
+  assert.equal(rendered.length, 913)
 })
 
 // Why: the census is the point. A binding added here without a workflow step behind it, or one
@@ -149,6 +150,7 @@ test('the staging deploy identity declares exactly its enumerated grants', () =>
     'google_cloud_run_v2_service_iam_member.github_staging_relay_deploy_director_developer',
     'google_iam_workload_identity_pool_provider.github_staging_relay_deploy',
     'google_project_iam_member.github_staging_relay_deploy_compute_viewer',
+    'google_project_iam_member.github_staging_relay_deploy_logging_viewer',
     'google_service_account.github_staging_relay_deploy',
     'google_service_account_iam_member.github_staging_relay_deploy_auth_runtime_user',
     'google_service_account_iam_member.github_staging_relay_deploy_workload_identity_user',
@@ -188,7 +190,7 @@ test('the staging deploy identity declares exactly its enumerated grants', () =>
   const projectRoles = declaredFamilies()
     .filter((family) => family.startsWith('google_project_iam_member.'))
     .map((family) => block('google_project_iam_member', family.split('.')[1]).match(/role\s*=\s*"([^"]+)"/)[1])
-  assert.deepEqual(projectRoles, ['roles/compute.viewer'])
+  assert.deepEqual(projectRoles, ['roles/compute.viewer', 'roles/logging.viewer'])
   assert.doesNotMatch(identity, /roles\/artifactregistry\.writer/)
   assert.doesNotMatch(identity, /"roles\/(?:owner|editor|viewer)"/)
 })
@@ -222,4 +224,15 @@ test('the deploy account email is environment-conditional', () => {
 test('the identity is exposed through its own outputs', () => {
   assert.match(outputs, /output "github_staging_relay_deploy_workload_identity_provider"/)
   assert.match(outputs, /output "github_staging_relay_deploy_service_account"/)
+})
+
+// Why: relay-deploy-workflow-argv.test.mjs proves the argv parses; this pins the identity it names.
+test('the staging director deploy runs as relay-dir with its rehome identity', () => {
+  const source = workflow('deploy-relay-staging.yml')
+  const start = source.indexOf('node dev/scripts/deploy-relay-blue-green.mjs')
+  const block = source.slice(start, source.indexOf('\n\n', start))
+  assert.match(block, /--runtime-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
+  assert.match(block, /--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
+  assert.match(source, /DIRECTOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay-dir@/)
+  assert.match(block, /--deploy-service-account "\$\{DEPLOY_SERVICE_ACCOUNT\}"/)
 })

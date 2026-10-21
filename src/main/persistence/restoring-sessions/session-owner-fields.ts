@@ -38,8 +38,7 @@ export function createMinimalPersistedTerminalTab(args: {
     color: null,
     sortOrder: args.existingTabCount,
     createdAt: Date.now(),
-    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
-    pendingActivationSpawn: true
+    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {})
   }
 }
 

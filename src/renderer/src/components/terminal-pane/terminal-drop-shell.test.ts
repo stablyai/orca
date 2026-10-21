@@ -46,25 +46,12 @@ describe('resolveTerminalDropTargetShell', () => {
     ).toBe('posix')
   })
 
-  it('uses Windows shell escaping for SSH Windows targets', () => {
-    expect(
-      resolveTerminalDropTargetShell({
-        activeRuntimeEnvironmentId: null,
-        worktreePath: '/remote/repo',
-        connectionId: 'ssh-win',
-        remotePlatform: 'win32',
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
-      })
-    ).toBe('windows')
-  })
-
-  it('uses POSIX shell escaping for SSH Linux targets', () => {
+  it('uses POSIX shell escaping for relay-era SSH targets', () => {
     expect(
       resolveTerminalDropTargetShell({
         activeRuntimeEnvironmentId: null,
         worktreePath: 'C:\\repo',
         connectionId: 'ssh-linux',
-        remotePlatform: 'linux',
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       })
     ).toBe('posix')

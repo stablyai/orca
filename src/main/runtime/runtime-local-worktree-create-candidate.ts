@@ -1,13 +1,14 @@
 import type { Repo } from '../../shared/repo-types'
+import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { getPRForBranch } from '../github/client'
 import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
-  resolveWorktreeCreateDisplayNameRequest,
   sanitizeWorktreeName,
   type getWorktreePathSettings
 } from '../ipc/worktree-logic'
+import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-display-name'
 import { getBranchConflictKind } from '../git/repo'
 import {
   getBranchNameOverrideCandidate,
@@ -31,6 +32,7 @@ import {
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from './runtime-worktree-filesystem'
+import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
@@ -57,7 +59,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   store?: RuntimeStore
   baseBranch: string
   localWorktreeGitOptions: { wslDistro?: string }
-  localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }]
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const sanitizedName = sanitizeWorktreeName(args.request.name)
@@ -110,23 +111,31 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.username,
       args.localWorktreeGitOptions
     )
-    checkoutExistingBranch = await canCheckoutExistingLocalBranch(
-      args.repo.path,
-      branchName,
-      args.baseBranch,
-      ...args.localWorktreeGitOptionArgs
-    )
-    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
-      selectedExistingLocalBranchName = branchName
+    const tryExistingBranch = async (): Promise<boolean> => {
+      checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+        args.repo.path,
+        branchName,
+        args.baseBranch,
+        args.localWorktreeGitOptions
+      )
+      return checkoutExistingBranch
     }
+    const preferExistingBranch = Boolean(
+      args.request.branchNameOverride || selectedExistingLocalBranchName
+    )
+    checkoutExistingBranch = preferExistingBranch && (await tryExistingBranch())
     branchConflictKind = checkoutExistingBranch
       ? null
       : await getBranchConflictKind(
           args.repo.path,
           branchName,
           args.baseBranch,
-          ...args.localWorktreeGitOptionArgs
+          args.localWorktreeGitOptions,
+          preferExistingBranch ? undefined : tryExistingBranch
         )
+    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+      selectedExistingLocalBranchName = branchName
+    }
     const allowedPushTargetRemoteConflict =
       branchConflictKind &&
       isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args.request)
@@ -181,14 +190,18 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
       args.workspaceRoot
     )
-    if (!(await runtimePathExists(worktreePath))) {
+    // Why the pending check: Orca still owns this path until its background removal settles.
+    if (
+      !findPendingWorktreeRemovalConflict(args.repo.path, { worktreePath }) &&
+      !(await runtimePathExists(worktreePath))
+    ) {
       worktreePathResolved = true
       break
     }
   }
   if (!worktreePathResolved) {
     if (branchConflictKind) {
-      throw new Error(
+      throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
       )
     }

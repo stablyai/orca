@@ -5,6 +5,7 @@ import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/co
 import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
 import { normalizeFsPath } from '../usage/usage-path-comparison'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 
@@ -25,7 +26,12 @@ async function walkJsonlFiles(
   dirPath: string,
   progress: { entriesVisited: number } = { entriesVisited: 0 }
 ): Promise<string[]> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
+  const entries = await readdir(dirPath, { withFileTypes: true }).catch((error: unknown) => {
+    if (isDefinitiveAbsence(error)) {
+      return []
+    }
+    throw error
+  })
   const files: string[] = []
 
   for (const entry of entries) {
@@ -79,11 +85,7 @@ function hasLegacyCopiedSessionBridgeMarkers(): boolean {
 export async function listCodexSessionFiles(): Promise<string[]> {
   const files: string[] = []
   for (const dirPath of getCodexSessionDirectories()) {
-    try {
-      appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
-    } catch {
-      // Missing or unreadable history in one home should not hide the other.
-    }
+    appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
   }
   return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())
 }
@@ -138,8 +140,9 @@ async function getCodexSessionFileAliasKey(filePath: string): Promise<string> {
 
 async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   try {
-    const fileStat = await stat(filePath)
-    if (fileStat.ino !== 0) {
+    // Windows file IDs can exceed the precision of JavaScript numbers.
+    const fileStat = await stat(filePath, { bigint: true })
+    if (fileStat.ino !== 0n) {
       return `${fileStat.dev}:${fileStat.ino}`
     }
   } catch {}

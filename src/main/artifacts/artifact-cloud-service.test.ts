@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -14,11 +14,7 @@ import {
   linkOrcaProfileToCloud,
   unlinkOrcaProfileFromCloud
 } from '../orca-profiles/profile-cloud-index'
-import {
-  cloudSessionIdentity,
-  recordSuccessfulCloudSessionLogin,
-  tombstoneCloudSession
-} from '../orca-profiles/profile-cloud-session-mutation'
+import { signOutCloudSession } from '../orca-profiles/profile-cloud-session-owner'
 import { saveOrcaCloudSession } from '../orca-profiles/profile-cloud-session-store'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
@@ -43,7 +39,10 @@ const cloudB: OrcaProfileCloudSummary = {
   linkedAt: 2
 }
 
-function createResponse(slug = 'artifact-a', expiresAt = '2026-09-06T00:00:00.000Z'): Response {
+function createResponse(
+  slug = 'artifact-a',
+  expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+): Response {
   return new Response(
     JSON.stringify({
       artifact: {
@@ -75,7 +74,6 @@ async function setup(sharingEnabled: { value: boolean } = { value: true }): Prom
   createdPaths.push(userDataPath)
   const active = ensureActiveOrcaProfile(userDataPath)
   linkOrcaProfileToCloud(active.profile.id, cloudA, userDataPath)
-  recordSuccessfulCloudSessionLogin(cloudSessionIdentity(active.profile.id, cloudA), userDataPath)
   return {
     userDataPath,
     profileId: active.profile.id,
@@ -91,6 +89,12 @@ const writeRequest = {
   apiUrl,
   authToken: 'token-a'
 }
+
+beforeEach(() => {
+  // Keep fixed response expirations independent of the runner's wall clock.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-08-07T00:00:00.000Z')
+})
 
 afterEach(async () => {
   vi.useRealTimers()
@@ -357,10 +361,9 @@ describe('ArtifactCloudService record authorization', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createResponse()))
     await service.share(writeRequest)
 
-    tombstoneCloudSession(cloudSessionIdentity(profileId, cloudA), userDataPath)
+    signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-    recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, cloudB), userDataPath)
 
     await expect(service.update({ ...writeRequest, authToken: 'token-b' })).rejects.toThrow(
       /has not been shared/
@@ -385,10 +388,9 @@ describe('ArtifactCloudService record authorization', () => {
     const pending = service.share(writeRequest)
     await vi.waitFor(() => expect(resolvePost).toBeTypeOf('function'))
 
-    tombstoneCloudSession(cloudSessionIdentity(profileId, cloudA), userDataPath)
+    signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-    recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, cloudB), userDataPath)
     resolvePost?.(createResponse())
 
     await expect(pending).rejects.toThrow(/account changed/)

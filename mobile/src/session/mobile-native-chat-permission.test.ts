@@ -142,3 +142,10 @@ describe('parseApprovalFromStatus', () => {
     expect(parseApprovalFromStatus(JSON.stringify({ approval: {} }))).toBeNull()
   })
 })
+
+for (const agent of ['opencode', 'opencode2']) {
+  it(`${agent} approves the captured default selector with Enter`, () => {
+    const card = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'shell' } }), agent)
+    expect(card?.options[0].send).toBe('\r')
+  })
+}

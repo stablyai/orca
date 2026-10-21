@@ -3,7 +3,7 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
-import { BrowserTabCreateParams } from '../../../src/main/runtime/rpc/methods/browser-tab-create-schema'
+import { BrowserTabCreateParams } from '../../../src/shared/rpc-contract/browser-tab-create-params'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

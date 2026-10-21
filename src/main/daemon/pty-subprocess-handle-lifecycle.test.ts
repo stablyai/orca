@@ -509,15 +509,5 @@ describe('createPtySubprocess', () => {
       expect(killSpy).not.toHaveBeenCalled()
       killSpy.mockRestore()
     })
-
-    it('forceKill before exit still fires SIGKILL (live child)', async () => {
-      const proc = mockPtyProcess(77)
-      spawnMock.mockReturnValue(proc)
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-      handle.forceKill()
-      expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
-      killSpy.mockRestore()
-    })
   })
 })

@@ -41,9 +41,9 @@ const getRuntimeEnvironmentStatus = vi.fn()
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args),
-  hasRuntimeRpcErrorCode: () => false
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 // 10 authorities x 5 entries = 50 hosts; 50 hosts x 20 = 1,000 automations.
 // Half the authorities are old servers, because the legacy fan-out is where the

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getProjectPickerBrowseHost, parseProjectInput } from './ProjectPicker'
+import { parseProjectInput } from './project-picker-input'
+import { getProjectPickerBrowseHost } from './project-picker-runtime'
 
 describe('ProjectPicker project input', () => {
   it('preserves the host and custom port from a GHES project URL', () => {
@@ -17,6 +18,16 @@ describe('ProjectPicker project input', () => {
     expect(parseProjectInput('acme/7')).toEqual({ owner: 'acme', number: 7 })
   })
 
+  it('accepts Enterprise Managed User owners (`_<shortcode>` suffix) in URLs and shorthand', () => {
+    expect(parseProjectInput('https://github.com/users/octocat_acme/projects/1/views/1')).toEqual({
+      owner: 'octocat_acme',
+      number: 1,
+      host: 'github.com',
+      viewNumber: 1
+    })
+    expect(parseProjectInput('octocat_acme/1')).toEqual({ owner: 'octocat_acme', number: 1 })
+  })
+
   it('browses and reports auth errors against the active project host', () => {
     expect(getProjectPickerBrowseHost({ host: ' GitHub.Corp.Example:8443 ' })).toBe(
       'github.corp.example:8443'
@@ -30,7 +41,8 @@ describe('ProjectPicker project input', () => {
       'https://github.corp.example/orgs/acme/projects/7evil',
       'https://github.corp.example/orgs/acme/projects/7/views/2evil',
       'https://github.corp.example/orgs/acme/projects/7/files',
-      'https://github.corp.example/orgs/co_op/projects/7'
+      'https://github.corp.example/orgs/_acme/projects/7',
+      '_acme/7'
     ]) {
       expect(parseProjectInput(input)).toBeNull()
     }

@@ -27,6 +27,19 @@ afterEach(() => {
 })
 
 describe('Cursor hook normalization', () => {
+  it('publishes the conversation identity through the owning hook store', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'beforeSubmitPrompt',
+        prompt: 'remember the codeword',
+        conversation_id: 'conversation-742'
+      }),
+      'production'
+    )
+    expect(result?.providerSession).toEqual({ key: 'conversation_id', id: 'conversation-742' })
+  })
+
   it('beforeSubmitPrompt maps to working and captures the prompt', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
@@ -202,37 +215,6 @@ describe('Cursor hook normalization', () => {
         lastAssistantMessage: 'All set.'
       })
     ])
-  })
-
-  it('tool-heavy turn keeps working across shell and generic tool hooks until stop', () => {
-    _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'run checks' }),
-      'production'
-    )
-    const shell = _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({ hook_event_name: 'beforeShellExecution', command: 'pnpm test' }),
-      'production'
-    )
-    expect(shell?.payload.state).toBe('working')
-    const tool = _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({
-        hook_event_name: 'preToolUse',
-        tool_name: 'Read',
-        tool_input: { file_path: '/repo/src/app.ts' }
-      }),
-      'production'
-    )
-    expect(tool?.payload.state).toBe('working')
-    const stop = _internals.normalizeHookPayload(
-      'cursor',
-      buildBody({ hook_event_name: 'stop', status: 'completed' }),
-      'production'
-    )
-    expect(stop?.payload.state).toBe('done')
-    expect(stop?.payload.prompt).toBe('run checks')
   })
 
   it('beforeSubmitPrompt clears the cached tool state from a prior turn', () => {

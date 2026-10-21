@@ -1,8 +1,10 @@
 // Why (#15117): an agent holding a private copy of the shared post command missed the move to
 // curl for three months, invisible to per-agent tests. Assert the invariant across every agent
-// at once: a managed Windows .cmd hook posts through curl.exe and spawns no interpreter.
+// at once: EOF-based managed Windows .cmd hooks post through curl.exe.
+// Antigravity keeps stdin open and instead tests its owned bounded Node reader separately.
 // Generated under a mocked win32 platform, not executed, so the POSIX CI legs guard it too.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +15,13 @@ let previousUserDataPath: string | undefined
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
+}))
+
+// Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
+vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: async () =>
+    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -29,7 +38,6 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { CodexHookService } from '../codex/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
@@ -44,7 +52,6 @@ import { openClaudeHookService } from '../openclaude/hook-service'
 // `.ps1` — PowerShell is its interpreter, not a child process it spawns per event — and Kimi's
 // is a Git Bash `.sh`, so neither is subject to this invariant.
 const BATCH_SCRIPT_INSTALLERS = [
-  { agent: 'antigravity', install: () => new AntigravityHookService().install() },
   { agent: 'claude', install: () => new ClaudeHookService().install() },
   { agent: 'openclaude', install: () => openClaudeHookService.install() },
   { agent: 'codex', install: () => new CodexHookService().install() },
@@ -56,9 +63,8 @@ const BATCH_SCRIPT_INSTALLERS = [
   { agent: 'grok', install: () => new GrokHookService().install() }
 ] as const
 
-// Why: the Codex installer awaits an app-server trust-grant session, so the
-// override has to stay pinned across the await instead of being restored by a
-// synchronous `finally` while the install is still running.
+// Why: the Codex installer is async, so the override has to stay pinned across
+// the await instead of being restored by a synchronous `finally` while it runs.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })

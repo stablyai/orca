@@ -10,6 +10,24 @@ import {
 } from './workspace-source'
 
 describe('workspace source policy', () => {
+  it.each(['347', '002', '#347', 'https://github.com/fixture/repo/issues/347'])(
+    'keeps manual name %s after the query field becomes a selected source',
+    (currentName) => {
+      expect(
+        shouldApplyWorkspaceSourceAutoName({
+          currentName,
+          lastAutoName: 'fix-export',
+          lookupTextIsQuery: false
+        })
+      ).toBe(false)
+      expect(
+        shouldApplyWorkspaceSourceAutoName({
+          currentName,
+          lastAutoName: 'fix-export'
+        })
+      ).toBe(true)
+    }
+  )
   const linear = buildLinearWorkspaceSource({
     identifier: 'ENG-42',
     title: 'Ship mobile parity',

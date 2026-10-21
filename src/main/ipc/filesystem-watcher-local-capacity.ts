@@ -7,6 +7,7 @@ import {
   registerWatcherSenderCleanup
 } from './filesystem-watcher-listener-lifecycle'
 import { isWatcherRemovalInProgressError } from './watcher-removal-gate'
+import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 
 export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
 
@@ -42,6 +43,15 @@ export function scheduleLocalCapacityRetry(
             console.error(`[filesystem-watcher] capacity retry failed for ${rootKey}:`, error)
           }
         })
+        // Why: the IPC call returned before this install, so writes in between were never reported.
+        const root = watcherLifecycleState.watchedRoots.get(rootKey)
+        if (root?.listeners.has(listener.id) && !listener.isDestroyed()) {
+          listener.send('fs:changed', {
+            worktreePath: root.rootPath,
+            events: [{ kind: 'overflow', absolutePath: root.rootPath }],
+            resync: true
+          } satisfies FsChangedPayload)
+        }
       })
     )
   })

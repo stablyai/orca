@@ -4,6 +4,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
+  hasUnroutableTerminalWorktreeOwner,
   resolveTerminalHostOwnership,
   resolveTerminalWorktreeRoute
 } from './terminal-worktree-route'
@@ -88,8 +89,60 @@ describe('resolveTerminalWorktreeRoute', () => {
     expect(resolveTerminalWorktreeRoute(localState(), 'repo-9::/stale')).toBeNull()
   })
 
+  it('never spawns on the focused runtime when the state carries no owner catalogs', () => {
+    const catalogless = {
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      runtimeEnvironments: [{ id: 'hub-a' }]
+    }
+    expect(resolveTerminalHostOwnership(catalogless, 'repo-1::/w', 'spawn')).toEqual({
+      kind: 'unresolved',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('refuses to spawn on a folder workspace two hosts publish, and tears raw ids down locally', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these folder fields.
+    const twin = localState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      runtimeEnvironments: [{ id: 'focused-env' }],
+      folderWorkspaces: [
+        { id: 'twin', executionHostId: 'local' },
+        { id: 'twin', executionHostId: 'ssh:box', connectionId: 'box' }
+      ]
+    } as unknown as Partial<AppState>)
+    const id = folderWorkspaceKey('twin')
+    expect(resolveTerminalHostOwnership(twin, id, 'spawn').kind).toBe('unresolved')
+    expect(resolveTerminalHostOwnership(twin, id, 'teardown').kind).toBe('local-or-ssh')
+  })
+
   it('does not treat a folder workspace as an unresolved worktree', () => {
     expect(resolveTerminalWorktreeRoute(localState(), folderWorkspaceKey('abc-123'))).not.toBeNull()
+  })
+
+  // #16733: the store a reporter actually has — a real local repo/worktree whose legacy rows were
+  // persisted before owner projection, plus one saved runtime environment. resolveTerminalWorktreeRoute
+  // is the sole gate in front of terminal-request-ipc-bridge.ts's "Terminal creation is unavailable
+  // because the worktree owner could not be resolved" reply, so a non-null route here is exactly
+  // "that toast cannot fire".
+  describe('unstamped local worktrees with a saved runtime (#16733)', () => {
+    /** The single saved runtime is the hazard: it arms the legacy hydration gates while owning nothing here. */
+    const unstampedState = (): AppState =>
+      localState({
+        repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }],
+        worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1' }] },
+        runtimeEnvironments: [{ id: 'some-hub' }]
+      } as unknown as Partial<AppState>)
+
+    it('keeps a terminal routable on a local worktree while an unrelated runtime is saved', () => {
+      expect(resolveTerminalWorktreeRoute(unstampedState(), 'repo-1::/w')).toEqual({
+        runtimeEnvironmentId: null
+      })
+      expect(hasUnroutableTerminalWorktreeOwner(unstampedState(), 'repo-1::/w')).toBe(false)
+    })
+
+    it('still fails a genuinely unknown worktree id closed in that same state', () => {
+      expect(resolveTerminalWorktreeRoute(unstampedState(), 'repo-9::/stale')).toBeNull()
+    })
   })
 })
 
@@ -137,17 +190,16 @@ describe('resolveTerminalHostOwnership teardown', () => {
     })
   })
 
-  it('keeps a hostless worktree on the focused runtime for teardown too', () => {
-    // Why: unlike the host-agnostic surfaces, an ownerless worktree row really does spawn on the
-    // focused HUB, and its wake hint is `ssh:`-shaped — downgrading it would kill the wrong host.
+  it('spawns and tears down a hostless worktree locally, never on the focused runtime', () => {
+    // Why: the client stamps every server row on arrival, so a row with no host is this machine's.
     const state = focusedState({
       repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }],
       worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1' }] }
     } as unknown as Partial<AppState>)
     for (const purpose of ['spawn', 'teardown'] as const) {
       expect(resolveTerminalHostOwnership(state, 'repo-1::/w', purpose)).toEqual({
-        kind: 'runtime',
-        runtimeEnvironmentId: 'hub-a'
+        kind: 'local-or-ssh',
+        runtimeEnvironmentId: null
       })
     }
   })

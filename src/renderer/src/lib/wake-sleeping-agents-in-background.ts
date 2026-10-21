@@ -5,11 +5,13 @@ import {
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
+import { resolveActivationPtyListScope } from './worktree-activation-pty-inventory'
+import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
 import {
   getProviderSessionClaimKey,
-  isPassiveCompletedHibernationEvidence,
+  activationTreatsNoteAsFinished,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
 
@@ -70,15 +72,6 @@ export function createBackgroundSleepingAgentWakeDispatcher(
   }
 }
 
-function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
-  return (
-    record.tabId ??
-    parsePaneKey(record.paneKey)?.tabId ??
-    parseLegacyNumericPaneKey(record.paneKey)?.tabId ??
-    null
-  )
-}
-
 function dispatchBackgroundMount(worktreeId: string, tabIds: readonly string[] | undefined): void {
   requestBackgroundTerminalWorktreeMount({ worktreeId, ...(tabIds ? { tabIds } : {}) })
 }
@@ -89,12 +82,12 @@ function getCanonicalPassiveWakeRecords(
 ): SleepingAgentSessionRecord[] {
   const activeClaimKeys = new Set(
     records
-      .filter((record) => !isPassiveCompletedHibernationEvidence(record))
+      .filter((record) => !activationTreatsNoteAsFinished(record))
       .map(getProviderSessionClaimKey)
   )
   const recordsByClaim = new Map<string, SleepingAgentSessionRecord[]>()
   for (const record of records) {
-    if (!isPassiveCompletedHibernationEvidence(record)) {
+    if (!activationTreatsNoteAsFinished(record)) {
       continue
     }
     const claimKey = getProviderSessionClaimKey(record)
@@ -209,11 +202,19 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
-  resumeSleepingAgentSessionsForWorktree(worktreeId, {
+  const resumeOptions = {
     suppressNavigation: true,
     skipClaimKeys: wokenClaimKeys,
     // Why: a mirror-parked sweep replays after this call returns, so each tab
     // must request its own mount instead of a batch collected here.
-    onSessionLaunched: (tabId) => dispatchBackgroundMount(worktreeId, [tabId])
-  })
+    onSessionLaunched: (tabId: string) => dispatchBackgroundMount(worktreeId, [tabId])
+  }
+  // Why the gate (STA-3859): this worktree is usually not the active one, so an unmounted pane
+  // whose PTY the host still runs looks unowned locally; only the host's PTY inventory can prove it
+  // exited. A paired-runtime workspace has no such inventory here and keeps its mirror park instead.
+  if (resolveActivationPtyListScope(useAppStore.getState(), worktreeId)) {
+    void gateWorktreeAgentActivation(worktreeId, resumeOptions)
+    return
+  }
+  resumeSleepingAgentSessionsForWorktree(worktreeId, resumeOptions)
 }

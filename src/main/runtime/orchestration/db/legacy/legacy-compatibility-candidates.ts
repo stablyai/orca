@@ -7,6 +7,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 
 export function resolveLegacyCompatibilityPrincipalByIdentity(
   this: OrchestrationDb,
@@ -60,9 +61,10 @@ export function resolveLegacyWorkerCandidate(
       ? [this.getDispatchContextById(params.dispatchId)].filter(
           (row): row is DispatchContextRow => row !== undefined
         )
-      : (this.db
+      : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
+        (this.db
           .prepare(
-            `SELECT * FROM dispatch_contexts
+            `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
              WHERE run_id = ? AND contract_version = ?
                AND status IN ('pending', 'dispatched')
              ORDER BY rowid`

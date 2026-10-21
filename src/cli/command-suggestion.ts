@@ -1,8 +1,6 @@
 import { specPaths, type CommandSpec } from './command-spec'
 import { levenshtein } from '../shared/edit-distance'
 
-export { levenshtein } from '../shared/edit-distance'
-
 // Why: rank the live registry so typo recovery cannot drift from accepted paths.
 
 const SUGGESTION_THRESHOLD = 3
@@ -17,27 +15,28 @@ function finalToken(path: string[]): string {
   return path.at(-1) ?? ''
 }
 
-// Why: destructiveness is declared on the spec (single source of truth); the
-// intent verbs are the final tokens of every destructive path/alias so the guard
-// tracks the registry instead of a hand-maintained list.
-function destructiveVerbs(specs: CommandSpec[]): Set<string> {
-  const verbs = new Set<string>()
+// Why: declared aliases connect equivalent destructive verbs without unlocking unrelated actions.
+function destructiveVerbFamilies(specs: CommandSpec[]): Map<string, Set<string>> {
+  const families = new Map<string, Set<string>>()
   for (const spec of specs) {
-    if (spec.destructive) {
-      for (const path of specPaths(spec)) {
-        verbs.add(finalToken(path))
-      }
+    if (!spec.destructive) {
+      continue
+    }
+    const verbs = specPaths(spec).map(finalToken)
+    const family = new Set(verbs.flatMap((verb) => [...(families.get(verb) ?? [verb])]))
+    for (const verb of family) {
+      families.set(verb, family)
     }
   }
-  return verbs
+  return families
 }
 
-// Why: deletion is irreversible and suggestions flow into agents' recovery
-// channel (--json nextSteps), so only unlock destructive candidates when the
-// input token is itself a near-miss of a destructive verb. #6303
-function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
-  for (const verb of verbs) {
-    if (levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD) {
+function intendsDestruction(inputToken: string, verbs: Set<string> | undefined): boolean {
+  for (const verb of verbs ?? []) {
+    if (
+      Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
+      levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
+    ) {
       return true
     }
   }
@@ -61,16 +60,17 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
 // Why: same-depth matching avoids suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
-  // Why: only surface destructive commands when the user actually reached for one;
-  // otherwise a benign typo could recover into an irreversible action. #6303
-  const allowDestructive = intendsDestruction(finalToken(commandPath), destructiveVerbs(specs))
+  const families = destructiveVerbFamilies(specs)
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
     if (spec.hidden) {
       continue
     }
-    if (spec.destructive && !allowDestructive) {
+    if (
+      spec.destructive &&
+      !intendsDestruction(finalToken(commandPath), families.get(finalToken(spec.path)))
+    ) {
       continue
     }
     const candidates = specPaths(spec).map((path) =>
@@ -85,7 +85,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
         continue
       }
       seen.add(joined)
-      scored.push({ label: joined, distance: levenshtein(input, joined) })
+      if (Math.abs(input.length - joined.length) <= SUGGESTION_THRESHOLD) {
+        scored.push({ label: joined, distance: levenshtein(input, joined) })
+      }
     }
   }
   return rankByDistance(scored)
@@ -105,10 +107,24 @@ export type FlagErrorData = {
   nextSteps: string[]
 }
 
+// Why: edit distance cannot recover a rename. `orchestration check` is the one verb
+// that identifies its caller with `--terminal` while every sibling uses `--from`, so
+// the near-miss ranking answered `--json`/`--run` and left the caller stuck (#16904).
+// A synonym only fires where the typed flag is rejected and its partner is accepted.
+const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal' }
+
 function suggestFlags(flag: string, validFlags: string[]): string[] {
-  return rankByDistance(
-    validFlags.map((candidate) => ({ label: candidate, distance: levenshtein(flag, candidate) }))
-  )
+  const synonym = FLAG_SYNONYMS[flag]
+  const scored: { label: string; distance: number }[] = []
+  for (const candidate of validFlags) {
+    if (Math.abs(flag.length - candidate.length) <= SUGGESTION_THRESHOLD) {
+      scored.push({ label: candidate, distance: levenshtein(flag, candidate) })
+    }
+  }
+  const ranked = rankByDistance(scored)
+  return synonym && validFlags.includes(synonym)
+    ? [synonym, ...ranked.filter((name) => name !== synonym)].slice(0, MAX_SUGGESTIONS)
+    : ranked
 }
 
 // Why: include the accepted set so agents can recover without another help call.

@@ -5,7 +5,7 @@ import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import {
   collectBrowserWebviewIds,
-  destroyRemovedBrowserWebview
+  destroyWebviewsRemovedFromStore
 } from '../store/slices/browser-webview-cleanup'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
@@ -77,16 +77,11 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       }
       prevBrowserTabs = state.browserTabsByWorktree
       prevBrowserPages = state.browserPagesByWorkspace
-      const currentIds = collectBrowserWebviewIds(
+      prevBrowserWebviewIdsRef.current = destroyWebviewsRemovedFromStore(
+        prevBrowserWebviewIdsRef.current,
         state.browserTabsByWorktree,
         state.browserPagesByWorkspace
       )
-      for (const prevId of prevBrowserWebviewIdsRef.current) {
-        if (!currentIds.has(prevId)) {
-          destroyRemovedBrowserWebview(prevId)
-        }
-      }
-      prevBrowserWebviewIdsRef.current = currentIds
     })
   }, [])
 
@@ -104,7 +99,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       if (fallbackBrowserTab) {
         setActiveBrowserTab(fallbackBrowserTab.id)
       } else {
-        setActiveTabType('terminal')
+        setActiveTabType('terminal', renderedActiveWorktreeId)
       }
     }
   }, [

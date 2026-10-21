@@ -1,0 +1,729 @@
+{
+  "recordedFrom": "Ubuntu 22.04 container, Xvfb + openbox, Electron 43.7.5 --ozone-platform=x11",
+  "inputFramework": "fcitx 4.2.9.8 via GTK_IM_MODULE=fcitx",
+  "engine": "googlepinyin",
+  "events": [
+    {
+      "scenario": "s1_ni_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyN",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": false,
+      "value": ""
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "compositionupdate",
+      "data": "你",
+      "value": ""
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你",
+      "value": ""
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你",
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "keyup",
+      "key": "n",
+      "code": "KeyN",
+      "keyCode": 78,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyI",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "keyup",
+      "key": "i",
+      "code": "KeyI",
+      "keyCode": 73,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "Space",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "compositionupdate",
+      "data": "你",
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你",
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你",
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "compositionend",
+      "data": "你",
+      "value": "你"
+    },
+    {
+      "scenario": "s1_ni_space",
+      "type": "keyup",
+      "key": " ",
+      "code": "Space",
+      "keyCode": 32,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "你"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyH",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": false,
+      "value": ""
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "compositionupdate",
+      "data": "和",
+      "value": ""
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "和",
+      "value": ""
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "和",
+      "value": "和"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keyup",
+      "key": "h",
+      "code": "KeyH",
+      "keyCode": 72,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "和"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyA",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "和"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "compositionupdate",
+      "data": "哈",
+      "value": "和"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "哈",
+      "value": "和"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "哈",
+      "value": "哈"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "哈"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyO",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "哈"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "compositionupdate",
+      "data": "好",
+      "value": "哈"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "好",
+      "value": "哈"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "好",
+      "value": "好"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keyup",
+      "key": "o",
+      "code": "KeyO",
+      "keyCode": 79,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "好"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keydown",
+      "key": "Process",
+      "code": "Digit3",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "好"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "compositionupdate",
+      "data": "浩",
+      "value": "好"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "浩",
+      "value": "好"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "浩",
+      "value": "浩"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "compositionend",
+      "data": "浩",
+      "value": "浩"
+    },
+    {
+      "scenario": "s2_hao_3",
+      "type": "keyup",
+      "key": "3",
+      "code": "Digit3",
+      "keyCode": 51,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "浩"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyN",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": false,
+      "value": ""
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionstart",
+      "data": "",
+      "value": ""
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionupdate",
+      "data": "你",
+      "value": ""
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你",
+      "value": ""
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你",
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keyup",
+      "key": "n",
+      "code": "KeyN",
+      "keyCode": 78,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyI",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keyup",
+      "key": "i",
+      "code": "KeyI",
+      "keyCode": 73,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyH",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionupdate",
+      "data": "你好",
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你好",
+      "value": "你"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你好",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keyup",
+      "key": "h",
+      "code": "KeyH",
+      "keyCode": 72,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyA",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionupdate",
+      "data": "你哈",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你哈",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你哈",
+      "value": "你哈"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keyup",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你哈"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "KeyO",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你哈"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionupdate",
+      "data": "你好",
+      "value": "你哈"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你好",
+      "value": "你哈"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你好",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keyup",
+      "key": "o",
+      "code": "KeyO",
+      "keyCode": 79,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keydown",
+      "key": "Process",
+      "code": "Space",
+      "keyCode": 229,
+      "charCode": 0,
+      "isComposing": true,
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionupdate",
+      "data": "你好",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "beforeinput",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你好",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "input",
+      "isComposing": true,
+      "inputType": "insertCompositionText",
+      "data": "你好",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "compositionend",
+      "data": "你好",
+      "value": "你好"
+    },
+    {
+      "scenario": "s3_nihao_space",
+      "type": "keyup",
+      "key": " ",
+      "code": "Space",
+      "keyCode": 32,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "你好"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keydown",
+      "key": "l",
+      "code": "KeyL",
+      "keyCode": 76,
+      "charCode": 0,
+      "isComposing": false,
+      "value": ""
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keypress",
+      "key": "l",
+      "code": "KeyL",
+      "keyCode": 108,
+      "charCode": 108,
+      "isComposing": false,
+      "value": ""
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "beforeinput",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": "l",
+      "value": ""
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "input",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": "l",
+      "value": "l"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keyup",
+      "key": "l",
+      "code": "KeyL",
+      "keyCode": 76,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "l"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keydown",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "l"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keypress",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 115,
+      "charCode": 115,
+      "isComposing": false,
+      "value": "l"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "beforeinput",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": "s",
+      "value": "l"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "input",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": "s",
+      "value": "ls"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keyup",
+      "key": "s",
+      "code": "KeyS",
+      "keyCode": 83,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "ls"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keydown",
+      "key": " ",
+      "code": "Space",
+      "keyCode": 32,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "ls"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keypress",
+      "key": " ",
+      "code": "Space",
+      "keyCode": 32,
+      "charCode": 32,
+      "isComposing": false,
+      "value": "ls"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "beforeinput",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": " ",
+      "value": "ls"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "input",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": " ",
+      "value": "ls "
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keyup",
+      "key": " ",
+      "code": "Space",
+      "keyCode": 32,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "ls "
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keydown",
+      "key": "7",
+      "code": "Digit7",
+      "keyCode": 55,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "ls "
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keypress",
+      "key": "7",
+      "code": "Digit7",
+      "keyCode": 55,
+      "charCode": 55,
+      "isComposing": false,
+      "value": "ls "
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "beforeinput",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": "7",
+      "value": "ls "
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "input",
+      "isComposing": false,
+      "inputType": "insertText",
+      "data": "7",
+      "value": "ls 7"
+    },
+    {
+      "scenario": "s4_ascii_im_off",
+      "type": "keyup",
+      "key": "7",
+      "code": "Digit7",
+      "keyCode": 55,
+      "charCode": 0,
+      "isComposing": false,
+      "value": "ls 7"
+    }
+  ]
+}

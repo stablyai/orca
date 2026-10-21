@@ -8,20 +8,3 @@ export function isSkillBundleVersion(
 ): version is SkillCloudVersion & { manifest: SkillBundleManifestV1 } {
   return 'skills' in version.manifest
 }
-
-export function summarizeSkillShareVersion(version: SkillCloudVersion | undefined): {
-  scriptCount: number
-  executableCount: number
-  fileCount: number
-} {
-  const files = version
-    ? 'skills' in version.manifest
-      ? version.manifest.skills.flatMap((skill) => skill.files)
-      : version.manifest.files
-    : []
-  return {
-    scriptCount: files.filter((file) => file.path.startsWith('scripts/')).length,
-    executableCount: files.filter((file) => file.executable).length,
-    fileCount: files.length
-  }
-}

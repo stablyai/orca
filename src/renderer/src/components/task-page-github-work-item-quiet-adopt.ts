@@ -1,5 +1,6 @@
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
 import { loginSetOfUsers, loginSetsEqual } from './task-page-github-work-item-mutation-patches'
 import {
   familiesFromPendingOp,
@@ -52,6 +53,7 @@ export function adoptQuietSearchFieldsForItem(args: {
 }): { needTrailing: boolean } {
   const state = getOrCreateQuietRevalidateState(args.queryKey)
   const itemKey = taskPageGitHubItemKey(args.item.repoId, args.item.id)
+  const ownerRepo = parseGitHubIssueOrPRLink(args.item.url)?.slug ?? null
   let needTrailing = false
   const G0 = args.fetchStartedAtGeneration
   const tryFamily = (
@@ -91,7 +93,8 @@ export function adoptQuietSearchFieldsForItem(args: {
     'state',
     () => {
       args.patchWorkItem(args.item.id, { state: args.serverItem.state }, args.item.repoId, {
-        sourceContext: args.sourceContext
+        sourceContext: args.sourceContext,
+        ownerRepo
       })
     },
     () => {
@@ -99,14 +102,27 @@ export function adoptQuietSearchFieldsForItem(args: {
         args.sourceScope,
         args.item.repoId,
         args.item.id,
-        'state'
+        'state',
+        ownerRepo
       )
       return last === undefined || args.serverItem.state === last
     },
     () =>
-      getLastConfirmedClientValue(args.sourceScope, args.item.repoId, args.item.id, 'state') !==
-      undefined,
-    () => deleteLastConfirmedClientValue(args.sourceScope, args.item.repoId, args.item.id, 'state')
+      getLastConfirmedClientValue(
+        args.sourceScope,
+        args.item.repoId,
+        args.item.id,
+        'state',
+        ownerRepo
+      ) !== undefined,
+    () =>
+      deleteLastConfirmedClientValue(
+        args.sourceScope,
+        args.item.repoId,
+        args.item.id,
+        'state',
+        ownerRepo
+      )
   )
   tryFamily(
     'autoMerge',
@@ -115,7 +131,7 @@ export function adoptQuietSearchFieldsForItem(args: {
         args.item.id,
         { autoMergeEnabled: args.serverItem.autoMergeEnabled },
         args.item.repoId,
-        { sourceContext: args.sourceContext }
+        { sourceContext: args.sourceContext, ownerRepo }
       )
     },
     () => {
@@ -147,7 +163,7 @@ export function adoptQuietSearchFieldsForItem(args: {
           args.item.id,
           family === 'assignees' ? { assignees: serverList } : { reviewRequests: serverList },
           args.item.repoId,
-          { sourceContext: args.sourceContext }
+          { sourceContext: args.sourceContext, ownerRepo }
         )
       },
       () => {

@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { Suspense } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
@@ -70,6 +71,10 @@ import {
   selectClientHostedBrowserRow
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import BrowserPaneOverlayLayer, { RetainedBrowserPaneOverlayLayer } from './BrowserPaneOverlayLayer'
+import {
+  admitBrowserPageMount,
+  releaseBrowserPageMount
+} from '../host-guest/browser-page-mount-admission'
 
 const HOST_ROW = {
   browserPageId: 'page-hosted',
@@ -177,13 +182,13 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(0)
   })
 
-  it('keeps inactive browser panes mounted for a visible worktree', () => {
+  it('defers inactive browser panes while retaining their viewport slots', () => {
     const markup = renderOverlay({ isWorktreeActive: true })
 
     expect(markup).toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-active="true"')
-    expect(markup).toContain('data-browser-pane-id="browser-b"')
-    expect(markup).toContain('data-browser-pane-active="false"')
+    expect(markup).not.toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-overlay-tab-id="browser-b"')
   })
 
   it('marks the active browser pane focused when its own group holds focus', () => {
@@ -192,6 +197,102 @@ describe('BrowserPaneOverlayLayer', () => {
     // browser-a is the active tab of group-1, and group-1 is the focused split.
     expect(markup).toContain(
       'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+  })
+
+  it('restores 200 tabs on demand and preserves viewport roots across parking and selection', () => {
+    const browsers = Array.from({ length: 200 }, (_, index) =>
+      createBrowserTab(`browser-${index}`, [`page-${index}`])
+    )
+    const tabs = browsers.map((browser, index) =>
+      createUnifiedBrowserTab(`tab-${index}`, browser.id, index)
+    )
+    mocks.state!.browserTabsByWorktree['wt-1'] = browsers
+    mocks.state!.unifiedTabsByWorktree['wt-1'] = tabs
+    const group = mocks.state!.groupsByWorktree['wt-1'][0]
+    mocks.state!.groupsByWorktree['wt-1'] = [
+      { ...group, activeTabId: tabs[0].id, tabOrder: tabs.map((tab) => tab.id) }
+    ]
+    const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    const slot = view.container.querySelector('[data-browser-overlay-tab-id="browser-0"]')!
+    const viewport = slot.firstElementChild
+    const pane = slot.querySelector('[data-browser-pane-id]')
+    expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(1)
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(200)
+
+    view.rerender(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+    expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(0)
+    expect(pane!.isConnected).toBe(false)
+    expect((slot as HTMLElement).style.display).toBe('none')
+    view.rerender(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(1)
+    expect(slot.querySelector('[data-browser-pane-id]')).not.toBe(pane)
+    view.rerender(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+    mocks.state!.groupsByWorktree['wt-1'] = [{ ...group, activeTabId: tabs[199].id }]
+    view.rerender(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(1)
+    expect(view.container.querySelector('[data-browser-pane-id="browser-199"]')).not.toBeNull()
+    expect(slot.firstElementChild).toBe(viewport)
+    expect(viewport!.isConnected).toBe(true)
+  })
+
+  it('retains zero unclaimed hidden panes after visiting 50 worktrees with 20 tabs each', () => {
+    const worktreeIds = Array.from({ length: 50 }, (_, index) => `wt-scale-${index}`)
+    for (const worktreeId of worktreeIds) {
+      const browsers = Array.from({ length: 20 }, (_, index) => ({
+        ...createBrowserTab(`${worktreeId}-browser-${index}`, [`${worktreeId}-page-${index}`]),
+        worktreeId
+      }))
+      const tabs = browsers.map((browser, index) => ({
+        ...createUnifiedBrowserTab(`${worktreeId}-tab-${index}`, browser.id, index),
+        worktreeId,
+        groupId: `${worktreeId}-group-${index}`
+      }))
+      mocks.state!.browserTabsByWorktree[worktreeId] = browsers
+      mocks.state!.unifiedTabsByWorktree[worktreeId] = tabs
+      mocks.state!.groupsByWorktree[worktreeId] = tabs.map((tab) => ({
+        id: tab.groupId,
+        worktreeId,
+        activeTabId: tab.id,
+        tabOrder: [tab.id]
+      }))
+    }
+    const surfaces = (activeId: string | null) =>
+      worktreeIds.map((worktreeId) => (
+        <RetainedBrowserPaneOverlayLayer
+          key={worktreeId}
+          worktreeId={worktreeId}
+          isWorktreeActive={worktreeId === activeId}
+          mountEligible={worktreeId === activeId}
+        />
+      ))
+    const view = render(surfaces(null))
+    for (const worktreeId of worktreeIds) {
+      view.rerender(surfaces(worktreeId))
+      expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(20)
+      view.rerender(surfaces(null))
+      expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(0)
+    }
+    expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(1000)
+  })
+
+  it('keeps a floating browser to chords from its own overlay even when its group holds focus', () => {
+    const floating = FLOATING_TERMINAL_WORKTREE_ID
+    const state = createState()
+    mocks.state = {
+      ...state,
+      browserTabsByWorktree: { [floating]: state.browserTabsByWorktree['wt-1'] },
+      unifiedTabsByWorktree: { [floating]: state.unifiedTabsByWorktree['wt-1'] },
+      groupsByWorktree: { [floating]: state.groupsByWorktree['wt-1'] },
+      activeGroupIdByWorktree: { [floating]: 'group-1' }
+    }
+
+    const markup = renderToStaticMarkup(
+      <BrowserPaneOverlayLayer worktreeId={floating} isWorktreeActive />
+    )
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
     )
   })
 
@@ -313,6 +414,39 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).not.toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  // STA-7435: a background-opened page's admission starts its guest; once released (first load
+  // settled) the slot must fall back to the normal rules instead of staying laid out forever.
+  it('mounts an admitted page in a hidden worktree and parks it once the admission ends', () => {
+    admitBrowserPageMount('page-b')
+    try {
+      const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).not.toBeNull()
+
+      act(() => releaseBrowserPageMount('page-b'))
+
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).toBeNull()
+    } finally {
+      releaseBrowserPageMount('page-b')
+    }
+  })
+
+  it('keeps an admitted page mounted in the visible worktree but stops laying out its slot', () => {
+    admitBrowserPageMount('page-b')
+    try {
+      const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={true} />)
+      const slot = (): HTMLElement | null =>
+        view.container.querySelector<HTMLElement>('[data-browser-overlay-tab-id="browser-b"]')
+      expect(slot()?.style.display).toBe('flex')
+
+      act(() => releaseBrowserPageMount('page-b'))
+
+      expect(slot()?.style.display).toBe('none')
+      expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).not.toBeNull()
+    } finally {
+      releaseBrowserPageMount('page-b')
+    }
   })
 
   // Why the style and not just mountedness: paintability drives the slot's `display`, and

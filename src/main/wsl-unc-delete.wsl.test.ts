@@ -46,7 +46,7 @@ describe.skipIf(!runRealWsl)('WSL contained delete integration', () => {
   it.each([
     ['file-shaped', 'file-link/session.json', false],
     ['directory-shaped', 'dir-link/session', true]
-  ])('rejects a %s escape and preserves all outside entries', async (_shape, path, recursive) => {
+  ])('rejects a %s escape and preserves all outside entries', async (_label, path, recursive) => {
     const vaultRoot = `${fixtureRoot}/vault`
 
     await expect(

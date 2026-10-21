@@ -1,59 +1,95 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Legacy import runs the existing per-agent transcript decoders and keys the
 // results by identity read off the same raw lines. Fixtures are shaped like the
 // files the providers actually write.
 
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import { JOURNAL_BLOB_DIR, readJournalBlob } from './journal-blob-store'
+import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
+import type { NativeChatMessage } from '../../../shared/native-chat-types'
+import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import {
-  appendLegacyTranscriptMessages,
-  importLegacyTranscriptIntoJournal
+  importLegacyTranscriptIntoJournal,
+  prepareLegacyTranscriptImport,
+  LEGACY_IMPORT_BLOCK_LIMITS
 } from './journal-legacy-import'
-import { boundPayload, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
+
+// No shipped decoder emits a subagent roster, so the roster bounds are reached by standing one in.
+const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({
+  message: null
+}))
+
+vi.mock('../transcript-line-decoders', async (importOriginal) => {
+  const actual = await importOriginal<typeof TranscriptLineDecoders>()
+  return {
+    ...actual,
+    decodeClaudeTranscriptLine: (...args: Parameters<typeof actual.decodeClaudeTranscriptLine>) =>
+      decodedClaudeOverride.message ?? actual.decodeClaudeTranscriptLine(...args)
+  }
+})
 
 const CLAUDE_SESSION = '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88'
 const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
 let clock = 1_000
+const journals = createTrackedJournalOpener()
 
 function tick(): number {
   clock += 1
   return clock
 }
 
-function identity(agent: 'claude' | 'codex', sessionId: string): AgentSessionJournalIdentity {
+type ImportAgent = 'claude' | 'codex' | 'grok' | 'omp'
+
+function providerHandle(agent: ImportAgent, sessionId: string): AgentSessionProviderHandle {
+  if (agent === 'claude') {
+    return claudeProviderHandle(sessionId, null)
+  }
+  return agent === 'codex'
+    ? codexProviderHandle(sessionId)
+    : { transport: 'terminal-transcript', agent, nativeId: sessionId }
+}
+
+function identity(agent: ImportAgent, sessionId: string): AgentSessionJournalIdentity {
   return {
     sessionId,
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent,
-    providerHandle:
-      agent === 'claude'
-        ? { kind: 'claude', sessionId, leafUuid: null }
-        : { kind: 'codex', threadId: sessionId }
+    providerHandle: providerHandle(agent, sessionId)
   }
 }
 
 async function open(
-  agent: 'claude' | 'codex',
+  agent: ImportAgent,
   sessionId: string,
   overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}
 ): Promise<AgentSessionJournal> {
-  return openAgentSessionJournal({
-    identity: identity(agent, sessionId),
-    journalDir: root,
-    now: tick,
-    mintEpoch: () => `epoch-${clock}`,
-    ...overrides
-  })
+  return journals.track(
+    await openAgentSessionJournal({
+      identity: identity(agent, sessionId),
+      database: openTestJournalHostDatabase(root),
+      now: tick,
+      mintEpoch: () => `epoch-${clock}`,
+      ...overrides
+    })
+  )
 }
 
 function legacyKey(recordId: string): string {
@@ -179,6 +215,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  decodedClaudeOverride.message = null
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -216,6 +254,10 @@ describe('claude import', () => {
         sessionId: CLAUDE_SESSION,
         uuid: 'e3a5b7c9-2d13-4f88-94ce-6b0d8f2a4e31'
       })
+    ])
+    // Imported at fence 1, yet no generation's work: provenance 0, so nothing in it is current.
+    expect(journal.snapshot().items.map((entry) => journal.itemFence(entry.itemId))).toEqual([
+      0, 0, 0, 0
     ])
   })
 
@@ -287,46 +329,6 @@ describe('claude import', () => {
 })
 
 describe('codex import', () => {
-  it('upserts live transcript messages without rolling the structured epoch', async () => {
-    const journal = await open('codex', CODEX_SESSION)
-    const epoch = journal.epoch
-    const message = {
-      id: 'live-tui-message',
-      role: 'assistant' as const,
-      blocks: [{ type: 'text' as const, text: 'first version' }],
-      timestamp: 1_800_000_000_000,
-      source: 'transcript' as const
-    }
-
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'codex',
-      sessionId: CODEX_SESSION,
-      fence: 2,
-      messages: [message]
-    })
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'codex',
-      sessionId: CODEX_SESSION,
-      fence: 2,
-      messages: [{ ...message, blocks: [{ type: 'text', text: 'final version' }] }]
-    })
-
-    expect(journal.epoch).toBe(epoch)
-    expect(journal.snapshot().items).toMatchObject([
-      {
-        itemId: legacyKey('live-tui-message'),
-        revision: 2,
-        body: {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'final version' }]
-        }
-      }
-    ])
-  })
-
   it('keys rollout records in the import-scoped namespace, not as app-server ordinals', async () => {
     const filePath = await writeFixture('rollout.jsonl', CODEX_LINES)
     const journal = await open('codex', CODEX_SESSION)
@@ -386,8 +388,34 @@ describe('codex import', () => {
   })
 })
 
+type RosterAgents = Extract<
+  NativeChatMessage['blocks'][number],
+  { type: 'subagent-group' }
+>['agents']
+
+async function importDecodedRoster(agents: RosterAgents): Promise<AgentSessionJournal> {
+  decodedClaudeOverride.message = {
+    id: 'legacy-roster',
+    role: 'assistant',
+    timestamp: null,
+    source: 'transcript',
+    blocks: [{ type: 'subagent-group', groupId: 'group-1', agents }]
+  }
+  const filePath = await writeFixture('claude-roster.jsonl', [CLAUDE_LINES[2]])
+  const journal = await open('claude', CLAUDE_SESSION)
+  const result = await importLegacyTranscriptIntoJournal({
+    journal,
+    agent: 'claude',
+    sessionId: CLAUDE_SESSION,
+    fence: 1,
+    options: { filePath }
+  })
+  expect(result).toMatchObject({ ok: true, imported: 1 })
+  return journal
+}
+
 describe('payload bounds on import', () => {
-  it('marks a clipped tool result and parks the remainder in the blob store', async () => {
+  it('marks a clipped tool result and discards the remainder', async () => {
     const output = 'y'.repeat(64 * 1024)
     const filePath = await writeFixture('claude-big.jsonl', [
       {
@@ -409,307 +437,138 @@ describe('payload bounds on import', () => {
       agent: 'claude',
       sessionId: CLAUDE_SESSION,
       fence: 1,
-      options: { filePath, limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1_024 } }
+      options: { filePath, limits: { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 1_024 } }
     })
 
     const item = journal.snapshot().items[0]
-    expect(item?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
+    expect(item?.body).toMatchObject({ kind: 'message', role: 'tool' })
     const body = item?.body
-    if (body?.kind !== 'tool-call' || !body.output) {
-      throw new Error('expected a bounded tool-call output')
+    const result = body?.kind === 'message' ? body.blocks[0] : undefined
+    if (result?.type !== 'tool-result') {
+      throw new Error('expected a bounded tool result')
     }
-    expect(body.output.truncated).toBe(true)
-    expect(body.output.byteLength).toBe(64 * 1024)
-    expect(body.output.head).toHaveLength(1_024)
-    expect(await readJournalBlob(root, body.output.digest)).toBe(output)
+    expect(result.callId).toBe('toolu_9')
+    expect(result.output.startsWith('y'.repeat(1_024))).toBe(true)
+    expect(result.output).toContain('65536 bytes')
+    expect(result.output).toContain('output truncated')
+    expect(result.output.length).toBeLessThan(1_200)
   })
 
-  it('deduplicates staged blobs while importing a replacement epoch', async () => {
-    const journalDir = join(root, 'dedupe-journal')
-    const limits = {
-      ...DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-      inlineHeadBytes: 512,
-      maxSessionBytes: 512 * 1024
+  it('bounds an imported subagent roster by entry count, label and id', async () => {
+    // The import reads an untrusted file: nothing upstream bounded either string.
+    const oversized = 'z'.repeat(20 * 1024)
+    const journal = await importDecodedRoster(
+      Array.from({ length: 80 }, (_, index) => ({
+        id: index === 0 ? oversized : `task-${index}`,
+        label: index === 0 ? oversized : `label-${index}`,
+        state: 'working' as const
+      }))
+    )
+
+    const body = journal.snapshot().items[0]?.body
+    const block = body?.kind === 'message' ? body.blocks[0] : undefined
+    if (block?.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
     }
-    const output = 'd'.repeat(32 * 1024)
-    const bounded = boundPayload(output, limits)
-    const toolResultLine = (uuid: string) => ({
-      parentUuid: null,
-      isSidechain: false,
-      type: 'user',
-      message: {
-        role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: `toolu_${uuid}`, content: output }]
-      },
-      uuid,
-      timestamp: '2026-08-05T10:00:09.000Z',
-      sessionId: CLAUDE_SESSION
-    })
-    const filePath = await writeFixture('claude-duplicate-blobs.jsonl', [
-      toolResultLine('aa11bb22-cc33-4d44-8e55-6f7788990011'),
-      toolResultLine('bb22cc33-dd44-4e55-8f66-778899001122')
-    ])
-    const journal = await open('claude', CLAUDE_SESSION, {
-      journalDir,
-      limits,
-      autoCompact: false
-    })
-
-    await importLegacyTranscriptIntoJournal({
-      journal,
-      agent: 'claude',
-      sessionId: CLAUDE_SESSION,
-      fence: 1,
-      options: { filePath, limits }
-    })
-
-    expect(await readJournalBlob(journalDir, bounded.digest)).toBe(output)
-    expect(await readdir(join(journalDir, JOURNAL_BLOB_DIR))).toEqual([bounded.digest])
-    expect(
-      journal
-        .snapshot()
-        .items.map((item) => (item.body.kind === 'tool-call' ? item.body.output?.digest : null))
-    ).toEqual([bounded.digest, bounded.digest])
+    expect(block.agents).toHaveLength(64)
+    expect(block.agents[0]?.label.length).toBeLessThan(oversized.length)
+    expect(block.agents[0]?.id.length).toBeLessThan(oversized.length)
+    expect(block.agents[0]?.id.startsWith('z')).toBe(true)
   })
 
-  it('prunes root-level blobs made stale by a later legacy import', async () => {
-    const journalDir = join(root, 'prune-journal')
-    const limits = {
-      ...DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-      inlineHeadBytes: 512,
-      maxSessionBytes: 512 * 1024
-    }
-    const output = 's'.repeat(32 * 1024)
-    const bounded = boundPayload(output, limits)
-    const first = await writeFixture('claude-stale-blob.jsonl', [
-      {
-        parentUuid: null,
-        isSidechain: false,
-        type: 'user',
-        message: {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: 'toolu_stale', content: output }]
-        },
-        uuid: 'aa11bb22-cc33-4d44-8e55-6f7788990011',
-        timestamp: '2026-08-05T10:00:09.000Z',
-        sessionId: CLAUDE_SESSION
-      }
+  it('bounds a roster id in the shared format, keeping a shared prefix distinct', async () => {
+    // The id is the roster key: it takes the same bounded-id format the wires
+    // use, so a later wire bound is a no-op instead of a second, merging clip.
+    const head = 'y'.repeat(512)
+    const journal = await importDecodedRoster([
+      { id: `${head}-one`, label: 'Audit', state: 'working' as const },
+      { id: `${head}-two`, label: 'Audit', state: 'working' as const }
     ])
-    const second = await writeFixture('claude-without-blob.jsonl', [
-      {
-        parentUuid: null,
-        isSidechain: false,
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'replacement' }] },
-        uuid: 'cc33dd44-ee55-4666-8777-889900112233',
-        timestamp: '2026-08-05T10:00:10.000Z',
-        sessionId: CLAUDE_SESSION
-      }
-    ])
-    const journal = await open('claude', CLAUDE_SESSION, {
-      journalDir,
-      limits,
-      autoCompact: false
-    })
 
-    await importLegacyTranscriptIntoJournal({
-      journal,
-      agent: 'claude',
-      sessionId: CLAUDE_SESSION,
-      fence: 1,
-      options: { filePath: first, limits }
-    })
-    expect(await readJournalBlob(journalDir, bounded.digest)).toBe(output)
-
-    await importLegacyTranscriptIntoJournal({
-      journal,
-      agent: 'claude',
-      sessionId: CLAUDE_SESSION,
-      fence: 2,
-      options: { filePath: second, limits }
-    })
-
-    expect(await readJournalBlob(journalDir, bounded.digest)).toBeNull()
-    expect(journal.snapshot().items[0]?.body).toMatchObject({
-      kind: 'message',
-      blocks: [{ type: 'text', text: 'replacement' }]
-    })
-  })
-
-  it('uses managed catch-up appends when a tool-result blob exceeds quota', async () => {
-    const journalDir = join(root, 'catchup-journal')
-    const limits = {
-      ...DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-      inlineHeadBytes: 128,
-      maxSessionBytes: 8_000
+    const body = journal.snapshot().items[0]?.body
+    const block = body?.kind === 'message' ? body.blocks[0] : undefined
+    if (block?.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
     }
-    const journal = await open('codex', CODEX_SESSION, {
-      journalDir,
-      limits,
-      autoCompact: false
-    })
-    const output = 'z'.repeat(12_000)
-    const bounded = boundPayload(output, limits)
-
-    await expect(
-      appendLegacyTranscriptMessages({
-        journal,
-        agent: 'codex',
-        sessionId: CODEX_SESSION,
-        fence: 1,
-        messages: [
-          {
-            id: 'catchup-tool-output',
-            role: 'tool',
-            blocks: [{ type: 'tool-result', output }],
-            timestamp: 1_800_000_000_000,
-            source: 'transcript'
-          }
-        ]
-      })
-    ).rejects.toMatchObject({ code: 'journal_bound_exceeded' })
-
-    expect(await readJournalBlob(journalDir, bounded.digest)).toBeNull()
-    expect(journal.snapshot().items).toEqual([])
+    expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
+    expect(block.agents[0]?.id).toHaveLength(512)
   })
 })
 
 describe('import failures', () => {
-  it('rejects a legacy source above the fixed 16 MiB import cap before decoding', async () => {
-    const journalDir = join(root, 'oversized-source-journal')
-    const journal = await open('claude', CLAUDE_SESSION, {
-      journalDir,
-      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 256 * 1024 * 1024 },
-      autoCompact: false
-    })
-    const filePath = join(root, 'oversized-source.jsonl')
-    await writeFile(filePath, 'x'.repeat(16 * 1024 * 1024 + 1), 'utf8')
-    const epoch = journal.epoch
-
-    await expect(
-      importLegacyTranscriptIntoJournal({
-        journal,
-        agent: 'claude',
-        sessionId: CLAUDE_SESSION,
-        fence: 1,
-        options: { filePath }
-      })
-    ).resolves.toMatchObject({
-      ok: false,
-      error: `Legacy transcript exceeds the ${16 * 1024 * 1024}-byte import bound`
-    })
-    expect(journal.epoch).toBe(epoch)
-    expect(journal.snapshot().items).toEqual([])
-  })
-
-  it('keeps the live epoch intact when a staged rebuild runs out of budget', async () => {
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 2_000 }
-    const journal = await open('codex', CODEX_SESSION, { limits })
-    await appendLegacyTranscriptMessages({
-      journal,
-      agent: 'codex',
-      sessionId: CODEX_SESSION,
-      fence: 1,
-      messages: [
-        {
-          id: 'durable-prefix',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'keep me' }],
-          timestamp: 1_800_000_000_000,
-          source: 'transcript'
-        }
-      ]
-    })
-    const filePath = await writeFixture('oversized-rollout.jsonl', [
-      CODEX_LINES[0],
-      CODEX_LINES[1],
-      CODEX_LINES[2],
-      {
-        type: 'event_msg',
-        timestamp: '2026-08-05T10:00:03.000Z',
-        payload: { type: 'agent_message', message: 'x'.repeat(2_000) }
-      }
-    ])
-    const epoch = journal.epoch
-    const snapshotPath = join(root, 'snapshot.json')
-    const logPath = join(root, 'log.jsonl')
-    const before = {
-      snapshot: await readFile(snapshotPath, 'utf-8'),
-      log: await readFile(logPath, 'utf-8')
-    }
-
-    await expect(
-      importLegacyTranscriptIntoJournal({
-        journal,
-        agent: 'codex',
-        sessionId: CODEX_SESSION,
-        fence: 1,
-        options: { filePath, limits }
-      })
-    ).rejects.toMatchObject({ code: 'journal_bound_exceeded' })
-    expect(journal.epoch).toBe(epoch)
-    expect(await readFile(snapshotPath, 'utf-8')).toBe(before.snapshot)
-    expect(await readFile(logPath, 'utf-8')).toBe(before.log)
-    expect(journal.snapshot().items[0]?.body).toMatchObject({
-      kind: 'message',
-      blocks: [{ type: 'text', text: 'keep me' }]
-    })
-  })
-
-  it('cleans staged replacement blobs when legacy import exceeds physical quota', async () => {
-    const journalDir = join(root, 'replacement-journal')
-    const limits = {
-      ...DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-      inlineHeadBytes: 128,
-      maxSessionBytes: 8_000
-    }
-    const journal = await open('claude', CLAUDE_SESSION, {
-      journalDir,
-      limits,
-      autoCompact: false
-    })
-    const output = 'q'.repeat(12_000)
-    const bounded = boundPayload(output, limits)
-    const filePath = await writeFixture('oversized-tool-result.jsonl', [
-      {
-        parentUuid: null,
-        isSidechain: false,
+  it('charges retained identity metadata against the history budget', async () => {
+    const filePath = join(root, 'large-identities.jsonl')
+    const longId = 'i'.repeat(80 * 1024)
+    const lines = Array.from({ length: 250 }, (_, index) =>
+      JSON.stringify({
         type: 'user',
-        message: {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: 'toolu_oversized', content: output }]
-        },
-        uuid: 'ba11ad00-1111-4222-8333-444455556666',
-        timestamp: '2026-08-05T10:00:09.000Z',
-        sessionId: CLAUDE_SESSION
-      }
-    ])
-    const epoch = journal.epoch
-
-    await expect(
-      importLegacyTranscriptIntoJournal({
-        journal,
-        agent: 'claude',
+        uuid: `${index}-${longId}`,
         sessionId: CLAUDE_SESSION,
-        fence: 1,
-        options: { filePath, limits }
+        message: { role: 'user', content: 'small' }
       })
-    ).rejects.toMatchObject({ code: 'journal_bound_exceeded' })
-
-    expect(journal.epoch).toBe(epoch)
-    expect(await readJournalBlob(journalDir, bounded.digest)).toBeNull()
-    expect((await readdir(journalDir)).some((name) => name.startsWith('.epoch-replacement-'))).toBe(
-      false
     )
+    await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
+
+    const result = await prepareLegacyTranscriptImport({
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      options: { filePath }
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.items.length).toBeLessThan(lines.length)
+    expect(
+      result.items.reduce((total, item) => total + Buffer.byteLength(JSON.stringify(item)), 0)
+    ).toBeLessThanOrEqual(16 * 1024 * 1024)
+    expect(result.items.at(-1)?.identity).toMatchObject({
+      provider: 'claude',
+      uuid: `249-${longId}`
+    })
+  })
+
+  it('imports a source past 16 MiB, keeping its newest messages', async () => {
+    const journal = await open('claude', CLAUDE_SESSION, {
+      database: openTestJournalHostDatabase(join(root, 'large-source-journal'))
+    })
+    const filePath = join(root, 'large-source.jsonl')
+    const filler = 'x'.repeat(17 * 1024)
+    const lines = Array.from({ length: 1_100 }, (_, index) =>
+      JSON.stringify({
+        type: 'assistant',
+        uuid: `message-${index}`,
+        message: { role: 'assistant', content: [{ type: 'text', text: `${index} ${filler}` }] }
+      })
+    )
+    await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      fence: 1,
+      options: { filePath }
+    })
+
+    expect(result).toMatchObject({ ok: true, replaced: true })
+    const texts = journal
+      .snapshot()
+      .items.map((item) =>
+        item.body.kind === 'message' && item.body.blocks[0]?.type === 'text'
+          ? item.body.blocks[0].text.split(' ')[0]
+          : null
+      )
+    expect(texts.at(-1)).toBe('1099')
+    expect(texts.length).toBeGreaterThan(900)
+    expect(texts.length).toBeLessThan(lines.length)
   })
 
   it('bounds oversized legacy tool-call input before journal publication', async () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+    const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, {
-      journalDir,
-      limits,
-      autoCompact: false
+      database: openTestJournalHostDatabase(journalDir)
     })
     const filePath = await writeFixture('oversized-tool-input.jsonl', [
       {
@@ -768,6 +627,38 @@ describe('import failures', () => {
     expect(journal.epoch).toBe(before)
   })
 
+  // A transcript with no decodable messages recovers nothing. Publishing an
+  // empty replacement would roll the epoch and drop whatever the journal held.
+  it('leaves the epoch untouched when the transcript decodes to no messages', async () => {
+    const journal = await open('codex', CODEX_SESSION)
+    await journal.appendItem(
+      { provider: 'codex', threadId: CODEX_SESSION, turnId: 'turn-1', ordinal: 1 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'kept' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const before = journal.epoch
+    const metadataOnly = await writeFixture('metadata-only.jsonl', [
+      {
+        type: 'session_meta',
+        timestamp: '2026-08-05T10:00:00.000Z',
+        payload: { id: CODEX_SESSION, session_id: CODEX_SESSION, cwd: '/Users/dev/project' }
+      }
+    ])
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'codex',
+      sessionId: CODEX_SESSION,
+      fence: 1,
+      options: { filePath: metadataOnly }
+    })
+
+    expect(result).toMatchObject({ ok: true, imported: 0, replaced: false })
+    expect(journal.epoch).toBe(before)
+    expect(journal.snapshot().items).toHaveLength(1)
+    await journal.close()
+  })
+
   it('rejects an agent with no transcript decoder', async () => {
     const journal = await open('claude', CLAUDE_SESSION)
     const result = await importLegacyTranscriptIntoJournal({
@@ -778,5 +669,134 @@ describe('import failures', () => {
       options: { filePath: join(root, 'claude.jsonl') }
     })
     expect(result).toMatchObject({ ok: false })
+  })
+})
+
+// A tool call is only the SOLE block of its message when the provider wrote it
+// that way. Claude interleaves it with narration, Grok hangs `tool_calls` off a
+// row that also has text, and omp's execution cells always pair the invocation
+// with its output — so the multi-block path carries untrusted tool input too.
+describe('multi-block legacy messages', () => {
+  const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
+  const oversized = 'x'.repeat(10_000)
+
+  /** The tool-call block of the first imported multi-block message. */
+  function importedToolCallBlock(journal: AgentSessionJournal): unknown {
+    for (const entry of journal.snapshot().items) {
+      if (entry.body.kind !== 'message') {
+        continue
+      }
+      const block = entry.body.blocks.find((candidate) => candidate.type === 'tool-call')
+      if (block) {
+        return block.input
+      }
+    }
+    return null
+  }
+
+  it('bounds a Claude tool call that shares its message with narration', async () => {
+    const journal = await open('claude', CLAUDE_SESSION, {
+      database: openTestJournalHostDatabase(join(root, 'claude-mixed-journal'))
+    })
+    const filePath = await writeFixture('claude-mixed.jsonl', [
+      {
+        parentUuid: null,
+        isSidechain: false,
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Editing the file.' },
+            {
+              type: 'tool_use',
+              id: 'toolu_mixed',
+              name: 'Edit',
+              input: { file_path: 'a.ts', patch: oversized }
+            }
+          ]
+        },
+        uuid: 'dd22be00-1111-4222-8333-444455556666',
+        timestamp: '2026-08-05T10:00:09.000Z',
+        sessionId: CLAUDE_SESSION
+      }
+    ])
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      fence: 1,
+      options: { filePath, limits }
+    })
+
+    expect(result.ok).toBe(true)
+    expect(importedToolCallBlock(journal)).toMatchObject({
+      truncated: true,
+      byteLength: expect.any(Number),
+      digest: expect.stringMatching(/^[0-9a-f]{64}$/),
+      head: expect.any(String)
+    })
+    expect(JSON.stringify(journal.snapshot().items)).not.toContain('x'.repeat(1_000))
+    await journal.close()
+  })
+
+  it('bounds a Grok tool call that shares its row with assistant text', async () => {
+    const journal = await open('grok', CODEX_SESSION, {
+      database: openTestJournalHostDatabase(join(root, 'grok-mixed-journal'))
+    })
+    const filePath = await writeFixture('grok-mixed.jsonl', [
+      {
+        type: 'assistant',
+        id: 'asst-mixed',
+        timestamp: '2026-08-05T10:00:09.000Z',
+        content: [{ type: 'text', text: 'Searching.' }],
+        tool_calls: [{ id: 'c1', name: 'grep', arguments: JSON.stringify({ pattern: oversized }) }]
+      }
+    ])
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'grok',
+      sessionId: CODEX_SESSION,
+      fence: 1,
+      options: { filePath, limits }
+    })
+
+    expect(result.ok).toBe(true)
+    expect(importedToolCallBlock(journal)).toMatchObject({ truncated: true })
+    expect(JSON.stringify(journal.snapshot().items)).not.toContain('x'.repeat(1_000))
+    await journal.close()
+  })
+
+  it('bounds an omp execution cell, whose invocation always ships with its output', async () => {
+    const journal = await open('omp', CODEX_SESSION, {
+      database: openTestJournalHostDatabase(join(root, 'omp-mixed-journal'))
+    })
+    const filePath = await writeFixture('omp-mixed.jsonl', [
+      {
+        type: 'message',
+        id: 'omp-mixed-1',
+        timestamp: '2026-08-05T10:00:09.000Z',
+        message: {
+          role: 'bashExecution',
+          command: `echo ${oversized}`,
+          output: 'done',
+          exitCode: 0
+        }
+      }
+    ])
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'omp',
+      sessionId: CODEX_SESSION,
+      fence: 1,
+      options: { filePath, limits }
+    })
+
+    expect(result.ok).toBe(true)
+    expect(importedToolCallBlock(journal)).toMatchObject({ truncated: true })
+    expect(JSON.stringify(journal.snapshot().items)).not.toContain('x'.repeat(1_000))
+    await journal.close()
   })
 })

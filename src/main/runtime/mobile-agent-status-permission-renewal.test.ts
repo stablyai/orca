@@ -92,6 +92,18 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
     expect(out?.state).toBe('done')
   })
 
+  it('does not let replay delivery time make old working evidence outrank a newer title', () => {
+    const hookAt = Date.now() - 1_000
+    const replayedAt = Date.now()
+    const out = renewFromPtyTitle()(
+      { ...claudeStatus('working', replayedAt), evidenceObservedAt: hookAt },
+      parkedOnPromptPty(hookAt),
+      { preserveQuestionUnderShellTitle: true }
+    )
+
+    expect(out?.state).toBe('done')
+  })
+
   // Why: an idle title is the ABSENCE of activity evidence, so it cannot outrank the hook.
   // A `working` title is positive evidence the agent resumed, which does — otherwise a
   // finished turn's question card would linger into the next working interval (#11761).

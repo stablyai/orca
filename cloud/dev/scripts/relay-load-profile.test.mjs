@@ -4,6 +4,7 @@ import {
   parseRelayLoadArguments,
   relayLoadPrincipalIndex,
   relayLoadReaderEvidenceError,
+  relayLoadResumePhoneIndexes,
   relayLoadSpliceIndexes,
   relayLoadSpliceProfile,
   relayLoadSpliceStartDelayMs
@@ -44,6 +45,13 @@ test('binds synthetic Relay principals to a bounded Asia director proof', () => 
     ...required, '--preferred-region', 'asia-east2',
     '--relay-asia-load-principals', '33'
   ]), /require a regional director proof/)
+  assert.throws(() => parseRelayLoadArguments([
+    ...required, '--preferred-region', 'europe-west1', '--relay-asia-load-principals', '1'
+  ]), /require a regional director proof/)
+  // A US cell's canary aims the one synthetic principal at us-central1.
+  assert.equal(parseRelayLoadArguments([
+    ...required, '--preferred-region', 'us-central1', '--relay-asia-load-principals', '1'
+  ]).preferredRegion, 'us-central1')
 })
 
 test('rejects a mixed profile beyond the ordinary 2900-unit boundary', () => {
@@ -205,6 +213,20 @@ test('maps splice ownership deterministically within a shard', () => {
   ])
 
   assert.deepEqual(relayLoadSpliceIndexes(config), [2, 6, 10])
+})
+
+test('puts resume phones on the controls after the splice controls', () => {
+  const config = parseRelayLoadArguments([
+    ...required, '--controls', '4', '--splices', '1', '--resume-phones', '2',
+    '--shard-count', '4', '--shard-index', '2'
+  ])
+
+  assert.deepEqual(relayLoadSpliceIndexes(config), [2])
+  assert.deepEqual(relayLoadResumePhoneIndexes(config), [6, 10])
+  assert.throws(
+    () => parseRelayLoadArguments([...required, '--controls', '2', '--splices', '1', '--resume-phones', '2']),
+    /--splices plus --resume-phones cannot exceed --controls/
+  )
 })
 
 test('staggered shards form one deterministic splice ramp', () => {
@@ -385,4 +407,21 @@ test('requires queue, memory, and expected close evidence', () => {
     relayLoadReaderEvidenceError({ ...passing, readerClosesByCode: { '4429': 0 } }, config),
     /did not close with 4429/
   )
+})
+
+test('bounds duplicate-assign probes to a director run', () => {
+  const config = parseRelayLoadArguments([...required, '--duplicate-assign-probes', '100'])
+  assert.equal(config.duplicateAssignProbes, 100)
+  assert.equal(config.duplicateAssignHoldMs, 20_000)
+  assert.equal(parseRelayLoadArguments(required).duplicateAssignProbes, 0)
+  assert.throws(() => parseRelayLoadArguments([
+    '--auth-origin', 'https://auth.test', '--target-origin', 'https://cell.test',
+    '--duplicate-assign-probes', '1'
+  ]), /require --director-origin/)
+  assert.throws(() => parseRelayLoadArguments([
+    ...required, '--duplicate-assign-probes', '1001'
+  ]), /cannot exceed 1000/)
+  assert.throws(() => parseRelayLoadArguments([
+    ...required, '--duplicate-assign-probes', '1', '--duplicate-assign-hold-ms', '500'
+  ]), /between 1000 and 120000/)
 })

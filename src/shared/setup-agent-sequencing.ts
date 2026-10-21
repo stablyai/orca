@@ -1,11 +1,15 @@
+import { quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { encodePowerShellCommand } from './powershell-command-encoding'
+import { getPosixCodexShellLaunchPreflight } from './codex-shell-function'
+import { getPosixClaudeShellFunction } from './claude-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
-  type SetupRunnerCommandShell,
   type SetupRunnerShell
 } from './setup-runner-command'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
+import { quotePowerShellLiteral } from './powershell-native-argument'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 // Exported so the gate and its tests share one definition.
@@ -28,11 +32,7 @@ export function resolveSetupAgentSequenceLaunchCommand(
 }
 
 export function createSetupAgentSequenceNonce(): string {
-  const cryptoApi = globalThis.crypto
-  if (typeof cryptoApi?.randomUUID === 'function') {
-    return cryptoApi.randomUUID()
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return createNonSecureContextUuid()
 }
 
 export function createSequencedSetupAgentCommands(args: {
@@ -90,9 +90,9 @@ export function createSequencedSetupAgentCommands(args: {
 }
 
 function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce: string): string {
-  const marker = quotePosixArg(markerPath)
-  const tmp = quotePosixArg(`${markerPath}.tmp`)
-  const nonceValue = quotePosixArg(nonce)
+  const marker = quotePosixShellUnlessPlainNoAt(markerPath)
+  const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
+  const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
 
   const script = [
     `rm -f ${marker} ${tmp} 2>/dev/null`,
@@ -103,7 +103,7 @@ function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce:
     'exit "$status"'
   ].join('; ')
 
-  return `bash -lc ${quotePosixArg(script)}`
+  return `bash -lc ${quotePosixShellUnlessPlainNoAt(script)}`
 }
 
 function buildPosixStartupScript(
@@ -112,9 +112,9 @@ function buildPosixStartupScript(
   nonce: string,
   waitTimeoutSeconds: number
 ): string {
-  const marker = quotePosixArg(markerPath)
-  const tmp = quotePosixArg(`${markerPath}.tmp`)
-  const nonceValue = quotePosixArg(nonce)
+  const marker = quotePosixShellUnlessPlainNoAt(markerPath)
+  const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
+  const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
   // Why: the PTY launch path feeds this command through an interactive shell,
@@ -130,7 +130,9 @@ function buildPosixStartupScript(
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     // Why: failure and timeout announce themselves; a silent success left
     // "Waiting for setup..." as the pane's last line forever.
-    `if [ "$status" = "0" ]; then echo ${quotePosixArg(SETUP_COMPLETE_MESSAGE)} >&2; if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    // Why here and not first: setup may be what puts codex on PATH, and this
+    // `bash -lc` never reads Orca's shell wrapper, so it defines the function itself.
+    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     'echo "Setup failed; skipping agent startup." >&2;',
     'exit "${status:-1}";',
     'fi;',
@@ -151,7 +153,7 @@ function buildPosixStartupSuccessCommand(startupCommand: string): string {
     hasUnquotedPosixCommandSeparator(startupCommand) ||
     hasLeadingPosixEnvAssignment(startupCommand)
   ) {
-    return `eval ${quotePosixArg(startupCommand)}; exit "$?"`
+    return `eval ${quotePosixShellUnlessPlainNoAt(startupCommand)}; exit "$?"`
   }
   return `exec ${startupCommand}`
 }
@@ -196,10 +198,10 @@ function buildWindowsSetupCommand(
 ): string {
   // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
   const script = [
-    `$runner = ${quotePowerShellString(runnerScriptPath)}`,
-    `$marker = ${quotePowerShellString(markerPath)}`,
+    `$runner = ${quotePowerShellLiteral(runnerScriptPath)}`,
+    `$marker = ${quotePowerShellLiteral(markerPath)}`,
     '$tmp = $marker + ".tmp"',
-    `$nonce = ${quotePowerShellString(nonce)}`,
+    `$nonce = ${quotePowerShellLiteral(nonce)}`,
     'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
     '$processInfo.FileName = $env:ComSpec',
@@ -227,13 +229,34 @@ function buildWindowsStartupCommand(
   // Why: native Windows setup runners launch through cmd.exe, but PowerShell
   // gives us safe bounded file polling/parsing without a fragile batch label loop.
   const script = [
-    `$marker = ${quotePowerShellString(markerPath)}`,
+    // Why: the startup command is user-authored and may invoke a `.ps1`, which IS
+    // execution-policy gated even though `-EncodedCommand` is not. This is the in-payload
+    // stand-in for the `-ExecutionPolicy Bypass` switch dropped from the command line
+    // (same trade as the agent-hooks launcher). Progress must be silenced first and
+    // restored after: Set-ExecutionPolicy autoloads a module whose "Preparing modules for
+    // first use." record would otherwise land on the stderr this gate writes to.
+    //
+    // The failure is reported rather than swallowed. Autoload can fail for reasons that
+    // have nothing to do with policy -- a 5.1 install with duplicate extended type data
+    // fails every cmdlet in Microsoft.PowerShell.Security -- and the old
+    // `-ErrorAction SilentlyContinue` plus empty `catch` hid that completely, leaving the
+    // user with an execution-policy refusal from their own script and no trace that the
+    // relief had been attempted. `-ErrorAction Stop` is what routes a non-terminating
+    // failure into the catch at all. Still never throws: a diagnostic is worth a line of
+    // stderr, but not the startup this gate exists to run.
+    "$orcaProgress = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'",
+    'try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop } ' +
+      'catch { [Console]::Error.WriteLine("Orca: could not relax the execution policy for this " + ' +
+      '"session (" + $_.FullyQualifiedErrorId + "). A startup command that runs a .ps1 " + ' +
+      '"may be blocked.") }',
+    '$ProgressPreference = $orcaProgress',
+    `$marker = ${quotePowerShellLiteral(markerPath)}`,
     'if ([string]::IsNullOrWhiteSpace($marker)) {',
     '  [Console]::Error.WriteLine("Missing setup marker path.")',
     '  exit 1',
     '}',
     '$tmp = $marker + ".tmp"',
-    `$nonce = ${quotePowerShellString(nonce)}`,
+    `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
     '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
     'while ($true) {',
@@ -251,7 +274,7 @@ function buildWindowsStartupCommand(
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',
     '        exit 1',
     '      }',
-    `      [Console]::Error.WriteLine(${quotePowerShellString(SETUP_COMPLETE_MESSAGE)})`,
+    `      [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_COMPLETE_MESSAGE)})`,
     '      Invoke-Expression $startup',
     '      if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
     '      if (-not $?) { exit 1 }',
@@ -269,24 +292,9 @@ function buildWindowsStartupCommand(
   return encodePowerShellInvocation(script)
 }
 
+// Why: `-EncodedCommand` is not execution-policy gated (only `-File` is), so `-ExecutionPolicy
+// Bypass` was a no-op — and it is one of the most heavily EDR-flagged PowerShell tokens. The
+// base64 stays: these strings are typed into a terminal pane and re-parsed by its shell.
 function encodePowerShellInvocation(script: string): string {
-  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
-}
-
-function quotePosixArg(value: string): string {
-  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
-    return value
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function quotePowerShellString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
-}
-
-export function getSetupAgentSequenceShellForTests(
-  runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
-): SetupRunnerCommandShell {
-  return resolveSetupRunnerCommand(runnerScriptPath, platform).shell
+  return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(script)}`
 }

@@ -37,5 +37,7 @@ export const nativeChatApi = {
       ipcRenderer.removeListener('nativeChat:appended', listener)
       ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
     }
-  }
+  },
+  getConversationNameFailureOutput: (sessionId: string): Promise<string | null> =>
+    ipcRenderer.invoke('nativeChat:conversationNameFailureOutput', sessionId)
 } satisfies PreloadApi['nativeChat']

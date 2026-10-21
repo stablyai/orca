@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../opencode/opencode-data-directory', () => ({
-  resolveOpenCodeDataDirectory: mocks.resolveDataDirectory
+  resolveOpenCodeDataDirectory: mocks.resolveDataDirectory,
+  resolveOpenCodeDatabasePath: () => UNC_DATABASE
 }))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),

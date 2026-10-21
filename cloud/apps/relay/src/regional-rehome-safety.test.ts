@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT,
-  REGIONAL_REHOME_POOL_WAITERS_MAX_LIMIT,
   REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,
   REGIONAL_REHOME_SQL_FAILURES_LIMIT,
-  regionalRehomeSafetyFailure
+  REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS,
+  REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS,
+  nextRegionalRehomeSqlFailuresBreach,
+  regionalRehomeSafetyFailure,
+  regionalRehomeSqlFailuresSustained,
+  type RegionalRehomeSqlFailuresBreach
 } from './regional-rehome-safety.js'
 
 const NOW = 1_787_900_000_000
@@ -41,14 +44,38 @@ describe('regionalRehomeSafetyFailure', () => {
     ).toBeNull()
   })
 
-  it('still fails closed on each pool pressure bound', () => {
-    for (const overrides of [
-      { databasePoolWaitersMax: REGIONAL_REHOME_POOL_WAITERS_MAX_LIMIT + 1 },
-      { databasePoolWaitMsMax: REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT + 1 }
-    ]) {
-      expect(regionalRehomeSafetyFailure(safety(overrides), NOW, 19)).toBe(
-        'database_pool_pressure'
+  it('passes asia-scale pool pressure, which excludes a cell rather than the fleet', () => {
+    // Measured 2026-09-16 on the asia-east2 cells: a client pool too narrow for
+    // a 176ms round trip, with 0.2ms server-side execution. The fleet snapshot
+    // is a Math.max, so gating on it here stops every region.
+    expect(
+      regionalRehomeSafetyFailure(
+        safety({ databasePoolWaitersMax: 150, databasePoolWaitMsMax: 2_005 }),
+        NOW,
+        19
       )
+    ).toBeNull()
+    // Every other bar still fails closed at that same pool pressure.
+    for (const [overrides, reason] of [
+      [{ sqlFailures: REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1 }, 'sql_failures'],
+      [{ controlActivityRecoveryFailures: 1 }, 'control_recovery_failures'],
+      [
+        { reconnects: 19 * REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT + 1 },
+        'elevated_reconnects'
+      ],
+      [{ observedAt: 0 }, 'monitoring_stale']
+    ] as const) {
+      expect(
+        regionalRehomeSafetyFailure(
+          safety({
+            databasePoolWaitersMax: 150,
+            databasePoolWaitMsMax: 2_005,
+            ...overrides
+          }),
+          NOW,
+          19
+        )
+      ).toBe(reason)
     }
   })
 
@@ -105,5 +132,46 @@ describe('regionalRehomeSafetyFailure', () => {
     expect(
       regionalRehomeSafetyFailure(safety({ observedAt: NOW - 61_000 }), NOW, 19)
     ).toBe('monitoring_stale')
+  })
+})
+
+describe('regional rehome sql failure breach', () => {
+  const STORM = REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1
+  function observe(samples: [at: number, sqlFailures: number][]): RegionalRehomeSqlFailuresBreach {
+    let breach: RegionalRehomeSqlFailuresBreach = null
+    for (const [at, sqlFailures] of samples) {
+      breach = nextRegionalRehomeSqlFailuresBreach(breach, sqlFailures, NOW + at)
+    }
+    return breach
+  }
+
+  it('does not sustain a single-stall spike', () => {
+    // 10-06 06:16Z: one 5-7 s stall published 396 for up to ~90 s.
+    const spike = observe([[0, 396], [30_000, 396], [60_000, 396], [90_000, 396]])
+    expect(spike && regionalRehomeSqlFailuresSustained(spike)).toBe(false)
+    expect(observe([[0, 396], [90_000, 396], [96_000, 0]])).toBeNull()
+  })
+
+  it('sustains a breach watched for the whole window', () => {
+    const samples: [number, number][] = []
+    for (let at = 0; at <= REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS; at += 6_000) samples.push([at, STORM])
+    const breach = observe(samples)
+    expect(breach && regionalRehomeSqlFailuresSustained(breach)).toBe(true)
+  })
+
+  it('restarts the window after an unwatched gap', () => {
+    const breach = observe([
+      [0, STORM],
+      [REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS + 1, STORM],
+      [REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS + 30_000, STORM]
+    ])
+    expect(breach?.since).toBe(NOW + REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS + 1)
+    expect(breach && regionalRehomeSqlFailuresSustained(breach)).toBe(false)
+  })
+
+  it('reports a latching reason over a concurrent sql spike', () => {
+    expect(
+      regionalRehomeSafetyFailure(safety({ sqlFailures: STORM, controlActivityRecoveryFailures: 1 }), NOW, 19)
+    ).toBe('control_recovery_failures')
   })
 })

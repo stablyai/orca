@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { resolveGitCommonDirectory } from '../../shared/git-common-directory'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // NUL can appear in neither a path nor a Git ref, so field boundaries stay unambiguous.
@@ -22,7 +23,7 @@ const LINKED_WORKTREE_PROBE_CONCURRENCY = 8
  */
 export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promise<string | null> {
   try {
-    const commonDir = await resolveGitCommonDir(repoPath)
+    const commonDir = await resolveGitCommonDirectory(repoPath)
     if (!commonDir) {
       return null
     }
@@ -58,7 +59,7 @@ async function readLinkedWorktreeStamp(
   const gitdirTarget = await readTrimmedFile(path.join(entryDir, 'gitdir'))
   const [head, locked, worktreeExists] = await Promise.all([
     readHeadStamp(commonDir, entryDir),
-    readExistenceStamp(path.join(entryDir, 'locked')),
+    readFileStamp(path.join(entryDir, 'locked')),
     // Deleting a worktree directory outside Orca flips its `prunable` row without touching the admin dir.
     gitdirTarget ? readExistenceStamp(path.dirname(gitdirTarget)) : Promise.resolve(MISSING)
   ])
@@ -112,41 +113,6 @@ async function readLinkedWorktreeNames(adminDir: string): Promise<string[]> {
     }
     throw err
   }
-}
-
-async function resolveGitCommonDir(repoPath: string): Promise<string | null> {
-  const gitDir = await resolveGitDir(repoPath)
-  if (!gitDir) {
-    return null
-  }
-  // A linked worktree's gitdir points at the shared admin root through `commondir`.
-  const commonDir = await readTrimmedFile(path.join(gitDir, 'commondir'))
-  return commonDir ? path.resolve(gitDir, commonDir) : gitDir
-}
-
-async function resolveGitDir(repoPath: string): Promise<string | null> {
-  const dotGitPath = path.join(repoPath, '.git')
-  let dotGitStats: Awaited<ReturnType<typeof stat>> | null = null
-  try {
-    dotGitStats = await stat(dotGitPath)
-  } catch (err) {
-    if (!isMissingEntryError(err)) {
-      throw err
-    }
-  }
-  if (!dotGitStats) {
-    // Bare repo, or a repo path that already is a gitdir.
-    return (await readExistenceStamp(path.join(repoPath, 'HEAD'))) === 'y' ? repoPath : null
-  }
-  if (dotGitStats.isDirectory()) {
-    return dotGitPath
-  }
-  if (!dotGitStats.isFile()) {
-    return null
-  }
-  const contents = await readTrimmedFile(dotGitPath)
-  const match = contents?.match(/^gitdir:\s*(.+?)\s*$/m)
-  return match ? path.resolve(repoPath, match[1]) : null
 }
 
 async function readTrimmedFile(filePath: string): Promise<string | null> {

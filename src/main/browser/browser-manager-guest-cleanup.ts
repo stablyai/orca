@@ -20,11 +20,10 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
       this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
     this.policyAttachedGuestIds.delete(guestWebContentsId)
-    this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
-    this.authUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
+    this.cdpUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
     if (isPrimaryGuest) {

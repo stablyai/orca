@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {
   const {
@@ -19,7 +20,8 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
     loading,
     viewId,
     doFetch,
-    setAppliedQueryByView
+    setAppliedQueryByView,
+    sourceTarget
   } = tableState
   const selectedViewUrl = table
     ? `${table.project.url}/views/${table.selectedView.number ?? ''}`
@@ -58,6 +60,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
             : null
         }
         onSelect={(selection) => void doFetch(selection, true)}
+        sourceTarget={sourceTarget}
       />
       {currentProjectViewKey ? (
         <ProjectSearchInput
@@ -171,8 +174,8 @@ function ProjectSearchInput({
       input.focus()
       input.select()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [])
 
   return (

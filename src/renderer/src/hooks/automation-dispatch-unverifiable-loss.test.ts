@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -10,7 +11,7 @@ vi.mock('@/store', () => ({
 
 const markDispatchResult = vi.fn<(result: AutomationDispatchResult) => Promise<void>>()
 const releaseTerminalOwnership = vi.fn()
-const finalizeTerminalOwnership = vi.fn(() => false)
+const finalizeTerminalOwnership = vi.fn<AutomationTerminalOwnership['finalize']>(async () => null)
 
 async function createCompletion() {
   const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
@@ -37,7 +38,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     markDispatchResult.mockResolvedValue(undefined)
-    finalizeTerminalOwnership.mockReturnValue(false)
+    finalizeTerminalOwnership.mockResolvedValue(null)
   })
 
   it('records no result, so the run keeps its non-final dispatched status', async () => {
@@ -58,7 +59,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
 
   it('still completes and finalizes a genuinely exited process', async () => {
     const completion = await createCompletion()
-    finalizeTerminalOwnership.mockReturnValue(true)
+    finalizeTerminalOwnership.mockResolvedValue('closed')
 
     completion.handleExit(0)
     await vi.waitFor(() => expect(finalizeTerminalOwnership).toHaveBeenCalledOnce())

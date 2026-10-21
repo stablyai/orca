@@ -18,7 +18,6 @@ export type ChecksPanelReviewStateInput = Pick<
   | 'prRefreshStateNow'
   | 'prCachedHasPR'
   | 'prNumber'
-  | 'refreshContextKey'
 > &
   Pick<
     ChecksPanelControllerState,
@@ -37,6 +36,7 @@ export type ChecksPanelReviewStateInput = Pick<
     | 'remoteStatusInvalidation'
     | 'repo'
     | 'repoConnectionId'
+    | 'ownerTarget'
     | 'runtimeEnvironmentId'
     | 'settings'
     | 'updatePullRequestGenerationRecord'

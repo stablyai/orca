@@ -1,3 +1,4 @@
+import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -27,6 +28,9 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
 // path for the composer, so keep its clone/SSH machinery out of the entry render.
@@ -42,6 +46,7 @@ type ComposerModalData = {
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   taskSourceContext?: TaskSourceContext | null
+  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
@@ -73,6 +78,7 @@ function ComposerModalBody({
   modalData: ComposerModalData
   onClose: () => void
 }): React.JSX.Element {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const submitCancelledRef = useRef(false)
   const handleDismiss = useCallback(() => {
     submitCancelledRef.current = true
@@ -83,7 +89,13 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
+        ref={dialogRef}
         className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        onEscapeKeyDown={(event) => {
+          if (dialogRef.current?.querySelector('[data-sparse-preset-editor]')) {
+            event.preventDefault()
+          }
+        }}
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
@@ -123,7 +135,7 @@ function QuickTabBody({
     onComposerNodeChange,
     nameInputRef,
     submitQuick,
-    createDisabled,
+    createDisabled: formDisabled,
     selectAddedProjectRepo
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
@@ -133,6 +145,7 @@ function QuickTabBody({
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
+    initialWorkspaceTarget: modalData.initialWorkspaceTarget ?? null,
     initialRepoId: modalData.initialRepoId,
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
@@ -142,8 +155,7 @@ function QuickTabBody({
     onCreated: onClose,
     isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
-    enableIssueAutomation: modalData.enableIssueAutomation === true,
-    createGateMode: 'quick'
+    enableIssueAutomation: modalData.enableIssueAutomation === true
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want
@@ -162,8 +174,6 @@ function QuickTabBody({
   )
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
-    // Why: detection can still be pending when quick-create submits; keep the
-    // prior catalog fallback while filtering disabled agents out of that choice.
     return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
   const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
@@ -178,14 +188,46 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const [quickSelectionCleared, setQuickSelectionCleared] = useState(false)
+  const quickSetupOnly = quickAgent === null && quickSelectionCleared
 
-  const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
-    setQuickAgentOverride(agent)
+  // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
+  const [quickAgentPick, setQuickAgentPick] = useState<{
+    agent: TuiAgent | null
+    surface?: AgentLaunchSurface
+  }>({ agent: null })
+  const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
+  const observation = useAgentMenuObservation(
+    cardProps.agentRows?.target ?? null,
+    active && Boolean(cardProps.agentRows),
+    cardProps.agentRows?.detectionTarget
+  )
+  const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
+  const createDisabled = formDisabled || !launchSelection.ready
+
+  const handleQuickAgentChange = useCallback(
+    (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
+      setQuickAgentOverride(agent)
+      setQuickAgentPick({ agent, surface })
+      setQuickSelectionCleared(false)
+    },
+    []
+  )
+
+  const handleQuickSetupOnlySelect = useCallback(() => {
+    setQuickAgentOverride(null)
+    setQuickSelectionCleared(true)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+    if (createDisabled) {
+      return
+    }
+    await submitQuick(quickAgent, {
+      setupOnly: quickSetupOnly,
+      launchChoice: launchSelection.choice
+    })
+  }, [createDisabled, quickAgent, launchSelection.choice, quickSetupOnly, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -261,14 +303,14 @@ function QuickTabBody({
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
-      if (createDisabled) {
+      if (createDisabled || composerRef.current?.hasAttribute('data-sparse-preset-editing')) {
         return
       }
       event.preventDefault()
       void handleCreate()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
 
   return (
@@ -284,24 +326,36 @@ function QuickTabBody({
         </DialogTitle>
         <DialogDescription className="sr-only">
           {translate(
-            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
-            'Choose the project, workspace name, and agent before creating the workspace.'
+            'components.newWorkspace.createDescription',
+            'Choose the project and workspace name. Select an agent if you want to start one.'
           )}
         </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
-        // Why: the scroll container clips children (overflow-y-auto forces overflow-x to auto),
-        // while Orca's standard field focus ring paints 3px outside the control and the ghost
-        // "Advanced" disclosure pulls its padded hover highlight ~8px left to align its label with
-        // the field labels. Inset px-2 so both stay fully visible instead of clipped at the edge.
-        containerClassName="min-h-0 flex-1 overflow-y-auto px-2 scrollbar-sleek"
+        // Keep focus rings and the Advanced hover highlight inside the scroll padding.
+        containerClassName="px-2"
+        contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        quickSetupOnly={quickSetupOnly}
+        onQuickSetupOnlySelect={handleQuickSetupOnlySelect}
         {...cardProps}
+        createDisabled={createDisabled}
+        agentSurfaceRows={
+          cardProps.agentRows
+            ? {
+                model: observation.model,
+                selection: launchSelection,
+                surface: quickAgentSurface,
+                contextKey: observation.contextKey,
+                onPick: handleQuickAgentChange
+              }
+            : undefined
+        }
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}

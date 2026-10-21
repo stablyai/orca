@@ -13,7 +13,7 @@ const {
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock,
+  wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -27,7 +27,7 @@ const {
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
@@ -107,7 +107,7 @@ vi.mock('../wsl', () => ({
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
   // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
   // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+  wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
@@ -146,7 +146,7 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
-      wslUncDirectoryExistsMock,
+      wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
 
@@ -513,13 +513,16 @@ describe('LocalPtyProvider', () => {
       expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     })
 
-    it('non-win32 immediate shutdown of a plain shell skips the tree kill', async () => {
-      // beforeEach pins platform to linux; POSIX force-kill already reaches the child pgroup.
+    it('POSIX immediate shutdown sweeps detached OMP tools without startup recognition', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
       await provider.shutdown(id, { immediate: true })
 
-      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
     })
   })
 
@@ -561,6 +564,20 @@ describe('LocalPtyProvider', () => {
       expect(mock2Kill).toHaveBeenCalled()
       const list = await provider.listProcesses()
       expect(list).toHaveLength(0)
+    })
+
+    it('force-kills an OMP PTY root during app quit', async () => {
+      const killSpy = vi.fn()
+      spawnMock.mockReturnValue({
+        ...mockProc,
+        kill: killSpy
+      })
+
+      await provider.spawn({ cols: 80, rows: 24, launchAgent: 'omp' })
+
+      provider.killAll()
+
+      expect(killSpy).toHaveBeenCalledWith('SIGKILL')
     })
 
     it('does not destroy after intentional Windows orphan kills', async () => {

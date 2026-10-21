@@ -4,13 +4,14 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-rejection-guards'
+import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
     return
   }
   await runTerminalCopy({
-    selection: pane.terminal.getSelection(),
+    selection: readTerminalClipboardSelection(pane.terminal),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
     // Why: Radix returns focus to the menu trigger (the pane container) on
     // close, but xterm.js only accepts input when its own helper textarea is
@@ -54,7 +55,8 @@ export const copyTerminalPaneMenuPaneId = async (
 
 export const copyTerminalPaneMenuTerminalId = async (
   pane: ManagedPane | null,
-  tabId: string
+  tabId: string,
+  ptyId: string | null
 ): Promise<void> => {
   if (!pane) {
     return
@@ -63,6 +65,7 @@ export const copyTerminalPaneMenuTerminalId = async (
     await copyTerminalHandleForPane({
       tabId,
       leafId: pane.leafId,
+      ptyId,
       callRuntime: window.api.runtime.call,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
     })

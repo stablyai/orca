@@ -1,4 +1,6 @@
+import { RELAY_DEFAULT_REGION } from '@orca-cloud/relay-contract'
 import type { RelayDatabase, SqlRow } from './database.js'
+import { REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS } from './regional-rehome-abort-reason.js'
 
 export type CellInventorySnapshotRow = {
   cellId: string
@@ -21,6 +23,7 @@ export type AssignmentInventorySnapshot = {
     targetRegistered: number
     completedLast24Hours: number
     abortedLast24Hours: number
+    hostNotArrivedLast24Hours: number
     oldestActiveAgeMs: number | null
   }
 }
@@ -78,6 +81,10 @@ export async function readAssignmentInventorySnapshot(
            AS completed_last_24_hours,
          COALESCE(SUM(CASE WHEN attempt.aborted_at >= ? THEN 1 ELSE 0 END), 0)
            AS aborted_last_24_hours,
+         COALESCE(SUM(CASE WHEN attempt.aborted_at >= ?
+                                AND attempt.abort_reason = 'host_not_arrived'
+                           THEN 1 ELSE 0 END), 0)
+           AS host_not_arrived_last_24_hours,
          MIN(CASE WHEN attempt.completed_at IS NULL AND attempt.aborted_at IS NULL
                   THEN attempt.created_at END) AS oldest_active_at
        FROM relay_region_rehome_attempts attempt
@@ -85,14 +92,18 @@ export async function readAssignmentInventorySnapshot(
          ON migration.user_id = attempt.user_id
         AND migration.relay_host_id = attempt.relay_host_id
         AND migration.assignment_epoch = attempt.assignment_epoch`,
-      [now - 24 * 60 * 60_000, now - 24 * 60 * 60_000]
+      [
+        now - REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS,
+        now - REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS,
+        now - REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS
+      ]
     )
   )[0]
   const oldestActiveAt = optionalInteger(regionalRehomeRow, 'oldest_active_at')
   return {
     cells: cellRows.map((row) => ({
       cellId: asText(row, 'cell_id'),
-      region: optionalText(row, 'region') ?? 'us-central1',
+      region: optionalText(row, 'region') ?? RELAY_DEFAULT_REGION,
       admissionState: optionalText(row, 'admission_state') ?? 'unset',
       enabled: asInteger(row, 'enabled') === 1,
       capacityRequests: asInteger(row, 'capacity_requests'),
@@ -116,6 +127,10 @@ export async function readAssignmentInventorySnapshot(
       targetRegistered: asInteger(regionalRehomeRow, 'target_registered'),
       completedLast24Hours: asInteger(regionalRehomeRow, 'completed_last_24_hours'),
       abortedLast24Hours: asInteger(regionalRehomeRow, 'aborted_last_24_hours'),
+      hostNotArrivedLast24Hours: asInteger(
+        regionalRehomeRow,
+        'host_not_arrived_last_24_hours'
+      ),
       oldestActiveAgeMs: oldestActiveAt === null ? null : now - oldestActiveAt
     }
   }
@@ -146,6 +161,7 @@ export function formatAssignmentInventorySnapshot(
       ` targetRegistered=${snapshot.regionalRehomes.targetRegistered}` +
       ` completedLast24Hours=${snapshot.regionalRehomes.completedLast24Hours}` +
       ` abortedLast24Hours=${snapshot.regionalRehomes.abortedLast24Hours}` +
+      ` hostNotArrivedLast24Hours=${snapshot.regionalRehomes.hostNotArrivedLast24Hours}` +
       ` oldestActiveAgeMs=${snapshot.regionalRehomes.oldestActiveAgeMs ?? 'none'}`
   )
   return lines

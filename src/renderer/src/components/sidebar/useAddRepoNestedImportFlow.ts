@@ -16,7 +16,7 @@ import type {
 } from '../../../../shared/project-group-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
-import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-runtime-owner'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
 import { defaultProjectGroupNameForPath } from './add-repo-dialog-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -45,7 +45,7 @@ export function useAddRepoNestedImportFlow({
   nestedConnectionId: string | null
   nestedGroupName: string
   nestedImportScanId: string | null
-  nestedRuntimeEnvironmentId?: CapturedRuntimeOwner
+  nestedRuntimeEnvironmentId: string | null
   activeRuntimeEnvironmentId: string | null | undefined
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
@@ -55,7 +55,7 @@ export function useAddRepoNestedImportFlow({
     projectPaths: string[]
     connectionId?: string
     scanId?: string
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind

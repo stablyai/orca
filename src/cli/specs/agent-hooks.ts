@@ -4,7 +4,7 @@ import { GLOBAL_FLAGS } from '../args'
 export const AGENT_HOOK_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['agent', 'hooks', 'prepare-codex'],
-    summary: 'Repair Orca-managed Codex hook trust before a shell launch',
+    summary: "Prepare a WSL pane's Orca-managed Codex home before a shell launch",
     usage: 'orca agent hooks prepare-codex',
     allowedFlags: [...GLOBAL_FLAGS]
   },

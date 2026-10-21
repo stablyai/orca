@@ -1,5 +1,9 @@
 import type { Repo } from '../../shared/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { GitPushTarget } from '../../shared/worktree/types'
 
@@ -10,31 +14,37 @@ export type RuntimeWorktreeRemovalTarget = {
   pushTarget?: GitPushTarget
 }
 
-export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : typeof error === 'string'
-          ? error
-          : ''
-  const stderr =
-    error && typeof error === 'object' && 'stderr' in error
-      ? String((error as { stderr: unknown }).stderr)
-      : ''
-  return /not a git repository/i.test(`${message}\n${stderr}`)
+/**
+ * Options for `removeManagedWorktree`. Named rather than positional on purpose: three of the
+ * four are interchangeable booleans that each waive a different safety check on a destructive
+ * delete, so a transposition would silently delete a checkout the caller meant to protect.
+ */
+export type RemoveManagedWorktreeOptions = {
+  force?: boolean
+  runHooks?: boolean
+  /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
+  allowUnverifiedPtyStop?: boolean
+  /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
+  allowFailedArchiveHook?: boolean
+  hostId?: string
+  /** Reply with the finished delete's result; otherwise a background delete replies on acceptance. */
+  waitForBackgroundRemoval?: boolean
 }
 
 export function getRuntimeWorktreeRemovalOptionsKey(
-  force: boolean,
-  runHooks: boolean,
-  allowUnverifiedPtyStop: boolean
+  options: Pick<
+    RemoveManagedWorktreeOptions,
+    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
+  >
 ): string {
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
   // failed the PTY gate — it would inherit that failure instead of retrying.
-  const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
+  const ptyKey = options.allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
+  // Same reason for the archive waiver: a retry that waives the failed hook must not coalesce
+  // onto the in-flight attempt that is about to refuse on it.
+  const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
+  const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
@@ -52,6 +62,17 @@ export function runtimeRepoMatchesExecutionHost(
     return true
   }
   return getRepoExecutionHostId(repo) === executionHostId
+}
+
+/**
+ * Whether `repo` can be the row a registration in this process dedupes onto. Registration reads its
+ * path on this machine, so an SSH row at the same path string is another machine's project.
+ */
+export function runtimeRepoIsRegistrationCandidate(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  return runtimeRepoMatchesExecutionHost(repo, executionHostId) && !getRepoSshConnectionId(repo)
 }
 
 export function parseExactWorktreeIdSelector(

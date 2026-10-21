@@ -22,6 +22,36 @@ function file(overrides: Partial<OpenFile> & Pick<OpenFile, 'id' | 'filePath'>):
 }
 
 describe('editor external watch path batch index', () => {
+  it('routes POSIX literal-backslash updates only to the matching tab', () => {
+    const scope = { worktreeId: 'wt-posix', worktreePath: '/repo', runtimeEnvironmentId: null }
+    const literal = file({
+      id: 'literal',
+      worktreeId: scope.worktreeId,
+      filePath: '/repo/a\\b.txt',
+      relativePath: 'a\\b.txt'
+    })
+    const nested = file({
+      id: 'nested',
+      worktreeId: scope.worktreeId,
+      filePath: '/repo/a/b.txt',
+      relativePath: 'a/b.txt'
+    })
+    const index = indexEditorExternalWatchBatchPaths(
+      {
+        worktreePath: scope.worktreePath,
+        events: [
+          { kind: 'update', absolutePath: literal.filePath },
+          { kind: 'update', absolutePath: nested.filePath }
+        ]
+      },
+      [literal, nested],
+      scope
+    )
+    expect(index.changes.map((change) => change.relativePath)).toEqual(['a\\b.txt', 'a/b.txt'])
+    expect(index.matchingOpenFiles(index.changes[0])).toEqual([literal])
+    expect(index.matchingOpenFiles(index.changes[1])).toEqual([nested])
+  })
+
   it('matches UNC aliases for updates, deletes, and restored tombstones', () => {
     const restored = file({
       id: 'restored',

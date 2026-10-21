@@ -15,7 +15,7 @@ export function useSourceControlPanelState() {
   const storeActions = useSourceControlStoreActions()
   const {
     activeConnectionId,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     activeWorktreeInstanceId,
@@ -51,7 +51,7 @@ export function useSourceControlPanelState() {
     isFolder
   })
   const statusRefresh = useSourceControlStatusRefresh({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     activePushTarget: activeWorktree?.pushTarget,

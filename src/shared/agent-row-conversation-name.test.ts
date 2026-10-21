@@ -31,6 +31,49 @@ describe('getAgentRowConversationName', () => {
     )
   })
 
+  it("shows the title owned by the row's provider session", () => {
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'claude', sessionId: 's1', title: 'Fix the lease probe' },
+      generatedTitle: 'Fix intake flow',
+      title: '\u2733 Investigate replay bug'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe(
+      'Fix the lease probe'
+    )
+  })
+
+  it('lets a manual rename and a quick command still outrank the provider title', () => {
+    const vault = { agent: 'claude' as const, sessionId: 's1', title: 'Fix the lease probe' }
+    expect(
+      getAgentRowConversationName(
+        makeTab({ aiVaultTitle: vault, customTitle: 'Mine' }),
+        'claude',
+        true,
+        undefined,
+        's1'
+      )
+    ).toBe('Mine')
+    expect(
+      getAgentRowConversationName(
+        makeTab({ aiVaultTitle: vault, quickCommandLabel: 'Run tests' }),
+        'claude',
+        true,
+        undefined,
+        's1'
+      )
+    ).toBe('Run tests')
+  })
+
+  it('keeps a cwd-shaped provider title that the live-title sanitizer would discard', () => {
+    // `auth/login` is a real session name; as a scraped live title it would be read as a cwd.
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'claude', sessionId: 's1', title: 'auth/login' },
+      title: '\u2733 Investigate replay bug'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe('auth/login')
+    expect(getAgentRowConversationName(makeTab({ title: 'auth/login' }), 'claude', true)).toBeNull()
+  })
+
   it('uses the generated title only when generated titles are enabled', () => {
     const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Investigate replay bug' })
     expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
@@ -139,6 +182,29 @@ describe('getAgentRowConversationName', () => {
       getAgentRowConversationName(makeTab({ title: 'claude agents' }), 'claude', false)
     ).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: 'Agent' }), 'claude', false)).toBeNull()
+  })
+
+  it("rejects jcode's live identity title so the row shows the prompt instead", () => {
+    // Why: jcode repaints its title every second with its session codename and the
+    // turn's diff/duration. Accepting it pinned the row to "jcode Puppy…" while
+    // Claude's row in the same sidebar showed the prompt and the reply.
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: '🌐 jcode Puppy · +3 -0 · last ~23s' }),
+        'jcode',
+        false
+      )
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(makeTab({ title: '🐍 jcode Snake · work ~6s' }), 'jcode', false)
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(makeTab({ title: '🐍 jcode/creek Snake' }), 'jcode', false)
+    ).toBeNull()
+    // A name the user gave the tab still wins.
+    expect(
+      getAgentRowConversationName(makeTab({ title: 'Fix the greet helper' }), 'jcode', false)
+    ).toBe('Fix the greet helper')
   })
 
   it('rejects empty, glyph-only, and default terminal titles', () => {

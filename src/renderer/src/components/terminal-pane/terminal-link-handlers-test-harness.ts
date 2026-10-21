@@ -35,7 +35,6 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     openUrlMock,
     openFileUriMock,
     openFilePathMock,
-    authorizeExternalPathMock,
     statMock,
     fsPathExistsMock,
     runtimeEnvironmentCallMock,
@@ -59,7 +58,16 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     storeState.settings = undefined
     storeState.activeFileIdByWorktree = {}
     storeState.openFiles = []
-    storeState.worktreesByRepo = {}
+    storeState.unifiedTabsByWorktree = {}
+    storeState.groupsByWorktree = {}
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/tmp', hostId: 'local' }]
+    }
+    storeState.repos = [
+      { id: 'repo-1', displayName: 'Repo', connectionId: null, executionHostId: 'local' }
+    ]
+    storeState.browserTabsByWorktree = {}
+    storeState.browserPagesByWorkspace = {}
     registerHttpLinkStoreAccessor(() => storeState)
     vi.stubGlobal('window', {
       dispatchEvent: vi.fn(),
@@ -71,7 +79,6 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
           pathExists: vi.fn().mockResolvedValue(true)
         },
         fs: {
-          authorizeExternalPath: authorizeExternalPathMock,
           pathExists: fsPathExistsMock,
           stat: statMock
         },

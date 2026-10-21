@@ -16,7 +16,7 @@ import {
   resultOptionDomId
 } from './TabBarCreateEntryRow'
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
-import { insertHistoryRowsBelowFileMatches } from './tab-create-entry-history-placement'
+import { placeHistoryRowsInEntryOptions } from './tab-create-entry-history-placement'
 import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
 import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
@@ -33,7 +33,6 @@ import {
   getTabEntryOmniboxPlaceholder
 } from './tab-create-entry-copy'
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
-import { useStructuredCodexLaunchStatus } from '@/lib/structured-agent-session-launch'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
@@ -48,6 +47,7 @@ function TabBarCreateEntrySession({
   menuOptions = EMPTY_MENU_OPTIONS,
   onDidOpenEntry,
   onLaunchAgent,
+  onLaunchAgentOption,
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
@@ -60,7 +60,6 @@ function TabBarCreateEntrySession({
   const [error, setError] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
-  const structuredCodexLaunchStatus = useStructuredCodexLaunchStatus(worktreeId)
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -78,7 +77,8 @@ function TabBarCreateEntrySession({
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
     query,
-    worktreeId
+    worktreeId,
+    retainedResultId: pinnedOptionId
   })
   const shouldResolveAbsolutePaths =
     menuOpen && !terminalQueryMode && isTabEntryAbsolutePathLike(query.trim())
@@ -168,7 +168,7 @@ function TabBarCreateEntrySession({
       kind: 'agent' as const,
       option
     })),
-    ...insertHistoryRowsBelowFileMatches(options, historyRows)
+    ...placeHistoryRowsInEntryOptions(options, historyRows)
   ]
   const { activeSelectedIndex, selectedActiveOption } = useNetworkSafeTabEntrySelection({
     activeOptions,
@@ -212,6 +212,9 @@ function TabBarCreateEntrySession({
     }
     if (selectedOption.kind === 'tab') {
       const outcome = activateOpenTabSearchResult(selectedOption.option)
+      if (outcome.status === 'blocked') {
+        return
+      }
       if (outcome.status === 'failed') {
         setSwitchError(outcome.message)
         return
@@ -228,10 +231,14 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      if (selectedOption.option.agent === 'codex' && structuredCodexLaunchStatus === 'pending') {
+      if (selectedOption.option.disabled) {
         return
       }
-      onLaunchAgent?.(selectedOption.option.agent)
+      if (onLaunchAgentOption) {
+        onLaunchAgentOption(selectedOption.option)
+      } else {
+        onLaunchAgent?.(selectedOption.option.agent)
+      }
       onDidOpenEntry?.()
       return
     }
@@ -379,26 +386,12 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                labelOverride={
-                  option.kind === 'agent' &&
-                  option.option.agent === 'codex' &&
-                  structuredCodexLaunchStatus === 'pending'
-                    ? 'Starting Codex chat…'
-                    : undefined
-                }
                 disabled={
                   disabled ||
                   pending ||
-                  (option.kind === 'agent' &&
-                    option.option.agent === 'codex' &&
-                    structuredCodexLaunchStatus === 'pending')
+                  (option.kind === 'agent' && option.option.disabled === true)
                 }
-                loading={
-                  (pending && index === activeSelectedIndex) ||
-                  (option.kind === 'agent' &&
-                    option.option.agent === 'codex' &&
-                    structuredCodexLaunchStatus === 'pending')
-                }
+                loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)
                   submitOption(option)

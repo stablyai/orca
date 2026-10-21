@@ -2,6 +2,7 @@ import type { GetProjectViewTableArgs } from '../../../shared/github/project-req
 import type { GetProjectViewTableResult } from '../../../shared/github/project-result-types'
 import type { GitHubProjectTable } from '../../../shared/github/project-types'
 import { githubProjectHost } from '../../../shared/github/project-identity'
+import { isRenderableProjectViewLayout } from '../../../shared/github/project-types'
 import { assertPositiveInt, assertSlug } from './internals'
 import {
   fetchProjectViewsPage,
@@ -84,6 +85,17 @@ export async function getProjectViewTable(
   if (!project) {
     return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
   }
+  const noSelector =
+    args.viewId === undefined && args.viewNumber === undefined && args.viewName === undefined
+  if (!selectedRaw && noSelector) {
+    // Why: `matchesSelector` only defaults to a table view, so a project whose
+    // views are all roadmaps resolved to nothing even though we can now render
+    // one. Table stays the preferred default; this is the empty-handed case.
+    selectedRaw =
+      viewsSeen.find((v) => v.layout === 'ROADMAP_LAYOUT') ??
+      viewsSeen.find((v) => v.layout === 'BOARD_LAYOUT') ??
+      null
+  }
   if (!selectedRaw) {
     return { ok: false, error: { type: 'not_found', message: 'Could not find the selected view.' } }
   }
@@ -109,8 +121,10 @@ export async function getProjectViewTable(
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
-  // Unsupported layout: skip item pagination; best-effort count-only query.
-  if (selectedView.layout !== 'TABLE_LAYOUT') {
+  // Why: boards and roadmaps read the same item stream as a table — only the
+  // renderer differs. Unknown future layouts must reject cleanly, not render
+  // as a table.
+  if (!isRenderableProjectViewLayout(selectedView.layout)) {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
       ownerType: args.ownerType,
@@ -122,7 +136,9 @@ export async function getProjectViewTable(
       ok: false,
       error: {
         type: 'unsupported_layout',
-        message: `Orca only renders table views. This is a ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} view.`
+        // Why: the branch is type-unreachable (closed union) but runtime-real —
+        // raw.layout is cast unchecked, so an unknown value lands here.
+        message: `Orca renders table, board, and roadmap views. This is a ${String(selectedView.layout).replace('_LAYOUT', '').toLowerCase()} view.`
       },
       ...(typeof count === 'number' ? { totalCount: count } : {})
     }

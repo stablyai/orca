@@ -16,7 +16,7 @@ export function createTerminalDisownedPtySourceActions(
     markPtySourceDisowned: (ptyId) => {
       set((state) =>
         state.disownedPtyIds[ptyId]
-          ? {}
+          ? state
           : { disownedPtyIds: { ...state.disownedPtyIds, [ptyId]: true } }
       )
     }
@@ -37,17 +37,4 @@ export function omitDisownedPtyIds(
     delete next[ptyId]
   }
   return next ?? records
-}
-
-/**
- * True when a recorded id still names a PTY this client may reattach to.
- *
- * Why the record and not the id's shape: a relay renumbers from `pty-1` after a redeploy, so the id
- * alone cannot say which relay generation minted it. Only the host's own answer can.
- */
-export function isPtyBindingStillAddressable(
-  ptyId: string | null | undefined,
-  disownedPtyIds: Readonly<Record<string, true>> | undefined
-): boolean {
-  return Boolean(ptyId) && !disownedPtyIds?.[ptyId as string]
 }

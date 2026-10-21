@@ -5,6 +5,7 @@ import {
 } from './runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import type { PairedE2EEAuthReply, PairedE2EEReadyVerdict } from './paired-e2ee-client-handshake'
 
 export const REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 256 * 1024,
@@ -38,47 +39,34 @@ export function invalidRemoteRuntimeResponseError(message: string): RemoteRuntim
   return new RemoteRuntimeClientError('invalid_runtime_response', message)
 }
 
-export function parseReadyFrame(frame: string): RemoteRuntimeClientError | null {
-  let ready: unknown
-  try {
-    ready = parseRemoteRuntimeJsonText(frame)
-  } catch {
-    return invalidRemoteRuntimeResponseError(
-      'Remote Orca runtime returned an invalid E2EE handshake frame.'
-    )
+export function remoteRuntimeReadyError(
+  verdict: PairedE2EEReadyVerdict
+): RemoteRuntimeClientError | null {
+  if (verdict === 'accepted') {
+    return null
   }
-  if (
-    typeof ready !== 'object' ||
-    ready === null ||
-    (ready as { type?: unknown }).type !== 'e2ee_ready'
-  ) {
-    return invalidRemoteRuntimeResponseError(
-      'Remote Orca runtime returned an unexpected E2EE handshake frame.'
-    )
-  }
-  return null
+  return invalidRemoteRuntimeResponseError(
+    verdict === 'invalid'
+      ? 'Remote Orca runtime returned an invalid E2EE handshake frame.'
+      : 'Remote Orca runtime returned an unexpected E2EE handshake frame.'
+  )
 }
 
-export function parseAuthenticatedFrame(plaintext: string): RemoteRuntimeClientError | null {
-  let authenticated: unknown
-  try {
-    authenticated = parseRemoteRuntimeJsonText(plaintext)
-  } catch {
+export function remoteRuntimeAuthReplyError(
+  reply: PairedE2EEAuthReply
+): RemoteRuntimeClientError | null {
+  if (reply.kind === 'authenticated') {
+    return null
+  }
+  if (reply.kind === 'invalid') {
     return invalidRemoteRuntimeResponseError(
       'Remote Orca runtime returned an invalid E2EE auth frame.'
     )
   }
-  const type = (authenticated as { type?: unknown }).type
-  if (type === 'e2ee_authenticated') {
-    return null
-  }
-  const code =
-    typeof authenticated === 'object' &&
-    authenticated !== null &&
-    (authenticated as { error?: { code?: unknown } }).error?.code === 'unauthorized'
-      ? 'unauthorized'
-      : 'invalid_runtime_response'
-  return new RemoteRuntimeClientError(code, 'Remote Orca runtime rejected the pairing token.')
+  return new RemoteRuntimeClientError(
+    reply.errorCode === 'unauthorized' ? 'unauthorized' : 'invalid_runtime_response',
+    'Remote Orca runtime rejected the pairing token.'
+  )
 }
 
 export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRuntimeFrame {

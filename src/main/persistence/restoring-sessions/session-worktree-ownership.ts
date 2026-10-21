@@ -27,6 +27,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeTabId: 'none',
   tabsByWorktree: 'owner-keyed-row-arrays',
   terminalLayoutsByTabId: 'none',
+  localOnlyScrollbackByTabId: 'none',
   activeWorktreeIdsOnShutdown: 'worktree-id-array',
   openFilesByWorktree: 'owner-keyed-row-arrays',
   activeFileIdByWorktree: 'owner-keyed',
@@ -36,6 +37,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeBrowserTabIdByWorktree: 'owner-keyed',
   clientHostedBrowserPagesByWorktree: 'owner-keyed',
   clientHostedBrowserCloseIntentsByEnvironment: 'row-arrays',
+  pairedTerminalTabCloseIntentsByEnvironment: 'row-arrays',
   activeTabTypeByWorktree: 'owner-keyed',
   browserUrlHistory: 'none',
   workspaceDocHistory: 'none',
@@ -209,7 +211,7 @@ export function collectWorkspaceSessionWorktreeOwners(
   return owners
 }
 
-function addWorkspaceSessionWorktreeOwners(
+export function addWorkspaceSessionWorktreeOwners(
   session: WorkspaceSessionState,
   collector: WorktreeOwnerCandidateCollector
 ): void {

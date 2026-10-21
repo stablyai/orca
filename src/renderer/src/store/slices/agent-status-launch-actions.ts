@@ -1,10 +1,10 @@
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type { AgentLaunchConfigRegistryEntry } from './agent-status-contract'
-import { copyLaunchConfig, sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { copyLaunchConfig } from '../../../../shared/agent-resume-record-from-status'
+import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
 import {
   getLaunchConfigForEntry,
-  getLaunchConfigForStatusMetadata,
   launchConfigRegistryEntriesEqual,
   normalizeLaunchConfigRegistrationMetadata,
   registryEntryMatchesStatus
@@ -15,10 +15,7 @@ export function createAgentStatusLaunchActions(
   runtime: AgentStatusRuntime
 ): Pick<
   AgentStatusSlice,
-  | 'registerAgentLaunchConfig'
-  | 'getAgentLaunchConfigForStatusEntry'
-  | 'getAgentLaunchConfigForStatusMetadata'
-  | 'clearAgentLaunchConfig'
+  'registerAgentLaunchConfig' | 'getAgentLaunchConfigForStatusEntry' | 'clearAgentLaunchConfig'
 > {
   const { get, set } = runtime
   return {
@@ -93,9 +90,6 @@ export function createAgentStatusLaunchActions(
       })
     },
     getAgentLaunchConfigForStatusEntry: (entry) => getLaunchConfigForEntry(get(), entry),
-    getAgentLaunchConfigForStatusMetadata: (metadata) =>
-      getLaunchConfigForStatusMetadata(get(), metadata),
-
     clearAgentLaunchConfig: (paneKey) => {
       set((s) => {
         if (!(paneKey in s.agentLaunchConfigByPaneKey)) {

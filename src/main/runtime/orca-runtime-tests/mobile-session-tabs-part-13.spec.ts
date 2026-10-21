@@ -602,7 +602,7 @@ describe('OrcaRuntimeService', () => {
       expect(write).toHaveBeenCalledTimes(2)
       expect(write.mock.calls[0][0]).toBe('pty-bare')
       expect(String(write.mock.calls[0][1])).toMatch(/codex/)
-      expect(write.mock.calls[1]).toEqual(['pty-bare', '\r'])
+      expect(write.mock.calls[1]).toEqual(['pty-bare', '\r', 'launch'])
     } finally {
       vi.useRealTimers()
     }

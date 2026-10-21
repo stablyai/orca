@@ -1,7 +1,6 @@
 import { resolvePaneTitleDecision } from '../terminal-title-evidence'
 import { useAppStore } from '@/store'
 import { shouldSeedCacheTimerOnInitialTitle } from '../cache-timer-seeding'
-import { shouldSuppressCodexAutoApprovalSyntheticTitle } from '../codex-auto-approval-notification-suppression'
 import {
   cancelCommandCodeDoneSettle,
   openCommandCodeDoneSettle,
@@ -10,6 +9,7 @@ import {
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -21,6 +21,9 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ): void => {
+    if (!meta?.staleWorkingTitleClear && resolveCommittedTitleAgentType(rawTitle)) {
+      session.paneForegroundAgentTracker.onAgentStartupObserved()
+    }
     // Why: one owner-aware decision drives the display label, the runtime/tab
     // title, task-completion tracking, and the renderer gate, so raw title text
     // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
@@ -32,15 +35,6 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
     })
     const paneTitle = decision.displayTitle
-    if (
-      shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
-        paneKey: session.cacheKey,
-        tabId: session.deps.tabId,
-        ...(session.launchToken ? { launchToken: session.launchToken } : {})
-      })
-    ) {
-      return
-    }
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
     // Why: a stale-derived cleared title comes from main's unthrottled 3s

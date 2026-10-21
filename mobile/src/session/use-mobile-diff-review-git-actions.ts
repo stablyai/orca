@@ -1,6 +1,11 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import {
+  MOBILE_DIFF_REVIEW_GIT_MUTATIONS,
+  reviewGitStageRun
+} from './mobile-diff-review-git-operations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
@@ -29,13 +34,15 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
       setBusyAction(`${method}:${item.filePath}`)
       setActionError(null)
       try {
-        const response = await client.sendRequest(method, {
+        const mutation = MOBILE_DIFF_REVIEW_GIT_MUTATIONS[method]
+        const response = await mutation.request(client, {
           worktree: `id:${worktreeId}`,
           filePath: item.filePath
         })
-        if (!response.ok) {
-          throw new Error(response.error?.message || 'Source control action failed')
-        }
+        interpretOrThrowRefusalMessage(
+          () => mutation.interpret(response),
+          'Source control action failed'
+        )
         triggerSuccess()
         await loadReviewData()
       } catch (err) {
@@ -64,11 +71,13 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
     let staged = 0
     let failed = 0
     for (const item of files) {
-      const response = await client.sendRequest('git.stage', {
-        worktree: `id:${worktreeId}`,
-        filePath: item.filePath
-      })
-      if (response.ok) {
+      const response = reviewGitStageRun.interpret(
+        await reviewGitStageRun.request(client, {
+          worktree: `id:${worktreeId}`,
+          filePath: item.filePath
+        })
+      )
+      if (response.accepted) {
         staged += 1
       } else {
         failed += 1

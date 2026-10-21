@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcessSync } from '../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import {
   PRESS_AND_HOLD_KEY,
   ensureMacPressAndHoldDefault,

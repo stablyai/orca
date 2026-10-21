@@ -96,10 +96,12 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     const lifecycleRevision = ++lifecycleRevisionRef.current
     removedAtRevisionRef.current.set(sessionId, lifecycleRevision)
     knownSessionIdsRef.current.delete(sessionId)
-    setStoredState((current) => ({
-      ...current,
-      sessionInventory: removeSessionFromInventory(current.sessionInventory, sessionId)
-    }))
+    setStoredState((current) => {
+      const sessionInventory = removeSessionFromInventory(current.sessionInventory, sessionId)
+      return sessionInventory === current.sessionInventory
+        ? current
+        : { ...current, sessionInventory }
+    })
   }, [])
 
   const removeSessions = useCallback((sessionIds: ReadonlySet<string>): void => {
@@ -108,10 +110,12 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       removedAtRevisionRef.current.set(sessionId, lifecycleRevision)
       knownSessionIdsRef.current.delete(sessionId)
     }
-    setStoredState((current) => ({
-      ...current,
-      sessionInventory: removeSessionsFromInventory(current.sessionInventory, sessionIds)
-    }))
+    setStoredState((current) => {
+      const sessionInventory = removeSessionsFromInventory(current.sessionInventory, sessionIds)
+      return sessionInventory === current.sessionInventory
+        ? current
+        : { ...current, sessionInventory }
+    })
   }, [])
 
   useEffect(() => {

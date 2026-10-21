@@ -82,6 +82,12 @@ describe('resolveSharedElectronDistEntry', () => {
     }
   })
 
+  it('declines when the global virtual store already shares the electron package', () => {
+    expect(
+      resolveSharedElectronDistEntry({ ...baseOptions, isSharedPackageDir: () => true })
+    ).toBeNull()
+  })
+
   it('declines on CI, where every job gets a fresh checkout', () => {
     expect(resolveSharedElectronDistEntry({ ...baseOptions, env: { CI: '1' } })).toBeNull()
     expect(resolveSharedElectronDistEntry({ ...baseOptions, env: { CI: 'true' } })).toBeNull()

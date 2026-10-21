@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
-import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { SourceControlHeaderIconButton } from './header-icon-button'
 import { SourceControlBranchLineTotalChip } from './branch-line-total-chip'
 import {

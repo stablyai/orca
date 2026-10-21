@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
-import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
+import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
+import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-structured-composer'
+import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
@@ -13,6 +15,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     worktreeId,
     client,
     connState,
+    hostCapabilities,
     activeHandle,
     pendingDiffNotesDelivery,
     showCreateTabDrawer,
@@ -37,10 +40,18 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     nativeChatController,
     getActiveWorktreeConnectionId,
     refreshCanPaste,
-    activeSessionTab
+    activeSessionTab,
+    agentSessionHostSupport,
+    hostId
   } = scope
+  const clipboardContents = useClipboardReader().contents
+  const agent =
+    activeSessionTab && 'agentStatus' in activeSessionTab
+      ? (activeSessionTab.agentStatus?.agentType ?? nativeChatController.nativeChatAgent)
+      : nativeChatController.nativeChatAgent
   const handlePaste = useMobileTerminalPaste({
     client,
+    agent,
     activeHandle,
     activeHandleRef,
     activeSessionTabTypeRef,
@@ -67,38 +78,51 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     showToast
   })
 
+  const structuredNativeChat = activeSessionTab?.type === 'agent-session'
+  const nativeChatSessionId = resolveMobileNativeChatSessionId(activeSessionTab)
   // Terminal input pastes an attached image straight into the visible terminal;
   // native chat instead holds it as a composer chip and rides it along on submit.
-  const { attachImage, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
+  const { attachImage, isAttaching, nativeChatImages, nativeChatFiles } =
+    useMobileSessionImageAttachments({
+      client,
+      agent,
+      activeHandle,
+      activeHandleRef,
+      canSend,
+      connState,
+      deviceTokenRef,
+      nativeChatScopeKey,
+      nativeChatInputLeaseReady,
+      getActiveWorktreeConnectionId,
+      beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
+      nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
+      structuredNativeChat,
+      nativeChatSessionId,
+      readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
+      showToast,
+      onNativeChatSendError: nativeChatSendError.show,
+      onSuccess: triggerSelection,
+      onError: triggerError
+    })
+  const nativeChatStructuredComposer = useMobileNativeChatStructuredComposer({
     client,
-    activeHandle,
-    activeHandleRef,
-    canSend,
-    connState,
-    deviceTokenRef,
-    nativeChatScopeKey,
-    nativeChatInputLeaseReady,
-    getActiveWorktreeConnectionId,
-    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
-    nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
-    structuredNativeChat: activeSessionTab?.type === 'agent-session',
-    readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
-    showToast,
-    onNativeChatSendError: nativeChatSendError.show,
-    onSuccess: triggerSelection,
-    onError: triggerError
+    hostId,
+    sessionId: nativeChatSessionId,
+    structured: structuredNativeChat,
+    connected: connState === 'connected',
+    acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
+    conversationCommands:
+      nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
+    files: nativeChatFiles
   })
 
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
     const refresh = () => {
-      void Promise.all([
-        Clipboard.hasStringAsync().catch(() => false),
-        Clipboard.hasImageAsync().catch(() => false)
-      ]).then(([hasString, hasImage]) => {
+      void clipboardContents().then(({ text, image }) => {
         if (mounted) {
-          setCanPaste(hasString || hasImage)
+          setCanPaste(text || image)
         }
       })
     }
@@ -114,52 +138,25 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       mounted = false
       sub.remove()
     }
-  }, [selectModeActive])
+  }, [clipboardContents, selectModeActive, setCanPaste])
 
-  useEffect(() => {
-    const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
-    if (!shouldLoadAgentOptions) {
-      setCreateTabAgentLoadState('idle')
-      setCreateTabAgentOptions([])
-      return
-    }
-    if (!client || connState !== 'connected') {
-      setCreateTabAgentLoadState('idle')
-      setCreateTabAgentOptions([])
-      return
-    }
-
-    let stale = false
-    setCreateTabAgentLoadState('loading')
-    setCreateTabAgentOptions([])
-
-    void (async () => {
-      const options = await loadMobileNewTabAgentOptions({
-        client,
-        worktreeId
-      })
-      if (stale) {
-        return
-      }
-      setCreateTabAgentOptions(options)
-      setCreateTabAgentLoadState('loaded')
-    })().catch(() => {
-      if (!stale) {
-        setCreateTabAgentOptions([])
-        setCreateTabAgentLoadState('error')
-      }
-    })
-
-    return () => {
-      stale = true
-    }
-  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
+  useMobileNewTabAgentOptions({
+    client,
+    connState,
+    hostId,
+    hostCapabilities,
+    worktreeId,
+    open: showCreateTabDrawer || pendingDiffNotesDelivery !== null,
+    setLoadState: setCreateTabAgentLoadState,
+    setOptions: setCreateTabAgentOptions
+  })
   return {
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,
     isAttaching,
-    nativeChatImages
+    nativeChatImages,
+    nativeChatStructuredComposer
   }
 }
 

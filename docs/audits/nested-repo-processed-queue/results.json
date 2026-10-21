@@ -1,0 +1,74 @@
+{
+  "description": "Actual nested-repo scan with observational dequeue hook; before reverses fix.patch and control clears only consumed slots.",
+  "sourceHashes": {
+    "normalization": "UTF-8 source with CRLF line endings normalized to LF",
+    "before": "0a0952888db648a77776becfa9fcfc783d0b905ce096e70311d532ea2675065e",
+    "after": "8517a2bc2220e5fb3e96f063e1714911235ab040ee21487ca537d5c34d3cc81d",
+    "rules": "4613599bf5382edd86ae33bc84548f247018f26acbf2f7db072d847fa5533660",
+    "regression": "5e343d4da0627458ebd15c5c619b861c07388830b2a65aef76c9fb0dcd9d4c8d",
+    "runner": "2bafd8e2de95a86bcefdef484f63002cb0f59428b5359a3b9b9f16b8942ac11f"
+  },
+  "nodeVersion": "v26.6.0",
+  "branchCount": 96,
+  "rulesPerBranch": 64,
+  "before": {
+    "mode": "before",
+    "pausedState": {
+      "allocatedSlots": 193,
+      "consumedSlots": 192,
+      "pendingSlots": 1,
+      "occupiedConsumedSlots": 192
+    },
+    "retained": {
+      "completedLeaves": 94,
+      "retainedCompletedRecords": 94,
+      "retainedCompletedRuleArrays": 94
+    },
+    "afterCompletion": 0,
+    "totalVisited": 193
+  },
+  "control": {
+    "mode": "clear-consumed-slot",
+    "pausedState": {
+      "allocatedSlots": 193,
+      "consumedSlots": 192,
+      "pendingSlots": 1,
+      "occupiedConsumedSlots": 0
+    },
+    "retained": {
+      "completedLeaves": 94,
+      "retainedCompletedRecords": 0,
+      "retainedCompletedRuleArrays": 0
+    },
+    "afterCompletion": 0,
+    "totalVisited": 193
+  },
+  "after": {
+    "mode": "after",
+    "pausedState": {
+      "allocatedSlots": 34,
+      "consumedSlots": 33,
+      "pendingSlots": 1,
+      "occupiedConsumedSlots": 0
+    },
+    "retained": {
+      "completedLeaves": 94,
+      "retainedCompletedRecords": 0,
+      "retainedCompletedRuleArrays": 0
+    },
+    "afterCompletion": 0,
+    "totalVisited": 193
+  },
+  "passed": true,
+  "historicalSource": {
+    "ref": "v1.4.198",
+    "sha256": "0a0952888db648a77776becfa9fcfc783d0b905ce096e70311d532ea2675065e",
+    "equalsBaseline": true
+  },
+  "process": {
+    "exitCode": 0,
+    "timedOut": false,
+    "timeoutMs": 15000,
+    "oldSpaceMiB": 256
+  }
+}

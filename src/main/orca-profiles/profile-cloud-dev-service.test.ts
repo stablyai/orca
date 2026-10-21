@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -128,10 +128,14 @@ describe('Orca cloud dev auth service', () => {
 
   it('signs out locally without calling the cloud logout endpoint', async () => {
     await connectCurrentOrcaProfile(userDataPath)
+    const regionCache = join(userDataPath, 'orca-relay-region-preference.json')
+    writeFileSync(regionCache, '{}')
 
     const result = await signOutCurrentOrcaProfile(userDataPath)
 
     expect(result.status).toBe('signed-out')
+    // Why: sign-out must remove what Relay use left behind.
+    expect(existsSync(regionCache)).toBe(false)
     expect(revokeOrcaCloudSessionMock).not.toHaveBeenCalled()
     expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
       configured: true,

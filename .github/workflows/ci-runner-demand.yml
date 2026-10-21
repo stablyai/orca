@@ -1,0 +1,33 @@
+name: CI runner demand
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-runner-demand
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: config/scripts
+          persist-credentials: false
+      - name: Measure the previous complete 24 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node config/scripts/ci-runner-demand.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ci-runner-demand-${{ github.run_id }}
+          path: ci-demand/
+          retention-days: 30

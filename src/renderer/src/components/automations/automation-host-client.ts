@@ -1,9 +1,9 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { assertEnvironmentSupportsExtraAgentArgs } from './automation-capability-probe'
 import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
@@ -132,26 +132,15 @@ export async function listAutomationRunsForTarget(
   return result.runs
 }
 
-export async function listAutomationRunsPageForTarget(
-  target: AutomationHostTarget,
-  automationId: string,
-  options: { limit?: number; cursor?: string } = {}
-): Promise<AutomationRunsPage> {
-  const result = await callRuntimeRpc<AutomationRunsPage | { runs: AutomationRun[] }>(
-    target,
-    'automation.runs',
-    { automationId, ...options },
-    { timeoutMs: 15_000 }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
-}
-
 export async function updateAutomationForTarget(
   automation: Automation,
   updates: AutomationUpdateInput,
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+  if (target.kind === 'environment') {
+    await assertEnvironmentSupportsExtraAgentArgs(target.environmentId, updates.extraAgentArgs)
+  }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',

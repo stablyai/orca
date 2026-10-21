@@ -1,7 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
+import {
+  readPersistedProfileState,
+  mutateStoppedProfileState
+} from './helpers/persisted-profile-state'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { test, expect } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForSessionReady } from './helpers/store'
@@ -18,34 +20,32 @@ type PersistedData = {
   }
 }
 
-function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
 function injectTruncatedTab(userDataDir: string, worktreeId: string, startupCwd: string): void {
-  const dataPath = persistedDataPath(userDataDir)
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as PersistedData
-  const tabs = data.workspaceSession?.tabsByWorktree?.[worktreeId]
-  if (!tabs) {
-    throw new Error('Persisted terminal tabs were unavailable for corruption seeding')
-  }
-  tabs.push({
-    id: CORRUPT_TAB_ID,
-    ptyId: null,
-    worktreeId,
-    title: 'Truncated terminal',
-    sortOrder: 999,
-    generation: 3,
-    startupCwd
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as PersistedData
+    const tabs = data.workspaceSession?.tabsByWorktree?.[worktreeId]
+    if (!tabs) {
+      throw new Error('Persisted terminal tabs were unavailable for corruption seeding')
+    }
+    tabs.push({
+      id: CORRUPT_TAB_ID,
+      ptyId: null,
+      worktreeId,
+      title: 'Truncated terminal',
+      sortOrder: 999,
+      generation: 3,
+      startupCwd
+    })
   })
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`)
 }
 
 function persistedSessionEvidence(
   userDataDir: string,
   worktreeId: string
 ): { corruptLegacyTabPresent: boolean; unifiedTabIds: string[] } {
-  const data = JSON.parse(readFileSync(persistedDataPath(userDataDir), 'utf8')) as PersistedData
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+  const data = readPersistedProfileState(userDataDir) as PersistedData
   const legacyTabs = data.workspaceSession?.tabsByWorktree?.[worktreeId] ?? []
   const unifiedTabs = data.workspaceSession?.unifiedTabs?.[worktreeId] ?? []
   return {

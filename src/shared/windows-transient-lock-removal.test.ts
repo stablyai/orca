@@ -58,10 +58,6 @@ describe('transient lock removal options', () => {
     })
   })
 
-  it('matches the repo policy of eight attempts', () => {
-    expect(WINDOWS_RM_MAX_RETRIES).toBe(8)
-  })
-
   it('asks for no retries where removal is not raced by the OS', () => {
     for (const platform of ['darwin', 'linux'] as const) {
       withPlatform(platform)

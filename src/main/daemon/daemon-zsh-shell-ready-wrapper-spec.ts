@@ -11,10 +11,10 @@ export function getDaemonZshWrapperSpec(): ZshStartupHookSpec {
     overlayRestoreComment:
       "# Why: ~/.zshrc can export the user's default OpenCode config after spawn.",
     restores: {
+      managedWslCli: false,
       agentTeamsPath: true,
       remoteCliBinDir: false,
-      codexHome: true,
-      codexLaunchPreflight: true
+      codexHome: true
     }
   }
 }

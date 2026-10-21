@@ -1,8 +1,10 @@
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
+import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
+import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
-import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
@@ -35,14 +37,16 @@ __orca_restore_agent_teams_path() {
   export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __orca_restore_agent_teams_path
+${ORCA_CLI_POSIX_PATH_RESTORE}
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
 # Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-${getPosixCodexShellLaunchPreflight()}
+${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
 # Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
 # status when the foreground command exits — mirrors the zsh daemon wrapper.
 # Without this, bash users (default on most Linux distros) keep a stuck
@@ -56,10 +60,6 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
-  # Why: emit the shell-ready marker here (not a trailing PROMPT_COMMAND entry)
-  # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
-  # displaced by one of Orca's own hooks.
-  [[ -n "$__orca_ready_marker" ]] && printf "${SHELL_READY_MARKER}"
   return "$exit_code"
 }
 __orca_osc133_preexec() {
@@ -117,6 +117,11 @@ __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
+  if [[ -n "$__orca_ready_marker" ]]; then
+    PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
+    __orca_ready_marker=""
+  fi
 }
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"

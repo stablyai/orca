@@ -8,16 +8,11 @@ import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-st
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
-// Fully stub the picker so the real expo/react-native chain never loads under
-// the vitest transform (react-native ships Flow syntax rolldown can't parse).
-vi.mock('./mobile-image-source-picker', () => ({
-  pickMobileImages: vi.fn(),
-  ImageLibraryPermissionError: class ImageLibraryPermissionError extends Error {}
-}))
-
-import { pickMobileImages } from './mobile-image-source-picker'
-
-const pick = vi.mocked(pickMobileImages)
+// Stubbed at the seam the hook now holds, which keeps the real expo/react-native chain out of the
+// vitest transform (react-native ships Flow syntax rolldown cannot parse) and pins the call site:
+// a hook that went back to importing the picker module directly would load that chain and fail.
+const pick = vi.hoisted(() => vi.fn())
+vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'r' } }
@@ -57,11 +52,17 @@ function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): Pick<
 type HookArgs = Parameters<typeof useMobileNativeChatImageAttachments>[0]
 type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>
 
+/** A terminal chat's text send: its words, preview URIs, the action's budget, no attachments, and
+ *  when Send was pressed. */
+const textSend = (text: string, previews?: string[]) =>
+  [text, previews, expect.any(Number), undefined, expect.any(Number)] as const
+
 const SCOPE_A = 'h\0w\0tab-a'
 const SCOPE_B = 'h\0w\0tab-b'
 
 function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): HookArgs {
   return {
+    agent: 'claude',
     activeHandleRef: { current: 'term-1' },
     deviceTokenRef: { current: null },
     getActiveWorktreeConnectionId: async () => null,
@@ -127,12 +128,16 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
 
     expect(hook!.attachments).toEqual([
-      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
+      {
+        id: 'img-1',
+        path: '/tmp/a.png',
+        previewUri: 'file:///a.jpg'
+      }
     ])
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
   })
 
-  it('rides pending images along on send: pastes the path, settles, then delegates the text', async () => {
+  it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
@@ -161,6 +166,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     mount(
       baseArgs({
         client: trackedClient as RpcClient,
+        agent,
         deviceTokenRef: { current: 'device-1' },
         baseSend,
         sleep
@@ -182,7 +188,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(2)
     expect(sendCalls[0]?.params).toMatchObject({ text: '\x15', enter: false })
     expect(sendCalls[1]?.params).toMatchObject({
-      text: '\x1b[200~/tmp/a.png\x1b[201~ ',
+      text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/a.png\x1b[201~ `,
       enter: false
     })
     const combined = String(sendCalls[1]?.params.text ?? '') + 'look at this'
@@ -191,7 +197,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     // Clear, then paste, then settle, then the text send — in that order.
     expect(order).toEqual(['clear', 'paste', 'settle', 'text:look at this'])
     // The local preview URI rides along so the sent bubble shows the photo.
-    expect(baseSend).toHaveBeenCalledWith('look at this', ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(...textSend('look at this', ['file:///a.jpg']))
     // Chips clear once the send is accepted.
     expect(hook!.attachments).toEqual([])
   })
@@ -230,7 +236,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(firstSend?.params.text).not.toBe('\x15')
   })
 
-  it('spends one budget across the image paste and the text body that follows', async () => {
+  it('spends one budget and one press time across the image paste and the text body', async () => {
     vi.useFakeTimers()
     try {
       pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
@@ -255,6 +261,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       await act(async () => {
         await hook!.attachImage('library')
       })
+      const pressedAt = Date.now()
       await act(async () => {
         await hook!.sendNativeChat('look at this')
       })
@@ -265,6 +272,8 @@ describe('useMobileNativeChatImageAttachments', () => {
       // one user action hold the composer `sending` for ~30s.
       const deadline = baseSend.mock.calls[0]?.[2] as number
       expect(deadline - Date.now()).toBeLessThanOrEqual(5_300)
+      // The message is timed at the press, as desktop times it, not 10s later.
+      expect(baseSend.mock.calls[0]?.[4]).toBe(pressedAt)
     } finally {
       vi.useRealTimers()
     }
@@ -295,7 +304,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     // Attachment-only text still goes through baseSend (which submits Enter) so the
     // optimistic echo carries the preview URI.
-    expect(baseSend).toHaveBeenCalledWith(text, ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(...textSend(text, ['file:///a.jpg']))
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     // Only the clear + image paste hit the wire here; baseSend owns the submit.
     expect(sendCalls).toHaveLength(2)
@@ -311,7 +320,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     await act(async () => {
       await hook!.sendNativeChat('just text')
     })
-    expect(baseSend).toHaveBeenCalledWith('just text', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(...textSend('just text'))
     expect(client.calls).toHaveLength(0)
   })
 
@@ -398,7 +407,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     await act(async () => {
       await hook!.sendNativeChat('hi')
     })
-    expect(baseSend).toHaveBeenCalledWith('hi', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(...textSend('hi'))
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
 
     // Back on the original tab the chip is still pending.
@@ -501,7 +510,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
 
     // Only the first (sent) image rode along; the mid-send chip survives.
-    expect(baseSend).toHaveBeenCalledWith('hi', ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(...textSend('hi', ['file:///a.jpg']))
     expect(hook!.attachments.map((a) => a.previewUri)).toEqual(['file:///b.jpg'])
   })
 
@@ -587,7 +596,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     // Failed attempt's clear + rejected paste, then the healing clear.
     expect(sendCalls).toHaveLength(3)
     expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenCalledWith('hi again', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(...textSend('hi again'))
   })
 
   it('heals before the next text-only send when an image submit delivery is unknown (#10228)', async () => {
@@ -624,8 +633,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
     expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(1, 'pic', ['file:///a.jpg'], expect.any(Number))
-    expect(baseSend).toHaveBeenNthCalledWith(2, 'later message', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenNthCalledWith(1, ...textSend('pic', ['file:///a.jpg']))
+    expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('later message'))
   })
 
   it('still heals after the session screen unmounts and remounts (#10228)', async () => {
@@ -661,7 +670,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
     expect(sendCalls[2]?.params).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(2, 'later message', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('later message'))
   })
 
   it('does not heal after an unknown text-only send (nothing was pasted first)', async () => {
@@ -720,8 +729,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(4)
     expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
     expect(sendCalls[3]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(1, 'hi', ['file:///a.jpg'], expect.any(Number))
-    expect(baseSend).toHaveBeenNthCalledWith(2, 'hi again', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenNthCalledWith(1, ...textSend('hi', ['file:///a.jpg']))
+    expect(baseSend).toHaveBeenNthCalledWith(2, ...textSend('hi again'))
   })
 
   it('does not reroute text when the active terminal changes during a healing clear', async () => {

@@ -1,5 +1,9 @@
 import type { AddWorktreeOptions } from './git/worktree'
 import { discardPreparedWorktree } from './git/worktree-create-preparation'
+import { WorktreePreparationLockOwnershipError } from './git/worktree-preparation-lock'
+import { isOrphanedWorktreeError } from './ipc/worktree-logic'
+import { trackPreparationWork } from './worktree-create-concurrency'
+import type { PreparationEntry } from './worktree-create-preparation-pool'
 
 // Stale cleanup only reclaims preparations whose owner pid is dead, so a discard that fails inside
 // the live process would strand its scratch checkout until the app restarts. Remember the failure
@@ -10,11 +14,33 @@ export type PreparationDiscardTarget = {
   hostKey: string
   repoPath: string
   preparedPath: string
+  lockReason: string
   options: AddWorktreeOptions
 }
 
 const pendingDiscards = new Map<string, PreparationDiscardTarget & { attempts: number }>()
 const inFlightDiscards = new Set<Promise<unknown>>()
+
+/** One repository on one Git host owns preparation cleanup and its retries. */
+export function preparationHostKey(repoPathKey: string, wslDistro: string): string {
+  return `${repoPathKey}\0${wslDistro}`
+}
+
+export async function discardPreparationEntry(entry: PreparationEntry): Promise<void> {
+  await entry.ready.catch(() => {})
+  if (!entry.checkoutStarted) {
+    return
+  }
+  // Claim cleanup before yielding so queued refresh failures cannot discard the same checkout.
+  entry.checkoutStarted = false
+  await discardPreparationWithRetry({
+    hostKey: preparationHostKey(entry.repoPathKey, entry.wslDistro),
+    repoPath: entry.repoPath,
+    preparedPath: entry.preparedPath,
+    lockReason: entry.lockReason,
+    options: entry.options
+  })
+}
 
 /** Keeps a fire-and-forget discard settleable by the test reset, which would otherwise race it. */
 export function trackPreparationDiscard(work: Promise<void>): void {
@@ -29,8 +55,18 @@ function pendingKey(target: PreparationDiscardTarget): string {
 
 async function runDiscard(target: PreparationDiscardTarget, attempts: number): Promise<void> {
   try {
-    await discardPreparedWorktree(target.repoPath, target.preparedPath, target.options)
+    await discardPreparedWorktree(
+      target.repoPath,
+      target.preparedPath,
+      target.options,
+      target.lockReason
+    )
   } catch (error) {
+    // An aborted or failed checkout self-discards first, so the registration is usually already
+    // gone by the time the pool discards; retrying that would only spawn Git to fail again.
+    if (error instanceof WorktreePreparationLockOwnershipError || isOrphanedWorktreeError(error)) {
+      return
+    }
     // Bounded: a path that never becomes removable must not tax every later preparation.
     if (attempts >= PREPARATION_DISCARD_ATTEMPT_LIMIT) {
       console.warn(
@@ -50,7 +86,8 @@ export function discardPreparationWithRetry(
 ): Promise<void> {
   // Claim the record so an overlapping retry pass cannot run the same discard twice.
   pendingDiscards.delete(pendingKey(target))
-  const discard = runDiscard(target, attempts)
+  // Counted as preparation work: removing a full tree competes with creates for the disk.
+  const discard = trackPreparationWork(runDiscard(target, attempts))
   trackPreparationDiscard(discard)
   return discard
 }

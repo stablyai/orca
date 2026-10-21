@@ -8,6 +8,7 @@ import { initReactI18next } from 'react-i18next'
 
 import enRuntimeRequired from './en-runtime-required.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
+import { advanceTranslationResourceVersion } from './translation-resource-version'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
@@ -29,6 +30,7 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   fr: () => import('./locales/fr.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
+  pt: () => import('./locales/pt.json'),
   zh: () => import('./locales/zh.json')
 }
 
@@ -81,6 +83,10 @@ void i18n
       useSuspense: false
     }
   })
+
+// Plugin packs can replace translations without changing the active language.
+i18n.store.on('added', advanceTranslationResourceVersion)
+i18n.store.on('removed', advanceTranslationResourceVersion)
 
 export function translate(key: string, fallback: string, options?: TOptions): string {
   const value = i18n.t(key, { defaultValue: fallback, ...options })

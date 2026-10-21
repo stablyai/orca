@@ -1,0 +1,4 @@
+# Why: link the C runtime statically so orca.exe runs on Windows hosts without the
+# Visual C++ Redistributable (VCRUNTIME140.dll is not part of Windows).
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

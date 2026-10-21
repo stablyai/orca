@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { agentTypeToIconAgent } from './agent-status'
@@ -12,7 +12,7 @@ import { agentTypeToIconAgent } from './agent-status'
  * Panes keep the source map's insertion order because the resolvers return the
  * FIRST match — order decides which icon a split tab shows.
  */
-export type TabAgentPane = { readonly leafId: string; readonly agent: TuiAgent }
+export type TabAgentPane = { readonly leafId: string; readonly agent: TerminalAgent }
 
 type TabAgentPanesByTabId = ReadonlyMap<string, readonly TabAgentPane[]>
 
@@ -107,7 +107,7 @@ export function selectRetainedTabAgentPanes(
 export function firstTabAgentExcludingLeaf(
   panes: readonly TabAgentPane[],
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const pane of panes) {
     if (pane.leafId !== excludedLeafId) {
       return pane.agent

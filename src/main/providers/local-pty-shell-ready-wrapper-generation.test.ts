@@ -187,12 +187,20 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps markerless fish spawns unwrapped', async () => {
+  it('keeps markerless fish argv untouched and points it at the vendor snippet', async () => {
     const { getMarkerlessShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
     const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
-    expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
+    expect(config.args).toBeNull()
+    expect(config.supportsReadyMarker).toBe(false)
+    const prefix = config.env.ORCA_FISH_XDG_DATA_DIRS_PREFIX
+    expect(prefix).toMatch(/\/fish-xdg-data:\/usr\/local\/share:\/usr\/share$/)
+    expect(config.env).toEqual({ XDG_DATA_DIRS: prefix, ORCA_FISH_XDG_DATA_DIRS_PREFIX: prefix })
+    const dataDir = prefix.split(':')[0]
+    expect(
+      readFileSync(`${dataDir}/fish/vendor_conf.d/orca-shell-integration.fish`, 'utf8')
+    ).toContain('set argv --no-daemon $argv')
   })
 
   it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {
@@ -210,37 +218,6 @@ describePosix('local PTY shell-ready launch config', () => {
         delete process.env.ZDOTDIR
       } else {
         process.env.ZDOTDIR = previousZdotdir
-      }
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
-    }
-  })
-
-  it('uses inherited ORCA_ORIG_ZDOTDIR when ZDOTDIR is an Orca wrapper dir', async () => {
-    const previousZdotdir = process.env.ZDOTDIR
-    const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
-    const previousHome = process.env.HOME
-    const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
-    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
-    process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
-    process.env.HOME = userDataPath
-    try {
-      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
-      const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
-    } finally {
-      if (previousZdotdir === undefined) {
-        delete process.env.ZDOTDIR
-      } else {
-        process.env.ZDOTDIR = previousZdotdir
-      }
-      if (previousOrigZdotdir === undefined) {
-        delete process.env.ORCA_ORIG_ZDOTDIR
-      } else {
-        process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
       }
       if (previousHome === undefined) {
         delete process.env.HOME
@@ -330,7 +307,6 @@ describePosix('local PTY shell-ready launch config', () => {
     // Why one file: every restore now lives in the single epilogue in .zshenv,
     // which .zshrc and .zlogin each invoke on their own startup path.
     const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-    const zlogin = zshrc
     const bashRc = getBashShellReadyRcfileContent()
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
@@ -341,27 +317,20 @@ describePosix('local PTY shell-ready launch config', () => {
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
-    expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
     expect(zshrc).toContain(mimoRestoreLine)
-    expect(zlogin).toContain(mimoRestoreLine)
     expect(bashRc).toContain(mimoRestoreLine)
     expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(zshrc).toContain(codexRestoreLine)
-    expect(zlogin).toContain(codexRestoreLine)
     expect(zshrc).toContain(agentTeamsPathRestoreLine)
-    expect(zlogin).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
     expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(zshrc).toContain(ompWrapperLine)
-    expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
-    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+    for (const wrapperFile of [zshrc, bashRc]) {
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')
       expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
@@ -369,23 +338,8 @@ describePosix('local PTY shell-ready launch config', () => {
     }
   })
 
-  // Why: issue #2422 — without OSC 133 C/D markers, bash sessions kept the worktree spinner "working" ~30min after the agent exited.
-  it('emits OSC 133 C/D markers in the bash wrapper so agent exit cleanup fires', async () => {
-    const bashRc = getBashShellReadyRcfileContent()
-    // Why .zshenv: the zsh markers live in the deferred hook, behind `markers`.
+  it('emits OSC 133 C/D markers in the zsh wrapper', () => {
     const zshRc = getZshShellReadyWrapperFile()
-
-    // The exact escape sequences terminal-command-lifecycle parses (133;D = finished, 133;C = start).
-    expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(bashRc).toContain('printf "\\033]133;C\\007"')
-    expect(bashRc).toContain('[[ -z "${__orca_in_command:-}" ]] || return 0')
-    expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
-    // DEBUG is armed after setup; lastIndexOf skips the dispatcher's conditional re-arm.
-    expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('if [[ -n "$__orca_ready_marker" ]]; then')
-    )
-    // Sanity: zsh wrapper emits the same markers — both branches must stay in
-    // sync. They live in the .zshenv epilogue, behind the `markers` feature.
     expect(zshRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshRc).toContain('printf "\\033]133;C\\007"')
   })
@@ -482,29 +436,6 @@ describePosix('local PTY shell-ready launch config', () => {
         delete process.env.ZDOTDIR
       } else {
         process.env.ZDOTDIR = previousZdotdir
-      }
-    }
-  })
-
-  it('rejects inherited ZDOTDIR ending in /shell-ready/zsh even with a trailing slash', async () => {
-    const previousZdotdir = process.env.ZDOTDIR
-    const previousHome = process.env.HOME
-    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh/'
-    process.env.HOME = '/Users/alice'
-    try {
-      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
-      const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
-    } finally {
-      if (previousZdotdir === undefined) {
-        delete process.env.ZDOTDIR
-      } else {
-        process.env.ZDOTDIR = previousZdotdir
-      }
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
       }
     }
   })

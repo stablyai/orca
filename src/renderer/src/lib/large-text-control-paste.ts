@@ -36,7 +36,7 @@ function getPlainTextFromPasteEvent(event: ClipboardEvent): string {
   return event.clipboardData?.getData('text/plain') ?? ''
 }
 
-export function findLargeTextControlPasteTarget(
+function findLargeTextControlPasteTarget(
   eventTarget: EventTarget | null,
   activeElement: Element | null = document.activeElement
 ): HTMLInputElement | HTMLTextAreaElement | null {

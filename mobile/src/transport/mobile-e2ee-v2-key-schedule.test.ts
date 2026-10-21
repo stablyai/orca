@@ -7,7 +7,7 @@ import {
   createMobileE2EEV2Fixture,
   MOBILE_E2EE_V2_VECTOR
 } from '../../../src/shared/mobile-e2ee-v2-fixtures'
-import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
+import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
 
 function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')

@@ -3,14 +3,14 @@ import { vi } from 'vitest'
 import type { CommonProps } from '../../shared/telemetry-events'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
-import { resetBurstCapsForSession } from './burst-cap'
 import {
   _enableTransportForTests,
   _resetFirstAppOpenedFiredForTests,
   _setCommonPropsForTests,
   _setPostHogClientForTests,
   _setShuttingDownForTests,
-  _setStoreForTests
+  _setStoreForTests,
+  initTelemetry
 } from './client'
 
 export type MockPostHog = {
@@ -136,11 +136,10 @@ export function setupTelemetryClientTest(
   const envStash = stashAndClearConsentEnv()
   vi.spyOn(console, 'debug').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
-  resetBurstCapsForSession()
-
   const mock = makeMockPostHog()
   const settings = makeFakeSettings(telemetry)
   const store = makeFakeStore(settings)
+  initTelemetry(store)
   _setPostHogClientForTests(mock as unknown as PostHog)
   _setCommonPropsForTests(BASE_COMMON)
   _setStoreForTests(store)

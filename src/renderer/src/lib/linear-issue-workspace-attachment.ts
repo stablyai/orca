@@ -1,4 +1,5 @@
 import type { LinearIssue } from '../../../shared/linear/issue-types'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
   getLinearOrganizationUrlKeyFromIssueUrl,
@@ -53,12 +54,24 @@ function findScopedAttachment(
   let best: Worktree | null = null
   let bestScore = -1
   for (const worktree of candidates) {
-    const score = scopeMatchScore({
-      issueWorkspaceId: issue.workspaceId,
-      worktreeWorkspaceId: worktree.linkedLinearIssueWorkspaceId,
-      issueOrganizationUrlKey,
-      worktreeOrganizationUrlKey: worktree.linkedLinearIssueOrganizationUrlKey
-    })
+    const identifier = normalizeLinearIdentifier(issue.identifier)
+    const scores = getWorkspaceAttachments(worktree)
+      .filter(
+        (item) =>
+          item.provider === 'linear' &&
+          normalizeLinearIdentifier(item.identifier ?? item.linearIdentifier) === identifier
+      )
+      .map((item) =>
+        scopeMatchScore({
+          issueWorkspaceId: issue.workspaceId,
+          worktreeWorkspaceId: item.linearWorkspaceId,
+          issueOrganizationUrlKey,
+          worktreeOrganizationUrlKey:
+            item.linearOrganizationUrlKey ?? getLinearOrganizationUrlKeyFromIssueUrl(item.url)
+        })
+      )
+      .filter((score): score is number => score !== null)
+    const score = scores.length ? Math.max(...scores) : null
     if (
       score != null &&
       (score > bestScore ||
@@ -83,7 +96,12 @@ export function findLinearIssueWorkspaceAttachment(
   return findScopedAttachment(
     worktrees.filter(
       (worktree) =>
-        !worktree.isArchived && normalizeLinearIdentifier(worktree.linkedLinearIssue) === identifier
+        !worktree.isArchived &&
+        getWorkspaceAttachments(worktree).some(
+          (item) =>
+            item.provider === 'linear' &&
+            normalizeLinearIdentifier(item.identifier ?? item.linearIdentifier) === identifier
+        )
     ),
     issue
   )
@@ -99,15 +117,21 @@ export function buildLinearIssueWorkspaceAttachmentIndex(
     if (worktree.isArchived) {
       continue
     }
-    const identifier = normalizeLinearIdentifier(worktree.linkedLinearIssue)
-    if (!identifier) {
-      continue
-    }
-    const bucket = index.get(identifier)
-    if (bucket) {
-      bucket.push(worktree)
-    } else {
-      index.set(identifier, [worktree])
+    const identifiers = new Set(
+      getWorkspaceAttachments(worktree)
+        .filter((item) => item.provider === 'linear')
+        .map((item) => normalizeLinearIdentifier(item.identifier ?? item.linearIdentifier))
+    )
+    for (const identifier of identifiers) {
+      if (!identifier) {
+        continue
+      }
+      const bucket = index.get(identifier)
+      if (bucket) {
+        bucket.push(worktree)
+      } else {
+        index.set(identifier, [worktree])
+      }
     }
   }
   return index

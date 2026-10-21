@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T06:10:52.713Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.0; recording stopped ~0.3s after submit, while the spinner was live; no shutdown repaint in the file",
+  "exitCode": 0
+}

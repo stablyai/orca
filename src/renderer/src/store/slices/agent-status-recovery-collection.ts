@@ -10,7 +10,6 @@ import {
   retainedAgentEntryFromLive
 } from './agent-status-pane-key-tab-binding'
 import {
-  carryOverAutomaticResumeBlock,
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,
   markManualSleepLazyRestore,
@@ -19,7 +18,8 @@ import {
   type CollectSleepingAgentSessionRecordsOptions
 } from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../shared/live-resume-anchor-record'
 
 export function collectSleepingAgentSessionRecordsForWorktree(
   state: AppState,
@@ -96,10 +96,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(
-          record,
-          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
-        )
       }
       records[record.paneKey] = record
     }
@@ -133,7 +129,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
       }
       records[record.paneKey] = record
     }
@@ -159,7 +154,7 @@ export function collectHibernatedCompletionEvidenceForWorktree(
       !allowedPaneKeys.has(paneKey) ||
       entry.state !== 'done' ||
       agentType === undefined ||
-      entry.interrupted === true
+      agentTurnEndedOnPurpose(entry)
     ) {
       continue
     }

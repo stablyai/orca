@@ -1,18 +1,12 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { activateMobileSessionTab } from '../session/mobile-session-tab-activation'
-
-type ActivationClient = Pick<RpcClient, 'sendRequest'>
-
-type SessionFileTabCandidate = {
-  id: string
-  type: string
-  mode?: unknown
-  relativePath?: unknown
-  diffSource?: unknown
-}
+import {
+  sessionFileTabListRead,
+  type MobileSessionFileTabCandidate
+} from './mobile-source-file-open-operations'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type Options = {
-  client: ActivationClient
+  client: RpcOperationSender
   worktreeId: string
   relativePath: string
   tabMode: 'diff' | 'edit'
@@ -59,20 +53,19 @@ export async function revealMobileSourceControlSessionDiff(
   return 'timeout'
 }
 
-async function findOpenedSessionFileTab(options: Options): Promise<SessionFileTabCandidate | null> {
+async function findOpenedSessionFileTab(
+  options: Options
+): Promise<MobileSessionFileTabCandidate | null> {
   try {
-    const response = await options.client.sendRequest('session.tabs.list', {
+    const reply = await sessionFileTabListRead.request(options.client, {
       worktree: `id:${options.worktreeId}`
     })
-    if (!response.ok) {
-      return null
-    }
-    const snapshot = readTabSnapshot(response.result)
-    if (!snapshot) {
+    const listed = sessionFileTabListRead.interpret(reply)
+    if (!listed.accepted || !listed.value) {
       return null
     }
 
-    const matches = snapshot.tabs.filter(
+    const matches = listed.value.tabs.filter(
       (tab) =>
         tab.type !== 'browser' &&
         tab.type !== 'terminal' &&
@@ -110,21 +103,6 @@ async function activateSessionFileTab(options: Options, tabId: string): Promise<
   } catch {
     return false
   }
-}
-
-function readTabSnapshot(value: unknown): { tabs: SessionFileTabCandidate[] } | null {
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.tabs) ||
-    !value.tabs.every(isSessionFileTabCandidate)
-  ) {
-    return null
-  }
-  return { tabs: value.tabs }
-}
-
-function isSessionFileTabCandidate(value: unknown): value is SessionFileTabCandidate {
-  return isRecord(value) && typeof value.id === 'string' && typeof value.type === 'string'
 }
 
 function readActiveTabId(value: unknown): string | null {

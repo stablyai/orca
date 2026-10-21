@@ -2,7 +2,6 @@
 // tests pin capture payload drift, shutdown gating, burst caps, consent order,
 // and the per-session event ceiling.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CommonProps } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
 import { _setShuttingDownForTests, track, trackAppOpenedOnce } from './client'
 import {
@@ -34,10 +33,10 @@ describe('track()', () => {
     const call = mock.capture.mock.calls[0]![0]
     expect(call.event).toBe('app_opened')
     expect(call.distinctId).toBe(BASE_COMMON.install_id)
-    expect(call.properties.$process_person_profile).toBe(false)
-    for (const key of Object.keys(BASE_COMMON) as (keyof CommonProps)[]) {
-      expect(call.properties[key]).toBe(BASE_COMMON[key])
-    }
+    expect(call.properties).toEqual({
+      ...BASE_COMMON,
+      $process_person_profile: false
+    })
   })
 
   // Drift-check: the full set of keys on the capture payload is bounded by

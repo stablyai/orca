@@ -19,14 +19,19 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
 const GRAPH_SOURCE = readFileSync(
-  fileURLToPath(new URL('../../src/renderer/src/runtime/sync-runtime-graph.ts', import.meta.url)),
+  fileURLToPath(
+    new URL(
+      '../../src/renderer/src/runtime/sync-runtime-graph/agent-status-projection.ts',
+      import.meta.url
+    )
+  ),
   'utf8'
 )
 
 const bucketMatch = GRAPH_SOURCE.match(/AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = ([0-9_]+)/)
 if (!bucketMatch) {
   throw new Error(
-    'sync-runtime-graph.ts no longer defines the updatedAt bucket; re-sync this benchmark.'
+    'agent-status-projection.ts no longer defines the updatedAt bucket; re-sync this benchmark.'
   )
 }
 const BUCKET_MS = Number(bucketMatch[1].replaceAll('_', ''))

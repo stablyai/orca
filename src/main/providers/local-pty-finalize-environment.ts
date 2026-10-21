@@ -27,7 +27,7 @@ import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import { getShellLaunchConfig } from './local-pty-shell-ready'
 import { finalizeWindowsLocalPtySpawnEnvironment } from './local-pty-windows-spawn-environment'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export function finalizeLocalPtySpawnEnvironment(args: {
   spawn: PtySpawnOptions
@@ -104,11 +104,19 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // config below may name features for this shell.
     delete env.ORCA_SHELL_FEATURES
     delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
+    // Why captured now: the launch env below prefixes XDG_DATA_DIRS.
+    const fishLaunch = {
+      inheritedXdgDataDirs: env.XDG_DATA_DIRS,
+      shellArgs: plan.shellArgs
+    }
     plan.getFallbackShellReadyConfig = (shell) => {
       const wrapperStartupCommand =
         codexStartupCommand !== undefined && supportsPosixShellStartupCommand(shell)
           ? codexStartupCommand
           : undefined
+      // Why no line-editor widening here (unlike the daemon and relay): a Codex
+      // startup command this provider wraps is run by the wrapper's own prompt
+      // hook, never written into the PTY, so there is no early write to double-echo.
       const waitsForShellReady =
         Boolean(spawn.command) && (!isCodexStartupCommand || codexRequiresShellReady)
       return getShellLaunchConfig(
@@ -122,14 +130,17 @@ export function finalizeLocalPtySpawnEnvironment(args: {
           // handshake can bind output to the right shell PID.
           emitsStartupIdentity: waitsForShellReady
         }),
-        wrapperStartupCommand
+        wrapperStartupCommand,
+        fishLaunch
       )
     }
     const shellLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
+    plan.primaryPreLaunchEnv = Object.fromEntries(
+      Object.keys(shellLaunch.env).map((key) => [key, env[key]])
+    )
     Object.assign(env, shellLaunch.env)
     plan.shellArgs = shellLaunch.args ?? plan.shellArgs
     plan.shellReadyLaunch = spawn.command ? shellLaunch : null
-    plan.primaryLaunchEnvKeys = Object.keys(shellLaunch.env)
   }
   return historyResult
 }

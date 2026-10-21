@@ -46,15 +46,13 @@ function readRegistryPath(
   }
 }
 
-export function readWindowsPathRegistry(): WindowsPathRegistryRead[] {
+/** Null when the native addon cannot load (an Orca server slot does not ship it). */
+export function readWindowsPathRegistry(): WindowsPathRegistryRead[] | null {
   let registry: WindowsNativeRegistryModule
   try {
     registry = windowsRegistryLoader()
   } catch {
-    return [
-      { failed: true, value: null },
-      { failed: true, value: null }
-    ]
+    return null
   }
   return [
     readRegistryPath(registry, registry.HK.LM, MACHINE_ENVIRONMENT_KEY),

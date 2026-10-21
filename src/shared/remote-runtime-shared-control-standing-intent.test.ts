@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
@@ -149,12 +150,12 @@ function testConnection(options?: {
   paused?: boolean
 }): RemoteRuntimeSharedControlConnection {
   return new RemoteRuntimeSharedControlConnection(
-    {
+    pairedRuntimeConnectionFromOffer({
       v: 2,
       endpoint: 'ws://127.0.0.1:1',
       deviceToken: 'token',
       publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
-    },
+    }),
     {
       isManuallyDisconnected: () => options?.manual ?? false,
       isCapabilityPaused: () => options?.paused ?? false

@@ -2,14 +2,15 @@ import type { JiraConnectionStatus, JiraIssue } from '../../../shared/jira-types
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-target'
+import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
 
 export async function jiraReadStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
   const target = getJiraRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraConnectionStatus>(target, 'jira.readStatus', undefined, {
-        timeoutMs: 15_000
-      })
-    : window.api.jira.readStatus()
+  return parseJiraConnectionStatus(
+    target.kind === 'environment'
+      ? await callRuntimeRpc<unknown>(target, 'jira.readStatus', undefined, { timeoutMs: 15_000 })
+      : await window.api.jira.readStatus()
+  )
 }
 
 export async function jiraLookupIssueSummary(

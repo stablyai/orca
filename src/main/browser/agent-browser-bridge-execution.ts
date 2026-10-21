@@ -11,7 +11,9 @@ import {
 } from './agent-browser-bridge-process'
 import { translateResult } from './agent-browser-bridge-result'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
+import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
 import {
   STALE_SESSION_CLOSE_TIMEOUT_MS,
   type AgentBrowserExecOptions,
@@ -82,6 +84,8 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
       throw this.createPageUnavailableError(sessionName)
     }
 
+    // Why: a command can spawn several helpers in turn; none may start after a host's revocation.
+    assertRemoteCliBrowserAccess(session.webContentsId)
     this.reinitializeIfDaemonIdledOut(sessionName, session)
     session.lastCommandAt = Date.now()
 
@@ -173,6 +177,15 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
   }
 
   protected closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+    if (
+      canSkipAgentBrowserSessionReset({
+        ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
+        socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
+        sessionName
+      })
+    ) {
+      return Promise.resolve()
+    }
     return new Promise((resolve, reject) => {
       let child: ReturnType<typeof execFile> | null = null
       let settled = false

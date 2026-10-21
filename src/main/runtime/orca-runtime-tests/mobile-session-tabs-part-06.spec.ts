@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   OrcaRuntimeService,
   appendBrowserTabOrder,
@@ -653,7 +654,9 @@ describe('OrcaRuntimeService', () => {
       }))
     })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Layout-owner build: main's own panes read the partition twice more (graph and fence); this
+    // store has no write notice to cache on. Still per sync, never per workspace.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(ORCA_LAYOUT_OWNER_IS_MAIN ? 3 : 1)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
@@ -674,7 +677,9 @@ describe('OrcaRuntimeService', () => {
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Layout-owner build: main's own panes read the partition twice more (graph and fence); this
+    // store has no write notice to cache on. Still per sync, never per workspace.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(ORCA_LAYOUT_OWNER_IS_MAIN ? 3 : 1)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 })

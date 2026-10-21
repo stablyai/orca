@@ -1,6 +1,16 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
 
 export type ServeSimRuntimeMaterializerOptions = {
   bundledPackageDir: string
@@ -8,11 +18,6 @@ export type ServeSimRuntimeMaterializerOptions = {
   version: string
   clearQuarantine?: (dir: string) => void
 }
-
-const EXECUTABLE_RELATIVE_PATHS = [
-  join('bin', 'serve-sim-bin'),
-  join('dist', 'simcam', 'serve-sim-camera-helper')
-]
 
 function defaultClearQuarantine(dir: string): void {
   if (process.platform !== 'darwin') {
@@ -47,45 +52,89 @@ function pruneStaleServeSimRuntimes(targetRootDir: string, keepVersion: string):
   }
 }
 
+function readDependencyNames(packageDir: string): string[] {
+  const manifest: unknown = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+  if (!manifest || typeof manifest !== 'object' || !('dependencies' in manifest)) {
+    return []
+  }
+  const { dependencies } = manifest
+  return dependencies && typeof dependencies === 'object' ? Object.keys(dependencies) : []
+}
+
+// Why: the copy has no node_modules of its own, so its bare imports (e.g. `ws`) must resolve
+// through links to the bundle's installed siblings; a dangling link (moved or translocated app) is stale.
+function bundledDependencyLinks(
+  bundledPackageDir: string,
+  runtimeNodeModulesDir: string
+): { linkPath: string; targetPath: string }[] {
+  const bundledNodeModulesDir = dirname(realpathSync(bundledPackageDir))
+  return readDependencyNames(bundledPackageDir)
+    .map((name) => ({
+      linkPath: join(runtimeNodeModulesDir, name),
+      targetPath: join(bundledNodeModulesDir, name)
+    }))
+    .filter(({ targetPath }) => existsSync(targetPath))
+}
+
+function isMaterializedRuntimeCurrent(bundledPackageDir: string, versionDir: string): boolean {
+  const nodeModulesDir = join(versionDir, 'node_modules')
+  if (!existsSync(join(nodeModulesDir, 'serve-sim', 'dist', 'serve-sim.js'))) {
+    return false
+  }
+  try {
+    return bundledDependencyLinks(bundledPackageDir, nodeModulesDir).every(
+      ({ linkPath, targetPath }) => realpathSync(linkPath) === realpathSync(targetPath)
+    )
+  } catch {
+    return false
+  }
+}
+
 // Copies the bundled serve-sim package to a per-version directory outside the
 // signed app bundle and strips quarantine, so the camera dylib injected from
 // it is not subject to Gatekeeper assessment. The bundled dylib stays signed
 // and in place (it must, or the app fails notarization) — this only relocates
 // the copy that actually gets DYLD-injected. serve-sim resolves the dylib and
 // helper relative to its own entry, so the whole package moves together.
+// Layout: <version>/node_modules/serve-sim plus links to its bundled dependencies.
 export function materializeServeSimRuntime(
   options: ServeSimRuntimeMaterializerOptions
 ): string | null {
   const { bundledPackageDir, targetRootDir, version } = options
   const clearQuarantine = options.clearQuarantine ?? defaultClearQuarantine
   const targetDir = join(targetRootDir, version)
-  const entryPath = join(targetDir, 'dist', 'serve-sim.js')
-  if (existsSync(entryPath)) {
-    return targetDir
+  const packageDir = join(targetDir, 'node_modules', 'serve-sim')
+  if (isMaterializedRuntimeCurrent(bundledPackageDir, targetDir)) {
+    return packageDir
   }
   const stagingDir = join(targetRootDir, `.staging-${version}-${process.pid}`)
+  const stagingNodeModulesDir = join(stagingDir, 'node_modules')
   try {
     mkdirSync(targetRootDir, { recursive: true })
     pruneStaleServeSimRuntimes(targetRootDir, version)
     rmSync(stagingDir, { recursive: true, force: true })
     rmSync(targetDir, { recursive: true, force: true })
-    cpSync(bundledPackageDir, stagingDir, { recursive: true })
-    for (const relativePath of EXECUTABLE_RELATIVE_PATHS) {
-      const executablePath = join(stagingDir, relativePath)
-      if (existsSync(executablePath)) {
-        chmodSync(executablePath, 0o755)
-      }
+    const stagingPackageDir = join(stagingNodeModulesDir, 'serve-sim')
+    // Why realpath: cpSync copies a symlinked package dir (pnpm layout) as a link back into the bundle.
+    cpSync(realpathSync(bundledPackageDir), stagingPackageDir, { recursive: true })
+    // Why before linking: the recursive xattr walk must not reach into the signed bundle.
+    clearQuarantine(stagingPackageDir)
+    for (const { linkPath, targetPath } of bundledDependencyLinks(
+      bundledPackageDir,
+      stagingNodeModulesDir
+    )) {
+      mkdirSync(dirname(linkPath), { recursive: true })
+      symlinkSync(targetPath, linkPath, 'junction')
     }
-    clearQuarantine(stagingDir)
     try {
       renameSync(stagingDir, targetDir)
     } catch (error) {
       // Another app instance sharing userData may have finished first.
-      if (!existsSync(entryPath)) {
+      if (!isMaterializedRuntimeCurrent(bundledPackageDir, targetDir)) {
         throw error
       }
     }
-    return existsSync(entryPath) ? targetDir : null
+    return isMaterializedRuntimeCurrent(bundledPackageDir, targetDir) ? packageDir : null
   } catch {
     return null
   } finally {

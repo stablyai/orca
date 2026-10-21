@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { WebSocket } from 'ws'
 import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
+import type { NativeChatMessage } from '../../src/shared/native-chat-types'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
@@ -25,6 +26,10 @@ const TAB_ID = 'chat-tab-1'
 const SESSION_ID = 'mock-chat-session'
 const TRANSCRIPT_PATH = join(tmpdir(), 'mock-transcript.jsonl')
 const MOCK_IMAGE_PATH = join(tmpdir(), 'mock-image.png')
+// Exercise legacy OMP hooks without a transcript path; current hooks may include one.
+const CHAT_AGENT = process.env.MOCK_CHAT_AGENT === 'omp' ? 'omp' : 'claude'
+const CHAT_TITLE = CHAT_AGENT === 'omp' ? 'OMP' : 'Claude Code'
+const TRANSCRIPT_START = Date.now() - 1000 * 60 * 5
 
 function readControl(file: string): string {
   try {
@@ -41,28 +46,27 @@ const agentStatus: AgentStatusEntry = {
   prompt: '',
   updatedAt: Date.now(),
   stateStartedAt: Date.now(),
-  agentType: 'claude',
+  agentType: CHAT_AGENT,
   paneKey: `${TAB_ID}:leaf-1`,
   terminalHandle: TERMINAL_HANDLE,
   stateHistory: [],
-  providerSession: {
-    key: 'session_id',
-    id: SESSION_ID,
-    transcriptPath: TRANSCRIPT_PATH
-  }
+  providerSession:
+    CHAT_AGENT === 'omp'
+      ? { key: 'session_id', id: SESSION_ID }
+      : { key: 'session_id', id: SESSION_ID, transcriptPath: TRANSCRIPT_PATH }
 }
 
 function buildTab(): RuntimeMobileSessionTerminalClientTab {
   return {
     type: 'terminal',
     id: TAB_ID,
-    title: 'Claude Code',
+    title: CHAT_TITLE,
     parentTabId: TAB_ID,
     leafId: 'leaf-1',
     ptyId: 'pty-1',
     status: 'ready',
     terminal: TERMINAL_HANDLE,
-    launchAgent: 'claude',
+    launchAgent: CHAT_AGENT,
     agentStatus,
     viewMode: 'chat',
     isActive: true
@@ -102,6 +106,51 @@ function tabsResultIfChanged(worktree: string): RuntimeMobileSessionTabsResult |
 function worktreeOf(request: RpcRequest): string {
   const raw = request.params?.worktree
   return typeof raw === 'string' ? raw : 'id:mock-worktree'
+}
+
+// Why: shapes mirror what the runtime's omp decoder emits for a real session
+// (thinking→text on the assistant turn, toolCall blocks, toolResult turns), so
+// the phone exercises the same render path a live omp pane would.
+function mockTranscript(): NativeChatMessage[] {
+  if (CHAT_AGENT !== 'omp') {
+    return []
+  }
+  const t = TRANSCRIPT_START
+  return [
+    {
+      id: 'omp-1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'why is my deploy failing?' }],
+      timestamp: t,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-2',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'Let me check the deploy logs first.' },
+        { type: 'tool-call', name: 'bash', input: { command: 'kubectl get pods' } }
+      ],
+      timestamp: t + 1000,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-3',
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output: 'api-7f9c 0/1 CrashLoopBackOff' }],
+      timestamp: t + 2000,
+      source: 'transcript'
+    },
+    {
+      id: 'omp-4',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'The API pod is crash-looping. Check its logs with kubectl logs.' }
+      ],
+      timestamp: t + 3000,
+      source: 'transcript'
+    }
+  ]
 }
 
 // Why: unsubscribe correlates by worktree, not request id, and a socket that
@@ -144,7 +193,7 @@ type Respond = (response: RpcResponse) => void
 type Success = (id: string, result: unknown, streaming?: boolean) => RpcResponse
 type Failure = (id: string, code: string, message: string) => RpcResponse
 
-/** Mock backend for the native-chat surface: session tabs, an empty transcript
+/** Mock backend for the native-chat surface: session tabs, a fixture transcript
  *  snapshot, terminal send, and image upload. Opt-in via MOCK_NATIVE_CHAT=1
  *  because it replaces the default terminal fixtures. No transcript or terminal
  *  output frames are pushed. Returns false for methods it does not own. */
@@ -194,7 +243,7 @@ export function handleMockNativeChatRequest(
       const entry = (handle: string) => ({
         handle,
         worktreeId,
-        title: 'Claude Code',
+        title: CHAT_TITLE,
         isActive: true,
         hasRunningProcess: true
       })
@@ -209,11 +258,13 @@ export function handleMockNativeChatRequest(
     }
 
     case 'nativeChat.subscribe':
-      respond(success(request.id, { type: 'snapshot', messages: [], hasMore: false }, true))
+      respond(
+        success(request.id, { type: 'snapshot', messages: mockTranscript(), hasMore: false }, true)
+      )
       return true
 
     case 'nativeChat.readSession':
-      respond(success(request.id, { messages: [], hasMore: false }))
+      respond(success(request.id, { messages: mockTranscript(), hasMore: false }))
       return true
 
     case 'terminal.subscribe': {

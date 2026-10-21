@@ -105,16 +105,16 @@ type DoctorResult = EphemeralVmRecipeDoctorResult & {
   provisionTranscript?: ProvisionTranscript
 }
 
-const MAX_TRANSCRIPT_STREAM_BYTES = 16_000
+const MAX_TRANSCRIPT_STREAM_CHARS = 16_000
 
 // Why: keep both ends of a long log — the script's setup context (head) and the
 // failure itself (tail) — rather than only the last 500 chars.
 function capTranscriptStream(value: string): string {
   const redacted = redactEphemeralVmRecipeDiagnosticText(value)
-  if (redacted.length <= MAX_TRANSCRIPT_STREAM_BYTES) {
+  if (redacted.length <= MAX_TRANSCRIPT_STREAM_CHARS) {
     return redacted
   }
-  const half = Math.floor(MAX_TRANSCRIPT_STREAM_BYTES / 2)
+  const half = Math.floor(MAX_TRANSCRIPT_STREAM_CHARS / 2)
   const omitted = redacted.length - half * 2
   return `${redacted.slice(0, half)}\n…[${omitted} chars omitted]…\n${redacted.slice(-half)}`
 }

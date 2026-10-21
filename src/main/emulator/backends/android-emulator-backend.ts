@@ -172,24 +172,10 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    options: { helperPid?: number; includeOrphaned?: boolean } = {}
+    _options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
+    // Only live handles establish ownership; scrcpy socket names are shared with other tools.
     this.streams.stop(deviceId)
-    // Reap a port-forward leaked by an unclean exit: the in-memory handle is gone
-    // after a crash, so streams.stop can't remove it. Best-effort, serial-scoped,
-    // and must never throw on this teardown path.
-    if (options.includeOrphaned) {
-      const sdk = this.sdkState.resolve()
-      if (!sdk) {
-        return
-      }
-      const serial = await this.resolveDeviceId(deviceId).catch(() => null)
-      if (!serial) {
-        return
-      }
-      // `-s <serial>` scopes --remove-all to this device's adb forwards only.
-      await this.runner(sdk.adb, ['-s', serial, 'forward', '--remove-all']).catch(() => {})
-    }
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {

@@ -13,19 +13,26 @@ import {
   classifyLatestAgentTitle,
   getLatestAgentCandidateTitle,
   getLatestLeafTitle,
-  ptyTitleProvesAgentPresence
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
+  ptyTitleProvesAgentPresence,
+  type TitleDisplayClear
 } from './runtime-worktree-status-projection'
 
 const WRAPPER_RETRY_INTERVAL_MS = 150
 const WRAPPER_RETRY_TIMEOUT_MS = 6_500
 
 type RuntimeTerminalAgentPresenceDependencies = {
+  /** A structured agent session of this runtime; it has no pane, so no PTY probe can see it. */
+  isLiveStructuredAgent?(handle: string): boolean
   getLivePty(handle: string): RuntimePtyWorktreeRecord | null
   getLiveLeaf(handle: string): RuntimeLeafRecord
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
   getTrackedPty(ptyId: string): RuntimePtyWorktreeRecord | null
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
+  /** The stale-working timer's display-only clear of the PTY's own title, if one stands. */
+  getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
 
 export type RuntimeTerminalAgentPresenceOptions = {
@@ -41,12 +48,32 @@ export class RuntimeTerminalAgentPresence {
     handle: string,
     options: RuntimeTerminalAgentPresenceOptions = {}
   ): Promise<boolean> {
+    // Before every PTY probe below, because none of them can answer for a session that has no
+    // pane: `getLiveLeaf` threw, the catch turned that into `false`, and a coordinator running
+    // `dispatch --inject` concluded its structured worker was a bare shell — `no_agent_detected`.
+    // A structured session IS the agent; there is no foreground process to recognise.
+    if (this.deps.isLiveStructuredAgent?.(handle)) {
+      return true
+    }
     try {
+      // Why display records: presence reads what the pane shows, as before the stale-working
+      // clear stopped rewriting records. A cwd spinner clears to a neutral title, so the
+      // foreground process decides for an agent that exited behind it.
       const pty = this.deps.getLivePty(handle)
       if (pty) {
-        return await this.isPtyRunning(pty, this.deps.getPrimaryLeaf(pty.ptyId), options)
+        const clear = this.deps.getTitleDisplayClear(pty.ptyId)
+        const leaf = this.deps.getPrimaryLeaf(pty.ptyId)
+        return await this.isPtyRunning(
+          getPtyDisplayRecord(pty, clear),
+          leaf ? getLeafDisplayRecord(leaf, clear) : null,
+          options
+        )
       }
-      const leaf = this.deps.getLiveLeaf(handle)
+      const liveLeaf = this.deps.getLiveLeaf(handle)
+      const leaf = getLeafDisplayRecord(
+        liveLeaf,
+        liveLeaf.ptyId ? this.deps.getTitleDisplayClear(liveLeaf.ptyId) : null
+      )
       const trackedPty = leaf.ptyId ? this.deps.getTrackedPty(leaf.ptyId) : null
       const paneTitle = getLatestLeafTitle(leaf, null)
       const paneClassification = classifyAgentTitle(paneTitle)

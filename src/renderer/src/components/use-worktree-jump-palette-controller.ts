@@ -11,8 +11,12 @@ import { useWorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-l
 import { useWorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import { useWorktreeJumpPaletteSelectionActions } from './use-worktree-jump-palette-selection-actions'
 import { useWorktreeJumpPaletteCreateAction } from './use-worktree-jump-palette-create-action'
+import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { useWorktreeJumpPaletteTaskUrl } from './use-worktree-jump-palette-task-url'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
+import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
+import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
+import { useMemo } from 'react'
 
 export function useWorktreeJumpPaletteController({
   visible,
@@ -25,6 +29,34 @@ export function useWorktreeJumpPaletteController({
 }) {
   const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering })
   const localState = useWorktreeJumpPaletteLocalState({ createLookupGuard, visible })
+  const paletteEvaluationSnapshot = useMemo(
+    () => ({
+      query: localState.paletteSearchQuery,
+      agentStatus: storeState.agentStatusByPaneKey,
+      worktrees: storeState.workspaces,
+      browserPages: storeState.browserPagesByWorkspace,
+      browserWorkspaces: storeState.browserTabsByWorktree,
+      openFiles: storeState.openFiles,
+      retainedAgents: storeState.retainedAgentsByPaneKey,
+      sleepingAgents: storeState.sleepingAgentSessionsByPaneKey,
+      unifiedTabs: storeState.unifiedTabsByWorktree,
+      visible
+    }),
+    [
+      localState.paletteSearchQuery,
+      storeState.agentStatusByPaneKey,
+      storeState.workspaces,
+      storeState.browserPagesByWorkspace,
+      storeState.browserTabsByWorktree,
+      storeState.openFiles,
+      storeState.retainedAgentsByPaneKey,
+      storeState.sleepingAgentSessionsByPaneKey,
+      storeState.unifiedTabsByWorktree,
+      visible
+    ]
+  )
+  const paletteSearchContext = usePaletteSearchEvaluationContext(paletteEvaluationSnapshot)
+  const evaluation = { paletteSearchContext }
   const taskUrl = useWorktreeJumpPaletteTaskUrl({
     visible,
     createWorktreeName: localState.createWorktreeName,
@@ -32,16 +64,19 @@ export function useWorktreeJumpPaletteController({
     createLookupGuard
   })
   const filter = useWorktreeJumpPaletteFilter({ ...storeState, ...localState })
+  const taskSearch = useWorktreeJumpPaletteTaskSearch({ ...storeState, ...localState, ...filter })
   const worktrees = useWorktreeJumpPaletteWorktrees({
     ...storeState,
     ...localState,
-    ...filter
+    ...filter,
+    ...evaluation
   })
   const openTabs = useWorktreeJumpPaletteOpenTabs({
     ...storeState,
     ...localState,
     ...filter,
-    ...worktrees
+    ...worktrees,
+    ...evaluation
   })
   const recentTabs = useWorktreeJumpPaletteRecentTabs({
     ...storeState,
@@ -78,6 +113,7 @@ export function useWorktreeJumpPaletteController({
     ...worktrees,
     ...openTabs,
     ...sections,
+    ...taskSearch,
     ...taskUrl
   })
   const selectionLifecycle = useWorktreeJumpPaletteSelectionLifecycle({
@@ -91,12 +127,14 @@ export function useWorktreeJumpPaletteController({
     ...quickActions,
     ...sections,
     ...listEntries,
+    ...taskSearch,
     ...taskUrl
   })
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
     ...storeState,
     ...localState,
     ...quickActions,
+    ...taskSearch,
     ...selectionLifecycle
   })
   const emojiInput = useWorkspaceEmojiShortcodeInput({
@@ -120,6 +158,7 @@ export function useWorktreeJumpPaletteController({
     ...storeState,
     ...localState,
     ...taskUrl,
+    ...taskSearch,
     ...filter,
     ...worktrees,
     ...openTabs,
@@ -130,10 +169,10 @@ export function useWorktreeJumpPaletteController({
     ...listEntries,
     ...selectionLifecycle,
     ...selectionActions,
+    paletteNowMs: worktrees.hasQuery ? paletteSearchContext.nowMs : storeState.paletteNowMs,
     emojiInput,
     ...createAction
   }
 }
 
 export type WorktreeJumpPaletteController = ReturnType<typeof useWorktreeJumpPaletteController>
-import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'

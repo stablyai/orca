@@ -54,13 +54,19 @@ test('resets standard keyboard bytes after a protocol-mode agent exits on ConPTY
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
-  await configureGoldenStubAgent(orcaPage, { agentArgs: '--keyboard-protocol' })
-  await launchGoldenStubAgentFromNewTab(orcaPage)
+  // Grok is the supported native ConPTY exception to Kitty protocol withholding.
+  await configureGoldenStubAgent(orcaPage, {
+    agent: 'grok',
+    agentArgs: '--keyboard-protocol --grok'
+  })
+  await launchGoldenStubAgentFromNewTab(orcaPage, /^Grok(?:\s|$)/i)
 
   const ptyId = await waitForActivePanePtyId(orcaPage)
   await expect.poll(() => getKittyKeyboardFlags(orcaPage), { timeout: 10_000 }).toBe(1)
 
   await clearTerminalPtyWriteLog(electronApp)
+  // Kitty flag 1 preserves plain Enter; modified Enter proves CSI-u input.
+  await orcaPage.keyboard.press('Shift+Enter')
   await orcaPage.keyboard.type('exit')
   await orcaPage.keyboard.press('Enter')
   await waitForTerminalOutput(orcaPage, GOLDEN_STUB_EXIT_MARKER, 15_000)
@@ -68,7 +74,8 @@ test('resets standard keyboard bytes after a protocol-mode agent exits on ConPTY
     .filter((entry) => entry.id === ptyId)
     .map((entry) => entry.data)
     .join('')
-  expect(protocolWrites.includes('\x1b[13u') || protocolWrites.includes('\x1b[13;1u')).toBe(true)
+  expect(protocolWrites).toContain('\x1b[13;2u')
+  expect(protocolWrites).toContain('\r')
   await expect.poll(() => getKittyKeyboardFlags(orcaPage), { timeout: 10_000 }).toBe(0)
 
   await clearTerminalPtyWriteLog(electronApp)

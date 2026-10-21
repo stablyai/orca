@@ -7,7 +7,7 @@ import {
   type BitbucketConnectResult,
   type BitbucketConnectionStatus
 } from '../bitbucket/credential-connection'
-import { _resetPreflightCache } from './preflight'
+import { _resetPreflightCache } from '../preflight/agent-detection'
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' ? value : null

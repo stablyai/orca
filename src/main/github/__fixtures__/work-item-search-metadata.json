@@ -1,0 +1,248 @@
+[
+  {
+    "graphql": {
+      "number": 19933,
+      "title": "[Bug]: Browser element annotations cleared and overlay removed when scrolling the page (no reload)",
+      "state": "OPEN",
+      "url": "https://github.com/stablyai/orca/issues/19933",
+      "updatedAt": "2026-09-12T01:57:20Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "bug"
+          },
+          {
+            "name": "os:linux"
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "author": {
+        "__typename": "User",
+        "login": "peeraponw",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/13129669?u=bf337820b1f6d507dfac4e48db7cf61e6c2c8b95&v=4"
+      },
+      "assignees": {
+        "nodes": [
+          {
+            "login": "AmethystLiang",
+            "avatarUrl": "https://avatars.githubusercontent.com/u/6427696?u=86a210ddf931a6a557a4664cc17a97dc02c9de36&v=4"
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "__typename": "Issue"
+    },
+    "rest": {
+      "number": 19933,
+      "title": "[Bug]: Browser element annotations cleared and overlay removed when scrolling the page (no reload)",
+      "state": "open",
+      "html_url": "https://github.com/stablyai/orca/issues/19933",
+      "updated_at": "2026-09-12T01:57:20Z",
+      "labels": [
+        {
+          "name": "bug"
+        },
+        {
+          "name": "os:linux"
+        }
+      ],
+      "user": {
+        "login": "peeraponw",
+        "avatar_url": "https://avatars.githubusercontent.com/u/13129669?v=4"
+      },
+      "assignees": [
+        {
+          "login": "AmethystLiang",
+          "avatar_url": "https://avatars.githubusercontent.com/u/6427696?v=4"
+        }
+      ]
+    }
+  },
+  {
+    "graphql": {
+      "number": 19932,
+      "title": "[Bug] Incorrect status after /usage",
+      "state": "OPEN",
+      "url": "https://github.com/stablyai/orca/issues/19932",
+      "updatedAt": "2026-09-10T21:44:41Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "bug"
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "author": {
+        "__typename": "Bot",
+        "login": "orca-discord-issues",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/127256420?v=4"
+      },
+      "assignees": {
+        "nodes": [],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "__typename": "Issue"
+    },
+    "rest": {
+      "number": 19932,
+      "title": "[Bug] Incorrect status after /usage",
+      "state": "open",
+      "html_url": "https://github.com/stablyai/orca/issues/19932",
+      "updated_at": "2026-09-10T21:44:41Z",
+      "labels": [
+        {
+          "name": "bug"
+        }
+      ],
+      "user": {
+        "login": "orca-discord-issues[bot]",
+        "avatar_url": "https://avatars.githubusercontent.com/u/127256420?v=4"
+      },
+      "assignees": []
+    }
+  },
+  {
+    "graphql": {
+      "number": 19926,
+      "title": "[Bug]: Copying assistant response adds visual-wrap line breaks when pasted into Google Chat (macOS)",
+      "state": "OPEN",
+      "url": "https://github.com/stablyai/orca/issues/19926",
+      "updatedAt": "2026-09-11T17:14:42Z",
+      "labels": {
+        "nodes": [],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "author": {
+        "__typename": "User",
+        "login": "JanPlessow",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/202702070?u=6cdc81f81e27630db038e80eea4924c9ded7ddc2&v=4"
+      },
+      "assignees": {
+        "nodes": [],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "__typename": "Issue"
+    },
+    "rest": {
+      "number": 19926,
+      "title": "[Bug]: Copying assistant response adds visual-wrap line breaks when pasted into Google Chat (macOS)",
+      "state": "open",
+      "html_url": "https://github.com/stablyai/orca/issues/19926",
+      "updated_at": "2026-09-11T17:14:42Z",
+      "labels": [],
+      "user": {
+        "login": "JanPlessow",
+        "avatar_url": "https://avatars.githubusercontent.com/u/202702070?v=4"
+      },
+      "assignees": []
+    }
+  },
+  {
+    "graphql": {
+      "number": 19919,
+      "title": "[Bug]: v1.4.199 Windows NSIS installer reports success but never installs Orca.exe (partial install)",
+      "state": "OPEN",
+      "url": "https://github.com/stablyai/orca/issues/19919",
+      "updatedAt": "2026-09-10T20:08:25Z",
+      "labels": {
+        "nodes": [],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "author": {
+        "__typename": "User",
+        "login": "Subdij",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/105368200?u=d379763ab273d375d0cfff0215daf325bd59f4d6&v=4"
+      },
+      "assignees": {
+        "nodes": [],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "__typename": "Issue"
+    },
+    "rest": {
+      "number": 19919,
+      "title": "[Bug]: v1.4.199 Windows NSIS installer reports success but never installs Orca.exe (partial install)",
+      "state": "open",
+      "html_url": "https://github.com/stablyai/orca/issues/19919",
+      "updated_at": "2026-09-10T20:08:25Z",
+      "labels": [],
+      "user": {
+        "login": "Subdij",
+        "avatar_url": "https://avatars.githubusercontent.com/u/105368200?v=4"
+      },
+      "assignees": []
+    }
+  },
+  {
+    "graphql": {
+      "number": 19918,
+      "title": "[Bug]: Svelte files do not get parsed or highlighted correctly",
+      "state": "OPEN",
+      "url": "https://github.com/stablyai/orca/issues/19918",
+      "updatedAt": "2026-09-10T20:06:53Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "bug"
+          },
+          {
+            "name": "os:macos"
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "author": {
+        "__typename": "User",
+        "login": "futuraprime",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/181752?v=4"
+      },
+      "assignees": {
+        "nodes": [],
+        "pageInfo": {
+          "hasNextPage": false
+        }
+      },
+      "__typename": "Issue"
+    },
+    "rest": {
+      "number": 19918,
+      "title": "[Bug]: Svelte files do not get parsed or highlighted correctly",
+      "state": "open",
+      "html_url": "https://github.com/stablyai/orca/issues/19918",
+      "updated_at": "2026-09-10T20:06:53Z",
+      "labels": [
+        {
+          "name": "bug"
+        },
+        {
+          "name": "os:macos"
+        }
+      ],
+      "user": {
+        "login": "futuraprime",
+        "avatar_url": "https://avatars.githubusercontent.com/u/181752?v=4"
+      },
+      "assignees": []
+    }
+  }
+]

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { hasNativeFileDragTypes } from '../../../../shared/native-file-drop'
+import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../../../../shared/native-file-drop-preparation'
 import { extractImageFilesFromDataTransfer } from '@/lib/feedback-image-attachments'
 
 type FeedbackImageDragHandlers = {
@@ -10,21 +11,16 @@ type FeedbackImageDragHandlers = {
 
 export type FeedbackImageDrop = {
   isDragActive: boolean
-  contentRef: React.RefObject<HTMLDivElement | null>
+  contentRef: (node: HTMLDivElement | null) => void
   dragHandlers: FeedbackImageDragHandlers
 }
 
-/**
- * Drag-and-drop attachment wiring for the feedback dialog. Native file drops
- * never reach React here: preload consumes them on document capture and routes
- * the paths to the editor, so the drop is claimed one phase earlier on window.
- */
 export function useFeedbackImageDrop(
   open: boolean,
   onAddFiles: (files: readonly File[]) => void
 ): FeedbackImageDrop {
   const [isDragActive, setIsDragActive] = useState(false)
-  const contentRef = useRef<HTMLDivElement | null>(null)
+  const detachRef = useRef<(() => void) | null>(null)
   const dragDepthRef = useRef(0)
 
   const reset = useCallback(() => {
@@ -49,6 +45,8 @@ export function useFeedbackImageDrop(
       return
     }
     event.preventDefault()
+    // Keep accepted web drags from reaching the unclaimed-file guard.
+    event.stopPropagation()
     event.dataTransfer.dropEffect = 'copy'
   }, [])
 
@@ -64,38 +62,50 @@ export function useFeedbackImageDrop(
     }
   }, [])
 
+  const contentRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      detachRef.current?.()
+      detachRef.current = null
+      if (!node || !open) {
+        return
+      }
+      const handleDrop = (event: DragEvent): void => {
+        if (!hasNativeFileDragTypes(event.dataTransfer?.types)) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        reset()
+        if (!event.isTrusted) {
+          return
+        }
+        const images = extractImageFilesFromDataTransfer(event.dataTransfer)
+        if (images.length > 0) {
+          onAddFiles(images)
+        }
+      }
+      node.setAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE, '')
+      node.addEventListener('drop', handleDrop, true)
+      detachRef.current = () => {
+        node.removeEventListener('drop', handleDrop, true)
+        node.removeAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE)
+      }
+    },
+    [onAddFiles, open, reset]
+  )
   useEffect(() => {
     if (!open) {
+      reset()
       return
     }
-    const handleDrop = (event: DragEvent): void => {
-      const droppedInDialog = contentRef.current?.contains(event.target as Node) ?? false
-      reset()
-      if (!droppedInDialog || !hasNativeFileDragTypes(event.dataTransfer?.types)) {
-        return
-      }
-      // Why: dragover accepted this drag, and a drop left uncancelled after that
-      // is what makes the browser navigate to the file — including the non-image
-      // drops below, which would otherwise wipe the typed feedback on web.
-      event.preventDefault()
-      const images = extractImageFilesFromDataTransfer(event.dataTransfer)
-      if (images.length === 0) {
-        return
-      }
-      // Why: stop preload's native-drop lane from also opening the screenshot
-      // in an editor behind the dialog.
-      event.stopPropagation()
-      onAddFiles(images)
-    }
-    window.addEventListener('drop', handleDrop, true)
-    window.addEventListener('dragend', reset, true)
+    document.addEventListener('drop', reset, true)
+    document.addEventListener('dragend', reset, true)
     return () => {
-      window.removeEventListener('drop', handleDrop, true)
-      window.removeEventListener('dragend', reset, true)
-      // Why: a dialog closed mid-drag would otherwise reopen mid-highlight.
+      document.removeEventListener('drop', reset, true)
+      document.removeEventListener('dragend', reset, true)
       reset()
     }
-  }, [onAddFiles, open, reset])
+  }, [open, reset])
 
   return { isDragActive, contentRef, dragHandlers: { onDragEnter, onDragOver, onDragLeave } }
 }

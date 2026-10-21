@@ -1,30 +1,40 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
 import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
-import { trackDaemonPtyCwdDeniedIfDiverged } from './daemon-adoption-telemetry-event'
+import { reportDaemonPtyCwdVerdict } from './daemon-adoption-telemetry-event'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId } from './pty-session-id'
-import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
-import { supportsPtyStartupBarrier } from './shell-ready'
+import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell-ready'
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
-import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
+  // Checked again in doSpawn: retirement can close admission while spawn awaits.
+  private assertSpawnAdmission(): void {
+    if (this.idleRetirementAdmissionClosed) {
+      throw new Error('Terminal daemon is decommissioning')
+    }
+  }
+
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    this.assertSpawnAdmission()
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
     const operation: PendingDaemonSpawnOperation = {
@@ -104,6 +114,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    this.assertSpawnAdmission()
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
@@ -161,14 +172,19 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if (!restoreInfo) {
         return null
       }
+      const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
+      const recoveredCwd = normalizeWslColdRestoreCwd({
+        recoveredCwd: restoreInfo.cwd,
+        requestedCwd,
+        wslDistro: recoveryWslDistro
+      })
+      // Why: a recovered folder deleted since the crash yields to the request's already-resolved cwd.
       return {
         ...restoreInfo,
         cwd:
-          normalizeWslColdRestoreCwd({
-            recoveredCwd: restoreInfo.cwd,
-            requestedCwd: opts.cwd ?? resolveSafePtyDefaultCwd(),
-            wslDistro: recoveryWslDistro
-          }) ?? ''
+          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
+            ? recoveredCwd
+            : requestedCwd
       }
     }
 
@@ -212,22 +228,26 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
-    const isCodexStartupCommand =
-      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
-    const shouldWaitForShellReady =
-      isCodexStartupCommand &&
-      shouldUseShellReadyStartupDelivery({
+    const effectiveShellPath =
+      process.platform !== 'win32' && opts.command
+        ? resolveUnixShellPath(opts.shellOverride || resolvePtyShellPath(opts.env ?? {}))
+        : ''
+    const shellReadySupported = shellPathSupportsPtyStartupBarrier(effectiveShellPath)
+    const immediateMarker = shellReadyMarkerComesFromLineEditor(effectiveShellPath)
+    const shellReadyTimeoutMs =
+      shellReadySupported &&
+      !immediateMarker &&
+      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex' &&
+      !shouldUseShellReadyStartupDelivery({
         command: opts.command,
         startupCommandDelivery: opts.startupCommandDelivery
       })
-    const shellReadyTimeoutMs =
-      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
-
     const context: DaemonPtySpawnContext = {
-      opts,
+      // Older daemons also need the existing hint to enable their ready marker.
+      opts:
+        opts.command && immediateMarker ? { ...opts, startupCommandDelivery: 'shell-ready' } : opts,
       operation,
       historyRecovery,
       requestedSessionId,
@@ -248,7 +268,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     activeSpawnContext = context
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
     if (result.isNew && !attachOnly) {
-      trackDaemonPtyCwdDeniedIfDiverged(effectiveCwd, result.cwdReadableByDaemon, this.pidPath)
+      // Not awaited: the app-side read behind it can sit on an unanswered macOS folder prompt.
+      void reportDaemonPtyCwdVerdict({
+        cwd: effectiveCwd,
+        cwdReadableByDaemon: result.cwdReadableByDaemon,
+        pidPath: this.pidPath,
+        daemonIdentity: this.client.getDaemonIdentity()
+      })
     }
     return this.finishSpawn(context, result)
   }

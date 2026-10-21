@@ -1,4 +1,5 @@
 import { type Mock, vi } from 'vitest'
+import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 
 /** Loose signature: one mock stands in for many unrelated module exports. */
@@ -78,18 +79,10 @@ export const resolveSetupRunnerShellMock: ModuleMock = vi.fn()
 export const runHookMock: ModuleMock = vi.fn()
 export const hasHooksFileMock: ModuleMock = vi.fn()
 export const loadHooksMock: ModuleMock = vi.fn()
-export const computeWorktreePathMock: Mock<
-  (
-    sanitizedName: string,
-    repoPath: string,
-    settings: { nestWorkspaces: boolean; workspaceDir: string }
-  ) => string
-> = vi.fn()
+export const computeWorktreePathMock: Mock<typeof computeWorktreePath> = vi.fn()
 export const ensurePathWithinWorkspaceMock: StringArgMock = vi.fn()
 export const gitExecFileAsyncMock: GitArgvMock = vi.fn()
-export const getSshGitProviderMock: StringArgMock = vi.fn()
 export const getSshFilesystemProviderMock: ModuleMock = vi.fn()
-export const getActiveMultiplexerMock: ModuleMock = vi.fn()
 export const deleteWorktreeHistoryDirMock: ModuleMock = vi.fn()
 export const advertisedUrlWatcherForgetWorktreeMock: ModuleMock = vi.fn()
 export const pruneCleanupScanSnapshotMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
@@ -100,7 +93,6 @@ export const recordRemovalSnapshotPruneMock: ModuleMock = vi.fn()
 export const killAllProcessesForWorktreeMock: ModuleMock = vi.fn()
 export const clearProviderPtyStateMock: ModuleMock = vi.fn()
 export const getLocalPtyProviderMock: ModuleMock = vi.fn()
-export const getSshPtyProviderMock: ModuleMock = vi.fn()
 
 // Why: vi.mock factories are hoisted per test file, so each file calls these builders instead of
 // closing over module-scope bindings.
@@ -115,6 +107,7 @@ export const gitWorktreeModuleMock = () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
   listWorktreesSharedStrict: listWorktreesMock,
+  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
   describeCreatedWorktree: describeCreatedWorktreeMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
@@ -137,7 +130,19 @@ export const gitRepoModuleMock = () => ({
   resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
-  getBranchConflictKind: getBranchConflictKindMock
+  getBranchConflictKind: async (
+    repoPath: string,
+    branch: string,
+    base?: string,
+    options?: { wslDistro?: string },
+    allowLocalBranch?: () => Promise<boolean>
+  ) => {
+    // These handler tests stub ref presence; policy tests cover the absent-ref fast path.
+    if (allowLocalBranch && (await allowLocalBranch())) {
+      return null
+    }
+    return getBranchConflictKindMock(repoPath, branch, base, options)
+  }
 })
 
 export const githubClientModuleMock = () => ({
@@ -148,22 +153,6 @@ export const githubClientModuleMock = () => ({
 
 export const hostedReviewModuleMock = () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
-})
-
-export const sshGitDispatchModuleMock = () => ({
-  getSshGitProviderGeneration: () => 0,
-  getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
-  requireSshGitProvider: (connectionId: string) => {
-    const provider = getSshGitProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  }
 })
 
 export const sshFilesystemDispatchModuleMock = () => ({
@@ -180,17 +169,6 @@ export const worktreeSymlinksModuleMock = (): {
   createWorktreeLinkedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
-})
-
-export const sshModuleMock = () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-})
-
-// Why a second builder: getActiveMultiplexer moved to ../ssh/ssh-target-registry so the
-// runtime could reach it without ipcMain. Production imports it from there now, so a
-// vi.mock('./ssh') factory alone is inert.
-export const sshTargetRegistryModuleMock = () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
 })
 
 export const hooksModuleMock = () => ({
@@ -262,8 +240,8 @@ export const worktreeTeardownModuleMock = () => ({
   killAllProcessesForWorktree: killAllProcessesForWorktreeMock
 })
 
-export const ptyModuleMock = () => ({
-  clearProviderPtyState: clearProviderPtyStateMock,
-  getLocalPtyProvider: getLocalPtyProviderMock,
-  getSshPtyProvider: getSshPtyProviderMock
+export const ptyRegistryModuleMock = () => ({ getLocalPtyProvider: getLocalPtyProviderMock })
+
+export const ptyStateCleanupModuleMock = () => ({
+  clearProviderPtyState: clearProviderPtyStateMock
 })

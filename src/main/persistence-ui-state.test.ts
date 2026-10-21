@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { readFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs'
+import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cleanup-browse-state'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  readPersistedStateJson,
   testState,
   dataFile,
   writeDataFile,
@@ -20,7 +24,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -35,8 +39,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+let hasCreatedStoreInCase = false
+
 async function createStore() {
-  vi.resetModules()
+  if (hasCreatedStoreInCase) {
+    vi.resetModules()
+  }
   const { setSecretStore } = await import('../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -50,12 +58,16 @@ async function createStore() {
     },
     describeProtectionGap: () => null
   })
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 vi.mock('./telemetry/client', () => ({
@@ -68,16 +80,71 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
+    hasCreatedStoreInCase = false
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── UI state ───────────────────────────────────────────────────────
+
+  it('defaults new users to compact status bar usage', async () => {
+    const store = await createStore()
+    expect(store.getUI().statusBarUsageMode).toBe('compact')
+  })
+
+  it.each([undefined, null, 'expanded'])(
+    'normalizes saved status bar usage mode %j to compact',
+    async (value) => {
+      const state = getDefaultPersistedState(testState.dir)
+      if (value === undefined) {
+        delete state.ui.statusBarUsageMode
+      } else {
+        Reflect.set(state.ui, 'statusBarUsageMode', value)
+      }
+      writeDataFile(state)
+
+      const store = await createStore()
+      expect(store.getUI().statusBarUsageMode).toBe('compact')
+      store.updateUI({ sidebarWidth: 400 })
+      expect(store.getUI().statusBarUsageMode).toBe('compact')
+    }
+  )
+
+  it.each(['verbose', 'compact'] as const)('preserves saved %s usage mode', async (mode) => {
+    const store = await createStore()
+    store.updateUI({ statusBarUsageMode: mode })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
+    reloaded.updateUI({ sidebarWidth: 400 })
+    expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
+  })
+
+  it('moves the legacy host scope with a written host list, so "all hosts" sticks', async () => {
+    const store = await createStore()
+    store.updateUI({ workspaceHostScope: 'ssh:box', visibleWorkspaceHostIds: ['ssh:box'] })
+
+    // A paired phone writes only the list.
+    store.updateUI({ visibleWorkspaceHostIds: null })
+    expect(store.getUI()).toMatchObject({
+      visibleWorkspaceHostIds: null,
+      workspaceHostScope: 'all'
+    })
+    store.updateUI({ visibleWorkspaceHostIds: ['ssh:box'] })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+    // A multi-host list keeps the default host for new workspaces.
+    store.updateUI({ visibleWorkspaceHostIds: ['local', 'ssh:box'] })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+    store.updateUI({ sidebarWidth: 300 })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+  })
 
   it('updateUI merges partial updates', async () => {
     const store = await createStore()
@@ -87,6 +154,19 @@ describe('Store', () => {
     expect(ui.groupBy).toBe('repo') // default preserved
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
+
+  it.each([false, true])(
+    'restores sidebarOpen=%s from disk without changing the right sidebar',
+    async (sidebarOpen) => {
+      const store = await createStore()
+      store.updateUI({ sidebarOpen, rightSidebarOpen: false })
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getUI().sidebarOpen).toBe(sidebarOpen)
+      expect(reloaded.getUI().rightSidebarOpen).toBe(false)
+    }
+  )
 
   it('round-trips and normalizes the host-qualified manual repo order', async () => {
     const store = await createStore()
@@ -132,6 +212,25 @@ describe('Store', () => {
     expect(store.getUI().sidebarWidth).toBe(400)
   })
 
+  it('updateUI persists sanitized per-worktree explorer roots', async () => {
+    const store = await createStore()
+    store.updateUI({
+      explorerDisplayRootByWorktree: {
+        'repo-1::/repo': '/',
+        'repo-2::/repo': 'packages/app',
+        // @ts-expect-error Deliberately malformed input exercises runtime sanitization.
+        'repo-3::/repo': false,
+        // @ts-expect-error Deliberately malformed prototype key exercises runtime sanitization.
+        constructor: false
+      }
+    })
+
+    expect(store.getUI().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
+  })
+
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
     const store = await createStore()
     store.updateUI({
@@ -165,7 +264,7 @@ describe('Store', () => {
       })
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
-      const persistedBefore = readFileSync(dataFile(), 'utf-8')
+      const persistedBefore = readPersistedStateJson(dataFile())
       store.onUIChanged((ui) => notifications.push(ui))
 
       store.updateUI({
@@ -181,7 +280,7 @@ describe('Store', () => {
       await store.waitForPendingWrite()
 
       expect(notifications).toEqual([])
-      expect(readFileSync(dataFile(), 'utf-8')).toBe(persistedBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(persistedBefore)
     } finally {
       vi.useRealTimers()
     }
@@ -193,7 +292,7 @@ describe('Store', () => {
     store.updateUI({ sidebarWidth: 321 })
     store.flush()
 
-    const raw = readFileSync(dataFile(), 'utf-8')
+    const raw = readPersistedStateJson(dataFile())
     // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
     expect(raw).not.toMatch(/\n\s+"/)
     const parsed = JSON.parse(raw) as PersistedState
@@ -692,79 +791,73 @@ describe('Store', () => {
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
-  it('durably encrypts SSH PTY consumer ownership for process restart recovery', async () => {
-    const store = await createStore()
-    store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 1 } as never }, issue: {} })
-    await store.upsertSshPtyConsumerRecovery({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ownerLease: 'secret-owner-lease',
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
-    })
+  // Relay-era builds wrote this record; this build only carries it, sealed, for a downgrade.
+  const legacyRecovery = {
+    targetId: 'ssh-1',
+    clientInstanceId: 'client-1',
+    serverBuildId: 'relay-build-1',
+    clientGeneration: 3,
+    ownerGeneration: 5,
+    ownerLease: 'secret-owner-lease',
+    outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+  }
+  const sealedOwnerLease = (lease: string) =>
+    Buffer.from(`encrypted:${lease}`, 'utf-8').toString('base64')
 
-    const persisted = readDataFile() as {
-      sshPtyConsumerRecoveries: { ownerLease: string }[]
-    }
-    expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).not.toBe('secret-owner-lease')
-    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(false)
-
-    const reloaded = await createStore()
-    expect(reloaded.getSshPtyConsumerRecovery('ssh-1')).toEqual({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ownerLease: 'secret-owner-lease',
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
-    })
-  })
-
-  it('drops decrypted SSH PTY owner leases that exceed the relay protocol bound', async () => {
-    const oversizedLease = 'x'.repeat(513)
+  it('re-seals SSH PTY consumer ownership on every save so a downgrade can recover it', async () => {
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       sshPtyConsumerRecoveries: [
-        {
-          targetId: 'ssh-1',
-          clientInstanceId: 'client-1',
-          serverBuildId: 'relay-build-1',
-          clientGeneration: 3,
-          ownerGeneration: 5,
-          ownerLease: Buffer.from(`encrypted:${oversizedLease}`, 'utf-8').toString('base64')
-        }
+        { ...legacyRecovery, ownerLease: sealedOwnerLease(legacyRecovery.ownerLease) }
+      ]
+    })
+    const store = await createStore()
+    store.updateUI({ sidebarWidth: 301 })
+    store.flush()
+
+    expect(readDataFile()).toHaveProperty('sshPtyConsumerRecoveries', [
+      { ...legacyRecovery, ownerLease: sealedOwnerLease(legacyRecovery.ownerLease) }
+    ])
+
+    const reloaded = await createStore()
+    reloaded.updateUI({ sidebarWidth: 302 })
+    reloaded.flush()
+    expect(readDataFile()).toHaveProperty('sshPtyConsumerRecoveries', [
+      { ...legacyRecovery, ownerLease: sealedOwnerLease(legacyRecovery.ownerLease) }
+    ])
+  })
+
+  it('drops decrypted SSH PTY owner leases that exceed the relay protocol bound', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      sshPtyConsumerRecoveries: [
+        { ...legacyRecovery, ownerLease: sealedOwnerLease('x'.repeat(513)) }
       ]
     })
 
     const store = await createStore()
+    store.updateUI({ sidebarWidth: 301 })
+    store.flush()
 
-    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
+    expect(readDataFile()).toHaveProperty('sshPtyConsumerRecoveries', [])
   })
 
   it('removes persisted SSH PTY consumer ownership with its target', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      sshTargets: [
+        { id: 'ssh-1', label: 'SSH 1', host: 'example.test', port: 22, username: 'orca' }
+      ],
+      sshPtyConsumerRecoveries: [
+        { ...legacyRecovery, ownerLease: sealedOwnerLease(legacyRecovery.ownerLease) }
+      ]
+    })
     const store = await createStore()
-    store.addSshTarget({
-      id: 'ssh-1',
-      label: 'SSH 1',
-      host: 'example.test',
-      port: 22,
-      username: 'orca'
-    })
-    await store.upsertSshPtyConsumerRecovery({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ownerLease: 'secret-owner-lease'
-    })
 
     store.removeSshTarget('ssh-1')
+    store.flush()
 
-    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
+    expect(readDataFile()).toHaveProperty('sshPtyConsumerRecoveries', [])
   })
 
   it('keeps plaintext Kagi session links readable for migration from older builds', async () => {

@@ -1,328 +1,297 @@
 import { matchPaletteField, type PaletteFieldMatch } from './match-field'
-import {
-  isFuzzyPaletteMatchQuality,
-  paletteMatchQualityRank,
-  resolvePaletteResultQualityClass,
-  type PaletteMatchQuality
-} from './match-quality'
-import { mergeMatchRanges, type MatchRange } from './normalized-text'
+import { resolvePaletteResultQualityClass, type PaletteMatchQuality } from './match-quality'
 import { createPaletteQueryToken, type PaletteQueryToken } from './palette-query'
 import {
   comparePaletteDocumentRank,
   type PaletteDocument,
   type PaletteDocumentMatch,
-  type PaletteDocumentRank,
-  type PaletteSupportingEvidence,
   type PaletteTokenAssignment
 } from './palette-document'
+import type { PaletteIndexedField } from './indexed-field'
+import {
+  addRankedAssignment,
+  collectCompleteVisibleAssignments,
+  collectRecognizedIdentifierAssignments,
+  collectScopeAssignments,
+  selectThresholdAssignment,
+  summarizeCandidates,
+  type RankedAssignment
+} from './palette-assignment-ranking'
+import { buildRangesByField, buildSupportingEvidence } from './palette-match-rendering'
+import { assignmentsAreContainerOnly } from './palette-assignment-inspection'
+import { compareSelectedSourceOrder } from './palette-selection-source-order'
 
-type FieldHit = { fieldId: string; match: PaletteFieldMatch }
+type FieldHit = { field: PaletteIndexedField; match: PaletteFieldMatch }
 
-/** One token's chosen coverage; a `repo/branch` composite carries two hits. */
-type TokenCandidate = { hits: readonly FieldHit[]; quality: PaletteMatchQuality }
-
-type TokenCandidates = {
-  visible: TokenCandidate | null
-  byEvidenceId: Map<string, TokenCandidate>
+/** One token's proof; a repo/branch composite deliberately retains both hits. */
+export type TokenCandidate = {
+  hits: readonly FieldHit[]
+  quality: PaletteMatchQuality
+  recovery: number
+  wordMatch: number
+  coverage: number
+  strength: number
+  containerOnly: number
 }
 
-function better(a: TokenCandidate | null, b: TokenCandidate): TokenCandidate {
-  if (!a) {
-    return b
+export type TokenCandidates = {
+  visible: TokenCandidate[]
+  byEvidenceId: Map<string, TokenCandidate[]>
+}
+
+export type PaletteMatchDiagnostics = {
+  selectionCandidateVisits: number
+}
+
+const STRENGTH: Record<PaletteMatchQuality, number> = {
+  'field-exact': 0,
+  'word-exact': 0,
+  'field-prefix': 1,
+  'word-prefix': 1,
+  'boundary-substring': 2,
+  'literal-substring': 3,
+  compact: 4,
+  typo: 5
+}
+
+function fieldCoverage(field: PaletteIndexedField): number {
+  if (field.evidenceId) {
+    return 3
   }
-  return paletteMatchQualityRank(a.quality) <= paletteMatchQualityRank(b.quality) ? a : b
+  if (field.role === 'primary') {
+    return 0
+  }
+  if (field.role === 'secondary' || field.role === 'alias') {
+    return 1
+  }
+  return 2
 }
 
 function toCandidate(hits: readonly FieldHit[]): TokenCandidate {
   let quality = hits[0].match.quality
-  for (const hit of hits) {
-    if (paletteMatchQualityRank(hit.match.quality) > paletteMatchQualityRank(quality)) {
+  let strength = STRENGTH[quality]
+  let recovery = strength >= STRENGTH.compact ? 1 : 0
+  let wordMatch = strength >= STRENGTH['literal-substring'] ? 1 : 0
+  let coverage = fieldCoverage(hits[0].field)
+  for (let index = 1; index < hits.length; index += 1) {
+    const hit = hits[index]
+    const value = STRENGTH[hit.match.quality]
+    if (value > strength) {
+      strength = value
       quality = hit.match.quality
     }
+    if (value >= STRENGTH.compact) {
+      recovery = 1
+    }
+    if (value >= STRENGTH['literal-substring']) {
+      wordMatch = 1
+    }
+    coverage = Math.max(coverage, fieldCoverage(hit.field))
   }
-  return { hits, quality }
+  return {
+    hits,
+    quality,
+    recovery,
+    wordMatch,
+    coverage,
+    containerOnly: hits.every((hit) => hit.field.role === 'container') ? 1 : 0,
+    strength
+  }
 }
 
 function matchCompositePairs(
   document: PaletteDocument,
-  token: PaletteQueryToken
-): TokenCandidate | null {
+  token: PaletteQueryToken,
+  isFieldAllowed?: (field: PaletteIndexedField) => boolean
+): TokenCandidate[] {
   if (!token.repoBranch || !document.compositePairs.length) {
-    return null
+    return []
   }
   const left = createPaletteQueryToken(token.repoBranch.repo, token.index)
   const right = createPaletteQueryToken(token.repoBranch.branch, token.index)
-  let best: TokenCandidate | null = null
+  const candidates: TokenCandidate[] = []
   for (const pair of document.compositePairs) {
-    const leftField = document.fields.find((field) => field.id === pair.leftFieldId)
-    const rightField = document.fields.find((field) => field.id === pair.rightFieldId)
-    if (!leftField || !rightField) {
+    const leftField = document.fieldById.get(pair.leftFieldId)
+    const rightField = document.fieldById.get(pair.rightFieldId)
+    if (
+      !leftField ||
+      !rightField ||
+      (isFieldAllowed && (!isFieldAllowed(leftField) || !isFieldAllowed(rightField)))
+    ) {
       continue
     }
     const leftMatch = matchPaletteField(leftField, left)
     const rightMatch = matchPaletteField(rightField, right)
-    if (!leftMatch || !rightMatch) {
-      continue
+    if (leftMatch && rightMatch) {
+      candidates.push(
+        toCandidate([
+          { field: leftField, match: leftMatch },
+          { field: rightField, match: rightMatch }
+        ])
+      )
     }
-    best = better(
-      best,
-      toCandidate([
-        { fieldId: leftField.id, match: leftMatch },
-        { fieldId: rightField.id, match: rightMatch }
-      ])
-    )
   }
-  return best
+  return candidates
 }
 
 function collectTokenCandidates(
   document: PaletteDocument,
-  token: PaletteQueryToken
+  token: PaletteQueryToken,
+  isFieldAllowed?: (field: PaletteIndexedField) => boolean
 ): TokenCandidates | null {
   const candidates: TokenCandidates = {
-    visible: matchCompositePairs(document, token),
+    visible: matchCompositePairs(document, token, isFieldAllowed),
     byEvidenceId: new Map()
   }
-  let found = candidates.visible !== null
+  let found = candidates.visible.length > 0
   for (const field of document.fields) {
+    if (isFieldAllowed && !isFieldAllowed(field)) {
+      continue
+    }
     const match = matchPaletteField(field, token)
     if (!match) {
       continue
     }
     found = true
-    const candidate = toCandidate([{ fieldId: field.id, match }])
+    const candidate = toCandidate([{ field, match }])
     if (!field.evidenceId) {
-      candidates.visible = better(candidates.visible, candidate)
+      candidates.visible.push(candidate)
     } else {
-      candidates.byEvidenceId.set(
-        field.evidenceId,
-        better(candidates.byEvidenceId.get(field.evidenceId) ?? null, candidate)
-      )
+      const bucket = candidates.byEvidenceId.get(field.evidenceId)
+      if (bucket) {
+        bucket.push(candidate)
+      } else {
+        candidates.byEvidenceId.set(field.evidenceId, [candidate])
+      }
     }
   }
   return found ? candidates : null
 }
 
-function scoreWholeQuery(document: PaletteDocument, normalizedQuery: string): number {
-  let best = 3
-  for (const field of document.visibleFields) {
-    const text = field.text.normalized
-    if (text === normalizedQuery) {
-      return 0
-    }
-    if (text.startsWith(normalizedQuery)) {
-      best = Math.min(best, 1)
-      continue
-    }
-    const index = text.indexOf(normalizedQuery)
-    if (index > 0 && field.words.some((word) => word.start === index)) {
-      best = Math.min(best, 2)
-    }
-  }
-  return best
-}
-
-function buildAssignments(
-  candidates: readonly TokenCandidates[],
+function toTokenAssignments(
   tokens: readonly PaletteQueryToken[],
-  evidenceId: string | null
-): { assignments: PaletteTokenAssignment[]; usesEvidence: boolean } | null {
+  selected: readonly TokenCandidate[]
+): PaletteTokenAssignment[] {
   const assignments: PaletteTokenAssignment[] = []
-  let usesEvidence = false
-
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index]
-    const evidence = evidenceId ? (candidate.byEvidenceId.get(evidenceId) ?? null) : null
-    const chosen = evidence ? better(candidate.visible, evidence) : candidate.visible
-    if (!chosen) {
-      return null
-    }
-    if (evidence && chosen === evidence) {
-      usesEvidence = true
-    }
-    for (const hit of chosen.hits) {
+  selected.forEach((candidate, index) => {
+    for (const hit of candidate.hits) {
       assignments.push({
         tokenIndex: tokens[index].index,
-        fieldId: hit.fieldId,
+        fieldId: hit.field.id,
         quality: hit.match.quality,
         ranges: hit.match.ranges
       })
     }
-  }
-
-  return { assignments, usesEvidence }
+  })
+  return assignments
 }
 
-function rankAssignments(args: {
-  document: PaletteDocument
-  assignments: readonly PaletteTokenAssignment[]
-  usesEvidence: boolean
-  wholeQuery: number
-  exactIntent: boolean
-}): { rank: PaletteDocumentRank; worstQuality: PaletteMatchQuality; isContainerOnly: boolean } {
-  let worstQuality: PaletteMatchQuality = 'field-exact'
-  let fuzzyTokenCount = 0
-  const fields = new Set<string>()
-  let containerOnlyTokenCount = 0
-  let tokenIndex = -1
-  let tokenHasDirectField = false
-  let matchedTokenCount = 0
-
-  for (const assignment of args.assignments) {
-    if (paletteMatchQualityRank(assignment.quality) > paletteMatchQualityRank(worstQuality)) {
-      worstQuality = assignment.quality
-    }
-    if (isFuzzyPaletteMatchQuality(assignment.quality)) {
-      fuzzyTokenCount += 1
-    }
-    fields.add(assignment.fieldId)
-    if (assignment.tokenIndex !== tokenIndex) {
-      if (tokenIndex !== -1 && !tokenHasDirectField) {
-        containerOnlyTokenCount += 1
-      }
-      tokenIndex = assignment.tokenIndex
-      tokenHasDirectField = false
-      matchedTokenCount += 1
-    }
-    const field = args.document.fieldById.get(assignment.fieldId)
-    if (field && !field.isContainer) {
-      tokenHasDirectField = true
-    }
-  }
-
-  if (tokenIndex !== -1 && !tokenHasDirectField) {
-    containerOnlyTokenCount += 1
-  }
-  const isContainerOnly =
-    containerOnlyTokenCount > 0 && containerOnlyTokenCount === matchedTokenCount
-
-  return {
-    worstQuality,
-    isContainerOnly,
-    rank: {
-      exactIntent: args.exactIntent ? 0 : 1,
-      containerOnlyTokenCount,
-      wholeQuery: args.wholeQuery,
-      worstQuality: paletteMatchQualityRank(worstQuality),
-      usesSupportingEvidence: args.usesEvidence ? 1 : 0,
-      fuzzyTokenCount,
-      fieldHopCount: fields.size
-    }
-  }
-}
-
-function buildSupportingEvidence(
-  document: PaletteDocument,
-  assignments: readonly PaletteTokenAssignment[],
-  evidenceId: string | null
-): PaletteSupportingEvidence[] {
-  const unit = evidenceId ? document.evidenceUnits.get(evidenceId) : undefined
-  if (!unit) {
-    return []
-  }
-  const ranges: MatchRange[] = []
-  for (const assignment of assignments) {
-    const offset = document.renderOffsetByFieldId.get(assignment.fieldId)
-    if (offset === undefined) {
-      continue
-    }
-    for (const range of assignment.ranges) {
-      // Why clamp: a range is only meaningful against the unit text the row renders, and
-      // an out-of-range end would highlight past the end of that string.
-      const start = Math.min(range.start + offset, unit.text.length)
-      const end = Math.min(range.end + offset, unit.text.length)
-      if (start < end) {
-        ranges.push({ start, end })
-      }
-    }
-  }
-  if (!ranges.length) {
-    return []
-  }
-  return [
-    {
-      id: unit.id,
-      kind: unit.kind,
-      text: unit.text,
-      ranges: mergeMatchRanges(ranges),
-      accessibilityLabel: unit.accessibilityLabel
-    }
-  ]
-}
-
-function buildRangesByField(
-  assignments: readonly PaletteTokenAssignment[]
-): Map<string, readonly MatchRange[]> {
-  const byField = new Map<string, MatchRange[]>()
-  for (const assignment of assignments) {
-    const bucket = byField.get(assignment.fieldId)
-    if (bucket) {
-      bucket.push(...assignment.ranges)
-    } else {
-      byField.set(assignment.fieldId, [...assignment.ranges])
-    }
-  }
-  const merged = new Map<string, readonly MatchRange[]>()
-  for (const [fieldId, ranges] of byField) {
-    merged.set(fieldId, mergeMatchRanges(ranges))
-  }
-  return merged
-}
-
-/**
- * Accepts a document only when every token has an allowed field match reachable
- * from visible identity text plus at most one supporting-evidence unit.
- */
 export function matchPaletteDocument(args: {
   document: PaletteDocument
   tokens: readonly PaletteQueryToken[]
   normalizedQuery: string
+  tokenCountBeforeDeduplication?: number
   exactIntent?: boolean
+  isFieldAllowed?: (field: PaletteIndexedField) => boolean
+  diagnostics?: PaletteMatchDiagnostics
 }): PaletteDocumentMatch | null {
-  const { document, tokens } = args
   const candidates: TokenCandidates[] = []
-  for (const token of tokens) {
-    const candidate = collectTokenCandidates(document, token)
-    if (!candidate) {
+  for (const token of args.tokens) {
+    const collected = collectTokenCandidates(args.document, token, args.isFieldAllowed)
+    if (!collected) {
       return null
     }
-    candidates.push(candidate)
+    candidates.push(collected)
   }
 
-  const wholeQuery = scoreWholeQuery(document, args.normalizedQuery)
-  const evidenceIds: (string | null)[] = [null, ...document.evidenceUnits.keys()]
-  let best: PaletteDocumentMatch | null = null
-
-  for (const evidenceId of evidenceIds) {
-    const built = buildAssignments(candidates, tokens, evidenceId)
-    if (!built) {
-      continue
-    }
-    const usedEvidenceId = built.usesEvidence ? evidenceId : null
-    const { rank, worstQuality, isContainerOnly } = rankAssignments({
-      document,
-      assignments: built.assignments,
-      usesEvidence: built.usesEvidence,
-      wholeQuery,
-      exactIntent: args.exactIntent === true
+  const visibleSummaries = candidates.map((candidate) =>
+    summarizeCandidates(candidate.visible, args.diagnostics)
+  )
+  const evidenceSummaries = candidates.map(
+    (candidate) =>
+      new Map(
+        [...candidate.byEvidenceId].map(([evidenceId, entries]) => [
+          evidenceId,
+          summarizeCandidates(entries, args.diagnostics)
+        ])
+      )
+  )
+  const ranked: RankedAssignment[] = [
+    ...collectCompleteVisibleAssignments({
+      document: args.document,
+      candidates,
+      normalizedQuery: args.normalizedQuery,
+      diagnostics: args.diagnostics
     })
-    if (best && comparePaletteDocumentRank(best.rank, rank) <= 0) {
-      continue
+  ]
+  addRankedAssignment(
+    ranked,
+    args.document,
+    selectThresholdAssignment(visibleSummaries, args.diagnostics),
+    args.normalizedQuery,
+    null
+  )
+  const matchedEvidenceIds = new Set<string>()
+  for (const candidate of candidates) {
+    for (const evidenceId of candidate.byEvidenceId.keys()) {
+      matchedEvidenceIds.add(evidenceId)
     }
-    best = {
-      qualityClass: args.exactIntent
+  }
+  for (const evidenceId of matchedEvidenceIds) {
+    ranked.push(
+      ...collectScopeAssignments({
+        document: args.document,
+        visibleSummaries,
+        evidenceSummaries,
+        normalizedQuery: args.normalizedQuery,
+        evidenceId,
+        diagnostics: args.diagnostics
+      })
+    )
+  }
+  if ((args.tokenCountBeforeDeduplication ?? args.tokens.length) === 1) {
+    ranked.push(
+      ...collectRecognizedIdentifierAssignments({
+        document: args.document,
+        candidates,
+        normalizedQuery: args.normalizedQuery,
+        diagnostics: args.diagnostics
+      })
+    )
+  }
+  if (!ranked.length) {
+    return null
+  }
+  ranked.sort((a, b) => {
+    const rank = comparePaletteDocumentRank(a.rank, b.rank)
+    if (rank !== 0) {
+      return rank
+    }
+    return compareSelectedSourceOrder(a.selected, b.selected)
+  })
+  const winner = ranked[0]
+  const winnerRank = args.exactIntent ? { ...winner.rank, destination: 0 } : winner.rank
+  const assignments = toTokenAssignments(args.tokens, winner.selected)
+  const worstQuality = winner.selected.reduce<PaletteMatchQuality>(
+    (worst, candidate) =>
+      STRENGTH[candidate.quality] > STRENGTH[worst] ? candidate.quality : worst,
+    'field-exact'
+  )
+  const usesSupportingEvidence = assignments.some(
+    (assignment) => args.document.fieldById.get(assignment.fieldId)?.evidenceId
+  )
+  return {
+    qualityClass:
+      winnerRank.destination === 0
         ? 'exact-intent'
         : resolvePaletteResultQualityClass({
             worstQuality,
-            usesSupportingEvidence: built.usesEvidence,
-            isContainerOnly
+            usesSupportingEvidence,
+            isContainerOnly: assignmentsAreContainerOnly(args.document, assignments)
           }),
-      rank,
-      assignments: built.assignments,
-      rangesByField: buildRangesByField(built.assignments),
-      supportingEvidence: buildSupportingEvidence(document, built.assignments, usedEvidenceId)
-    }
+    rank: winnerRank,
+    assignments,
+    rangesByField: buildRangesByField(assignments),
+    supportingEvidence: buildSupportingEvidence(args.document, assignments, winner.evidenceId)
   }
-
-  return best
 }

@@ -19,7 +19,10 @@ const inventoryPage = {
   state: 'active' as const
 }
 
-const command = (reconciliationCommand: object) => ({
+/** Raw command input for the parser under test, including deliberately malformed shapes. */
+type RawReconciliationCommand = { type: string } & Record<string, unknown>
+
+const command = (reconciliationCommand: RawReconciliationCommand) => ({
   type: 'command' as const,
   authorityRuntimeId: 'runtime-a',
   authorityEpoch: 'epoch-new',

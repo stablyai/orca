@@ -1,3 +1,4 @@
+import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
 import type { GitHubPRMergeMethod } from '../../../../shared/github/pull-request-types'
 import {
   ghExecFileAsync,
@@ -165,13 +166,17 @@ export async function setPRAutoMerge(
   await acquire()
   try {
     if (enabled) {
-      return await enablePRAutoMerge(
+      const result = await enablePRAutoMerge(
         prNumber,
         method,
         ownerRepo,
         ghOptions,
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
+      if (result.ok) {
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
+      }
+      return result
     }
     const args = ['pr', 'merge', String(prNumber), '--disable-auto']
     if (ownerRepo) {
@@ -181,6 +186,7 @@ export async function setPRAutoMerge(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =

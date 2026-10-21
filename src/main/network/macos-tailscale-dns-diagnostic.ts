@@ -14,8 +14,28 @@ type CacheEntry = {
 
 let cache: CacheEntry | null = null
 
+// Symbolic errno/Chromium codes carry the weight because they are locale-independent; the
+// English phrases only add coverage, so a localized or reworded string costs the hint, never
+// a wrong message. Deliberately over-inclusive: a false candidate re-reads cached DNS state,
+// a missed one silently drops the diagnostic that explains a broken connection.
 const NETWORK_LOOKUP_FAILURE_RE =
-  /\b(?:ENOTFOUND|EAI_AGAIN|ESERVFAIL|ERR_NAME_NOT_RESOLVED)\b|lookup address|nodename nor servname|name resolution|dns|websocket|connection refused/i
+  /\b(?:ENOTFOUND|ENODATA|EAI_AGAIN|EAI_FAIL|EAI_NODATA|EAI_NONAME|ESERVFAIL|ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION_FAILED|getaddrinfo)\b|lookup address|nodename nor servname|name resolution|name or service not known|no address associated with hostname|(?:could not|couldn't|cannot|can't|unable to|failed to) resolve|dns|websocket|connection refused/i
+
+const MAGIC_DNS_HINT =
+  'macOS is using Tailscale MagicDNS (100.100.100.100) as the only global DNS resolver; add an upstream DNS server to the active network service or configure Tailscale global nameservers, then retry.'
+
+/**
+ * Single source of truth for "could a DNS sample explain this failure?". The probe-admission
+ * gate and the hint decision must never disagree — a gate stricter than the hint test silently
+ * loses the diagnostic for a genuine DNS failure.
+ */
+export function isMacTailscaleDnsHintCandidate(message: string, detail?: string | null): boolean {
+  // Already hinted: re-wrapping a hinted message would match on its own "DNS" text.
+  if (message.endsWith(MAGIC_DNS_HINT)) {
+    return false
+  }
+  return NETWORK_LOOKUP_FAILURE_RE.test(`${message}\n${detail ?? ''}`)
+}
 
 function globalDnsSection(scutilOutput: string): string {
   const scopedStart = scutilOutput.indexOf('\nDNS configuration (for scoped queries)')
@@ -66,26 +86,31 @@ function readMacTailscaleDnsDiagnostic(now = Date.now()): DnsDiagnostic | null {
   return diagnostic
 }
 
+// Why: Claude/Codex own the failing API transports, so Orca can only point
+// users at the macOS resolver configuration that makes those transports fail.
+function appendMagicDnsHint(message: string, diagnostic: DnsDiagnostic | null): string {
+  return diagnostic ? `${message} ${MAGIC_DNS_HINT}` : message
+}
+
 export function withMacTailscaleDnsHintForDiagnostic(
   message: string,
   detail: string | null | undefined,
   diagnostic: DnsDiagnostic | null
 ): string {
-  const probeText = `${message}\n${detail ?? ''}`
-  if (!NETWORK_LOOKUP_FAILURE_RE.test(probeText)) {
-    return message
-  }
-  if (!diagnostic) {
-    return message
-  }
-
-  // Why: Claude/Codex own the failing API transports, so Orca can only point
-  // users at the macOS resolver configuration that makes those transports fail.
-  return `${message} macOS is using Tailscale MagicDNS (100.100.100.100) as the only global DNS resolver; add an upstream DNS server to the active network service or configure Tailscale global nameservers, then retry.`
+  return isMacTailscaleDnsHintCandidate(message, detail)
+    ? appendMagicDnsHint(message, diagnostic)
+    : message
 }
 
 export function withMacTailscaleDnsHint(message: string, detail?: string | null): string {
-  return withMacTailscaleDnsHintForDiagnostic(message, detail, readMacTailscaleDnsDiagnostic())
+  // The hint only describes macOS resolver state, so nothing off darwin can produce it.
+  if (process.platform !== 'darwin') {
+    return message
+  }
+  if (!isMacTailscaleDnsHintCandidate(message, detail)) {
+    return message
+  }
+  return appendMagicDnsHint(message, readMacTailscaleDnsDiagnostic())
 }
 
 export function __resetMacTailscaleDnsDiagnosticCacheForTests(): void {

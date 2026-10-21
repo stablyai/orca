@@ -1,3 +1,5 @@
+import { settledWriteStub } from '../../providers/settled-pty-write-stub'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -105,6 +107,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -137,10 +140,13 @@ describe('OrcaRuntimeService', () => {
   // #7970: headless serve has no renderer syncing tab.agentStatus, so hook-only transitions must republish the snapshot carrying the retained hook payload.
   it('republishes mobile session tabs with hook payloads for title-less OSC 9999 transitions', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'hook-only-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -185,15 +191,19 @@ describe('OrcaRuntimeService', () => {
     )
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   // Why: restored OMP panes can retain the hook while the wrapped Pi owns foreground (#6364).
   it('keeps an OMP hook labeled OMP when the wrapped pi child owns the foreground', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'omp-flicker-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       // Why: the remote relay reads the deeper `pi` child of the omp process tree.
       getForegroundProcess: async () => 'pi'
@@ -236,14 +246,18 @@ describe('OrcaRuntimeService', () => {
     )
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   it('does not republish mobile session tabs for repeated identical OSC 9999 payloads', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'hook-ping-pty' })
-    const runtime = new OrcaRuntimeService(store)
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
+    const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -265,6 +279,7 @@ describe('OrcaRuntimeService', () => {
     expect(events).toHaveLength(1)
 
     unsubscribe()
+    uninstallRepublish()
   })
 
   it('suppresses a retained hook working status once the shell owns the pane title again', async () => {
@@ -273,6 +288,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -482,6 +498,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -522,6 +539,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -569,6 +587,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -611,6 +630,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -645,6 +665,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -660,7 +681,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       const firstInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
+        (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
       ).length
       expect(firstInjections).toBe(1)
 
@@ -669,7 +690,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       const totalInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
+        (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
       ).length
       expect(totalInjections).toBe(1)
       db.close()

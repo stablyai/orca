@@ -1,5 +1,6 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -8,7 +9,10 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
+
+export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -22,9 +26,11 @@ export type PaneSpawnHints = {
   cwd?: string
   cwdPromise?: Promise<string>
   ptyId?: string
+  /** Where the pane's leaf sits; main reads it only for a leaf it does not know yet. */
+  placement?: TerminalPanePlacement
 }
 
-export type PaneSplitOptions = PaneSpawnHints & {
+export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
 }
@@ -52,6 +58,11 @@ export type PaneExternalDropHandler = (
   target: PaneExternalDropTarget
 ) => boolean
 
+export type PaneDropTaker = (
+  drop: { sourcePaneId: number; targetPaneId: number; zone: DropZone },
+  move: () => void
+) => boolean
+
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
@@ -62,7 +73,15 @@ export type PaneManagerOptions = {
   onPaneDragActiveChange?: (active: boolean) => void
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  /** A user's divider drag or reset ended; runs after `onLayoutChanged`. */
+  onDividerRatiosCommitted?: () => void
+  /** Takes an in-tab pane drop instead of moving it now: true means `move` runs later or never. */
+  takePaneDrop?: PaneDropTaker
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
+  terminalLigaturesEnabled?: () => boolean
+  /** Whether inline terminal images (SIXEL / iTerm2 IIP / Kitty graphics) are
+   *  enabled. Resolved per pane open and toggleable at runtime. */
+  terminalInlineImagesEnabled?: () => boolean
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
@@ -76,6 +95,7 @@ export type PaneManagerOptions = {
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
   initialRenderingSuspended?: boolean
+  retainHiddenWebgl?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal
   // helpers log warnings that are hard to correlate without knowing which
@@ -165,6 +185,13 @@ export type ManagedPaneInternal = {
   // so the addon instance only exists while the feature is active. A null
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
+  // Why nullable: inline images are opt-in and toggleable at runtime, and the
+  // addon is lazy-loaded, so the instance only exists while the feature is
+  // active and its chunk has resolved. Null means "currently disabled".
+  imageAddon: ImageAddon | null
+  // Set while the setting is on but the lazy addon chunk is still loading; the
+  // loader's onLoaded handler drains these into a real attach.
+  imageAttachmentDeferred?: boolean
   fitResizeObserver: ResizeObserver | null
   // Why: fit-element pixel size at the last successful fit; the reveal fit compares
   // against it to tell a real hidden-time resize from a transient cell-metric wobble.
@@ -185,8 +212,11 @@ export type ManagedPaneInternal = {
   compositionHandler: (() => void) | null
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
+  domBlockFillCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
+  // Stored so disposePane() can drop the mouse-encoding parser handlers.
+  mouseEncodingTrackerDisposable?: IDisposable | null
   // Stored so disposePane() can detach the streamed-output hover-cache reset
   // that keeps freshly printed links linkifiable without a scroll.
   linkifierHoverResetDisposable?: IDisposable | null

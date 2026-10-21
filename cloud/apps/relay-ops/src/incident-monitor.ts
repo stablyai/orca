@@ -1,3 +1,4 @@
+import type { RelayOpsRegion } from './environment-config.js'
 import {
   exactAdmissionSelector,
   type AdmissionSelector,
@@ -6,18 +7,53 @@ import {
 
 export const INCIDENT_MONITOR_THRESHOLDS = {
   activeProbeMaxAgeMs: 60_000,
-  cloudDataMaxAgeMs: 180_000,
+  // Why: Cloud Monitoring publishes on Google's clock, not ours. Per the metric
+  // list read 2026-09-05, Cloud Run instance_count / cpu / memory /
+  // max_request_concurrencies / request_count are "Sampled every 60 seconds.
+  // After sampling, data is not visible for up to 120 seconds" (60+120=180 s),
+  // and Cloud SQL cpu / memory / num_backends / backends_in_wait /
+  // deadlock_count say "up to 165 seconds" (60+165=225 s). Window-sum signals
+  // age differently: observedAt is the newest point in the 5-minute query
+  // window, so a label series that stops emitting reads as 300 s old while its
+  // summed value is still complete. 330 s clears the worst of the three (the
+  // 300 s query window) plus ~30 s of collect-to-evaluate latency. The old
+  // 180 s bar restarted healthy 15-minute windows at 181 s, 189 s and 255 s on
+  // 2026-09-04/05, once burning the whole 25-minute lineage with no verdict.
+  cloudDataMaxAgeMs: 330_000,
+  // Why: the director admin API answers live on our own request, so hold its
+  // freshness bar where it sat while it shared cloudDataMaxAgeMs.
+  directorAdminMaxAgeMs: 180_000,
+  // Why: how long a nonzero backends-in-wait point is carried before it reads as
+  // zero. Held at the pre-2026-09-05 cloud bar: carrying it for the full
+  // cloudDataMaxAgeMs would hand the evaluator a point older than its own
+  // freshness bar as soon as collection latency is added.
+  cloudLockWaitCarryMs: 180_000,
   relayLogMaxAgeMs: 180_000,
   heartbeatMaxAgeMs: 45_000,
   endpointLatencyMs: 2_000,
+  // Why: a cell's /ready fetches the auth JWKS and runs SELECT 1 against Cloud SQL,
+  // both in us-central1, so from the US runner asia-east2 cells measure p50 0.88 s /
+  // max 2.7 s against 0.08-0.5 s for us-central1. The flat 2 000 bar froze three
+  // healthy 15-minute gates on 2026-09-05 (c27 at 2568/2668/2685 ms); hard faults
+  // are still caught by the .health/.ready equal-1 checks and the 8 s fetch timeout.
+  cellEndpointLatencyMs: {
+    'us-central1': 2_000,
+    'asia-east2': 4_000
+  } as const satisfies Record<RelayOpsRegion, number>,
   cloudSqlCpuUtilization: 0.8,
   cloudSqlMemoryUtilization: 0.9,
-  // Why: healthy latest-sum backends idle near 100 but spike to 216 in 1-minute
-  // bursts (~10 min/day exceeded the old bar of 160 on 2026-08-26, freezing a
-  // pre-drain gate on baseline noise). 250 clears measured healthy peaks while
-  // firing well before the verified 400-connection ceiling; the retry signals
-  // below discriminate incident-class contention.
-  cloudSqlBackends: 250,
+  // Why: 320, recalibrated 2026-09-17 from 250. The auth instance sums seven
+  // databases, and its steady load has grown past the 2026-08-26 measurement the
+  // old bar came from. Measured latest-sum over the 24 h to 2026-09-17, aligned
+  // per minute exactly as this signal reads it: p50 118 / p90 165 / p95 212 /
+  // p99 262 / max 282. 250 was under the observed max, so 1.95% of minutes and
+  // 21.8% of 15-minute pre-drain gates froze on ordinary load. 320 clears every
+  // measured healthy minute with 13% of headroom above the peak and still fires
+  // at 65% of the 490 connections the budget work (#21165) treats as usable out
+  // of max_connections 500, so exhaustion-class growth is caught with 170
+  // connections still in hand. The retry signals below discriminate incident-class
+  // contention. Re-tighten when the auth connection model lands (#21165).
+  cloudSqlBackends: 320,
   // Bound the observed recovery load; deadlocks remain zero-tolerance.
   cloudSqlLockWaits: 20,
   cloudSqlDeadlocks: 0,
@@ -71,17 +107,53 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   directorCpuUtilization: 0.8,
   directorMemoryUtilization: 0.8,
   directorConcurrency: 64,
-  directorErrors: 0,
-  authErrors: 0,
+  // Why: 15, recalibrated 2026-09-17 from 3. This counts non-503 5xx answers from
+  // the director over the rolling five-minute query window; 503s are excluded
+  // because they are the documented back-pressure answer a client retries.
+  // Measured over the 24 h to 2026-09-17 (272 non-503 5xx against 71 941 503s):
+  // p50 0 / p90 3 / p95 5 / p99 9 / max 52. A bar of 3 sits at the p90, so 9.2%
+  // of windows and 29.0% of 15-minute pre-drain gates froze on the chronic 500
+  // bursts that /v1/assign, /v1/regions and /v1/resolve emit alongside the
+  // recurring Cloud SQL stall. 15 clears the chronic p99 with margin and drops
+  // the baseline gate-freeze rate to 1.5%, while leaving the exceptional 20-52
+  // bursts detectable. A director that is actually broken answers 5xx on a large
+  // share of its traffic: it serves ~50 requests a minute in 503s alone, so a
+  // real fault lands in the hundreds per window, an order of magnitude clear of
+  // this bar.
+  directorErrors: 15,
+  // Why: 2, raised 2026-10-07 from 0. Auth answers ~58k requests per five minutes
+  // (24 h to 2026-10-07: min 44k) and logged two 5xx in that day, so a single 500 on
+  // the desktop sign-in callback froze the c13 and c28 waves with auth healthy. A real
+  // auth fault fails hundreds per window; the ratio bar keeps a near-idle auth strict.
+  authErrors: 2,
+  authErrorRatio: 0.001,
   // Why: 800 exceeded the 600 hard cap, so this could never trigger on a capped cell. 500 is
   // the ordinary admission limit a cell actually stops at (600 cap - 100 control-rebind reserve).
   cellConnections: 500,
   cellQueuedBytes: 48 * 1024 * 1024,
-  migrationBlocked: 0
+  migrationBlocked: 0,
+  // Why: one sample is one HTTP round trip from one GitHub runner to one cell, so
+  // a single bad reading is evidence about that round trip, not about the fleet.
+  // The asia-east2 cells' readiness probe runs SELECT 1 against Cloud SQL in
+  // us-central1 over a 176 ms round trip behind a 2 s statement timeout, so a
+  // saturated pool makes the load balancer answer "no healthy upstream" for about
+  // 30 s. That answer is an HTTP 503, not a transport failure, so provenance
+  // cannot separate it from a cell that genuinely serves health=0 -- persistence
+  // can. At the 60 s sample interval a 30 s outage shows up in one sample and at
+  // worst two, so a cell's probe must fail more than this many consecutive samples
+  // before it freezes the run. The streak is per cell, not per signal, so a cell
+  // that alternates between slow and unanswered still accumulates one. This applies
+  // to per-cell probes and the director instance count; the director and auth health
+  // probes stay at zero tolerance.
+  cellProbeToleranceSamples: 2
 } as const
 
 export const INCIDENT_CHECKPOINT_MINUTES = [0, 5, 15, 30, 45, 60, 75, 90] as const
-export const INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS = 25 * 60_000
+// Why: 35 minutes, raised 2026-09-17 from 25. A 15-minute window plus one
+// restart must fit: a continuity reset on the window's last sample restarts at
+// minute 16 and finishes at 31. Under 25 a reset past minute 9 cost the whole
+// verdict, which is what run 35258662628 hit on a healthy fleet.
+export const INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS = 35 * 60_000
 
 export type IncidentSourceName =
   | 'active-probe'
@@ -106,9 +178,12 @@ export type IncidentSource = {
 
 export type IncidentCellExpectation = {
   cellId: string
+  region: RelayOpsRegion
   runtimeKnown: boolean
   powered: boolean
   expectedAdmissionState: AdmissionState
+  // Step 5 reserve mode: the director's cell-status and migration reads refuse the cell.
+  reserve?: boolean
 }
 
 export type IncidentSample = {
@@ -125,6 +200,17 @@ export type IncidentFailure = {
   signal?: string
   observed?: number
   threshold?: number
+}
+
+// Keep the source/code prefix other tooling matches on, then name the signal and
+// its numbers so a frozen wave is attributable without re-reading the sample.
+export function describeIncidentFailure(failure: IncidentFailure): string {
+  const detail = [
+    failure.signal,
+    failure.observed === undefined ? null : `observed=${failure.observed}`,
+    failure.threshold === undefined ? null : `threshold=${failure.threshold}`
+  ].filter((part): part is string => part !== null && part !== undefined)
+  return [`${failure.source}/${failure.code}`, ...detail].join(' ')
 }
 
 export type IncidentEvaluation = {
@@ -175,10 +261,22 @@ export type IncidentMonitorState = {
   continuityEvents: {
     recordedAt: string
     windowSequence: number
+    tolerated: boolean
     failures: IncidentFailure[]
   }[]
   frozenAt: string | null
   failures: IncidentFailure[]
+  // Consecutive samples each tolerated reading has currently been failing for,
+  // keyed by cell so its health, ready and latency readings share one streak, and
+  // by signal for the director instance count.
+  probeStreaks: Record<string, number>
+  // Cell-probe breaches absorbed by the tolerance, kept so a green artifact still
+  // shows what the gate chose not to freeze on.
+  toleratedProbeEvents: {
+    recordedAt: string
+    windowSequence: number
+    failures: IncidentFailure[]
+  }[]
   completedAt: string | null
 }
 
@@ -307,7 +405,7 @@ const SOURCE_MAX_AGE: Record<IncidentSourceName, number> = {
   'active-probe': INCIDENT_MONITOR_THRESHOLDS.activeProbeMaxAgeMs,
   'cloud-monitoring': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs,
   'relay-logs': INCIDENT_MONITOR_THRESHOLDS.relayLogMaxAgeMs,
-  'director-admin': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+  'director-admin': INCIDENT_MONITOR_THRESHOLDS.directorAdminMaxAgeMs
 }
 
 function ageMs(timestamp: string, nowMs: number): number {
@@ -342,6 +440,27 @@ function checkRule(
       signal: rule.signal,
       observed: signal.value,
       threshold: rule.threshold
+    })
+  }
+}
+
+// Why: a few errors are noise only against real traffic; with almost no requests they are the outage.
+function checkAuthErrorRatio(
+  failures: IncidentFailure[],
+  signals: Record<string, IncidentSignal>
+): void {
+  const errors = signals['auth.errors']?.value ?? 0
+  if (errors === 0) return
+  const requests = signals['auth.requests']
+  if (!requests) return addMissingSignal(failures, 'cloud-monitoring', 'auth.requests')
+  const ratio = requests.value > 0 ? errors / requests.value : Number.POSITIVE_INFINITY
+  if (ratio > INCIDENT_MONITOR_THRESHOLDS.authErrorRatio) {
+    failures.push({
+      code: 'threshold_max',
+      source: 'cloud-monitoring',
+      signal: 'auth.error_ratio',
+      observed: ratio,
+      threshold: INCIDENT_MONITOR_THRESHOLDS.authErrorRatio
     })
   }
 }
@@ -384,7 +503,7 @@ function checkCell(
       'active-probe',
       probe,
       `cell.${cell.cellId}.latency_ms`,
-      INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs,
+      INCIDENT_MONITOR_THRESHOLDS.cellEndpointLatencyMs[cell.region],
       'max'
     ],
     [
@@ -441,6 +560,15 @@ function checkCell(
     ]
   ] as const
   for (const [source, signals, signalName, threshold, comparison] of checks) {
+    // Probes, logs and selector still judge a reserve cell; the reserve watch reads its runtime.
+    if (
+      cell.reserve &&
+      ['heartbeat_fresh', 'heartbeat_age_ms', 'migration_blocked', 'migration_target_inactive'].some(
+        (suffix) => signalName.endsWith(suffix)
+      )
+    ) {
+      continue
+    }
     if (
       migrationPolicy === 'recover-forward' &&
       cell.cellId === recoverySourceCellId &&
@@ -545,6 +673,8 @@ export function evaluateIncidentSample(
     const source = sample.sources[rule.source]
     if (source) checkRule(failures, rule.source, source.signals, rule)
   }
+  const monitoring = sample.sources['cloud-monitoring']
+  if (monitoring) checkAuthErrorRatio(failures, monitoring.signals)
   for (const cell of sample.cells) {
     checkCell(
       failures,
@@ -592,6 +722,8 @@ export function initialIncidentMonitorState(input: {
     continuityEvents: [],
     frozenAt: null,
     failures: [],
+    probeStreaks: {},
+    toleratedProbeEvents: [],
     completedAt: null
   }
 }
@@ -602,19 +734,112 @@ export type IncidentMonitorDependencies = {
   collect(): Promise<IncidentSample>
   persist(state: IncidentMonitorState): Promise<void>
   checkpoint(summary: IncidentCheckpoint): Promise<void>
+  warn?(message: string): void
 }
 
 function checkpointMinutes(durationMinutes: number): number[] {
   return INCIDENT_CHECKPOINT_MINUTES.filter((minute) => minute <= durationMinutes)
 }
 
-const CONTINUITY_FAILURE_CODES = new Set([
-  'collector_failed',
-  'monitor_gap',
+// Freshness-only failures: we could not read a signal this sample. Distinct from
+// collector_failed / monitor_gap, where the whole sample is absent.
+export const FRESHNESS_FAILURE_CODES = new Set([
+  'signal_missing',
   'signal_stale',
   'source_missing',
   'source_stale'
 ])
+
+const CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  'monitor_gap',
+  ...FRESHNESS_FAILURE_CODES
+])
+
+// A whole sample we could not read gets the same consecutive-sample budget as an
+// unread signal, for the same reason: one failed collector round trip is evidence
+// about that round trip, not about the fleet. `monitor_gap` is excluded because it
+// means the run itself stopped sampling, so the window genuinely has a hole.
+const TOLERABLE_CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  ...FRESHNESS_FAILURE_CODES
+])
+
+// Why: Cloud Monitoring overshoots its own publish bar, and one unread sample is
+// not evidence of an unhealthy fleet. Under the 25-minute lineage cap in force
+// then, a restart past minute 10 cost the entire verdict, so a healthy fleet
+// produced none on 2026-09-05. A signal may miss this many consecutive samples before the window
+// restarts; the sample is still evaluated against every threshold it can read,
+// and a threshold breach still freezes the run outright.
+export const INCIDENT_FRESHNESS_TOLERANCE_SAMPLES = 2
+
+function freshnessKey(failure: IncidentFailure): string {
+  return `${failure.source}/${failure.signal ?? '*'}`
+}
+
+// The streak key for a per-cell active-probe reading, or null if the failure is not
+// one. A cell probe is a single HTTP round trip and so is subject to
+// cellProbeToleranceSamples; director and auth probes return null on purpose,
+// because they are the single points of failure this gate exists to catch.
+//
+// Why the key is the cell and not the signal: health, ready and latency_ms all
+// describe the same round trip. Keyed per signal, a cell that alternates between
+// answering slowly and not answering at all holds every individual streak at one and
+// never reaches the tolerance, so a continuously unhealthy cell passes the gate.
+export function cellProbeStreakKey(failure: IncidentFailure): string | null {
+  const signal = failure.signal
+  if (failure.source !== 'active-probe' || signal === undefined) return null
+  if (!signal.startsWith('cell.')) return null
+  const lastDot = signal.lastIndexOf('.')
+  if (lastDot < 'cell.'.length) return null
+  return `${failure.source}/${signal.slice(0, lastDot)}`
+}
+
+// Cloud Run replaces director instances in place rather than holding the count,
+// so the reading leaves [min, max] for about one sample roughly twice a day, and a
+// deploy that briefly serves two revisions raises it the same way. Neither is an
+// unhealthy fleet, and on 2026-09-17 this was one of the signals freezing the
+// pre-drain gate on a condition the roll exists to fix. Min and max share one
+// streak on purpose: a count that alternates above and below the band would
+// otherwise hold each individual streak at one and never reach the tolerance.
+export function directorInstancesStreakKey(failure: IncidentFailure): string | null {
+  if (failure.source !== 'cloud-monitoring' || failure.signal !== 'director.instances') {
+    return null
+  }
+  return `${failure.source}/${failure.signal}`
+}
+
+// The streak key for any reading subject to cellProbeToleranceSamples, or null
+// for a reading that freezes the run on its first bad sample.
+export function toleratedStreakKey(failure: IncidentFailure): string | null {
+  return cellProbeStreakKey(failure) ?? directorInstancesStreakKey(failure)
+}
+
+// Rebuild the per-signal tolerated streak from the trailing continuity events so a
+// resumed monitor cannot hand a signal a fresh budget.
+function resumeFreshnessStreaks(
+  state: IncidentMonitorState
+): Map<string, number> {
+  const events = state.continuityEvents
+  const streaks = new Map<string, number>()
+  const last = events[events.length - 1]
+  if (!last?.tolerated) return streaks
+  for (const key of new Set(last.failures.map(freshnessKey))) {
+    let streak = 0
+    let laterAt: number | null = null
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]!
+      const recordedAt = Date.parse(event.recordedAt)
+      if (!event.tolerated) break
+      if (laterAt !== null && laterAt - recordedAt > state.intervalMs * 1.5) break
+      if (!event.failures.some((failure) => freshnessKey(failure) === key)) break
+      streak++
+      laterAt = recordedAt
+    }
+    streaks.set(key, streak)
+  }
+  return streaks
+}
 
 function resetContinuousWindow(
   state: IncidentMonitorState,
@@ -631,6 +856,7 @@ function resetContinuousWindow(
   state.continuityEvents.push({
     recordedAt,
     windowSequence: state.windowSequence,
+    tolerated: false,
     failures
   })
 }
@@ -681,6 +907,7 @@ export async function runIncidentMonitor(
     await dependencies.persist(state)
     return state
   }
+  const freshnessStreaks = resumeFreshnessStreaks(state)
   while (state.completedAt === null) {
     if (dependencies.now() > lineageDeadlineMs) {
       completeContinuityDeadline(state, dependencies.now(), lineageStartMs)
@@ -697,7 +924,12 @@ export async function runIncidentMonitor(
         state.recoverySourceCellId,
         state.capacityCellId
       )
-    } catch {
+    } catch (error) {
+      dependencies.warn?.(
+        `incident monitor collector failed: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      )
       evaluation = {
         status: 'freeze',
         evaluatedAt: new Date(dependencies.now()).toISOString(),
@@ -715,17 +947,74 @@ export async function runIncidentMonitor(
     const thresholdFailures = evaluation.failures.filter((failure) =>
       !CONTINUITY_FAILURE_CODES.has(failure.code)
     )
-    if (continuityFailures.length > 0) {
+    const toleratedKeys = new Set(
+      state.windowStartedAt !== null &&
+        continuityFailures.length > 0 &&
+        continuityFailures.every((failure) =>
+          TOLERABLE_CONTINUITY_FAILURE_CODES.has(failure.code))
+        ? continuityFailures.map(freshnessKey)
+        : []
+    )
+    for (const key of [...freshnessStreaks.keys()]) {
+      if (!toleratedKeys.has(key)) freshnessStreaks.delete(key)
+    }
+    let tolerated = toleratedKeys.size > 0
+    for (const key of toleratedKeys) {
+      const streak = (freshnessStreaks.get(key) ?? 0) + 1
+      freshnessStreaks.set(key, streak)
+      if (streak > INCIDENT_FRESHNESS_TOLERANCE_SAMPLES) tolerated = false
+    }
+    if (continuityFailures.length > 0 && !tolerated) {
+      freshnessStreaks.clear()
       resetContinuousWindow(state, evaluation.evaluatedAt, continuityFailures)
     } else {
+      if (tolerated) {
+        state.continuityEvents.push({
+          recordedAt: evaluation.evaluatedAt,
+          windowSequence: state.windowSequence,
+          tolerated: true,
+          failures: continuityFailures
+        })
+      }
       if (state.windowStartedAt === null) {
         state.windowStartedAt = evaluation.evaluatedAt
       }
       state.sampleCount++
     }
-    if (thresholdFailures.length > 0) {
+    const probeFailures = new Map<string, IncidentFailure[]>()
+    for (const failure of thresholdFailures) {
+      const key = toleratedStreakKey(failure)
+      if (key === null) continue
+      probeFailures.set(key, [...(probeFailures.get(key) ?? []), failure])
+    }
+    for (const key of Object.keys(state.probeStreaks)) {
+      if (!probeFailures.has(key)) delete state.probeStreaks[key]
+    }
+    const sustainedProbeFailures: IncidentFailure[] = []
+    const toleratedProbeFailures: IncidentFailure[] = []
+    for (const [key, entries] of probeFailures) {
+      const streak = (state.probeStreaks[key] ?? 0) + 1
+      state.probeStreaks[key] = streak
+      const target =
+        streak > INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+          ? sustainedProbeFailures
+          : toleratedProbeFailures
+      target.push(...entries)
+    }
+    if (toleratedProbeFailures.length > 0) {
+      state.toleratedProbeEvents.push({
+        recordedAt: evaluation.evaluatedAt,
+        windowSequence: state.windowSequence,
+        failures: toleratedProbeFailures
+      })
+    }
+    const freezingFailures = [
+      ...thresholdFailures.filter((failure) => toleratedStreakKey(failure) === null),
+      ...sustainedProbeFailures
+    ]
+    if (freezingFailures.length > 0) {
       state.frozenAt ??= evaluation.evaluatedAt
-      state.failures = [...state.failures, ...thresholdFailures]
+      state.failures = [...state.failures, ...freezingFailures]
     }
     if (state.windowStartedAt === null) {
       if (dependencies.now() >= lineageDeadlineMs) {

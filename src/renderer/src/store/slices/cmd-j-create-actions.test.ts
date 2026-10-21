@@ -8,12 +8,23 @@ import {
   MANAGED_BROWSER_UNAVAILABLE_MESSAGE
 } from '@/lib/client-creation-action-policy'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+
+vi.mock('@/store/slices/browser/paired-browser-tab-creator', () => ({
+  getRegisteredPairedBrowserTabCreator: () => null,
+  loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({

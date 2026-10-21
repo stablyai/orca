@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
+import { CODEX_COMMAND_IDENTITY_ENV_KEYS } from '../../shared/codex-shell-function'
 import { resolveGitBashPath } from '../git-bash'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
@@ -188,6 +189,8 @@ describeWindows('Windows Codex shell preflight runtime', () => {
         cwd: root,
         env: {
           ...withPathEntry(process.env, join(root, 'bin')),
+          // Why: the fixture codex is node, which reads the forwarded identity's `-c` as --check.
+          ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, ''])),
           CHERE_INVOKING: '1',
           HOME: root,
           ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,

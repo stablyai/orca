@@ -108,8 +108,20 @@ describe('message batch atomicity', () => {
 
     expect(() =>
       db?.insertMessages([
-        { id: 'inner_first', from: 'sender', to: 'recipient', subject: 'first' },
-        { id: 'inner_second', from: 'sender', to: 'recipient', subject: 'second' }
+        {
+          runId: 'run_legacy_local',
+          id: 'inner_first',
+          from: 'sender',
+          to: 'recipient',
+          subject: 'first'
+        },
+        {
+          runId: 'run_legacy_local',
+          id: 'inner_second',
+          from: 'sender',
+          to: 'recipient',
+          subject: 'second'
+        }
       ])
     ).toThrow('blocked')
     sqlite.exec('COMMIT')
@@ -119,5 +131,34 @@ describe('message batch atomicity', () => {
         .prepare("SELECT id FROM messages WHERE id IN ('outer', 'inner_first') ORDER BY id")
         .all()
     ).toEqual([{ id: 'outer' }])
+  })
+
+  it('preserves an outer transaction when a worker_done commit rolls back', () => {
+    db = new OrchestrationDb(':memory:')
+    const sqlite = (db as unknown as { db: Database.Database }).db
+    sqlite.exec(`
+      BEGIN IMMEDIATE;
+      INSERT INTO messages (id, from_handle, to_handle, subject)
+      VALUES ('outer', 'sender', 'recipient', 'outer change');
+    `)
+
+    expect(() =>
+      db?.commitWorkerDoneMessageMutation(() => {
+        db?.insertMessage({
+          runId: 'run_legacy_local',
+          id: 'inner',
+          from: 'worker',
+          to: 'coordinator',
+          subject: 'Done',
+          type: 'worker_done'
+        })
+        throw new Error('injected failure')
+      })
+    ).toThrow('injected failure')
+    sqlite.exec('COMMIT')
+
+    expect(sqlite.prepare("SELECT id FROM messages WHERE id IN ('outer', 'inner')").all()).toEqual([
+      { id: 'outer' }
+    ])
   })
 })

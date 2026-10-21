@@ -1,9 +1,11 @@
+import { useWorktreeJumpPaletteTaskSelection } from './use-worktree-jump-palette-task-selection'
+import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
 import { activateWorkspaceTabPaletteResult } from '@/lib/workspace-tab-palette-activation'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search'
@@ -14,6 +16,7 @@ import { getUnavailableQuickActionMessage } from './use-worktree-jump-palette-qu
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
 import { translate } from '@/i18n/i18n'
 import type { PaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
@@ -33,14 +36,19 @@ function getSettingsTargetFromSectionId(sectionId: string): {
 }
 
 type WorktreeJumpPaletteSelectionActionsInput = WorktreeJumpPaletteStoreState &
+  Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   WorktreeJumpPaletteLocalState &
   Pick<WorktreeJumpPaletteQuickActions, 'buildQuickActionContext'> &
   Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'>
 
 export function useWorktreeJumpPaletteSelectionActions({
+  visible,
+  taskItems,
+  workspaces,
   closeModal,
   recordFeatureInteraction,
   skipRestoreFocusRef,
+  liveQueryRef,
   setSelectedItemId,
   focusFallbackSurface,
   requestBrowserFocus,
@@ -56,17 +64,21 @@ export function useWorktreeJumpPaletteSelectionActions({
 }: WorktreeJumpPaletteSelectionActionsInput) {
   const handleSelectWorktree = useCallback(
     (worktree: Worktree) => {
-      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, worktree.hostId)
+      const executionHostId = getPaletteWorktreeExecutionHostId(worktree)
+      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, executionHostId)
       if (!current) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
         )
         return
       }
-      const activation = activateAndRevealWorktree(
-        worktree.id,
-        worktree.hostId ? { executionHostId: worktree.hostId } : {}
-      )
+      const activation = activateAndRevealWorkspace(worktree.id, {
+        navigationIntent: 'user-open',
+        ...(executionHostId ? { executionHostId } : {})
+      })
+      if (!activation) {
+        return
+      }
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
@@ -81,6 +93,9 @@ export function useWorktreeJumpPaletteSelectionActions({
   const handleSelectBrowserPage = useCallback(
     (result: BrowserPaletteSearchResult) => {
       const activation = activateBrowserPagePaletteResult(result)
+      if (activation.status === 'blocked') {
+        return
+      }
       if (activation.status === 'failed') {
         toast.error(
           activation.reason === 'missing-page'
@@ -107,6 +122,9 @@ export function useWorktreeJumpPaletteSelectionActions({
   const handleSelectSimulatorTab = useCallback(
     (result: SimulatorPaletteSearchResult) => {
       const activation = activateSimulatorTabPaletteResult(result)
+      if (activation.status === 'blocked') {
+        return
+      }
       if (activation.status === 'failed') {
         toast.error(
           activation.reason === 'missing-tab'
@@ -131,6 +149,9 @@ export function useWorktreeJumpPaletteSelectionActions({
   const handleSelectWorkspaceTab = useCallback(
     (result: WorkspaceTabPaletteSearchResult) => {
       const activation = activateWorkspaceTabPaletteResult(result)
+      if (activation.status === 'blocked') {
+        return
+      }
       if (activation.status === 'failed') {
         toast.error(
           activation.reason === 'missing-worktree'
@@ -170,6 +191,9 @@ export function useWorktreeJumpPaletteSelectionActions({
   )
   const handleSelectQuickAction = useCallback(
     (action: CmdJActionResult) => {
+      if (action.sourceQuery !== undefined && liveQueryRef.current.trim() !== action.sourceQuery) {
+        return
+      }
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
@@ -189,7 +213,8 @@ export function useWorktreeJumpPaletteSelectionActions({
         })
         .catch((error: unknown) => {
           if (!action.id.startsWith('plugin:')) {
-            throw error
+            toast.error(error instanceof Error ? error.message : String(error))
+            return
           }
           toast.error(
             translate(
@@ -205,6 +230,8 @@ export function useWorktreeJumpPaletteSelectionActions({
   const handleSelectProjectTarget = useCallback(
     (result: CmdJProjectSearchResult) => {
       skipRestoreFocusRef.current = true
+      // Why switch: picking a project row explicitly asks to see it in the workspace list.
+      useAppStore.getState().setSidebarBody('workspaces')
       revealSidebarRow(result.rowKey, { behavior: 'smooth', highlight: true })
       recordFeatureInteraction('cmd-j')
       closeModal()
@@ -229,6 +256,15 @@ export function useWorktreeJumpPaletteSelectionActions({
       revealSidebarRow
     ]
   )
+  const handleSelectTask = useWorktreeJumpPaletteTaskSelection({
+    visible,
+    taskItems,
+    workspaces,
+    handleSelectWorktree,
+    recordFeatureInteraction,
+    skipRestoreFocusRef,
+    setSelectedItemId
+  })
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
@@ -241,6 +277,8 @@ export function useWorktreeJumpPaletteSelectionActions({
         handleSelectSimulatorTab(item.result)
       } else if (item.type === 'workspace-tab') {
         handleSelectWorkspaceTab(item.result)
+      } else if (item.type === 'task') {
+        handleSelectTask(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
       } else {
@@ -248,6 +286,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       }
     },
     [
+      handleSelectTask,
       handleSelectBrowserPage,
       handleSelectProjectTarget,
       handleSelectQuickAction,
@@ -257,7 +296,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       handleSelectWorktree
     ]
   )
-  return { handleSelectItem }
+  return { handleSelectItem, handleSelectTask }
 }
 
 export type WorktreeJumpPaletteSelectionActions = ReturnType<

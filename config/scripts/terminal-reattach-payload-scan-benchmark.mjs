@@ -5,7 +5,7 @@
 //     CSI strip against the shipped shape (256KB tail + shared CSI_SEQUENCE_PATTERN). Every
 //     variant is asserted to agree with the baseline before it is timed.
 //  2. TerminalKittyKeyboardModeTracker.scanReplay — measured to justify leaving it alone, and
-//     to record that porting the daemon mouse mirror's includes() pre-filter makes it slower.
+//     to record that an includes() introducer pre-filter makes it slower.
 //
 // Payloads are generated deterministically (LCG, no Math.random) so runs compare.
 //
@@ -214,7 +214,7 @@ const kittyScan = (data) => {
   tracker.scanReplay(data)
   return tracker.flags
 }
-// Mirrors src/main/daemon/terminal-mouse-mode-mirror.ts:41-47.
+// The includes() introducer pre-filter a daemon-side mode scan would use.
 const kittyGated = (data) => {
   if (!data.includes('\x1b[?') && !data.includes('\x1bc') && !data.includes('\x9b')) {
     return 0

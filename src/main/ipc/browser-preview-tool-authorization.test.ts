@@ -125,6 +125,7 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:isGuestRegistered',
   'browser:unregisterGuest',
   'browser:respondWebAuthnAccount',
+  'browser:respondPagePrompt',
   'browser:proceedCertificate',
   'browser:activeTabChanged',
   'browser:openDevTools',
@@ -141,7 +142,13 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:clientRouteImportSources',
   'browser:session:detectBrowsers',
   'browser:session:detectBrowsersForClientHost',
-  'browser:session:importFromBrowser'
+  'browser:session:importFromBrowser',
+  // Process-wide identity: reads/writes the host's own user-agent choice, never a viewed guest.
+  'browser:identity:get',
+  'browser:identity:set',
+  // Remembered site answers for a browser profile, never a viewed guest.
+  'browser:sitePermissions:list',
+  'browser:sitePermissions:set'
 ]
 
 type Handler = (event: { sender: Electron.WebContents }, args: unknown) => unknown
@@ -179,6 +186,12 @@ function grantForNewDocPage(): { id: string; browserPageId: string } {
   return { id: grant.id, browserPageId }
 }
 
+/** The fake WebContents a preview's policy installs onto; tools are matched against its identity. */
+type PreviewGuestContents = {
+  isDestroyed: () => boolean
+  getURL: () => string
+}
+
 /** A preview guest already showing its document, which is the only state a tool can act in. */
 function renderPreviewForGrant(
   grant: { id: string; browserPageId: string },
@@ -186,7 +199,7 @@ function renderPreviewForGrant(
 ): {
   grantId: string
   browserPageId: string
-  contents: object
+  contents: PreviewGuestContents
   markContentsDestroyed: () => void
 } {
   const browserPageId = grant.browserPageId
@@ -250,7 +263,7 @@ function toolArgs(channel: string, browserPageId: string): Record<string, unknow
 }
 
 /** The viewport bridge is handed a resolver rather than the contents, so unwrap one call argument. */
-function resolvesToGuest(argument: unknown, guest: object): boolean {
+function resolvesToGuest(argument: unknown, guest: PreviewGuestContents): boolean {
   return argument === guest || (typeof argument === 'function' && argument() === guest)
 }
 

@@ -1,4 +1,4 @@
-import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
 import { isCollectionSectionKey } from './worktree-list-collections'
 
 /** The row shape both drag models share: only `item` rows carry a worktree and a section. */

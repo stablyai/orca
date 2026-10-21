@@ -3,7 +3,8 @@ import {
   MOBILE_DICTATION_PCM_SAMPLE_RATE
 } from './mobile-dictation-pending-audio-budget'
 import { bytesToBase64 } from './mobile-dictation-session-state'
-import type { MicrophoneDataEvent } from '@orca/expo-two-way-audio'
+import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
+import type { DictationCaptureChunk } from '../platform/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -17,11 +18,11 @@ type MobileDictationAudioChunkQueue = {
 export function enqueueMobileDictationAudioChunk(
   client: RpcClient,
   dictationId: string,
-  event: MicrophoneDataEvent,
+  chunk: DictationCaptureChunk,
   queue: MobileDictationAudioChunkQueue
 ): void {
-  const raw = event.data
-  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
+  // The seam normalises what the engine handed over, so there is nothing to widen here.
+  const bytes = chunk.data
   const byteLength = bytes.byteLength
   if (!queue.pendingAudioBudget.tryReserve(byteLength)) {
     queue.failActiveDictation(
@@ -30,16 +31,14 @@ export function enqueueMobileDictationAudioChunk(
     )
     return
   }
-  const sendChunk = client
-    .sendRequest('speech.dictation.chunk', {
+  const sendChunk = dictationAudioChunkSend
+    .request(client, {
       dictationId,
       audioBase64: bytesToBase64(bytes),
       sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
     })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
+    .then((reply) => {
+      dictationAudioChunkSend.interpret(reply)
     })
     .catch((err) => queue.failActiveDictation(dictationId, err))
     .finally(() => {

@@ -5,7 +5,9 @@ import { posixOnlyIt, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
-import { registerPtyHandlers, setLocalPtyProvider, type PrepareCodexSessionResume } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider } from './pty/provider/registry'
+import type { PrepareCodexSessionResume } from './pty/host-env/types'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -278,7 +280,7 @@ describe('registerPtyHandlers', () => {
             await Promise.resolve()
             vi.runAllTimers()
 
-            expect(mockProc.proc.write).toHaveBeenCalledWith(`${command}\n`)
+            expect(mockProc.proc.write).toHaveBeenCalledWith(`${command}\r`)
             expect(spawned.agentResumeUnavailable).toBeUndefined()
           } finally {
             vi.useRealTimers()

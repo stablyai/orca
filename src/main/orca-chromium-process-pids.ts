@@ -12,6 +12,12 @@ import { recordCoalescedDurableCrashBreadcrumb } from './crash-reporting/durable
  * Empty on a Node host and empty on failure: that is "no refusal proven", never
  * "safe to kill" — callers must keep every other guard they already have.
  *
+ * The other direction is real too, and bounded by design: `getAppMetrics()` can
+ * still list a renderer Electron has not finished reaping, so on Windows a pid
+ * already recycled onto an unrelated child of ours reads as `own` and its tree
+ * walk is refused. That is why a refusal only blocks the pid-addressed walk and
+ * every gated site still kills its own root through the child handle.
+ *
  * Why failure stays open rather than refusing everything: a refusal is not free.
  * `terminateWindowsProcessTree` resolves without killing, and
  * `killSourceControlAgentProcess` returns that straight to a caller that then

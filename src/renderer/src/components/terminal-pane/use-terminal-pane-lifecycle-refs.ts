@@ -21,6 +21,7 @@ export function useTerminalPaneLifecycleRefs() {
       new Map<number, ReturnType<typeof installHttpLinkClickFallback>>()
     ),
     selectionDisposablesRef: useRef(new Map<number, IDisposable>()),
+    nativeCopyDisposablesRef: useRef(new Map<number, IDisposable>()),
     selectionCaptureTimersRef: useRef(new Map<number, number>()),
     osc52DisposablesRef: useRef(new Map<number, IDisposable>()),
     osc7DisposablesRef: useRef(new Map<number, IDisposable>()),

@@ -1,9 +1,12 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import process from 'node:process'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../src/shared/app-environment'
 import { setSecretStore } from '../../src/shared/secret-store'
+
+// The harness owns its directory even when a suite replaces the fs module.
+const { mkdtempSync, rmSync } = process.getBuiltinModule('fs')
 
 /**
  * Why: both host ports throw until an entrypoint installs them, which is the right
@@ -12,14 +15,17 @@ import { setSecretStore } from '../../src/shared/secret-store'
  * that asserts on host behaviour installs its own and wins, because this runs first.
  */
 
-// One directory per test environment, not per test: suites that write a file in one
-// step and read it back in the next would otherwise lose it between them. Removed on
-// teardown — vitest builds one environment per test file, so without this a full run
-// leaves thousands of directories behind.
-const userData = mkdtempSync(join(tmpdir(), 'orca-vitest-userdata-'))
+// Most suites never read a host data path; create its per-file directory only when needed.
+let userData: string | undefined
+
+function userDataPath(): string {
+  return (userData ??= mkdtempSync(join(tmpdir(), 'orca-vitest-userdata-')))
+}
 
 afterAll(() => {
-  rmSync(userData, { recursive: true, force: true })
+  if (userData) {
+    rmSync(userData, { recursive: true, force: true })
+  }
 })
 
 // Deliberately not a plaintext passthrough: encryptString must return something a
@@ -34,7 +40,7 @@ const SEAL_PREFIX = 'vitest-sealed:'
  */
 export function fakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): AppEnvironment {
   return {
-    getPath: (name) => (name === 'home' ? homedir() : name === 'temp' ? tmpdir() : userData),
+    getPath: (name) => (name === 'home' ? homedir() : name === 'temp' ? tmpdir() : userDataPath()),
     getAppPath: () => process.cwd(),
     getVersion: () => '0.0.0-test',
     isPackaged: () => false,

@@ -1,10 +1,7 @@
-import { useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
-import { PixelRatio, type Image, type View } from 'react-native'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { PixelRatio } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import type {
-  BrowserScreencastFrame,
-  BrowserScreencastFrameMetadata
-} from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import {
   buildMobileBrowserScreencastRequest,
   type MobileBrowserViewMode
@@ -12,9 +9,9 @@ import {
 import {
   MAX_ZOOM,
   MIN_ZOOM,
-  getCachedBrowserFrame,
-  updateBrowserLayerVisibility,
-  type FrameLayer
+  browserFrameMetadataEqual,
+  cacheBrowserFrame,
+  getCachedBrowserFrame
 } from './mobile-browser-frame-state'
 import {
   clampBrowserZoomState,
@@ -28,30 +25,23 @@ import {
   type BrowserDialogState,
   type ScreencastEvent
 } from './mobile-browser-stream-events'
-import { useMobileBrowserFrameApply } from './use-mobile-browser-frame-apply'
+import { createBrowserFramePacer } from './browser-frame-pacer'
 import { useMobileBrowserRequest } from './use-mobile-browser-request'
 
-type PendingFrame = { frame: BrowserScreencastFrame; cacheKey: string }
-
 type MobileBrowserStreamArgs = {
-  appActive: boolean
-  browserImageRefs: { current: [Image | null, Image | null] }
-  browserLayerRefs: { current: [View | null, View | null] }
+  binaryScreencastGranted: boolean
   browserViewMode: MobileBrowserViewMode
   busyRef: { current: boolean }
   cacheKey: string | null
   client: RpcClient | null
   frameMetadata: BrowserScreencastFrameMetadata | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
-  frameMountedRef: { current: boolean }
-  frameThrottleTimerRef: { current: ReturnType<typeof setTimeout> | null }
-  frameUriRef: { current: string | null }
-  lastAppliedFrameAtRef: { current: number }
+  /** Null while the app is away; each return to the foreground is a new value. */
+  foregroundVisit: number | null
+  initialFrameUri: string | null
   lastStreamCacheKeyRef: { current: string | null }
   lastZoomResetUrlRef: { current: string }
   layout: BrowserTouchLayout | null
-  pendingFrameLayerRef: { current: FrameLayer | null }
-  pendingThrottledFrameRef: { current: PendingFrame | null }
   resetBrowserZoomState: () => void
   screencastSupported: boolean | null
   setAddressValue: Dispatch<SetStateAction<string>>
@@ -59,35 +49,27 @@ type MobileBrowserStreamArgs = {
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
   setError: Dispatch<SetStateAction<string | null>>
   setFrameMetadata: Dispatch<SetStateAction<BrowserScreencastFrameMetadata | null>>
-  setFrameUri: Dispatch<SetStateAction<string | null>>
   setZoom: Dispatch<SetStateAction<BrowserZoomState>>
   streamGenerationRef: { current: number }
   tab: MobileBrowserTab
-  visibleFrameLayerRef: { current: FrameLayer }
   worktreeId: string
   zoomRef: { current: BrowserZoomState }
 }
 
 export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
   const {
-    appActive,
-    browserImageRefs,
-    browserLayerRefs,
+    binaryScreencastGranted,
     browserViewMode,
     busyRef,
     cacheKey,
     client,
     frameMetadata,
     frameMetadataRef,
-    frameMountedRef,
-    frameThrottleTimerRef,
-    frameUriRef,
-    lastAppliedFrameAtRef,
+    foregroundVisit,
+    initialFrameUri,
     lastStreamCacheKeyRef,
     lastZoomResetUrlRef,
     layout,
-    pendingFrameLayerRef,
-    pendingThrottledFrameRef,
     resetBrowserZoomState,
     screencastSupported,
     setAddressValue,
@@ -95,11 +77,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     setDialog,
     setError,
     setFrameMetadata,
-    setFrameUri,
     setZoom,
     streamGenerationRef,
     tab,
-    visibleFrameLayerRef,
     worktreeId,
     zoomRef
   } = args
@@ -113,21 +93,25 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     worktreeId
   })
 
-  const { applyFrameThrottled, clearFrameThrottle } = useMobileBrowserFrameApply({
-    browserImageRefs,
-    busyRef,
-    frameMetadataRef,
-    frameMountedRef,
-    frameThrottleTimerRef,
-    frameUriRef,
-    lastAppliedFrameAtRef,
-    pendingFrameLayerRef,
-    pendingThrottledFrameRef,
-    setBusy,
-    setFrameMetadata,
-    setFrameUri,
-    visibleFrameLayerRef
-  })
+  const [frameUri, setFrameUri] = useState(initialFrameUri)
+  const [framePacer] = useState(() =>
+    createBrowserFramePacer({
+      initialUri: initialFrameUri,
+      setFrameUri,
+      // Why: at the flip, so touch mapping uses the geometry of the frame on screen.
+      onShown: ({ frame, cacheKey: shownCacheKey, uri }) => {
+        cacheBrowserFrame(shownCacheKey, { uri, metadata: frame.metadata })
+        if (!browserFrameMetadataEqual(frameMetadataRef.current, frame.metadata)) {
+          frameMetadataRef.current = frame.metadata
+          setFrameMetadata(frame.metadata)
+        }
+        if (busyRef.current) {
+          busyRef.current = false
+          setBusy(false)
+        }
+      }
+    })
+  )
 
   const streamRequest = useMemo(
     () => buildMobileBrowserScreencastRequest(layout, PixelRatio.get(), browserViewMode),
@@ -164,44 +148,31 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     const generation = streamGenerationRef.current
     const sameStream = Boolean(cacheKey) && lastStreamCacheKeyRef.current === cacheKey
     lastStreamCacheKeyRef.current = cacheKey
-    if (!sameStream || !frameUriRef.current) {
-      const cachedFrame = getCachedBrowserFrame(cacheKey)
-      if (cachedFrame) {
-        frameUriRef.current = cachedFrame.uri
-        frameMountedRef.current = true
-        frameMetadataRef.current = cachedFrame.metadata
-        setFrameUri(cachedFrame.uri)
-        setFrameMetadata(cachedFrame.metadata)
-      } else {
-        frameUriRef.current = null
-        frameMountedRef.current = false
-        setFrameUri(null)
-        setFrameMetadata(null)
-        frameMetadataRef.current = null
-      }
+    if (sameStream && framePacer.hasFrame()) {
+      framePacer.reset()
     } else {
-      frameMountedRef.current = true
+      const cachedFrame = getCachedBrowserFrame(cacheKey)
+      framePacer.replace(cachedFrame?.uri ?? null)
+      frameMetadataRef.current = cachedFrame?.metadata ?? null
+      setFrameMetadata(cachedFrame?.metadata ?? null)
     }
-    pendingFrameLayerRef.current = null
-    if (!sameStream || !frameUriRef.current) {
-      visibleFrameLayerRef.current = 0
-    }
-    updateBrowserLayerVisibility(browserLayerRefs.current, visibleFrameLayerRef.current)
-    lastAppliedFrameAtRef.current = 0
-    clearFrameThrottle()
-    busyRef.current = false
     setDialog(null)
     setError(null)
     if (
       !client ||
+      !binaryScreencastGranted ||
       screencastSupported !== true ||
       !tab.browserPageId ||
-      !appActive ||
+      foregroundVisit === null ||
       !streamRequest
     ) {
       busyRef.current = false
       setBusy(false)
-      if (screencastSupported === false) {
+      if (!binaryScreencastGranted) {
+        // Before the desktop's answer, because this one is about the app in the user's hand and no
+        // desktop update can change it.
+        setError('Update the Orca app to stream browser tabs here.')
+      } else if (screencastSupported === false) {
         setError('Update desktop Orca to stream browser tabs on mobile.')
       } else if (screencastSupported === null) {
         setError('Checking desktop browser streaming support.')
@@ -256,21 +227,21 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
           }
           clearStartupTimer()
           if (cacheKey) {
-            applyFrameThrottled(frame, cacheKey)
+            framePacer.push(frame, cacheKey)
           }
         }
       }
     )
     return () => {
       clearStartupTimer()
-      clearFrameThrottle()
+      framePacer.reset()
       unsubscribe()
     }
   }, [
-    appActive,
-    applyFrameThrottled,
-    clearFrameThrottle,
+    binaryScreencastGranted,
     client,
+    foregroundVisit,
+    framePacer,
     resetBrowserZoomState,
     screencastSupported,
     streamRequest,
@@ -279,5 +250,14 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     worktreeId
   ])
 
-  return { frameGeometry, pageParams, sendBrowserRequest }
+  // Why: only mounts the layers; the pacer re-points them natively, which a re-render must not undo.
+  const renderedFrameSource = frameUri ? { uri: frameUri } : null
+
+  return {
+    frameGeometry,
+    frameLayers: framePacer.layers,
+    pageParams,
+    renderedFrameSource,
+    sendBrowserRequest
+  }
 }

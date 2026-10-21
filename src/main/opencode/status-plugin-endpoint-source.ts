@@ -83,6 +83,7 @@ export function getStatusPluginEndpointSource(): string[] {
     '    token: fileEnv.ORCA_AGENT_HOOK_TOKEN || process.env.ORCA_AGENT_HOOK_TOKEN,',
     '    env: fileEnv.ORCA_AGENT_HOOK_ENV || process.env.ORCA_AGENT_HOOK_ENV || "",',
     '    version: fileEnv.ORCA_AGENT_HOOK_VERSION || process.env.ORCA_AGENT_HOOK_VERSION || "",',
+    '    openCodeTui: process.env.ORCA_AGENT_HOOK_ENDPOINT ? fileEnv.ORCA_AGENT_HOOK_OPENCODE_TUI : process.env.ORCA_AGENT_HOOK_OPENCODE_TUI,',
     '  };',
     '}',
     '',

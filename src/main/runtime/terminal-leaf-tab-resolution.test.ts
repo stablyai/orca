@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { findTerminalTabIdForLeaf } from './workspace-session-terminal-membership-authority'
+import { findTerminalTabIdForLeaf } from '../persistence/terminal-topology/terminal-topology-membership'
 
 function layout(...leafIds: string[]): TerminalLayoutSnapshot {
   let root = { type: 'leaf' as const, leafId: leafIds[0] }

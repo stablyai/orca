@@ -1,0 +1,54 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "shadcn",
+      "specifier": "@shadcn/lint"
+    }
+  ],
+  "settings": {
+    "shadcn": {
+      "note": "See docs/STYLEGUIDE.md for the role each token and primitive plays."
+    }
+  },
+  "rules": {},
+  "overrides": [
+    {
+      "files": ["**/src/renderer/**/*.tsx"],
+      "rules": {
+        "shadcn/no-restyle": [
+          "error",
+          {
+            "allow": ["layout"]
+          }
+        ],
+        "shadcn/no-raw-colors": [
+          "error",
+          {
+            "allow": ["shadow-floating"]
+          }
+        ],
+        "shadcn/require-static-classes": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.tsx"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-raw-colors": "off",
+        "shadcn/require-static-classes": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "cloud/**", "mobile/**"]
+}

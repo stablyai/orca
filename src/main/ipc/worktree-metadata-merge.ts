@@ -50,6 +50,7 @@ export function mergeWorktree(
     isBare: git.isBare,
     ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
+    ...(git.removalError ? { removalError: git.removalError } : {}),
     // Automatic labels follow the live branch; persisted values are only authoritative when pinned.
     displayName:
       meta?.displayNameIsPinned === false
@@ -79,6 +80,8 @@ export function mergeWorktree(
     sortOrder: meta?.sortOrder ?? 0,
     ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
     lastActivityAt: meta?.lastActivityAt ?? 0,
+    ...(meta?.smartTier !== undefined ? { smartTier: meta.smartTier, smartAt: meta.smartAt } : {}),
+    ...(meta?.lastTerminalUseAt !== undefined ? { lastTerminalUseAt: meta.lastTerminalUseAt } : {}),
     ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     ...(meta?.automationProvenance !== undefined

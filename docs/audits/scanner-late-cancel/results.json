@@ -1,0 +1,27 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "heapLimitBytes": 234881024,
+  "sourcePath": "src/main/ai-vault/session-scanner-service-entry.ts",
+  "baselineTransform": "Remove only the three-line pending-membership guard in memory",
+  "harness": "Production entry in isolated VM contexts; imported collaborators stubbed",
+  "before": {
+    "source": "working tree without pending guard",
+    "sourceSha256": "846f9af9577dbaf14d05aa5a2eea9e16a44a28ef7993e6b04c43b65db1f1f44f",
+    "requests": 1000,
+    "responses": 1000,
+    "pending": 0,
+    "controllers": 0,
+    "cancelled": 1000
+  },
+  "after": {
+    "source": "working tree",
+    "sourceSha256": "e300d4922da94da09abb3c14bbb240ef9593d8a4834a37598c1c2f77b14dcbf5",
+    "requests": 1000,
+    "responses": 1000,
+    "pending": 0,
+    "controllers": 0,
+    "cancelled": 0
+  }
+}

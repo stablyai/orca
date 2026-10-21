@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeGitCommandHost, RuntimeGitTarget } from './runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
-  getBranchCompare: vi.fn(),
-  getSshGitProvider: vi.fn()
+  getBranchCompare: vi.fn()
 }))
 
 vi.mock('../git/status', () => ({
@@ -15,11 +14,8 @@ vi.mock('../git/status', () => ({
 }))
 vi.mock('../git/repo', () => ({ getRemoteCommitUrl: vi.fn(), getRemoteFileUrl: vi.fn() }))
 vi.mock('../git/runner', () => ({ awaitWindowsHostGitEnvironmentReady: vi.fn() }))
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: mocks.getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'provider unavailable'
-}))
 
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { RuntimeGitDiffCommands } from './runtime-git-diff-commands'
 
 function makeCommands(overrides: Partial<RuntimeGitTarget> = {}): RuntimeGitDiffCommands {
@@ -69,16 +65,12 @@ describe('RuntimeGitDiffCommands branch-compare admission', () => {
     })
   })
 
-  it('forwards background admission to the SSH execution host', async () => {
-    const getBranchCompare = vi.fn().mockResolvedValue({ summary: {}, entries: [] })
-    mocks.getSshGitProvider.mockReturnValue({ getBranchCompare })
+  it('refuses an SSH execution host without running git here', async () => {
     const commands = makeCommands({ executionHostId: 'ssh:conn-1' })
 
-    await commands.getRuntimeGitBranchCompare('id:wt-1', 'origin/main', 'background')
-
-    expect(getBranchCompare).toHaveBeenCalledWith('C:\\repo', 'origin/main', {
-      admissionTier: 'background'
-    })
+    await expect(
+      commands.getRuntimeGitBranchCompare('id:wt-1', 'origin/main', 'background')
+    ).rejects.toThrow(SshHostNotServedError)
     expect(mocks.getBranchCompare).not.toHaveBeenCalled()
   })
 })

@@ -135,25 +135,4 @@ describe('published-url observation wiring', () => {
 
     expect(recordedUrlParams).toEqual([metadata])
   })
-
-  it('publishes harmlessly before any executor exists', async () => {
-    const { publishBrowserClientPageMetadata } = await startHost()
-
-    await expect(
-      publishBrowserClientPageMetadata(ENVIRONMENT_ID, metadata).catch((error) => error)
-    ).resolves.toBeInstanceOf(Error)
-    expect(recordedUrlParams).toEqual([])
-  })
-
-  it('does not observe publishes aimed at another environment', async () => {
-    const { options, publishBrowserClientPageMetadata } = await startHost()
-    options.createExecutor(
-      { orcaProfileId: 'profile-a' },
-      { retainNetworkRoute: () => Promise.resolve({}), onPageUnavailable: () => {} }
-    )
-
-    await publishBrowserClientPageMetadata('environment-b', metadata).catch(() => undefined)
-
-    expect(recordedUrlParams).toEqual([])
-  })
 })

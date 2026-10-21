@@ -20,7 +20,7 @@ import {
   revokeAllDocPreviewGrants
 } from '../browser/doc-preview-grant-registry'
 import { isDocPreviewSession } from '../browser/doc-preview-protocol'
-import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
+import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 
 /**
@@ -54,9 +54,9 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })
-  // Why: containment must be listening before any plugin panel frame is created,
-  // so register it with the window's other navigation policy.
-  registerPluginPanelNavigationGuard(mainWindow.webContents)
+  // Why: containment must be listening before any plugin panel or chat visual frame is
+  // created, so register it with the window's other navigation policy.
+  registerHostFrameNavigationGuard(mainWindow.webContents)
 
   const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
   // Why a preview gets a preload at all: it is our own editor surface, not a browsing guest. This
@@ -111,7 +111,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     if (isDocPreviewSession(guest.session)) {
-      // Why: preview guests never join browser-tab routing, popups or anti-detection; the
+      // Why: preview guests never join browser-tab routing, popups or auth-identity tracking; the
       // workspace-doc profile is what refuses all three. The attach is also the point a live window
       // exists to receive read failures for that guest.
       setDocPreviewFailureSink(mainWindow.webContents)

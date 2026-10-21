@@ -66,6 +66,25 @@ describe('mobile diff review queue', () => {
     ])
   })
 
+  it('leaves out a status entry whose staging area it does not know', () => {
+    // An unknown `area` degrades to absent, and every queue scope is a staging area — there is no
+    // section to file the row under, so it does not enter the queue.
+    const queue = buildMobileDiffReviewQueue({
+      worktreeId: 'wt-1',
+      statusEntries: [
+        statusEntry({ path: 'placed.ts', area: 'unstaged' }),
+        statusEntry({ path: 'placeless.ts', area: undefined })
+      ],
+      branchEntries: [],
+      branchHeadOid: 'head',
+      branchMergeBase: 'base',
+      comments: [],
+      reviewState: emptyReviewState
+    })
+
+    expect(queue.map((item) => item.filePath)).toEqual(['placed.ts'])
+  })
+
   it('uses stable keys for renamed files', () => {
     expect(createMobileDiffReviewFileKey('branch', 'branch', 'new.ts', 'old.ts')).toBe(
       'branch\0branch\0old.ts\0new.ts'

@@ -1,11 +1,8 @@
 import { fetchManagedAccountUsage } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
-import {
-  INACTIVE_CODEX_PROBE_STAGGER_MS,
-  INACTIVE_FETCH_DEBOUNCE_MS,
-  delayUnlessAborted
-} from './service-types'
+import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
+import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
@@ -16,7 +13,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (this.inactiveClaudeFetching.size > 0) {
       return
     }
-    const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
+    const accounts = (this.inactiveClaudeAccountsResolver?.() ?? []).filter(
+      (account) => !this.isRetryAfterActive(this.inactiveClaudeCache.get(account.id) ?? null)
+    )
     if (accounts.length === 0) {
       return
     }
@@ -97,7 +96,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (accounts.length === 0) {
       return
     }
-    // Why: account switching can activate a previewed account while its RPC-only fetch is still in flight; ignore stale results.
+    // Why: account switching can activate a previewed account while its usage fetch is still in flight; ignore stale results.
     const fetchGeneration = this.inactiveCodexAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
@@ -143,10 +142,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         this.pushToRenderer()
         try {
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
-          // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
-            allowPtyFallback: false,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
           if (

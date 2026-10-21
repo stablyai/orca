@@ -18,14 +18,6 @@ const electronMocks = vi.hoisted(() => {
 })
 vi.mock('electron', () => electronMocks)
 
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable',
-  requireSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
-}))
-
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -37,6 +29,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const TARGET_ID = 'remote-1'
 const REPO_ID = 'repo-remote'
@@ -91,7 +84,7 @@ function makeStore(repoOverrides: Record<string, unknown>) {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
       return metaById[id]
     },
@@ -130,23 +123,15 @@ function makeRuntime(repoOverrides: Record<string, unknown>): {
 
 describe('worktree scan execution-host routing', () => {
   beforeEach(() => {
-    getSshGitProviderMock.mockReset()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([])
   })
 
-  it('scans an executionHostId-only SSH repo over its SSH provider, not on the client', async () => {
-    const listWorktrees = vi.fn(async () => [
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-      { path: WORKTREE_PATH, head: 'def', branch: 'feature', isBare: false, isMainWorktree: false }
-    ])
-    getSshGitProviderMock.mockReturnValue({ listWorktrees })
+  it('lists an executionHostId-only SSH repo from its stored rows, not on the client', async () => {
     const { list } = makeRuntime({ executionHostId: `ssh:${TARGET_ID}` })
 
     const worktrees = await list()
 
-    expect(getSshGitProviderMock).toHaveBeenCalledWith(TARGET_ID)
-    expect(listWorktrees).toHaveBeenCalledWith(REPO_PATH)
     // A client-side `git worktree list` against a remote path is the silent-substitution failure.
     expect(listWorktreesStrictMock).not.toHaveBeenCalled()
     expect(worktrees.map((worktree) => worktree.path).sort()).toEqual([REPO_PATH, WORKTREE_PATH])
@@ -154,18 +139,6 @@ describe('worktree scan execution-host routing', () => {
   })
 
   it('routes the PTY of an executionHostId-only SSH worktree to its host', async () => {
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: async () => [
-        { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-        {
-          path: WORKTREE_PATH,
-          head: 'def',
-          branch: 'feature',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]
-    })
     const { runtime } = makeRuntime({ executionHostId: `ssh:${TARGET_ID}` })
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
     runtime.setPtyController({
@@ -183,18 +156,6 @@ describe('worktree scan execution-host routing', () => {
   })
 
   it('still routes a legacy connectionId-only SSH repo the same way', async () => {
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: async () => [
-        { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-        {
-          path: WORKTREE_PATH,
-          head: 'def',
-          branch: 'feature',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]
-    })
     const { runtime } = makeRuntime({ connectionId: TARGET_ID })
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
     runtime.setPtyController({
@@ -206,7 +167,6 @@ describe('worktree scan execution-host routing', () => {
 
     await runtime.createTerminal(`id:${WORKTREE_ID}`)
 
-    expect(getSshGitProviderMock).toHaveBeenCalledWith(TARGET_ID)
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: TARGET_ID, cwd: WORKTREE_PATH })
     )

@@ -94,7 +94,7 @@ function pruneRecords(
       ? unexpired.sort(compareRecordsNewestFirst).slice(0, MAX_ARTIFACT_SHARE_RECORDS)
       : unexpired
   return {
-    shares: Object.fromEntries(retained),
+    shares: retained.length === currentEntries.length ? shares : Object.fromEntries(retained),
     changed: retained.length !== currentEntries.length
   }
 }

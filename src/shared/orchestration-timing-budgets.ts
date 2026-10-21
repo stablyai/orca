@@ -6,7 +6,6 @@ export const ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS = 5_000
 export const ORCHESTRATION_READINESS_TIMEOUT_MS = 60_000
 export const ORCHESTRATION_FEDERATION_ATTACH_GRACE_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 10_000
 export const ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 20_000
-export const SWALLOWED_ENTER_FIXTURE_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS + 30_000
 
 export function resolveWorkerStartReadinessTimeoutMs(timeoutMs: number | undefined): number {
   return typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0

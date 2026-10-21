@@ -6,6 +6,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 import { launchDashboardAgent } from './launch-dashboard-agent'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
 // glanceable surface, so ~4 updates/sec is plenty and keeps the cross-worktree
@@ -45,7 +46,7 @@ export function dashboardSnapshotInputsChanged(
 ): boolean {
   return (
     state.repos !== previousState.repos ||
-    state.worktreesByRepo !== previousState.worktreesByRepo ||
+    selectWorktreesByRepo(state) !== selectWorktreesByRepo(previousState) ||
     state.tabsByWorktree !== previousState.tabsByWorktree ||
     state.unifiedTabsByWorktree !== previousState.unifiedTabsByWorktree ||
     state.retainedAgentsByPaneKey !== previousState.retainedAgentsByPaneKey ||
@@ -145,8 +146,8 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
-    return window.api.dashboard.onAckAgent?.((paneKey) => {
-      useAppStore.getState().acknowledgeAgents([paneKey])
+    return window.api.dashboard.onAckAgent?.((paneKey, intent) => {
+      useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
     })
   }, [enabled])
 

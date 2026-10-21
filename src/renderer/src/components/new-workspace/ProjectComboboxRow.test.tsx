@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MatchedText } from './ProjectComboboxRow'
+import { MatchedText, ProjectOptionDetail } from './ProjectComboboxRow'
 import { rankProjectOptions } from './project-combobox-matching'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 
@@ -67,5 +67,19 @@ describe('MatchedText', () => {
 
     expect(container.querySelectorAll('mark')).toHaveLength(0)
     expect(container.textContent).toBe('🚀 orca')
+  })
+})
+
+describe('ProjectOptionDetail', () => {
+  it('keeps Windows path matches highlighted in the preserved tail', () => {
+    const detail = 'C:\\Users\\ada\\projects\\orca\\src\\renderer\\app.ts'
+    const start = detail.indexOf('src')
+
+    act(() => {
+      root.render(<ProjectOptionDetail detail={detail} hits={[start, start + 1, start + 2]} />)
+    })
+
+    expect(container.textContent).toBe(detail)
+    expect(markedText()).toBe('src')
   })
 })

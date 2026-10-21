@@ -75,6 +75,10 @@ export class SharedControlReconnectScheduler {
 
   // Why: OS resume / browser online should advance an already-scheduled reconnect, not start a new one.
   retryNow(): boolean {
+    // Why: a wake or network change is fresh evidence, so the next failure starts again from the short
+    // delays instead of the 5-minute idle cap earned during the outage — also when an open is already
+    // in flight and no timer is pending (#9092).
+    this.attempt = 0
     if (!this.timer || !this.pendingOpen) {
       return false
     }

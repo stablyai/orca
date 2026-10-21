@@ -36,6 +36,7 @@ import {
 export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
   const {
     comments,
+    commentsError,
     commentsLoading,
     reviewKind = 'PR',
     commentsDisabled,
@@ -314,6 +315,10 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
       {commentsLoading && comments.length === 0 ? (
         <div className="flex items-center justify-center py-6">
           <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : comments.length === 0 && commentsError ? (
+        <div role="alert" className="px-3 py-5 text-[11px] break-words text-destructive">
+          {commentsError}
         </div>
       ) : comments.length === 0 && isAddingComment && onAddComment ? (
         renderAddCommentComposer(true)

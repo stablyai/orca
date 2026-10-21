@@ -148,6 +148,21 @@ describe('formatQuestionAnswer', () => {
       formatQuestionFreeTextAnswer({ ...numbered, freeTextToken: 'target' }, '  hi there  ')
     ).toBe(`target:${encodeURIComponent('hi there')}`)
   })
+
+  it('encodes empty and whitespace answers only when allowed', () => {
+    const withInput: MobileChatQuestion = {
+      ...numbered,
+      freeTextToken: 'target',
+      freeTextInput: { allowEmpty: true }
+    }
+    expect(formatQuestionFreeTextAnswer(withInput, '')).toBe('target:')
+    expect(formatQuestionFreeTextAnswer(withInput, '  \n ')).toBe(
+      `target:${encodeURIComponent('  \n ')}`
+    )
+    expect(formatQuestionFreeTextAnswer({ ...withInput, freeTextInput: undefined }, '  \n ')).toBe(
+      ''
+    )
+  })
 })
 
 describe('mobileChatQuestionKey', () => {

@@ -1,17 +1,8 @@
 import React from 'react'
-import {
-  CheckCircle2,
-  Info,
-  RefreshCw,
-  RotateCcw,
-  Settings,
-  Sparkles,
-  TriangleAlert
-} from 'lucide-react'
+import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -27,14 +18,15 @@ import type { SourceControlAiWriteTarget } from '../../../../shared/source-contr
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
 
+/** What the dialog shows before it starts an agent: only an error the user can fix. */
 export type SourceControlAgentActionDeliveryPlanState =
   | { status: 'idle' }
-  | { status: 'success'; summary: string; commandLabel: string; caveat: string }
   | { status: 'error'; error: string }
 
 type SourceControlAgentActionDialogFormProps = {
@@ -47,6 +39,8 @@ type SourceControlAgentActionDialogFormProps = {
   detecting: boolean
   statusCopy: string | null
   agentArgs: string
+  /** False when the launch would be structured native chat; the field is then absent, not disabled. */
+  agentArgsApply: boolean
   commandTemplate: string
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
@@ -92,6 +86,7 @@ export function SourceControlAgentActionDialogForm({
   detecting,
   statusCopy,
   agentArgs,
+  agentArgsApply,
   commandTemplate,
   savedCommandInputTemplate,
   saveLaunchRecipe,
@@ -196,25 +191,11 @@ export function SourceControlAgentActionDialogForm({
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="source-control-agent-cli-args" className="text-xs">
-            {translate(
-              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.bc8dc39f4b',
-              'CLI arguments'
-            )}
-          </Label>
-          <Input
-            id="source-control-agent-cli-args"
-            value={agentArgs}
-            spellCheck={false}
-            placeholder={translate(
-              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.fe119187bb',
-              '--model sonnet'
-            )}
-            onChange={(event) => onAgentArgsChange(event.target.value)}
-            className="h-8 font-mono text-xs"
-          />
-        </div>
+        <SourceControlAgentCliArgsField
+          applies={agentArgsApply}
+          value={agentArgs}
+          onChange={onAgentArgsChange}
+        />
 
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-3">
@@ -356,36 +337,12 @@ export function SourceControlAgentActionDialogForm({
           </div>
         ) : null}
 
-        {deliveryPlan.status !== 'idle' ? (
-          <div
-            className={cn(
-              'rounded-md border px-3 py-2 text-xs',
-              deliveryPlan.status === 'error'
-                ? 'border-destructive/30 bg-destructive/5 text-destructive'
-                : 'border-border bg-muted/30 text-muted-foreground'
-            )}
-          >
-            {deliveryPlan.status === 'error' ? (
-              <span className="inline-flex items-start gap-2">
-                <TriangleAlert className="mt-px size-3.5 shrink-0" />
-                {deliveryPlan.error}
-              </span>
-            ) : (
-              <div className="space-y-1.5">
-                <div className="flex items-start gap-2 text-foreground">
-                  <CheckCircle2 className="mt-px size-3.5 shrink-0 text-status-success" />
-                  <span>{deliveryPlan.summary}</span>
-                </div>
-                <div className="truncate font-mono text-[11px]">
-                  {translate(
-                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
-                    'Launch:'
-                  )}{' '}
-                  {deliveryPlan.commandLabel}
-                </div>
-                <div className="text-[11px]">{deliveryPlan.caveat}</div>
-              </div>
-            )}
+        {deliveryPlan.status === 'error' ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <span className="inline-flex items-start gap-2">
+              <TriangleAlert className="mt-px size-3.5 shrink-0" />
+              {deliveryPlan.error}
+            </span>
           </div>
         ) : null}
       </div>

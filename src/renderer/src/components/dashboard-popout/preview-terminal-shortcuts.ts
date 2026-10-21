@@ -22,15 +22,15 @@ export type PreviewShortcutContext = {
   terminalInput: DashboardCardTerminalInput | null
   /** Live kitty-protocol flags mirrored from this pty's output. */
   getKittyKeyboardFlags: () => number
-  /** The user's setting; terminal-first yields the tab.close alias to the shell. */
+  /** The user's policy for chords shared with shells and TUIs. */
   terminalShortcutPolicy: TerminalShortcutPolicy | null | undefined
 }
 
 /**
  * Runs the preview terminal's keys through the same policy a pane uses, so the
  * dashboard encodes word-kills, Option chords, and modified Enter identically.
- * Every pane-scoped verdict (splits, search, focus) still comes back — the
- * caller swallows those rather than leaking raw bytes to the agent.
+ * Active pane commands come back for the caller to handle; deferred TUI
+ * chords continue through xterm.
  */
 export function resolvePreviewShortcutAction(
   event: KeyboardEvent,

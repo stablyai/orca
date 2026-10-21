@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import type { JiraProject } from '../../../shared/jira-types'
 import { jiraListProjects } from '@/runtime/runtime-jira-client'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationModel) {
   const {
     settings,
@@ -75,7 +76,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     let cancelled = false
     setAvailableJiraProjects([])
     setJiraProjectsLoading(true)
-    void jiraListProjects(jiraTaskSourceContext ?? settings, selectedJiraSiteId)
+    void jiraListProjects(jiraTaskSourceContext ?? defaultScopeSource(settings), selectedJiraSiteId)
       .then((projects) => {
         if (!cancelled) {
           setAvailableJiraProjects(projects)

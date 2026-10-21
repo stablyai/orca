@@ -14,21 +14,17 @@ export function legacyMigrationUnsupportedRowsToAliasEntries(
   const normalizedEntries = normalizeMigrationUnsupportedPtyEntries(entries).filter(
     (entry) => entry.tabId && entry.paneKey && parsePaneKey(entry.paneKey)
   )
-  const entriesByTabId = new Map<string, MigrationUnsupportedPtyEntry[]>()
+  const entriesByTabId = new Map<string, MigrationUnsupportedPtyEntry | null>()
   for (const entry of normalizedEntries) {
     const tabId = entry.tabId
     if (!tabId) {
       continue
     }
-    entriesByTabId.set(tabId, [...(entriesByTabId.get(tabId) ?? []), entry])
+    entriesByTabId.set(tabId, entriesByTabId.has(tabId) ? null : entry)
   }
   const aliasEntries: LegacyPaneKeyAliasEntry[] = []
-  for (const [tabId, tabEntries] of entriesByTabId) {
-    if (tabEntries.length !== 1) {
-      continue
-    }
-    const [entry] = tabEntries
-    if (!entry.paneKey) {
+  for (const [tabId, entry] of entriesByTabId) {
+    if (!entry?.paneKey) {
       continue
     }
     // Why: pre-stable rows lack the old numeric key; only synthesize single-pane aliases when the row is unambiguous.
@@ -44,32 +40,8 @@ export function legacyMigrationUnsupportedRowsToAliasEntries(
   return aliasEntries
 }
 
-// Why: bounds a corrupt/bloated persisted list — the gate only needs the few Claude sessions a daemon can keep alive.
-export const MAX_CLAUDE_LIVE_PTY_SESSION_IDS = 200
-
 // Why: bound removed-SSH-target history so remove/re-add churn can't grow the file unbounded.
 export const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
-
-export function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  // Why: scan newest-first so the cap keeps the most recent ids, matching addClaudeLivePtySessionId's eviction policy.
-  const ids: string[] = []
-  for (let index = value.length - 1; index >= 0; index -= 1) {
-    const entry = value[index]
-    if (typeof entry !== 'string' || entry.length === 0 || entry.length > 512) {
-      continue
-    }
-    if (!ids.includes(entry)) {
-      ids.push(entry)
-    }
-    if (ids.length >= MAX_CLAUDE_LIVE_PTY_SESSION_IDS) {
-      break
-    }
-  }
-  return ids.toReversed()
-}
 
 export function normalizeMigrationUnsupportedPtyEntries(
   value: unknown
