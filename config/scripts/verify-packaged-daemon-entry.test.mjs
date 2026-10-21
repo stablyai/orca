@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const {
+  daemonProtocolVersion
+} = require('../../src/shared/local-build-compatibility-contract.json')
+const {
   assertPackagedDaemonEntryExists,
+  assertPackagedDaemonProtocolAndDeps,
   runTerminalHostRoundTrip,
   verifyPackagedDaemonEntryBoots,
   verifyPackagedMacTerminalHostBoots
@@ -55,6 +59,64 @@ describe('verify-packaged-daemon-entry', () => {
   it('fails when the packaged entry never reaches argv parsing', () => {
     writePackagedEntry('process.exit(0)\n')
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(/did not reach argv parsing/)
+  })
+
+  function writeProcessHost(exportsMap, presentFiles) {
+    const packageDir = join(resourcesDir, 'node_modules', '@orca', 'process-host')
+    mkdirSync(join(packageDir, 'dist'), { recursive: true })
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ exports: exportsMap }))
+    for (const name of presentFiles) {
+      writeFileSync(join(packageDir, 'dist', name), '')
+    }
+  }
+
+  it('throws when a declared @orca/process-host export is missing', () => {
+    writePackagedEntry('console.error("Usage: daemon-entry"); process.exit(1)\n')
+    writeProcessHost({ './windows-tree-kill': { default: './dist/windows-tree-kill.js' } }, [])
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] missing @orca\/process-host export/
+    )
+    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] missing @orca\/process-host export/
+    )
+  })
+
+  it('throws when unpacked daemon-entry embeds a stale protocolVersion', () => {
+    const stale = daemonProtocolVersion - 2
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst startup = { protocolVersion: ${stale} }\n`
+    )
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+  })
+
+  it('throws when a chunk socket helper defaults to a stale protocol generation', () => {
+    const stale = daemonProtocolVersion - 2
+    writePackagedEntry('console.error("Usage: daemon-entry"); process.exit(1)\n')
+    const chunksDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'chunks')
+    mkdirSync(chunksDir, { recursive: true })
+    writeFileSync(
+      join(chunksDir, 'socket.js'),
+      `function getDaemonSocketPath(e,t=${stale}){return "orca-terminal-host-v\${t}-x"}\n`
+    )
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+  })
+
+  it('passes when protocolVersion matches and every process-host export exists', () => {
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry protocolVersion: ${daemonProtocolVersion}"); process.exit(1)\n`
+    )
+    writeProcessHost({ './windows-tree-kill': { default: './dist/windows-tree-kill.js' } }, [
+      'windows-tree-kill.js'
+    ])
+    const chunksDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'chunks')
+    mkdirSync(chunksDir, { recursive: true })
+    writeFileSync(join(chunksDir, 'mcp-initialize.js'), 'call("initialize",{protocolVersion:1})\n')
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).not.toThrow()
+    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).not.toThrow()
   })
 })
 

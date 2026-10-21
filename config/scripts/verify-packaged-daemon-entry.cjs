@@ -1,4 +1,4 @@
-const { existsSync, mkdtempSync, readFileSync, rmSync, statSync } = require('node:fs')
+const { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } = require('node:fs')
 const { spawn, spawnSync } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const { connect } = require('node:net')
@@ -28,6 +28,101 @@ function assertPackagedDaemonEntryExists(resourcesDir) {
   return entryPath
 }
 
+function exportDefaultPath(entry) {
+  if (typeof entry === 'string') {
+    return entry
+  }
+  if (entry && typeof entry === 'object' && typeof entry.default === 'string') {
+    return entry.default
+  }
+  return null
+}
+
+function assertPackagedProcessHostExports(resourcesDir) {
+  const packageDir = join(resourcesDir, 'node_modules', '@orca', 'process-host')
+  const packageJsonPath = join(packageDir, 'package.json')
+  if (!existsSync(packageJsonPath)) {
+    return
+  }
+  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+  if (!pkg.exports || typeof pkg.exports !== 'object') {
+    return
+  }
+  for (const entry of Object.values(pkg.exports)) {
+    const target = exportDefaultPath(entry)
+    if (!target || !target.endsWith('.js')) {
+      continue
+    }
+    const filePath = join(packageDir, target)
+    if (!existsSync(filePath)) {
+      throw new Error(
+        `[verify-packaged-daemon-entry] missing @orca/process-host export ${target} at ${filePath}`
+      )
+    }
+  }
+}
+
+function protocolVersionsInSource(source) {
+  const versions = []
+  for (const match of source.matchAll(/orca-terminal-host-v(\d+)/g)) {
+    versions.push(Number(match[1]))
+  }
+  for (const match of source.matchAll(/protocolVersion\s*:\s*(\d+)/g)) {
+    versions.push(Number(match[1]))
+  }
+  for (const match of source.matchAll(/\bPROTOCOL_VERSION\s*=\s*(\d+)/g)) {
+    versions.push(Number(match[1]))
+  }
+  for (const match of source.matchAll(/orca-terminal-host-v\$\{([A-Za-z_$][\w$]*)\}/g)) {
+    const name = match[1]
+    const window = source.slice(Math.max(0, match.index - 220), match.index)
+    const defaults = [...window.matchAll(new RegExp(`\\b${name}\\s*=\\s*(\\d+)`, 'g'))]
+    const found = defaults.at(-1)
+    if (found) {
+      versions.push(Number(found[1]))
+    }
+  }
+  return versions
+}
+
+function unpackedDaemonJsFiles(resourcesDir) {
+  const mainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+  const files = [join(mainDir, 'daemon-entry.js')]
+  const chunksDir = join(mainDir, 'chunks')
+  if (!existsSync(chunksDir)) {
+    return files
+  }
+  for (const name of readdirSync(chunksDir)) {
+    if (name.endsWith('.js')) {
+      files.push(join(chunksDir, name))
+    }
+  }
+  return files
+}
+
+// Why: highest literal is the current generation; unrelated chunks also embed protocolVersion:1.
+function assertPackagedDaemonProtocolAndDeps(resourcesDir) {
+  assertPackagedProcessHostExports(resourcesDir)
+  const versions = []
+  for (const filePath of unpackedDaemonJsFiles(resourcesDir)) {
+    if (!existsSync(filePath)) {
+      continue
+    }
+    versions.push(...protocolVersionsInSource(readFileSync(filePath, 'utf8')))
+  }
+  if (versions.length === 0) {
+    return
+  }
+  const highest = Math.max(...versions)
+  if (highest !== daemonProtocolVersion || !versions.includes(daemonProtocolVersion)) {
+    const found = [...new Set(versions)].sort((left, right) => left - right).join(', ')
+    throw new Error(
+      `[verify-packaged-daemon-entry] unpacked daemon protocol version mismatch: ` +
+        `found ${found}; expected ${daemonProtocolVersion}`
+    )
+  }
+}
+
 // Why: v1.4.129-rc.1 shipped a terminal daemon that could not load (an electron
 // `require` leaked into its bundle) while every build check passed. This boots
 // the PACKAGED daemon-entry under plain Node against the asar-unpacked layout,
@@ -41,6 +136,7 @@ function assertPackagedDaemonEntryExists(resourcesDir) {
 function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   const execPath = options.execPath || process.execPath
   const entryPath = assertPackagedDaemonEntryExists(resourcesDir)
+  assertPackagedDaemonProtocolAndDeps(resourcesDir)
 
   const result = spawnSync(execPath, [entryPath], { encoding: 'utf8', timeout: 10_000 })
   if (result.error) {
@@ -307,6 +403,7 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
 
 module.exports = {
   assertPackagedDaemonEntryExists,
+  assertPackagedDaemonProtocolAndDeps,
   macCommandPrefixForArch,
   runTerminalHostRoundTrip,
   verifyPackagedDaemonEntryBoots,
