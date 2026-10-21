@@ -1,4 +1,4 @@
-import { buildTerminalShortcutKey } from './terminal-accessory-keys'
+import { buildTerminalShortcutKey, type TerminalShortcutModifier } from './terminal-accessory-keys'
 
 const TERMINAL_LIVE_INPUT_MAX_BYTES = 256 * 1024
 
@@ -86,12 +86,18 @@ export type TerminalLiveInputDefaultResult = {
 
 export type TerminalLiveInputPruneResult = TerminalLiveInputDefaultResult
 
-export function getTerminalLiveSpecialKeyBytes(key: string): string | null {
-  const shortcutKey = TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key)
+/** A single character counts only under Ctrl or Alt; plain typing reaches the PTY through the field. */
+export function getTerminalLiveSpecialKeyBytes(
+  key: string,
+  modifiers: readonly TerminalShortcutModifier[] = []
+): string | null {
+  const isChord = modifiers.includes('ctrl') || modifiers.includes('alt')
+  const shortcutKey =
+    TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key) ?? (isChord && key.length === 1 ? key : undefined)
   if (!shortcutKey) {
     return null
   }
-  return buildTerminalShortcutKey({ key: shortcutKey, modifiers: [] })?.bytes ?? null
+  return buildTerminalShortcutKey({ key: shortcutKey, modifiers: [...modifiers] })?.bytes ?? null
 }
 
 export function isTerminalLiveInputWithinByteLimit(
