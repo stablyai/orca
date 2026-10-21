@@ -448,6 +448,10 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
 })
 
 describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs with the switch off', () => {
+  // Why: the first editor opens beside the lone terminal pane, so look it up in any group.
+  const tabFor = (fileId: string): Tab | undefined =>
+    tabsOf().find((tab) => tab.entityId === fileId)
+
   it('draws at once and sends nothing', () => {
     const b = openFile('/b.ts', { preview: true })
     expect(tabFor(b)).toBeDefined()

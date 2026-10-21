@@ -184,8 +184,8 @@ describe('file links open beside their source', () => {
     await main.settle()
     main.close()
 
-    // Why: the plain open documents the unchanged baseline for callers without link intent.
-    expect(groupOfFile(store, '/repo/plain.ts')).toEqual([a])
+    // Why: a plain open from a content panel of two opens opposite it (lone-pane-split-source.ts).
+    expect(groupOfFile(store, '/repo/plain.ts')).toEqual([b])
     expect(groupOfFile(store, '/repo/link.ts')).toEqual([b])
     expect(opened).toMatchObject({ fileId: '/repo/link.ts', groupId: b })
   })
@@ -392,7 +392,7 @@ describe('file links open beside their source', () => {
     })
   })
 
-  it('keeps the source in place when it is the only group', () => {
+  it('opens beside the source when it is the only group', () => {
     const store = createEditorTabsStore()
     addTab(store, 'terminal', 'source')
     const a = store.getState().groupsByWorktree['wt-1']![0]!.id
@@ -401,7 +401,8 @@ describe('file links open beside their source', () => {
       .getState()
       .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
 
-    expect(opened?.groupId).toBe(a)
-    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(1)
+    // Why: a second tab into a lone pane opens a pane beside it instead of covering the source.
+    expect(opened?.groupId).not.toBe(a)
+    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
   })
 })
