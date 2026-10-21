@@ -15,12 +15,10 @@ export function useBrowserPageZoomFeedback(browserTabId: string): {
   browserZoomFeedbackVisible: boolean
   showBrowserZoomFeedback: (level: number) => void
   browserDefaultZoomPercent: number
-  setBrowserDefaultZoomLevel: (level: number) => void
 } {
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   )
-  const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
   const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
   const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
   // Why: the level THIS pane should hold. Seeded from the configured default ("applied to newly
@@ -54,7 +52,6 @@ export function useBrowserPageZoomFeedback(browserTabId: string): {
     setBrowserZoomPercent,
     browserZoomFeedbackVisible,
     showBrowserZoomFeedback,
-    browserDefaultZoomPercent,
-    setBrowserDefaultZoomLevel
+    browserDefaultZoomPercent
   }
 }

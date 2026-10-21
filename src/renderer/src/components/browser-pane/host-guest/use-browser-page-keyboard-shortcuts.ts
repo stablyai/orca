@@ -4,7 +4,13 @@ import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
-import { isEditableKeyboardTarget } from './browser-keyboard'
+import {
+  copyLiveTerminalSelection,
+  hasHostTextSelection,
+  hasLiveTerminalSelection,
+  isEditableKeyboardTarget,
+  shouldYieldGrabCopyChordToHostCopy
+} from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
@@ -17,7 +23,6 @@ export function useBrowserPageKeyboardShortcuts({
   markupIsActive,
   webviewRef,
   paneZoomLevelRef,
-  setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
   reloadWebviewOrRecoverGuest,
   startGrabIntent,
@@ -32,7 +37,6 @@ export function useBrowserPageKeyboardShortcuts({
   markupIsActive: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   paneZoomLevelRef: MutableRefObject<number>
-  setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
   startGrabIntent: (intent: GrabIntent) => void
@@ -49,7 +53,6 @@ export function useBrowserPageKeyboardShortcuts({
     isActiveRef,
     webviewRef,
     paneZoomLevelRef,
-    setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest
   })
@@ -81,10 +84,18 @@ export function useBrowserPageKeyboardShortcuts({
         e.repeat ||
         // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
         markupIsActive ||
-        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId) ||
-        // Why: a live selection means copy; selecting in the floating panel or a sidebar keeps scope.
-        (intent === 'copy' && window.getSelection()?.isCollapsed === false)
+        !browserChromeShortcutOwnsEvent(chromeShortcutScope, e, workspaceId)
       ) {
+        return
+      }
+      // Why: platform copy must stay copy when the host has a DOM selection or an xterm
+      // highlight (canvas/WebGL — not window.getSelection). Terminal keyboard is off while
+      // the browser split is focused, so copy the terminal selection here when present.
+      if (intent === 'copy' && shouldYieldGrabCopyChordToHostCopy(e, shortcutPlatform)) {
+        if (hasLiveTerminalSelection() && !hasHostTextSelection()) {
+          e.preventDefault()
+          copyLiveTerminalSelection()
+        }
         return
       }
       e.preventDefault()
@@ -98,9 +109,18 @@ export function useBrowserPageKeyboardShortcuts({
   useEffect(() => {
     return window.api.browser.onGrabModeToggle((tabId, intent) => {
       // Why: a guest can hold keyboard focus under the markup overlay, whose toolbar disables both tools.
-      if (tabId === browserTabId && !markupIsActive) {
-        startGrabIntent(intent)
+      if (tabId !== browserTabId || markupIsActive) {
+        return
       }
+      // Why: guest already swallowed the key; if the host still has a terminal highlight,
+      // copy that instead of arming grab so split terminal copy is not lost to the guest path.
+      if (intent === 'copy' && (hasHostTextSelection() || hasLiveTerminalSelection())) {
+        if (hasLiveTerminalSelection() && !hasHostTextSelection()) {
+          copyLiveTerminalSelection()
+        }
+        return
+      }
+      startGrabIntent(intent)
     })
   }, [browserTabId, markupIsActive, startGrabIntent])
 

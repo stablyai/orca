@@ -27,7 +27,6 @@ export function useBrowserPageWebviewShortcuts({
   isActiveRef,
   webviewRef,
   paneZoomLevelRef,
-  setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
   reloadWebviewOrRecoverGuest
 }: {
@@ -38,7 +37,6 @@ export function useBrowserPageWebviewShortcuts({
   isActiveRef: MutableRefObject<boolean>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   paneZoomLevelRef: MutableRefObject<number>
-  setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
 }): void {
@@ -165,7 +163,6 @@ export function useBrowserPageWebviewShortcuts({
       if (nextLevel !== null) {
         paneZoomLevelRef.current = nextLevel
         rememberExplicitBrowserPageZoomLevel(browserTabId, nextLevel)
-        setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }
     }
@@ -180,13 +177,5 @@ export function useBrowserPageWebviewShortcuts({
       removeGuestListener()
       removeLocalListener()
     }
-  }, [
-    browserTabId,
-    isActive,
-    isActiveRef,
-    paneZoomLevelRef,
-    setBrowserDefaultZoomLevel,
-    showBrowserZoomFeedback,
-    webviewRef
-  ])
+  }, [browserTabId, isActive, isActiveRef, paneZoomLevelRef, showBrowserZoomFeedback, webviewRef])
 }
