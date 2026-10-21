@@ -508,7 +508,8 @@ describe('registerClipboardHandlers', () => {
           expect.stringMatching(
             /orca-paste-1760000000000-00000000-0000-4000-8000-000000000000\.png$/
           ),
-          png
+          png,
+          { mode: 0o600 }
         )
       } finally {
         platformSpy.mockRestore()

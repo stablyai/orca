@@ -73,6 +73,34 @@ describe('NativeChatImageAttachmentPreview', () => {
     expect(screen.getByRole('button', { name: 'Image #3: View image: shot.png' })).toBeTruthy()
   })
 
+  it.each([
+    { id: 'a1', path: '/tmp/shot.png' },
+    { id: 'a1', path: '', unavailableName: 'shot.png' }
+  ])(
+    'locks removal during handoff while keeping image numbering: $path $unavailableName',
+    (attachment) => {
+      const onRemove = vi.fn()
+      const { rerender } = render(
+        <NativeChatImageAttachmentPreview
+          attachment={attachment}
+          number={3}
+          removeDisabled
+          onRemove={onRemove}
+        />
+      )
+
+      screen.getByRole('button', { name: 'Remove attachment' }).click()
+      expect(onRemove).not.toHaveBeenCalled()
+      expect(screen.getByText('#3')).toBeTruthy()
+
+      rerender(
+        <NativeChatImageAttachmentPreview attachment={attachment} number={3} onRemove={onRemove} />
+      )
+      screen.getByRole('button', { name: 'Remove attachment' }).click()
+      expect(onRemove).toHaveBeenCalledExactlyOnceWith('a1')
+    }
+  )
+
   it('shows the clipboard thumbnail and a spinner while pending', () => {
     mocks.useLocalImageSrc.mockReturnValue(undefined)
     renderPreview({ id: 'a1', path: '', previewUrl: 'blob:clipboard-1', pending: true })
@@ -244,4 +272,28 @@ describe('NativeChatImageAttachmentPreview', () => {
     expect(screen.getByText('diagram.png')).toBeTruthy()
     expect(screen.getByText('Attach again')).toBeTruthy()
   })
+})
+
+it('uses the captured full-size image without reading an identically named local file', () => {
+  vi.stubGlobal('IntersectionObserver', undefined)
+  render(
+    <NativeChatImageAttachmentPreview
+      attachment={{ id: 'runtime', path: '/tmp/remote.png' }}
+      fullSizePreviewUrl="data:image/png;base64,captured"
+      onRemove={vi.fn()}
+    />
+  )
+  expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(
+    undefined,
+    '/tmp/remote.png',
+    undefined,
+    undefined,
+    { kind: 'chat-image' }
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View image: remote.png' }))
+  expect(
+    screen
+      .getAllByRole('img')
+      .every((image) => image.getAttribute('src') === 'data:image/png;base64,captured')
+  ).toBe(true)
 })

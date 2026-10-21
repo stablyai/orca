@@ -210,7 +210,6 @@
 2 src/renderer/src/components/terminal-pane/terminal-pane-menu-paste.ts
 3 src/renderer/src/components/terminal-pane/terminal-pane-mount-preparation.ts
 1 src/renderer/src/components/terminal-pane/terminal-pane-paste-execution.ts
-1 src/renderer/src/components/terminal-pane/terminal-pane-paste-listeners.ts
 1 src/renderer/src/components/terminal-pane/terminal-paste-runtime.ts # the paste owner's legacy-fallback read for raw PTY ids (round 3 F5); F8 nets it down
 2 src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
 2 src/renderer/src/components/terminal-pane/use-terminal-pane-controller.ts

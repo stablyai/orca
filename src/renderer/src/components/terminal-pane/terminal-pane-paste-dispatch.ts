@@ -19,6 +19,7 @@ type PasteTextIntoTerminalPaneArgs = {
   inputKind: 'driving' | 'launch'
   isTargetCurrent: () => boolean
   canContinue: () => boolean
+  beforeDelivery?: () => Promise<void>
   planOptions?: Pick<
     TerminalPasteTextOptions,
     'forceBracketedPaste' | 'forceBracketedPasteForMultiline' | 'windowsInputRecordNewline'
@@ -35,6 +36,7 @@ export async function pasteTextIntoTerminalPane({
   inputKind,
   isTargetCurrent,
   canContinue,
+  beforeDelivery,
   planOptions
 }: PasteTextIntoTerminalPaneArgs): Promise<TerminalPasteExecutionResult> {
   const plan = await planTerminalPasteWithYield({
@@ -51,6 +53,7 @@ export async function pasteTextIntoTerminalPane({
       pasteTerminalText(pane.terminal, pasteText, pasteOptions),
     writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, inputKind, signal),
     isTargetCurrent,
-    canContinue
+    canContinue,
+    beforeDelivery
   })
 }

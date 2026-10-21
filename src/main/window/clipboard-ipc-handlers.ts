@@ -44,6 +44,7 @@ import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-fi
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
+import { registerClipboardImagePreviewHandlers } from './clipboard-image-preview-ipc'
 import { readClipboardNativeImage } from './clipboard-native-image'
 import { publishClipboardText } from './clipboard-text-publisher'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
@@ -87,7 +88,8 @@ async function saveClipboardImageBufferForTarget(
       app.getPath('userData'),
       runtimeEnvironmentId,
       buffer,
-      args?.connectionId ?? null
+      args?.connectionId ?? null,
+      args?.discardable ?? false
     )
   }
   // A local structured chat's paste goes in this machine's chat store: a send claims it for its
@@ -116,6 +118,8 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
+  ipcMain.removeHandler('clipboard:saveImagePreview')
+  ipcMain.removeHandler('clipboard:imageLease')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
   ipcMain.removeHandler('clipboard:hasImage')
@@ -188,6 +192,10 @@ export function registerClipboardHandlers(
       return saveClipboardImageBufferForTarget(image.toPNG(), args, handlerOptions)
     }
   )
+  registerClipboardImagePreviewHandlers({
+    assertTrustedSender: assertTrustedClipboardSender,
+    saveBuffer: saveClipboardImageBufferForTarget
+  })
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
   // drops the file itself, not its path as text.
   ipcMain.handle(
