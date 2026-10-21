@@ -1,5 +1,13 @@
 import '../unused-default-rpc-methods.test-fixture'
-import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  truncateSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,8 +23,10 @@ import type { RpcRequest, RpcResponse } from '../core'
 import { ORCAD_MOBILE_WEB_DIR, ORCAD_MOBILE_WEB_MANIFEST } from '../../../../shared/orcad-artifacts'
 import type { RpcDispatcher } from '../dispatcher'
 
+import { installFakeAppEnvironment } from '../../../../../config/scripts/vitest-host-ports-setup'
 import {
   getBundledMobileWebBundleRoot,
+  loadBundledMobileWebBundle,
   resetBundledMobileWebBundleCacheForTests
 } from '../../bundled-mobile-web-bundle'
 import {
@@ -40,6 +50,7 @@ import {
 
 let scratch: string
 let dispatcher: RpcDispatcher
+const previousBundleDir = process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
 
 function request(method: string, params?: unknown): RpcRequest {
   return { id: `req-${method}`, authToken: 'tok', method, params }
@@ -85,6 +96,7 @@ async function download(buildId: string, path: string): Promise<{ bytes: Buffer;
 }
 
 beforeEach(() => {
+  delete process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-'))
   installMobileWebBundleAppPath(scratch)
   resetBundledMobileWebBundleCacheForTests()
@@ -95,6 +107,11 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  if (previousBundleDir === undefined) {
+    delete process.env.ORCA_MOBILE_WEB_BUNDLE_DIR
+  } else {
+    process.env.ORCA_MOBILE_WEB_BUNDLE_DIR = previousBundleDir
+  }
   rmSync(scratch, { recursive: true, force: true })
   vi.restoreAllMocks()
 })
@@ -118,11 +135,13 @@ describe('an install that carries a mobile web bundle', () => {
     expect(body.manifest.assets).toEqual(bundle.assets)
   })
 
-  // Read once per process: without the cache every chunk request re-parses the manifest, and the
-  // schema's refinement recomputes the buildId with a pure-JS sha256 on the event loop.
+  // Same mtime returns the cached object. Re-parsing would allocate a new bundle and recompute
+  // buildId on the event loop; a dev rebuild changes mtime and is covered separately.
   it('answers from the manifest it already read, without going back to disk', async () => {
     const first = await call('mobileWeb.bundle.manifest')
-    writeFileSync(join(bundle.root, 'manifest.json'), 'not json', 'utf8')
+    const cached = loadBundledMobileWebBundle()
+
+    expect(loadBundledMobileWebBundle()).toBe(cached)
 
     const second = await call('mobileWeb.bundle.manifest')
 
@@ -130,6 +149,18 @@ describe('an install that carries a mobile web bundle', () => {
     expect(MobileWebBundleManifestResultSchema.parse(second.ok && second.result).manifest).toEqual(
       MobileWebBundleManifestResultSchema.parse(first.ok && first.result).manifest
     )
+  })
+
+  it('reloads when manifest.json gets a new buildId and a new mtime', () => {
+    expect(loadBundledMobileWebBundle()?.manifest.buildId).toBe(bundle.buildId)
+
+    const replacement = writeSyntheticMobileWebBundle(bundle.root, 9)
+    const manifestPath = join(bundle.root, 'manifest.json')
+    const bumped = new Date(Date.now() + 10_000)
+    utimesSync(manifestPath, bumped, bumped)
+
+    expect(loadBundledMobileWebBundle()?.manifest.buildId).toBe(replacement.buildId)
+    expect(replacement.buildId).not.toBe(bundle.buildId)
   })
 
   it('pages every asset back byte for byte, and each reassembly matches its manifest hash', async () => {
@@ -358,6 +389,49 @@ describe('where the resolver probes', () => {
 
   it('answers undefined when neither layout holds a manifest', () => {
     expect(getBundledMobileWebBundleRoot()).toBeUndefined()
+  })
+
+  it('prefers ORCA_MOBILE_WEB_BUNDLE_DIR over the install layout', () => {
+    writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
+    const override = writeSyntheticMobileWebBundle(join(scratch, 'override'), 6)
+    process.env.ORCA_MOBILE_WEB_BUNDLE_DIR = override.root
+
+    expect(getBundledMobileWebBundleRoot()).toBe(override.root)
+  })
+
+  it('reads the repo bundle four levels above an unpackaged app before the install copy', () => {
+    const repoBundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    const appPath = join(scratch, 'level4', 'level3', 'level2', 'level1')
+    writeSyntheticMobileWebBundle(join(appPath, 'out', 'mobile-web'), 4)
+    installMobileWebBundleAppPath(appPath)
+
+    expect(getBundledMobileWebBundleRoot()).toBe(repoBundle.root)
+  })
+
+  it('reads the repo bundle four levels above win-unpacked even when packaged', () => {
+    const repoBundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    const appPath = join(scratch, 'dist', 'win-unpacked', 'resources', 'app')
+    writeSyntheticMobileWebBundle(join(appPath, 'out', 'mobile-web'), 4)
+    installFakeAppEnvironment({
+      getAppPath: () => appPath,
+      getPath: () => appPath,
+      isPackaged: () => true
+    })
+
+    expect(getBundledMobileWebBundleRoot()).toBe(repoBundle.root)
+  })
+
+  it('keeps a packaged install on its own out/mobile-web', () => {
+    writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
+    const appPath = join(scratch, 'level4', 'level3', 'level2', 'level1')
+    const installed = writeSyntheticMobileWebBundle(join(appPath, 'out', 'mobile-web'), 4)
+    installFakeAppEnvironment({
+      getAppPath: () => appPath,
+      getPath: () => appPath,
+      isPackaged: () => true
+    })
+
+    expect(getBundledMobileWebBundleRoot()).toBe(installed.root)
   })
 
   // Unpacked electron-vite entrypoints set appPath to out/main, next to the bundle.
