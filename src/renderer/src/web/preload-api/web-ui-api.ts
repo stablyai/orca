@@ -253,6 +253,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
+    onFocusTabGroup: () => noopUnsubscribe,
     onSwitchTerminalTab: () => noopUnsubscribe,
     onCtrlTabKeyDown: () => noopUnsubscribe,
     onCtrlTabKeyUp: () => noopUnsubscribe,

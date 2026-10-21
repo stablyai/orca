@@ -9,6 +9,8 @@ export const PLUGIN_COMMAND_ALIAS_ACTION_IDS = [
   'sidebar.sleepingWorkspaces.toggle',
   'floatingWorkspace.maximize',
   'tab.rename',
+  'tab.focusNextGroup',
+  'tab.focusPreviousGroup',
   'workspace.rename',
   'workspace.openBoard',
   'view.tasks',

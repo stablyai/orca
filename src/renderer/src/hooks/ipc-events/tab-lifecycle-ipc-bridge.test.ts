@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 
 const mocks = vi.hoisted(() => {
   const state: Record<string, unknown> = {}
@@ -61,6 +62,26 @@ describe('registerTabLifecycleIpcBridge new terminal tab', () => {
       }
     }
   }
+
+  it('routes both split-group directions through the workspace command', () => {
+    registerTabLifecycleIpcBridge([])
+    mocks.listeners.onFocusTabGroup(1)
+    expect(dispatchWorkspaceTabCommand).toHaveBeenLastCalledWith({
+      type: 'focus-group',
+      direction: 1
+    })
+    mocks.listeners.onFocusTabGroup(-1)
+    expect(dispatchWorkspaceTabCommand).toHaveBeenLastCalledWith({
+      type: 'focus-group',
+      direction: -1
+    })
+    mocks.listeners.onFocusTabGroup(-1, 'source-page')
+    expect(dispatchWorkspaceTabCommand).toHaveBeenLastCalledWith({
+      type: 'focus-group',
+      direction: -1,
+      sourcePageId: 'source-page'
+    })
+  })
 
   it('appends the new terminal to the saved order, dropping repeated ids', async () => {
     const setTabBarOrder = vi.fn()

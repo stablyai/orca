@@ -48,7 +48,8 @@ export function forwardGuestShortcutInput(
   if (input.isAutoRepeat) {
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
-      action?.type === 'deleteCurrentWorkspace'
+      action?.type === 'deleteCurrentWorkspace' ||
+      action?.type === 'focusTabGroup'
     ) {
       event.preventDefault()
       return true
@@ -67,6 +68,12 @@ export function forwardGuestShortcutInput(
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:toggleFloatingTerminal')
+    return true
+  }
+
+  if (action?.type === 'focusTabGroup') {
+    event.preventDefault()
+    resolveRenderer(browserTabId)?.send('ui:focusTabGroup', action.direction, browserTabId)
     return true
   }
 

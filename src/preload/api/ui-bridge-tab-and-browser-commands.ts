@@ -143,6 +143,15 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:switchRecentTab', listener)
     return () => ipcRenderer.removeListener('ui:switchRecentTab', listener)
   },
+  onFocusTabGroup: (callback: (direction: 1 | -1, sourcePageId?: string) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      direction: 1 | -1,
+      sourcePageId?: string
+    ) => callback(direction, sourcePageId)
+    ipcRenderer.on('ui:focusTabGroup', listener)
+    return () => ipcRenderer.removeListener('ui:focusTabGroup', listener)
+  },
   onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
     ipcRenderer.on('ui:switchTerminalTab', listener)

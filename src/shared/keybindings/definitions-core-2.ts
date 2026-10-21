@@ -222,6 +222,28 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'tab.focusNextGroup',
+    title: 'Focus next split group',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    conflictGroup: 'global',
+    searchKeywords: ['shortcut', 'tab', 'split', 'group', 'pane', 'focus', 'next'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true,
+    allowInTextField: 'non-default-chords'
+  },
+  {
+    id: 'tab.focusPreviousGroup',
+    title: 'Focus previous split group',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    conflictGroup: 'global',
+    searchKeywords: ['shortcut', 'tab', 'split', 'group', 'pane', 'focus', 'previous'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true,
+    allowInTextField: 'non-default-chords'
+  },
+  {
     id: 'tab.selectByIndex',
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',

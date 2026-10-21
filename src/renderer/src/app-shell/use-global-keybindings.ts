@@ -188,6 +188,13 @@ export function useGlobalKeybindings(args: {
         return
       }
 
+      const groupHandlers = createAppCommandHandlers(state, input, context)
+      for (const actionId of ['tab.focusNextGroup', 'tab.focusPreviousGroup'] as const) {
+        if (matchShortcut(actionId) && groupHandlers.get(actionId)?.()) {
+          return
+        }
+      }
+
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
       if (fileSearchClaimsTextKey(input)) {
         return

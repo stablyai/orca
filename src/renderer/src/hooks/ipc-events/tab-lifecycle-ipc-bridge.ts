@@ -97,6 +97,13 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
     window.api.ui.onSwitchRecentTab(() => {
       dispatchWorkspaceTabCommand({ type: 'previous-recent' })
     }),
+    window.api.ui.onFocusTabGroup?.((direction, sourcePageId) => {
+      dispatchWorkspaceTabCommand({
+        type: 'focus-group',
+        direction,
+        ...(sourcePageId ? { sourcePageId } : {})
+      })
+    }) ?? (() => {}),
     window.api.ui.onSwitchTerminalTab((direction) => {
       dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'terminal' })
     })

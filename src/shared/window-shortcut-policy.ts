@@ -43,6 +43,7 @@ export type WindowShortcutAction =
   | { type: 'openTasks' }
   | { type: 'toggleAgentDashboard' }
   | { type: 'switchRecentTab' }
+  | { type: 'focusTabGroup'; direction: 1 | -1 }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
@@ -134,37 +135,7 @@ function actionMatches(
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
 }
 
-export function nativeZoomCommandMatchesKeybindings(
-  direction: 'in' | 'out',
-  platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides,
-  options: KeybindingMatchOptions = {}
-): boolean {
-  const primary =
-    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
-  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
-  const candidates =
-    direction === 'in'
-      ? [
-          { key: '=', code: 'Equal', shift: false },
-          { key: '+', code: 'Equal', shift: true },
-          { key: 'Add', code: 'NumpadAdd', shift: false }
-        ]
-      : [
-          { key: '-', code: 'Minus', shift: false },
-          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
-        ]
-
-  return candidates.some((candidate) =>
-    keybindingMatchesAction(
-      actionId,
-      { ...primary, alt: false, ...candidate },
-      platform,
-      keybindings,
-      options
-    )
-  )
-}
+export { nativeZoomCommandMatchesKeybindings } from './window-zoom-shortcuts'
 
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
@@ -260,6 +231,13 @@ export function resolveWindowShortcutAction(
     return { type: 'switchRecentTab' }
   }
 
+  if (actionMatches('tab.focusNextGroup', input, platform, keybindings, options)) {
+    return { type: 'focusTabGroup', direction: 1 }
+  }
+  if (actionMatches('tab.focusPreviousGroup', input, platform, keybindings, options)) {
+    return { type: 'focusTabGroup', direction: -1 }
+  }
+
   // Why: the two ranges live in different scopes (no shared conflictGroup), so a
   // user is free to map both onto the same modifier without it being blocked as a
   // conflict. Checking workspace first gives that overlap deterministic
@@ -333,6 +311,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'dashboard.toggle'
     case 'switchRecentTab':
       return 'tab.previousRecent'
+    case 'focusTabGroup':
+      return action.direction === 1 ? 'tab.focusNextGroup' : 'tab.focusPreviousGroup'
     case 'worktreeHistoryNavigate':
       return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
     case 'dictationKeyDown':

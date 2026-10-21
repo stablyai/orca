@@ -25,6 +25,7 @@ import type {
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+import { createTabGroupCommandHandlers } from './app-command-tab-group-handlers'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -155,6 +156,7 @@ export function createAppCommandHandlers(
       : false
 
   return new Map<KeybindingActionId, () => boolean>([
+    ...createTabGroupCommandHandlers(workspaceChromeActive && !floatingWorkspaceFocused, claim),
     [
       'worktree.history.back',
       () => {

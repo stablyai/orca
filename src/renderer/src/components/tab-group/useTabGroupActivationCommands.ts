@@ -1,17 +1,10 @@
 import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/tab-types'
-import { useAppStore } from '../../store'
-import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
-import { activateWebRuntimeSessionTab } from '../../runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-environment'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateTabGroupTab } from './tab-group-tab-activation'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupActivationCommands({
-  groupId,
   worktreeId,
   groupTabs,
   worktreeState
@@ -21,50 +14,18 @@ export function useTabGroupActivationCommands({
   groupTabs: Tab[]
   worktreeState: TabGroupWorktreeSnapshot
 }) {
-  const focusGroup = useAppStore((state) => state.focusGroup)
-  const activateTab = useAppStore((state) => state.activateTab)
-  const setActiveTab = useAppStore((state) => state.setActiveTab)
-  const setActiveTabType = useAppStore((state) => state.setActiveTabType)
-  const setActiveFile = useAppStore((state) => state.setActiveFile)
-  const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
-
   const activateTerminal = useCallback(
     (terminalId: string) => {
       const item = groupTabs.find(
         (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
       )
-      if (!item) {
-        return
-      }
-      focusGroup(worktreeId, groupId)
-      activateTab(item.id)
-      const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        useAppStore.getState(),
-        worktreeId
-      )
-      if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-        void activateWebRuntimeSessionTab({
-          worktreeId,
-          tabId: terminalId,
-          environmentId: runtimeEnvironmentId
+      if (item) {
+        activateTabGroupTab(worktreeId, item, {
+          activeLeafId: worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
         })
       }
-      setActiveTab(terminalId)
-      setActiveTabType('terminal', worktreeId)
-      const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
-      // Why: restore xterm focus to the store-active leaf so keyboard input can't drift to a sibling pane.
-      focusTerminalTabSurface(terminalId, activeLeafId)
     },
-    [
-      activateTab,
-      focusGroup,
-      groupId,
-      groupTabs,
-      setActiveTab,
-      setActiveTabType,
-      worktreeState.terminalLayoutsByTabId,
-      worktreeId
-    ]
+    [groupTabs, worktreeState.terminalLayoutsByTabId, worktreeId]
   )
 
   const toggleTerminalPaneExpand = useCallback(
@@ -91,20 +52,11 @@ export function useTabGroupActivationCommands({
   const activateEditor = useCallback(
     (tabId: string) => {
       const item = groupTabs.find((candidate) => candidate.id === tabId)
-      if (!item) {
-        return
-      }
-      focusGroup(worktreeId, groupId)
-      activateTab(item.id)
-      if (item.contentType === 'simulator') {
-        setActiveTabType('simulator', worktreeId)
-        // simulator has no editor file entity
-      } else {
-        setActiveFile(item.entityId, worktreeId)
-        setActiveTabType('editor', worktreeId)
+      if (item) {
+        activateTabGroupTab(worktreeId, item)
       }
     },
-    [activateTab, focusGroup, groupId, groupTabs, setActiveFile, setActiveTabType, worktreeId]
+    [groupTabs, worktreeId]
   )
 
   const activateBrowser = useCallback(
@@ -112,37 +64,14 @@ export function useTabGroupActivationCommands({
       const item = groupTabs.find(
         (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
       )
-      if (!item) {
-        return
+      if (item) {
+        activateTabGroupTab(worktreeId, item)
       }
-      focusGroup(worktreeId, groupId)
-      activateTab(item.id)
-      const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        useAppStore.getState(),
-        worktreeId
-      )
-      if (
-        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-        browserWorkspaceHasRemoteOwner(useAppStore.getState(), browserTabId, runtimeEnvironmentId)
-      ) {
-        void activateWebRuntimeSessionTab({
-          worktreeId,
-          tabId: item.id,
-          environmentId: runtimeEnvironmentId
-        })
-      }
-      setActiveBrowserTab(browserTabId, worktreeId)
-      setActiveTabType('browser', worktreeId)
     },
-    [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
+    [groupTabs, worktreeId]
   )
 
-  const activateAgentSession = useCallback(
-    (tabId: string) => {
-      activateStructuredAgentSessionTab({ worktreeId, tabId })
-    },
-    [worktreeId]
-  )
+  const activateAgentSession = activateEditor
 
   return {
     activateTerminal,

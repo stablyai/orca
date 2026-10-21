@@ -10,6 +10,7 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
+import { handleFocusTabGroup } from '@/hooks/ipc-tab-group-focus'
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
 import {
   isFloatingWorkspacePanelFocused,
@@ -34,6 +35,7 @@ export type WorkspaceTabCommand =
     }
   | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
   | { type: 'previous-recent' }
+  | { type: 'focus-group'; direction: 1 | -1; sourcePageId?: string }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -171,6 +173,11 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       return false
     }
     return handleSwitchRecentTab()
+  }
+  if (command.type === 'focus-group') {
+    return isFloatingWorkspacePanelFocused()
+      ? false
+      : handleFocusTabGroup(command.direction, command.sourcePageId)
   }
   if (isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)
