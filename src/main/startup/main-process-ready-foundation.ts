@@ -16,6 +16,7 @@ import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-sc
 import { recoverInterruptedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-reset'
 import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl-move-startup-rewrite'
 import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
+import { registerWslMoveRendererRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -158,6 +159,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
   const userDataPath = getAppEnvironment().getPath('userData')
   registerWslMoveMainRewriteStores(store)
+  registerWslMoveRendererRewriteStores()
   // Resets a move interrupted before commit, then finishes one that committed; main-process-ready
   // waits on both, bounded. Gated off, neither runs.
   state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite({ userDataPath }, () =>

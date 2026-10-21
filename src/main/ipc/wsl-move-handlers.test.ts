@@ -29,7 +29,11 @@ beforeEach(() => {
   vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
   registerWslMoveDesktopRewriteStore({ id: 'renderer-a', side: 'renderer' })
   seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
-  registerWslMoveHandlers(() => userDataPath)
+  flushStorageData.mockReset()
+  registerWslMoveHandlers(
+    () => userDataPath,
+    (senderId) => senderId === MAIN_WINDOW_ID
+  )
 })
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -37,7 +41,11 @@ afterEach(() => {
   rmSync(userDataPath, { recursive: true, force: true })
 })
 
-const invoke = (channel: string, request?: unknown) => handlers.get(channel)?.({}, request)
+const MAIN_WINDOW_ID = 7
+const flushStorageData = vi.fn()
+const sender = (id: number) => ({ id, session: { flushStorageData } })
+const invoke = (channel: string, request?: unknown, senderId = MAIN_WINDOW_ID) =>
+  handlers.get(channel)?.({ sender: sender(senderId) }, request)
 
 describe('WSL move IPC', () => {
   it('lists pending renderer rewrites and records one', () => {
@@ -74,6 +82,23 @@ describe('WSL move IPC', () => {
     expect(
       invoke('wslMove:recordStoreRewritten', { migrationId: 'move-1', storeId: 'renderer-a' })
     ).toEqual({ recorded: false, reason: 'gated-off' })
+    expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([])
+  })
+
+  it('writes the window storage to disk before the ledger entry', () => {
+    flushStorageData.mockImplementation(() => {
+      expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([])
+    })
+    invoke('wslMove:recordStoreRewritten', { migrationId: 'move-1', storeId: 'renderer-a' })
+    expect(flushStorageData).toHaveBeenCalledOnce()
+    expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual(['renderer-a'])
+  })
+
+  it('records only for the main window, whose storage holds the renderer stores', () => {
+    expect(
+      invoke('wslMove:recordStoreRewritten', { migrationId: 'move-1', storeId: 'renderer-a' }, 8)
+    ).toEqual({ recorded: false, reason: 'not-main-window' })
+    expect(flushStorageData).not.toHaveBeenCalled()
     expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([])
   })
 })

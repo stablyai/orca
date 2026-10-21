@@ -4,6 +4,7 @@
  * store is rewritten and durable, so a crash redoes only the rest.
  */
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
+import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import type { OrcadMigrationPathRewriter } from '../../ssh/orcad-migration-path-rewrite'
 
 export type WslMoveDesktopRewriteContext = {
@@ -71,6 +72,13 @@ export function registerWslMoveDesktopRewriteStore(store: WslMoveDesktopRewriteS
     throw new Error('wsl_move_rewrite_store_limit')
   }
   stores.push(store)
+}
+
+/** The renderer's localStorage stores (D1b-7d); the renderer rewrites and records each. */
+export function registerWslMoveRendererRewriteStores(): void {
+  for (const id of WSL_MOVE_RENDERER_REWRITE_STORE_IDS) {
+    registerWslMoveDesktopRewriteStore({ id, side: 'renderer' })
+  }
 }
 
 export function listWslMoveDesktopRewriteStores(): readonly WslMoveDesktopRewriteStore[] {

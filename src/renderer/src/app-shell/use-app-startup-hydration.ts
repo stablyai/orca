@@ -113,6 +113,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           listRuntimeSessionHostIdsForStartup
         )
         runtimeHostsPromise.catch(() => {})
+        // Before the session read: a moved project's local rows must leave before the host's merge in.
+        // Started before the repo list too; this startup load does not prune, so it need not wait.
+        const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
         // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -120,8 +123,6 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('repo-catalog-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
         )
-        // Before the session read: a moved project's local rows must leave before the host's merge in.
-        const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
         // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
         // so keep this chain ordered while overlapping it with session-scoped hydration.
         const localCatalogChain = (async () => {

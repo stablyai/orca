@@ -2,7 +2,7 @@
  * IPC for the renderer half of a committed WSL move's desktop rewrite. Both channels answer
  * empty / refuse while the internal WSL hosts gate is closed.
  */
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type {
   WslMovePendingRendererRewrite,
   WslMoveRecordStoreRewrittenResult
@@ -17,7 +17,13 @@ export const WSL_MOVE_HANDLER_CHANNELS = [
   'wslMove:recordStoreRewritten'
 ] as const
 
-export function registerWslMoveHandlers(getUserDataPath: () => string): void {
+type RendererEvent = { sender?: Pick<WebContents, 'id' | 'session'> }
+
+export function registerWslMoveHandlers(
+  getUserDataPath: () => string,
+  /** The renderer stores live in the main window's storage; another window's copy is not them. */
+  isMainWindowRenderer: (senderId: number) => boolean
+): void {
   for (const channel of WSL_MOVE_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -26,7 +32,7 @@ export function registerWslMoveHandlers(getUserDataPath: () => string): void {
   )
   ipcMain.handle(
     'wslMove:recordStoreRewritten',
-    (_event, request: unknown): WslMoveRecordStoreRewrittenResult => {
+    (event: RendererEvent, request: unknown): WslMoveRecordStoreRewrittenResult => {
       // Renderer input: anything but two strings is an unknown store.
       if (
         typeof request !== 'object' ||
@@ -38,10 +44,15 @@ export function registerWslMoveHandlers(getUserDataPath: () => string): void {
       ) {
         return { recorded: false, reason: 'unknown-store' }
       }
-      return recordWslMoveRendererStoreRewritten(getUserDataPath(), {
-        migrationId: request.migrationId,
-        storeId: request.storeId
-      })
+      const sender = event.sender
+      if (!sender || !isMainWindowRenderer(sender.id)) {
+        return { recorded: false, reason: 'not-main-window' }
+      }
+      return recordWslMoveRendererStoreRewritten(
+        getUserDataPath(),
+        { migrationId: request.migrationId, storeId: request.storeId },
+        () => sender.session.flushStorageData()
+      )
     }
   )
 }

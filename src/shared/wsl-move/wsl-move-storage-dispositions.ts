@@ -32,6 +32,10 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
+  'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
+    62,
+    "The mover's own record of which renderer rewrites landed; keyed by move id."
+  ),
   'src/renderer/src/store/slices/worktrees/session/worktree-visit-recency.ts':
     notApplicableDisposition(
       32,

@@ -4,7 +4,10 @@
  * crash or failure redoes only the stores not recorded yet, on the next pass.
  */
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
+import {
+  WSL_MOVE_CUTOVER_PHASES,
+  type WslMoveCutover
+} from '../../../shared/wsl-move/wsl-move-cutover'
 import type {
   WslMovePendingRendererRewrite,
   WslMoveRecordStoreRewrittenRequest,
@@ -19,6 +22,7 @@ import {
   type WslMoveDesktopRewriteContext
 } from './wsl-move-desktop-rewrite-stores'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
+import { wslMoveScopeRootPaths } from './wsl-move-scope-roots'
 
 // Passes are serialized, so one hung store would otherwise stall every later pass in the process.
 export const WSL_MOVE_REWRITE_STORE_TIMEOUT_MS = 30_000
@@ -192,7 +196,13 @@ export function runGatedWslMoveDesktopRewritePass(
   return wslHostsGateOpen() ? runWslMoveDesktopRewritePass(options) : Promise.resolve()
 }
 
-/** Committed moves still waiting on renderer-side stores; empty with the gate closed. */
+const COMMITTED_PHASE_INDEX = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+
+/**
+ * Every committed move, for the renderer to re-apply its stores (its storage flushes lazily), with
+ * the renderer stores still to record while the move is in its rewrite phase. Empty with the gate
+ * closed.
+ */
 export function listPendingWslMoveRendererRewrites(
   userDataPath: string
 ): WslMovePendingRendererRewrite[] {
@@ -201,15 +211,15 @@ export function listPendingWslMoveRendererRewrites(
   }
   try {
     return listWslMoveCutovers(userDataPath).flatMap((cutover) => {
-      if (cutover.phase !== 'destination-committed') {
+      if (WSL_MOVE_CUTOVER_PHASES.indexOf(cutover.phase) < COMMITTED_PHASE_INDEX) {
         return []
       }
-      const storeIds = pendingWslMoveDesktopRewriteStores(cutover.rewrittenStores)
-        .filter((store) => store.side === 'renderer')
-        .map((store) => store.id)
-      if (storeIds.length === 0) {
-        return []
-      }
+      const storeIds =
+        cutover.phase === 'destination-committed'
+          ? pendingWslMoveDesktopRewriteStores(cutover.rewrittenStores)
+              .filter((store) => store.side === 'renderer')
+              .map((store) => store.id)
+          : []
       const { source } = cutover.manifest
       return [
         {
@@ -219,7 +229,8 @@ export function listPendingWslMoveRendererRewrites(
           destinationHostId: toRuntimeExecutionHostId(cutover.destinationEnvironmentId),
           distro: source.distro,
           scopeRepoIds: [...source.scopeRepoIds],
-          scopeFolderWorkspaceIds: [...source.scopeFolderWorkspaceIds]
+          scopeFolderWorkspaceIds: [...source.scopeFolderWorkspaceIds],
+          scopeRootPaths: wslMoveScopeRootPaths(cutover.manifest)
         }
       ]
     })
@@ -235,7 +246,10 @@ export function listPendingWslMoveRendererRewrites(
  */
 export function recordWslMoveRendererStoreRewritten(
   userDataPath: string,
-  request: WslMoveRecordStoreRewrittenRequest
+  request: WslMoveRecordStoreRewrittenRequest,
+  /** Asks for the renderer's storage on disk before the ledger entry. Best effort: it only schedules
+   * the write, so the renderer re-applies its stores at every startup regardless. */
+  flushRendererStorage: () => void = () => {}
 ): WslMoveRecordStoreRewrittenResult {
   if (!wslHostsGateOpen()) {
     return { recorded: false, reason: 'gated-off' }
@@ -252,6 +266,7 @@ export function recordWslMoveRendererStoreRewritten(
     if (!cutover || cutover.rewrittenStores.includes(store.id)) {
       return { recorded: false, reason: 'not-pending' }
     }
+    flushRendererStorage()
     appendLedgerEntry(userDataPath, cutover, store.id)
   } catch (error) {
     console.warn(`[wsl-move] Could not record a renderer rewrite: ${describe(error)}`)

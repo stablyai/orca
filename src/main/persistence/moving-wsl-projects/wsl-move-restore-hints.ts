@@ -4,7 +4,7 @@
  * at its worktree root, which is a silent loss.
  */
 import type { ColdRestoreDetection } from '../../daemon/history-reader'
-import { wslUncPathToLinux } from './wsl-move-path-rewriter'
+import { wslUncPathToLinux } from '../../../shared/wsl-paths'
 
 export type WslMoveRestoreHint = { paneKey: string; cwd: string }
 

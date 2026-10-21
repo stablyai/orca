@@ -30,7 +30,8 @@ import {
 } from '../../ssh/orcad-migration-path-rewrite'
 import type { Store } from '../../persistence'
 import { compareKeys } from '../migrating-orcad-catalog/orcad-source-key-order'
-import { createUncToLinuxPathRewriter, wslUncPathToLinux } from './wsl-move-path-rewriter'
+import { wslUncPathToLinux } from '../../../shared/wsl-paths'
+import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 
 export type WslMoveManifestExportRequest = {
   migrationId: string

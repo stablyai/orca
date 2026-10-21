@@ -58,7 +58,11 @@ import { registerTelemetryHandlers } from '../telemetry'
 import { registerShellHandlers } from '../shell'
 import { registerPetHandlers } from '../pet'
 import { registerPluginHandlers } from '../plugins'
-import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
+import {
+  getTrustedUIRendererWebContents,
+  registerUIHandlers,
+  setTrustedUIRendererWebContentsId
+} from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
 import { registerSpeechHandlers } from '../speech'
@@ -265,7 +269,10 @@ export function registerCoreHandlers(
     getUserDataPath: () => app.getPath('userData'),
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerWslMoveHandlers(() => app.getPath('userData'))
+  registerWslMoveHandlers(
+    () => app.getPath('userData'),
+    (senderId) => getTrustedUIRendererWebContents()?.id === senderId
+  )
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>
