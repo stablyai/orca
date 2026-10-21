@@ -93,4 +93,14 @@ describe('RemoteFileBrowser keyboard navigation', () => {
 
     await act(async () => root.unmount())
   })
+
+  it('points the input at no row while the next listing loads', async () => {
+    const { input, root } = await render()
+    browseDir.mockImplementationOnce(() => new Promise(() => {}))
+
+    await press(input, 'Enter')
+
+    expect(input.hasAttribute('aria-activedescendant')).toBe(false)
+    await act(async () => root.unmount())
+  })
 })

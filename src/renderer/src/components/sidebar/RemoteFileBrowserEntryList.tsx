@@ -72,6 +72,10 @@ export function RemoteFileBrowserEntryList({
         ref={scrollRef}
         id={listboxId}
         role="listbox"
+        aria-label={translate(
+          'auto.components.sidebar.RemoteFileBrowser.entriesLabel',
+          'Folder entries'
+        )}
         className="h-[240px] overflow-y-auto scrollbar-sleek"
       >
         {loading ? (
