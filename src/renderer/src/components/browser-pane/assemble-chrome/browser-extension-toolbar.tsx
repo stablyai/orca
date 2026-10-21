@@ -67,6 +67,31 @@ function ExtensionIcon({ action }: { action: BrowserExtensionToolbarAction }): R
   )
 }
 
+type ActionMenuProps = {
+  browserPageId: string
+  profileId: string
+  action: BrowserExtensionToolbarAction
+}
+
+// Why separate components: they mount with the open menu, which is when the extension's items are fetched.
+function PinnedActionMenuEntries(props: ActionMenuProps): React.JSX.Element {
+  const entries = useBrowserExtensionActionMenuEntries(
+    props.profileId,
+    props.action,
+    props.browserPageId
+  )
+  return <BrowserExtensionContextEntries entries={entries} />
+}
+
+function PuzzleRowMenuEntries(props: ActionMenuProps): React.JSX.Element {
+  const entries = useBrowserExtensionActionMenuEntries(
+    props.profileId,
+    props.action,
+    props.browserPageId
+  )
+  return <BrowserExtensionDropdownEntries entries={entries} />
+}
+
 function PinnedActionButton({
   browserPageId,
   profileId,
@@ -78,7 +103,6 @@ function PinnedActionButton({
   action: BrowserExtensionToolbarAction
   buttonRef: (element: HTMLButtonElement | null) => void
 }): React.JSX.Element {
-  const entries = useBrowserExtensionActionMenuEntries(profileId, action)
   const badge = action.badgeText.slice(0, MAX_BADGE_CHARACTERS)
   return (
     <ContextMenu>
@@ -117,22 +141,22 @@ function PinnedActionButton({
         </TooltipContent>
       </Tooltip>
       <ContextMenuContent>
-        <BrowserExtensionContextEntries entries={entries} />
+        <PinnedActionMenuEntries
+          browserPageId={browserPageId}
+          profileId={profileId}
+          action={action}
+        />
       </ContextMenuContent>
     </ContextMenu>
   )
 }
 
 function ExtensionMenuRow({
+  browserPageId,
   profileId,
   action,
   onOpen
-}: {
-  profileId: string
-  action: BrowserExtensionToolbarAction
-  onOpen: () => void
-}): React.JSX.Element {
-  const entries = useBrowserExtensionActionMenuEntries(profileId, action)
+}: ActionMenuProps & { onOpen: () => void }): React.JSX.Element {
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -146,7 +170,7 @@ function ExtensionMenuRow({
           {translate('browser.extensions.open', 'Open')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <BrowserExtensionDropdownEntries entries={entries} />
+        <PuzzleRowMenuEntries browserPageId={browserPageId} profileId={profileId} action={action} />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
@@ -233,6 +257,7 @@ export function BrowserExtensionToolbar({
             state.actions.map((action) => (
               <ExtensionMenuRow
                 key={action.extensionId}
+                browserPageId={browserPageId}
                 profileId={state.profileId}
                 action={action}
                 onOpen={() =>

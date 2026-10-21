@@ -7,20 +7,31 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
 
 type FakeSession = { name: string }
-type Guest = EventEmitter & { id: number; session: FakeSession; url: string }
+type Guest = EventEmitter & {
+  id: number
+  session: FakeSession
+  url: string
+  loadURL: ReturnType<typeof vi.fn>
+}
 
 const mocks = vi.hoisted(() => {
   const sessions = { default: { name: 'default' }, work: { name: 'work' } }
   const host = { id: 900 }
   const emitted: { event: string; args: unknown; session: unknown }[] = []
+  const grantedOrigins: string[] = []
+  const state: { popout: { id: number; webContents: { session: unknown } } | null } = {
+    popout: null
+  }
   return {
     sessions,
     host,
-    guests: new Map<number, unknown>(),
+    guests: new Map<number, Guest>(),
     pageByGuest: new Map<number, string>(),
     emitted,
     activate: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
+    grantedOrigins,
+    state,
     extension: { id: 'e'.repeat(32), manifest: { permissions: ['tabs'] } }
   }
 })
@@ -77,13 +88,19 @@ vi.mock('./browser-extension-window-model', () => ({
   WINDOW_ID_CURRENT: -2,
   getBrowserExtensionMainWindow: () => ({ id: 1, webContents: mocks.host }),
   getBrowserExtensionWindow: () => null,
-  getPopoutWindowForWebContents: () => null,
-  listPopoutWindowsInSession: () => [],
+  getPopoutWindowForWebContents: (contents: unknown) =>
+    mocks.state.popout?.webContents === contents ? mocks.state.popout : null,
+  listPopoutWindowsInSession: (sess: unknown) =>
+    mocks.state.popout?.webContents.session === sess ? [mocks.state.popout] : [],
   getLastFocusedBrowserExtensionWindowId: () => 1,
   listBrowserExtensionWindows: () => [{ window: { id: 1 }, type: 'normal' }],
   presentBrowserExtensionWindow: vi.fn()
 }))
 vi.mock('./api/tabs-capture', () => ({ captureVisibleTabMethod: {} }))
+vi.mock('./api/permissions', () => ({
+  browserExtensionHostPatternsInSession: (_extension: unknown, sess: unknown) =>
+    sess === mocks.sessions.default ? mocks.grantedOrigins : []
+}))
 
 const registry = await import('./browser-extension-namespace-registry')
 const discardedTabs = await import('./browser-extension-discarded-tabs')
@@ -157,6 +174,7 @@ function guest(id: number, sess: FakeSession, url: string): Guest {
     id,
     session: sess,
     url,
+    loadURL: vi.fn(async () => {}),
     isDestroyed: () => false,
     getType: () => 'webview',
     hostWebContents: mocks.host,
@@ -172,8 +190,18 @@ function guest(id: number, sess: FakeSession, url: string): Guest {
   return contents
 }
 
-function call(method: string, args: unknown[], sess: FakeSession = mocks.sessions.default) {
-  const caller = { extension: mocks.extension, session: sess, browserProfileId: 'default' }
+function call(
+  method: string,
+  args: unknown[],
+  sess: FakeSession = mocks.sessions.default,
+  webContents?: Guest
+) {
+  const caller = {
+    extension: mocks.extension,
+    session: sess,
+    browserProfileId: 'default',
+    webContents
+  }
   return Promise.resolve().then(() =>
     registry.getBrowserExtensionNamespace('tabs')?.methods[method].invoke(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: tabs methods read only the caller's extension and session.
@@ -198,6 +226,9 @@ beforeEach(() => {
   mocks.emitted.length = 0
   mocks.activate.mockClear()
   mocks.extension.manifest = { permissions: ['tabs'] }
+  mocks.grantedOrigins = []
+  mocks.state.popout = null
+  registry.setBrowserExtensionGrantedPermissionsLookup(() => [])
   // Local: a git worktree and a folder workspace; a document page and another profile's tab.
   saved = {
     local: session(
@@ -273,6 +304,22 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     expect(await query({ url: 'https://cold.test/*' })).toEqual([])
   })
 
+  it('shows url and title once the user grants an optional permission in this profile', async () => {
+    mocks.extension.manifest = { permissions: [] }
+    mocks.grantedOrigins = ['https://cold.test/*']
+    const urls = async () => (await query({ discarded: true })).map((entry) => entry.url)
+    expect(await urls()).toEqual(['https://cold.test/', undefined, undefined])
+    mocks.grantedOrigins = []
+    registry.setBrowserExtensionGrantedPermissionsLookup((_extension, sess) =>
+      Object.is(sess, mocks.sessions.default) ? ['tabs'] : []
+    )
+    expect(await urls()).toEqual([
+      'https://cold.test/',
+      'https://notes.test/',
+      'https://remote.test/'
+    ])
+  })
+
   it('activates through the renderer, then is replaced by the loaded guest', async () => {
     const [cold] = await query({ discarded: true })
     const coldId = cold.id!
@@ -336,6 +383,44 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     // A write that still saves the page: its guest was evicted, so it is discarded now.
     writeListener?.('local')
     expect(await urls()).toContain('https://live.test/')
+  })
+
+  it('reports a discarded tab closed once, when the session save drops its page', async () => {
+    const [cold] = await query({ discarded: true })
+    saved.local.browserPagesByWorkspace = Object.fromEntries(
+      Object.entries(saved.local.browserPagesByWorkspace ?? {}).map(([id, pages]) => [
+        id,
+        pages.filter((entry) => entry.id !== 'cold')
+      ])
+    )
+    writeListener?.('local')
+    writeListener?.('local')
+    expect(mocks.emitted.filter((entry) => entry.event === 'onRemoved')).toEqual([
+      {
+        event: 'onRemoved',
+        session: mocks.sessions.default,
+        args: [cold.id, { windowId: 1, isWindowClosing: false }]
+      }
+    ])
+  })
+
+  it('sends only the keys that changed in onUpdated', () => {
+    const fresh = guest(13, mocks.sessions.default, 'https://fresh.test/')
+    mocks.pageByGuest.set(13, 'fresh')
+    announceRegisteredBrowserExtensionTab('fresh', 13)
+    mocks.emitted.length = 0
+    fresh.emit('did-stop-loading')
+    // Why strict: an undefined url/title key still reads as present to `'url' in changeInfo`.
+    expect(events('onUpdated')).toStrictEqual([[13, { status: 'complete' }, expect.anything()]])
+  })
+
+  it("updates the active tab of the caller's window when no tab id is given", async () => {
+    const popoutPage = guest(14, mocks.sessions.default, 'https://popout.test/')
+    mocks.state.popout = { id: 5, webContents: popoutPage }
+    await call('update', [{ url: 'https://next.test/' }], mocks.sessions.default, popoutPage)
+    expect(popoutPage.loadURL).toHaveBeenCalledWith('https://next.test/')
+    const mainPage = mocks.guests.get(11)
+    expect(mainPage?.loadURL).not.toHaveBeenCalled()
   })
 
   it("uses the preload's first synthetic id", () => {

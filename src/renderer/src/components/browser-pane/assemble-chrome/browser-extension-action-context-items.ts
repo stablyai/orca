@@ -1,18 +1,25 @@
-/** One item an extension adds to its toolbar button's menu (contextMenus with contexts: ['action']). */
-export type BrowserExtensionActionContextItem = {
-  id: string
-  label: string
-  enabled: boolean
-  onSelect: () => void
-}
+import { useEffect, useState } from 'react'
+import type { BrowserExtensionContextMenuPayload } from '../../../../../shared/browser-extension-context-menu-types'
 
 /**
- * Hook point for the extension's own action-menu items. Returns none until chrome.contextMenus
- * publishes 'action' items to the renderer; the toolbar menus render whatever this returns.
+ * The extension's own items for its toolbar button menu (chrome.contextMenus, contexts: ['action']).
+ * Fetched on mount, so mount it with the open menu: main snapshots the page once per opening.
  */
-export function useBrowserExtensionActionContextItems(
-  _profileId: string,
-  _extensionId: string
-): BrowserExtensionActionContextItem[] {
-  return []
+export function useBrowserExtensionActionContextMenu(
+  profileId: string,
+  extensionId: string,
+  browserPageId: string
+): BrowserExtensionContextMenuPayload | null {
+  const [menu, setMenu] = useState<BrowserExtensionContextMenuPayload | null>(null)
+  useEffect(() => {
+    let current = true
+    window.api.browser
+      .extensionsActionContextMenu({ profileId, extensionId, browserPageId })
+      .then((payload) => current && setMenu(payload))
+      .catch(() => current && setMenu(null))
+    return () => {
+      current = false
+    }
+  }, [profileId, extensionId, browserPageId])
+  return menu
 }

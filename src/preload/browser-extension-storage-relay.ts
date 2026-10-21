@@ -140,8 +140,6 @@ export function installBrowserExtensionStorageRelay(
     if (!isCallable(get)) {
       return
     }
-    // Why serial: each write must read the old values after the previous write landed.
-    let queue: Promise<void> = Promise.resolve()
     for (const [method, keysOf] of Object.entries(writeKeys)) {
       const native = area[method]
       if (!isCallable(native)) {
@@ -158,35 +156,30 @@ export function installBrowserExtensionStorageRelay(
         if (keys === undefined) {
           return native.call(area, ...input)
         }
+        // Why all three now: Chromium runs an area's calls in order, so the reads bracket exactly
+        // this write, and the write copies its arguments at call time as Chrome's does.
         const run = (done: (error: string | null) => void): void => {
-          queue = queue.then(
-            () =>
-              new Promise<void>((settle) => {
-                try {
-                  get.call(area, keys, (before: unknown) => {
-                    native.call(area, ...args, () => {
-                      const error = lastErrorMessage()
-                      if (error !== null) {
-                        settle()
-                        // Why inside the native callback: chrome.runtime.lastError is set only here.
-                        done(error)
-                        return
-                      }
-                      get.call(area, keys, (after: unknown) => {
-                        settle()
-                        done(null)
-                        if (isObject(before) && isObject(after)) {
-                          publish(areaName, diff(before, after))
-                        }
-                      })
-                    })
-                  })
-                } catch (error) {
-                  settle()
-                  done(error instanceof Error ? error.message : String(error))
-                }
-              })
-          )
+          let before: unknown
+          let error: string | null = null
+          get.call(area, keys, (value: unknown) => {
+            before = value
+          })
+          native.call(area, ...args, () => {
+            error = lastErrorMessage()
+            if (error !== null) {
+              // Why inside the native callback: chrome.runtime.lastError is set only here.
+              done(error)
+            }
+          })
+          get.call(area, keys, (after: unknown) => {
+            if (error !== null) {
+              return
+            }
+            done(null)
+            if (isObject(before) && isObject(after)) {
+              publish(areaName, diff(before, after))
+            }
+          })
         }
         if (callback) {
           run(() => callback())

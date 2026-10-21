@@ -10,7 +10,10 @@ import {
 type Callback = (value?: unknown) => void
 type Runtime = { lastError?: { message: string } }
 
-/** Callback-style StorageArea like Electron's: async replies, lastError set only in the callback. */
+/**
+ * Callback-style StorageArea like Electron's: each call takes effect in call order, replies are
+ * async, and lastError is set only in the callback.
+ */
 function fakeArea(runtime: Runtime, initial: Record<string, unknown> = {}) {
   const data = new Map(Object.entries(initial))
   let failNext: string | null = null
@@ -37,7 +40,10 @@ function fakeArea(runtime: Runtime, initial: Record<string, unknown> = {}) {
       failNext = message
     },
     area: {
-      get: vi.fn((keys: unknown, callback: Callback) => queueMicrotask(() => callback(read(keys)))),
+      get: vi.fn((keys: unknown, callback: Callback) => {
+        const value = structuredClone(read(keys))
+        queueMicrotask(() => callback(value))
+      }),
       set: vi.fn((items: unknown, callback: Callback) => {
         if (typeof items !== 'object' || items === null) {
           throw new TypeError('Error in invocation of storage.set')
@@ -181,6 +187,19 @@ describe('installBrowserExtensionStorageRelay in a worker', () => {
     expect(worker.all).toEqual([
       ['local', { changed: { oldValue: 'old', newValue: 'first' } }],
       ['local', { changed: { oldValue: 'first', newValue: 'second' } }]
+    ])
+  })
+
+  it('stores the values passed, not later changes to the same objects', async () => {
+    const worker = install('worker')
+    worker.listen()
+    const items = { changed: { count: 1 } }
+    const written = call(worker.chrome, 'storage.local.set', items)
+    items.changed.count = 2
+    await written
+    expect(worker.local.data.get('changed')).toEqual({ count: 1 })
+    expect(worker.all).toEqual([
+      ['local', { changed: { oldValue: 'old', newValue: { count: 1 } } }]
     ])
   })
 

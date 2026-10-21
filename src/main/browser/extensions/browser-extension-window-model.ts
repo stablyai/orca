@@ -37,7 +37,12 @@ function isOrcaWindowFocused(): boolean {
 }
 
 // Why one closed listener per window: Orca's core already puts ~9 on the main window, so extras trip Node's leak warning.
-function watchWindowEvents(window: BrowserWindow, onClosed?: () => void): void {
+function watchWindowEvents(
+  window: BrowserWindow,
+  /** A popout's events reach only its profile; the main window's reach every profile. */
+  sess: Electron.Session | undefined,
+  onClosed?: () => void
+): void {
   if (watchedWindows.has(window)) {
     return
   }
@@ -47,9 +52,9 @@ function watchWindowEvents(window: BrowserWindow, onClosed?: () => void): void {
   const emitBounds = (): void => {
     clearTimeout(boundsTimer)
     boundsTimer = setTimeout(() => {
-      const entry = getBrowserExtensionWindow(windowId)
+      const entry = findWindow(windowId)
       if (entry) {
-        emitBrowserExtensionEvent({}, 'windows', 'onBoundsChanged', [
+        emitBrowserExtensionEvent({ session: sess }, 'windows', 'onBoundsChanged', [
           describeBrowserExtensionWindow(entry)
         ])
       }
@@ -57,7 +62,7 @@ function watchWindowEvents(window: BrowserWindow, onClosed?: () => void): void {
   }
   window.on('focus', () => {
     lastFocusedWindowId = windowId
-    emitBrowserExtensionEvent({}, 'windows', 'onFocusChanged', [windowId])
+    emitBrowserExtensionEvent({ session: sess }, 'windows', 'onFocusChanged', [windowId])
   })
   window.on('blur', () => {
     setImmediate(() => {
@@ -81,7 +86,7 @@ export function trackBrowserExtensionMainWindow(window: BrowserWindow): void {
   }
   mainWindow = window
   watchBrowserExtensionMainWindowReadiness(window)
-  watchWindowEvents(window, () => {
+  watchWindowEvents(window, undefined, () => {
     if (mainWindow === window) {
       mainWindow = null
     }
@@ -92,7 +97,7 @@ export function getBrowserExtensionMainWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
 }
 
-export function getBrowserExtensionWindow(windowId: number): BrowserExtensionWindowEntry | null {
+function findWindow(windowId: number): BrowserExtensionWindowEntry | null {
   const main = getBrowserExtensionMainWindow()
   if (main && main.id === windowId) {
     return { window: main, type: 'normal', isMain: true }
@@ -103,10 +108,19 @@ export function getBrowserExtensionWindow(windowId: number): BrowserExtensionWin
     : null
 }
 
-export function listBrowserExtensionWindows(): BrowserExtensionWindowEntry[] {
+/** A window an extension in `sess` may see: Orca's main window, or one of its own profile's popouts. */
+export function getBrowserExtensionWindow(
+  windowId: number,
+  sess: Electron.Session
+): BrowserExtensionWindowEntry | null {
+  const popout = popoutsByWindowId.get(windowId)
+  return popout && popout.session !== sess ? null : findWindow(windowId)
+}
+
+export function listBrowserExtensionWindows(sess: Electron.Session): BrowserExtensionWindowEntry[] {
   const ids = [getBrowserExtensionMainWindow()?.id, ...popoutsByWindowId.keys()]
   return ids.flatMap((id) => {
-    const entry = id === undefined ? null : getBrowserExtensionWindow(id)
+    const entry = id === undefined ? null : getBrowserExtensionWindow(id, sess)
     return entry ? [entry] : []
   })
 }
@@ -129,8 +143,8 @@ export function listPopoutWindowsInSession(sess: Electron.Session): BrowserWindo
     .map((popout) => popout.window)
 }
 
-export function getLastFocusedBrowserExtensionWindowId(): number | null {
-  if (lastFocusedWindowId !== null && getBrowserExtensionWindow(lastFocusedWindowId)) {
+export function getLastFocusedBrowserExtensionWindowId(sess: Electron.Session): number | null {
+  if (lastFocusedWindowId !== null && getBrowserExtensionWindow(lastFocusedWindowId, sess)) {
     return lastFocusedWindowId
   }
   return getBrowserExtensionMainWindow()?.id ?? null
@@ -209,9 +223,9 @@ export function createBrowserExtensionPopout(
   })
   popoutsByWindowId.set(window.id, { window, session: sess, type: options.type })
   const windowId = window.id
-  watchWindowEvents(window, () => {
+  watchWindowEvents(window, sess, () => {
     popoutsByWindowId.delete(windowId)
-    emitBrowserExtensionEvent({}, 'windows', 'onRemoved', [windowId])
+    emitBrowserExtensionEvent({ session: sess }, 'windows', 'onRemoved', [windowId])
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   // Why: the popout gets no Orca guest policies, so it may only move within its extension or to web URLs.
@@ -236,7 +250,7 @@ export function createBrowserExtensionPopout(
   window.loadURL(options.url).catch((error: unknown) => {
     console.warn('[browser-extensions] Popout failed to load:', error)
   })
-  emitBrowserExtensionEvent({}, 'windows', 'onCreated', [
+  emitBrowserExtensionEvent({ session: sess }, 'windows', 'onCreated', [
     describeBrowserExtensionWindow({ window, type: options.type, isMain: false })
   ])
   return window

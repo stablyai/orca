@@ -9,7 +9,7 @@ import {
   applyDnrRequestHeaderActions,
   applyDnrResponseHeaderActions
 } from './declarative-net-request/header-modification'
-import type { DnrRequestInfo } from './declarative-net-request/request-context'
+import type { DnrRequestInfo, DnrResponseHeaders } from './declarative-net-request/request-context'
 import type { DnrRequestAction } from './declarative-net-request/ruleset-matcher'
 import { getDnrSessionRuntime, type DnrSessionRuntime } from './browser-extension-dnr-session'
 import { chromeResourceType } from './browser-extension-web-request'
@@ -78,6 +78,24 @@ function evaluateOptions(
   }
 }
 
+/** Chrome matches a committed document with its navigation's method and response headers. */
+function noteNavigation(
+  runtime: DnrSessionRuntime,
+  details: RequestDetails,
+  info: DnrRequestInfo,
+  responseHeaders?: DnrResponseHeaders
+): void {
+  const frame = details.frame && !details.frame.isDestroyed() ? details.frame : null
+  const navigates = info.type === 'main_frame' || info.type === 'sub_frame'
+  if (navigates && frame && details.webContentsId !== undefined) {
+    runtime.frames.noteNavigation(details.webContentsId, frame.frameTreeNodeId, {
+      url: info.url,
+      isPost: info.method.toUpperCase() === 'POST',
+      responseHeaders
+    })
+  }
+}
+
 // Why a set: one action can apply at both header stages, and Chrome counts it once.
 const recordedActions = new WeakSet<DnrRequestAction>()
 
@@ -109,6 +127,7 @@ function decideBeforeRequest(
     return null
   }
   const info = requestInfo(runtime, details)
+  noteNavigation(runtime, details, info)
   const state = createDnrRequestState()
   const { actions } = runtime.engine.evaluateBeforeRequest(
     info,
@@ -170,6 +189,7 @@ function decideHeadersReceived(
   const stored = runtime.takeRequestState(details.id)
   const responseHeaders = details.responseHeaders ?? {}
   const info = requestInfo(runtime, details)
+  noteNavigation(runtime, details, info, responseHeaders)
   const state = stored ?? createDnrRequestState()
   if (runtime.evaluatesResponseConditions) {
     const evaluation = runtime.engine.evaluateHeadersReceived(

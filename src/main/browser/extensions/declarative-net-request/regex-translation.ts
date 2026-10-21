@@ -1,49 +1,24 @@
-import { CharSet, hex, perlClass, POSIX_CLASSES, rangesOf, rangesSource } from './regex-char-set'
+import {
+  caseFoldPartner,
+  CharSet,
+  hex,
+  perlClass,
+  POSIX_CLASSES,
+  rangesOf,
+  rangesSource
+} from './regex-char-set'
+import { joined, piece, Refusal, refuse, type Piece } from './regex-piece'
+import { parseRepetition, repeatedPiece, REPETITION } from './regex-repetition'
 
 // RE2 syntax (as Chromium configures it: Latin-1, Perl flags) translated to JS RegExp source.
 // Refuses what RE2 refuses and what JS reads differently or cannot express (\p classes, (?U)).
 // Alongside the source it estimates RE2's program size and finds a literal every match contains.
+// The source must suit V8's linear-time engine, which has no `i` flag and repeats a group at most
+// 16 times: case folding is spelled out as classes and counted repetitions as copies, as RE2 does.
 
-type Piece = {
-  src: string
-  /** Approximate RE2 instruction count. */
-  cost: number
-  /** Set when the piece is one literal character (lower-cased). */
-  char: string | null
-  /** Longest literal every match contains (lower-cased). */
-  literal: string
-  assertion: boolean
-}
-
-class Refusal extends Error {}
-
-const refuse = (): never => {
-  throw new Refusal()
-}
-
-const MAX_REPEAT = 1000
-// MaybeParseRepetition: {n}, {n,} or {n,m} without leading zeros; anything else is literal.
-const REPETITION = /^\{(0|[1-9]\d*)(,(0|[1-9]\d*)?)?\}/
 const C_ESCAPES: Record<string, number> = { n: 10, r: 13, t: 9, f: 12, v: 11, a: 7 }
 
-const piece = (src: string, cost: number, assertion = false): Piece => ({
-  src,
-  cost,
-  char: null,
-  literal: '',
-  assertion
-})
-
-const literal = (code: number): Piece => ({
-  ...piece(hex(code), 1),
-  char: String.fromCharCode(code).toLowerCase()
-})
-
-/** JS modifier text for RE2 flags; (?U) has no JS equivalent. */
-function modifiers(on: string, off: string | undefined): string {
-  const text = off ? `${on}-${off}` : on
-  return text.includes('U') ? refuse() : text
-}
+const withoutFold = (flags: string): string => flags.replace('i', '')
 
 const longer = (a: string, b: string): string => (b.length > a.length ? b : a)
 const isOctal = (c: string | undefined): boolean => c !== undefined && c >= '0' && c <= '7'
@@ -51,12 +26,34 @@ const isOctal = (c: string | undefined): boolean => c !== undefined && c >= '0' 
 class Re2ToJs {
   private pos = 0
   captureCount = 0
+  /** Case-insensitive at the current position: the option, then (?i) and (?-i). */
+  private folding: boolean
 
   constructor(
     private pattern: string,
     private readonly capturing: boolean,
     private readonly fold: boolean
-  ) {}
+  ) {
+    this.folding = fold
+  }
+
+  /** Applies RE2 flags and returns the JS modifier text for the rest; (?U) has no JS equivalent. */
+  private modifiers(on: string, off: string | undefined): string {
+    if (`${on}${off ?? ''}`.includes('U')) {
+      refuse()
+    }
+    this.folding = on.includes('i') || (this.folding && !off?.includes('i'))
+    const jsOff = withoutFold(off ?? '')
+    return jsOff ? `${withoutFold(on)}-${jsOff}` : withoutFold(on)
+  }
+
+  private literal(code: number): Piece {
+    const partner = this.folding ? caseFoldPartner(code) : null
+    return {
+      ...piece(partner === null ? hex(code) : `[${hex(code)}${hex(partner)}]`, 1),
+      char: String.fromCharCode(code).toLowerCase()
+    }
+  }
 
   done(): boolean {
     return this.pos >= this.pattern.length
@@ -88,28 +85,30 @@ class Re2ToJs {
     )
     return {
       ...piece(alternatives.map((alternative) => alternative.src).join('|'), cost),
-      literal: alternatives.length === 1 ? alternatives[0].literal : ''
+      literal: alternatives.length === 1 ? alternatives[0].literal : '',
+      nullable: alternatives.some((alternative) => alternative.nullable),
+      replication: Math.max(...alternatives.map((alternative) => alternative.replication))
     }
   }
 
   private sequence(persisting: string[]): Piece {
-    const result = piece('', 0)
+    let result: Piece = { ...piece('', 0), nullable: true }
     let run = ''
     while (this.pos < this.pattern.length && this.peek() !== '|' && this.peek() !== ')') {
       const flags = /^\(\?([imsU]*)(?:-([imsU]+))?\)/.exec(this.rest())
       if (flags !== null) {
         // RE2 applies the flags to the rest of the group, including later alternatives.
         this.pos += flags[0].length
-        persisting.push(modifiers(flags[1], flags[2]))
+        persisting.push(this.modifiers(flags[1], flags[2]))
         const tail = this.sequence(persisting)
+        result = joined(result, tail)
         result.src += `(?${persisting.at(-1)}:${tail.src})`
-        result.cost += tail.cost
         result.literal = longer(longer(result.literal, run), tail.literal)
         return result
       }
       const atom = this.quantified()
+      result = joined(result, atom)
       result.src += atom.src
-      result.cost += atom.cost
       if (atom.char !== null) {
         run += atom.char
       } else if (!atom.assertion) {
@@ -122,53 +121,17 @@ class Re2ToJs {
   }
 
   private quantified(): Piece {
+    const capturesBefore = this.captureCount
     const atom = this.atom()
-    const quantifier = this.quantifier()
-    if (quantifier === null) {
+    const repetition = parseRepetition(this.rest())
+    if (repetition === null) {
       return atom
     }
-    if (this.quantifier() !== null) {
+    this.pos += repetition.text.length
+    if (parseRepetition(this.rest()) !== null) {
       refuse() // "a**", "a{2}*": stacked repetition
     }
-    const { min, max, text } = quantifier
-    const count = max === -1 ? Math.max(min, 1) : max
-    // RE2 never repeats an assertion more than once; JS needs a group to quantify one.
-    return {
-      ...piece(atom.assertion ? `(?:${atom.src})${text}` : atom.src + text, 0),
-      cost:
-        atom.cost * (atom.assertion ? Math.min(count, 1) : count) + (max === -1 ? 1 : max - min),
-      literal: min > 0 ? (atom.char ?? atom.literal) : ''
-    }
-  }
-
-  private quantifier(): { min: number; max: number; text: string } | null {
-    const c = this.peek()
-    let bounds: [number, number]
-    let text: string
-    if (c === '*' || c === '+' || c === '?') {
-      bounds = c === '*' ? [0, -1] : c === '+' ? [1, -1] : [0, 1]
-      text = c
-    } else {
-      const counted = c === '{' ? REPETITION.exec(this.rest()) : null
-      if (counted === null) {
-        return null
-      }
-      const min = Number(counted[1])
-      bounds = [
-        min,
-        counted[2] === undefined ? min : counted[3] === undefined ? -1 : Number(counted[3])
-      ]
-      if (min > MAX_REPEAT || bounds[1] > MAX_REPEAT || (bounds[1] !== -1 && bounds[1] < min)) {
-        refuse()
-      }
-      text = counted[0]
-    }
-    this.pos += text.length
-    if (this.peek() === '?') {
-      this.pos++
-      text += '?'
-    }
-    return { min: bounds[0], max: bounds[1], text }
+    return repeatedPiece(atom, repetition, this.captureCount > capturesBefore)
   }
 
   private atom(): Piece {
@@ -193,19 +156,20 @@ class Re2ToJs {
         // A '{' that does not start a repetition is a literal in RE2.
         return c === '{' && REPETITION.test(this.pattern.slice(this.pos - 1))
           ? refuse()
-          : literal(c.charCodeAt(0))
+          : this.literal(c.charCodeAt(0))
     }
   }
 
   private group(): Piece {
     let open = '('
+    const outerFolding = this.folding
     const named = /^\?P?<\w+>/.exec(this.rest())
     const flags = /^\?([imsU]*)(?:-([imsU]+))?:/.exec(this.rest())
     if (named !== null) {
       this.pos += named[0].length
     } else if (flags !== null) {
       this.pos += flags[0].length
-      open = `(?${modifiers(flags[1], flags[2])}:`
+      open = `(?${this.modifiers(flags[1], flags[2])}:`
     } else if (this.peek() === '?') {
       refuse() // lookaround, comments, bad flags
     }
@@ -215,6 +179,7 @@ class Re2ToJs {
     if (this.pattern[this.pos++] !== ')') {
       refuse()
     }
+    this.folding = outerFolding
     return {
       ...inner,
       src: `${open}${inner.src})`,
@@ -245,7 +210,7 @@ class Re2ToJs {
       return quoted === '' ? piece('', 0, true) : this.atom()
     }
     const perl = perlClass(c)
-    return perl === null ? literal(this.escapedChar(c)) : piece(`\\${c}`, perl.cost(this.fold))
+    return perl === null ? this.literal(this.escapedChar(c)) : piece(`\\${c}`, perl.cost(this.fold))
   }
 
   /** ParseEscape for one character; `c` was just consumed. */
@@ -274,7 +239,6 @@ class Re2ToJs {
   /** "[...]": JS reads "[]a]" and "[[:alpha:]]" differently, so the class is rebuilt. */
   private bracketClass(): Piece {
     const set = new CharSet()
-    let src = ''
     const negated = this.peek() === '^'
     this.pos += negated ? 1 : 0
     for (let first = true; this.peek() !== ']' || first; first = false) {
@@ -286,20 +250,21 @@ class Re2ToJs {
           .add(rangesOf(POSIX_CLASSES[posix[2]] ?? refuse()), posix[1] === '^')
           .ranges()
         set.add(ranges)
-        src += rangesSource(ranges)
         this.pos += posix[0].length
       } else if (perl !== null) {
         set.add(perl.ranges())
-        src += this.pattern.slice(this.pos, (this.pos += 2))
+        this.pos += 2
       } else {
         const lo = this.classChar()
         const ranged = this.peek() === '-' && this.peek(1) !== ']' && this.peek(1) !== undefined
         const hi = ranged ? (this.pos++, this.classChar()) : lo
         set.add([[lo, hi < lo ? refuse() : hi]])
-        src += rangesSource([[lo, hi]])
       }
     }
     this.pos++
+    // RE2 folds the listed members, then negates.
+    const members = new CharSet().add(set.ranges())
+    const src = rangesSource((this.folding ? members.foldCase() : members).ranges())
     return piece(`[${negated ? '^' : ''}${src}]`, (negated ? set.negate() : set).cost(this.fold))
   }
 

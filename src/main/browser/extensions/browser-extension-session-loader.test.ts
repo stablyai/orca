@@ -2,7 +2,7 @@ import type * as NodeFs from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const ID = 'a'.repeat(32)
 
@@ -13,8 +13,12 @@ const mocks = vi.hoisted(() => {
     hasWorker: false
   }
   const registrationListeners = new Set<(event: unknown, details: { scope: string }) => void>()
+  /** Holds prepareBrowserExtensionDirectory until released, to land a load late. */
+  const prepareGate: { held: Promise<void> | null } = { held: null }
   return {
     userData: '',
+    prepareGate,
+    prepareCalls: 0,
     prepared,
     loaded,
     registrationListeners,
@@ -65,12 +69,16 @@ vi.mock('./browser-extension-api-host', () => ({
   emitBrowserExtensionWorkerStartEvent: mocks.emitWorkerStart
 }))
 vi.mock('./browser-extension-load-directory', () => ({
-  prepareBrowserExtensionDirectory: async () => ({
-    directory: '/orca/copy',
-    extensionId: 'a'.repeat(32),
-    workerSignature: mocks.prepared.signature,
-    hasWorker: mocks.prepared.hasWorker
-  })
+  prepareBrowserExtensionDirectory: async () => {
+    mocks.prepareCalls++
+    await mocks.prepareGate.held
+    return {
+      directory: '/orca/copy',
+      extensionId: 'a'.repeat(32),
+      workerSignature: mocks.prepared.signature,
+      hasWorker: mocks.prepared.hasWorker
+    }
+  }
 }))
 
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
@@ -78,6 +86,11 @@ mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 const { setBrowserExtensionSupportEnabled } = await import('./browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
 const { getBrowserExtensionLoadFailure } = await import('./browser-extension-load-errors')
+const { getBrowserExtensionProfileStateStore } =
+  await import('./browser-extension-profile-state-store')
+const { getBrowserExtensionSyncStorageStore } =
+  await import('./browser-extension-sync-storage-store')
+const { getBrowserExtensionInstallStore } = await import('./browser-extension-install-store')
 
 const installed = {
   id: ID,
@@ -240,5 +253,59 @@ describe('switching the experimental setting while Orca runs', () => {
     loader.attachBrowserExtensionsToProfileSession(profile, [])
     expect(mocks.session.registerPreloadScript).toHaveBeenCalledOnce()
     expect(loader.getBrowserExtensionSessionForProfile('default')).toBe(mocks.session)
+  })
+})
+
+describe('profile changes while startup loads are in flight', () => {
+  const profile = {
+    id: 'default',
+    scope: 'default' as const,
+    partition: 'persist:orca-browser',
+    label: 'Default',
+    source: null
+  }
+  let release: () => void = () => {}
+
+  /** Attaches with the extension enabled and holds its startup load before it reaches Chromium. */
+  async function attachWithHeldStartupLoad(): Promise<void> {
+    setBrowserExtensionSupportEnabled(true)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    mocks.session.extensions.loadExtension.mockClear()
+    getBrowserExtensionInstallStore().save(installed)
+    mocks.prepareGate.held = new Promise<void>((resolve) => (release = resolve))
+    const calls = mocks.prepareCalls
+    loader.attachBrowserExtensionsToProfileSession(profile, [ID])
+    await vi.waitFor(() => expect(mocks.prepareCalls).toBe(calls + 1))
+  }
+
+  afterEach(() => {
+    release()
+    mocks.prepareGate.held = null
+  })
+
+  it('a disable that finishes first leaves the late startup load unloaded', async () => {
+    await attachWithHeldStartupLoad()
+    loader.unloadBrowserExtensionFromProfile('default', ID)
+    release()
+    await loader.whenBrowserExtensionProfileLoaded('default')
+    expect(mocks.session.extensions.loadExtension).toHaveBeenCalled()
+    expect(mocks.loaded.size).toBe(0)
+  })
+
+  it('profile delete purges saved data only after the startup loads stop writing', async () => {
+    mocks.prepared.signature = 'v-delete'
+    await attachWithHeldStartupLoad()
+    const detaching = loader.detachBrowserExtensionsFromProfileSession(profile)
+    release()
+    await detaching
+    expect(getBrowserExtensionProfileStateStore().readProfile('default')).toEqual({})
+  })
+
+  it('profile delete purges saved data even when extensions never attached to it', async () => {
+    setBrowserExtensionSupportEnabled(false)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    getBrowserExtensionSyncStorageStore().write('work', ID, { token: 'secret' })
+    await loader.detachBrowserExtensionsFromProfileSession({ ...profile, id: 'work' })
+    expect(getBrowserExtensionSyncStorageStore().read('work', ID)).toEqual({})
   })
 })

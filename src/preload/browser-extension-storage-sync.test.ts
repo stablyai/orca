@@ -19,7 +19,10 @@ function nativeEvent() {
 }
 
 /** Runs the installer from its source text, as contextBridge.executeInMainWorld does. */
-function install(reply: (method: string, args: unknown[]) => BrowserExtensionInvokeReply) {
+function install(
+  reply: (method: string, args: unknown[]) => BrowserExtensionInvokeReply,
+  forward?: (changes: unknown, from?: string) => void
+) {
   const runtime: Runtime = {}
   const native = nativeEvent()
   const nativeSync = { get: vi.fn(), set: vi.fn() }
@@ -41,17 +44,18 @@ function install(reply: (method: string, args: unknown[]) => BrowserExtensionInv
   }
   const realm = { chrome, console, JSON, Promise }
   const relay: unknown = runInNewContext(
-    `(${installBrowserExtensionStorageSync.toString()})(bridge, constants)`,
+    `(${installBrowserExtensionStorageSync.toString()})(bridge, constants, forward)`,
     {
       ...realm,
       globalThis: realm,
       bridge,
-      constants: PRELOAD_STORAGE_SYNC_CONSTANTS
+      constants: PRELOAD_STORAGE_SYNC_CONSTANTS,
+      forward
     }
   )
   return {
-    relay: (method: string, args: unknown[]): unknown =>
-      typeof relay === 'function' ? relay(method, args) : undefined,
+    relay: (method: string, args: unknown[], from?: string): unknown =>
+      typeof relay === 'function' ? relay(method, args, from) : undefined,
     chrome,
     native,
     nativeSync,
@@ -185,6 +189,24 @@ describe('installBrowserExtensionStorageSync', () => {
     expect(worker.calls).toEqual([
       [PRELOAD_STORAGE_SYNC_NAMESPACE, 'get', ['theme']],
       [PRELOAD_STORAGE_SYNC_NAMESPACE, 'set', [{ theme: 'dark' }]]
+    ])
+  })
+
+  it('passes every sync change on to content scripts, naming the one that wrote it', async () => {
+    const own = { mine: { newValue: 1 } }
+    const forward = vi.fn()
+    const worker = install(() => ({ ok: true, value: own }), forward)
+    // Listens with no listener of its own: content scripts hear other contexts only this way.
+    expect(worker.listens).toEqual([[PRELOAD_STORAGE_SYNC_NAMESPACE, 'onChanged', true]])
+
+    const elsewhere = { theme: { newValue: 'dark' } }
+    worker.emit(elsewhere)
+    await call(worker.chrome, 'storage.sync.set', { mine: 1 })
+    await worker.relay('set', [{ mine: 1 }], 'cs-1')
+    expect(forward.mock.calls).toEqual([
+      [elsewhere, undefined],
+      [own, undefined],
+      [own, 'cs-1']
     ])
   })
 })

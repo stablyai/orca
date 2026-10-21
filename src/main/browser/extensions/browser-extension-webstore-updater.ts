@@ -188,11 +188,19 @@ async function stageUpdate(
   return staged
 }
 
+// Why under the lock: the version this update replaces may have been removed or replaced since it was read.
+function isStillInstalled(extension: InstalledBrowserExtension): boolean {
+  return getBrowserExtensionInstallStore().get(extension.id)?.path === extension.path
+}
+
 async function applyUpdate(
   extension: InstalledBrowserExtension,
   update: BrowserExtensionUpdate
 ): Promise<void> {
   await withBrowserExtensionLock(extension.id, async () => {
+    if (!isStillInstalled(extension)) {
+      return
+    }
     const granted = await installedAccess(extension)
     const staged = await stageUpdate(extension, update)
     if (!staged) {
@@ -240,6 +248,9 @@ export async function reviewHeldBrowserExtensionUpdate(
     return
   }
   await withBrowserExtensionLock(extensionId, async () => {
+    if (!isStillInstalled(extension)) {
+      throw new Error('No update is waiting for this extension')
+    }
     const staged = await stageUpdate(extension, held)
     forgetHeldBrowserExtensionUpdate(extensionId)
     if (!staged) {

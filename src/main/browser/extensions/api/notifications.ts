@@ -1,7 +1,10 @@
 import { Notification, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import {
+  getChromeExtensionOrigin,
+  parseChromeExtensionUrl
+} from '../../../../shared/browser-extension-url'
 import { isBackgroundLaunch } from '../../../window/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
 import { resolveInsideExtensionDirectory } from '../browser-extension-manifest'
@@ -60,14 +63,14 @@ export function resolveNotificationIconPath(
   if (!iconUrl) {
     return null
   }
-  const origin = getChromeExtensionOrigin(extension.id)
   let url: URL
   try {
-    url = new URL(iconUrl, `${origin}/`)
+    url = new URL(iconUrl, `${getChromeExtensionOrigin(extension.id)}/`)
   } catch {
     return null
   }
-  if (url.origin !== origin) {
+  // Why not url.origin: Node reports "null" for chrome-extension: URLs.
+  if (parseChromeExtensionUrl(url.toString())?.extensionId !== extension.id) {
     return null
   }
   return resolveInsideExtensionDirectory(extension.path, decodeURIComponent(url.pathname))

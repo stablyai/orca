@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
 
 const SYNC_STORAGE_DIRECTORY = 'sync-storage'
 const PERSIST_DELAY_MS = 250
@@ -135,9 +136,7 @@ let syncStorageStore: BrowserExtensionSyncStorageStore | null = null
 
 export function getBrowserExtensionSyncStorageStore(): BrowserExtensionSyncStorageStore {
   if (!syncStorageStore) {
-    const store = new BrowserExtensionSyncStorageStore(
-      join(app.getPath('userData'), 'browser-extensions')
-    )
+    const store = new BrowserExtensionSyncStorageStore(getBrowserExtensionProfileDataDirectory())
     app.on('will-quit', () => store.flush())
     syncStorageStore = store
   }

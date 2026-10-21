@@ -8,6 +8,7 @@ import {
 import { forgetBrowserExtensionActionTab } from '../browser-extension-action-registry'
 import { revokeBrowserExtensionActiveTab } from '../browser-extension-active-tab'
 import {
+  emitDiscardedBrowserTabRemoved,
   noteBrowserPageGuestGone,
   takeDiscardedBrowserTabId
 } from '../browser-extension-discarded-tabs'
@@ -18,7 +19,6 @@ import {
   replaceActivatedBrowserTabId,
   resolveBrowserExtensionTab
 } from '../browser-extension-tab-model'
-import { getBrowserExtensionMainWindow } from '../browser-extension-window-model'
 
 /** Tabs announced through onCreated or onReplaced, with their window, so onRemoved matches them. */
 const announcedTabWindowIds = new Map<number, { windowId: number; isPopout: boolean }>()
@@ -48,14 +48,14 @@ function emitTabUpdated(
     if (!entry) {
       return null
     }
-    const canSee = canExtensionSeeTabUrl(extension, contents.getURL(), tabId)
-    const { url, title, ...visibleChange } = changeInfo
+    const canSee = canExtensionSeeTabUrl(extension, contents.session, contents.getURL(), tabId)
+    const { url: _url, title: _title, ...visibleChange } = changeInfo
     if (!canSee && Object.keys(visibleChange).length === 0) {
       return null
     }
     return [
       tabId,
-      canSee ? { ...visibleChange, url, title } : visibleChange,
+      canSee ? changeInfo : visibleChange,
       describeBrowserExtensionTab(extension, entry)
     ]
   })
@@ -104,11 +104,7 @@ export function announceRegisteredBrowserExtensionTab(
   const replaces = discarded?.session === contents.session
   if (discarded && !replaces) {
     // Loaded outside the session it was listed in, so that session's tab is simply gone.
-    const windowId = getBrowserExtensionMainWindow()?.id ?? -1
-    emitBrowserExtensionEvent({ session: discarded.session }, 'tabs', 'onRemoved', [
-      discarded.tabId,
-      { windowId, isWindowClosing: false }
-    ])
+    emitDiscardedBrowserTabRemoved(discarded)
   }
   if (!markAnnounced(contents)) {
     return

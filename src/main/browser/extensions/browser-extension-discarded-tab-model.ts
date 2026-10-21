@@ -74,7 +74,7 @@ export function describeBrowserExtensionDiscardedTab(
     status: 'unloaded',
     audible: false,
     mutedInfo: { muted: false },
-    ...(canExtensionSeeTabUrl(extension, tab.url, tab.tabId)
+    ...(canExtensionSeeTabUrl(extension, tab.session, tab.url, tab.tabId)
       ? { url: tab.url, title: tab.title }
       : {})
   }

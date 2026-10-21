@@ -150,6 +150,14 @@ describe('chrome.runtime native messaging in extension contexts', () => {
     expect(worker.calls.at(-1)).toEqual({ method: 'disconnect', args: [worker.portId()] })
   })
 
+  it('registers a worker for port events on every connect, so a refusal before a grant is retried', () => {
+    const worker = install({ optional_permissions: ['nativeMessaging'] }, 'worker')
+    call(worker.runtime, 'connectNative', 'com.example.vault')
+    call(worker.runtime, 'connectNative', 'com.example.vault')
+    const listen = [PRELOAD_NATIVE_MESSAGING_NAMESPACE, 'onPortEvent', true]
+    expect(worker.listens).toEqual([listen, listen])
+  })
+
   it('answers sendNativeMessage with a promise, or a callback that sees lastError', async () => {
     const page = install({ permissions: ['nativeMessaging'] })
     const promised = call(page.runtime, 'sendNativeMessage', 'com.example.vault', { q: 1 })

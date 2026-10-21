@@ -1,7 +1,12 @@
+import { MAX_PROGRAM_SIZE } from './regex-piece'
 import { translateRe2 } from './regex-translation'
 
 // regexFilter support. Chromium compiles these with RE2 under a 2KB program limit; Orca runs a
 // JS RegExp translated from the same pattern and caps size with an estimate of RE2's program.
+// Matching runs synchronously on every request, so it must stay linear-time like RE2.
+
+// The translation emits only syntax V8's linear-time engine runs, which main startup turns on
+// for runaway backtracking (enableLinearRegexpFallback).
 
 export type DnrRegexOptions = { caseSensitive: boolean; requireCapturing: boolean }
 
@@ -14,9 +19,6 @@ export type DnrRegexTranslation =
       requiredLiteral: string
     }
   | { ok: false; reason: 'syntaxError' | 'memoryLimitExceeded' }
-
-/** RE2 instructions allowed by Chromium's 2KB max_mem: (2048 * 2/3 - sizeof(Prog)) / 8. */
-const MAX_PROGRAM_SIZE = 116
 
 /**
  * What a leading ^ saves: RE2 compiles no ".*?" loop for anchored patterns and strips a literal
@@ -36,51 +38,26 @@ function anchorSavings(pattern: string): number {
   return 1 + (next === '*' || next === '+' || next === '?' || next === '{' ? length - 1 : length)
 }
 
-let linearEngineFlag: string | undefined
-
-/** V8's linear-time engine (`l`) keeps RE2's no-backtracking guarantee when enabled. */
-function linearFlag(): string {
-  if (linearEngineFlag === undefined) {
-    try {
-      // oxlint-disable-next-line no-invalid-regexp -- `l` exists only under --enable-experimental-regexp-engine; the throw is the feature test.
-      new RegExp('a', 'l')
-      linearEngineFlag = 'l'
-    } catch {
-      linearEngineFlag = ''
-    }
-  }
-  return linearEngineFlag
-}
-
 export function translateDnrRegex(pattern: string, options: DnrRegexOptions): DnrRegexTranslation {
   const translation = translateRe2(pattern, options.requireCapturing, !options.caseSensitive)
   if (translation === null) {
-    return { ok: false, reason: 'syntaxError' }
-  }
-  const flags = options.caseSensitive ? '' : 'i'
-  let regex: RegExp
-  try {
-    regex = compile(translation.source, flags)
-  } catch {
     return { ok: false, reason: 'syntaxError' }
   }
   // Fail + Match + the unanchored ".*?" loop, less what an anchor saves.
   if (translation.cost + 4 - anchorSavings(pattern) > MAX_PROGRAM_SIZE) {
     return { ok: false, reason: 'memoryLimitExceeded' }
   }
+  let regex: RegExp
+  try {
+    regex = new RegExp(translation.source)
+  } catch {
+    return { ok: false, reason: 'syntaxError' }
+  }
   return {
     ok: true,
     regex,
     captureCount: translation.captureCount,
     requiredLiteral: translation.requiredLiteral
-  }
-}
-
-function compile(source: string, flags: string): RegExp {
-  try {
-    return new RegExp(source, flags + linearFlag())
-  } catch {
-    return new RegExp(source, flags)
   }
 }
 

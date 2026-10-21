@@ -82,9 +82,11 @@ describe('isDnrRegexSupported syntax', () => {
     ['\\C', 'ok'],
     ['a{,5}', 'ok'],
     ['a{01}', 'ok'],
-    // RE2 accepts these; JS cannot read them the same way, so they are refused.
+    // RE2 accepts these; JS or V8's linear-time engine cannot run them the same way.
     ['\\pL', 'syntaxError'],
-    ['(?U)a*', 'syntaxError']
+    ['(?U)a*', 'syntaxError'],
+    ['(a){17}', 'syntaxError'],
+    ['(?:(?:(?:(?:(?:a*)+)+)+)+)+', 'syntaxError']
   ])('%s → %s', (pattern, expected) => {
     expect(verdict(pattern)).toBe(expected)
   })
@@ -130,9 +132,36 @@ describe('translated regex semantics', () => {
     ['a{01}', false, 'a{01}', true],
     ['^(?:a|b)+$', false, 'abba', true],
     ['x{2,3}?y', false, 'xxxy', true],
-    ['\\x41\\101', false, 'https://e.com/aa', true]
+    ['\\x41\\101', false, 'https://e.com/aa', true],
+    ['[a-f0-9]{32}\\.js$', false, `https://e.com/${'aB12'.repeat(8)}.js`, true],
+    ['[^a]', false, 'A', false],
+    ['(?i:ab)c', true, 'ABc', true],
+    ['(?i:ab)c', true, 'ABC', false],
+    ['(?:ab){2,3}$', false, 'xABaBab', true],
+    ['^a{0}b', false, 'b', true],
+    ['\\xc0', false, '\u00e0', true]
   ])('%s (caseSensitive=%s) on %s → %s', (pattern, caseSensitive, url, expected) => {
     expect(compile(pattern, caseSensitive).test(url)).toBe(expected)
+  })
+})
+
+// V8 reruns a runaway regex on its linear-time engine only when that engine can run it: no case
+// folding flag or (?i:...) group, and no repetition replicated past 16.
+describe('linear-time engine contract', () => {
+  it.each([
+    'ADS\\.js',
+    '(?i)ab(?-i:C)|D',
+    '[[:alpha:]_]+[^x]',
+    '^https?://[a-z0-9]{3,8}\\.com/[0-9a-f]{17}',
+    '\\b{50}x{3,}?',
+    '(a+)+$',
+    '(?:(?:ab){4}){5}'
+  ])('%s', (pattern) => {
+    const { flags, source } = compile(pattern)
+    expect(flags).toBe('')
+    expect(source).not.toMatch(/\(\?[a-z-]*i/)
+    // Counted repetitions without captures are copied out.
+    expect(source).not.toContain('{')
   })
 })
 

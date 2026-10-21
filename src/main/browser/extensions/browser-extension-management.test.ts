@@ -77,6 +77,7 @@ const loader = await import('./browser-extension-session-loader')
 const { clearBrowserExtensionSessionData } = await import('./browser-extension-data-removal')
 const { addUnpackedBrowserExtension, removeBrowserExtension } =
   await import('./browser-extension-management')
+const { withBrowserExtensionLock } = await import('./browser-extension-webstore-install')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -97,6 +98,22 @@ describe('removeBrowserExtension', () => {
     ])
     expect(mocks.store.remove).toHaveBeenCalledWith(ID)
     expect(mocks.forgetDnrState).toHaveBeenCalledWith(ID)
+  })
+
+  it('refuses while an install or update of the same extension is running', async () => {
+    mocks.records.set(ID, { id: ID, name: 'Vault', source: 'webstore' })
+    let finishUpdate = (): void => {}
+    const update = withBrowserExtensionLock(
+      ID,
+      () => new Promise<void>((resolve) => (finishUpdate = resolve))
+    )
+    expect(await removeBrowserExtension(ID)).toEqual({
+      ok: false,
+      error: 'This extension is already being installed or removed'
+    })
+    expect(mocks.store.remove).not.toHaveBeenCalled()
+    finishUpdate()
+    await update
   })
 
   it('still removes the extension when one profile cannot clear its data', async () => {

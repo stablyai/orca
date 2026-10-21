@@ -6,7 +6,10 @@ import {
   encodeBrowserExtensionWireJson
 } from '../shared/browser-extension-worker-api'
 import { BROWSER_EXTENSION_API_SURFACE } from './browser-extension-api-surface'
-import { installContentScriptRelayFilter } from './browser-extension-content-script-relay'
+import {
+  createContentScriptSyncForward,
+  installContentScriptRelayFilter
+} from './browser-extension-content-script-relay'
 import { restorePersistedContentScripts } from './browser-extension-content-script-restore'
 import {
   installBrowserExtensionDocumentTargets,
@@ -197,6 +200,10 @@ installBrowserExtensionNativeMessaging(bridge, 'worker')
 installBrowserExtensionDocumentTargets(bridge, PRELOAD_FIRST_DISCARDED_TAB_ID)
 installBrowserExtensionInertApis('worker')
 installContentScriptRelayFilter(
-  installBrowserExtensionStorageSync(bridge, PRELOAD_STORAGE_SYNC_CONSTANTS) ?? undefined
+  installBrowserExtensionStorageSync(
+    bridge,
+    PRELOAD_STORAGE_SYNC_CONSTANTS,
+    createContentScriptSyncForward() ?? undefined
+  ) ?? undefined
 )
 void restorePersistedContentScripts(invoke, globalThis)

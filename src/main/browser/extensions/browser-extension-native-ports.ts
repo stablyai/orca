@@ -245,6 +245,10 @@ export async function openNativePort(
     if (!host.ok) {
       throw new BrowserExtensionApiError(host.error)
     }
+    // Why: the owner can go away (unload, worker stop) during the lookup; never start its host then.
+    if (port.closed) {
+      throw new BrowserExtensionApiError('The port owner went away')
+    }
     const args = [nativeHostOriginArgument(caller.extension.id)]
     if (process.platform === 'win32') {
       args.push(parentWindowArgument(caller))

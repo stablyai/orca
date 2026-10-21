@@ -1,4 +1,7 @@
-import { createContentScriptRelayBridge } from './browser-extension-content-script-relay'
+import {
+  createContentScriptRelayBridge,
+  installContentScriptRelayFilter
+} from './browser-extension-content-script-relay'
 import { installBrowserExtensionInertApis } from './browser-extension-inert-apis'
 import {
   installBrowserExtensionStorageSync,
@@ -14,7 +17,12 @@ import {
 
 type ContentScriptRoot = {
   chrome?: {
-    runtime?: { sendMessage?: unknown; getManifest?: () => { background?: unknown } }
+    runtime?: {
+      id?: unknown
+      onMessage?: unknown
+      sendMessage?: unknown
+      getManifest?: () => { background?: unknown }
+    }
   }
   __orcaContentScriptApi?: true
 }
@@ -41,11 +49,11 @@ if (!root.__orcaContentScriptApi && root.chrome) {
   const runtime = root.chrome.runtime
   const sendMessage = runtime?.sendMessage
   if (runtime && typeof sendMessage === 'function' && hasServiceWorker(runtime)) {
-    installBrowserExtensionStorageSync(
-      createContentScriptRelayBridge((message) =>
-        Promise.resolve(sendMessage.call(runtime, message))
-      ),
-      PRELOAD_STORAGE_SYNC_CONSTANTS
+    const bridge = createContentScriptRelayBridge(
+      (message) => Promise.resolve(sendMessage.call(runtime, message)),
+      runtime
     )
+    installContentScriptRelayFilter()
+    installBrowserExtensionStorageSync(bridge, PRELOAD_STORAGE_SYNC_CONSTANTS)
   }
 }

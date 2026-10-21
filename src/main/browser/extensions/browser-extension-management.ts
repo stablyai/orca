@@ -32,6 +32,7 @@ import {
 } from './browser-extension-load-errors'
 import { notifyBrowserExtensionListChanged } from './browser-extension-list-changes'
 import { reviewHeldBrowserExtensionUpdate } from './browser-extension-webstore-updater'
+import { withBrowserExtensionLock } from './browser-extension-webstore-install'
 import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
 import { withExtensionEnabled, withoutExtension } from './browser-extension-profile-enablement'
 import { forgetPinnedBrowserExtension } from './browser-extension-toolbar-pins'
@@ -118,23 +119,26 @@ async function clearBrowserExtensionDataEverywhere(extensionId: string): Promise
 
 /** Removes the extension from every profile (Orca installs once, enables per profile), data included. */
 export function removeBrowserExtension(extensionId: string): Promise<BrowserExtensionActionResult> {
-  return settle(async () => {
-    // Why first: chrome.storage can only be cleared through the still-loaded extension.
-    await clearBrowserExtensionDataEverywhere(extensionId)
-    unloadBrowserExtensionEverywhere(extensionId)
-    browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-      withoutExtension(byProfile, extensionId)
-    )
-    forgetPinnedBrowserExtension(extensionId)
-    getBrowserExtensionProfileStateStore().forgetExtension(extensionId)
-    getBrowserExtensionSyncStorageStore().forgetExtension(extensionId)
-    getBrowserExtensionDnrStore().forgetExtension(extensionId)
-    forgetBrowserExtensionLoadFailures({ extensionId })
-    forgetHeldBrowserExtensionUpdate(extensionId)
-    await getBrowserExtensionInstallStore().remove(extensionId)
-    notifyChromeWebStoreUninstalled(extensionId)
-    notifyBrowserExtensionListChanged()
-  })
+  // Why the lock: an update committing mid-removal would reinstall the extension.
+  return settle(() =>
+    withBrowserExtensionLock(extensionId, async () => {
+      // Why first: chrome.storage can only be cleared through the still-loaded extension.
+      await clearBrowserExtensionDataEverywhere(extensionId)
+      unloadBrowserExtensionEverywhere(extensionId)
+      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+        withoutExtension(byProfile, extensionId)
+      )
+      forgetPinnedBrowserExtension(extensionId)
+      getBrowserExtensionProfileStateStore().forgetExtension(extensionId)
+      getBrowserExtensionSyncStorageStore().forgetExtension(extensionId)
+      getBrowserExtensionDnrStore().forgetExtension(extensionId)
+      forgetBrowserExtensionLoadFailures({ extensionId })
+      forgetHeldBrowserExtensionUpdate(extensionId)
+      await getBrowserExtensionInstallStore().remove(extensionId)
+      notifyChromeWebStoreUninstalled(extensionId)
+      notifyBrowserExtensionListChanged()
+    })
+  )
 }
 
 /** Settings › Review access for an update held because it asks for more. */

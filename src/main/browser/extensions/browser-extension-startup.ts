@@ -35,6 +35,7 @@ import {
 
 let initialized = false
 let switching = Promise.resolve()
+let savedBrowserTabs: SavedBrowserTabsSource | null = null
 
 /** Runs before browser sessions are set up; with the setting off nothing is registered or loaded. */
 export function initializeBrowserExtensionSupport(options: {
@@ -42,7 +43,7 @@ export function initializeBrowserExtensionSupport(options: {
   /** The saved workspace session, which names browser pages not loaded yet (discarded tabs). */
   savedBrowserTabs?: SavedBrowserTabsSource
 }): void {
-  setSavedBrowserTabsSource(options.savedBrowserTabs ?? null)
+  savedBrowserTabs = options.savedBrowserTabs ?? null
   setBrowserExtensionSupportEnabled(options.enabled)
   if (options.enabled) {
     installBrowserExtensionSupport()
@@ -91,6 +92,7 @@ function installBrowserExtensionSupport(): void {
     return
   }
   initialized = true
+  setSavedBrowserTabsSource(savedBrowserTabs)
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()
   installBrowserExtensionSessionServices()

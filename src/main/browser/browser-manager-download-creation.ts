@@ -11,6 +11,7 @@ import { BrowserManagerQueries } from './browser-manager-queries'
 
 export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueries {
   private unownedDownloadOwnerResolver: ((webContentsId: number) => string | null) | null = null
+  private readonly requestedFilenames = new WeakMap<Electron.DownloadItem, string>()
 
   /**
    * Extension pages and workers are never registered as tabs, so their downloads would wait
@@ -20,12 +21,17 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     this.unownedDownloadOwnerResolver = resolver
   }
 
+  /** chrome.downloads `filename`: names the item before its destination is reserved. */
+  requestDownloadFilename(item: Electron.DownloadItem, filename: string): void {
+    this.requestedFilenames.set(item, filename)
+  }
+
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
     const { guestWebContentsId, item } = args
     const downloadId = randomUUID()
     const requestedFilename = (() => {
       try {
-        return item.getFilename() || 'download'
+        return this.requestedFilenames.get(item) || item.getFilename() || 'download'
       } catch {
         return 'download'
       }

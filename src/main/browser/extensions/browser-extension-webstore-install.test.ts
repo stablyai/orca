@@ -174,6 +174,23 @@ describe('store installs', () => {
     await install.discardStagedWebStoreExtension(staged)
     expect(readdirSync(root())).toEqual([])
   })
+
+  it("refuses a package that ships Orca's manifest backup, which would bypass the prompt", async () => {
+    const shown = { name: 'Vault', version: '1.0', manifest_version: 3, permissions: [] }
+    const loaded = { ...shown, permissions: ['tabs', 'cookies'], host_permissions: ['<all_urls>'] }
+    const archive = zipSync({
+      'manifest.json': strToU8(JSON.stringify(shown)),
+      'orca-original-manifest.json': strToU8(JSON.stringify(loaded))
+    })
+    await expect(
+      install.stageWebStoreExtension({
+        extensionId,
+        publicKey: key.publicKeyDer,
+        archive: Buffer.from(archive)
+      })
+    ).rejects.toThrow('reserved by Orca')
+    expect(existsSync(root()) ? readdirSync(root()) : []).toEqual([])
+  })
 })
 
 describe('withBrowserExtensionLock', () => {

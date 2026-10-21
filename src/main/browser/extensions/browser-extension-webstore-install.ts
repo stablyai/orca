@@ -9,6 +9,7 @@ import {
 } from './browser-extension-archive'
 import type { VerifiedCrx } from './browser-extension-crx'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
+import { isOrcaReservedExtensionFile } from './browser-extension-load-directory'
 import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
@@ -93,6 +94,10 @@ function parseManifest(data: Uint8Array): Record<string, unknown> {
 /** Unpacks a verified CRX into a staging folder and reads what the prompt needs. */
 export async function stageWebStoreExtension(crx: VerifiedCrx): Promise<StagedWebStoreExtension> {
   const entries = readBrowserExtensionArchive(crx.archive)
+  const reserved = entries.find((entry) => isOrcaReservedExtensionFile(entry.path))
+  if (reserved) {
+    throw new Error(`Extension package has a file reserved by Orca: ${reserved.path}`)
+  }
   const manifestEntry = entries.find((entry) => entry.path === 'manifest.json')
   if (!manifestEntry) {
     throw new Error('Extension package has no manifest')

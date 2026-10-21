@@ -121,9 +121,9 @@ function queryTabs(
 ): chrome.tabs.Tab[] {
   const context = {
     callerWindowId: resolveCallerWindowId(caller),
-    lastFocusedWindowId: getLastFocusedBrowserExtensionWindowId(),
+    lastFocusedWindowId: getLastFocusedBrowserExtensionWindowId(caller.session),
     windowTypeById: new Map(
-      listBrowserExtensionWindows().map((entry) => [entry.window.id, entry.type])
+      listBrowserExtensionWindows(caller.session).map((entry) => [entry.window.id, entry.type])
     )
   }
   // Electron's query never sees discarded tabs, so its url/title/audio keys are applied here.
@@ -220,10 +220,13 @@ export function registerTabsNamespace(): void {
         ]),
         async (caller, ...args) => {
           const [tabId, properties] = args.length === 1 ? [null, args[0]] : args
+          // Chrome: the active tab of the caller's current window.
+          const windowId = resolveCallerWindowId(caller)
+          const isCurrent = (entry: { active: boolean; windowId: number }): boolean =>
+            entry.active && entry.windowId === windowId
           const fallbackId =
-            listBrowserExtensionTabs(caller.session).find((tab) => tab.active)?.contents.id ??
-            listBrowserExtensionDiscardedTabs(caller.session).find((entry) => entry.active)?.tab
-              .tabId
+            listBrowserExtensionTabs(caller.session).find(isCurrent)?.contents.id ??
+            listBrowserExtensionDiscardedTabs(caller.session).find(isCurrent)?.tab.tabId
           const id = tabId ?? fallbackId
           if (id === undefined) {
             throw new BrowserExtensionApiError('No active tab')

@@ -40,6 +40,14 @@ export const hex = (code: number): string =>
 export const rangesSource = (ranges: Ranges): string =>
   ranges.map(([lo, hi]) => (lo === hi ? hex(lo) : `${hex(lo)}-${hex(hi)}`)).join('')
 
+/** RE2's case folding kept within Latin-1: A-Z and À-Þ (less ×) pair with the code 0x20 above. */
+export function caseFoldPartner(code: number): number | null {
+  const upper = code & ~0x20
+  const letter =
+    (upper >= 0x41 && upper <= 0x5a) || (upper >= 0xc0 && upper <= 0xde && upper !== 0xd7)
+  return letter ? code ^ 0x20 : null
+}
+
 /** A Latin-1 character set, which is how RE2 holds a class under Chromium's encoding. */
 export class CharSet {
   private readonly members = new Uint8Array(256)
@@ -55,6 +63,16 @@ export class CharSet {
 
   negate(): this {
     this.members.forEach((member, code) => (this.members[code] = 1 - member))
+    return this
+  }
+
+  foldCase(): this {
+    this.members.forEach((member, code) => {
+      const partner = caseFoldPartner(code)
+      if (member && partner !== null) {
+        this.members[partner] = 1
+      }
+    })
     return this
   }
 

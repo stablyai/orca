@@ -25,17 +25,27 @@ export const BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE = 'orca-original-manifest.
 /** Body of every POST; `request` is a BrowserExtensionInvokeRequest for calls, absent for events. */
 export type BrowserExtensionWorkerRequestBody = { token: string; request?: unknown }
 
-const UNDEFINED_MARKER = '__orcaUndefined__'
+// Why an escape: undefined is the lone ESCAPE, and a real string starting with it gains one more,
+// so no extension string can decode as undefined.
+const ESCAPE = '\u0000'
 
 /** JSON that keeps `undefined` (optional arguments in tuples, absent event args). */
 export function encodeBrowserExtensionWireJson(value: unknown): string {
   return JSON.stringify(value, (_key, entry: unknown) =>
-    entry === undefined ? UNDEFINED_MARKER : entry
+    entry === undefined
+      ? ESCAPE
+      : typeof entry === 'string' && entry.startsWith(ESCAPE)
+        ? ESCAPE + entry
+        : entry
   )
 }
 
 export function decodeBrowserExtensionWireJson(text: string): unknown {
   return JSON.parse(text, (_key, entry: unknown) =>
-    entry === UNDEFINED_MARKER ? undefined : entry
+    typeof entry !== 'string' || !entry.startsWith(ESCAPE)
+      ? entry
+      : entry === ESCAPE
+        ? undefined
+        : entry.slice(1)
   )
 }

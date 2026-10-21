@@ -1,5 +1,9 @@
 import type { DnrEngine, DnrFrameCommit } from './declarative-net-request/engine'
 import type { DnrFrameAllowState } from './declarative-net-request/extension-matcher'
+import type { DnrResponseHeaders } from './declarative-net-request/request-context'
+
+/** What a frame's navigation request carried, which its committed document is matched with. */
+export type DnrNavigation = { url: string; isPost: boolean; responseHeaders?: DnrResponseHeaders }
 
 function originOf(url: string): string | null {
   try {
@@ -24,6 +28,8 @@ export class DnrFrameTracker {
   private readonly framesByContents = new Map<number, Set<number>>()
   private readonly topOriginByContents = new Map<number, string>()
   private readonly tabIdByContents = new Map<number, number>()
+  /** Each frame node's latest navigation request until it commits, by webContents then node. */
+  private readonly navigationsByContents = new Map<number, Map<number, DnrNavigation>>()
 
   constructor(private readonly resolveTabId: (webContentsId: number) => number) {}
 
@@ -56,12 +62,27 @@ export class DnrFrameTracker {
     return tabId
   }
 
+  noteNavigation(webContentsId: number, frameTreeNodeId: number, navigation: DnrNavigation): void {
+    let navigations = this.navigationsByContents.get(webContentsId)
+    if (!navigations) {
+      navigations = new Map()
+      this.navigationsByContents.set(webContentsId, navigations)
+    }
+    navigations.set(frameTreeNodeId, navigation)
+  }
+
   commit(
     engine: DnrEngine | null,
     webContentsId: number,
     frame: Electron.WebFrameMain,
     url: string
   ): void {
+    const node = frame.frameTreeNodeId
+    const navigations = this.navigationsByContents.get(webContentsId)
+    const noted = navigations?.get(node)
+    navigations?.delete(node)
+    // A note for another URL is from a navigation that never committed.
+    const navigation = noted?.url === url ? noted : undefined
     const parent = frame.parent
     if (!parent) {
       this.forgetContents(webContentsId)
@@ -73,11 +94,12 @@ export class DnrFrameTracker {
     if (!engine) {
       return
     }
-    const node = frame.frameTreeNodeId
     const parentState = parent ? this.allowByFrame.get(parent.frameTreeNodeId) : undefined
     // Why inherit: about:blank, srcdoc and blob documents run requests on their parent's behalf.
     const state = isNetworkUrl(url)
-      ? engine.evaluateFrameCommit(this.frameCommit(webContentsId, frame, url, parentState))
+      ? engine.evaluateFrameCommit(
+          this.frameCommit(webContentsId, frame, navigation ?? { url, isPost: false }, parentState)
+        )
       : parentState
     let frames = this.framesByContents.get(webContentsId)
     if (state && state.size > 0) {
@@ -96,14 +118,14 @@ export class DnrFrameTracker {
   private frameCommit(
     webContentsId: number,
     frame: Electron.WebFrameMain,
-    url: string,
+    { url, isPost, responseHeaders }: DnrNavigation,
     parentState: DnrFrameAllowState | undefined
   ): DnrFrameCommit {
     const committedOrigin = frame.origin
     return {
       url,
-      // Electron does not say which method committed the document.
-      isPost: false,
+      isPost,
+      responseHeaders,
       parentOrigin: frame.parent?.origin ?? null,
       ...(committedOrigin !== originOf(url) ? { committedOrigin } : {}),
       topFrameOrigin: this.topOrigin(webContentsId),
@@ -120,5 +142,6 @@ export class DnrFrameTracker {
     this.framesByContents.delete(webContentsId)
     this.topOriginByContents.delete(webContentsId)
     this.tabIdByContents.delete(webContentsId)
+    this.navigationsByContents.delete(webContentsId)
   }
 }

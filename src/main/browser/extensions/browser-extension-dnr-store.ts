@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { join } from 'node:path'
 import { z } from 'zod'
 import { BrowserExtensionSyncStorageStore } from './browser-extension-sync-storage-store'
+import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
 
 /**
  * What Chrome persists per extension per profile for declarativeNetRequest: dynamic rules, the
@@ -24,7 +24,7 @@ let store: BrowserExtensionSyncStorageStore | null = null
 export function getBrowserExtensionDnrStore(): BrowserExtensionSyncStorageStore {
   if (!store) {
     const created = new BrowserExtensionSyncStorageStore(
-      join(app.getPath('userData'), 'browser-extensions'),
+      getBrowserExtensionProfileDataDirectory(),
       'declarative-net-request'
     )
     app.on('will-quit', () => created.flush())

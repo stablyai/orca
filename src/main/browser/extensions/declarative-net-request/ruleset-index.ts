@@ -1,4 +1,4 @@
-import type { DnrDomainList } from './domain-matching'
+import { hostLabelSuffixes, type DnrDomainList } from './domain-matching'
 import type { DnrIndexedRule } from './indexed-rule'
 import { dnrNgramDictionary, patternNgrams } from './ngram-dictionary'
 import type { DnrRequestContext } from './request-context'
@@ -64,7 +64,10 @@ export function compareRulePriority(left: DnrIndexedRule, right: DnrIndexedRule)
   return right.indexPriority - left.indexPriority || right.id - left.id
 }
 
-/** Domains a host-suffix lookup can find: DomainIs matches only these at label boundaries. */
+/**
+ * Domains a host-suffix lookup can find: DomainIs matches only these at label boundaries. A
+ * domain under another listed one is left out, so no request finds the rule twice.
+ */
 function suffixKeys(list: DnrDomainList | null): readonly string[] | null {
   if (
     list === null ||
@@ -72,7 +75,10 @@ function suffixKeys(list: DnrDomainList | null): readonly string[] | null {
   ) {
     return null
   }
-  return list.domains
+  const domains = new Set(list.domains)
+  return [...domains].filter((domain) =>
+    hostLabelSuffixes(domain).every((suffix) => suffix === domain || !domains.has(suffix))
+  )
 }
 
 export class DnrRulePartition {

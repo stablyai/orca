@@ -119,7 +119,6 @@ export function installBrowserExtensionNativeMessaging(
     port: ApiObject
   }
   const ports = new Map<string, PortState>()
-  let listening = false
   let counter = 0
 
   const endPort = (id: string, entry: PortState, error: string | null): void => {
@@ -159,9 +158,9 @@ export function installBrowserExtensionNativeMessaging(
         'Error in invocation of runtime.connectNative(string application): No matching signature.'
       )
     }
-    // Why lazily: the listen needs the permission, which may be granted only later.
-    if (context === 'worker' && !listening) {
-      listening = true
+    // Why every connect: main refuses the listen until an optional permission is granted, and
+    // a repeated listen is a no-op.
+    if (context === 'worker') {
       bridge.listen(namespace, portEvent, true)
     }
     counter += 1

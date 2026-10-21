@@ -84,6 +84,7 @@ function requireInside(directory: string, relativePath: string): string {
   return target
 }
 
+// Why the backup can be trusted: packages never supply Orca's file names (see isOrcaReservedExtensionFile).
 async function readOriginalManifest(
   directory: string
 ): Promise<{ originalText: string; original: Record<string, unknown> }> {
@@ -109,7 +110,7 @@ function manifestKey(
 
 /** The id an unpacked folder will load under, read without copying or loading anything. */
 export async function browserExtensionIdForUnpackedFolder(directory: string): Promise<string> {
-  const { original } = await readOriginalManifest(directory)
+  const original = parseManifest(await readFile(join(directory, 'manifest.json'), 'utf8'))
   return chromeExtensionIdFromKey(manifestKey(original, { source: 'unpacked', path: directory }))
 }
 
@@ -124,6 +125,11 @@ const ORCA_GENERATED_FILE_NAMES = new Set([
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_WRAPPER_FILE
 ])
+
+/** A file only Orca may write; a package that ships one could swap the manifest Orca loads. */
+export function isOrcaReservedExtensionFile(path: string): boolean {
+  return ORCA_GENERATED_FILE_NAMES.has(basename(path))
+}
 
 // Why skip Orca's own files: they appear only after the first load, and listing them would change
 // the manifest on the next launch and needlessly re-register the worker.
@@ -146,7 +152,7 @@ async function prepare(
     await cp(extension.path, directory, {
       recursive: true,
       dereference: true,
-      filter: (source) => basename(source) !== '.git'
+      filter: (source) => basename(source) !== '.git' && !isOrcaReservedExtensionFile(source)
     })
   }
   const originalPath = join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE)

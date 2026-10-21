@@ -67,7 +67,7 @@ export function observeBrowserExtensionCommands(contents: Electron.WebContents):
     const entry = resolveBrowserExtensionTab(contents.id)
     const tab = entry ? describeBrowserExtensionTab(extension, entry) : undefined
     if (EXECUTE_ACTION_COMMANDS.has(name)) {
-      runBrowserExtensionToolbarAction(session, extension).catch((error: unknown) => {
+      runBrowserExtensionToolbarAction(contents, extension).catch((error: unknown) => {
         console.warn('[browser-extensions] Could not run the extension action:', error)
       })
       return

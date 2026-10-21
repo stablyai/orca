@@ -3,11 +3,13 @@ import type { Store } from '../../persistence'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { browserManager } from '../browser-manager'
+import { emitBrowserExtensionEvent } from './browser-extension-api-host'
 import {
   getBrowserExtensionProfile,
   getBrowserExtensionProfileForPartition,
   getBrowserExtensionSessionForProfile
 } from './browser-extension-session-loader'
+import { getBrowserExtensionMainWindow } from './browser-extension-window-model'
 
 /**
  * Orca mounts a browser page's <webview> only when the page is first shown, so a restored page
@@ -84,13 +86,25 @@ function hasLiveGuest(browserPageId: string): boolean {
   return Boolean(contents && !contents.isDestroyed())
 }
 
+/** tabs.onRemoved for a synthetic tab, which has no guest whose destruction would announce it. */
+export function emitDiscardedBrowserTabRemoved(tab: {
+  tabId: number
+  session: Electron.Session
+}): void {
+  const windowId = getBrowserExtensionMainWindow()?.id ?? -1
+  emitBrowserExtensionEvent({ session: tab.session }, 'tabs', 'onRemoved', [
+    tab.tabId,
+    { windowId, isWindowClosing: false }
+  ])
+}
+
 /** Main's copy of the renderer's saved browser tabs; read on every listing, so never stale for long. */
 export function setSavedBrowserTabsSource(next: SavedBrowserTabsSource | null): void {
   stopWatchingWrites?.()
   source = next
   stopWatchingWrites =
     next?.onWorkspaceSessionWritten((hostId) => {
-      if (unloadedPageIds.size === 0) {
+      if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
         return
       }
       const allHostIds = next.getWorkspaceSessionHostIds()
@@ -99,6 +113,13 @@ export function setSavedBrowserTabsSource(next: SavedBrowserTabsSource | null): 
       for (const pageId of unloadedPageIds) {
         if (written.has(pageId) || !anywhere.has(pageId)) {
           unloadedPageIds.delete(pageId)
+        }
+      }
+      // A listed page no save keeps was closed before its guest ever loaded.
+      for (const [pageId, assigned] of assignedByPageId) {
+        if (!anywhere.has(pageId)) {
+          assignedByPageId.delete(pageId)
+          emitDiscardedBrowserTabRemoved(assigned)
         }
       }
     }) ?? null

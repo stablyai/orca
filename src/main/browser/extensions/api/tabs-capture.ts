@@ -56,7 +56,7 @@ async function captureVisibleTab(
 ): Promise<string> {
   const resolvedId =
     windowId == null || windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
-  if (resolvedId === null || !getBrowserExtensionWindow(resolvedId)) {
+  if (resolvedId === null || !getBrowserExtensionWindow(resolvedId, caller.session)) {
     throw new BrowserExtensionApiError(`No window with id: ${windowId ?? WINDOW_ID_CURRENT}.`)
   }
   const tab = listBrowserExtensionTabs(caller.session).find(

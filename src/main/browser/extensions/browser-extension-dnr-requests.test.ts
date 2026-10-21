@@ -271,6 +271,52 @@ describe('declarativeNetRequest in Orca request handlers', () => {
     ).toBeNull()
   })
 
+  it('keeps allowAllRequests that matched on the navigation method or response headers', async () => {
+    const { session, runtime } = await loadedSession(
+      blocker([
+        { id: 1, condition: { urlFilter: '||ads.example^' }, action: { type: 'block' } },
+        {
+          id: 2,
+          priority: 2,
+          condition: {
+            requestDomains: ['site.example'],
+            resourceTypes: ['main_frame'],
+            responseHeaders: [{ header: 'x-allow', values: ['yes'] }]
+          },
+          action: { type: 'allowAllRequests' }
+        },
+        {
+          id: 3,
+          priority: 2,
+          condition: {
+            requestDomains: ['form.example'],
+            resourceTypes: ['main_frame'],
+            requestMethods: ['post']
+          },
+          action: { type: 'allowAllRequests' }
+        }
+      ])
+    )
+    const frame = { frameTreeNodeId: 1, origin: '', parent: null, isDestroyed: () => false }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the DNR code reads only these frame members.
+    const mainFrame = frame as unknown as Electron.WebFrameMain
+    const navigate = (url: string, method: string, responseHeaders: Record<string, string[]>) => {
+      frame.origin = new URL(url).origin
+      const request = details(url, { resourceType: 'mainFrame', method, frame: mainFrame })
+      decider.beforeRequest(session, request)
+      decider.headersReceived(session, headersReceived(request, responseHeaders))
+      runtime.frames.commit(runtime.engine, TAB, mainFrame, url)
+      return decider.beforeRequest(
+        session,
+        details('https://ads.example/a.js', { frame: mainFrame })
+      )
+    }
+    expect(navigate('https://site.example/', 'GET', { 'X-Allow': ['yes'] })).toBeNull()
+    expect(navigate('https://site.example/', 'GET', {})).toEqual({ cancel: true })
+    expect(navigate('https://form.example/submit', 'POST', {})).toBeNull()
+    expect(navigate('https://form.example/submit', 'GET', {})).toEqual({ cancel: true })
+  })
+
   it("shows blocked requests on the tab's badge once asked, and restarts it per document", async () => {
     const extension = blocker([
       { id: 1, condition: { urlFilter: '||ads.example^' }, action: { type: 'block' } }

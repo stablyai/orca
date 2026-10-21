@@ -141,6 +141,24 @@ describe('modifyHeaders', () => {
     ])
   })
 
+  it('matches a rule once when several of its domains cover the request', () => {
+    const domains = ['example.com', 'sub.example.com', 'example.com']
+    const engine = engineWith({
+      [OLD]: [
+        { ...setHeader('x-url', '1'), condition: { requestDomains: domains } },
+        {
+          ...setHeader('x-regex', '1'),
+          condition: { regexFilter: '.*', initiatorDomains: domains }
+        }
+      ]
+    })
+    const { actions } = engine.evaluateBeforeRequest(
+      request('https://a.sub.example.com/', { initiator: 'https://sub.example.com' }),
+      createDnrRequestState()
+    )
+    expect(actions.map((action) => action.rule.ruleId)).toEqual([2, 1])
+  })
+
   it('is suppressed entirely by a block from any extension', () => {
     const engine = engineWith({ [OLD]: [{ condition: {} }], [NEW]: [setHeader('x', '1', 9)] })
     expect(

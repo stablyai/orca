@@ -12,7 +12,8 @@ import {
   extensionHasPermission,
   type BrowserExtensionCaller
 } from './browser-extension-namespace-registry'
-import { matchesExtensionMatchPattern } from './browser-extension-match-pattern'
+import { hasBrowserExtensionHostPermission } from './browser-extension-permission-grants'
+import { browserExtensionHostPatternsInSession } from './api/permissions'
 import { closeBrowserExtensionPopup } from './browser-extension-popup-host'
 import { hasBrowserExtensionActiveTab } from './browser-extension-active-tab'
 import {
@@ -158,27 +159,22 @@ export function resolveCallerWindowId(caller: BrowserExtensionCaller): number | 
     return getBrowserExtensionMainWindow()?.id ?? null
   }
   // Chrome: a background context's "current" window is the last focused one.
-  return getLastFocusedBrowserExtensionWindowId()
+  return getLastFocusedBrowserExtensionWindowId(caller.session)
 }
 
-/** Chrome exposes url/title only with the "tabs" permission or a matching host permission. */
+/** Chrome shows url/title with "tabs" or a matching host permission, optional grants included. */
 export function canExtensionSeeTabUrl(
   extension: Electron.Extension,
+  sess: Electron.Session,
   url: string,
   tabId?: number
 ): boolean {
-  if (
+  return (
     url.startsWith(`${getChromeExtensionOrigin(extension.id)}/`) ||
-    extensionHasPermission(extension, 'tabs') ||
-    (tabId !== undefined && hasBrowserExtensionActiveTab(extension.id, tabId))
-  ) {
-    return true
-  }
-  const manifest: { permissions?: unknown; host_permissions?: unknown } = extension.manifest ?? {}
-  const patterns = [manifest.permissions, manifest.host_permissions].flatMap((list) =>
-    Array.isArray(list) ? list.filter((entry): entry is string => typeof entry === 'string') : []
+    extensionHasPermission(extension, 'tabs', sess) ||
+    (tabId !== undefined && hasBrowserExtensionActiveTab(extension.id, tabId)) ||
+    hasBrowserExtensionHostPermission(browserExtensionHostPatternsInSession(extension, sess), url)
   )
-  return patterns.some((pattern) => matchesExtensionMatchPattern(pattern, url))
 }
 
 function tabStatus(contents: Electron.WebContents): 'loading' | 'complete' {
@@ -213,7 +209,7 @@ export function describeBrowserExtensionTab(
   const url = entry.contents.getURL()
   return {
     ...orcaTabFields(entry),
-    ...(canExtensionSeeTabUrl(extension, url, entry.contents.id)
+    ...(canExtensionSeeTabUrl(extension, entry.contents.session, url, entry.contents.id)
       ? { url, title: entry.contents.getTitle() }
       : {})
   }

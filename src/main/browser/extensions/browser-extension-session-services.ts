@@ -2,6 +2,8 @@ import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../shared/browser-extension-url'
 import { browserManager } from '../browser-manager'
 import { observeBrowserExtensionCookieChanges } from './api/cookies'
+import { observeBrowserExtensionActionSession } from './browser-extension-action-registry'
+import { revokeBrowserExtensionActiveTabInSession } from './browser-extension-active-tab'
 import { getBrowserExtensionProfileIdForSession } from './browser-extension-api-host'
 import { getActiveBrowserTabId } from './browser-extension-tab-model'
 import {
@@ -53,12 +55,15 @@ export function installBrowserExtensionSessionServices(): void {
     attached: (sess, profileId, enabledExtensionIds) => {
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
+      // Why at attach: chrome.action calls create state before any toolbar asks for it.
+      observeBrowserExtensionActionSession(sess)
       attachBrowserExtensionDnr(sess, profileId, enabledExtensionIds)
       if (!servedSessions.has(sess)) {
         servedSessions.add(sess)
-        sess.extensions.on('extension-unloaded', (_event, extension) =>
+        sess.extensions.on('extension-unloaded', (_event, extension) => {
           forgetBrowserExtensionContentScriptRestore(sess, extension.id)
-        )
+          revokeBrowserExtensionActiveTabInSession(sess, extension.id)
+        })
       }
     },
     detached: stopObservingBrowserExtensionWebRequests,

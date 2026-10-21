@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
 
 const STATE_FILE_NAME = 'profile-state.json'
 const PERSIST_DELAY_MS = 250
@@ -155,9 +156,7 @@ let stateStore: BrowserExtensionProfileStateStore | null = null
 
 export function getBrowserExtensionProfileStateStore(): BrowserExtensionProfileStateStore {
   if (!stateStore) {
-    const store = new BrowserExtensionProfileStateStore(
-      join(app.getPath('userData'), 'browser-extensions')
-    )
+    const store = new BrowserExtensionProfileStateStore(getBrowserExtensionProfileDataDirectory())
     app.on('will-quit', () => store.flush())
     stateStore = store
   }

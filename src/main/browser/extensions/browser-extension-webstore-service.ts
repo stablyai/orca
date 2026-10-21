@@ -108,13 +108,12 @@ export const chromeWebStoreInstallFlow = new ChromeWebStoreInstallFlow({
         }
       : null
   },
-  uninstall: (extensionId) =>
-    withBrowserExtensionLock(extensionId, async () => {
-      const result = await removeBrowserExtension(extensionId)
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-    }),
+  uninstall: async (extensionId) => {
+    const result = await removeBrowserExtension(extensionId)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+  },
   // Why deferred: Chrome answers the page's callback before raising the management event.
   notifyInstalled: (extension) => setImmediate(() => notifyChromeWebStoreInstalled(extension)),
   notifyUninstalled: (extensionId) =>

@@ -150,6 +150,7 @@ export function BrowserExtensionInstallDialog(): React.JSX.Element {
   return (
     <Dialog open={activeRequest !== null} onOpenChange={(open) => !open && respond(false)}>
       <DialogContent
+        surface="security"
         showCloseButton={false}
         className="sm:max-w-md"
         onOpenAutoFocus={(event) => {

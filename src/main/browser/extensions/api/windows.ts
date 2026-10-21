@@ -78,7 +78,7 @@ function requireWindow(
   windowId: number
 ): BrowserExtensionWindowEntry {
   const resolvedId = windowId === WINDOW_ID_CURRENT ? resolveCallerWindowId(caller) : windowId
-  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId)
+  const entry = resolvedId === null ? null : getBrowserExtensionWindow(resolvedId, caller.session)
   if (!entry) {
     throw new BrowserExtensionApiError(`No window with id: ${windowId}.`)
   }
@@ -125,7 +125,7 @@ export function registerWindowsNamespace(): void {
       getAll: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
         (caller, options) =>
-          listBrowserExtensionWindows()
+          listBrowserExtensionWindows(caller.session)
             .filter((entry) => !options?.windowTypes || options.windowTypes.includes(entry.type))
             .map((entry) => describe(caller, entry, options))
       ),
@@ -140,7 +140,7 @@ export function registerWindowsNamespace(): void {
       getLastFocused: defineBrowserExtensionMethod(
         z.tuple([queryOptionsSchema.optional()]),
         (caller, options) => {
-          const windowId = getLastFocusedBrowserExtensionWindowId()
+          const windowId = getLastFocusedBrowserExtensionWindowId(caller.session)
           return describe(caller, requireWindow(caller, windowId ?? WINDOW_ID_CURRENT), options)
         }
       ),

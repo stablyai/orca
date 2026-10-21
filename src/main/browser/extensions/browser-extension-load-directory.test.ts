@@ -178,6 +178,20 @@ describe('extension load directories', () => {
     expect(existsSync(join(prepared.directory, 'orca-extension-api.js'))).toBe(false)
   })
 
+  it("loads an unpacked folder's own manifest even when it ships Orca's backup", async () => {
+    const source = join(mocks.userData, 'dev', 'with-backup')
+    writeExtension(source, { manifest_version: 3, name: 'Shown', version: '1' })
+    writeFileSync(
+      join(source, 'orca-original-manifest.json'),
+      JSON.stringify({ manifest_version: 3, name: 'Hidden', version: '1', key: STORE_KEY })
+    )
+    const predicted = await browserExtensionIdForUnpackedFolder(source)
+    const prepared = await prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
+    expect(prepared.extensionId).toBe(predicted)
+    expect(prepared.extensionId).not.toBe(chromeExtensionIdFromKey(STORE_KEY))
+    expect(readJson(join(prepared.directory, 'manifest.json'))).toMatchObject({ name: 'Shown' })
+  })
+
   it('refuses Manifest V2', async () => {
     const source = join(mocks.userData, 'dev', 'legacy')
     writeExtension(source, { manifest_version: 2, name: 'Old', version: '1' })

@@ -263,13 +263,25 @@ export function requestBrowserExtensionPopup(
   })
 }
 
+/**
+ * The tab a shortcut pressed in `contents` acts on: that tab, else (an action popup) the active
+ * page's, and only if it is in the same profile; the active page may be another profile's.
+ */
+function shortcutTabId(contents: Electron.WebContents): number | null {
+  const tab = liveContents(
+    resolveBrowserExtensionTab(contents.id)?.contents.id ?? getActiveBrowserTabId()
+  )
+  return tab && tab.session === contents.session ? tab.id : null
+}
+
 /** _execute_action: what clicking the extension's toolbar button does, from a keyboard command. */
 export async function runBrowserExtensionToolbarAction(
-  sess: Electron.Session,
+  contents: Electron.WebContents,
   extension: Electron.Extension
 ): Promise<void> {
+  const sess = contents.session
   const profileId = getBrowserExtensionProfileIdForSession(sess)
-  const tabId = getActiveBrowserTabId()
+  const tabId = shortcutTabId(contents)
   if (!profileId || tabId === null) {
     return
   }

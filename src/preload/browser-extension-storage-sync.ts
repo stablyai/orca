@@ -16,11 +16,21 @@ export const PRELOAD_STORAGE_SYNC_CONSTANTS: Record<string, number> = {
   MAX_SUSTAINED_WRITE_OPERATIONS_PER_MINUTE: 1_000_000
 }
 
-/** Runs a content script's sync call here, as if this context made it (see the content-script relay). */
+/**
+ * Runs a content script's sync call here, as if this context made it (see the content-script
+ * relay). `from` names the calling content script so its own changes are not sent back to it.
+ */
 export type BrowserExtensionStorageSyncRelay = (
   method: string,
-  args: unknown[]
+  args: unknown[],
+  from?: string
 ) => Promise<BrowserExtensionInvokeReply>
+
+/** The worker's way to pass every sync change it sees on to its content scripts. */
+export type BrowserExtensionStorageSyncForward = (
+  changes: Record<string, unknown>,
+  from?: string
+) => void
 
 type ApiObject = Record<string, unknown>
 type ExtensionCallable = (...args: unknown[]) => unknown
@@ -36,7 +46,8 @@ type ExtensionCallable = (...args: unknown[]) => unknown
  */
 export function installBrowserExtensionStorageSync(
   bridge: BrowserExtensionMainWorldBridge,
-  constants: Record<string, number>
+  constants: Record<string, number>,
+  forward?: BrowserExtensionStorageSyncForward
 ): BrowserExtensionStorageSyncRelay | null {
   const namespace = 'orcaStorageSync'
   const isObject = (value: unknown): value is ApiObject =>
@@ -99,8 +110,10 @@ export function installBrowserExtensionStorageSync(
   const areaListeners = new Set<ExtensionCallable>()
   const storageListeners: Set<ExtensionCallable>[] = []
   let listening = false
+  // Why always with `forward`: content scripts hear other contexts' changes only through it.
   const syncListening = (): void => {
-    const active = [areaListeners, ...storageListeners].some((set) => set.size > 0)
+    const active =
+      Boolean(forward) || [areaListeners, ...storageListeners].some((set) => set.size > 0)
     if (active !== listening) {
       listening = active
       bridge.listen(namespace, 'onChanged', active)
@@ -127,7 +140,7 @@ export function installBrowserExtensionStorageSync(
     hasListener: (callback: unknown) => isCallable(callback) && registered.has(callback),
     hasListeners: () => registered.size > 0
   })
-  const deliver = (changes: ApiObject): void => {
+  const deliver = (changes: ApiObject, from?: string): void => {
     const calls: [ExtensionCallable, unknown[]][] = [
       ...[...areaListeners].map((callback): [ExtensionCallable, unknown[]] => [
         callback,
@@ -144,6 +157,7 @@ export function installBrowserExtensionStorageSync(
         console.error(error)
       }
     }
+    forward?.(changes, from)
   }
   bridge.onEvent((eventNamespace, event, args) => {
     const [changes] = args
@@ -213,9 +227,10 @@ export function installBrowserExtensionStorageSync(
       makeEvent(registered, isObject(storage.onChanged) ? storage.onChanged : null)
     )
   }
+  syncListening()
   const relayable = new Set(['get', 'getKeys', 'getBytesInUse', ...writes])
   // Why deliver here too: main skips this context's listeners for a write made on its behalf.
-  return async (name, args) => {
+  return async (name, args, from) => {
     if (!relayable.has(name)) {
       return { ok: false, error: `storage.sync.${name} is not available here` }
     }
@@ -226,7 +241,7 @@ export function installBrowserExtensionStorageSync(
       isObject(reply.value) &&
       Object.keys(reply.value).length > 0
     ) {
-      deliver(reply.value)
+      deliver(reply.value, from)
     }
     return reply
   }

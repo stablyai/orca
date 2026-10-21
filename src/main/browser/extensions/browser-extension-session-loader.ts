@@ -36,6 +36,8 @@ type ProfileSessionState = {
   profile: BrowserSessionProfile
   session: Electron.Session
   loading: Promise<void>
+  /** Startup loads not landed yet; an unload drops its id so the late load is undone. */
+  startupPending: Set<string>
 }
 
 /** Per-session services and per-extension restart restore, supplied by browser-extension-startup. */
@@ -156,6 +158,7 @@ export function attachBrowserExtensionsToProfileSession(
   sessionHooks?.attached(sess, profile.id, enabledExtensionIds)
   const store = getBrowserExtensionInstallStore()
   const installedIds = new Set(store.list().map((extension) => extension.id))
+  const startupPending = new Set(enabledExtensionIds)
   const loading = removeOrphanedBrowserExtensionStorage(sess.getStoragePath(), installedIds)
     .catch((error: unknown) => {
       console.warn('[browser-extensions] Could not remove data of uninstalled extensions:', error)
@@ -164,11 +167,18 @@ export function attachBrowserExtensionsToProfileSession(
       Promise.all(
         enabledExtensionIds.map(async (extensionId) => {
           const installed = store.get(extensionId)
-          if (!installed) {
+          if (!installed || !startupPending.has(extensionId)) {
             return
           }
           try {
             const loaded = await loadInstalledIntoSession(sess, profile.id, installed, 'startup')
+            // Why: disabled or removed while this load was in flight.
+            if (!startupPending.delete(extensionId)) {
+              if (sess.extensions.getExtension(loaded.id)) {
+                removeBrowserExtensionFromSession(sess, loaded.id)
+              }
+              return
+            }
             await sessionHooks?.loaded(sess, profile.id, loaded)
           } catch (error) {
             console.warn(`[browser-extensions] Failed to load ${extensionId}:`, error)
@@ -177,7 +187,7 @@ export function attachBrowserExtensionsToProfileSession(
       )
     )
     .then(() => undefined)
-  stateByProfileId.set(profile.id, { profile, session: sess, loading })
+  stateByProfileId.set(profile.id, { profile, session: sess, loading, startupPending })
 }
 
 /** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
@@ -192,19 +202,19 @@ async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
   sessionHooks?.detached(state.session)
 }
 
-/** Profile delete: unload everything so a retired session keeps no extension running. */
+/** Profile delete: unload everything, then purge its saved extension data even if never attached. */
 export async function detachBrowserExtensionsFromProfileSession(
   profile: BrowserSessionProfile
 ): Promise<void> {
   const state = stateByProfileId.get(profile.id)
-  if (!state) {
-    return
+  if (state) {
+    stateByProfileId.delete(profile.id)
+    // Why first: startup loads still in flight write worker and lifecycle state.
+    await unloadProfileSession(state)
   }
-  stateByProfileId.delete(profile.id)
   getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
   getBrowserExtensionSyncStorageStore().forgetProfile(profile.id)
   getBrowserExtensionDnrStore().forgetProfile(profile.id)
-  await unloadProfileSession(state)
 }
 
 /** The experimental setting turned off: every profile drops its extensions until it turns on. */
@@ -289,9 +299,10 @@ export async function loadBrowserExtensionFolderIntoProfile(
 
 export function unloadBrowserExtensionFromProfile(profileId: string, extensionId: string): void {
   clearBrowserExtensionLoadFailure(profileId, extensionId)
-  const sess = stateByProfileId.get(profileId)?.session
-  if (sess?.extensions.getExtension(extensionId)) {
-    removeBrowserExtensionFromSession(sess, extensionId)
+  const state = stateByProfileId.get(profileId)
+  state?.startupPending.delete(extensionId)
+  if (state?.session.extensions.getExtension(extensionId)) {
+    removeBrowserExtensionFromSession(state.session, extensionId)
   }
 }
 

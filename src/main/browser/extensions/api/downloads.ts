@@ -1,6 +1,9 @@
 import { webContents as allWebContents } from 'electron'
 import { z } from 'zod'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import {
+  getChromeExtensionOrigin,
+  parseChromeExtensionUrl
+} from '../../../../shared/browser-extension-url'
 import { browserManager } from '../../browser-manager'
 import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
 import {
@@ -13,6 +16,8 @@ import { getActiveBrowserTabId } from '../browser-extension-tab-model'
 
 const WILL_DOWNLOAD_TIMEOUT_MS = 15_000
 let nextDownloadId = 1
+/** Owner + URL → the start in flight; will-download names no caller, so identical starts take turns. */
+const startsInFlight = new Map<string, Promise<unknown>>()
 
 const optionsSchema = z
   .object({
@@ -22,7 +27,7 @@ const optionsSchema = z
     method: z.enum(['GET', 'POST']),
     headers: z.array(z.object({ name: z.string(), value: z.string() })),
     body: z.string(),
-    conflictAction: z.string()
+    conflictAction: z.enum(['uniquify', 'overwrite', 'prompt'])
   })
   .partial()
   .required({ url: true })
@@ -83,7 +88,8 @@ function resolveDownloadUrl(caller: BrowserExtensionCaller, raw: string): string
   } catch {
     throw new BrowserExtensionApiError('Invalid URL')
   }
-  const ownPage = url.protocol === 'chrome-extension:' && url.origin === origin
+  // Why not url.origin: Node reports "null" for chrome-extension: URLs.
+  const ownPage = parseChromeExtensionUrl(url.toString())?.extensionId === caller.extension.id
   if (!ownPage && !['http:', 'https:', 'data:', 'blob:'].includes(url.protocol)) {
     throw new BrowserExtensionApiError('Invalid URL')
   }
@@ -116,17 +122,31 @@ function track(caller: BrowserExtensionCaller, id: number, item: Electron.Downlo
   })
 }
 
-async function download(
-  caller: BrowserExtensionCaller,
-  options: z.infer<typeof optionsSchema>
-): Promise<number> {
-  if (options.method === 'POST') {
-    throw new BrowserExtensionApiError('Orca downloads only with GET')
+/** Chrome's rule: relative to Downloads, no back-references. Orca keeps only the last segment. */
+function requestedFilename(raw: string | undefined): string | undefined {
+  if (raw === undefined) {
+    return undefined
   }
-  const url = resolveDownloadUrl(caller, options.url)
-  const owner = downloadOwner(caller)
+  const segments = raw.split(/[\\/]/)
+  if (
+    raw.trim() === '' ||
+    /^([\\/]|[A-Za-z]:)/.test(raw) ||
+    segments.some((segment) => segment === '..')
+  ) {
+    throw new BrowserExtensionApiError('Invalid filename')
+  }
+  return raw
+}
+
+function startDownload(
+  caller: BrowserExtensionCaller,
+  owner: Electron.WebContents,
+  url: string,
+  options: z.infer<typeof optionsSchema>,
+  filename: string | undefined
+): Promise<number> {
   const id = nextDownloadId++
-  const started = new Promise<void>((resolve, reject) => {
+  const started = new Promise<number>((resolve, reject) => {
     const timer = setTimeout(() => {
       caller.session.off('will-download', onWillDownload)
       reject(new BrowserExtensionApiError('The download did not start'))
@@ -141,17 +161,53 @@ async function download(
       }
       clearTimeout(timer)
       caller.session.off('will-download', onWillDownload)
+      if (filename !== undefined) {
+        browserManager.requestDownloadFilename(item, filename)
+      }
       track(caller, id, item)
-      resolve()
+      resolve(id)
     }
-    caller.session.on('will-download', onWillDownload)
+    // Why prepend: the download manager's listener reserves the destination from the filename.
+    caller.session.prependListener('will-download', onWillDownload)
   })
   const headers = Object.fromEntries(
     (options.headers ?? []).map(({ name, value }) => [name, value])
   )
   owner.downloadURL(url, { headers })
-  await started
-  return id
+  return started
+}
+
+async function download(
+  caller: BrowserExtensionCaller,
+  options: z.infer<typeof optionsSchema>
+): Promise<number> {
+  if (options.method === 'POST') {
+    throw new BrowserExtensionApiError('Orca downloads only with GET')
+  }
+  // Why reject: Orca saves every download into Downloads under a unique name, without asking.
+  if (options.saveAs === true) {
+    throw new BrowserExtensionApiError('Orca cannot ask where to save a download')
+  }
+  if (options.conflictAction !== undefined && options.conflictAction !== 'uniquify') {
+    throw new BrowserExtensionApiError('Orca saves downloads only with conflictAction "uniquify"')
+  }
+  const filename = requestedFilename(options.filename)
+  const url = resolveDownloadUrl(caller, options.url)
+  const owner = downloadOwner(caller)
+  const key = `${owner.id} ${url}`
+  const previous = startsInFlight.get(key) ?? Promise.resolve()
+  const start = previous.then(
+    () => startDownload(caller, owner, url, options, filename),
+    () => startDownload(caller, owner, url, options, filename)
+  )
+  startsInFlight.set(key, start)
+  try {
+    return await start
+  } finally {
+    if (startsInFlight.get(key) === start) {
+      startsInFlight.delete(key)
+    }
+  }
 }
 
 export function registerDownloadsNamespace(): void {

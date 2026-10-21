@@ -231,6 +231,19 @@ describe('native messaging ports', () => {
     expect(mocks.workerEvents).not.toHaveBeenCalled()
   })
 
+  it('starts no host when its extension unloads during the host lookup', async () => {
+    const { session, emitter } = fakeSession()
+    const { caller } = workerCaller(session)
+    let finishLookup: (value: unknown) => void = () => {}
+    mocks.lookup.mockReturnValueOnce(new Promise((resolve) => (finishLookup = resolve)))
+    const connecting = call(caller, 'connect', 'late', 'com.example.vault')
+    await vi.waitFor(() => expect(mocks.lookup).toHaveBeenCalled())
+    emitter.extensions.emit('extension-unloaded', {}, { id: VAULT })
+    finishLookup({ ok: true, program: '/opt/vault/host', manifestPath: '/m.json' })
+    await expect(connecting).rejects.toThrow('The port owner went away')
+    expect(mocks.hosts).toEqual([])
+  })
+
   it('sends one message, returns the first reply and closes the host', async () => {
     const { session } = fakeSession()
     const { caller } = workerCaller(session)

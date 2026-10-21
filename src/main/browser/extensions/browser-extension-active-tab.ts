@@ -1,6 +1,9 @@
+import { webContents } from 'electron'
+
 /**
  * activeTab: invoking an extension's action (click, popup, keyboard command) lets it read that
- * tab's URL and title until the tab loads another document or closes, as Chrome grants it.
+ * tab's URL and title until the tab loads another document or closes, or the extension unloads,
+ * as Chrome grants it.
  * Orca's own APIs honor the grant too (tabs.captureVisibleTab). Script access does not follow:
  * Electron's native scripting.executeScript/insertCSS check only manifest host permissions, and
  * Electron has no API to add Chromium's per-tab grant, so those calls still fail with Chrome's
@@ -24,4 +27,16 @@ export function hasBrowserExtensionActiveTab(extensionId: string, tabId: number)
 
 export function revokeBrowserExtensionActiveTab(tabId: number): void {
   grantsByTabId.delete(tabId)
+}
+
+/** The extension unloaded from `sess`: its grants on that session's tabs end. */
+export function revokeBrowserExtensionActiveTabInSession(
+  sess: Electron.Session,
+  extensionId: string
+): void {
+  for (const [tabId, grants] of grantsByTabId) {
+    if (webContents.fromId(tabId)?.session === sess) {
+      grants.delete(extensionId)
+    }
+  }
 }
