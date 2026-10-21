@@ -8,6 +8,7 @@ import {
 } from './mobile-existing-agent-launch'
 import {
   hostRefusesOtherRuntimeWorkspace,
+  hostScopesAgentDetection,
   loadMobileAgentLaunchContext
 } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
@@ -44,7 +45,8 @@ export async function launchAgentWithPrompt(args: {
       await loadMobileAgentLaunchContext({
         client: args.client,
         worktreeId: args.worktreeId,
-        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
+        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities),
+        hostScopesDetection: hostScopesAgentDetection(args.hostCapabilities)
       }),
       args.actionId
     )

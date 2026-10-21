@@ -36,6 +36,24 @@ export const runtimeRepoListSchema = z
   .transform((reply) => reply.repos)
 
 /**
+ * The repos, project groups and folder workspaces an older host's agent detection is checked
+ * against (legacy-host-folder-agent-trust.ts). Nothing drops: that check must see every row, so a
+ * malformed row or list reaches it (a list as null) and fails closed instead of vanishing.
+ */
+function placementListSchema<const Key extends string>(key: Key) {
+  return z
+    .looseObject({ [key]: salvagedOptional(key, z.array(z.unknown())) })
+    .transform((reply): unknown[] | null => reply[key] ?? null)
+}
+
+export const repoPlacementListSchema = placementListSchema('repos')
+export const projectGroupPlacementListSchema = placementListSchema('groups')
+export const folderWorkspacePlacementListSchema = placementListSchema('folderWorkspaces')
+
+/** `status.get`, passed whole to readMobileRuntimeHostPlatform, which owns the platform domain. */
+export const hostStatusSchema = z.looseObject({})
+
+/**
  * The agents a host reports for a workspace.
  *
  * An array and nothing more: buildMobileNewTabAgentOptions spreads it

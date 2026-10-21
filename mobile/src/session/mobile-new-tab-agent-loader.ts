@@ -1,5 +1,6 @@
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+  PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   WORKSPACE_ON_OTHER_RUNTIME
 } from '../../../src/shared/protocol-version'
 import { newTabSettingsRead } from '../transport/settings-read-operations'
@@ -13,6 +14,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
+import { legacyHostAnswersForFolder } from './legacy-host-folder-agent-trust'
 import {
   buildMobileNewTabAgentOptions,
   type MobileNewTabAgentOption,
@@ -30,6 +32,16 @@ export class MobileWorkspaceOnOtherRuntimeError extends Error {
   }
 }
 
+const HOST_UPDATE_REQUIRED_MESSAGE = "Update Orca Desktop to see this workspace's agents."
+
+/** The host is too old to say which machine runs this workspace, so any list it gave could be wrong. */
+export class MobileAgentDetectionNeedsHostUpdateError extends Error {
+  constructor() {
+    super(HOST_UPDATE_REQUIRED_MESSAGE)
+    this.name = 'MobileAgentDetectionNeedsHostUpdateError'
+  }
+}
+
 /** What a launch in this workspace can choose from: the host's settings, the agents detected on
  *  the workspace's execution host, and the workspace's repo (absent for the floating workspace). */
 export type MobileAgentLaunchContext = {
@@ -44,11 +56,19 @@ export function hostRefusesOtherRuntimeWorkspace(
   return hostCapabilities?.includes(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY) === true
 }
 
+export function hostScopesAgentDetection(
+  hostCapabilities: readonly string[] | null | undefined
+): boolean {
+  return hostCapabilities?.includes(PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY) === true
+}
+
 type MobileAgentLaunchContextArgs = {
   client: RpcClient
   worktreeId: string
   /** Whether the host refuses, rather than answers for, a workspace another runtime owns. */
   hostRefusesOtherRuntime?: boolean
+  /** Whether the host detects on the workspace's own machine, rather than discarding the id. */
+  hostScopesDetection?: boolean
 }
 
 export async function loadMobileAgentLaunchContext(
@@ -57,7 +77,7 @@ export async function loadMobileAgentLaunchContext(
   const { client, worktreeId } = args
   // Started before the settings read, not inside the array: the detection request goes on the wire
   // first, and the recorded sender order is what says so.
-  const detectedAgentsRequest = loadDetectedAgents(client, worktreeId, args.hostRefusesOtherRuntime)
+  const detectedAgentsRequest = loadDetectedAgents(client, worktreeId, args)
   const [settingsResponse, detectedAgents] = await Promise.all([
     newTabSettingsRead.request(client),
     detectedAgentsRequest
@@ -90,8 +110,9 @@ type DetectedAgentsReply = {
 async function loadDetectedAgents(
   client: RpcClient,
   worktreeId: string,
-  hostRefusesOtherRuntime = false
+  host: Pick<MobileAgentLaunchContextArgs, 'hostRefusesOtherRuntime' | 'hostScopesDetection'>
 ): Promise<DetectedAgentsReply> {
+  const hostRefusesOtherRuntime = host.hostRefusesOtherRuntime === true
   // Why: the floating workspace runs on the paired host, so it has no repo connection to resolve.
   if (isFloatingWorkspaceWorktreeId(worktreeId)) {
     return {
@@ -99,6 +120,13 @@ async function loadDetectedAgents(
       interpret: preflightDetectAgentsRead.interpret,
       repo: null
     }
+  }
+  // Why: a folder workspace has no git repo, so repo.list never holds it.
+  if (worktreeId.startsWith('folder:')) {
+    return loadFolderDetectedAgents(client, worktreeId, {
+      hostRefusesOtherRuntime,
+      hostScopesDetection: host.hostScopesDetection === true
+    })
   }
   const repoResponse = await newTabRepoListRead.request(client)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
@@ -138,6 +166,32 @@ async function loadDetectedAgents(
         interpret: preflightDetectAgentsRead.interpret,
         repo
       }
+}
+
+async function loadFolderDetectedAgents(
+  client: RpcClient,
+  worktreeId: string,
+  host: { hostRefusesOtherRuntime: boolean; hostScopesDetection: boolean }
+): Promise<DetectedAgentsReply> {
+  // Why both: a host that resolves `folder:` ids but predates the refusal answers its own agents
+  // for a folder another runtime owns.
+  if (host.hostScopesDetection && host.hostRefusesOtherRuntime) {
+    return {
+      reply: await preflightDetectAgentsRead.request(client, { worktreeId }),
+      interpret: preflightDetectAgentsRead.interpret,
+      repo: null
+    }
+  }
+  // An older host discards the id and answers for its own PATH, which is this folder's only when
+  // nothing it holds runs elsewhere.
+  if (!(await legacyHostAnswersForFolder(client, worktreeId))) {
+    throw new MobileAgentDetectionNeedsHostUpdateError()
+  }
+  return {
+    reply: await preflightDetectAgentsRead.request(client),
+    interpret: preflightDetectAgentsRead.interpret,
+    repo: null
+  }
 }
 
 function interpretDetectedAgents(detected: DetectedAgentsReply): unknown[] {
