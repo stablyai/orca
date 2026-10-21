@@ -236,7 +236,7 @@ it('preserves actual HTTP GET bytes, cache headers and HEAD without a reader', a
   expect(get.status).toBe(200)
   expect(get.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
   expect(get.headers.get('content-type')).toBe('text/javascript; charset=utf-8')
-  expect(Buffer.from(await get.arrayBuffer())).toEqual(Buffer.alloc(1024 * 1024, 1))
+  expect(Buffer.from(await get.arrayBuffer()).equals(Buffer.alloc(1024 * 1024, 1))).toBe(true)
   await expect.poll(() => observed.streams.every((source) => source.closed)).toBe(true)
   const index = await fetch(`${url}/`)
   expect(index.headers.get('cache-control')).toBe('no-cache')

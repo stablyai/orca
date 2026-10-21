@@ -7,7 +7,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeOpenFile, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeOpenFile } from '../../store/slices/store-session-test-harness'
+import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { useGitStatusPolling } from './useGitStatusPolling'
 
@@ -155,6 +156,30 @@ describe('useGitStatusPolling rerender stability', () => {
 
     addSpy.mockRestore()
   })
+  it('still refreshes while file-watch events never stop', async () => {
+    await renderHook()
+    await flushMicrotasks()
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    // Why: a nudge pushed back on every event would never fire under continuous agent writes.
+    for (let elapsed = 0; elapsed < 4_000; elapsed += 50) {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: {
+            payload: {
+              worktreePath: WORKTREE_PATH,
+              events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }]
+            },
+            runtimeEnvironmentId: null
+          }
+        })
+      )
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    await flushMicrotasks()
+    expect(refreshMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('triggers an immediate poll when the active worktree changes (no delay)', async () => {
     await renderHook()
     await flushMicrotasks()

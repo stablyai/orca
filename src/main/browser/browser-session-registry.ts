@@ -41,6 +41,7 @@ import { retireFailedBrowserSessionProfile } from './browser-session-profile-ret
 import { cancelBrowserWebAuthnAccountRequestsForSession } from './browser-webauthn-account-picker'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { markBrowserIdentityMigrationNoticePending } from './browser-identity-mode-store'
+import { forgetBrowserSitePermissions } from './browser-site-permission-store'
 
 export type BrowserSessionRegistryProfileOptions = {
   orcaProfileId: string
@@ -272,6 +273,7 @@ class BrowserSessionRegistry {
     }
     this.profiles.delete(profileId)
     this.persistProfiles()
+    forgetBrowserSitePermissions(profileId)
     const meta = this.loadPersistedMeta()
     const pendingCookieImports = { ...meta.pendingCookieImports }
     delete pendingCookieImports[profile.partition]

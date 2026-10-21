@@ -1,15 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshGitProvider } from '../providers/ssh-git-provider'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
-import {
-  materializeWorktreePushTargetRemote,
-  materializeWorktreePushTargetRemoteSsh
-} from './worktree-remote'
+import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from './worktree-remote'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 
 const REPO_PATH = '/repo-root'
 const FORK_URL = 'git@github.com:contributor/orca.git'
@@ -84,6 +82,62 @@ describe('materializeWorktreePushTargetRemote', () => {
       `${FORK_REMOTE}/${target.branchName}`,
       'contributor/fix'
     ])
+  })
+
+  it('preserves the legacy null-store failure after existing-remote adoption work', async () => {
+    const commands: string[][] = []
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      commands.push(args)
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        throw new Error('no such section')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    await expect(
+      materializeWorktreePushTargetRemote(REPO_PATH, forkTarget(), null, 'repo-1')
+    ).rejects.toBeInstanceOf(TypeError)
+    expect(commands).toEqual([
+      ['remote', 'get-url', FORK_REMOTE],
+      ['config', '--get-all', `remote.${FORK_REMOTE}.fetch`],
+      [
+        'config',
+        '--add',
+        `remote.${FORK_REMOTE}.fetch`,
+        `+refs/heads/contributor/fix*:refs/remotes/${FORK_REMOTE}/contributor/fix*`
+      ],
+      ['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'],
+      ['rev-parse', '--verify', '--quiet', `refs/remotes/${FORK_REMOTE}/contributor/fix`],
+      ['symbolic-ref', '--short', 'HEAD'],
+      ['branch', '--set-upstream-to', `${FORK_REMOTE}/contributor/fix`, 'contributor/fix']
+    ])
+  })
+
+  it('accepts a null store when both persistence identifiers are omitted', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        throw new Error('no such section')
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+
+    await expect(materializeWorktreePushTargetRemote(REPO_PATH, target, null)).resolves.toBe(target)
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['branch', '--set-upstream-to', `${FORK_REMOTE}/${target.branchName}`, 'contributor/fix'],
+      { cwd: REPO_PATH }
+    )
   })
 
   it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {
@@ -290,10 +344,14 @@ describe('materializeWorktreePushTargetRemote', () => {
     })
     const target = forkTarget()
     const setWorktreeMeta = vi.fn()
+    // The write lands on the id's only repo row.
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({}),
+      getRepos: () => [
+        { id: 'worktree-1', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
+      ],
       setWorktreeMeta
-    } as unknown as WorktreePushTargetStore
+    }
 
     const result = await materializeWorktreePushTargetRemote(
       REPO_PATH,
@@ -301,13 +359,134 @@ describe('materializeWorktreePushTargetRemote', () => {
       store,
       undefined,
       {},
-      'worktree-1'
+      ipcGitWorktreeTarget({ worktreeId: 'worktree-1' })
     )
 
     expect(result).toEqual({ ...target, remoteCreated: true })
-    expect(setWorktreeMeta).toHaveBeenCalledWith('worktree-1', {
-      pushTarget: { ...target, remoteCreated: true }
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' }),
+      {
+        pushTarget: { ...target, remoteCreated: true }
+      }
+    )
+  })
+
+  it('records the mint on the copy whose git ran, even when the repo has a twin on another host', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      return { stdout: '', stderr: '' }
     })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const repo = {
+      id: 'worktree-1',
+      path: REPO_PATH,
+      displayName: 'r',
+      badgeColor: '#000',
+      addedAt: 1
+    }
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({}),
+      getRepos: () => [
+        { ...repo, executionHostId: 'local' },
+        { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }
+      ],
+      setWorktreeMeta
+    }
+
+    await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      undefined,
+      {},
+      ipcGitWorktreeTarget({ worktreeId: 'worktree-1' })
+    )
+
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' }),
+      { pushTarget: { ...target, remoteCreated: true } }
+    )
+  })
+
+  it("never adopts a remote as Orca's because a twin on another host created one", async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: `${FORK_URL}\n`, stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'contributor/fix\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const repo = { id: 'repo', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
+    const store: WorktreePushTargetStore = {
+      // The SSH twin's Orca-created remote shares this remote's name and URL.
+      getAllWorktreeMeta: () => ({
+        'repo::/ssh-wt': mergeWorktreeMetaForWrite(undefined, {
+          hostId: 'ssh:box',
+          pushTarget: { ...target, remoteCreated: true }
+        })
+      }),
+      getRepos: () => [repo, { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }],
+      setWorktreeMeta
+    }
+
+    const result = await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      'repo',
+      {},
+      ipcGitWorktreeTarget({ worktreeId: 'repo::/local-wt' })
+    )
+
+    expect(result.remoteCreated).not.toBe(true)
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it("never reuses a remote as Orca's because a twin on another host minted it", async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return { stdout: `fork-x\t${FORK_URL} (fetch)\nfork-x\t${FORK_URL} (push)`, stderr: '' }
+      }
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: 'fork-x', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const target = forkTarget()
+    const setWorktreeMeta = vi.fn()
+    const repo = { id: 'repo', path: REPO_PATH, displayName: 'r', badgeColor: '#000', addedAt: 1 }
+    const store: WorktreePushTargetStore = {
+      getAllWorktreeMeta: () => ({
+        'repo::/ssh-wt': mergeWorktreeMetaForWrite(undefined, {
+          hostId: 'ssh:box',
+          pushTarget: { ...target, remoteName: 'fork-x', remoteCreated: true }
+        })
+      }),
+      getRepos: () => [repo, { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }],
+      setWorktreeMeta
+    }
+
+    const result = await materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      target,
+      store,
+      'repo',
+      {},
+      ipcGitWorktreeTarget({ worktreeId: 'repo::/local-wt' })
+    )
+
+    expect(result.remoteName).toBe('fork-x')
+    expect(result.remoteCreated).not.toBe(true)
   })
 
   it('does not touch the store when no worktreeId is provided', async () => {
@@ -327,278 +506,5 @@ describe('materializeWorktreePushTargetRemote', () => {
     await materializeWorktreePushTargetRemote(REPO_PATH, target, store)
 
     expect(setWorktreeMeta).not.toHaveBeenCalled()
-  })
-})
-
-describe('materializeWorktreePushTargetRemoteSsh', () => {
-  it('is a no-op when the target already reports remoteCreated', async () => {
-    const exec = vi.fn()
-    const target = forkTarget({ remoteCreated: true })
-
-    const result = await materializeWorktreePushTargetRemoteSsh(
-      { exec } as unknown as SshGitProvider,
-      REPO_PATH,
-      target
-    )
-
-    expect(result).toBe(target)
-    expect(exec).not.toHaveBeenCalled()
-  })
-
-  it('short-circuits the remote probe but still restores upstream (refspec widening is a local-only gap)', async () => {
-    // Why: mirrors the local short-circuit's upstream restore. Refspec widening is
-    // intentionally NOT mirrored here -- SSH's bare `remote add` is a pre-existing,
-    // documented gap this fix does not touch.
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn()
-    const target = forkTarget()
-
-    const result = await materializeWorktreePushTargetRemoteSsh(
-      { exec, fetchRemoteTrackingRef } as unknown as SshGitProvider,
-      REPO_PATH,
-      target
-    )
-
-    expect(result).toBe(target)
-    const calls = exec.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual(['remote', 'get-url', FORK_REMOTE])
-    expect(calls).toContainEqual(['symbolic-ref', '--short', 'HEAD'])
-    expect(calls).toContainEqual([
-      'branch',
-      '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
-      'contributor/fix'
-    ])
-    expect(calls.some((call) => call[0] === 'config' && String(call[2]).includes('.fetch'))).toBe(
-      false
-    )
-    expect(fetchRemoteTrackingRef).not.toHaveBeenCalled()
-  })
-
-  it('fetches the missing tracking ref (one-off, no config write) before restoring upstream on the short-circuit path', async () => {
-    // SSH mirror of the local sibling-worktree fix: refspec widening stays out of scope
-    // here, but the branch must still be fetched once before `--set-upstream-to` can
-    // succeed for a branch this remote has never pulled in.
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${FORK_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'rev-parse') {
-        throw new Error('unknown revision')
-      }
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn(async () => {})
-    const target = forkTarget()
-
-    const result = await materializeWorktreePushTargetRemoteSsh(
-      { exec, fetchRemoteTrackingRef } as unknown as SshGitProvider,
-      REPO_PATH,
-      target
-    )
-
-    expect(result).toBe(target)
-    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      REPO_PATH,
-      FORK_REMOTE,
-      target.branchName,
-      `refs/remotes/${FORK_REMOTE}/${target.branchName}`
-    )
-    const calls = exec.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual([
-      'branch',
-      '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
-      'contributor/fix'
-    ])
-    // Still no config write -- the fetch is a one-off refspec argument, not a widen.
-    expect(calls.some((call) => call[0] === 'config' && String(call[2]).includes('.fetch'))).toBe(
-      false
-    )
-  })
-
-  it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn(async () => {})
-    const markRemoteOrcaCreated = vi.fn(async () => {})
-    const target = forkTarget()
-
-    const result = await materializeWorktreePushTargetRemoteSsh(
-      { exec, fetchRemoteTrackingRef, markRemoteOrcaCreated } as unknown as SshGitProvider,
-      REPO_PATH,
-      target
-    )
-
-    expect(result).toEqual({ ...target, remoteCreated: true })
-    const calls = exec.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual(['check-ref-format', '--branch', target.branchName])
-    expect(calls).toContainEqual(['remote', 'add', FORK_REMOTE, FORK_URL])
-    // Provenance is a narrow RPC, not exec: the relay's generic git.exec blocks config writes.
-    expect(markRemoteOrcaCreated).toHaveBeenCalledWith(REPO_PATH, FORK_REMOTE)
-    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      REPO_PATH,
-      FORK_REMOTE,
-      target.branchName,
-      `refs/remotes/${FORK_REMOTE}/${target.branchName}`
-    )
-  })
-
-  it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn(async () => {})
-    const markRemoteOrcaCreated = vi.fn(async () => {})
-    const target = forkTarget()
-    const setWorktreeMeta = vi.fn()
-    const store: WorktreePushTargetStore = {
-      getAllWorktreeMeta: () => ({}),
-      setWorktreeMeta
-    } as unknown as WorktreePushTargetStore
-
-    const result = await materializeWorktreePushTargetRemoteSsh(
-      { exec, fetchRemoteTrackingRef, markRemoteOrcaCreated } as unknown as SshGitProvider,
-      REPO_PATH,
-      target,
-      store,
-      undefined,
-      'worktree-1'
-    )
-
-    expect(result).toEqual({ ...target, remoteCreated: true })
-    expect(setWorktreeMeta).toHaveBeenCalledWith('worktree-1', {
-      pushTarget: { ...target, remoteCreated: true }
-    })
-  })
-
-  // Moved from worktrees-ssh-fork-push-target-remote.test.ts: this behavior lives in
-  // prepareWorktreePushTargetSsh (invoked here through the materialize wrapper, once
-  // the fast probe misses) and is unchanged -- it just no longer runs at create time.
-  it('names the relay upgrade when an older host still rejects the fork remote', async () => {
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      if (args[0] === 'remote' && args[1] === 'add') {
-        throw new Error('Destructive git remote operations are not allowed via exec')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn()
-    const target = forkTarget()
-
-    await expect(
-      materializeWorktreePushTargetRemoteSsh(
-        { exec, fetchRemoteTrackingRef } as unknown as SshGitProvider,
-        REPO_PATH,
-        target
-      )
-    ).rejects.toThrow('Reconnect to deploy the latest relay')
-    expect(fetchRemoteTrackingRef).not.toHaveBeenCalled()
-  })
-
-  it('drops the fork remote it just added when the SSH head fetch fails', async () => {
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        throw new Error('No such remote')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn(async () => {
-      throw new Error('network unreachable')
-    })
-    const markRemoteOrcaCreated = vi.fn(async () => {})
-    const target = forkTarget()
-
-    await expect(
-      materializeWorktreePushTargetRemoteSsh(
-        { exec, fetchRemoteTrackingRef, markRemoteOrcaCreated } as unknown as SshGitProvider,
-        REPO_PATH,
-        target
-      )
-    ).rejects.toThrow('network unreachable')
-
-    expect(exec).toHaveBeenCalledWith(['remote', 'remove', FORK_REMOTE], REPO_PATH)
-  })
-
-  // Regression: the rollback must not fire on ownership inherited from a sibling
-  // worktree, deleting the remote that worktree is still pushing through. The probe
-  // misses under the *requested* remote name so this reaches prepareWorktreePushTargetSsh's
-  // own by-URL reuse scan, which finds the sibling's differently-named remote.
-  it('keeps a reused fork remote a sibling worktree owns when the SSH head fetch fails', async () => {
-    const SIBLING_REMOTE = 'pr-contributor-orca-existing'
-    const exec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        if (args[2] === SIBLING_REMOTE) {
-          return { stdout: `${FORK_URL}\n`, stderr: '' }
-        }
-        throw new Error('No such remote')
-      }
-      if (args[0] === 'remote' && args[1] === '-v') {
-        return {
-          stdout: [
-            'origin\thttps://github.com/stablyai/orca.git (fetch)',
-            'origin\thttps://github.com/stablyai/orca.git (push)',
-            `${SIBLING_REMOTE}\t${FORK_URL} (fetch)`,
-            `${SIBLING_REMOTE}\t${FORK_URL} (push)`
-          ].join('\n'),
-          stderr: ''
-        }
-      }
-      if (args[0] === 'remote' && args.length === 1) {
-        return { stdout: `origin\n${SIBLING_REMOTE}\n`, stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    const fetchRemoteTrackingRef = vi.fn(async () => {
-      throw new Error('network unreachable')
-    })
-    const target = forkTarget()
-    const store: WorktreePushTargetStore = {
-      getAllWorktreeMeta: () => ({
-        'repo::/repo-root-sibling': {
-          pushTarget: {
-            remoteName: SIBLING_REMOTE,
-            branchName: 'contributor/other',
-            remoteUrl: FORK_URL,
-            remoteCreated: true
-          }
-        }
-      })
-    } as unknown as WorktreePushTargetStore
-
-    await expect(
-      materializeWorktreePushTargetRemoteSsh(
-        { exec, fetchRemoteTrackingRef } as unknown as SshGitProvider,
-        REPO_PATH,
-        target,
-        store
-      )
-    ).rejects.toThrow('network unreachable')
-
-    expect(exec).not.toHaveBeenCalledWith(['remote', 'remove', SIBLING_REMOTE], REPO_PATH)
-    expect(exec).not.toHaveBeenCalledWith(
-      ['remote', 'add', expect.anything(), expect.anything()],
-      REPO_PATH
-    )
   })
 })

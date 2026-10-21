@@ -2,16 +2,22 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 
-const mocks = vi.hoisted(() => ({
-  call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-  hold: vi.fn<(args: { enabled?: boolean }) => void>(),
-  read: vi.fn<(args: { isVisible?: boolean }) => void>(),
-  outbox: vi.fn<(args: { fence: number | null; submissions: readonly unknown[] }) => void>(),
-  send: vi.fn<(text: string) => boolean>(),
-  retry: vi.fn<(clientMessageId: string) => void>()
-}))
+const mocks = vi.hoisted(() => {
+  const pending: StructuredAgentSessionPendingSend[] = []
+  return {
+    call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
+    hold: vi.fn((_args: { enabled?: boolean }) => ({ error: null })),
+    read: vi.fn<(args: { isVisible?: boolean }) => void>(),
+    outbox: vi.fn<(args: { fence: number | null; submissions: readonly unknown[] }) => void>(),
+    send: vi.fn<(text: string) => boolean>(),
+    stopSends: vi.fn<() => void>(),
+    takeBackLaunchText: vi.fn<(sessionId: string) => void>(),
+    pending
+  }
+})
 
 let readState: StructuredAgentSessionState
 
@@ -35,20 +41,30 @@ vi.mock('./use-structured-agent-session-read', () => ({
   }
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: () => 'operation-1',
-  useStructuredAgentSessionOutbox: (args: {
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: () => 'operation-1'
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: (args: {
     fence: number | null
     submissions: readonly unknown[]
   }) => {
     mocks.outbox(args)
     return {
-      outbox: [],
+      pending: mocks.pending,
       error: null,
       send: mocks.send,
-      retry: mocks.retry
+      stopSends: mocks.stopSends
     }
   }
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-support', () => ({
+  useStructuredLaunchCreateSupport: () => false
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+  takeBackLegacyStructuredLaunchPrompts: mocks.takeBackLaunchText
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -56,6 +72,7 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
 }))
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -99,12 +116,19 @@ function sessionState(): StructuredAgentSessionState {
 describe('useStructuredAgentSession provisional launch gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.pending = []
     readState = sessionState()
     mocks.send.mockReturnValue(true)
     mocks.call.mockResolvedValue(OPTIONS)
+    resetHostModelCatalogSnapshotsForTests()
   })
 
   it('keeps local sends usable while withholding every provider surface but the picker', async () => {
+    mocks.call.mockResolvedValue({
+      origin: 'probe',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5', efforts: [] }],
+      fetchedAt: 1_000
+    })
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -131,8 +155,8 @@ describe('useStructuredAgentSession provisional launch gate', () => {
       conversationCommands: []
     })
     expect(result.current.sessionCommands).toBeUndefined()
-    // The picker shows the selection the create seeds, from the first frame.
-    expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
+    // The picker shows the selection the create seeds, once the host's list names it.
+    await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
     expect(result.current.optionSurface.getSnapshot()).toBe(result.current.optionSnapshot)
     expect(result.current.send('queued while launching')).toBe(true)
     expect(mocks.send).toHaveBeenCalledWith('queued while launching')
@@ -143,6 +167,43 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     })
 
     expect(methodsCalled()).toEqual(['agentSession.modelCatalog'])
+  })
+
+  it("offers Stop while the launch's text waits on an unpublished chat, and takes it back locally", async () => {
+    const render = () =>
+      renderHook(() =>
+        useStructuredAgentSession({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          agent: 'grok',
+          isVisible: true,
+          transportEnabled: false,
+          launch: { kind: 'new', heldOptions: {} }
+        })
+      )
+    expect(render().result.current.canStop).toBe(false)
+    mocks.pending = [
+      {
+        clientMessageId: 'sent-while-starting',
+        sessionId: 'session-1',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+        previewUris: [],
+        queuedAt: 1,
+        phase: 'sending',
+        issued: false
+      }
+    ]
+    const { result } = render()
+    expect(result.current.canStop).toBe(true)
+
+    await act(async () => {
+      await result.current.stop()
+    })
+
+    expect(mocks.takeBackLaunchText).toHaveBeenCalledWith('session-1')
+    expect(mocks.stopSends).toHaveBeenCalledTimes(1)
+    // Nothing reached a host, so nothing is asked of one.
+    expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
   })
 
   it('shows no stored selection for a chat this view did not launch', () => {

@@ -10,22 +10,36 @@ import type { Repo } from '../../shared/repo-types'
 
 // Why: the watch must stay one stat per folder project per tick — counting the real
 // calls is what keeps a directory-listing fan-out from creeping back in.
-const { statCalls, readdirSpy, gitProbes } = vi.hoisted(() => ({
+const { statCalls, readdirSpy, gitProbes, pendingGitChecks } = vi.hoisted(() => ({
   statCalls: [] as string[],
   readdirSpy: vi.fn(),
+  pendingGitChecks: new Set<Promise<unknown>>(),
   // Why: the rejected-marker cache exists to stop git respawning every tick; counting the
   // real probes is the only way that guarantee stays true.
   gitProbes: [] as string[]
 }))
 
+function trackGitCheck<T>(pending: Promise<T>): Promise<T> {
+  const completed = pending.finally(() => pendingGitChecks.delete(completed))
+  pendingGitChecks.add(completed)
+  return completed
+}
+
+async function drainGitChecks(): Promise<void> {
+  while (pendingGitChecks.size > 0) {
+    await Promise.allSettled(pendingGitChecks)
+  }
+}
+
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRepo>()
   return {
     ...actual,
-    isGitRepo: (path: string) => {
+    isGitRepoAsync: (path: string) => {
       gitProbes.push(path)
-      return actual.isGitRepo(path)
-    }
+      return trackGitCheck(actual.isGitRepoAsync(path))
+    },
+    getGitRepoRootAsync: (path: string) => trackGitCheck(actual.getGitRepoRootAsync(path))
   }
 })
 
@@ -68,6 +82,7 @@ import {
   stopFolderRepoGitUpgradeWatch
 } from './folder-repo-git-upgrade'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 type TestWindow = {
   destroyed: boolean
@@ -114,7 +129,7 @@ function makeStore(
     getAllWorktreeMeta: () => worktreeMeta,
     getRepos: () => repos,
     getRepo: vi.fn((id: string) => repos.find((repo) => repo.id === id)),
-    updateRepo: vi.fn((id: string, updates: Partial<Repo>) => {
+    updateRepo: vi.fn(({ id }: Pick<Repo, 'id'>, updates: Partial<Repo>) => {
       const repo = repos.find((candidate) => candidate.id === id)
       if (!repo) {
         return null
@@ -143,13 +158,14 @@ describe('folder repo git upgrade watch', () => {
     vi.clearAllMocks()
     root = realpathSync(await mkdtemp(join(tmpdir(), 'folder-repo-upgrade-')))
     symlinkedRoot = `${root}-link`
-    await symlink(root, symlinkedRoot, 'dir')
+    await symlink(root, symlinkedRoot, process.platform === 'win32' ? 'junction' : 'dir')
     statCalls.length = 0
     gitProbes.length = 0
   })
 
   afterEach(async () => {
     stopFolderRepoGitUpgradeWatch()
+    await drainGitChecks()
     await rm(symlinkedRoot, { force: true })
     await rm(root, { recursive: true, force: true })
   })
@@ -157,6 +173,7 @@ describe('folder repo git upgrade watch', () => {
   // Real timers: the tick awaits real filesystem stats, which fake timers cannot flush.
   async function tick(times = 1): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS * times + POLL_MS))
+    await drainGitChecks()
   }
 
   /** Why: a tick that spawns git can outrun a fixed wait on a loaded machine. */
@@ -165,6 +182,7 @@ describe('folder repo git upgrade watch', () => {
     while (statCalls.length < count && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     }
+    await drainGitChecks()
   }
 
   it('upgrades a local folder repo once an external git init creates .git', async () => {
@@ -182,7 +200,7 @@ describe('folder repo git upgrade watch', () => {
     gitInit(repoPath)
     await tick()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('folder-repo'), {
       kind: 'git',
       folderUpgradeGitRootPath: repoPath.replaceAll('\\', '/'),
       externalWorktreeVisibility: 'hide'
@@ -206,12 +224,16 @@ describe('folder repo git upgrade watch', () => {
       pollIntervalMs: POLL_MS,
       idlePollIntervalMs: IDLE_POLL_MS
     })
-    await tick()
-
-    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
-      kind: 'git',
-      folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
-    })
+    // A fixed tick wait can finish before the marker stat resolves under load.
+    await vi.waitFor(
+      () => {
+        expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('folder-repo'), {
+          kind: 'git',
+          folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
+        })
+      },
+      { timeout: 5_000, interval: POLL_MS }
+    )
   })
 
   it('retries after the last extra folder workspace is removed', async () => {
@@ -236,7 +258,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -295,7 +317,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -328,7 +350,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({ kind: 'git' })
     )
     expect(notifyReposChanged).toHaveBeenCalledWith(nextWindow)
@@ -353,7 +375,7 @@ describe('folder repo git upgrade watch', () => {
 
     expect(store.updateRepo).toHaveBeenCalledTimes(1)
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'repo-a',
+      repoTarget('repo-a'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -413,7 +435,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'late-repo',
+      repoTarget('late-repo'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -442,7 +464,7 @@ describe('folder repo git upgrade watch', () => {
     await tick()
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({
         kind: 'git'
       })

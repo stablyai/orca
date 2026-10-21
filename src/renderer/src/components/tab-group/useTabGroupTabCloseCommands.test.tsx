@@ -8,12 +8,13 @@ const mocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => true),
   closeTerminalTab: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
-  requestEditorFileClose: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(() => null as string | null)
+  requestEditorFileClose: vi.fn()
 }))
 
-vi.mock('../../runtime/web-runtime-session', () => ({
-  closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
+vi.mock('../../runtime/web-runtime-session-tab-lifecycle', () => ({
+  closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab
+}))
+vi.mock('../../runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive
 }))
 vi.mock('../terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
@@ -22,9 +23,6 @@ vi.mock('../../store/slices/browser-webview-cleanup', () => ({
 }))
 vi.mock('../editor/editor-autosave', () => ({
   requestEditorFileClose: mocks.requestEditorFileClose
-}))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 import { useAppStore } from '../../store'
@@ -37,15 +35,29 @@ const BROWSER_TAB = {
   groupId: 'group-1'
 } as Tab
 
+const OWNED_BY_ENV_OWNER = {
+  repos: [{ id: 'repo-a', executionHostId: 'runtime:env-owner' }],
+  worktreesByRepo: {
+    'repo-a': [
+      {
+        id: 'worktree-a',
+        repoId: 'repo-a',
+        hostId: 'runtime:env-owner',
+        runtimeOwnerEnvironmentId: 'env-owner'
+      }
+    ]
+  }
+}
+
 let closeUnifiedTab: ReturnType<typeof vi.fn>
 let closeBrowserTab: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   // clearAllMocks leaves implementations in place, so a per-test mockReturnValue would leak.
   mocks.isWebRuntimeSessionActive.mockReturnValue(true)
-  mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
   closeUnifiedTab = vi.fn()
   closeBrowserTab = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
   useAppStore.setState({
     closeUnifiedTab,
     closeBrowserTab,
@@ -53,6 +65,8 @@ beforeEach(() => {
     closeFile: vi.fn(),
     setActiveWorktree: vi.fn(),
     reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
+    repos: [],
+    worktreesByRepo: {},
     unifiedTabsByWorktree: { 'worktree-a': [BROWSER_TAB] },
     browserPagesByWorkspace: {
       'workspace-a': [
@@ -70,9 +84,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 function commands(): ReturnType<typeof useTabGroupTabCloseCommands> {
-  return renderHook(() =>
-    useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [BROWSER_TAB] })
-  ).result.current
+  return renderHook(() => useTabGroupTabCloseCommands({ worktreeId: 'worktree-a' })).result.current
 }
 
 /** One page, held under a client-minted handle the host has not published yet. */
@@ -119,31 +131,33 @@ describe('closing a browser workspace owned by more than one runtime environment
   })
 
   // Why: a mirror of a host tab has no page of its own, so nothing names an owner — without the
-  // focused runtime standing in, the X removed nothing and the host re-mirrored the tab.
-  it('removes a pageless host mirror through the focused runtime', () => {
+  // worktree's owner standing in, the X removed nothing and the host re-mirrored the tab.
+  it("removes a pageless host mirror through the worktree's runtime owner", () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
     useAppStore.setState({
       browserPagesByWorkspace: {},
-      remoteBrowserPageHandlesByPageId: {}
+      remoteBrowserPageHandlesByPageId: {},
+      ...OWNED_BY_ENV_OWNER
     } as never)
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-focused')
 
     commands().closeItem('unified-browser')
 
-    expect(closedEnvironmentIds()).toEqual(['env-focused'])
+    expect(closedEnvironmentIds()).toEqual(['env-owner'])
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-browser', undefined)
     expect(mocks.destroyWorkspaceWebviews).not.toHaveBeenCalled()
   })
 
   it('routes the bulk close through the same plan for a pageless host mirror', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
     useAppStore.setState({
       browserPagesByWorkspace: {},
-      remoteBrowserPageHandlesByPageId: {}
+      remoteBrowserPageHandlesByPageId: {},
+      ...OWNED_BY_ENV_OWNER
     } as never)
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-focused')
 
     commands().closeMany(['unified-browser'])
 
-    expect(closedEnvironmentIds()).toEqual(['env-focused'])
+    expect(closedEnvironmentIds()).toEqual(['env-owner'])
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-browser', undefined)
   })
 
@@ -220,7 +234,7 @@ describe('closing a browser workspace owned by more than one runtime environment
     } as never)
 
     renderHook(() =>
-      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [BROWSER_TAB, hostTab] })
+      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a' })
     ).result.current.closeMany(['unified-browser', 'unified-browser-2'])
 
     expect(closedEnvironmentIds()).toEqual(['env-b'])
@@ -259,9 +273,12 @@ describe('shared tab close policies', () => {
       openFiles: [{ id: 'dirty-file', isDirty: true, worktreeId: 'worktree-a' }]
     } as never)
     renderHook(() =>
-      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [editor] })
+      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a' })
     ).result.current.closeItem(editor.id)
-    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('dirty-file')
+    // The close carries its emptied-workspace reaction, run only once the prompt lets it land.
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('dirty-file', {
+      onClosed: expect.any(Function)
+    })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
     expect(useAppStore.getState().closeFile).not.toHaveBeenCalled()
   })
@@ -274,9 +291,7 @@ describe('shared tab close policies', () => {
       contentType: 'terminal'
     } as Tab
     useAppStore.setState({ unifiedTabsByWorktree: { 'worktree-a': [terminal] } })
-    const { result } = renderHook(() =>
-      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [terminal] })
-    )
+    const { result } = renderHook(() => useTabGroupTabCloseCommands({ worktreeId: 'worktree-a' }))
     result.current.closeItem(terminal.id)
     expect(mocks.closeTerminalTab).toHaveBeenLastCalledWith('terminal-entity', {
       onClosed: expect.any(Function)

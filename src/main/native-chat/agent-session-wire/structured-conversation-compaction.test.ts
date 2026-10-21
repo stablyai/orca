@@ -11,7 +11,11 @@ import {
   type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
@@ -26,6 +30,10 @@ import {
   replaceHostTestState
 } from './structured-agent-session-host-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import {
+  editPersistedTestAgentSessionStore,
+  openTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import {
@@ -146,7 +154,8 @@ async function commandTurn(clientMessageId: string) {
   return (await journal()).items.find((item) => item.itemId === itemId)
 }
 
-it('answers at handover, then journals its own entry, turn and result (B1, B16)', async () => {
+it('answers at handover before the provider reports holding the command, then journals its result', async () => {
+  Object.assign(state.host.deps.adapter, { heldSends: () => new Set<string>() })
   await attach()
   const events = await subscribe()
   const params = compactParams()
@@ -157,7 +166,7 @@ it('answers at handover, then journals its own entry, turn and result (B1, B16)'
     ok: true,
     value: { command: 'compact', state: 'completed' }
   })
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   finish({ outcome: 'success' })
 
   await vi.waitFor(async () =>
@@ -197,7 +206,7 @@ it('replays the reply for the same operation without running it again (B16)', as
   await attach()
   const params = compactParams()
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   finish({ outcome: 'success' })
   await expect(state.host.conversationCommand(CALLER, params)).resolves.toMatchObject({
     ok: true,
@@ -210,7 +219,7 @@ it('holds messages sent during the command and delivers them after it, in order 
   await attach()
   const params = compactParams()
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   await expect(state.host.send(CALLER, sendParams('first'))).resolves.toMatchObject({ ok: true })
   await expect(state.host.send(CALLER, sendParams('second'))).resolves.toMatchObject({ ok: true })
   // Nothing is handed over while the command's turn runs.
@@ -223,7 +232,7 @@ it('holds messages sent during the command and delivers them after it, in order 
   })
 
   // Delivered even though the command failed.
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledTimes(2), { interval: 1 })
   expect(state.dispatch.mock.calls.map(([input]) => input.body.blocks)).toEqual([
     [{ type: 'text', text: 'first' }],
     [{ type: 'text', text: 'second' }]
@@ -242,17 +251,18 @@ it('holds messages sent during the command and delivers them after it, in order 
 it('hands over a message held behind the command when the command ends just as the loop stops for it', async () => {
   await attach()
   await state.host.conversationCommand(CALLER, compactParams())
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { journal: live } = state.host['sessions'].get(SESSION)!
-  const activeTurnId = live.activeTurnId
+  const runningTurn = live.runningTurn
   let ended = false
-  vi.spyOn(live, 'activeTurnId').mockImplementation(() => {
-    const read = activeTurnId()
+  // The loop reads the command through the host's current-work projection, which asks this.
+  vi.spyOn(live, 'runningTurn').mockImplementation(() => {
+    const read = runningTurn()
     // The provider's end lands the moment the loop's own step reads the command as running and
     // stops; no other reader's view of it matters here.
     if (
       !ended &&
-      read?.startsWith('compact:') &&
+      read?.turnId.startsWith('compact:') &&
       /at (?:StructuredAgentSessionDeliveryLoop\.)?prepare \(.*structured-agent-session-delivery-loop/.test(
         new Error('who reads').stack ?? ''
       )
@@ -265,7 +275,7 @@ it('hands over a message held behind the command when the command ends just as t
 
   await expect(state.host.send(CALLER, sendParams('held'))).resolves.toMatchObject({ ok: true })
 
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   expect(ended).toBe(true)
 })
 
@@ -285,7 +295,7 @@ it('settles a command the provider refused as a failure with its reason, and mov
   await state.host.conversationCommand(CALLER, params)
   await state.host.send(CALLER, sendParams('after the refusal'))
 
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   expect(readAgentJournalTurn((await commandTurn(cmid))?.body)).toMatchObject({
     state: 'completed',
     outcome: 'failure'
@@ -294,7 +304,7 @@ it('settles a command the provider refused as a failure with its reason, and mov
   // The message was not sent, in the provider's words; the command's row says the compaction failed.
   expect(snapshot.submissions.find((entry) => entry.clientMessageId === cmid)).toMatchObject({
     dispatchState: 'rejected',
-    reason: 'The provider did not accept this message: Not enough messages to compact.',
+    reason: "The agent didn't accept this message: Not enough messages to compact.",
     rejection: { kind: 'providerRejected', detail: NOT_ENOUGH }
   })
   expect(
@@ -367,25 +377,33 @@ it('refuses the command for an agent that does not declare compaction, whatever 
 it('refuses the command at handover when the provider opened a turn meanwhile (B3)', async () => {
   await attach()
   const events = state.acquire.mock.calls.at(-1)?.[0].events
-  // The provider starts a turn of its own after acceptance, before the command is handed over.
-  Object.assign(state.host.deps.adapter, {
-    awaitStarted: vi.fn(async () => {
-      events?.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'provider-turn', ordinal: 0 },
-        { kind: 'turn', turnId: 'provider-turn', state: 'running' },
-        { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
-      )
-    })
-  })
   const params = compactParams()
+  // Held, the command is accepted, then the provider starts a turn of its own, both ahead of the
+  // handover the acceptance asks for.
+  const held = Promise.withResolvers<void>()
+  void state.host['tasks'].serialize(SESSION, () => held.promise)
+  const commanded = state.host.conversationCommand(CALLER, params)
+  void state.host['tasks'].serialize(SESSION, async () => {
+    await events?.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'provider-turn', ordinal: 0 },
+      { kind: 'turn', turnId: 'provider-turn', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
+    )
+  })
+  held.resolve()
 
   const refused = {
     kind: 'commandRefused',
     refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
   }
-  await expect(state.host.conversationCommand(CALLER, params)).resolves.toMatchObject({
+  await expect(commanded).resolves.toMatchObject({
     ok: true,
-    value: { state: 'completed', error: "This command didn't run. Try it again.", failure: refused }
+    // The reason, said as its refusal is everywhere, not a bare "try it again".
+    value: {
+      state: 'completed',
+      error: "The agent is still working. Run /compact when it's done.",
+      failure: refused
+    }
   })
   expect(compact).not.toHaveBeenCalled()
   expect(await commandTurn(params.envelope.clientOperationId)).toBeUndefined()
@@ -395,7 +413,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
     )
   ).toMatchObject({
     dispatchState: 'rejected',
-    reason: "This command didn't run. Try it again.",
+    reason: "The agent is still working. Run /compact when it's done.",
     rejection: refused
   })
 })
@@ -453,7 +471,7 @@ it('leaves the command to the provider when it takes the Stop, and ends it as ca
   const params = compactParams()
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { turnId } = structuredAgentSessionCommandTurn(cmid)
 
   await expect(stop(turnId)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
@@ -475,21 +493,35 @@ it('leaves the command to the provider when it takes the Stop, and ends it as ca
 
 it('ends the command by stopping the child at a second Stop the provider never answered (B4)', async () => {
   await attach()
+  const statuses: AgentSessionStatusEvent[] = []
+  state.host.subscribeStatus({ id: 'list', emit: (event) => statuses.push(event) })
   const params = compactParams()
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { turnId } = structuredAgentSessionCommandTurn(cmid)
 
   // The provider takes the interrupt and then never answers it.
   await expect(stop(turnId)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   expect(closeSession).not.toHaveBeenCalled()
+  // The chat reads Stopping, yet only the next Stop ends the command: clients keep Stop enabled.
+  expect(latestSummary(statuses)).toMatchObject({ status: 'working', stopping: true })
   await expect(stop(turnId)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
 
   expect(state.cancelTurn).toHaveBeenCalledOnce()
   expect(closeSession).toHaveBeenCalledOnce()
   expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
+  expect(latestSummary(statuses)).not.toHaveProperty('stopping')
 })
+
+/** The session's newest summary in what a session list received. */
+function latestSummary(events: AgentSessionStatusEvent[]): AgentSessionStatusSummary | undefined {
+  return events
+    .flatMap((event) =>
+      event.type === 'status' ? [event.session] : event.type === 'snapshot' ? event.sessions : []
+    )
+    .findLast((summary) => summary.sessionId === SESSION)
+}
 
 it('ends the command by stopping the child when the provider cannot take the Stop (B4)', async () => {
   await attach()
@@ -498,7 +530,7 @@ it('ends the command by stopping the child when the provider cannot take the Sto
   const params = compactParams()
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
 
   await expect(stop(structuredAgentSessionCommandTurn(cmid).turnId)).resolves.toMatchObject({
     ok: true,
@@ -513,7 +545,7 @@ it('ends the command by stopping the child when the provider cannot take the Sto
   ])
   // The next message starts a child of its own.
   await state.host.send(CALLER, sendParams('after the stop'))
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   expect(state.acquire).toHaveBeenCalledTimes(2)
 })
 
@@ -522,7 +554,7 @@ it('does not stop the child for a Stop naming a command that already ended (B4)'
   state.cancelTurn.mockResolvedValue({ cancelled: false })
   const params = compactParams()
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   finish({ outcome: 'success' })
   const { itemId, turnId } = structuredAgentSessionCommandTurn(params.envelope.clientOperationId)
   await vi.waitFor(async () =>
@@ -561,7 +593,7 @@ it("answers a refused command's message before ending its turn, so a crash betwe
   const params = compactParams()
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(crash).toHaveBeenCalled())
+  await vi.waitFor(() => expect(crash).toHaveBeenCalled(), { interval: 1 })
   crash.mockRestore()
 
   // Never an ended turn whose message still reads as in flight.
@@ -582,13 +614,13 @@ it("answers a refused command's message before ending its turn, so a crash betwe
 it('counts a message held behind the command from its handover, not its send', async () => {
   await attach()
   await state.host.conversationCommand(CALLER, compactParams())
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const sent = await state.host.send(CALLER, sendParams('held'))
   expect(sent.ok).toBe(true)
   await new Promise((resolve) => setTimeout(resolve, 20))
   finish({ outcome: 'success' })
 
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   const [dispatched] = state.dispatch.mock.calls[0]!
   const submission = (await journal()).submissions.find(
     (entry) => entry.clientMessageId === dispatched.clientMessageId
@@ -632,7 +664,7 @@ it('writes one exit row when the child dies mid-command, and the loop writes not
   const params = compactParams()
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   await expect(state.host.send(CALLER, sendParams('queued behind it'))).resolves.toMatchObject({
     ok: true
   })
@@ -652,7 +684,7 @@ it('writes one exit row when the child dies mid-command, and the loop writes not
     expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
   )
   // Released from the command, the loop starts a child and delivers what waited behind it.
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   expect(state.acquire).toHaveBeenCalledTimes(2)
   const snapshot = await journal()
   expect(
@@ -681,7 +713,7 @@ it('delivers the next message after a command whose child died and whose settlem
   const params = compactParams()
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { journal: live } = state.host['sessions'].get(SESSION)!
   const appendLifecycleBatch = live.appendLifecycleBatch.bind(live)
   vi.spyOn(live, 'appendLifecycleBatch').mockImplementation((input) =>
@@ -708,12 +740,12 @@ it('delivers the next message after a command whose child died and whose settlem
   await expect(state.host.send(CALLER, sendParams('after it'))).resolves.toMatchObject({
     ok: true
   })
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   expect(state.acquire).toHaveBeenCalledTimes(2)
   expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).not.toBe('running')
 })
 
-it("ignores an older build's unconfirmed compaction record, and answers its operation without rerunning it (B15)", async () => {
+it('ignores a ledger-only compaction record with no command receipt (B15)', async () => {
   await attach()
   const older = compactParams()
   // An older build admitted this operation and died before recording its outcome.
@@ -723,28 +755,36 @@ it("ignores an older build's unconfirmed compaction record, and answers its oper
     hostFingerprint: older.envelope.payloadFingerprint,
     now: HOST_TEST_NOW
   })
-  await state.store.setConversationCommand(
-    SESSION,
-    state.store.getRecord(SESSION)!.lease.runtimeFence,
-    {
+  const fence = state.store.getRecord(SESSION)!.lease.runtimeFence
+  await state.host.close(SESSION, 'evict')
+  await state.host.flushAllStreamedEvents()
+  await editPersistedTestAgentSessionStore(state.root, (persisted) => {
+    persisted.records[SESSION].conversationCommand = {
       command: 'compact',
-      runtimeFence: state.store.getRecord(SESSION)!.lease.runtimeFence,
+      runtimeFence: fence,
       operationId: older.envelope.clientOperationId,
       callerKey: CALLER.callerKey,
       phase: 'prepared',
       state: 'unknown'
     }
-  )
+  })
+  const store = await openTestAgentSessionRecordStore(state.root)
+  replaceHostTestState({
+    store,
+    host: new StructuredAgentSessionHost({ ...state.host.deps, store })
+  })
+  state = hostTestState()
+  await state.host.restoreReadableSessions(store.listVisibleSessionIds())
 
   await expect(state.host.send(CALLER, sendParams('still works'))).resolves.toMatchObject({
     ok: true
   })
-  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.dispatch).toHaveBeenCalledOnce(), { interval: 1 })
   await expect(state.host.conversationCommand(CALLER, compactParams())).resolves.toMatchObject({
     ok: true,
     value: { state: 'completed' }
   })
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   finish({ outcome: 'success' })
   await vi.waitFor(async () =>
     expect((await journal()).submissions.every((entry) => entry.dispatchState === 'accepted')).toBe(
@@ -754,20 +794,17 @@ it("ignores an older build's unconfirmed compaction record, and answers its oper
 
   await expect(state.host.conversationCommand(CALLER, older)).resolves.toMatchObject({
     ok: true,
-    value: {
-      state: 'unknown',
-      error: 'Compaction completion is unconfirmed.',
-      failure: { kind: 'compactionUnconfirmed' }
-    }
+    replayed: false,
+    value: { state: 'completed' }
   })
-  expect(compact).toHaveBeenCalledOnce()
+  expect(compact).toHaveBeenCalledTimes(2)
 })
 
 it('never lets a provider echo alias the command entry', async () => {
   await attach()
   const params = compactParams()
   await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   finish({ outcome: 'success' })
   const events = state.acquire.mock.calls.at(-1)?.[0].events
   const echo = { provider: 'codex' as const, threadId: THREAD, turnId: 'later', ordinal: 0 }
@@ -785,7 +822,7 @@ it('never lets a provider echo alias the command entry', async () => {
 it('refuses a /compact pressed again under a new id while one runs, and runs one pressed after it ended', async () => {
   await attach()
   await state.host.conversationCommand(CALLER, compactParams())
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
 
   expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
     ok: false,
@@ -799,5 +836,5 @@ it('refuses a /compact pressed again under a new id while one runs, and runs one
       ok: true
     })
   )
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(2), { interval: 1 })
 })

@@ -6,10 +6,20 @@ import type {
   SshPlainSshMode,
   SshProviderEpoch
 } from './ssh-types'
+import { admitSshManagedServerStatus } from './ssh-managed-server-status-admission'
+import {
+  isNonNegativeSafeInteger,
+  isSshRetainedIdentifier,
+  SSH_CONNECTION_ERROR_MAX_UTF8_BYTES
+} from './ssh-retained-payload-limits'
 import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
 
-export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
-export const SSH_CONNECTION_ERROR_MAX_UTF8_BYTES = 16 * 1024
+export {
+  isSshRetainedIdentifier,
+  SSH_CONNECTION_ERROR_MAX_UTF8_BYTES,
+  SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
+} from './ssh-retained-payload-limits'
+
 export const SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES = 128
 const SSH_PLAIN_SSH_REASON_MAX_UTF8_BYTES = 64
 export const SSH_DETECTED_PORTS_MAX_ENTRIES = 50
@@ -27,16 +37,6 @@ const CONNECTION_STATUSES = new Set<SshConnectionStatus>([
   'reconnection-failed',
   'error'
 ])
-
-export function isSshRetainedIdentifier(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    !measureUtf8ByteLength(value, {
-      stopAfterBytes: SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
-    }).exceededLimit
-  )
-}
 
 export function isAdmissibleDirectSshAuthority(value: unknown): value is DirectSshAuthority {
   if (!value || typeof value !== 'object') {
@@ -95,7 +95,9 @@ export function admitSshConnectionState(
     input.remotePlatform === 'win32'
       ? { remotePlatform: input.remotePlatform }
       : {}),
-    ...admitSshPlainSshMode(input.plainSsh)
+    ...admitSshPlainSshMode(input.plainSsh),
+    ...(input.hostNodeRuntime === true ? { hostNodeRuntime: true } : {}),
+    ...admitSshManagedServerStatus(input.managedServer)
   }
 }
 
@@ -139,7 +141,9 @@ export function admitSshConnectionStateForAuthorityReconciliation(
       reconnectAttempt: input.reconnectAttempt,
       supportsFolderDownload: input.supportsFolderDownload,
       remotePlatform: input.remotePlatform,
-      plainSsh: input.plainSsh
+      plainSsh: input.plainSsh,
+      hostNodeRuntime: input.hostNodeRuntime,
+      managedServer: input.managedServer
     },
     expectedTargetId
   )
@@ -209,10 +213,6 @@ function admitDetectedPort(value: unknown): EnrichedDetectedPort | null {
       ? { advertisedProtocol: input.advertisedProtocol }
       : {})
   }
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0
 }
 
 function isStringWithinLimit(value: unknown, maxBytes: number): value is string {

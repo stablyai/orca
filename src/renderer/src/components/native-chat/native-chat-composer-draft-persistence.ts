@@ -3,6 +3,7 @@
 
 import { basename } from '@/lib/path'
 import { isNativeChatKeptPastePath, isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import {
   dirtyScopes,
   hasLocalChange,
@@ -12,7 +13,7 @@ import {
   records,
   refusedScopes,
   unconfirmed,
-  unverifiedScopes,
+  reconcileRestoredImageChecks,
   type AppendBeforeLoad,
   type DraftAppend,
   type DraftRecord,
@@ -54,11 +55,15 @@ export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
 }
 
 /** What storage keeps: not an unsaved launch-seed copy, and a paste outside Orca's paste folder
- *  (over SSH, or from before it) only by name. Null when nothing is left. */
+ *  (over SSH, or from before it) only by name. A paste a paired server stored for the chat stays
+ *  whole: the server keeps it, and its claim at send refuses one it no longer has. Null when
+ *  nothing is left. */
 function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
   const { unsavedText, ...saved } = record
   const images = saved.images.map((image) =>
-    isNativeChatPastedImagePath(image.path) && !isKeptLocalPaste(image)
+    isNativeChatPastedImagePath(image.path) &&
+    !isKeptLocalPaste(image) &&
+    !isAgentSessionAttachmentStorePath(image.path)
       ? unavailableNativeChatComposerDraftImage(image)
       : image
   )
@@ -237,14 +242,6 @@ export function deleteLoadingNativeChatComposerDraftsWhere(
   }
 }
 
-function addsAnImage(
-  draft: StoredNativeChatComposerDraft,
-  previous: DraftRecord | undefined
-): boolean {
-  const held = new Set(previous?.images.map((image) => `${image.id}\0${image.path}`))
-  return draft.images.some((image) => !held.has(`${image.id}\0${image.path}`))
-}
-
 // Why: another window of the same app (two web-client tabs) can send or edit this draft; its write
 // replaces what this window holds unless this window has a change of its own not yet saved.
 function adoptForeignChange(message: unknown): void {
@@ -263,13 +260,11 @@ function adoptForeignChange(message: unknown): void {
       }
       const draft = parseStoredNativeChatComposerDraft(value)
       if (draft) {
-        // Why: images this window already checked stay checked, so their chips don't flash.
-        if (addsAnImage(draft, records.get(scopeKey))) {
-          unverifiedScopes.add(scopeKey)
-        }
+        reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
         records.set(scopeKey, draft)
       } else {
         records.delete(scopeKey)
+        reconcileRestoredImageChecks(scopeKey, [])
       }
       notifyScope(scopeKey)
     })

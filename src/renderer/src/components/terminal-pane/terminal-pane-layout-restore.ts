@@ -7,6 +7,7 @@ import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import { resolveParkRevealLiveTuiLeafIds } from './park-reveal-live-tui-leaves'
 import {
   mapRestoredPaneTitlesByPaneId,
   replayLayoutWithOneShotParkIntent
@@ -21,6 +22,11 @@ export function restoreTerminalPaneLayout(args: {
 }): Map<string, number> {
   const { manager, deps, refs, ptyDeps, initialLayoutHadBuffers } = args
   const { initialLayoutRef, tabId, worktreeId, isActive, managerRef } = deps
+  // Read before replay consumes the one-shot park intent.
+  const liveAltScreenLeafIds = resolveParkRevealLiveTuiLeafIds(
+    ptyDeps.mountFollowsTerminalPark,
+    initialLayoutRef.current.ptyIdsByLeafId
+  )
   const restoredPaneByLeafId = replayLayoutWithOneShotParkIntent(ptyDeps, () =>
     replayTerminalLayout(manager, initialLayoutRef.current, isActive)
   )
@@ -34,7 +40,8 @@ export function restoreTerminalPaneLayout(args: {
     restoredBuffers,
     restoredPaneByLeafId,
     deps.replayingPanesRef,
-    refs.restoredViewportBlankingPanesRef
+    refs.restoredViewportBlankingPanesRef,
+    liveAltScreenLeafIds
   )
   const hasScrollbackRefs = Boolean(initialLayoutRef.current.scrollbackRefsByLeafId)
   if (

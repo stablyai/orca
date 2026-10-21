@@ -7,7 +7,6 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
-  getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
@@ -22,7 +21,6 @@ const {
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
-  getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
@@ -77,10 +75,6 @@ vi.mock('../pty/windows-environment-path', () => ({
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-}))
-
 vi.mock('../bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock
 }))
@@ -95,9 +89,9 @@ vi.mock('../gitea/client', () => ({
 
 import {
   detectInstalledAgents,
-  detectInstalledAgentsWithShellPathHydration,
-  registerPreflightHandlers
-} from './preflight'
+  detectInstalledAgentsWithShellPathHydration
+} from '../preflight/agent-detection'
+import { registerPreflightHandlers } from './preflight'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {
@@ -112,7 +106,6 @@ describe('preflight', () => {
         execFileAsyncMock,
         hydrateShellPathMock,
         mergePathSegmentsMock,
-        getActiveMultiplexerMock,
         getBitbucketAuthStatusMock,
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,

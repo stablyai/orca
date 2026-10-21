@@ -1,4 +1,4 @@
-import type { SpawnedProcess } from '../../shared/child-process/run-process'
+import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { waitForProcessExitUntil } from './provider-process-exit-deadline'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
@@ -9,12 +9,17 @@ export type ProviderProcessTree = {
   refresh?: () => Promise<void>
   reap(): Promise<DescendantTreeVerdict>
   readonly treeVerdict: DescendantTreeVerdict
+  /** A reap has reached the root while it lived: its exit since then is no longer its own. */
+  readonly forcedReapAttempted?: boolean
 }
 
 export type ProviderProcessClosePolicy = {
   gracefulExitMs: number
   forcedExitMs: number
   signalSupervisorOnClose?: boolean
+  /** A root that leaves on its own after its stdin ends, with no forced reap ever on its tree, is
+   *  the close: no claim is made about its descendants, and no post-exit reap runs. */
+  selfExitIsClose?: boolean
 }
 
 export type ProviderProcessCloseInput = {
@@ -31,6 +36,8 @@ export type ProviderProcessCloseResult = {
   root: DescendantTreeVerdict
   /** Null when this close made no observation of the descendants. */
   tree: DescendantTreeVerdict | null
+  /** Set when `selfExitIsClose` decided the close. */
+  selfExit?: true
 }
 
 export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
@@ -79,6 +86,14 @@ export async function closeProviderProcess(
       }
       await waitForProcessExitUntil(input.exitPromise, policy.forcedExitMs)
     }
+  }
+  if (
+    policy.selfExitIsClose &&
+    !reaped &&
+    !tree?.forcedReapAttempted &&
+    input.rootVerdict() === 'exited'
+  ) {
+    return { root: 'exited', tree: tree ? tree.treeVerdict : null, selfExit: true }
   }
   if (!reaped && input.rootVerdict() === 'exited' && tree && tree.treeVerdict !== 'exited') {
     await tree.reap()

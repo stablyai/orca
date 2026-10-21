@@ -5,8 +5,18 @@ import {
   releaseAllStagedMedia,
   releaseStagedMedia
 } from '../mobile-web-shell/bridge/staged-media-bytes'
-import { useNativeVerbs, type NativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
-import type { MediaPicker, PickedMobileImage } from './media-picker-contract'
+import {
+  NativeVerbError,
+  useNativeVerbs,
+  type NativeVerbs
+} from '../mobile-web-shell/bridge/use-native-verbs'
+import {
+  MobileFileTooLargeError,
+  type MediaPicker,
+  type PickedMobileFile,
+  type PickedMobileImage
+} from './media-picker-contract'
+import { mobilePickedFileFallbackName } from './mobile-picked-file-name'
 
 /**
  * Web sibling: the page has no photo library and no Files app, so the shell picks for it and hands
@@ -54,6 +64,41 @@ async function* readPicked(
   }
 }
 
+/** The shell refuses a file over what it stages; that refusal reads as the size error. */
+async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaItem[]> {
+  try {
+    return await verbs.pickMedia('files', true)
+  } catch (error) {
+    throw error instanceof NativeVerbError && error.reason === 'native_media_too_large'
+      ? new MobileFileTooLargeError(null)
+      : error
+  }
+}
+
+async function* readPickedFiles(
+  verbs: NativeVerbs,
+  items: readonly BridgeMediaItem[]
+): AsyncGenerator<PickedMobileFile> {
+  const unread = [...items]
+  try {
+    let index = 0
+    while (unread.length > 0) {
+      const item = unread[0]!
+      index += 1
+      // An older shell cannot name the file; the page names it from its type instead.
+      const name =
+        (verbs.canNameMedia ? await verbs.nameMedia(item.handle) : null) ??
+        mobilePickedFileFallbackName(item.mime, index)
+      const base64 = await readStagedMediaItem(verbs, item)
+      unread.shift()
+      await releaseStagedMedia(verbs, item.handle)
+      yield { name, mime: item.mime, byteLength: item.byteLength, base64 }
+    }
+  } finally {
+    await releaseAllStagedMedia(verbs, unread)
+  }
+}
+
 export function useMediaPicker(): MediaPicker {
   const verbs = useNativeVerbs()
 
@@ -68,6 +113,11 @@ export function useMediaPicker(): MediaPicker {
       pickImages: (source) => ({
         [Symbol.asyncIterator]: async function* () {
           yield* readPicked(verbs, await verbs.pickMedia(source, true))
+        }
+      }),
+      pickFiles: () => ({
+        [Symbol.asyncIterator]: async function* () {
+          yield* readPickedFiles(verbs, await pickFileItems(verbs))
         }
       })
     }),

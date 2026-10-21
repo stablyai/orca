@@ -1,10 +1,10 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import React from 'react'
 import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '../../lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '../../lib/floating-workspace-panel-reveal'
 import { detectLanguage } from '../../lib/language-detect'
 import { Button } from '../ui/button'
 import {
@@ -104,9 +104,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       cancelFloatingTerminalToggleFrame()
       floatingTerminalToggleFrameRef.current = requestAnimationFrame(() => {
         floatingTerminalToggleFrameRef.current = null
-        if (!isFloatingWorkspacePanelVisible()) {
-          window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-        }
+        revealFloatingWorkspacePanel(useAppStore.getState())
       })
     } catch (error) {
       toast.error(
@@ -132,7 +130,11 @@ export function KeybindingsFileActions(): React.JSX.Element {
         )
         return
       }
-      const result = await window.api.shell.openInExternalEditor({ path: filePath, command })
+      const result = await window.api.shell.openInExternalEditor({
+        path: filePath,
+        command,
+        ownerHostId: LOCAL_EXECUTION_HOST_ID
+      })
       if (!result.ok) {
         toast.error(openFailureMessage(result.reason))
       }

@@ -1,5 +1,6 @@
+import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal-output-side-effects'
+import { idleEdgeSettledAtRest, isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
-import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
 import type {
@@ -18,6 +19,22 @@ import { subscribeAgentTaskCompleteTrackingEnabled } from './agent-task-complete
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 import { installAgentIdleWorkingHandlers } from './agent-idle-working-handlers'
+
+/** A hook-owned idle edge still ends its output burst, so like a claimed title completion it
+ *  absorbs that burst's BEL: one held now, or one that lands within the completion's max wait. */
+export function absorbBurstBellForHookOwnedIdle(session: ConnectPanePtySession): void {
+  if (session.hasPendingAgentTaskCompleteNotification()) {
+    return
+  }
+  session.pendingTerminalBellNotification = false
+  session.clearTerminalBellNotificationTimer()
+  session.hookOwnedIdleAbsorbsBell = true
+  // Why: main's claimed completion stayed pending on a `done` row for its whole max wait.
+  session.agentTaskCompleteNotificationMaxTimer = setTimeout(() => {
+    session.agentTaskCompleteNotificationMaxTimer = null
+    session.hookOwnedIdleAbsorbsBell = false
+  }, AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+}
 
 export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): void {
   session.scheduleAgentTaskCompleteNotification = (
@@ -139,10 +156,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
   // findable after the OS banner is gone. Double-firing with a concurrent BEL
   // is handled by delaying the BEL OS notification below; main still keeps a
   // 5 s per-worktree dedupe as the final guard.
-  session.onAgentBecameIdle = (
-    title: string,
-    meta?: { staleWorkingTitleClear?: boolean }
-  ): void => {
+  session.onAgentBecameIdle = (title: string, meta?: AgentIdleEdgeMeta): void => {
     // Why: a stale-derived idle comes from main's UNTHROTTLED 3s timer, not
     // observed bytes — a merely-paused agent (>3s silent mid-task, window
     // minimized) would otherwise mint a false task-complete OS notification
@@ -173,10 +187,13 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     // CacheTimer component gates rendering on the enabled flag, so a
     // spurious write when the feature turns out to be disabled is harmless.
     const settings = currentState.settings
-    if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
+    if (
+      isClaudeIdleEdge(title, activeHookStatus) &&
+      (settings === null || settings.promptCacheTimerEnabled)
+    ) {
       session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
     }
-    if (detectAgentStatusFromTitle(title) === 'idle') {
+    if (idleEdgeSettledAtRest(title, meta)) {
       session.setFocusReportSuppressionForAgentCompletion(title, activeHookStatus?.agentType)
     }
     if (session.syncAgentTaskCompleteTrackingEnabled()) {

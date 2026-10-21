@@ -2,24 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
-const {
-  materializeLocalMock,
-  materializeSshMock,
-  getSshGitProviderMock,
-  getLocalProjectWorktreeGitOptionsMock
-} = vi.hoisted(() => ({
+const { materializeLocalMock, getLocalProjectWorktreeGitOptionsMock } = vi.hoisted(() => ({
   materializeLocalMock: vi.fn(),
-  materializeSshMock: vi.fn(),
-  getSshGitProviderMock: vi.fn(),
   getLocalProjectWorktreeGitOptionsMock: vi.fn()
 }))
 vi.mock('../ipc/worktree-remote', () => ({
-  materializeWorktreePushTargetRemote: materializeLocalMock,
-  materializeWorktreePushTargetRemoteSsh: materializeSshMock
-}))
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  materializeWorktreePushTargetRemote: materializeLocalMock
 }))
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
@@ -51,8 +41,6 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
 
   beforeEach(() => {
     materializeLocalMock.mockReset().mockResolvedValue(undefined)
-    materializeSshMock.mockReset().mockResolvedValue(undefined)
-    getSshGitProviderMock.mockReset()
     getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
@@ -64,7 +52,6 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
   it('is a no-op when there is no push target', () => {
     triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, undefined, LOCAL_REPO, STORE)
     expect(materializeLocalMock).not.toHaveBeenCalled()
-    expect(materializeSshMock).not.toHaveBeenCalled()
   })
 
   it('is a no-op for a same-repo push target with no remoteUrl', () => {
@@ -106,41 +93,32 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
       STORE,
       REPO_ID,
       { wslDistro: 'Ubuntu' },
-      'worktree-1'
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'local' })
     )
-    expect(materializeSshMock).not.toHaveBeenCalled()
   })
 
-  it('materializes over SSH when the repo has a connectionId and a provider is registered', () => {
-    const provider = { exec: vi.fn() }
-    getSshGitProviderMock.mockReturnValue(provider)
-    const target = forkTarget()
-    triggerTerminalSpawnPushTargetMaterialization(
-      WORKTREE_PATH,
-      target,
-      SSH_REPO,
-      STORE,
-      REPO_ID,
-      'worktree-1'
-    )
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('conn-1')
-    expect(materializeSshMock).toHaveBeenCalledWith(
-      provider,
-      WORKTREE_PATH,
-      target,
-      STORE,
-      undefined,
-      'worktree-1'
-    )
+  it('is a no-op for an SSH repo, never materializing on this machine', () => {
+    triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, forkTarget(), SSH_REPO, STORE)
+    // A row stamped with a remote host but no connection id is just as remote.
+    const stampedOnly: Repo = { ...LOCAL_REPO, executionHostId: 'ssh:box' }
+    triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, forkTarget(), stampedOnly, STORE)
     expect(materializeLocalMock).not.toHaveBeenCalled()
     expect(getLocalProjectWorktreeGitOptionsMock).not.toHaveBeenCalled()
   })
 
-  it('is a no-op when the SSH connection has dropped (no registered provider)', () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-    triggerTerminalSpawnPushTargetMaterialization(WORKTREE_PATH, forkTarget(), SSH_REPO, STORE)
-    expect(materializeSshMock).not.toHaveBeenCalled()
-    expect(materializeLocalMock).not.toHaveBeenCalled()
+  it("records on a server's own runtime-stamped row, whose git runs here", () => {
+    const serverRow: Repo = { ...LOCAL_REPO, executionHostId: 'runtime:env-1' }
+    triggerTerminalSpawnPushTargetMaterialization(
+      WORKTREE_PATH,
+      forkTarget(),
+      serverRow,
+      STORE,
+      REPO_ID,
+      'worktree-1'
+    )
+    expect(materializeLocalMock.mock.calls[0]?.[5]).toEqual(
+      hostWorktreeTarget({ id: 'worktree-1', hostId: 'runtime:env-1' })
+    )
   })
 
   it('falls back to default git options when WSL project runtime resolution throws', () => {

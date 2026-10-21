@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { emptyLayoutSnapshot, clearTransientTerminalState } from './terminal-helpers'
+import { clearTransientTerminalState } from './terminal-helpers'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -15,17 +15,6 @@ function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
     ...overrides
   }
 }
-
-describe('emptyLayoutSnapshot', () => {
-  it('returns correct default structure', () => {
-    const snapshot = emptyLayoutSnapshot()
-    expect(snapshot).toEqual({
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null
-    })
-  })
-})
 
 describe('clearTransientTerminalState', () => {
   it('clears ptyId to null', () => {

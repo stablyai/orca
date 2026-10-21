@@ -1,27 +1,18 @@
-import { translateMain } from '../i18n/main-i18n'
+import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
+
+type NotificationStatusTranslator = (key: string, fallback: string) => string
+
+const englishNotificationStatus: NotificationStatusTranslator = (_key, fallback) => fallback
 
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
 const NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH = 80
 const NOTIFICATION_BODY_PREVIEW_MAX_LENGTH = 180
 
-const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
-  claude: 'Claude',
-  openclaude: 'OpenClaude',
-  codex: 'Codex',
-  gemini: 'Gemini',
-  antigravity: 'Antigravity',
-  opencode: 'OpenCode',
-  cursor: 'Cursor',
-  aider: 'Aider',
-  pi: 'Pi',
-  omp: 'OMP',
-  droid: 'Droid',
-  grok: 'Grok',
-  hermes: 'Hermes'
-}
-
-export function buildNotificationOptions(args: NotificationDispatchRequest): {
+export function buildNotificationOptions(
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator = englishNotificationStatus
+): {
   title: string
   body: string
   silent?: boolean
@@ -41,7 +32,7 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
     }
   }
 
-  const richOptions = buildAgentTaskCompleteNotificationOptions(args)
+  const richOptions = buildAgentTaskCompleteNotificationOptions(args, translate)
   if (richOptions) {
     return richOptions
   }
@@ -50,7 +41,8 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
 }
 
 function buildAgentTaskCompleteNotificationOptions(
-  args: NotificationDispatchRequest
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator
 ): { title: string; body: string } | null {
   if (!hasAgentNotificationSnapshot(args)) {
     return null
@@ -58,7 +50,7 @@ function buildAgentTaskCompleteNotificationOptions(
 
   const agentLabel = formatNotificationAgentLabel(args.agentType)
   const worktreeContext = formatNotificationWorktreeContext(args)
-  const statusText = formatAgentNotificationStatusText(args)
+  const statusText = formatAgentNotificationStatusText(args, translate)
 
   return {
     title: `${worktreeContext} - ${agentLabel} ${statusText}`,
@@ -69,30 +61,33 @@ function buildAgentTaskCompleteNotificationOptions(
 // Why (#4375): a still-working agent must never be announced as finished. Only an
 // explicit terminal state, or no state at all (the hook snapshot expired and the
 // notification itself is the completion signal), may say "finished".
-function formatAgentNotificationStatusText(args: NotificationDispatchRequest): string {
+function formatAgentNotificationStatusText(
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator
+): string {
   if (args.agentState === 'blocked' || args.agentState === 'waiting') {
-    return translateMain('notifications.agentStatus.needsInput', 'needs input')
+    return translate('notifications.agentStatus.needsInput', 'needs input')
   }
   if (args.agentState === 'working') {
-    return translateMain('notifications.agentStatus.working', 'working')
+    return translate('notifications.agentStatus.working', 'working')
   }
   if (args.agentState !== 'done') {
-    return translateMain('notifications.agentStatus.finished', 'finished')
+    return translate('notifications.agentStatus.finished', 'finished')
   }
   switch (args.agentTurnOutcome) {
     // A turn cut short by anything but the user is a fault, as a failure is.
     case 'failure':
     case 'interruption':
-      return translateMain('notifications.agentStatus.failed', 'failed')
+      return translate('notifications.agentStatus.failed', 'failed')
     // Why: a Stop the user asked for, a turn a newer request replaced, or an end Orca cannot
     // prove, still never reads finished.
     case 'cancellation':
     case 'superseded':
     case 'unconfirmed':
-      return translateMain('notifications.agentStatus.stopped', 'stopped')
+      return translate('notifications.agentStatus.stopped', 'stopped')
     case 'success':
     case undefined:
-      return translateMain('notifications.agentStatus.finished', 'finished')
+      return translate('notifications.agentStatus.finished', 'finished')
   }
 }
 
@@ -167,11 +162,9 @@ function buildAgentTaskCompleteFallbackBody(args: NotificationDispatchRequest): 
 }
 
 function formatNotificationAgentLabel(agentType: string | null | undefined): string {
-  const normalized = normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH)
-  if (!normalized || normalized === 'unknown') {
-    return 'Agent'
-  }
-  return AGENT_TYPE_LABELS[normalized] ?? normalized
+  return formatAgentTypeLabel(
+    normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH)
+  )
 }
 
 function normalizeNotificationText(value: string | null | undefined, maxLength: number): string {

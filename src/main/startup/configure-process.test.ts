@@ -393,6 +393,25 @@ describe('configureOrcaUserDataPathEnv', () => {
 
     expect(configuredUserDataPath).toBe('/tmp/current-orca-user-data')
   })
+
+  it('drops a runtime source inherited from the Orca terminal that started this Orca', async () => {
+    const { app } = await import('electron')
+    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
+    const saved = { ...process.env }
+    process.env.ORCA_RUNTIME_SOURCE_ID = 'parent-source'
+    process.env.ORCA_RUNTIME_SOURCE_INCARNATION = 'parent-runtime'
+    app.setPath('userData', '/tmp/current-orca-user-data')
+    let inherited: (string | undefined)[] = []
+
+    try {
+      configureOrcaUserDataPathEnv()
+      inherited = [process.env.ORCA_RUNTIME_SOURCE_ID, process.env.ORCA_RUNTIME_SOURCE_INCARNATION]
+    } finally {
+      process.env = saved
+    }
+
+    expect(inherited).toEqual([undefined, undefined])
+  })
 })
 
 describe('shouldInstallManagedHooks', () => {

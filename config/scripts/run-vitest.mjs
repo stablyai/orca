@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const root = resolve(import.meta.dirname, '../..')
 try {
@@ -19,6 +19,6 @@ try {
 
   process.exitCode = result.code ?? 1
 } catch (error) {
-  console.error('Could not start Vitest. Install the Bun version in config/bun-version.', error)
+  console.error('Could not start Vitest. Install the Bun version in config/.bun-version.', error)
   process.exitCode = 1
 }

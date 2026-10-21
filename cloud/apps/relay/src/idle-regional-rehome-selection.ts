@@ -300,7 +300,7 @@ function inlineRows(columns: ReadonlyArray<readonly [string, string]>, rows: num
 }
 
 function hostKey(row: SqlRow): string {
-  return `${String(row.user_id)} ${String(row.relay_host_id)}`
+  return `${String(row.user_id)}\u0000${String(row.relay_host_id)}`
 }
 
 function idleRehomeCandidate(

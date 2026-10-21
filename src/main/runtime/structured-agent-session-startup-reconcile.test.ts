@@ -80,7 +80,8 @@ function startupRuntime(log = recordingStructuredAgentSessionLogger()) {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' })
     })
   internal.refreshMobileSessionPtyRecords = async () => new Set<string>()
   return runtime

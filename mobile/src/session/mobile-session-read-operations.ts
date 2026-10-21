@@ -3,6 +3,7 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   detectedAgentsSchema,
   markdownTabDocumentSchema,
+  refreshedAgentsSchema,
   runtimeRepoListSchema,
   sessionForwardedReplySchema,
   sessionTerminalInventorySchema,
@@ -32,7 +33,11 @@ export const sessionTerminalListRead = bindDeferredRpcOperation(
   })
 )
 
-export type MobileRuntimeRepoSummary = { id: string; connectionId?: string | null }
+export type MobileRuntimeRepoSummary = {
+  id: string
+  connectionId?: string | null
+  executionHostId?: string | null
+}
 
 const repoListReader = rpcResultVariant('runtime-repo-list', runtimeRepoListSchema)
 
@@ -83,6 +88,16 @@ export const preflightDetectAgentsRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('detected-agents', detectedAgentsSchema)
+  })
+)
+
+export const preflightRefreshAgentsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'preflight.refresh-agents',
+    method: 'preflight.refreshAgents',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('refreshed-agents', refreshedAgentsSchema)
   })
 )
 
@@ -139,9 +154,9 @@ export const nativeChatFileInventoryRead = bindDeferredRpcOperation(
 /**
  * The older-history page native chat asks for when the transcript is scrolled back.
  *
- * A skip rather than a throw: a refused page leaves the window the subscription already delivered
- * and the scroll simply does not grow, which is what the call site's `if (!response.ok) return`
- * did. There is no screen to raise a host message on — the pane is already showing history.
+ * A skip rather than a throw: a refused page leaves the window the subscription already delivered,
+ * and the call site shows its own retry line. The host's message isn't raised; it is an internal
+ * code the reader can't act on.
  *
  * The payload stays whole rather than being narrowed to `messages`, because the reply is a union:
  * an older runtime answers `{ error }` in place of a window, and the caller discriminates on that

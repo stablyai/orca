@@ -116,6 +116,7 @@ export type {
   RuntimeDesktopWindowStatus,
   RuntimeGraphStatus,
   RuntimeMobileSessionAgentTab,
+  RuntimeMobileSessionAgentTabStatus,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionCreateTerminalResult,
@@ -133,6 +134,7 @@ export type {
   RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileTerminalTheme,
+  RuntimeMountedLeaf,
   RuntimeNativeChatLaunchDraftResolution,
   RuntimeRendererSyncWindowGraph,
   RuntimeSessionTabCloseReason,
@@ -165,6 +167,7 @@ export type {
   RuntimeTerminalPromptStage,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalResolvePane,
   RuntimeTerminalSend,
   RuntimeTerminalShow,
@@ -200,6 +203,7 @@ export type {
   RuntimeWorktreePsUnchangedResult,
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
+  RuntimeWorktreeSetResult,
   RuntimeWorktreeStatus
 } from './runtime-worktree-contracts'
 export type {

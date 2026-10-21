@@ -20,6 +20,7 @@ import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
 import { extractJcodeToolFields } from './providers/jcode-tool-fields'
+import { extractKiroToolFields } from './providers/kiro-tool-fields'
 
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
@@ -87,6 +88,58 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // prompt before the model generates — its real turn boundary. session_start
       // returns early in normalizeJcodeEvent and clears the cache itself.
       return eventName === 'turn_start'
+    case 'kiro':
+      // Why: agentSpawn opens a fresh session in the pane, so stale tool/prompt caches go too.
+      return eventName === 'agentSpawn' || eventName === 'userPromptSubmit'
+  }
+}
+
+/** The per-provider answer to "is this the main agent's own turn-end event?". Idle reminders,
+ *  session events and late enrichment restate a finished turn, so they are never one. */
+export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boolean {
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
+  switch (source) {
+    case 'claude':
+    case 'qoder':
+    case 'qoder-cn':
+    case 'qwen-code':
+    case 'codebuddy':
+    case 'kimi':
+    case 'muse':
+      return eventName === 'Stop' || eventName === 'StopFailure'
+    case 'dsh':
+    case 'zcode':
+    case 'codex':
+    case 'antigravity':
+    case 'droid':
+    case 'devin':
+      return eventName === 'Stop'
+    case 'gemini':
+      return eventName === 'AfterAgent'
+    case 'amp':
+      return eventName === 'agent.end'
+    case 'command-code':
+      // Why: its only done event; repeats within one prompt share the transcript key, so they restate.
+      return eventName === 'Stop'
+    case 'cursor':
+    case 'kiro':
+      return eventName === 'stop'
+    case 'grok':
+      return isGrokEvent(eventName, 'stop', 'stop_failure', 'stop_cancelled')
+    case 'copilot':
+      return normalizeCopilotEventName(eventName) === 'Stop'
+    case 'hermes':
+      return eventName === 'post_llm_call'
+    case 'jcode':
+      return eventName === 'turn_end'
+    case 'opencode':
+    case 'opencode2':
+    case 'mimo-code':
+    case 'pi':
+    case 'omp':
+    case 'prime-agent':
+      // Why: their done events are status snapshots or milestones that can repeat within one turn.
+      return false
   }
 }
 
@@ -210,5 +263,7 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'jcode':
       return extractJcodeToolFields(eventName, hookPayload)
+    case 'kiro':
+      return extractKiroToolFields(eventName, hookPayload)
   }
 }

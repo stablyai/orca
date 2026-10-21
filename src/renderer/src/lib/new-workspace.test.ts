@@ -73,12 +73,13 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess,
+  inspectRuntimeTerminalProcess: mockInspectRuntimeTerminalProcess
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: mockSendRuntimePtyInputVerified
 }))
 
 vi.mock('@/lib/agent-paste-draft', () => ({
-  getSettingsForAgentTabRuntimeOwner: () => store.settings,
   pasteDraftToAgentPtyWhenReady: mockPasteDraftToAgentPtyWhenReady
 }))
 
@@ -97,11 +98,17 @@ vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
 import {
   canUseIssueCommandForLinkedItemProvider,
   ensureAgentStartupInTerminal,
+  getLinkedWorkItemProvider,
   getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl
 } from './new-workspace'
 import { resetAgentStartupDelayedDeliveryForTests } from './agent-startup-delayed-delivery'
+import { getLinkedWorkItemProvider as directGetLinkedWorkItemProvider } from './linked-work-item-provider'
+
+it('keeps linked item provider selection available through the workspace module', () => {
+  expect(getLinkedWorkItemProvider).toBe(directGetLinkedWorkItemProvider)
+})
 
 describe('linked-item issue commands', () => {
   it('keeps Jira and Linear sentinel numbers out of repository issue templates', () => {
@@ -294,7 +301,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     })
 
     expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      {},
       'pty-1',
       'fix the spinner\r',
       'launch'
@@ -411,7 +417,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     })
 
     expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
-      tabId: 'tab-1',
       ptyId: 'pty-1',
       content: 'review this before sending',
       agent: 'claude',
@@ -455,7 +460,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     })
 
     expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
-      tabId: 'agent-tab',
       ptyId: 'agent-pty',
       content: 'Linear context draft',
       agent: 'codex',
@@ -512,7 +516,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
 
     expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
     expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
-      tabId: 'tab-1',
       ptyId: 'pty-delayed',
       content: 'https://github.com/stablyai/orca/pull/2051',
       agent: 'codex',
@@ -594,7 +597,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
 
     expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledTimes(1)
     expect(mockPasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith({
-      tabId: 'tab-1',
       ptyId: 'startup-pty',
       content: 'linked draft',
       agent: 'codex',

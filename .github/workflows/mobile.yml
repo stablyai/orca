@@ -6,12 +6,16 @@ on:
       - opened
       - synchronize
       - reopened
+      - ready_for_review
+      - converted_to_draft
     paths:
       - 'mobile/**'
       # Why all of src/shared: mobile imports hundreds of its modules, directly and through the RPC
       # recordings and the host params check, so any shared edit can move a golden or break mobile's
       # typecheck. Why the root lockfile: those modules resolve their packages from the root install.
       - 'src/shared/**'
+      # Mobile's Node RPC recording tools import this package.
+      - 'src/packages/process-host/**'
       - 'pnpm-lock.yaml'
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
       - 'src/main/agent-launch/**'
@@ -22,15 +26,32 @@ on:
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/native-chat/agent-session-wire/**'
+      - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       # Why: this job holds the only checks that load the Fastfile, so edits to
       # it or to the release workflow it guards must re-run them.
       - '.github/workflows/mobile.yml'
+      - 'config/mobile-ci.vitest.config.mjs'
+      - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/oxlint-code-quality-native-plugins.json'
+      - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/mobile-test-change-scope*'
       - 'config/scripts/pr-code-change-scope.mjs'
+      - 'config/scripts/pr-package-test-paths.mjs'
+      - 'config/scripts/pr-layout-oracle-route.mjs'
+      # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
+      - '!src/shared/**/*.test.[jt]s'
+      - '!src/shared/**/*.test.[jt]sx'
+      - '!src/shared/**/*.test.[cm][jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]sx'
+      - '!src/packages/process-host/**/*.test.[cm][jt]s'
+      - '!src/main/**/*.test.[jt]s'
+      - '!src/main/**/*.test.[jt]sx'
+      - '!src/main/**/*.test.[cm][jt]s'
   # Why main too: two pull requests can each pass against their own base and disagree once both
   # land, and `verify` never runs on main. The same source paths as above, less the CI inputs only
   # `verify` reads.
@@ -40,6 +61,7 @@ on:
     paths:
       - 'mobile/**'
       - 'src/shared/**'
+      - 'src/packages/process-host/**'
       - 'pnpm-lock.yaml'
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
@@ -49,7 +71,21 @@ on:
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/native-chat/agent-session-wire/**'
+      - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
+      - 'config/mobile-ci.vitest.config.mjs'
+      - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/.bun-version'
+      # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
+      - '!src/shared/**/*.test.[jt]s'
+      - '!src/shared/**/*.test.[jt]sx'
+      - '!src/shared/**/*.test.[cm][jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]sx'
+      - '!src/packages/process-host/**/*.test.[cm][jt]s'
+      - '!src/main/**/*.test.[jt]s'
+      - '!src/main/**/*.test.[jt]sx'
+      - '!src/main/**/*.test.[cm][jt]s'
 
 concurrency:
   # Per commit on main, not per branch. GitHub cancels any PENDING run in a group when a new one
@@ -60,7 +96,8 @@ concurrency:
 
 jobs:
   verify:
-    if: github.event_name == 'pull_request'
+    name: Mobile verify
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Why ARM: 209s of this job is Vitest and nothing here needs x86: no Android SDK, emulator, gradle,
     # Hermes or Watchman, no docker, and no artifacts. The Gemfile.lock lists the generic `ruby`
     # platform, so frozen bundler installs without an aarch64-linux entry.
@@ -71,6 +108,7 @@ jobs:
       # from the Gemfile, which is how the release jobs could land on different
       # fastlane versions in the first place. Fail here instead.
       BUNDLE_FROZEN: 'true'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
 
     defaults:
       run:
@@ -84,6 +122,7 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
         with:
+          cache-pnpm-store: 'false'
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -104,6 +143,8 @@ jobs:
       # proves the pinned fastlane the release workflow depends on still
       # resolves — before a release run finds out.
       - name: Setup Ruby and fastlane
+        id: ruby-tools
+        background: true
         if: steps.ruby-scope.outputs.should_run != 'false'
         uses: ruby/setup-ruby@v1
         with:
@@ -114,20 +155,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Why here: pr.yml runs these import rules before mobile's install, when mobile's tsconfig
+      # (which extends expo's) can't load, so its import cycles were never seen. Zero tolerance.
+      - name: Lint mobile imports with mobile dependencies installed
+        working-directory: .
+        run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
+
       # Call installed tools so pnpm's dependency refresh cannot race between checks.
       - name: Typecheck
         id: production-types
         background: true
-        run: node node_modules/typescript/bin/tsc --noEmit
+        env:
+          GOMAXPROCS: '2'
+        run: node scripts/typecheck-mobile.mjs
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
       # drifted. This fails when a test file that checks today stops checking, when a test leaves
       # the program, and on @ts-nocheck; the baseline may only shrink.
       - name: Typecheck tests (ratchet)
+        id: test-types
+        background: true
+        env:
+          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
-
-      - wait: production-types
 
       # This includes the bridged replay of the whole recording corpus, which used to be a second
       # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:
@@ -146,11 +197,20 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Setup Bun for tests
+        if: steps.test-scope.outputs.should_run != 'false'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: pnpm test
+        run: node ../config/scripts/run-mobile-ci-tests.mjs
+
+      # All checks read the completed install; compilers need not hold up test workers.
+      - wait: [production-types, test-types, ruby-tools]
 
       # Reports, never gates: the goldens are content-addressed JSON, so their raw diff is hashes.
       # This decodes which recorded behaviour the pull request moves into the job summary, and runs
@@ -180,6 +240,10 @@ jobs:
           FASTLANE_OPT_OUT_USAGE: '1'
         run: bundle exec fastlane lanes
 
+      - name: Smoke-check CocoaPods
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: bundle exec pod --version
+
       - name: Lint
         run: pnpm lint
 
@@ -188,6 +252,8 @@ jobs:
 
   main-tests:
     name: Mobile tests on main
+    env:
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
     runs-on: ubuntu-24.04-arm
@@ -211,10 +277,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck
+        id: production-types
+        background: true
+        env:
+          GOMAXPROCS: '2'
+        run: node scripts/typecheck-mobile.mjs
+
+      - name: Typecheck tests (ratchet)
+        id: test-types
+        background: true
+        env:
+          GOMAXPROCS: '2'
+        run: node scripts/check-tests-typecheck-ratchet.mjs
+
       # The whole suite, not only the recordings: the mutant and page-bridge suites read the goldens
       # too. A red run here names each golden and the `rpc:record` command; the author of the merge
       # that turned it red re-records in a follow-up.
+      - name: Setup Bun for tests
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+
       - name: Test
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: pnpm test
+        run: node ../config/scripts/run-mobile-ci-tests.mjs
+
+      - wait: [production-types, test-types]

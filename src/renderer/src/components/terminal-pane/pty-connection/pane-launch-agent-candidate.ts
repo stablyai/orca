@@ -1,5 +1,7 @@
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-command-line-intent'
+import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../../../../shared/command-token-scanner'
 
 /** The store slice the launch-agent ladder reads. */
 export type PaneLaunchAgentStoreSlice = {
@@ -11,7 +13,7 @@ export type PaneLaunchAgentPaneSlice = {
   worktreeId: string
   tabId: string
   paneKey: string
-  startup?: { launchAgent?: string; initialAgentStatus?: { agent?: string } }
+  startup?: { command?: string; launchAgent?: string; initialAgentStatus?: { agent?: string } }
 }
 
 /**
@@ -28,11 +30,15 @@ export function resolvePaneLaunchAgentCandidate(
   pane: PaneLaunchAgentPaneSlice
 ): string | undefined {
   const registered = state.agentLaunchConfigByPaneKey[pane.paneKey]?.identity?.agentType
+  const command = pane.startup?.command
   return (
     state.tabsByWorktree[pane.worktreeId]?.find((tab) => tab.id === pane.tabId)?.launchAgent ??
     pane.startup?.launchAgent ??
     pane.startup?.initialAgentStatus?.agent ??
-    (isTuiAgent(registered) ? registered : undefined)
+    (isTuiAgent(registered) ? registered : undefined) ??
+    (command && command.length <= COMMAND_TOKEN_SCAN_MAX_CHARS
+      ? recognizeAgentLaunchCommand(command)?.agent
+      : undefined)
   )
 }
 

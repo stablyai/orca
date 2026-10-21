@@ -374,7 +374,6 @@ describeRender(
  * `mobile-web-app-screencast-lane-grant.test.mjs` derives from this closure.
  *
  * **The storage refusals a control makes.** The case above covers the writes a mount makes on its
- * own; a refusal a user's own write earns still needs the control. That chain is
- * `mobile/src/session/mobile-structured-send-page-storage-refusal.test.ts` end to end over the
- * real `page-async-storage`.
+ * own; store-level write refusals are covered by
+ * `mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts`.
  */

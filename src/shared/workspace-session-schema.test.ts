@@ -169,6 +169,47 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('drops a launch pane an older build saved: after a restart its pane is an ordinary pane', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'claude',
+            agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'not-started', code: 'boom' } }
+          },
+          {
+            id: 'tab2',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1,
+            agentLaunchPane: { leafId: 'leaf-2', outcome: { kind: 'exploded' } }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0]).not.toHaveProperty('agentLaunchPane')
+      expect(result.value.tabsByWorktree.wt[1]).not.toHaveProperty('agentLaunchPane')
+    }
+  })
+
   it('drops an unknown launchAgent without failing the whole session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

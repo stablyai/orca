@@ -1,37 +1,46 @@
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
+import { extendTranscriptBoundary } from './transcript-file-version'
+import { inTranscriptFileOrder } from './transcript-file-order'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
-import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
+import { openTranscriptReadStream, transcriptFileStat } from './wsl-transcript-fs-access'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
 export type IncrementalTranscriptState = {
   offset: number
+  boundary: Buffer
   pendingChunks: Buffer[]
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
+  /** Newest row time read so far, so an append never sorts above earlier rows. */
+  latestTimestamp: number
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
   return {
     offset: 0,
+    boundary: Buffer.alloc(0),
     pendingChunks: [],
     pendingStart: 0,
     pendingBytes: 0,
-    droppingOversizedRecord: false
+    droppingOversizedRecord: false,
+    latestTimestamp: Number.NEGATIVE_INFINITY
   }
 }
 
 export function resetIncrementalTranscriptState(state: IncrementalTranscriptState): void {
   state.offset = 0
+  state.boundary = Buffer.alloc(0)
   state.pendingChunks.length = 0
   state.pendingStart = 0
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
+  state.latestTimestamp = Number.NEGATIVE_INFINITY
 }
 
 export async function readIncrementalTranscriptMessages(
@@ -43,7 +52,7 @@ export async function readIncrementalTranscriptMessages(
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
   signal?: AbortSignal
 ): Promise<NativeChatMessage[]> {
-  const end = (await wslGatedStat(filePath, 'exact', signal)).size
+  const end = (await transcriptFileStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
@@ -74,6 +83,7 @@ export async function readIncrementalTranscriptMessages(
       }
       absoluteOffset += chunk.length
       state.offset = absoluteOffset
+      state.boundary = extendTranscriptBoundary(state.boundary, chunk)
     }
     return messages
   } finally {
@@ -122,7 +132,9 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
-    messages.push(message)
+    const ordered = inTranscriptFileOrder(message, state.latestTimestamp)
+    state.latestTimestamp = ordered.latest
+    messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))
     }

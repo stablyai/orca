@@ -84,6 +84,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 const defaultStoreState = {
+  unifiedTabsByWorktree: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],

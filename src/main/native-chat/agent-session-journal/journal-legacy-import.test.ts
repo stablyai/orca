@@ -13,11 +13,17 @@ import type { AgentSessionProviderHandle } from '../../../shared/agent-session-p
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
-import { importLegacyTranscriptIntoJournal } from './journal-legacy-import'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import {
+  importLegacyTranscriptIntoJournal,
+  prepareLegacyTranscriptImport,
+  LEGACY_IMPORT_BLOCK_LIMITS
+} from './journal-legacy-import'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -42,6 +48,7 @@ const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
 let clock = 1_000
+const journals = createTrackedJournalOpener()
 
 function tick(): number {
   clock += 1
@@ -74,13 +81,15 @@ async function open(
   sessionId: string,
   overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}
 ): Promise<AgentSessionJournal> {
-  return openAgentSessionJournal({
-    identity: identity(agent, sessionId),
-    database: openTestJournalHostDatabase(root),
-    now: tick,
-    mintEpoch: () => `epoch-${clock}`,
-    ...overrides
-  })
+  return journals.track(
+    await openAgentSessionJournal({
+      identity: identity(agent, sessionId),
+      database: openTestJournalHostDatabase(root),
+      now: tick,
+      mintEpoch: () => `epoch-${clock}`,
+      ...overrides
+    })
+  )
 }
 
 function legacyKey(recordId: string): string {
@@ -207,6 +216,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   decodedClaudeOverride.message = null
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -244,6 +254,10 @@ describe('claude import', () => {
         sessionId: CLAUDE_SESSION,
         uuid: 'e3a5b7c9-2d13-4f88-94ce-6b0d8f2a4e31'
       })
+    ])
+    // Imported at fence 1, yet no generation's work: provenance 0, so nothing in it is current.
+    expect(journal.snapshot().items.map((entry) => journal.itemFence(entry.itemId))).toEqual([
+      0, 0, 0, 0
     ])
   })
 
@@ -423,18 +437,21 @@ describe('payload bounds on import', () => {
       agent: 'claude',
       sessionId: CLAUDE_SESSION,
       fence: 1,
-      options: { filePath, limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1_024 } }
+      options: { filePath, limits: { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 1_024 } }
     })
 
     const item = journal.snapshot().items[0]
-    expect(item?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
+    expect(item?.body).toMatchObject({ kind: 'message', role: 'tool' })
     const body = item?.body
-    if (body?.kind !== 'tool-call' || !body.output) {
-      throw new Error('expected a bounded tool-call output')
+    const result = body?.kind === 'message' ? body.blocks[0] : undefined
+    if (result?.type !== 'tool-result') {
+      throw new Error('expected a bounded tool result')
     }
-    expect(body.output.truncated).toBe(true)
-    expect(body.output.byteLength).toBe(64 * 1024)
-    expect(body.output.head).toHaveLength(1_024)
+    expect(result.callId).toBe('toolu_9')
+    expect(result.output.startsWith('y'.repeat(1_024))).toBe(true)
+    expect(result.output).toContain('65536 bytes')
+    expect(result.output).toContain('output truncated')
+    expect(result.output.length).toBeLessThan(1_200)
   })
 
   it('bounds an imported subagent roster by entry count, label and id', async () => {
@@ -479,34 +496,77 @@ describe('payload bounds on import', () => {
 })
 
 describe('import failures', () => {
-  it('rejects a legacy source above the fixed 16 MiB import cap before decoding', async () => {
-    const journalDir = join(root, 'oversized-source-journal')
-    const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(journalDir)
-    })
-    const filePath = join(root, 'oversized-source.jsonl')
-    await writeFile(filePath, 'x'.repeat(16 * 1024 * 1024 + 1), 'utf8')
-    const epoch = journal.epoch
-
-    await expect(
-      importLegacyTranscriptIntoJournal({
-        journal,
-        agent: 'claude',
+  it('charges retained identity metadata against the history budget', async () => {
+    const filePath = join(root, 'large-identities.jsonl')
+    const longId = 'i'.repeat(80 * 1024)
+    const lines = Array.from({ length: 250 }, (_, index) =>
+      JSON.stringify({
+        type: 'user',
+        uuid: `${index}-${longId}`,
         sessionId: CLAUDE_SESSION,
-        fence: 1,
-        options: { filePath }
+        message: { role: 'user', content: 'small' }
       })
-    ).resolves.toMatchObject({
-      ok: false,
-      error: `Legacy transcript exceeds the ${16 * 1024 * 1024}-byte import bound`
+    )
+    await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
+
+    const result = await prepareLegacyTranscriptImport({
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      options: { filePath }
     })
-    expect(journal.epoch).toBe(epoch)
-    expect(journal.snapshot().items).toEqual([])
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.items.length).toBeLessThan(lines.length)
+    expect(
+      result.items.reduce((total, item) => total + Buffer.byteLength(JSON.stringify(item)), 0)
+    ).toBeLessThanOrEqual(16 * 1024 * 1024)
+    expect(result.items.at(-1)?.identity).toMatchObject({
+      provider: 'claude',
+      uuid: `249-${longId}`
+    })
+  })
+
+  it('imports a source past 16 MiB, keeping its newest messages', async () => {
+    const journal = await open('claude', CLAUDE_SESSION, {
+      database: openTestJournalHostDatabase(join(root, 'large-source-journal'))
+    })
+    const filePath = join(root, 'large-source.jsonl')
+    const filler = 'x'.repeat(17 * 1024)
+    const lines = Array.from({ length: 1_100 }, (_, index) =>
+      JSON.stringify({
+        type: 'assistant',
+        uuid: `message-${index}`,
+        message: { role: 'assistant', content: [{ type: 'text', text: `${index} ${filler}` }] }
+      })
+    )
+    await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
+
+    const result = await importLegacyTranscriptIntoJournal({
+      journal,
+      agent: 'claude',
+      sessionId: CLAUDE_SESSION,
+      fence: 1,
+      options: { filePath }
+    })
+
+    expect(result).toMatchObject({ ok: true, replaced: true })
+    const texts = journal
+      .snapshot()
+      .items.map((item) =>
+        item.body.kind === 'message' && item.body.blocks[0]?.type === 'text'
+          ? item.body.blocks[0].text.split(' ')[0]
+          : null
+      )
+    expect(texts.at(-1)).toBe('1099')
+    expect(texts.length).toBeGreaterThan(900)
+    expect(texts.length).toBeLessThan(lines.length)
   })
 
   it('bounds oversized legacy tool-call input before journal publication', async () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+    const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, {
       database: openTestJournalHostDatabase(journalDir)
     })
@@ -617,7 +677,7 @@ describe('import failures', () => {
 // row that also has text, and omp's execution cells always pair the invocation
 // with its output — so the multi-block path carries untrusted tool input too.
 describe('multi-block legacy messages', () => {
-  const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+  const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
   const oversized = 'x'.repeat(10_000)
 
   /** The tool-call block of the first imported multi-block message. */

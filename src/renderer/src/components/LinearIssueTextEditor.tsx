@@ -20,6 +20,7 @@ import {
   resolveLinearIssueTextDraftState
 } from './linear-issue-text-draft-state'
 import { translate } from '@/i18n/i18n'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
@@ -37,7 +38,7 @@ export function LinearIssueTextEditor({
   sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)

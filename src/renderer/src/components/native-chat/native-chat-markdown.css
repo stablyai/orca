@@ -52,3 +52,17 @@
   :is(h1, h2, h3, h4, h5, h6, [role='heading'], strong, a, code, pre) {
   color: inherit;
 }
+
+/* A reply being written: each new word, and each block that is not made of words,
+   fades in as it is drawn. Opacity only, so the line it joins never shifts. */
+@media (prefers-reduced-motion: no-preference) {
+  .native-chat-markdown[data-word-fade] :is([data-word], a, :not(pre) > code),
+  .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {
+    /* WORD_FADE_MS in use-native-chat-paced-text.ts waits this long for the last words. */
+    transition: opacity 300ms ease-out;
+
+    @starting-style {
+      opacity: 0;
+    }
+  }
+}

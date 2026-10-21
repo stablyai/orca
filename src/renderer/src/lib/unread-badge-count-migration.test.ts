@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { makeTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeTab } from '../store/slices/store-session-test-harness'
+import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { getUnreadBadgeCount, type UnreadBadgeCountSources } from './unread-badge-count'

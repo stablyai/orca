@@ -6,7 +6,7 @@ import {
   TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
   validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath
-} from './tab-create-entry-action'
+} from './tab-create-entry-classifier'
 
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 
@@ -19,6 +19,26 @@ it.each(['.env api', 'api .env'])('offers the multi-term file match for %s', (qu
 })
 
 describe('tab create entry classification', () => {
+  it.each([true, false])(
+    'offers HTML URLs while the file list loads (local paths: %s)',
+    (allowAbsolutePaths) => {
+      expect(
+        classifyTabEntryQuery(
+          'file:///repo/report.html',
+          {
+            files: [],
+            loading: true,
+            loadError: null
+          },
+          { allowAbsolutePaths }
+        )
+      ).toEqual({
+        kind: 'html-file-url',
+        filePath: '/repo/report.html'
+      })
+    }
+  )
+
   // Kept word-for-word in step with the omnibox placeholder (see
   // TabBarCreateEntry.keyboard.test.tsx), so the two never drift apart.
   it('advertises tab search in the empty-query message', () => {

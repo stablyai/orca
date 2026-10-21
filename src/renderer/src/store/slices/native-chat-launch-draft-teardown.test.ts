@@ -51,6 +51,10 @@ import {
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  addNativeChatPendingAttachment,
+  settleNativeChatPendingAttachment
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -188,6 +192,23 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
 
     expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
     expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
+  })
+
+  it('a user tab close drops the uploads still on their way in that tab’s panes only', () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    for (const scopeKey of [`${TAB1}:leaf-b`, `${TAB2}:leaf-b`]) {
+      addNativeChatPendingAttachment(scopeKey, { id: scopeKey, path: '', pending: true })
+    }
+
+    store.getState().closeTab(TAB2, { reason: 'pty-exit' })
+    store.getState().closeTab(TAB1)
+
+    const settled = [`${TAB1}:leaf-b`, `${TAB2}:leaf-b`].map((scopeKey) =>
+      settleNativeChatPendingAttachment(scopeKey, scopeKey, '/store/a.png')
+    )
+    expect(settled).toEqual([false, true])
+    expect(readNativeChatComposerDraft(`${TAB1}:leaf-b`).images).toEqual([])
   })
 
   function seedStructuredChat(store: ReturnType<typeof createTestStore>) {

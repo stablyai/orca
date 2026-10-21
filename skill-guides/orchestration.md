@@ -40,8 +40,11 @@ absence included, is a checkpoint.
 | A message carries a legacy authority label                                                                                                     | Compatibility operator  | Load the legacy contract reference before any lifecycle mutation               |
 | No live preamble and no explicit supervision                                                                                                   | Ordinary terminal agent | Do not emit lifecycle messages; use `orca-cli` for terminal/worktree work      |
 
-Model or effort selection does not make a handoff supervised. Never substitute a
-non-Orca subagent tool when Orca orchestration provenance was requested.
+Model or effort selection does not make a handoff supervised: `orca-cli`'s
+`worktree create --agent` and `agent launch` take `--model` and `--effort`, and
+open a chat or a terminal per the user's Chat UI setting, as `worker-start` does.
+Never substitute a non-Orca subagent tool when Orca orchestration provenance was
+requested.
 
 ## Authority and safety floor
 

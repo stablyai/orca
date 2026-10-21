@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { StringDecoder } from 'node:string_decoder'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { sendRequest } from './transport'
@@ -50,16 +49,6 @@ describe('CLI runtime response framing', () => {
       expect(socket.end).toHaveBeenCalledOnce()
     }
   )
-
-  it('accepts Unicode split across socket bytes using the existing UTF-8 decoder', async () => {
-    const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
-    const decoder = new StringDecoder('utf8')
-    for (const byte of Buffer.from(reply({ data: '界😀é' }))) {
-      socket.emit('data', decoder.write(Buffer.from([byte])))
-    }
-    socket.emit('data', decoder.end())
-    await expect(pending).resolves.toMatchObject({ result: { data: '界😀é' } })
-  })
 
   it('searches each fragment once without rescanning the accumulated reply', async () => {
     const encoded = reply({ data: 'x'.repeat(1024 * 1024) })

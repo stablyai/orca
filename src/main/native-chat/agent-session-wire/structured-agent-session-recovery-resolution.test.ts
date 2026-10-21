@@ -243,6 +243,31 @@ describe('structured session recovery resolution', () => {
     })
   })
 
+  it('releases a Windows owner the probe matches without signalling its saved pid', async () => {
+    const store = await openStore()
+    await liveOwner(store)
+    await latch(store)
+    const stopOwnerProcess = vi.fn()
+
+    const result = await resolveStructuredSessionRecovery(
+      deps(store, () => ({ outcome: 'identity-matched', matchedOn: ['process-start-time'] }), {
+        stopOwnerProcess,
+        platform: 'win32'
+      }),
+      SESSION
+    )
+
+    expect(result).toBe('resolved')
+    // Windows stops a tree only through a child it still holds; a saved pid is never signalled.
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      ownerProcess: null,
+      deathEvidence: null
+    })
+  })
+
   it('waits out a terminal owner an older build recorded, and never stops it', async () => {
     const directory = await newStoreDirectory()
     await liveOwner(await openStore(directory))

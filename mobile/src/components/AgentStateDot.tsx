@@ -19,9 +19,11 @@ const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, strin
   unconfirmed: colors.statusAmber,
   idle: 'rgba(115,115,115,0.4)'
 }
-const WORKING_COLOR = '#eab308'
+export const AGENT_WORKING_COLOR = '#eab308'
 
-export function AgentStateDot({ state }: { state: AgentDotState }) {
+/** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
+ *  mark rather than a state claim. */
+export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
   const rotate = useWorkingRingRotation(state === 'working')
 
   if (state === 'working') {
@@ -35,7 +37,15 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
   if (state === 'monitoring') {
     return (
       <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
-        <Activity size={10} color={WORKING_COLOR} />
+        <Activity size={10} color={AGENT_WORKING_COLOR} />
+      </View>
+    )
+  }
+
+  if (state === 'unverifiable') {
+    return (
+      <View style={styles.wrapper} accessibilityLabel="No recent update">
+        <View style={styles.dashedRing} />
       </View>
     )
   }
@@ -50,12 +60,20 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
 const styles = StyleSheet.create({
   wrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 6, height: 6, borderRadius: 3 },
+  dashedRing: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.statusAmber
+  },
   spinner: {
     width: 6,
     height: 6,
     borderRadius: 3,
     borderWidth: 1.5,
-    borderColor: WORKING_COLOR,
+    borderColor: AGENT_WORKING_COLOR,
     borderTopColor: 'transparent'
   }
 })

@@ -1,12 +1,16 @@
-import { EventEmitter } from 'node:events'
-import { writeFileSync } from 'node:fs'
-import { basename } from 'node:path'
-import type { spawn } from 'node:child_process'
+import { setWindowsSecurityForTests } from '../../shared/windows-security-addon'
+import {
+  createFakeWindowsSecurity,
+  daclFromSddl
+} from '../../shared/windows-security-addon.test-fixture'
+import type {
+  InstallDirPackageGrantOutcome,
+  InstallDirPackageGrants
+} from './windows-install-dir-package-acl-grant'
 
 /**
- * Shared icacls doubles for the install-dir DACL probe, repair, and recovery tests.
- * ACEs are SDDL, the shape `icacls <target> /save <file>` writes (captured on
- * win32 10.0.26200: the leaf name, CRLF, then `D:AI(...)(...)`, UTF-16LE).
+ * Shared ACL doubles for the install-dir DACL probe, repair, and recovery tests.
+ * ACEs are written as SDDL for readability; the fake hands the probe their structure.
  */
 
 export const ORPHAN_PACKAGE_ACE = '(A;OICI;0x1200a9;;;S-1-15-2-999-999-999)'
@@ -21,51 +25,63 @@ export const BASELINE_ACES = [
   '(A;OICIID;FA;;;S-1-5-21-432636774-4279371817-3971399515-1001)'
 ]
 
-/** The file `icacls <target> /save` writes for a target carrying these ACEs. */
-export function icaclsSavedAcl(target: string, aces: string[]): Buffer {
-  const leaf = basename(target.replaceAll('\\', '/'))
-  return Buffer.from(`${leaf}\r\nD:AI${[...aces, ...BASELINE_ACES].join('')}\r\n`, 'utf16le')
+/** The SDDL a target carrying these ACEs (plus the inherited baseline) reads back as. */
+export function savedDacl(aces: string[]): string {
+  return `D:AI${[...aces, ...BASELINE_ACES].join('')}`
 }
 
 /**
- * `saved` returns the target's extra ACEs, or the raw saved file; `null` makes the
- * spawn fail, as an unreadable target does. `display` is what a bare
- * `icacls <target>` prints.
+ * Installs a fake windows-security addon whose DACL reads come from `saved`: the target's extra
+ * ACEs, or a raw SDDL string; `null` makes the read throw, as an unreadable target does. Returns
+ * the paths read. Reset with resetWindowsSecurityLoadForTests().
  */
-export function fakeIcaclsSpawn(
-  saved: (target: string) => string[] | Buffer | null,
-  display: (target: string) => string = () => '',
-  exitCode: number | null = 0
-): {
-  spawnFn: typeof spawn
-  calls: { file: string; args: string[] }[]
+export function installFakeDacls(saved: (target: string) => string[] | string | null): {
+  calls: string[]
 } {
-  const calls: { file: string; args: string[] }[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; the probe only touches kill/stdout/on of the child.
-  const spawnFn = ((file: string, args: string[]) => {
-    calls.push({ file, args })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both fields are assigned on the next two lines.
-    const child = new EventEmitter() as EventEmitter & {
-      stdout: EventEmitter
-      kill: () => void
+  const calls: string[] = []
+  const fake = createFakeWindowsSecurity()
+  fake.getDaclAces = (addonPath: string) => {
+    const path = addonPath.startsWith('\\\\?\\') ? addonPath.slice(4) : addonPath
+    calls.push(path)
+    const aces = saved(path)
+    if (aces === null) {
+      throw new Error('GetNamedSecurityInfoW failed with Win32 error 5')
     }
-    child.stdout = new EventEmitter()
-    child.kill = () => undefined
-    const [target, verb, saveFile] = args
-    const aces = saved(target)
-    setImmediate(() => {
-      if (aces === null) {
-        child.emit('error', new Error('ENOENT'))
-        return
-      }
-      if (verb === '/save') {
-        writeFileSync(saveFile, Buffer.isBuffer(aces) ? aces : icaclsSavedAcl(target, aces))
-      } else {
-        child.stdout.emit('data', Buffer.from(display(target), 'utf-8'))
-      }
-      child.emit('close', exitCode)
-    })
-    return child
-  }) as unknown as typeof spawn
-  return { spawnFn, calls }
+    return daclFromSddl(typeof aces === 'string' ? aces : savedDacl(aces))
+  }
+  setWindowsSecurityForTests(fake)
+  return { calls }
+}
+
+export type InstallDirPackageGrantPass = keyof InstallDirPackageGrants
+
+/** One function standing in for both passes, the shape most tests find easiest to write. */
+export type InstallDirPackageGrant = (
+  installDir: string,
+  pass: InstallDirPackageGrantPass
+) => Promise<InstallDirPackageGrantOutcome>
+
+export function grantsFrom(grant: InstallDirPackageGrant): InstallDirPackageGrants {
+  return {
+    root: (installDir) => grant(installDir, 'root'),
+    tree: (installDir) => grant(installDir, 'tree')
+  }
+}
+
+/** Records each grant pass; `reply` decides its outcome (default: success). */
+export function fakePackageGrant(
+  reply: (
+    pass: InstallDirPackageGrantPass
+  ) => Partial<InstallDirPackageGrantOutcome> | Promise<InstallDirPackageGrantOutcome> = () => ({})
+): {
+  grants: InstallDirPackageGrants
+  passes: { installDir: string; pass: InstallDirPackageGrantPass }[]
+} {
+  const passes: { installDir: string; pass: InstallDirPackageGrantPass }[] = []
+  const grants = grantsFrom(async (installDir, pass) => {
+    passes.push({ installDir, pass })
+    const outcome = await reply(pass)
+    return { ok: true, failedFileCount: 0, ...outcome }
+  })
+  return { grants, passes }
 }

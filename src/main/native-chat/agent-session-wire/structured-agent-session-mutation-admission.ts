@@ -1,9 +1,8 @@
-// The one route every mutating agent-session call takes: recompute the
-// fingerprint, admit through the durable operation ledger, check the lease, then
-// run the plan. It lives outside the host so that no method can quietly grow its
-// own admission rules by sitting next to the call site.
+// The one route every mutating agent-session call takes: recompute the fingerprint,
+// accept a plan that declares a command receipt through it, otherwise admit
+// through the ledger and check the lease. Methods cannot grow their own admission rules.
 //
-// Admission is two-phase for a call that brings a `prepareSession`. The ledger's
+// Ledger-backed admission is two-phase when a call brings `prepareSession`. The ledger's
 // answer comes first and places nothing. An id it refuses is answered then, with
 // nothing opened; so is a recorded id that settled refused. Any other recorded id
 // is answered after the plan's own preparation for a replay (a send's only opens
@@ -23,14 +22,12 @@ import type {
   AgentSessionOperationRow
 } from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  refuse,
-  type AgentSessionMutationEnvelope,
-  type AgentSessionMutationResult,
-  type AgentSessionWireRefusal
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionMutationResult,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
@@ -43,6 +40,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
 import {
   agentSessionOperationOutcomeUnknown,
@@ -52,21 +50,16 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { mutationTurnContext } from './structured-agent-session-mutation-turn-context'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
+import { admitCommandReceiptMutation } from './structured-agent-session-command-admission'
 
-// The code is shared with the client so a read that refuses this way can be told apart from a
-// transcript that failed to load; the two must never drift apart.
-export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = refuse(
-  AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
-  { reason: 'sessionNotAttached' },
-  'This host holds no attached session by that id.'
-)
-
-export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
-  ok: false
-  refusal: AgentSessionWireRefusal
-} {
-  return { ok: false, refusal }
-}
+import {
+  AGENT_SESSION_NOT_ATTACHED,
+  refuseAgentSessionMutation
+} from './structured-agent-session-mutation-refusals'
+export {
+  AGENT_SESSION_NOT_ATTACHED,
+  refuseAgentSessionMutation
+} from './structured-agent-session-mutation-refusals'
 
 export type AgentSessionMutationSessionPreparation =
   | { ok: true }
@@ -82,6 +75,8 @@ export type AgentSessionMutationRequest<TValue> = {
   plan: MutationPlan<TValue>
   /** Journal of the attached session, read after `prepareSession`; absent when this host holds none. */
   journal: () => AgentSessionJournal | undefined
+  /** The host's projection of the chat's current work (`hostStructuredAgentSessionCurrentWork`). */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   /** Between the ledger's answer and the lease check, for a call that may first have to make the
    *  session ready for itself. Answers with the refusal that ends the call, if any. */
   prepareSession?: (
@@ -89,7 +84,7 @@ export type AgentSessionMutationRequest<TValue> = {
     record: AgentSessionRecord
   ) => Promise<AgentSessionMutationSessionPreparation>
   publish: (journal: AgentSessionJournal) => void
-  providerChildPhase?: AgentSessionTurnContext['providerChildPhase']
+  wakeDelivery?: (sessionId: string) => void
   now: () => number
 }
 
@@ -105,6 +100,9 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   const conflict = agentSessionFingerprintConflict(envelope, hostFingerprint)
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
+  }
+  if (plan.commandReceipt) {
+    return admitCommandReceiptMutation(request, hostFingerprint, plan.commandReceipt)
   }
   if (request.prepareSession) {
     const ledger = request.store.evaluateMutationOperation({
@@ -152,22 +150,17 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     ...(plan.conversationWrite ? { conversationWrite: true } : {})
   }
   let admitted: AgentSessionMutationOperationDecision
-  let ledgerRowWritten = true
   try {
     admitted = await request.store.admitMutationOperation(operation)
   } catch (error) {
-    if (plan.runsWithoutLedgerRow) {
-      admitted = admitWithoutLedgerRow(request, operation, error)
-      ledgerRowWritten = false
-    } else if (
+    if (
       isAgentSessionRefusalError(error) ||
       classifyJournalOpenFailure(error) === 'journalCorrupt'
     ) {
       // A store refusing the row (a newer Orca's records) or damage SQLite proves: as an open says.
       return refuseAgentSessionMutation(journalOpenRefusal(error))
-    } else {
-      throw error
     }
+    throw error
   }
   if (!admitted) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
@@ -200,18 +193,15 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  // With no row, a settle fails on the same storage and turns a landed Stop into a throw.
-  const outcome = ledgerRowWritten
-    ? await runSettledAgentSessionMutation({
-        store: request.store,
-        // A global send replay can cross caller identities. Settlement still owns
-        // the durable row admitted by the original caller.
-        operationCallerKey: admission.row.callerKey,
-        envelope,
-        plan,
-        context
-      })
-    : await plan.run(context)
+  const outcome = await runSettledAgentSessionMutation({
+    store: request.store,
+    // A global send replay can cross caller identities. Settlement still owns
+    // the durable row admitted by the original caller.
+    operationCallerKey: admission.row.callerKey,
+    envelope,
+    plan,
+    context
+  })
   return outcome.ok
     ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
     : refuseAgentSessionMutation(outcome.refusal)
@@ -270,8 +260,17 @@ async function answerRecordedOperation<TValue>(
 }
 
 /** The recorded answer from the journal, or `rerun` when the plan says nothing durable landed. */
-function replayRecordedOperation<TValue>(
-  { plan, envelope }: AgentSessionMutationRequest<TValue>,
+export function replayRecordedOperation<TValue>(
+  {
+    plan,
+    envelope
+  }: {
+    plan: Pick<
+      MutationPlan<TValue>,
+      'replay' | 'rerunWhenReplayMissing' | 'recoverUnknownFromDurableState'
+    >
+    envelope: AgentSessionMutationEnvelope
+  },
   context: AgentSessionTurnContext,
   row: AgentSessionOperationRow
 ): AgentSessionMutationResult<TValue> | 'rerun' {
@@ -294,29 +293,4 @@ function replayRecordedOperation<TValue>(
         value: replay.value
       }
     : 'rerun'
-}
-
-/** The committed ledger's admission, placing nothing: a failed commit left memory as it was. */
-function admitWithoutLedgerRow(
-  { store, logger }: Pick<AgentSessionMutationRequest<unknown>, 'store' | 'logger'>,
-  operation: AgentSessionMutationOperationAdmission,
-  error: unknown
-): AgentSessionMutationOperationDecision {
-  logger.warn("writing Stop's ledger row failed; Stop runs without it", {
-    scope: 'stop-ledger-row',
-    sessionId: operation.envelope.sessionId,
-    error
-  })
-  const evaluated = store.evaluateMutationOperation(operation)
-  if (!evaluated) {
-    return null
-  }
-  const admission = admitAgentSessionMutation({
-    envelope: operation.envelope,
-    hostFingerprint: operation.hostFingerprint,
-    ledger: evaluated.decision,
-    lease: evaluated.record.lease,
-    ...(operation.conversationWrite ? { conversationWrite: true } : {})
-  })
-  return { admission, record: evaluated.record }
 }

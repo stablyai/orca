@@ -1,10 +1,13 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
-import type { SectionListRenderItem } from 'react-native'
 import { colors } from '../theme/mobile-theme'
-import { MOBILE_GIT_STATUS_LABELS, type MobileSourceControlSection } from './mobile-git-status'
+import { MOBILE_GIT_STATUS_LABELS } from './mobile-git-status'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
-import { statusColor, type MobileGitStatusEntryView } from './mobile-source-control-screen-state'
+import {
+  statusColor,
+  type MobileBranchEntryView,
+  type MobileGitStatusEntryView
+} from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
 
@@ -18,15 +21,10 @@ type RowState = Pick<
   | 'setDiscardTarget'
 >
 
-export function makeRenderFileRow(
-  state: RowState
-): SectionListRenderItem<
-  MobileGitStatusEntryView,
-  MobileSourceControlSection<MobileGitStatusEntryView>
-> {
+export function makeRenderFileRow(state: RowState) {
   const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
     state
-  return function FileRow({ item }) {
+  return function FileRow({ item }: { item: MobileGitStatusEntryView }) {
     const rowBusy =
       busyAction === item.stageActionId ||
       busyAction === item.unstageActionId ||
@@ -136,7 +134,7 @@ export function makeRenderFileRow(
   }
 }
 
-type FooterState = Pick<
+type BranchState = Pick<
   MobileSourceControlState,
   | 'shouldShowBranchCompareSection'
   | 'branchCompareSummaryText'
@@ -149,17 +147,13 @@ type FooterState = Pick<
   | 'openingPath'
 >
 
-export function BranchCompareFooter({ state }: { state: FooterState }) {
+export function BranchCompareHeader({ state }: { state: BranchState }) {
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,
     branchEntries,
     branchCompareState,
-    branchCompareResult,
-    busyAction,
-    openBranchDiff,
-    openingBranchPath,
-    openingPath
+    branchCompareResult
   } = state
   if (!shouldShowBranchCompareSection) {
     return null
@@ -193,60 +187,63 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
             {branchCompareResult.summary.errorMessage ?? 'Committed changes unavailable.'}
           </Text>
         </View>
-      ) : (
-        branchEntries.map((entry) => {
-          const rowBusy = openingBranchPath === entry.path
-          const rowDisabled =
-            !entry.canOpen ||
-            busyAction !== null ||
-            openingPath !== null ||
-            openingBranchPath !== null
-          const meta = formatMobileBranchEntryMeta(entry)
-          return (
-            <Pressable
-              key={`${entry.path}:${entry.oldPath ?? ''}`}
-              style={({ pressed }) => [
-                styles.fileRow,
-                pressed && entry.canOpen && styles.fileRowPressed,
-                rowDisabled && styles.fileRowDisabled,
-                !entry.canOpen && styles.fileRowUnavailable
-              ]}
-              onPress={() => void openBranchDiff(entry)}
-              disabled={rowDisabled}
-              accessibilityLabel={`Open committed change ${entry.path}`}
-            >
-              <View style={styles.statusBadge}>
-                <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
-                  {MOBILE_GIT_STATUS_LABELS[entry.status]}
-                </Text>
-              </View>
-              <FileText
-                size={16}
-                color={entry.canOpen ? colors.textSecondary : colors.textMuted}
-                strokeWidth={2.1}
-              />
-              <View style={styles.fileTextBlock}>
-                <Text
-                  style={[styles.filePath, !entry.canOpen && styles.filePathDisabled]}
-                  numberOfLines={1}
-                >
-                  {entry.path}
-                </Text>
-                {meta ? (
-                  <Text style={styles.fileMeta} numberOfLines={1}>
-                    {meta}
-                  </Text>
-                ) : null}
-              </View>
-              {rowBusy ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : entry.canOpen ? (
-                <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
-              ) : null}
-            </Pressable>
-          )
-        })
-      )}
+      ) : null}
     </View>
+  )
+}
+
+export function BranchFileRow({
+  entry,
+  state
+}: {
+  entry: MobileBranchEntryView
+  state: BranchState
+}) {
+  const { busyAction, openBranchDiff, openingBranchPath, openingPath } = state
+  const rowBusy = openingBranchPath === entry.path
+  const rowDisabled =
+    !entry.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const meta = formatMobileBranchEntryMeta(entry)
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.fileRow,
+        pressed && entry.canOpen && styles.fileRowPressed,
+        rowDisabled && styles.fileRowDisabled,
+        !entry.canOpen && styles.fileRowUnavailable
+      ]}
+      onPress={() => void openBranchDiff(entry)}
+      disabled={rowDisabled}
+      accessibilityLabel={`Open committed change ${entry.path}`}
+    >
+      <View style={styles.statusBadge}>
+        <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
+          {MOBILE_GIT_STATUS_LABELS[entry.status]}
+        </Text>
+      </View>
+      <FileText
+        size={16}
+        color={entry.canOpen ? colors.textSecondary : colors.textMuted}
+        strokeWidth={2.1}
+      />
+      <View style={styles.fileTextBlock}>
+        <Text
+          style={[styles.filePath, !entry.canOpen && styles.filePathDisabled]}
+          numberOfLines={1}
+        >
+          {entry.path}
+        </Text>
+        {meta ? (
+          <Text style={styles.fileMeta} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+      </View>
+      {rowBusy ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : entry.canOpen ? (
+        <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
+      ) : null}
+    </Pressable>
   )
 }

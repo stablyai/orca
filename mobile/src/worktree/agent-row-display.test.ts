@@ -7,6 +7,9 @@ import {
 import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../src/shared/agent-status-freshness'
+import {
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
@@ -145,6 +148,18 @@ describe('agentDotState', () => {
       agentDotState(row({ state: 'done', updatedAt: 0, ...mainAgentDone('interruption') }), stale)
     ).toBe('failed')
   })
+
+  // The host advances updatedAt for a newer neutral title but keeps the evidence's own time.
+  it('ages a status by its evidence, not by a later title renewal, as desktop does', () => {
+    const now = 100 * 60 * 1000
+    const renewed = {
+      state: 'blocked' as const,
+      updatedAt: now,
+      evidenceObservedAt: now - 31 * 60 * 1000
+    }
+    expect(isAgentStatusFresh(renewed, now)).toBe(false)
+    expect(agentDotState(renewed, now)).toBe('idle')
+  })
 })
 
 describe('agentRowTimeAt', () => {
@@ -184,6 +199,15 @@ describe('agentDisplayLabel', () => {
         0
       )
     ).toBe('Monitoring background tasks')
+  })
+
+  it("says Stopping while the host says a person's Stop is ending the turn", () => {
+    const stopping = row({
+      lastAssistantMessage: 'hello there',
+      mainAgent: { state: 'working', stopping: true, stateStartedAt: 0 }
+    })
+    expect(agentDisplayLabel(stopping, 0)).toBe('Stopping…')
+    expect(agentDotState(stopping, 0)).toBe('working')
   })
 
   it('falls back to the decayed state label when stale', () => {

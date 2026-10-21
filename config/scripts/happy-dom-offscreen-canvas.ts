@@ -49,7 +49,7 @@ export function installHappyDomOffscreenCanvasCompatibility(): boolean {
       return context
     }
 
-    const canvas = document.createElement('canvas') as PatchableCanvas
+    const canvas = document.createElement('canvas')
     return htmlCanvas.prototype.getContext!.call(canvas, contextType, contextAttributes)
   }
   prototype[OFFSCREEN_CANVAS_COMPATIBILITY_INSTALLED] = true

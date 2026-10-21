@@ -31,6 +31,9 @@ import {
   buildSettingsProjectList,
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
+import { resolveSettingsHostScope } from './settings-host-scope'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)
@@ -58,6 +61,8 @@ export function useSettingsStoreModel() {
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
 
   const projectHostSetupProjection = useProjectHostSetupProjection()
   // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
@@ -139,10 +144,34 @@ export function useSettingsStoreModel() {
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
+  const [hasUnsavedChatPromptChanges, setHasUnsavedChatPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
   // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
+  const [settingsHostChoice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(null)
+  const defaultScope = defaultScopeHost(settings)
+  const defaultRuntimeEnvironmentId =
+    defaultScope.kind === 'environment' ? defaultScope.environmentId : null
+  // Why: keyed on ids so status-only catalog updates keep the scope (and its loads) stable.
+  const savedEnvironmentIdsKey = runtimeEnvironments.map((environment) => environment.id).join('\n')
+  // Why: the web client's only host is its server, so it never offers a choice.
+  const settingsHostScope = useMemo(
+    () =>
+      resolveSettingsHostScope({
+        choice: isWebClient ? null : settingsHostChoice,
+        defaultEnvironmentId: defaultRuntimeEnvironmentId,
+        savedEnvironmentIds: savedEnvironmentIdsKey ? savedEnvironmentIdsKey.split('\n') : [],
+        catalogHydrated: runtimeEnvironmentCatalogHydrated
+      }),
+    [
+      defaultRuntimeEnvironmentId,
+      isWebClient,
+      runtimeEnvironmentCatalogHydrated,
+      savedEnvironmentIdsKey,
+      settingsHostChoice
+    ]
+  )
 
   return {
     settings,
@@ -213,11 +242,16 @@ export function useSettingsStoreModel() {
     setHasUnsavedCommitPromptChanges,
     hasUnsavedBranchPromptChanges,
     setHasUnsavedBranchPromptChanges,
+    hasUnsavedChatPromptChanges,
+    setHasUnsavedChatPromptChanges,
     sourceControlAiPromptDiscardSignal,
     setSourceControlAiPromptDiscardSignal,
     confirm,
     hiddenExperimentalUnlocked,
-    setHiddenExperimentalUnlocked
+    setHiddenExperimentalUnlocked,
+    runtimeEnvironments,
+    settingsHostScope,
+    setSettingsHostChoice
   }
 }
 

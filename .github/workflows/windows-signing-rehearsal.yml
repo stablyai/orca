@@ -499,7 +499,7 @@ jobs:
           }
 
           $targets = @(Get-Content 'inner-signing-list.txt')
-          foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe')) {
+          foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe', 'resources\bin\orca-agent-hook.exe')) {
             if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }
           }
           foreach ($relative in $targets) {

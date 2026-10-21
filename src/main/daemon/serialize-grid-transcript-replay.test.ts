@@ -86,6 +86,8 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // regression, by replaying it against the previous build
   // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
   'dsh-tui-ready-no-key': 10,
+  // Capacity capture (#28231): identical attribute leaks with the pre-capture serializer.
+  'codex-model-capacity-fullscreen': 12,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
   // STA-8741 agy/Cline/Prime captures, serializer untouched: the same true-colour background
@@ -123,7 +125,10 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // short, as for Qoder. The unscrubbed captures diverge identically, so the scrub is not the cause.
   'omp-18-composer': 2,
   'omp-18-composer-narrow': 7,
-  'omp-18-setup': 6
+  'omp-18-setup': 6,
+  // STA-10739 ConPTY capture, serializer untouched: a cursor wrap-pending at column 120 (ConPTY
+  // pads the row to the edge) restores at column 119 on the unresized schedule.
+  'pwsh-7-6-psreadline-history-prediction-conpty': 2
 }
 
 // Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.
@@ -224,9 +229,17 @@ describe('serialize round trip over captured PTY transcripts', () => {
       const blocking: string[] = []
       const failureSignatures: string[] = []
       for (const schedule of SCHEDULES) {
+        const cases: SerializeFuzzCase[] = []
+        for (let seed = 1; seed <= SEEDS; seed++) {
+          cases.push(buildReplayCase(transcript, schedule, false, seed))
+        }
         for (const conpty of [false, true]) {
-          for (let seed = 1; seed <= SEEDS; seed++) {
-            const testCase = buildReplayCase(transcript, schedule, conpty, seed)
+          for (const replayCase of cases) {
+            const { seed } = replayCase
+            const testCase: SerializeFuzzCase = {
+              ...replayCase,
+              category: conpty ? 'conpty' : 'normal'
+            }
             const run = await runSerializeFuzzCase(testCase, serializers)
             expect(run.sourceCrash).toBeNull()
             for (const check of run.checks) {

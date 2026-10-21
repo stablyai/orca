@@ -16,9 +16,9 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
-import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
+import { resolveDecayedAgentRowState } from '../../../../shared/agent-row-decay-state'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'

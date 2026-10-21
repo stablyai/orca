@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import { getConnectionId } from '@/lib/connection-context'
-import { commitRuntimeGit } from '@/runtime/runtime-git-client'
+import { commitRuntimeGit } from '@/runtime/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -13,7 +14,7 @@ import { writeCommitDraftForWorktree } from './commit-drafts'
  * can keep committing to the worktree it started on after the user navigates away.
  */
 export function useSourceControlCommitAction({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktree,
   activeWorktreeId,
   beginGitBranchCompareRequest,
@@ -30,7 +31,7 @@ export function useSourceControlCommitAction({
   updateCommitDrafts,
   worktreePath
 }: {
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktree: SourceControlWorktreeContext['activeWorktree']
   activeWorktreeId: string | null
   beginGitBranchCompareRequest: SourceControlStoreActions['beginGitBranchCompareRequest']
@@ -60,7 +61,7 @@ export function useSourceControlCommitAction({
         options?.target ??
         (activeWorktreeId && worktreePath
           ? {
-              settings: activeRepoSettings,
+              target: activeRepoTarget,
               worktreeId: activeWorktreeId,
               worktreePath,
               connectionId: getConnectionId(activeWorktreeId) ?? undefined,
@@ -90,7 +91,7 @@ export function useSourceControlCommitAction({
         const commitResult = await commitRuntimeGit(
           {
             // Why: route the commit by the repo OWNER host, not the focused runtime.
-            settings: target.settings,
+            target: requireGitOwnerTarget(target.target),
             worktreeId: target.worktreeId,
             worktreePath: target.worktreePath,
             connectionId: target.connectionId
@@ -140,7 +141,7 @@ export function useSourceControlCommitAction({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       activeWorktree?.pushTarget,
       activeWorktreeId,
       beginGitBranchCompareRequest,

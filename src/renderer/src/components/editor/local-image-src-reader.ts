@@ -1,6 +1,6 @@
 import type { LocalFileAccess } from '../../../../shared/local-file-access'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
 
 export function readLocalImagePreview(
   absolutePath: string,

@@ -6,7 +6,8 @@ import {
   recordWebSessionBrowserPlacement,
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   NOW,

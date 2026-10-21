@@ -3,11 +3,9 @@ import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-work
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
-import {
-  applyWebSessionTabsSnapshot,
-  resolveHostSessionTabIdForWebSessionTab,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { resetBrowserClientHostIdForTests } from './browser-client-host-identity'
 import {
   ENV,

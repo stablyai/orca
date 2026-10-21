@@ -9,6 +9,7 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { createWebFileMutationMethods } from '../web-file-mutation-methods'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web-runtime-request-registry'
 import { callRuntimeResult } from './web-runtime-calls'
 import type { WebRuntimeEnvelopeCaller, WebRuntimeResultCaller } from './web-runtime-calls'
 import {
@@ -25,6 +26,9 @@ import { noopUnsubscribe } from './web-storage'
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   const searches = new Map<string, AbortController>()
   return {
+    prepareDroppedPaths: async () => {
+      throw new Error('Preparing dropped file paths is not supported in the web client')
+    },
     readFileChunk: async ({ filePath, offset, length }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.readChunk', {
@@ -165,6 +169,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       throw new Error('Uploading local files is not supported in the web client')
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
+    uploadPathsToAgentSessionAttachments: async () => ({ uploaded: [], skipped: [], failed: [] }),
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe
@@ -173,7 +178,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
 
 export function captureWebFileMutationSession(): {
   resolveFilePath: (filePath: string) => Promise<Awaited<ReturnType<typeof resolveRuntimeFilePath>>>
-  assertMutationSupported: () => Promise<void>
+  assertMutationSupported: (options: { pinConnection: boolean }) => Promise<readonly string[]>
   callRuntimeResult: WebRuntimeResultCaller
   getSshState: (targetId: string) => Promise<SshConnectionState | null>
 } {
@@ -187,6 +192,7 @@ export function captureWebFileMutationSession(): {
       throw new Error('Runtime pairing changed; refresh and try again')
     }
   }
+  let probedEpoch: number | undefined
   const callBoundRuntimeEnvelope: WebRuntimeEnvelopeCaller = async <TResult>(
     method: string,
     params?: unknown,
@@ -195,7 +201,7 @@ export function captureWebFileMutationSession(): {
     assertCurrent()
     const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
       assertCurrent()
-      return client.call(method, params, { timeoutMs })
+      return client.call(method, params, { timeoutMs, expectedConnectionEpoch: probedEpoch })
     })
     assertCurrent()
     updateEnvironmentFromResponse(environment, response)
@@ -222,10 +228,19 @@ export function captureWebFileMutationSession(): {
         false,
         environment.id
       ),
-    assertMutationSupported: async () => {
-      assertFileMutationOwnershipCapability(
-        await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
-      )
+    assertMutationSupported: async ({ pinConnection }) => {
+      const epochBeforeProbe = client.connectionEpoch
+      const status = await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
+      assertFileMutationOwnershipCapability(status)
+      if (!pinConnection) {
+        return status.capabilities ?? []
+      }
+      // Why: the same client reconnects internally; a guarded write must reach the runtime that answered.
+      if (client.connectionEpoch !== epochBeforeProbe) {
+        throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+      }
+      probedEpoch = epochBeforeProbe
+      return status.capabilities ?? []
     },
     callRuntimeResult: callBoundRuntimeResult,
     getSshState: async (targetId) =>

@@ -25,23 +25,32 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'config/patches/node-pty@1.1.0.patch',
   'src/shared/node-runtime-pin.ts',
   'config/scripts/build-orcad-prebuilds.mjs',
+  'config/scripts/orcad-prebuild-node-gyp.mjs',
+  'config/scripts/initialize-windows-native-toolchain.mjs',
+  'config/scripts/capture-windows-native-environment.cmd',
   'config/scripts/orcad-prebuild-slot-contents.mjs',
   'config/scripts/orcad-windows-prebuild-cache.mjs',
   'config/scripts/node-pty-job-ownership.cjs',
   'config/scripts/windows-pe-machine.cjs',
   'config/scripts/pinned-node-downloads.mjs',
   'config/scripts/update-node-runtime-pin.mjs',
-  'config/scripts/script-child-process.mjs',
-  'src/shared/child-process/run-process.ts',
-  'src/shared/child-process/spawn-resolution.ts',
-  'src/shared/child-process/process-tree-termination.ts',
-  'src/shared/child-process/process-tree-kill-gate.ts',
-  'src/shared/child-process/spawn-observer.ts',
-  'src/shared/child-process/bounded-output-sink.ts',
-  'src/shared/child-process/child-termination-reporter.ts',
-  'src/shared/child-process/process-spec.ts',
-  'src/shared/child-process/windows-command-line.ts',
-  'src/shared/child-process/windows-cmd-shim-resolution.ts'
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/package.json',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json',
+  'src/packages/process-host/src/run-process.ts',
+  'src/packages/process-host/src/spawn-resolution.ts',
+  'src/packages/process-host/src/process-tree-termination.ts',
+  'src/packages/process-host/src/process-tree-kill-gate.ts',
+  'src/packages/process-host/src/spawn-observer.ts',
+  'src/packages/process-host/src/bounded-output-sink.ts',
+  'src/packages/process-host/src/growing-byte-buffer.ts',
+  'src/packages/process-host/src/child-termination-reporter.ts',
+  'src/packages/process-host/src/process-spec.ts',
+  'src/packages/process-host/src/windows-command-line.ts',
+  'src/packages/process-host/src/windows-cmd-shim-resolution.ts',
+  'src/packages/process-host/src/windows-system-binary.ts',
+  'src/packages/process-host/src/windows-tree-kill.ts'
 ]
 
 function windowsSlot(platform, arch) {
@@ -64,7 +73,15 @@ export function windowsPrebuildCacheIdentity({
   }
   const digest = createHash('sha256').update(JSON.stringify({ slot, imageOS, imageVersion }))
   for (const file of WINDOWS_PREBUILD_CACHE_INPUTS) {
-    digest.update(`\0${file}\0`).update(readFileSync(join(repository, file)))
+    const bytes = readFileSync(join(repository, file))
+    if (file === 'package.json') {
+      const manifest = JSON.parse(bytes.toString('utf8'))
+      // App versions do not affect the separately versioned node-pty binary.
+      delete manifest.version
+      digest.update(`\0${file}\0`).update(JSON.stringify(manifest))
+    } else {
+      digest.update(`\0${file}\0`).update(bytes)
+    }
   }
   return {
     slot,

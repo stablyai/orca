@@ -329,6 +329,57 @@ function assertQuiescent(status) {
   }
 }
 
+// `undefined` when the director predates the step-5 reserve census (its router 404s the route).
+async function reserveCells(deps, cells) {
+  const token = deps.adminToken()
+  const reserve = []
+  for (const cell of cells) {
+    const response = await deps.fetch(`${DIRECTOR_ORIGIN}/v1/admin/cell-admit-mode`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, cellId: cell.cellId }),
+      signal: AbortSignal.timeout(30_000)
+    })
+    const result = await response.json().catch(() => null)
+    if (response.status === 404 && result === null) return undefined
+    if (!response.ok || result?.v !== 1 || !['db', 'reserve'].includes(result.admitMode)) {
+      throw new Error(`${cell.cellId} admit mode read failed: ${result?.error ?? response.status}`)
+    }
+    if (result.admitMode === 'reserve') reserve.push(cell.cellId)
+  }
+  return reserve
+}
+
+// Under the monotonic selector, admission belongs to the selector, and the selector-era wake
+// restores it; so this sleep proves the fleet empty and never writes a cell's admission.
+async function sleepUnderSelector(deps, cells, adminPost, selector) {
+  const reserve = await reserveCells(deps, cells)
+  if (reserve?.length) {
+    throw new Error(`staging sleep refuses reserve-mode cells: ${reserve.join(', ')}`)
+  }
+  for (const service of CLOUD_RUN_SERVICES) await ensureCloudRunScaleToZero(deps, service)
+  const final = await Promise.all(cells.map((cell) => cellStatus(adminPost, cell)))
+  for (const status of final) assertQuiescent(status)
+  const after = await inspectAdmissionSelector(
+    async (path, body) => await adminPost(DIRECTOR_ORIGIN, path, body)
+  )
+  if (after.selector.generation !== selector.generation) {
+    throw new Error('admission selector changed during staging sleep')
+  }
+  // The flag workflow runs outside the staging lock, so a reserve flip can land mid-sleep.
+  const lateReserve = await reserveCells(deps, cells)
+  if (lateReserve?.length) {
+    throw new Error(`staging sleep refuses reserve-mode cells: ${lateReserve.join(', ')}`)
+  }
+  await Promise.all(cells.map((cell) => setMigSize(deps, cell, 0)))
+  await ensureSqlPolicy(deps, 'NEVER')
+  deps.emit({
+    event: 'staging_relay_slept',
+    stoppedCells: cells.map((cell) => cell.cellId),
+    selectorGeneration: selector.generation
+  })
+}
+
 async function setCellState(adminPost, cell, enabled) {
   await adminPost(DIRECTOR_ORIGIN, '/v1/admin/cell-state', {
     v: 1,
@@ -376,9 +427,8 @@ async function sleepStaging(deps, cells) {
     async (path, body) => await adminPost(DIRECTOR_ORIGIN, path, body)
   )
   if (selector.selector.generation > 0) {
-    throw new Error(
-      'staging sleep cannot reverse the monotonic admission selector; keep staging awake'
-    )
+    await sleepUnderSelector(deps, cells, adminPost, selector.selector)
+    return
   }
   const previouslyEnabled = new Set(initial.filter((status) => status.enabled).map((status) => status.cellId))
 

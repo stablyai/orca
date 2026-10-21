@@ -13,7 +13,8 @@
  * every branch behaves exactly as it did inside `buildPtyHostEnv`.
  */
 
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
@@ -43,6 +44,20 @@ export function prependOrcaCliDirToChildPath(
   // Why: matches node:path's `delimiter` for the running platform, but stays correct when a test
   // drives a foreign platform through the seam.
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
+  const hostLauncher = hasAppEnvironment() ? getAppEnvironment().getCliLauncherPath?.() : null
+  if (hostLauncher) {
+    const binDir = dirname(hostLauncher)
+    const inheritedEntries = readInheritedPath(env, platform)
+      .split(pathDelimiter)
+      .filter((entry) => entry.length > 0 && entry !== binDir)
+    env[resolvePathEnvKey(env, platform)] = [binDir, ...inheritedEntries].join(pathDelimiter)
+    if (platform !== 'win32') {
+      env.ORCA_CLI_BIN_DIR = binDir
+    }
+    env.ORCA_USER_DATA_PATH = opts.userDataPath
+    env.ORCA_CLI_COMMAND = hostLauncher
+    return hostLauncher
+  }
   // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
   if (!opts.isPackaged) {
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')

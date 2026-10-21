@@ -46,6 +46,28 @@ describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Fi
     }
   )
 
+  it.each(['confirm', 'selection'])(
+    'releases completion-first composition ownership after %s',
+    (finish) => {
+      const action = vi.fn()
+      const { getByRole } = render(<Field onKeyDown={action} />)
+      const field = getByRole('textbox')
+      fireEvent.compositionStart(field)
+      fireEvent.change(field, { target: { value: '한글' } })
+      fireEvent.keyUp(field, { key: 'f', keyCode: 70, isComposing: true })
+      fireEvent.compositionEnd(field)
+      fireEvent.input(field, { data: '글', inputType: 'insertText', isComposing: false })
+      if (finish === 'confirm') {
+        expect(fireEvent.keyDown(field, enter)).toBe(false)
+        expect(action).not.toHaveBeenCalled()
+      } else {
+        vi.advanceTimersByTime(20)
+      }
+      expect(fireEvent.keyDown(field, enter)).toBe(true)
+      expect(action).toHaveBeenCalledOnce()
+    }
+  )
+
   it('guards active composition, preserves lifecycle callbacks, and releases on blur', () => {
     const action = vi.fn()
     const start = vi.fn(),

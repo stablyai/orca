@@ -168,6 +168,7 @@ describe('confirmation never outlives the write it belongs to', () => {
       reportedOptions: {},
       optionMutationSequence: 0,
       confirmedOptions: new Set<string>(),
+      appliedInputOptions: new Map(),
       connection: {
         supportedModels: async () => CATALOG,
         applyFlagSettings: async (s: { effortLevel?: string }) => {

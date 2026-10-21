@@ -5,7 +5,6 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { CAPABLE, SESSION_ID, ok } from './use-mobile-structured-agent-session-queued.test-fixture'
 
@@ -72,7 +71,7 @@ async function readFailedWith(reason: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetMobileStructuredSendOperationJournalForTests()
+
   sendRequest.mockImplementation(async (method) =>
     method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
   )

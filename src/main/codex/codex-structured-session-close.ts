@@ -1,6 +1,6 @@
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
-import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
+import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import {
   cancelCodexAcquisitionAttempt,
   type CodexAcquisitionRegistry,
@@ -27,6 +27,7 @@ export function handleCodexSessionExit(input: {
     return false
   }
   session.exitObservedAt ??= Date.now()
+  session.events?.observeExit?.(session.dispatchEchoes.heldSends(), session.exitObservedAt)
   // Before the admission check: the child is gone whether or not its end was admitted.
   session.turnOpenWaits.releaseAll()
   const event: StructuredAgentSessionEndedEvent = {
@@ -91,9 +92,13 @@ export async function closeCodexPublishedSession(
   ) {
     return false
   }
+  if (session.ended && session.connection.closed) {
+    sessions.delete(sessionId)
+    return true
+  }
   // Sink-failure recovery force-closes the child but must preserve the
   // observed-exit cause so host lease settlement runs as an unexpected death.
-  session.orcaClose = {
+  session.orcaClose ??= {
     requested: options?.requestedClose ?? true,
     reason: options?.unexpectedReason ?? new Error('codex session closed')
   }
@@ -124,16 +129,33 @@ export async function closeCodexSession(
   sessions: Map<string, CodexSession>,
   acquisitions: CodexAcquisitionRegistry,
   onEvent?: (event: CodexStructuredSessionEvent) => void,
-  logger?: StructuredAgentSessionLogger
+  logger?: StructuredAgentSessionLogger,
+  requestedClose = true
 ): Promise<boolean> {
   const attempt = acquisitions.get(sessionId)
-  if (!(await cancelCodexAcquisitionAttempt(attempt))) {
+  const published = sessions.get(sessionId)
+  if (attempt && published?.connection === attempt.window.connection) {
+    attempt.cancelled = true
+    attempt.requestedClose = requestedClose
+    const closed = await closeCodexPublishedSession(sessions, sessionId, onEvent, {
+      requestedClose,
+      ...(logger ? { logger } : {})
+    })
+    if (closed) {
+      acquisitions.deleteIfCurrent(sessionId, attempt)
+    }
+    return closed
+  }
+  if (!(await cancelCodexAcquisitionAttempt(attempt, requestedClose))) {
     return false
   }
   if (attempt) {
     acquisitions.deleteIfCurrent(sessionId, attempt)
   }
-  return closeCodexPublishedSession(sessions, sessionId, onEvent, logger ? { logger } : {})
+  return closeCodexPublishedSession(sessions, sessionId, onEvent, {
+    requestedClose,
+    ...(logger ? { logger } : {})
+  })
 }
 
 export async function closeAllCodexSessions(

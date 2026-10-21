@@ -4,9 +4,11 @@ import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skill-delete-contract'
 import { SkillsList } from './SkillsList'
@@ -348,6 +350,9 @@ export default function SkillsPage(): React.JSX.Element {
                   skills={visibleSkills}
                   allSkills={skills}
                   local={local}
+                  ownerHostId={
+                    runtimeTarget ? getRuntimeTargetHostId(runtimeTarget) : UNRESOLVED_OWNER_HOST_ID
+                  }
                   agentByRootPath={agentByRootPath}
                   selectedIds={selectedSkillIds}
                   selectionMode={selectionMode}

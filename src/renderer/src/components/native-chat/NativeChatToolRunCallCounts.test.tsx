@@ -9,6 +9,7 @@ import { interruptedAgentJournalToolCall } from '../../../../shared/agent-journa
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 afterEach(cleanup)
 
@@ -78,6 +79,7 @@ describe('NativeChatToolRun call counts', () => {
       })
     )
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
     const body = [...container.querySelectorAll('pre')].find((pre) => pre.textContent === 'partial')
     expect(body).toBeDefined()
     expect(body).not.toHaveClass('text-destructive')

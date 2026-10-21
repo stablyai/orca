@@ -15,6 +15,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: mocks.web }))
 vi.mock('@/store/github/visible-hosted-review-refresh-targets', () => ({
   visibleHostedReviewRefreshInputsChanged: () => true,
+  getVisibleHostedReviewWorkspaces: () => [],
   getVisibleHostedReviewRefreshTargets: () => [
     {
       key: 'review',

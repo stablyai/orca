@@ -95,11 +95,7 @@ function buildParkRevealSession(overrides: Record<string, unknown> = {}): Bag {
     authoritativeReattachGeneration: 0,
     // The reveal remount of a parked pane; consume-once in the handler.
     mountFollowsTerminalPark: true,
-    followsDirectSshReconnect: false,
-    connectionId: null,
     cacheKey: 'cache-1',
-    directSshRetryAttempt: undefined,
-    capturedDirectSshRetryPtyAccepted: false,
     pane: { id: 'pane-1', leafId: 'leaf-1', terminal: { options: { scrollback: 1000 } } },
     deps: {
       tabId: 'tab-1',
@@ -112,11 +108,9 @@ function buildParkRevealSession(overrides: Record<string, unknown> = {}): Bag {
     },
     agentCompletionCoordinator: { startProcessTracking: vi.fn() },
     structuralReplayCoordinator: { run: structuralRun },
-    getSshMainModelSnapshotProbe: () => async () => null,
     serializeHiddenOutputSnapshot: vi.fn(),
     retryUnverifiableParkRevealSnapshot,
     warnParkRevealNoHostImage,
-    rejectObsoleteDirectSshReattach: () => false,
     registerEffectiveLaunchConfig: vi.fn(),
     clearExitedPanePtyLayoutBinding: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),

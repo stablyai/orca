@@ -17,7 +17,6 @@ import { translate } from '@/i18n/i18n'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 
 export function DeleteNestedWorktreesDialog({
   target,
@@ -65,6 +64,7 @@ export function DeleteNestedWorktreesDialog({
       return
     }
     setDeleting(true)
+    setOpen(false)
     setError(null)
     const state = useAppStore.getState()
     const repoId = getRepoIdFromWorktreeId(target.id)
@@ -77,24 +77,37 @@ export function DeleteNestedWorktreesDialog({
       return row ? [row] : []
     })
     state.markWorktreesDeleting(nestedRows)
-    const commitFocus = prepareActiveWorktreeFocusAfterDelete(state.activeWorktreeId ?? target.id)
     try {
       const result = await state.removeWorktree(target, true, { approvedNestedWorktrees: plan })
       if (!result.ok) {
         setPlan(null)
-        setError(result.error)
+        toast.error(
+          translate(
+            'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+            'Failed to delete workspace'
+          ),
+          {
+            description: result.error
+          }
+        )
         return
       }
-      setOpen(false)
       dismissToast()
       onDeleted?.()
     } catch (failure) {
       setPlan(null)
-      setError(failure instanceof Error ? failure.message : String(failure))
+      toast.error(
+        translate(
+          'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+          'Failed to delete workspace'
+        ),
+        {
+          description: failure instanceof Error ? failure.message : String(failure)
+        }
+      )
     } finally {
       try {
         await useAppStore.getState().fetchAllWorktrees()
-        commitFocus()
       } catch (failure) {
         toast.error(
           translate('worktree.nestedRemoval.refreshFailed', 'Could not refresh the workspace list'),
@@ -112,8 +125,17 @@ export function DeleteNestedWorktreesDialog({
 
   return (
     <>
-      <Button type="button" variant="destructive" size="sm" onClick={() => void review()}>
-        {translate('worktree.nestedRemoval.review', 'Delete with nested worktrees…')}
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        disabled={deleting}
+        onClick={() => void review()}
+      >
+        {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
+        {deleting
+          ? translate('worktree.nestedRemoval.deleting', 'Deleting…')
+          : translate('worktree.nestedRemoval.review', 'Delete with nested worktrees…')}
       </Button>
       <Dialog
         open={open}

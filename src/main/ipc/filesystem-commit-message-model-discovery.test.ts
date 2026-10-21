@@ -7,8 +7,6 @@ import {
   WORKSPACE_DIR,
   WORKTREE_FEATURE_PATH,
   discoverCommitMessageModelsLocalMock,
-  discoverCommitMessageModelsRemoteMock,
-  getSshGitProviderMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
 
@@ -23,10 +21,6 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
 vi.mock(
-  '../local-downloaded-folder-promotion',
-  async () => (await import('./filesystem-test-harness')).folderPromotionMock
-)
-vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
@@ -38,10 +32,6 @@ vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness'
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
-vi.mock(
-  '../providers/ssh-git-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
 vi.mock(
   '../text-generation/commit-message-text-generation',
@@ -168,7 +158,6 @@ describe('registerFilesystemHandlers', () => {
       const prepareForClaudeLaunch = vi.fn().mockResolvedValue({
         configDir: '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.claude',
         envPatch: { CLAUDE_CONFIG_DIR: '/home/tester/.claude' },
-        stripAuthEnv: true,
         provenance: 'managed:account-1'
       })
       const folderStore = {
@@ -268,54 +257,16 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
-  it('routes SSH model discovery through the remote git provider', async () => {
-    discoverCommitMessageModelsRemoteMock.mockResolvedValue({
-      success: true,
-      capability: {
-        id: 'cursor',
-        label: 'Cursor',
-        modelSource: 'dynamic',
-        defaultModelId: 'auto',
-        models: [{ id: 'auto', label: 'Auto' }]
-      },
-      models: [{ id: 'auto', label: 'Auto' }],
-      defaultModelId: 'auto'
-    })
-    const executeCommitMessagePlan = vi.fn()
-    getSshGitProviderMock.mockReturnValue({ executeCommitMessagePlan })
-    const storeWithOverride = {
-      ...store,
-      getSettings: () => ({
-        workspaceDir: WORKSPACE_DIR,
-        agentCmdOverrides: { cursor: 'npx cursor-agent' }
+  it('reports no git provider for SSH model discovery and never discovers locally', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'cursor',
+        worktreePath: '/remote/repo',
+        connectionId: 'conn-1'
       })
-    }
-
-    registerFilesystemHandlers(storeWithOverride as never)
-
-    await handlers.get('git:discoverCommitMessageModels')!(null, {
-      agentId: 'cursor',
-      worktreePath: '/remote/repo',
-      connectionId: 'conn-1'
-    })
-
-    expect(discoverCommitMessageModelsRemoteMock).toHaveBeenCalledWith(
-      'cursor',
-      '/remote/repo',
-      expect.any(Function),
-      'npx cursor-agent'
-    )
-    const execute = discoverCommitMessageModelsRemoteMock.mock.calls[0]?.[2] as (
-      plan: unknown,
-      cwd: string,
-      timeoutMs: number
-    ) => Promise<unknown>
-    await execute({ binary: 'cursor-agent', args: ['--list-models'] }, '/remote/repo', 60_000)
-    expect(executeCommitMessagePlan).toHaveBeenCalledWith(
-      { binary: 'cursor-agent', args: ['--list-models'] },
-      '/remote/repo',
-      60_000
-    )
+    ).resolves.toEqual({ success: false, error: 'No git provider for connection "conn-1"' })
     expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
   })
 })

@@ -9,7 +9,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
  * is the only thing that writes this map, and the store read only seats it. Which keys those are
  * is the caller's to say: this holds no policy about them.
  */
-const mirror = new Map<string, string>()
+// `null` is a key known to be absent, so a removal is held as firmly as a write.
+const mirror = new Map<string, string | null>()
 
 /** Counts writes, so a store read that started before one cannot land on top of it. */
 let writeCount = 0
@@ -19,7 +20,7 @@ export function readMirroredStorage(keys: readonly string[]): Readonly<Record<st
   const held: Record<string, string> = {}
   for (const key of keys) {
     const value = mirror.get(key)
-    if (value !== undefined) {
+    if (typeof value === 'string') {
       held[key] = value
     }
   }
@@ -48,23 +49,37 @@ export async function hydrateMirroredStorage(keys: readonly string[]): Promise<v
   for (const [key, value] of pairs) {
     // What was asked for and nothing else: the answer is what a reader is served, so a store that
     // returned a key it was not asked about must not put one in the map.
-    if (!keys.includes(key)) {
-      continue
-    }
-    if (value === null) {
-      mirror.delete(key)
-    } else {
+    if (keys.includes(key)) {
       mirror.set(key, value)
     }
   }
 }
 
+/** One key: the map's value, else the store's, so a store failure rejects instead of reading as
+ *  unset. Not through `hydrateMirroredStorage`, which drops its answer when any write lands. */
+export async function readMirroredKeyOrStore(key: string): Promise<string | null> {
+  const held = mirror.get(key)
+  return held === undefined ? AsyncStorage.getItem(key) : held
+}
+
+type MirroredKeyListener = (value: string | null) => void
+const keyListeners = new Map<string, Set<MirroredKeyListener>>()
+
+/** Each noted write of `key`, including a page's write the app takes on its behalf. */
+export function subscribeMirroredKey(key: string, listener: MirroredKeyListener): () => void {
+  const forKey = keyListeners.get(key) ?? new Set<MirroredKeyListener>()
+  keyListeners.set(key, forKey)
+  forKey.add(listener)
+  return () => {
+    forKey.delete(listener)
+  }
+}
+
 function note(key: string, value: string | null): void {
   writeCount += 1
-  if (value === null) {
-    mirror.delete(key)
-  } else {
-    mirror.set(key, value)
+  mirror.set(key, value)
+  for (const listener of keyListeners.get(key) ?? []) {
+    listener(value)
   }
 }
 
@@ -78,8 +93,7 @@ function note(key: string, value: string | null): void {
  * refused page write left this map holding a value no store had taken and the next `init` handed
  * the page exactly that. There is nothing to undo, because nothing is written until the answer.
  *
- * Returns the store's own promise, so a caller that has something to say about a refusal — the
- * durable send journal is the one — still hears it, and a caller that has not is unchanged.
+ * Returns the store's own promise so callers can report refusals.
  */
 export function persistMirrored(key: string, value: string | null): Promise<void> {
   const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)

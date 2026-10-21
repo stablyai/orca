@@ -12,6 +12,7 @@ import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages } from './native-chat-tool-fold'
+import { foldSubagentItems } from './native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 
 /** Timestamp, then id. A null timestamp sorts first so a source that cannot supply
@@ -41,7 +42,7 @@ export function compareNativeChatMessagesByTime(
 
 /** Rows the journal holds read in the journal's own order, never its clock: a
  *  batch shares one timestamp, and a row recovered after a crash carries an
- *  earlier one. A row not in the journal yet — a send still in the outbox — was
+ *  earlier one. A row not in the journal yet — a send still on its way — was
  *  made after everything the journal holds, so it follows them; only such rows,
  *  and terminal-backed transcripts, which have no journal, order by time. */
 export function compareNativeChatTranscriptMessages(
@@ -53,6 +54,16 @@ export function compareNativeChatTranscriptMessages(
   }
   if (a.journalPosition || b.journalPosition) {
     return a.journalPosition ? -1 : 1
+  }
+  if (
+    a.transcriptOrder !== undefined &&
+    b.transcriptOrder !== undefined &&
+    a.transcriptOrder !== b.transcriptOrder
+  ) {
+    return a.transcriptOrder - b.transcriptOrder
+  }
+  if ((a.transcriptOrder === undefined) !== (b.transcriptOrder === undefined)) {
+    return a.transcriptOrder === undefined ? 1 : -1
   }
   return compareNativeChatMessagesByTime(a, b)
 }
@@ -75,7 +86,7 @@ export type NativeChatTranscriptProjection = {
 const NO_SUBAGENT_ROWS: ReadonlyMap<string, readonly NativeChatSubagentRow[]> = new Map()
 
 function projectRows(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  return stripNoiseMessages(foldToolMessages(messages))
+  return stripNoiseMessages(foldToolMessages(foldSubagentItems(messages)))
 }
 
 function sortedCopy(

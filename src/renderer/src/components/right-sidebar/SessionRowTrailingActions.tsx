@@ -55,6 +55,7 @@ export function SessionRowTrailingActions({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -62,7 +63,8 @@ export function SessionRowTrailingActions({
   onRevealLog,
   onOpenCwd,
   deleteBlockedReason,
-  onRequestDelete
+  onRequestDelete,
+  actionsHidden = false
 }: {
   session: AiVaultSession
   detailsExpanded: boolean
@@ -80,6 +82,7 @@ export function SessionRowTrailingActions({
   onContinueInNewSession?: () => void
   /** Passed through to the overflow menu only; the resting row keeps its two-icon budget. */
   onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
   onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
@@ -89,6 +92,8 @@ export function SessionRowTrailingActions({
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
   onRequestDelete?: () => void
+  /** Only the details toggle shows. */
+  actionsHidden?: boolean
 }) {
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
 
@@ -99,108 +104,110 @@ export function SessionRowTrailingActions({
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      <div className={HOVER_ACTION_GROUP_CLASS}>
-        {onJumpToOriginalPane ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={translate(
+      {actionsHidden ? null : (
+        <div className={HOVER_ACTION_GROUP_CLASS}>
+          {onJumpToOriginalPane ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
+                    'Jump to Original Pane'
+                  )}
+                  draggable={false}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onJumpToOriginalPane()
+                  }}
+                  data-testid="ai-vault-session-jump-original-pane"
+                  className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+                >
+                  <LocateFixed className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate(
                   'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
                   'Jump to Original Pane'
                 )}
-                draggable={false}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onJumpToOriginalPane()
-                }}
-                data-testid="ai-vault-session-jump-original-pane"
-                className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
-              >
-                <LocateFixed className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
-                'Jump to Original Pane'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-        {showJumpToWorktree ? (
-          <Tooltip>
-            <WorktreeJumpTooltipTrigger
-              disabled={!onJumpToWorktree}
-              ariaLabel={jumpToWorktreeTooltip}
-              onJumpToWorktree={onJumpToWorktree}
-            />
-            <TooltipContent side="top" sideOffset={4}>
-              {jumpToWorktreeTooltip}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-        {!resumeHidden ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={resumeLabel}
-                disabled={resumeDisabled}
-                draggable={false}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onResume()
-                }}
-                data-testid="ai-vault-session-resume"
-                // Why: on touch (no hover) these controls stay visible and
-                // tappable; on hover-capable devices the session row gates both
-                // visibility and hit targets until it is hovered.
-                className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
-              >
-                <Play className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {resumeLabel}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-        {onContinueInNewSession ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={translate(
-                  'components.agentSessionContinuation.continueInNewSession',
-                  'Continue in New Session…'
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {showJumpToWorktree ? (
+            <Tooltip>
+              <WorktreeJumpTooltipTrigger
+                disabled={!onJumpToWorktree}
+                ariaLabel={jumpToWorktreeTooltip}
+                onJumpToWorktree={onJumpToWorktree}
+              />
+              <TooltipContent side="top" sideOffset={4}>
+                {jumpToWorktreeTooltip}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {!resumeHidden ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={resumeLabel}
+                  disabled={resumeDisabled}
+                  draggable={false}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onResume()
+                  }}
+                  data-testid="ai-vault-session-resume"
+                  // Why: on touch (no hover) these controls stay visible and
+                  // tappable; on hover-capable devices the session row gates both
+                  // visibility and hit targets until it is hovered.
+                  className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+                >
+                  <Play className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {resumeLabel}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {onContinueInNewSession ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'components.agentSessionContinuation.handOffToAnotherAgent',
+                    'Hand Off to Another Agent'
+                  )}
+                  draggable={false}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onContinueInNewSession()
+                  }}
+                  data-testid="ai-vault-session-continue-in-new-session"
+                  className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+                >
+                  <MessageSquarePlus className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate(
+                  'components.agentSessionContinuation.handOffToAnotherAgent',
+                  'Hand Off to Another Agent'
                 )}
-                draggable={false}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onContinueInNewSession()
-                }}
-                data-testid="ai-vault-session-continue-in-new-session"
-                className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
-              >
-                <MessageSquarePlus className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'components.agentSessionContinuation.continueInNewSession',
-                'Continue in New Session…'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
-      </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -230,55 +237,59 @@ export function SessionRowTrailingActions({
           {detailsTooltip}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={translate(
-                  'auto.components.right.sidebar.AiVaultSessionRow.moreSessionActions',
-                  'More Session Actions'
-                )}
-                draggable={false}
-                data-testid="ai-vault-session-more-actions"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <MoreHorizontal className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionRow.moreActions',
-              'More Actions'
-            )}
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent align="end">
-          <SessionActionMenuItems
-            resumeDisabled={resumeDisabled}
-            resumeHidden={resumeHidden}
-            resumeLabel={resumeLabel}
-            onResume={onResume}
-            onContinueInNewSession={onContinueInNewSession}
-            onResumeInNewChat={onResumeInNewChat}
-            onJumpToOriginalPane={onJumpToOriginalPane}
-            showJumpToWorktree={showJumpToWorktree}
-            onJumpToWorktree={onJumpToWorktree}
-            onCopyResume={onCopyResume}
-            onCopyId={onCopyId}
-            onCopyPath={onCopyPath}
-            onOpenLog={onOpenLog}
-            onRevealLog={onRevealLog}
-            onOpenCwd={onOpenCwd}
-            deleteBlockedReason={deleteBlockedReason}
-            onDelete={onRequestDelete}
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {actionsHidden ? null : (
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.moreSessionActions',
+                    'More Session Actions'
+                  )}
+                  draggable={false}
+                  data-testid="ai-vault-session-more-actions"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.moreActions',
+                'More Actions'
+              )}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end">
+            <SessionActionMenuItems
+              resumeDisabled={resumeDisabled}
+              resumeHidden={resumeHidden}
+              resumeLabel={resumeLabel}
+              onResume={onResume}
+              onContinueInNewSession={onContinueInNewSession}
+              onResumeInNewChat={onResumeInNewChat}
+              onResumeInNewCli={onResumeInNewCli}
+              onJumpToOriginalPane={onJumpToOriginalPane}
+              showJumpToWorktree={showJumpToWorktree}
+              jumpWorkspaceId={worktreeInfo?.worktreeId}
+              onJumpToWorktree={onJumpToWorktree}
+              onCopyResume={onCopyResume}
+              onCopyId={onCopyId}
+              onCopyPath={onCopyPath}
+              onOpenLog={onOpenLog}
+              onRevealLog={onRevealLog}
+              onOpenCwd={onOpenCwd}
+              deleteBlockedReason={deleteBlockedReason}
+              onDelete={onRequestDelete}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

@@ -10,19 +10,20 @@
 // A process whose journal will not open installs none and answers every
 // structured request with the refusal that says why.
 
-import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
+import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
+import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
   type InstalledRuntime
 } from './structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
-import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
-import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
-import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
+import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps
@@ -30,11 +31,15 @@ import {
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
-import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
-import { legacyAgentSessionStorePath } from './agent-session-record-store-file'
+import {
+  installAgentSessionAttachments,
+  stopAgentSessionAttachments
+} from './structured-agent-session-attachment-wiring'
+import {
+  openAgentSessionRecordStoreOnce,
+  releaseAgentSessionRecordStore,
+  type OpenedAgentSessionRecordStore
+} from './agent-session-record-store-slot'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../native-chat/agent-session-journal/journal-database'
 import {
@@ -44,10 +49,7 @@ import {
 import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import {
-  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
-  type StructuredAgentAdapterContext
-} from './structured-agent-runtime-registrations'
+import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registration-types'
 import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -59,30 +61,28 @@ import {
   modelCatalogHostDeps,
   type RuntimeAgentAccountHomeResolver
 } from './structured-agent-model-catalog-wiring'
+import type { ClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
+import { migrateLegacyNativeChatVisualsFolders } from '../native-chat/native-chat-scratch-folder-migration'
+import { scheduleNativeChatVisualsSweep } from '../native-chat/native-chat-visuals-sweep'
 
-/** Whether this profile holds a structured chat: a record or tab in the journal database, or the
- *  records file a profile from before it carries while the database still owes its copy. */
+/** Whether this profile holds a structured chat: a record or tab in the journal database. */
 export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
   const databasePath = journalDatabasePath(stateDirectory)
-  if (fileExists(databasePath)) {
-    try {
-      const holds = journalDatabaseHoldsAgentSessions(databasePath)
-      if (holds !== undefined) {
-        return holds
-      }
-    } catch {
-      // A database that cannot be read cannot say it is empty.
-      return true
-    }
+  if (!fileExists(databasePath)) {
+    return false
   }
-  const filePath = legacyAgentSessionStorePath(stateDirectory)
-  return fileExists(filePath) || fileExists(`${filePath}.bak`)
+  try {
+    return journalDatabaseHoldsAgentSessions(databasePath)
+  } catch {
+    // A database that cannot be read cannot say it is empty.
+    return true
+  }
 }
 
-export type StructuredAgentSessionRuntimeDeps = {
+export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
@@ -92,28 +92,29 @@ export type StructuredAgentSessionRuntimeDeps = {
   claimKeyId: string
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
-  resolveClaudeCommand?: () => string
-  /** Provider transports are overridden only to drive the runtime against scripted children. */
-  openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
-  openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
-  /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
-  readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
-  resolveLaunchArgs?: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
-  resolveLaunchEnv?: () => Promise<NodeJS.ProcessEnv>
-  resolveLaunchEnvOverlay?: () => Promise<Record<string, string>> | Record<string, string>
-  resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
+  resolveClaudeCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  /** Which version-gated flags a Claude CLI takes; absent never passes one. */
+  claudeCliFlags?: ClaudeCliFlagSupport
+  /** Gives each chat a scratch folder and the visuals skill that teaches it, and sweeps folders
+   *  whose chat is gone. Wired by the real hosts only, so a test runtime never loads the bundled
+   *  skill. */
+  nativeChatVisuals?: {
+    /** Read this host's preference when a chat starts a provider process. */
+    isEnabled: () => boolean
+  }
+  /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
+  resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
-  /** The user's Agent Permissions setting for Claude; absent means prompting. */
-  resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
-  /** The same setting for Codex, as app-server thread policy. */
-  resolveCodexPermissionPolicy?: () => CodexStructuredPermissionPolicy
-  /** Raw settings getter; the reader that fails closed around it is built here, in checked code. */
-  getClaudeManagedAccountGateSettings?: () => ClaudeManagedAccountGateSettings
+  /** What a chat saved before its agent had modes ran with; fills that chat's mode once. */
+  resolveAgentFullAccess?: (agent: string) => boolean
+  /** The user's per-agent environment overlay from settings, laid over every agent's base env. */
+  resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
+  /** The settings a per-agent Command override is read from, for the same agents. */
+  resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Which login-shell variables Codex and Claude children inherit; absent inherits all. */
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
-  resolveCodexOverrides?: () => NodeJS.ProcessEnv
   /** Where every failure the runtime and its host carry on past is reported. Required, so no path
    *  can drop one: the desktop and headless hosts both pass the trace-file logger. */
   logger: StructuredAgentSessionLogger
@@ -122,8 +123,16 @@ export type StructuredAgentSessionRuntimeDeps = {
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
+  conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
+  resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
+  /** Launch prep's sync for a probed home; see `CodexModelCatalogProbeDeps.prepareHome`. */
+  prepareCodexCatalogProbeHome?: (homePath: string) => void
+  /** See `StructuredAgentSessionHostDeps.onSessionTabHidden`. */
+  onSessionTabHidden?: StructuredAgentSessionHostDeps['onSessionTabHidden']
+  /** Host-owned phone delivery and reconciliation from the current journal projection. */
+  attentionDelivery?: StructuredAttentionMobileDelivery
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
@@ -134,6 +143,9 @@ let installing: Promise<InstalledRuntime> | null = null
 /** Thrown when the host is installed without a Claude auth policy resolver. */
 export const CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED =
   'structured agent-session host requires a Claude auth policy resolver'
+
+export const STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED =
+  'structured agent-session host requires a launch arguments resolver'
 
 /** Thrown when the host is installed without a logger: every failure it carries on past would
  *  otherwise reach nobody. */
@@ -183,11 +195,20 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
+  stopAgentSessionAttachments()
   const outstanding = [...pendingTeardown]
   pendingTeardown.clear()
   const installed = pending ? await pending.catch(() => null) : null
   if (installed) {
     outstanding.push(installed)
+  }
+  // A store admission opened with no host built on it has no teardown to close its database.
+  const recordStore = await releaseAgentSessionRecordStore()
+  if (
+    recordStore &&
+    !outstanding.some((runtime) => runtime.journalDatabase === recordStore.journalDatabase)
+  ) {
+    recordStore.journalDatabase.close()
   }
   const failures: unknown[] = []
   for (const runtime of outstanding) {
@@ -208,40 +229,46 @@ export async function stopStructuredAgentSessionRuntime(options?: {
 }
 
 async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<InstalledRuntime> {
-  // Why thrown rather than defaulted: the caller is `@ts-nocheck`, so a dropped
-  // field arrives here as `undefined`. Refusing to install is loud; guessing a
-  // policy is the silent under-strip this assertion exists to prevent.
+  // A default policy could attribute sign-in failures to the wrong account.
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
+  }
+  if (typeof deps.resolveLaunchArgs !== 'function') {
+    throw new Error(STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED)
   }
   const declared: Partial<StructuredAgentSessionLogger> | undefined = deps.logger
   if (typeof declared?.warn !== 'function' || typeof declared.error !== 'function') {
     throw new Error(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)
   }
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
-  const journalDatabase = await openStructuredAgentSessionJournalDatabase({
+  // The store launch admission may already have opened; a failed install leaves it to that slot.
+  const recordStore = await openAgentSessionRecordStoreOnce({
     stateDirectory: deps.stateDirectory,
     hostId: deps.hostId,
     logger
   })
   try {
-    return await installOnJournal({ ...deps, logger }, journalDatabase)
+    // Without the Arguments source there is nothing to fill from; missing modes run Ask.
+    if (deps.resolveAgentFullAccess) {
+      await recordStore.store.backfillChatPermissionModes(deps.resolveAgentFullAccess)
+    }
   } catch (error) {
-    // Nothing else holds the connection yet, and the next install opens its own.
-    journalDatabase.close()
-    throw error
+    // Missing choices safely run Ask; the next host install retries this pass.
+    logger.warn('saving existing chat permission choices failed', {
+      scope: 'permission-mode-backfill',
+      error
+    })
   }
+  // Before the host serves reads: a chat opened right after an update finds its visuals in place.
+  await migrateLegacyNativeChatVisualsFolders(deps.stateDirectory, logger)
+  return await installOnJournal({ ...deps, logger }, recordStore)
 }
 
 async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
-  journalDatabase: JournalHostDatabase
+  { journalDatabase, store }: OpenedAgentSessionRecordStore
 ): Promise<InstalledRuntime> {
   const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
-  const store = AgentSessionRecordStore.open({
-    journalDatabase,
-    hostId: deps.hostId
-  })
   let host: StructuredAgentSessionHost | null = null
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
@@ -256,6 +283,7 @@ async function installOnJournal(
   const context: StructuredAgentAdapterContext = {
     deps,
     store,
+    journalDatabase,
     environment: envResolvers,
     deliverLifecycle: lifecycle.deliver,
     followUps: createStructuredAgentSessionDispatchFollowUps({
@@ -264,6 +292,8 @@ async function installOnJournal(
     }),
     host: () => host
   }
+  const { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } =
+    await import('./structured-agent-runtime-registrations')
   const registrations = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
     ({ definition, createAdapter }) => ({ definition, adapter: createAdapter(context) })
   )
@@ -280,23 +310,74 @@ async function installOnJournal(
     claimKeyId: deps.claimKeyId,
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
-    ...(deps.resolveLaunchArgs
-      ? {
-          resolveLaunchArgs: async (provider: AgentSessionRecord['provider']) =>
-            await deps.resolveLaunchArgs!(provider)
-        }
-      : {}),
+    resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
+    ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
-    ...(await modelCatalogHostDeps({ store, agents, deps, envResolvers }))
+    ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
+    ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+    ...(await modelCatalogHostDeps({
+      store,
+      agents,
+      registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+      deps,
+      environment: envResolvers
+    }))
   })
-  setStructuredAgentSessionHost(host)
+  if (deps.attentionDelivery) {
+    const installed = host
+    const delivery = deps.attentionDelivery
+    // Lives exactly as long as the host: teardown drops the host and its subscribers together.
+    installed.subscribeTurnCompletions({
+      id: 'host-attention-delivery',
+      includePrompts: true,
+      emit: (event) => {
+        if (event.type === 'end') {
+          return
+        }
+        const sessionId =
+          event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
+        delivery.deliver(event, installed.readStatusSummary(sessionId))
+      },
+      onState: delivery.reconcile
+    })
+  }
+  // The host starts with its runtime, local or remote, so this is the runtime-start listing.
+  const modelCatalog = host.deps.modelCatalog
+  void modelCatalog?.prewarm()
+  installAgentSessionAttachments({
+    stateDirectory: deps.stateDirectory,
+    store,
+    journalDatabase,
+    logger: deps.logger
+  })
+  const stopVisualsSweep = deps.nativeChatVisuals
+    ? scheduleNativeChatVisualsSweep({
+        stateDirectory: deps.stateDirectory,
+        listHeldSessionIds: () => (store.readOnly ? null : store.listHeldSessionIds()),
+        logger: deps.logger
+      })
+    : undefined
+  const stopCommands = bindAtRestCommandContexts(
+    registrations.map(({ adapter }) => adapter.atRestCommands)
+  )
+  try {
+    setStructuredAgentSessionHost(host)
+  } catch (error) {
+    stopCommands()
+    throw error
+  }
   return {
     host,
     adapter,
     journalDatabase,
-    waitForRecovery: lifecycle.drain
+    waitForRecovery: lifecycle.drain,
+    stopBackgroundWork: () => {
+      stopCommands()
+      stopVisualsSweep?.()
+      modelCatalog?.stop()
+    }
   }
 }

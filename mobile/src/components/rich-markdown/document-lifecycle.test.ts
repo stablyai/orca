@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import {
   createRichMarkdownEditorDocument,
   startRichMarkdownEditorDocument,
@@ -43,10 +44,12 @@ function viewportDouble() {
 }
 
 function mount(posted: MobileRichMarkdownEditorMessage[], keyboard = viewportDouble()) {
-  const document_ = createRichMarkdownEditorDocument({
-    postToHost: (message) => posted.push(message),
-    keyboardInsetSource: keyboard.source
-  })
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: (message) => posted.push(message),
+      keyboardInsetSource: keyboard.source
+    })
+  )
   started.push(document_)
   return { handle: document_.send, stop: () => document_.stop(), keyboard }
 }
@@ -133,10 +136,12 @@ describe('an editor document that is stopped', () => {
     plantMarkup()
     vi.useFakeTimers()
     try {
-      const scope = createRichMarkdownEditorScope({
-        postToHost: (message) => posted.push(message),
-        keyboardInsetSource: () => null
-      })
+      const scope = createRichMarkdownEditorScope(
+        quietRichMarkdownEditorHost({
+          postToHost: (message) => posted.push(message),
+          keyboardInsetSource: () => null
+        })
+      )
       startRichMarkdownEditorDocument(scope)
       setMarkdown(scope, 'body', 2)
       posted.length = 0
@@ -174,11 +179,13 @@ describe('an editor document that is stopped', () => {
     })
     try {
       const posted: MobileRichMarkdownEditorMessage[] = []
-      const document_ = createRichMarkdownEditorDocument({
-        postToHost: (message) => posted.push(message),
-        keyboardInsetSource: () => null,
-        promptForUrl: () => new Promise((resolve) => answer.push(resolve))
-      })
+      const document_ = createRichMarkdownEditorDocument(
+        quietRichMarkdownEditorHost({
+          postToHost: (message) => posted.push(message),
+          keyboardInsetSource: () => null,
+          promptForUrl: () => new Promise((resolve) => answer.push(resolve))
+        })
+      )
       started.push(document_)
       document_.send.setMarkdown('before', 1)
 
@@ -218,12 +225,14 @@ describe('an editor document that is stopped', () => {
     const posted: MobileRichMarkdownEditorMessage[] = []
     const editor = plantMarkup()
     expect(() =>
-      createRichMarkdownEditorDocument({
-        postToHost: (message) => posted.push(message),
-        keyboardInsetSource: () => {
-          throw new Error('no viewport')
-        }
-      })
+      createRichMarkdownEditorDocument(
+        quietRichMarkdownEditorHost({
+          postToHost: (message) => posted.push(message),
+          keyboardInsetSource: () => {
+            throw new Error('no viewport')
+          }
+        })
+      )
     ).toThrow('no viewport')
     // Nothing reported itself ready, and the surface carries no listener of the failed start.
     expect(posted).toEqual([])

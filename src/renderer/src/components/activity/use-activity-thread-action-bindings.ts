@@ -33,7 +33,7 @@ export function useActivityThreadActionBindings({
 }: {
   visibleThreads: AgentPaneThread[]
   markAllReadThreads: AgentPaneThread[]
-  acknowledgeAgents: (paneKeys: string[]) => void
+  acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   setSelectedPaneKey: (paneKey: string | null) => void
 }): ActivityThreadActionBindings {

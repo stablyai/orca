@@ -3,36 +3,62 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { ZcodePlanCredentialsStatus } from '../../../../shared/zcode-plan-sites'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import {
+  callZcodePlanCredentials,
+  UsageCredentialsHostOutdatedError
+} from '@/runtime/runtime-usage-credentials-client'
+import {
+  usageCredentialAccessAfterError,
+  type UsageCredentialAccess
+} from './usage-credential-host'
 
-export function useZcodePlanCredentials(updatedAt: number | undefined) {
+const LOCAL_OWNER: RuntimeClientTarget = { kind: 'local' }
+
+/** The GLM plan key on `owner`; key the component by owner so the draft resets. */
+export function useZcodePlanCredentials(
+  updatedAt: number | undefined,
+  owner: RuntimeClientTarget = LOCAL_OWNER
+) {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<ZcodePlanCredentialsStatus | null>(null)
+  const [access, setAccess] = useState<UsageCredentialAccess>(
+    owner.kind === 'local' ? 'ready' : 'checking'
+  )
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [credentialBusy, setCredentialBusy] = useState(false)
   const readGeneration = useRef(0)
   const mutationPending = useRef(false)
+
+  const ownerEnvironmentId = owner.kind === 'environment' ? owner.environmentId : null
 
   useEffect(() => {
     if (mutationPending.current) {
       return
     }
     const request = ++readGeneration.current
-    void window.api.zcodePlanCredentials.getStatus().then(
+    const readTarget: RuntimeClientTarget = ownerEnvironmentId
+      ? { kind: 'environment', environmentId: ownerEnvironmentId }
+      : LOCAL_OWNER
+    void callZcodePlanCredentials(readTarget, 'getStatus').then(
       (next) => {
         if (request === readGeneration.current) {
           setStatus(next)
+          setAccess('ready')
         }
       },
-      () => {
+      (error: unknown) => {
         if (request === readGeneration.current) {
           setStatus(null)
+          // Why local stays editable: this computer's store is always writable, as before.
+          setAccess(ownerEnvironmentId ? usageCredentialAccessAfterError(error) : 'ready')
         }
       }
     )
     return () => {
       readGeneration.current += 1
     }
-  }, [updatedAt, credentialBusy])
+  }, [updatedAt, credentialBusy, ownerEnvironmentId])
 
   const updateCredential = async (action: 'save' | 'clear'): Promise<void> => {
     if (mutationPending.current) {
@@ -44,8 +70,8 @@ export function useZcodePlanCredentials(updatedAt: number | undefined) {
     try {
       const next =
         action === 'save'
-          ? await window.api.zcodePlanCredentials.saveApiKey(apiKeyDraft.trim())
-          : await window.api.zcodePlanCredentials.clearApiKey()
+          ? await callZcodePlanCredentials(owner, 'saveApiKey', apiKeyDraft.trim())
+          : await callZcodePlanCredentials(owner, 'clearApiKey')
       if (
         !next ||
         typeof next.apiKeyConfigured !== 'boolean' ||
@@ -67,6 +93,9 @@ export function useZcodePlanCredentials(updatedAt: number | undefined) {
         )
       }
     } catch (error) {
+      if (error instanceof UsageCredentialsHostOutdatedError) {
+        setAccess('outdated')
+      }
       toast.error(
         translate(
           'auto.components.settings.ZcodePlanAccountsSection.keySaveFailed',
@@ -82,6 +111,7 @@ export function useZcodePlanCredentials(updatedAt: number | undefined) {
 
   return {
     status,
+    access,
     apiKeyDraft,
     setApiKeyDraft,
     credentialBusy,

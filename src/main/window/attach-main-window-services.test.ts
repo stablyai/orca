@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type { registerSshHandlers } from '../ipc/ssh'
-import type { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
+import { cancelHistoryGc } from '../terminal-history-gc'
+import type { registerSshHandlers } from '../ipc/ssh/ssh'
 import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
@@ -28,7 +28,6 @@ const {
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   registerSshHandlersMock,
-  registerRemoteWorkspaceHandlersMock,
   registerDaemonManagementHandlersMock,
   registerWorkspaceCleanupHandlersMock,
   startFolderRepoGitUpgradeWatchMock,
@@ -58,8 +57,6 @@ const {
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   registerSshHandlersMock: vi.fn<(...args: Parameters<typeof registerSshHandlers>) => void>(),
-  registerRemoteWorkspaceHandlersMock:
-    vi.fn<(...args: Parameters<typeof registerRemoteWorkspaceHandlers>) => void>(),
   registerDaemonManagementHandlersMock: vi.fn<typeof registerDaemonManagementHandlers>(),
   registerWorkspaceCleanupHandlersMock: vi.fn<typeof registerWorkspaceCleanupHandlers>(),
   startFolderRepoGitUpgradeWatchMock: vi.fn<typeof startFolderRepoGitUpgradeWatch>(),
@@ -115,15 +112,10 @@ vi.mock('../ipc/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
-vi.mock('../ipc/pty', () => ({
-  getLocalPtyProvider: vi.fn(),
-  registerPtyHandlers: registerPtyHandlersMock
-}))
+vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
+vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: registerPtyHandlersMock }))
 
-vi.mock('../ipc/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
-vi.mock('../ipc/remote-workspace', () => ({
-  registerRemoteWorkspaceHandlers: registerRemoteWorkspaceHandlersMock
-}))
+vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
 vi.mock('../ipc/pty-management', () => ({
   registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
 }))
@@ -164,7 +156,8 @@ vi.mock('../macos-tcc-prompt-notice', () => ({
   releasePendingTccPromptNotice: releasePendingTccPromptNoticeMock
 }))
 
-import { attachMainWindowServices } from './attach-main-window-services'
+import { attachMainWindowServices, registerUpdaterHandlers } from './attach-main-window-services'
+import { registerUpdaterHandlers as registerWindowUpdaterHandlers } from './main-window-updater'
 
 type MockFn = ReturnType<typeof vi.fn>
 
@@ -206,6 +199,14 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
 }
 
 describe('attachMainWindowServices', () => {
+  it('exports the updater handlers exercised by the recovery tests', () => {
+    expect(registerUpdaterHandlers).toBe(registerWindowUpdaterHandlers)
+  })
+
+  afterEach(() => {
+    cancelHistoryGc()
+  })
+
   beforeEach(() => {
     vi.resetAllMocks()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
@@ -228,12 +229,6 @@ describe('attachMainWindowServices', () => {
       runtime
     )
     expect(registerSshHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
-    expect(registerRemoteWorkspaceHandlersMock).toHaveBeenCalledExactlyOnceWith(
-      store,
-      expect.any(Function),
-      runtime
-    )
-    expect(registerRemoteWorkspaceHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
     expect(registerDaemonManagementHandlersMock).toHaveBeenCalledExactlyOnceWith()
     expect(registerDaemonManagementHandlersMock).toHaveBeenCalledAfter(registerPtyHandlersMock)
     expect(registerWorkspaceCleanupHandlersMock).toHaveBeenCalledExactlyOnceWith(store)
@@ -626,81 +621,6 @@ describe('attachMainWindowServices', () => {
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('removes the native file-drop relay when the main window closes', () => {
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow({ send: vi.fn() })
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    expect(relayHandler).toBeTypeOf('function')
-    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
-
-    const closedHandlers = getClosedHandlers(mainWindowOnMock)
-    for (const handler of closedHandlers) {
-      handler()
-    }
-
-    expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
-  })
-
-  it('relays native file drops only from the owning renderer webContents', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    const payload = { paths: ['/tmp/a'], target: 'editor' }
-
-    relayHandler?.({ sender: { id: 999 } }, payload)
-
-    expect(sendMock).not.toHaveBeenCalled()
-
-    relayHandler?.({ sender: mainWindow.webContents }, payload)
-
-    expect(sendMock).toHaveBeenCalledWith('terminal:file-drop', payload)
-  })
-
-  it('ignores malformed native file-drop payloads from the owning renderer', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['C:\\Users\\alice\\secret.txt'], target: 'browser' }
-    )
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['/tmp/a'], target: 'file-explorer' }
-    )
-
-    expect(sendMock).not.toHaveBeenCalled()
-  })
-
-  it('ignores native file drops after the owning webContents is destroyed', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    mainWindow.webContents.isDestroyed?.mockReturnValue(true)
-
-    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
-
-    expect(sendMock).not.toHaveBeenCalled()
   })
 
   it('clears the runtime notifier when the owning window closes', () => {

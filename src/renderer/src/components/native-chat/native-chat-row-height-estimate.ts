@@ -10,12 +10,18 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import {
+  NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
+  nativeChatUserMessageFolds
+} from '../../../../shared/native-chat-user-message-fold'
 
 /** What a row contains, reduced to the few numbers that drive its height. */
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']
   /** Wrapped display lines of prose, not source lines. */
   textLines: number
+  /** A user prompt long enough to mount folded behind "Show full message". */
+  userFolds: boolean
   imageCount: number
   toolCount: number
   subagentGroupCount: number
@@ -36,12 +42,22 @@ export type NativeChatRowChromeMetrics = {
 export type NativeChatRowTypography = {
   lineHeightPx: number
   charsPerLine: number
+  /** Spacing and controls relative to the default; bounded separately from message text. */
+  spacingScale: number
 }
-const DEFAULT_ROW_TYPOGRAPHY: NativeChatRowTypography = { lineHeightPx: 22, charsPerLine: 96 }
+export const DEFAULT_ROW_TYPOGRAPHY: NativeChatRowTypography = {
+  lineHeightPx: 22,
+  charsPerLine: 96,
+  spacingScale: 1
+}
 const PROSE_MIN_LINES = 1
 const USER_BUBBLE_CHROME_PX = 32
+const USER_FOLD_TOGGLE_PX = 24
 const IMAGE_STRIP_PX = 88
-const TOOL_RUN_PX = 40
+/** Header margin and vertical padding; its summary can occupy two text lines. */
+const TOOL_RUN_CHROME_PX = 16
+/** A reasoning row draws only its one-line trigger (`min-h-6`) until opened; opening remeasures it. */
+const COLLAPSED_REASONING_PX = 24
 const SUBAGENT_ROW_PX = 32
 /** The one-line head that names a subagent above its own rows. */
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
@@ -100,6 +116,7 @@ export function nativeChatRowContentMetrics(
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
     textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
+    userFolds: message.role === 'user' && nativeChatUserMessageFolds(content.markdown),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
     toolCount: content.tools.length,
     subagentGroupCount: content.subagentGroups.length
@@ -108,47 +125,72 @@ export function nativeChatRowContentMetrics(
   return metrics
 }
 
+/** A collapsed work run: a lead head's own words over one tool-run header. Its thoughts draw
+ *  only once it opens, which remeasures it. */
+export function nativeChatWorkRunContentMetrics(
+  head: NativeChatRowContentMetrics,
+  headIsLead: boolean
+): NativeChatRowContentMetrics {
+  return {
+    role: 'assistant',
+    textLines: headIsLead ? head.textLines : 0,
+    userFolds: false,
+    imageCount: headIsLead ? head.imageCount : 0,
+    toolCount: 1,
+    subagentGroupCount: 0
+  }
+}
+
 export function estimateNativeChatRowHeight(
   content: NativeChatRowContentMetrics,
   chrome: NativeChatRowChromeMetrics,
   typography = DEFAULT_ROW_TYPOGRAPHY
 ): number {
+  // Chat spacing and icons scale with the text size, so a row's fixed parts do too.
+  const scale = typography.spacingScale
   let partCount = 0
   let height = 0
   if (chrome.hasReceipt) {
-    height = RECEIPT_PX
+    height = RECEIPT_PX * scale
     partCount = 1
   } else if (chrome.folded === true) {
-    height = content.subagentGroupCount * SUBAGENT_ROW_PX
+    height = content.subagentGroupCount * SUBAGENT_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   } else {
-    height = content.textLines * typography.lineHeightPx
+    height =
+      content.role === 'reasoning'
+        ? content.textLines > 0
+          ? COLLAPSED_REASONING_PX * scale
+          : 0
+        : content.userFolds
+          ? (NATIVE_CHAT_USER_MESSAGE_FOLDED_PX + USER_FOLD_TOGGLE_PX) * scale
+          : content.textLines * typography.lineHeightPx
     if (content.role === 'user' && content.textLines > 0) {
-      height += USER_BUBBLE_CHROME_PX
+      height += USER_BUBBLE_CHROME_PX * scale
     }
     if (
       chrome.inSubagentSection === true &&
       content.role === 'assistant' &&
       content.textLines > 0
     ) {
-      height += AGENT_CONTROLS_OVERHANG_PX
+      height += AGENT_CONTROLS_OVERHANG_PX * scale
     }
     if (content.imageCount > 0) {
-      height += IMAGE_STRIP_PX
+      height += IMAGE_STRIP_PX * scale
     }
     if (content.toolCount > 0) {
       // A run is one collapsed header by default; its members only exist while open.
-      height += TOOL_RUN_PX
+      height += TOOL_RUN_CHROME_PX * scale + 2 * typography.lineHeightPx
     }
-    height += content.subagentGroupCount * SUBAGENT_ROW_PX
+    height += content.subagentGroupCount * SUBAGENT_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   }
   if (chrome.hasStatus) {
-    height += STATUS_ROW_PX
+    height += STATUS_ROW_PX * scale
     partCount += 1
   }
   if (chrome.hasTurnDiff) {
-    height += TURN_DIFF_PX
+    height += TURN_DIFF_PX * scale
     partCount += 1
   }
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX

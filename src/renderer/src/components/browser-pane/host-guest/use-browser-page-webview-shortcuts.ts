@@ -12,6 +12,7 @@ import {
   type BrowserPageZoomCommand,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /**
  * History, reload and zoom chords for a <webview>-backed pane — local and client-hosted alike.
@@ -72,8 +73,8 @@ export function useBrowserPageWebviewShortcuts({
         webviewRef.current?.goForward()
       }
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, webviewRef, workspaceId])
 
   // Browser history shortcuts (IPC path: focus inside webview guest)
@@ -123,8 +124,8 @@ export function useBrowserPageWebviewShortcuts({
       e.stopImmediatePropagation()
       reloadWebviewOrRecoverGuest(isHardReload)
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, reloadWebviewOrRecoverGuest, workspaceId])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)

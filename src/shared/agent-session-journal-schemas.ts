@@ -27,6 +27,7 @@
 
 import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
+import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import type {
@@ -109,6 +110,15 @@ const Block = openDiscriminatedUnion(
       groupId: z.string(),
       agents: z.array(SubagentEntry)
     }),
+    // `outcomeBasis` and `background` stay open for the same reason `state` does.
+    SubagentEntry.extend({
+      type: z.literal('subagent'),
+      groupId: z.string(),
+      parentId: z.string().optional(),
+      run: z.string().optional(),
+      outcomeBasis: z.string().optional(),
+      background: z.boolean().optional()
+    }),
     // `kind` and `state` stay open strings for the same reason a child's
     // lifecycle does: a vocabulary a newer build writes must not turn the row
     // malformed. The renderer falls back on anything it cannot name.
@@ -135,13 +145,21 @@ const PromptOption = z.object({
   description: z.string().optional()
 })
 
+const FreeTextInput = z.object({
+  allowEmpty: z.boolean().optional(),
+  multiline: z.boolean().optional(),
+  initialValue: z.string().optional(),
+  placeholder: z.string().optional()
+})
+
 const Question = z.object({
   id: z.string(),
   question: z.string(),
   header: z.string().optional(),
   multiSelect: z.boolean(),
   options: z.array(PromptOption),
-  freeTextQuestionId: z.string().optional()
+  freeTextQuestionId: z.string().optional(),
+  freeTextInput: FreeTextInput.optional()
 })
 
 const Resolution = z.object({
@@ -180,26 +198,12 @@ const MessageBody = z.object({
   blocks: z.array(Block),
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
-  command: z.object({ name: z.string().min(1) }).optional()
+  command: z.object({ name: z.string().min(1) }).optional(),
+  skills: z.array(z.object({ name: z.string().min(1), path: z.string().min(1) })).optional(),
+  // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.
+  state: z.string().min(1).optional(),
+  completedAt: z.number().finite().optional()
 })
-
-const ThreadGoal = z.object({
-  objective: z.string(),
-  status: z.string().min(1),
-  tokenBudget: z.number().finite().nullable(),
-  tokensUsed: z.number().finite(),
-  timeUsedSeconds: z.number().finite(),
-  createdAt: z.number().finite(),
-  updatedAt: z.number().finite()
-})
-
-/** Like blocks: an unknown `state` stays admissible, a known one with a broken payload does not. */
-const ThreadGoalState = openDiscriminatedUnion(
-  z.discriminatedUnion('state', [
-    z.object({ state: z.literal('set'), goal: ThreadGoal }),
-    z.object({ state: z.literal('cleared') })
-  ])
-)
 
 /** A turn's lifecycle, as the turn item and the legacy status row both carry it. */
 const TurnLifecycleFields = {
@@ -250,17 +254,26 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     options: z.array(PromptOption),
     questions: z.array(Question).optional(),
     freeTextQuestionId: z.string().optional(),
+    freeTextInput: FreeTextInput.optional(),
     resolution: Resolution
   }),
   z.object({
     kind: z.literal('status'),
     text: z.string(),
     presentation: z.string().optional(),
+    contextClear: z
+      .object({
+        operationId: z.string().min(1).max(512),
+        afterFence: z.number().int().nonnegative(),
+        clearedAt: z.number().int().nonnegative()
+      })
+      .optional(),
     tone: z.string().optional(),
     turnLifecycle: z.object(TurnLifecycleFields).optional(),
     providerFrame: ProviderFrame.optional(),
-    threadGoal: ThreadGoalState.optional(),
-    failure: AgentSessionFailureFactSchema.optional()
+    threadGoal: AgentJournalThreadGoalStateSchema.optional(),
+    failure: AgentSessionFailureFactSchema.optional(),
+    orcaStop: z.object({ cause: z.string().min(1) }).optional()
   }),
   z.object({
     kind: z.literal('turn'),
@@ -305,6 +318,7 @@ export const AgentJournalRenderItemSchema = z.object({
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
   turnScope: AgentJournalTurnScopeSchema.optional(),
+  shortened: z.literal(true).optional(),
   ...AgentJournalProducerLinkageFields
 })
 

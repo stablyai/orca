@@ -38,7 +38,7 @@ import {
   finishWorker,
   coordinatorRunAndTask,
   clearChat,
-  startSuccessor,
+  startClearedContext,
   WAIT,
   POINTER,
   ptyPointer,
@@ -206,6 +206,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 
   it('leaves a pointer the person stopped while its agent was starting stopped', async () => {
+    observationClock.start()
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await host.close(COORDINATOR, 'evict')
@@ -214,7 +215,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
     // The person presses Stop while the agent is still starting.
-    const cancelled = await host.cancel(
+    const cancelling = host.cancel(
       { callerKey: 'test-surface' },
       {
         envelope: {
@@ -230,6 +231,8 @@ describe('a worker result reaches the structured chat that coordinates it', () =
         turnId: 'turn-x'
       }
     )
+    await observationClock.observe(400)
+    const cancelled = await cancelling
     expect(cancelled).toMatchObject({ ok: true })
     providerFaults.startDelayMs = 0
     // A fixed window, not a poll: a re-point would start the agent again in it.
@@ -256,6 +259,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     // provider still dies, so exactly one start proves it is pointed once, not in a loop.
     restartRuntime()
     const before = providerFaults.starts
+    await observationClock.observe(2_000)
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
     await observationClock.observe(1_500)
     await edgesAnswered()
@@ -374,25 +378,42 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     refused.mockImplementation((caller, params) => realSend(caller, params))
     await finishWorker(taskId)
     await vi.waitFor(() => expect(refused).toHaveBeenCalledTimes(1), WAIT)
-    const held = db.getStructuredPointerOperation(`run:${runId}`)?.operation_id
+    const held = db.getStructuredPointerOperation(`run:${runId}`)
+    expect(held).toMatchObject({ session_id: COORDINATOR, operation_id: expect.any(String) })
+    const heldId = held!.operation_id
+    expect(heldId).not.toBe('')
+    expect(refused.mock.calls[0]?.[1].envelope.clientOperationId).toBe(heldId)
+    expect(await pointerSends()).toEqual([])
 
     // No edge for a day: the host would now refuse that id as expired, on every retry.
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       vi.setSystemTime(Date.now() + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + 60_000)
       await edgesAnswered()
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      expect(chat.turns.map(turnText)).toEqual([ptyPointer(`run:${runId}`)])
-      expect(db.getStructuredPointerOperation(`run:${runId}`)?.operation_id).not.toBe(held)
+      await vi.waitFor(
+        () => expect(chat.turns.map(turnText)).toEqual([ptyPointer(`run:${runId}`)]),
+        WAIT
+      )
+      await vi.waitFor(async () => {
+        const sends = await pointerSends()
+        expect(sends).toHaveLength(1)
+        expect(sends[0]).toBeTruthy()
+        expect(sends[0]).not.toBe(heldId)
+        expect(db.getStructuredPointerOperation(`run:${runId}`)).toMatchObject({
+          session_id: COORDINATOR,
+          operation_id: sends[0]
+        })
+      }, WAIT)
+      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it("holds mail a refused turn left in doubt, then queues the next pointer behind it as the person's message would wait", async () => {
+  it('points mail a refused turn left in doubt again with the next result, counting both', async () => {
     // A failed turn/start cannot prove the turn never started, so the host records it `unknown`
-    // and a resend under its id replays that. A live doubt counts as work still owed, so the next
-    // result's pointer waits in the chat's queue, as a message the person sent then would.
+    // and a resend under its id replays that. The next result's pointer does not wait behind
+    // that doubt: it names both messages, and the chat's own `check` reads them.
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const second = await call(
@@ -408,14 +429,11 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(chat.turns).toHaveLength(0)
 
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
-    await vi.waitFor(
-      async () =>
-        expect(await queuedCardTexts()).toEqual([
-          formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
-        ]),
-      WAIT
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    expect(turnText(chat.turns[0]!)).toBe(
+      formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
     )
-    expect(chat.turns).toHaveLength(0)
+    expect(await queuedCardTexts()).toEqual([])
     expect(codex.connections.length).toBe(before)
   })
 
@@ -438,88 +456,82 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(await userTexts(COORDINATOR)).toEqual([expect.stringMatching(POINTER)])
   })
 
-  it('points mail at the idle edge when it arrived mid-turn', async () => {
+  it('steers mail that arrives mid-turn into the running turn, with who it is from', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
-    const first = await host.send(
-      { callerKey: 'test-surface' },
-      {
-        envelope: {
-          sessionId: COORDINATOR,
-          clientOperationId: operationId(),
-          expectedRuntimeFence: host.deps.store.getRecord(COORDINATOR)!.lease.runtimeFence,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.send',
-            sessionId: COORDINATOR,
-            fields: {
-              body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'go' }] }
-            }
-          })
-        },
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'go' }] }
-      }
-    )
-    expect(first).toMatchObject({ ok: true })
-    // Accepted, then delivered: the provider sees the turn once the host hands it over.
+    expect(await sendUserMessage(COORDINATOR, 'go')).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     const notify = (method: string, params: unknown) =>
       chat.handlers.onNotification?.(method, params)
+    const echo = (id: string, clientId: string, text: string) =>
+      notify('item/completed', {
+        item: { type: 'userMessage', id, clientId, content: [{ type: 'text', text }] }
+      })
     notify('turn/started', { turn: { id: 'turn-1' } })
-    notify('item/completed', {
-      item: {
-        type: 'userMessage',
-        id: 'echo-go',
-        clientId: chat.turns[0]!.clientUserMessageId,
-        content: [{ type: 'text', text: 'go' }]
-      }
-    })
+    echo('echo-go', chat.turns[0]!.clientUserMessageId, 'go')
     await host.flushStreamedEvents(COORDINATOR)
 
     await finishWorker(taskId)
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    // The coordinator is mid-turn, so nothing is folded into that turn.
-    expect(chat.turns).toHaveLength(1)
 
+    // Into the turn that is running, as a terminal agent takes its typed nudge: no card, no
+    // second turn.
+    await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
+    const [steer] = chat.steers
+    expect(steer!.expectedTurnId).toBe('turn-1')
+    expect(steer!.text).toContain(ptyPointer(`run:${runId}`))
+    expect(await queuedCardTexts()).toEqual([])
+    const sent = (await host.journalSnapshot(COORDINATOR)).items.find(
+      (item) => item.body.kind === 'message' && item.body.from
+    )
+    expect(sent?.body).toMatchObject({
+      from: { kind: 'agent', orchestration: { message: 'mail-notice', mailbox: `run:${runId}` } }
+    })
+
+    echo('echo-pointer', steer!.clientUserMessageId, ptyPointer(`run:${runId}`))
     notify('turn/completed', { turn: { id: 'turn-1' } })
     await host.flushStreamedEvents(COORDINATOR)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    expect(chat.turns[1]!.text).toMatch(POINTER)
-    expect(chat.turns[1]!.text).toContain(runId)
+    // The idle edge finds the mail delivered: nothing is resent.
+    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(chat.turns).toHaveLength(1)
+    expect(chat.steers).toHaveLength(1)
   })
 })
 
 describe('a /clear keeps the chat its orchestration address', () => {
-  it("delivers the conversation's Run to the session that continues it, and acts as it", async () => {
+  it("delivers the conversation's Run to its fresh context under the same address", async () => {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const generation = db.getRunRaw(runId)!.consumer_generation
-    const successor = await clearChat(COORDINATOR)
+    const cleared = await clearChat(COORDINATOR)
+    expect(cleared).toBe(COORDINATOR)
     const opened = codex.connections.length
 
-    // The worker's result is the successor's first message, which starts it on a new thread.
+    // The worker's result starts the fresh context on a new thread.
     await finishWorker(taskId)
-    await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
-    const next = connectionFor(successor)
+    await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(1), WAIT)
+    const next = connectionFor(cleared)
     expect(codex.connections.slice(opened)).toEqual([next])
     expect(next.methods.filter((method) => method.startsWith('thread/'))).toEqual(['thread/start'])
     expect(next.turns[0]!.text).toMatch(POINTER)
-    await settleTurn(successor, 0)
+    await settleTurn(cleared, 0)
     await expect(
-      call('orchestration.runCurrent', {}, { sessionId: successor })
+      call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
-    await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
+    await expect(call('orchestration.check', {}, { sessionId: cleared })).resolves.toMatchObject({
       runId,
       count: 1,
       messages: [{ type: 'worker_done' }]
     })
-    // Nothing was rewritten: the Run is bound exactly as the first session bound it.
+    // Clear preserves the original Run binding and consumer generation.
     expect(db.getRunRaw(runId)).toMatchObject({
       coordinator_orca_session_id: COORDINATOR,
       consumer_generation: generation
     })
   })
 
-  it('points mail the cleared chat never took at the successor, with no message from the user', async () => {
+  it('points mail the earlier context never took at the fresh context, without a user message', async () => {
+    observationClock.start()
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
@@ -531,31 +543,33 @@ describe('a /clear keeps the chat its orchestration address', () => {
     )
     expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
 
-    const successor = await clearChat(COORDINATOR)
-    await vi.waitFor(() => expect(connectionFor(successor).turns[0]?.text).toMatch(POINTER), WAIT)
-    await settleTurn(successor, 0)
+    const cleared = await clearChat(COORDINATOR)
+    expect(cleared).toBe(COORDINATOR)
+    await observationClock.observe(2_000)
+    await vi.waitFor(() => expect(connectionFor(cleared).turns[0]?.text).toMatch(POINTER), WAIT)
+    await settleTurn(cleared, 0)
     await vi.waitFor(
       () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
       WAIT
     )
   })
 
-  it("stores the successor's own Run under the conversation's address, through a chain of clears", async () => {
+  it('keeps a Run under the same conversation address through repeated clears', async () => {
     await openChat(COORDINATOR)
-    const middle = await clearChat(COORDINATOR)
-    await startSuccessor(middle)
+    const firstClear = await clearChat(COORDINATOR)
+    await startClearedContext(firstClear)
     const created = await call(
       'orchestration.runCreate',
       { objective: 'next' },
-      { sessionId: middle }
+      { sessionId: firstClear }
     )
     const runId = idOf(created.run)
     expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
-    const successor = await clearChat(middle)
-    await startSuccessor(successor)
+    const cleared = await clearChat(firstClear)
+    await startClearedContext(cleared)
 
     await expect(
-      call('orchestration.runCurrent', {}, { sessionId: successor })
+      call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
     expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
     // What it sends carries the same address.
@@ -564,20 +578,20 @@ describe('a /clear keeps the chat its orchestration address', () => {
       call(
         'orchestration.send',
         { to: `orca_session_id:${PEER_CHAT}`, subject: 'hi' },
-        { sessionId: successor }
+        { sessionId: cleared }
       )
     ).resolves.toMatchObject({ message: { from_handle: `orca_session_id:${COORDINATOR}` } })
   })
 
-  it("binds a Run a cleared chat creates or uses to the conversation's root, at the Run's current generation", async () => {
+  it('binds a Run a cleared chat creates or uses to the same conversation at the current generation', async () => {
     const root = COORDINATOR
     const boundOrcaSessionId = (runId: string): string | null =>
       currentRunCoordinatorOrcaSessionId(db.getRunRaw(runId)!)
     await openChat(COORDINATOR)
-    const middle = await clearChat(COORDINATOR)
-    await startSuccessor(middle)
+    const firstClear = await clearChat(COORDINATOR)
+    await startClearedContext(firstClear)
     const first = idOf(
-      (await call('orchestration.runCreate', { objective: 'first' }, { sessionId: middle })).run
+      (await call('orchestration.runCreate', { objective: 'first' }, { sessionId: firstClear })).run
     )
     expect(db.getRunRaw(first)).toMatchObject({
       coordinator_orca_session_id: root,
@@ -585,40 +599,43 @@ describe('a /clear keeps the chat its orchestration address', () => {
     })
     expect(boundOrcaSessionId(first)).toBe(root)
     const second = idOf(
-      (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: middle })).run
+      (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: firstClear }))
+        .run
     )
     expect(boundOrcaSessionId(first)).toBeNull()
 
-    const successor = await clearChat(middle)
-    await startSuccessor(successor)
-    await call('orchestration.runUse', { id: first }, { sessionId: successor })
+    const cleared = await clearChat(firstClear)
+    await startClearedContext(cleared)
+    await call('orchestration.runUse', { id: first }, { sessionId: cleared })
     const rebound = db.getRunRaw(first)!
     expect(rebound.coordinator_orca_session_id).toBe(root)
     expect(rebound.coordinator_orca_session_id_generation).toBe(rebound.consumer_generation)
     expect(boundOrcaSessionId(second)).toBeNull()
     await expect(
-      call('orchestration.runCurrent', {}, { sessionId: successor })
+      call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: first } })
   })
 
-  it('lands mail sent to any session of the conversation in the live one', async () => {
+  it('lands successive mail at the same conversation after repeated clears', async () => {
     await openChat(PEER_CHAT)
-    const middle = await clearChat(PEER_CHAT)
-    const successor = await clearChat(middle)
-    // The first ping starts the live session, which neither clear did.
-    for (const [index, spelling] of [PEER_CHAT, middle, successor].entries()) {
+    const firstClear = await clearChat(PEER_CHAT)
+    const cleared = await clearChat(firstClear)
+    expect(firstClear).toBe(PEER_CHAT)
+    expect(cleared).toBe(PEER_CHAT)
+    // The first ping starts the fresh context, which neither clear did.
+    for (const [index, spelling] of [PEER_CHAT, firstClear, cleared].entries()) {
       const sent = await call('orchestration.send', {
         from: 'term_worker',
         to: `orca_session_id:${spelling}`,
         subject: `ping ${index}`
       })
       expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
-      await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(index + 1), WAIT)
-      await settleTurn(successor, index)
+      await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(index + 1), WAIT)
+      await settleTurn(cleared, index)
       // Read each ping before the next is sent, so each check holds exactly one.
-      const checked = await call('orchestration.check', {}, { sessionId: successor })
+      const checked = await call('orchestration.check', {}, { sessionId: cleared })
       expect(checked).toMatchObject({ count: 1, messages: [{ subject: `ping ${index}` }] })
-      await call('orchestration.check', { ack: checked.deliveryId }, { sessionId: successor })
+      await call('orchestration.check', { ack: checked.deliveryId }, { sessionId: cleared })
     }
   })
 })

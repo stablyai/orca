@@ -9,11 +9,13 @@ import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
 import { initObservability } from '../observability'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { getCanonicalUserDataPath } from '../persistence'
 import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
-import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
+import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -67,16 +69,6 @@ export function initializeMainProcessObservers(): void {
       migrated: profileStateStartup.migrated
     })
   }
-  // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
-  // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
-  // number the watchdog exists to produce would sit unread on the user's disk. Must run after
-  // initTelemetry: track() drops silently until the client and store are wired.
-  if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
-    })
-  }
   // Why: the trust-grant module is bundled into plain-node CLI entries where
   // the telemetry client cannot load, so the tracker is injected here instead
   // of imported there.
@@ -101,6 +93,13 @@ export function initializeMainProcessObservers(): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  if (state.hangDetection) {
+    track('main_thread_hang_detected', {
+      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
+      self_recovered: state.hangDetection.selfRecovered
+    })
+  }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
   )
@@ -126,12 +125,7 @@ export function initializeMainProcessObservers(): void {
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
-  // Agent-session stats come from hook status transitions, the same truth the
-  // sidebar and dashboard read — never from OSC terminal titles, which miss
-  // hook-only agents and count any spinner TUI as an agent (#10201).
-  const agentSessionRecorder = new AgentSessionTransitionRecorder(state.stats)
-  agentHookServer.subscribeEnrichedStatus((enriched) => agentSessionRecorder.onStatus(enriched))
-  agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
+  feedAgentSessionStats(state.stats, agentHookServer)
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)

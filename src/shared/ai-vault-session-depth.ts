@@ -1,7 +1,4 @@
-import {
-  createNormalizedPathInsideOrEqualMatcher,
-  normalizeRuntimePathForComparison
-} from './cross-platform-path'
+import { aiVaultSessionInScope, createAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
 import type { AiVaultListArgs, AiVaultListResult } from './ai-vault-types'
 
 export const DEFAULT_AI_VAULT_SCAN_LIMIT = 1000
@@ -33,6 +30,19 @@ export function aiVaultSessionDepthCovers(
   return cached === 'unlimited' || (requested !== 'unlimited' && cached >= requested)
 }
 
+// A deeper scan keeps every scoped row it found, so a scoped request reuses only a scan of its
+// own depth; a lowered depth otherwise shows the deeper scan's scoped rows again.
+export function aiVaultCachedDepthServes(
+  cached: AiVaultSessionDepth,
+  requested: AiVaultSessionDepth,
+  scopePaths: readonly string[] = []
+): boolean {
+  return scopePaths.length > 0 ? cached === requested : aiVaultSessionDepthCovers(cached, requested)
+}
+
+// Depth bounds only out-of-scope rows: the scan already budgets in-scope rows per source,
+// and its out-of-scope rows are its capped newest set, so a scan result passes through
+// unchanged and a cache hit can never show less than the scan it came from.
 export function truncateAiVaultListResult(
   result: AiVaultListResult,
   depth: AiVaultSessionDepth,
@@ -41,20 +51,15 @@ export function truncateAiVaultListResult(
   if (depth === 'unlimited') {
     return result
   }
-  const selectedIds = new Set(result.sessions.slice(0, depth).map((session) => session.id))
-  if (scopePaths.length > 0) {
-    const scopeMatchers = scopePaths.map(createNormalizedPathInsideOrEqualMatcher)
-    let scopedCount = 0
-    for (const session of result.sessions) {
-      const cwd = session.cwd
-      const normalizedCwd = cwd ? normalizeRuntimePathForComparison(cwd) : null
-      if (normalizedCwd !== null && scopeMatchers.some((matches) => matches(normalizedCwd))) {
-        selectedIds.add(session.id)
-        if (++scopedCount >= depth) {
-          break
-        }
-      }
-    }
+  const inScope = scopePaths.length > 0 ? createAiVaultScopeCwdMatcher(scopePaths) : null
+  let outOfScopeCount = 0
+  const sessions = result.sessions.filter(
+    (session) =>
+      (inScope !== null && aiVaultSessionInScope(inScope, session)) || outOfScopeCount++ < depth
+  )
+  return {
+    ...result,
+    sessions,
+    ...(sessions.length !== result.sessions.length ? { fingerprint: undefined } : {})
   }
-  return { ...result, sessions: result.sessions.filter((session) => selectedIds.has(session.id)) }
 }

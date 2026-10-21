@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { z } from 'zod'
 import { usePageBridgeClient } from '../../transport/client-context.web'
 import {
+  mediaNameResultSchema,
   mediaPickResultSchema,
   mediaReadResultSchema,
   mediaReleaseResultSchema,
@@ -62,6 +63,8 @@ export type NativeVerbs = {
    * three may have an image on the pasteboard, and one that is not never can.
    */
   canPickMedia: boolean
+  /** Whether the shell can name a picked file; an older one cannot, and the page names it. */
+  canNameMedia: boolean
   writeClipboardText: (value: string) => Promise<boolean>
   readClipboardText: () => Promise<string>
   /** Opens the shell's picker and answers a handle per item; an empty list is a cancelled picker,
@@ -72,6 +75,8 @@ export type NativeVerbs = {
   readMedia: (handle: string, offset: number, length: number) => Promise<BridgeMediaChunk>
   /** False for a handle this session no longer holds, which is not a fault. */
   releaseMedia: (handle: string) => Promise<boolean>
+  /** The picker's name for a staged item; null where it reported none. */
+  nameMedia: (handle: string) => Promise<string | null>
   /** Opens the microphone, running the OS prompt if there is one. A denied microphone and an
    *  engine that would not open are both answers here rather than rejections. */
   startAudio: (sampleRate: number) => Promise<z.infer<typeof audioStartResultSchema>>
@@ -208,6 +213,7 @@ export function useNativeVerbs(): NativeVerbs {
       canReadClipboardText,
       canPickMedia:
         has('native.media.pick') && has('native.media.read') && has('native.media.release'),
+      canNameMedia: has('native.media.name'),
       writeClipboardText: async (value) =>
         (await call('native.clipboard.write', { mime, value }, clipboardWriteResultSchema)).written,
       readClipboardText: async () =>
@@ -218,6 +224,8 @@ export function useNativeVerbs(): NativeVerbs {
         call('native.media.read', { handle, offset, length }, mediaReadResultSchema),
       releaseMedia: async (handle) =>
         (await call('native.media.release', { handle }, mediaReleaseResultSchema)).released,
+      nameMedia: async (handle) =>
+        (await call('native.media.name', { handle }, mediaNameResultSchema)).name,
       startAudio: (sampleRate) =>
         call('native.audio.start', { sampleRate }, audioStartResultSchema),
       readAudio: (maxBytes) => call('native.audio.read', { maxBytes }, audioReadResultSchema),

@@ -83,6 +83,14 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }
 
+/** Which runtime a request is meant for; a host that is not that runtime refuses it before any handler. */
+export type ExpectedRuntimeSource = {
+  /** The launching profile's installation id. */
+  sourceId: string
+  /** The runtime the client verified for this send. */
+  runtimeId: string
+}
+
 export type RuntimeRpcKeepaliveFrame = z.infer<typeof Keepalive>
 
 export function isKeepaliveFrame(frame: unknown): frame is RuntimeRpcKeepaliveFrame {

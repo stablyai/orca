@@ -1,0 +1,23 @@
+[package]
+name = "orca-agent-hook"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Why `orca-agent-hook`: it ships as resources\bin\orca-agent-hook.exe and installs under the
+# same name in ~/.orca/agent-hooks, so the name that runs matches the PE's OriginalFilename.
+[[bin]]
+name = "orca-agent-hook"
+path = "src/main.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
+# Why: runs once per agent hook event, so it stays a small std-only utility with
+# no panic machinery or debug sections, like native/windows-cli-launcher.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

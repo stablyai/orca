@@ -13,23 +13,25 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
       settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
       connectionId?: string
     ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
-  ),
-  readRuntimeFileContent: mocks.readRuntimeFileContent,
-  subscribeRuntimeFileChanges: vi.fn()
+  )
 }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
-  getRuntimeGitDiff: vi.fn(),
-  getRuntimeGitScope: vi.fn(() => null)
+  getRuntimeGitDiff: vi.fn()
 }))
+vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null),
@@ -139,6 +141,24 @@ describe('restored client-local editor tabs', () => {
     await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
 
     await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath, access: { kind: 'user-file' } })
+    )
+  })
+
+  it('keeps an absolute floating file in its panel when a project also owns the path', async () => {
+    const filePath = '/project/readme.md'
+    const activeFile = createFloatingFile(filePath, { relativePath: filePath })
+    mocks.findWorkspaceFileRoute.mockReturnValue({
+      worktreeId: 'folder:project',
+      relativePath: 'readme.md',
+      executionHostId: 'local'
+    })
+
+    await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
+    expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, access: { kind: 'user-file' } })
     )

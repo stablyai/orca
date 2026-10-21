@@ -26,6 +26,8 @@ export type PtyListedSession = {
    * Manager force-kill live agent sessions (#8459).
    */
   agentOwnership: AgentOwnershipEvidence
+  /** Still live, but its host is terminating it after an accepted kill: never adopt or restore it. */
+  exiting?: true
 }
 
 /** Only proven absence authorizes destroying a session without asking. */

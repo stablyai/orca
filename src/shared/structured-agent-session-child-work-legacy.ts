@@ -33,7 +33,8 @@ function withLegacyIds(
 ): AgentChildWorkView[] {
   return views.map((view) =>
     provider === 'codex' && view.kind === 'agent' && view.providerId !== undefined
-      ? { ...view, providerId: codexAgentBackgroundTaskId(view.providerId) }
+      ? // A Stop names the row's id, which no host record carries: these rows offer none.
+        { ...view, providerId: codexAgentBackgroundTaskId(view.providerId), stoppable: false }
       : view
   )
 }

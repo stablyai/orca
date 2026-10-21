@@ -3,10 +3,12 @@ import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 
+export type ChildProcessVerdictRead = PtyChildProcessVerdict | Promise<PtyChildProcessVerdict>
+
 export type SubprocessHandle = {
   pid: number
   processNameIsSpawnFile?: boolean
-  inspectChildProcesses?(): PtyChildProcessVerdict
+  inspectChildProcesses?(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null

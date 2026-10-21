@@ -2,7 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 
@@ -25,6 +27,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+    resetMobileNativeChatDraftStoreForTests()
     renderer = null
     state = null
   })
@@ -88,6 +91,20 @@ describe('useMobileNativeChatDrafts launch draft', () => {
     expect(state?.composerText).toBe('')
   })
 
+  it('does not resurrect a cleared prefill after the chat screen remounts', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId: 'a', launchDraft: 'issue link' }))
+    })
+    expect(state?.composerText).toBe('issue link')
+    act(() => state?.setComposerText(''))
+    act(() => renderer?.unmount())
+
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId: 'a', launchDraft: 'issue link' }))
+    })
+    expect(state?.composerText).toBe('')
+  })
+
   it('captures the generation paired with the adopted text', async () => {
     await mount('a')
     await act(async () =>
@@ -121,6 +138,28 @@ describe('useMobileNativeChatDrafts launch draft', () => {
           messages: [userTextMessage('m1', 'already sent')],
           launchDraft: 'issue link'
         })
+      )
+    )
+    expect(state?.composerText).toBe('')
+  })
+
+  // A structured chat draws this phone's accepted send before its row lands; that is a user turn.
+  it("declines a launch draft once the phone's own accepted send is drawn", async () => {
+    await mount('a')
+    const drawn = projectStructuredAgentSessionMessages(
+      [],
+      [
+        {
+          clientMessageId: 'sent',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+          queuedAt: 1
+        }
+      ],
+      []
+    )
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: drawn, launchDraft: 'issue link' })
       )
     )
     expect(state?.composerText).toBe('')

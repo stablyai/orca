@@ -31,6 +31,8 @@ export type StagedMedia = {
   readonly byteLength: number
   readonly width?: number
   readonly height?: number
+  /** The picker's own name for the file, kept for `native.media.name`; never on the minted item. */
+  readonly name?: string
 }
 
 /** The byte range one `read` covers, and whether it is the last. */
@@ -132,6 +134,13 @@ export class MediaHandleRegistry {
     // is the caller that reaches it.
     const end = Math.min(offset + Math.min(length, BRIDGE_MEDIA_READ_MAX_BYTES), record.byteLength)
     return { uri: record.uri, start: offset, end, eof: end >= record.byteLength }
+  }
+
+  /** The picked file's name, or null where the picker reported none. Counts as a touch. */
+  name(handle: string): string | null {
+    const record = this.hold(handle)
+    record.touchedAt = this.deps.now()
+    return record.name ?? null
   }
 
   /**

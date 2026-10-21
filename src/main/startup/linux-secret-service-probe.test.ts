@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessSync = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/child-process/run-process', () => ({ runProcessSync }))
+vi.mock('@orca/process-host', () => ({ runProcessSync }))
 
 const { probeSecretServiceCollection } = await import('./linux-secret-service-probe')
 

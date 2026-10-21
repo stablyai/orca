@@ -1,4 +1,5 @@
 import type { ComposerModel } from './composer-model'
+import type { ComposerAgentRows } from './composer-agent-rows-target'
 
 export type ComposerCardSourceProps = Pick<
   ComposerModel,
@@ -57,6 +58,8 @@ export type ComposerCardSourceProps = Pick<
 >
 
 export type ComposerCardActionProps = {
+  agentRows?: ComposerAgentRows | null
+  selectedRepo?: ComposerModel['selectedRepo'] | null
   onRepoChange: ComposerModel['handleRepoChange']
   onProjectChange: ComposerModel['handleProjectChange']
   onProjectHostSetupChange: ComposerModel['handleProjectHostSetupChange']
@@ -86,6 +89,7 @@ export type ComposerCardActionProps = {
   onAgentPromptChange: ComposerModel['setAgentPrompt']
   linkedOnlyTemplatePreview: string | null
   getAttachmentLabel: (pathValue: string) => string
+  onNativeFileDrop?: ComposerModel['applyNativeDrop']
   onAddAttachment: () => void
   onRemoveAttachment: (pathValue: string) => void
   onRemoveLinkedWorkItem: ComposerModel['handleRemoveLinkedWorkItem']
@@ -96,7 +100,6 @@ export type ComposerCardActionProps = {
   onOpenAgentSettings: ComposerModel['handleOpenAgentSettings']
   onToggleAdvanced: () => void
   createDisabled: boolean
-  onCreate: () => void
   onNoteChange: ComposerModel['setNote']
   onBaseBranchChange: ComposerModel['handleBaseBranchChange']
   onBaseBranchPrSelect: ComposerModel['handleBaseBranchPrSelect']

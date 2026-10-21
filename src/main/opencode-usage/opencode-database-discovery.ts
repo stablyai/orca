@@ -1,8 +1,11 @@
 import { stat } from 'node:fs/promises'
-import { basename, isAbsolute, join } from 'node:path'
+import { basename, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
+import {
+  resolveOpenCodeDataDirectory,
+  resolveOpenCodeDatabasePath
+} from '../opencode/opencode-data-directory'
 import type { OpenCodeUsageProcessedDatabase } from './types'
 
 type OpenCodeDatabaseOverride = {
@@ -10,20 +13,14 @@ type OpenCodeDatabaseOverride = {
   path: string | null
 }
 
-function getOpenCodeDatabaseOverride(
-  dataDirectory: string,
-  environment: NodeJS.ProcessEnv
-): OpenCodeDatabaseOverride {
+function getOpenCodeDatabaseOverride(environment: NodeJS.ProcessEnv): OpenCodeDatabaseOverride {
   const raw = environment.OPENCODE_DB?.trim()
   if (!raw) {
     return { isConfigured: false, path: null }
   }
-  if (raw === ':memory:') {
-    return { isConfigured: true, path: null }
-  }
   return {
     isConfigured: true,
-    path: isAbsolute(raw) ? raw : join(dataDirectory, raw)
+    path: resolveOpenCodeDatabasePath(environment)
   }
 }
 
@@ -40,7 +37,7 @@ export async function listOpenCodeDatabases(
   environment: NodeJS.ProcessEnv = process.env
 ): Promise<string[]> {
   const dataDirectory = resolveOpenCodeDataDirectory(environment)
-  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory, environment)
+  const databaseOverride = getOpenCodeDatabaseOverride(environment)
   if (databaseOverride.isConfigured) {
     if (!databaseOverride.path) {
       return []

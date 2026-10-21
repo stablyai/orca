@@ -3,7 +3,6 @@
 // same directory reads the same database the way a restarted host would.
 
 import { resolve } from 'node:path'
-import { NO_LEGACY_JOURNAL_RECORDS } from './journal-database'
 import { JournalHostDatabase } from './journal-host-database'
 import { replayJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
@@ -16,7 +15,6 @@ import {
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
-import { openAgentSessionJournal } from './journal-store-factory'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -26,7 +24,7 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   if (existing && !existing.isClosed) {
     return existing
   }
-  const database = JournalHostDatabase.openWith(directory, NO_LEGACY_JOURNAL_RECORDS)
+  const database = JournalHostDatabase.open(directory)
   opened.set(directory, database)
   return database
 }
@@ -62,6 +60,7 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
   return {
     open: async ({ stateDirectory, ...options }) => {
+      const { openAgentSessionJournal } = await import('./journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
         database: openTestJournalHostDatabase(stateDirectory)

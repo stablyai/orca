@@ -10,7 +10,7 @@ import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
 } from '@/lib/passive-macos-app-data-access'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
@@ -22,6 +22,7 @@ import {
   type GitStatusRefreshReason,
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const STATUS_SAFETY_INTERVAL_MS = 60_000
 const STATUS_ACTIVITY_DEBOUNCE_MS = 125
@@ -135,9 +136,12 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        const runtimeSettings = getRightSidebarWorktreeRuntimeSettings(activeWorktreeId)
+        const target = getWorktreeGitOwnerTarget(activeWorktreeId)
+        if (!target) {
+          return
+        }
         await refreshGitStatusForWorktree({
-          settings: runtimeSettings,
+          target,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId,
@@ -290,6 +294,14 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     statusSchedulerRef.current?.signal()
   }, [])
 
+  const getRepoWorktreePathsForSignal = useCallback(
+    (repoId: string) =>
+      (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
+        (worktree) => worktree.path
+      ),
+    []
+  )
+
   useGitStatusFileWatchRefresh({
     activeConnectionId,
     activeRepoSupportsGit,
@@ -308,8 +320,10 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   useGitStatusPushSignalRefresh({
     activeRepoId,
     activeWorktreeId,
+    activeWorktreePath: worktreePath,
     enabled: canFetchActiveWorktreeGitStatus,
-    fetchStatus: fetchStatusOnChangeSignal
+    fetchStatus: fetchStatusOnChangeSignal,
+    getRepoWorktreePaths: getRepoWorktreePathsForSignal
   })
 
   useStaleConflictOperationPolling({

@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   gitExecFileAsync: vi.fn(),
   getPullRequestDraftContext: vi.fn(),
   loadPullRequestLinkedIssue: vi.fn(),
-  getSshGitProvider: vi.fn(),
   prepareLocalCommitMessageAgentEnv: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
   generatePullRequestFieldsFromContext: vi.fn(),
@@ -29,10 +28,6 @@ vi.mock('../source-control/pull-request-linked-issue', () => ({
     return linkedLookup.run()
   }
 }))
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: mocks.getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'provider unavailable'
-}))
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepareLocalCommitMessageAgentEnv
 }))
@@ -44,6 +39,7 @@ vi.mock('../source-control/pull-request-template', () => ({
   resolveHostedReviewBodyForGeneration: mocks.resolveHostedReviewBodyForGeneration
 }))
 
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { RuntimeGitGenerationCommands } from './runtime-git-generation-commands'
 
 const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
@@ -140,49 +136,29 @@ describe('RuntimeGitGenerationCommands admission', () => {
     })
     expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
       expect.objectContaining({
-        connectionId: undefined,
         localGitOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' }
       })
     )
   })
 
-  it('keeps SSH pull-request context reads on the remote provider', async () => {
-    const exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    mocks.getSshGitProvider.mockReturnValue({ exec, executeCommitMessagePlan: vi.fn() })
-    mocks.getPullRequestDraftContext.mockImplementation(async (execute) => {
-      await execute(['log', '--oneline'])
-      await execute(['show-ref', '--verify'], { maxBuffer: 456, timeoutMs: 789 })
-      return pullRequestContext
-    })
-    const commands = makeCommands(
-      makeTarget('/remote/repo', {
-        executionHostId: 'ssh:conn-1',
-        localGitOptions: { wslDistro: 'Ubuntu' }
-      })
-    )
+  it('reports an SSH pull-request target unserved without reading git anywhere', async () => {
+    const commands = makeCommands(makeTarget('/remote/repo', { executionHostId: 'ssh:conn-1' }))
 
-    await commands.generateRuntimePullRequestFields(
-      'id:wt-1',
-      { base: 'main', title: '', body: '', draft: false },
-      settingsOverride
-    )
-
-    expect(exec).toHaveBeenCalledWith(['log', '--oneline'], '/remote/repo')
-    expect(exec).toHaveBeenCalledWith(['show-ref', '--verify'], '/remote/repo', { timeoutMs: 789 })
+    await expect(
+      commands.generateRuntimePullRequestFields(
+        'id:wt-1',
+        { base: 'main', title: '', body: '', draft: false },
+        settingsOverride
+      )
+    ).resolves.toEqual({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
+    expect(mocks.getPullRequestDraftContext).not.toHaveBeenCalled()
     expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
-    expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'conn-1', localGitOptions: {} })
-    )
+    expect(mocks.loadPullRequestLinkedIssue).not.toHaveBeenCalled()
   })
 
-  describe.each(['local', 'SSH'])('linked-issue lifetime on %s', (host) => {
+  describe('linked-issue lifetime', () => {
     function commands(): RuntimeGitGenerationCommands {
-      mocks.getSshGitProvider.mockReturnValue({ exec: vi.fn(), executeCommitMessagePlan: vi.fn() })
-      return makeCommands(
-        makeTarget('/repo', {
-          executionHostId: host === 'SSH' ? 'ssh:conn-1' : 'local'
-        })
-      )
+      return makeCommands(makeTarget('/repo'))
     }
 
     const input = { base: 'main', title: '', body: '', draft: false, provider: 'gitlab' as const }

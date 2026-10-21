@@ -13,12 +13,14 @@ import { cacheStableSurfaceRecoveryFailure } from './web-session-terminal-orphan
 import { runInTerminalRecoveryRpcLane } from './web-session-terminal-orphan-recovery-rpc-lane'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
-import { hasTerminalHandleRetirementProof } from './web-session-terminal-orphan-recovery-surface-index'
+import {
+  hasTerminalHandleRetirementProof,
+  isValidReadySurface,
+  terminalRowsBySurface
+} from './web-session-terminal-orphan-recovery-surface-index'
 import { isTerminalRecoverySnapshot } from './web-session-terminal-recovery-snapshot-validation'
 import {
   mergeRetainedTerminalSurfaces,
-  isValidReadySurface,
-  terminalRowsBySurface,
   type AnyRecoverySurface,
   type RecoverySurface
 } from './web-session-terminal-orphan-recovery-surface'

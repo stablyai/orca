@@ -1,7 +1,3 @@
-import {
-  remoteSessionContentLines,
-  type RemoteSessionContent
-} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -44,21 +40,6 @@ export async function parseCopilotSessionFile(
     crlfDelay: Infinity
   })
   return parseCopilotSessionLines({ file, lines, platform, messages })
-}
-
-export async function parseCopilotSessionContent(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {},
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseCopilotSessionLines({
-    file,
-    lines: remoteSessionContentLines(content, signal),
-    platform,
-    options
-  })
 }
 
 function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string): void {

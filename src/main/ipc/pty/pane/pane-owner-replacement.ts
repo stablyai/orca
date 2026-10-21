@@ -3,13 +3,8 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Store } from '../../../persistence'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/pty-binding-persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { resolveStablePaneOwner, type StablePaneOwner } from './stable-owner'
-
-/** The owner a replacing spawn stopped. Its binding stays until the replacement's bind swaps it. */
-export type ReplacedPaneOwner = {
-  ptyId: string
-  pane: { worktreeId: string; tabId: string; leafId: string; hostId: string | undefined } | null
-}
+import type { ReplacedPaneOwner } from './replaced-pane-owner'
+import { resolveStablePaneOwner } from './stable-owner'
 
 /** Caller holds the pane's spawn reservation, so no other spawn can claim the pane meanwhile. */
 export async function stopReplacedPaneOwner(
@@ -51,14 +46,6 @@ export async function stopReplacedPaneOwner(
   }
 }
 
-/** The stopped id is dead whatever its incarnation, so a binding naming it must not be reattached. */
-export function excludeReplacedPaneOwner(
-  owner: StablePaneOwner | null,
-  replaced: ReplacedPaneOwner | null
-): StablePaneOwner | null {
-  return owner && owner.ptyId === replaced?.ptyId ? null : owner
-}
-
 /**
  * The replacement's bind is the swap: decided inside the bind's durable mutation, it takes a leaf
  * still naming the stopped id, or one the renderer already cleared; any other owner wins.
@@ -66,17 +53,32 @@ export function excludeReplacedPaneOwner(
 export function swapReplacedPaneBinding(
   store: Store,
   binding: PersistPtyBindingArgs,
-  replaced: ReplacedPaneOwner,
-  hostId: string | undefined
+  replaced: ReplacedPaneOwner
 ): () => PersistPtyBindingArgs | null {
   return () => {
     const bound =
-      store.getWorkspaceSession(hostId).terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
+      store.getWorkspaceSession().terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
         binding.leafId
       ]
-    // Unbound is ok: the renderer's pre-connect clear can withdraw it (split tab, SSH lease ended).
-    return bound === undefined || bound === replaced.ptyId ? binding : null
+    // Unbound is ok: the renderer's pre-connect clear can withdraw it (split tab).
+    if (bound !== undefined && bound !== replaced.ptyId) {
+      return null
+    }
+    return replaced.dropsIncarnation ? { ...binding, dropsIncarnation: true } : binding
   }
+}
+
+/** Clears a stopped id's binding and keeps the pane; false when another owner took the pane. */
+export async function retireReplacedPaneBinding(
+  store: Store,
+  replaced: ReplacedPaneOwner & {
+    pane: NonNullable<ReplacedPaneOwner['pane']>
+    /** Also fence on the saved incarnation, for an id the host reported absent rather than stopped. */
+    absenceFence?: { incarnationId: string | undefined }
+  }
+): Promise<boolean> {
+  const { hostId, ...pane } = replaced.pane
+  return store.retirePtyBinding({ ...pane, ptyId: replaced.ptyId }, hostId, replaced.absenceFence)
 }
 
 /** Best effort: a failed replacement must not leave the stopped id bound for the remount to reattach. */
@@ -87,9 +89,8 @@ export async function releaseStoppedPaneBinding(
   if (!store || !replaced.pane) {
     return
   }
-  const { hostId, ...pane } = replaced.pane
   try {
-    await store.retirePtyBinding({ ...pane, ptyId: replaced.ptyId }, hostId)
+    await retireReplacedPaneBinding(store, { ...replaced, pane: replaced.pane })
   } catch (error) {
     console.warn('[pty] could not clear the stopped pane binding after a failed restart:', error)
   }

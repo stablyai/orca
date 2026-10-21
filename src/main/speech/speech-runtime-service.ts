@@ -5,14 +5,9 @@ import type { VoiceSettings } from '../../shared/speech-types'
 /**
  * Lazy accessors for the speech services.
  *
- * Why the construction is injected: `ModelManager` downloads models through Electron's
- * streaming `net.request` — byte-range resume, progress events, a manual idle timeout —
- * and `SttService` resolves paths inside the packaged app. Importing either for its
- * *type* is free; constructing one is what pulls Electron in.
- *
- * The desktop installs the factories. A host without them rejects per call rather than
- * returning a stub that silently does nothing: speech is a desktop feature, and a
- * headless host saying so is more useful than one that appears to transcribe.
+ * Why the construction is injected: each host picks how `ModelManager` downloads (Chromium's
+ * `net` on the desktop, Node's `https` on orcad). Both the desktop and orcad install factories;
+ * a host without them rejects per call rather than returning a stub that appears to transcribe.
  */
 
 type SpeechSettingsStore = {

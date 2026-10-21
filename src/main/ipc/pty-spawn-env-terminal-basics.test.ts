@@ -1,17 +1,27 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
-import { TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
+import {
+  piBuildPtyEnvMock,
+  spawnMock,
+  wslUncDirectoryExistsAsyncMock
+} from './pty-ipc-mock-registry'
+import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
-import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { buildPtyHostEnv } from './pty/host-env/assembly'
 import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { selectShellStartupFeatures } from '../shell-startup-features'
+import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from './pty/host-env/codex-terminal-clipboard'
+import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -93,6 +103,26 @@ describe('registerPtyHandlers', () => {
             value: originalPlatform
           })
         }
+      }
+    )
+
+    it.each(['pi', 'omp', 'prime-agent'] as const)(
+      'prepares delayed %s hooks for the requested harness',
+      (agent) => {
+        piBuildPtyEnvMock.mockClear()
+        buildPtyHostEnv(
+          'delayed-agent',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            agentStatusHooksEnabled: true,
+            launchCommand: `sleep 30 && ${agent}`
+          }
+        )
+        expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual([agent])
+        expect(piBuildPtyEnvMock.mock.calls[0]?.[3]).toMatchObject({ materializeDefaultHome: true })
       }
     )
 
@@ -230,6 +260,40 @@ describe('registerPtyHandlers', () => {
       }
     })
 
+    describe('Codex terminal clipboard on headless runtimes (#23530)', () => {
+      const buildEnv = (launchAgent: 'codex' | 'claude', routeBrowserOpensToClient: boolean) =>
+        buildPtyHostEnv(
+          'pty-codex-clipboard',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            agentStatusHooksEnabled: false,
+            launchCommand: launchAgent,
+            launchAgent,
+            routeBrowserOpensToClient
+          }
+        )
+
+      it.each([
+        ['codex', true, CODEX_REMOTE_VIEWER_SSH_CONNECTION],
+        ['codex', false, undefined],
+        ['claude', true, undefined]
+      ] as const)(
+        'launching %s with a remote viewer=%s sets SSH_CONNECTION=%s',
+        (launchAgent, remoteViewer, expected) => {
+          vi.stubEnv('SSH_CONNECTION', undefined)
+          vi.stubEnv('SSH_TTY', undefined)
+          try {
+            expect(buildEnv(launchAgent, remoteViewer).SSH_CONNECTION).toBe(expected)
+          } finally {
+            vi.unstubAllEnvs()
+          }
+        }
+      )
+    })
+
     it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
       const runtimeHome =
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
@@ -272,6 +336,7 @@ describe('registerPtyHandlers', () => {
         })
       }))
       __resetPersistedWindowsPathCacheForTests()
+      wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
 
       try {
         const provider = new LocalPtyProvider({
@@ -320,49 +385,6 @@ describe('registerPtyHandlers', () => {
         id: expect.any(String)
       })
     })
-    it('marks local Claude launches live until the PTY is killed', async () => {
-      let exitCb: ((info: { exitCode: number }) => void) | undefined
-      spawnMock.mockReturnValue({
-        onData: vi.fn(() => makeDisposable()),
-        onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
-          exitCb = cb
-          return makeDisposable()
-        }),
-        write: vi.fn(),
-        resize: vi.fn(),
-        kill: vi.fn(() => exitCb?.({ exitCode: -1 })),
-        process: 'zsh',
-        pid: 12345
-      })
-      const prepareClaudeAuth = vi.fn(async () => ({
-        configDir: '/tmp/claude',
-        envPatch: {},
-        stripAuthEnv: false,
-        provenance: 'managed:account-1'
-      }))
-      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
-
-      const spawnResult = (await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        command: 'claude'
-      })) as { id: string }
-
-      expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
-      expect(hasLiveClaudePtys()).toBe(true)
-
-      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    })
-    it('clears Claude live-PTY tracking from shared provider teardown', () => {
-      markClaudePtySpawned('ssh-claude-pty')
-      expect(hasLiveClaudePtys()).toBe(true)
-
-      clearProviderPtyState('ssh-claude-pty')
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    })
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
@@ -400,6 +422,46 @@ describe('registerPtyHandlers', () => {
         expect(spawnedEnv.JCODE_RUNTIME_DIR).toBeUndefined()
       }
     })
+    it.skipIf(!shouldInjectJcodeRuntimeDir(process.platform)).each(['window', 'host'] as const)(
+      '%s local spawn preserves its managed-dir failure policy',
+      async (lane) => {
+        const tabId = `jcode-fallback-${randomUUID()}`
+        const leafId = randomUUID()
+        const paneKey = makePaneKey(tabId, leafId)
+        const managedDir = buildJcodeRuntimeDir(paneKey)
+        const customDir = await mkdtemp(join(tmpdir(), 'orca-jcode-fallback-'))
+        const env = { JCODE_RUNTIME_DIR: customDir }
+        let managedFileCreated = false
+        try {
+          await mkdir(dirname(managedDir), { recursive: true })
+          await writeFile(managedDir, '', { flag: 'wx' })
+          managedFileCreated = true
+          const runtime = new OrcaRuntimeService()
+          const installed = vi.spyOn(runtime, 'setPtyController')
+          handlers.clear()
+          registerPtyHandlers(mainWindow, runtime)
+          const controller = installed.mock.calls.at(-1)?.[0]
+          const request = { cols: 80, rows: 24, env, tabId, leafId, worktreeId: 'wt-1' }
+          if (lane === 'host') {
+            if (!controller?.spawn) {
+              throw new Error('Runtime controller was not installed')
+            }
+            await controller.spawn(request)
+          } else {
+            await handlers.get('pty:spawn')!(null, request)
+          }
+          const spawnedEnv = spawnMock.mock.calls.at(-1)?.[2]?.env
+          expect(spawnedEnv?.JCODE_RUNTIME_DIR).toBe(lane === 'host' ? customDir : undefined)
+          expect(spawnedEnv?.ORCA_PANE_KEY).toBe(paneKey)
+          expect(env).toEqual({ JCODE_RUNTIME_DIR: customDir })
+        } finally {
+          if (managedFileCreated) {
+            await rm(managedDir, { force: true })
+          }
+          await rm(customDir, { recursive: true, force: true })
+        }
+      }
+    )
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
       // Why: the local provider spreads main's process.env, so a GUI launched from
       // inside a Claude session would stamp every pane as a nested child and Claude

@@ -16,6 +16,7 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
 
 export class JournalDerivedTurnScope {
   private openTurnItemId: string | null = null
@@ -35,6 +36,10 @@ export class JournalDerivedTurnScope {
     before: AgentJournalItemBody | undefined,
     after: AgentJournalItemBody | undefined
   ): void {
+    if (isAgentSessionContextClear(after)) {
+      this.openTurnItemId = null
+      return
+    }
     const turn = readAgentJournalTurn(after)
     if (before === undefined && turn && root) {
       this.openTurnItemId = itemId

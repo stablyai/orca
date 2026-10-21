@@ -19,6 +19,7 @@ import {
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 describe('structured session runtime provider-exit wiring', () => {
   let root: string | null = null
@@ -87,11 +88,11 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000
+      ...scriptedCodexTransport(openConnection)
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
@@ -192,11 +193,11 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000
+      ...scriptedCodexTransport(openConnection)
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
@@ -223,11 +224,11 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000
+      ...scriptedCodexTransport(openConnection)
     })
     await restarted.restoreReadableSessions()
     const history = await restarted.history({ sessionId: SESSION, direction: 'tail' })
@@ -297,11 +298,11 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000
+      ...scriptedCodexTransport(openConnection)
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
@@ -404,11 +405,11 @@ describe('structured session runtime provider-exit wiring', () => {
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000
+      ...scriptedCodexTransport(openConnection)
     })
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()

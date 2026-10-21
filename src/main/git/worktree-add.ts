@@ -22,6 +22,7 @@ import type {
 import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
 
 export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdateSuggestion'> & {
   effectiveBase: string
@@ -152,14 +153,48 @@ export async function unsetWorktreeCreationBase(
 }
 
 /**
+ * Issue #26344: a branch created from its own remote branch (`origin/foo` -> `foo`) tracks it, as
+ * `git checkout foo` would; every other new branch stays untracked (see `--no-track` below).
+ */
+export async function trackSameNameRemoteBase(
+  worktreePath: string,
+  branch: string,
+  baseBranch: string,
+  effectiveBase: string,
+  options: AddWorktreeOptions
+): Promise<void> {
+  if (!effectiveBase.startsWith('refs/remotes/')) {
+    return
+  }
+  const parsed = parseRemoteTrackingLocalBaseRef(
+    baseBranch,
+    effectiveBase,
+    options.remoteTrackingBase
+  )
+  if (parsed?.localBranch !== branch) {
+    return
+  }
+  try {
+    // Why: `branch --set-upstream-to` (Git 1.8) maps the ref to its remote through the fetch
+    // refspecs, so a remote name containing `/` resolves without a capability probe.
+    await gitExecFileAsync(['branch', '--set-upstream-to', effectiveBase, branch], {
+      ...gitExecOptions(worktreePath, options)
+    })
+  } catch (error) {
+    console.warn(`addWorktree: failed to track ${effectiveBase} for ${branch}`, error)
+  }
+}
+
+/**
  * Create a new worktree.
  * @param repoPath - Path to the main repo (or bare repo)
  * @param worktreePath - Absolute path where the worktree will be created
  * @param branch - Branch name for the new worktree
  * @param baseBranch - Optional base branch to create from (defaults to HEAD)
  * @remarks Side effects (best-effort, warn-only): passes `--no-track`, writes
- * `branch.<branch>.base` for new-branch worktrees with a base ref, and may
- * write `push.autoSetupRemote=true` to the repo's shared config.
+ * `branch.<branch>.base` for new-branch worktrees with a base ref, tracks a
+ * same-named remote base, and may write `push.autoSetupRemote=true` to the
+ * repo's shared config.
  */
 export async function addWorktree(
   repoPath: string,
@@ -229,17 +264,24 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
+  // Why: git already writes its checkout meter into our stderr pipe; read it, don't request it.
+  const checkoutProgress =
+    options.onCheckoutProgress && !noCheckout
+      ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
+      : null
   try {
     await gitExecFileAsync(args, {
       ...gitExecOptions(repoPath, options),
       // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-      timeout: resolveWorktreeAddTimeoutMs()
+      timeout: resolveWorktreeAddTimeoutMs(),
+      ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
     })
   } catch (error) {
     // Why: settle the overlapped refresh inside the caller's ref-maintenance pause before reporting the failure.
     await pendingLocalBaseRefRefresh
     throw error
   } finally {
+    checkoutProgress?.close()
     // Git may have written the target's `.git` marker even when it reports a late
     // failure, so drop any pre-create route before the follow-up commands route.
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
@@ -249,11 +291,11 @@ async function performAddWorktree(
     return {}
   }
 
-  if (effectiveBase) {
+  if (effectiveBase && baseBranch) {
     await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
+    await trackSameNameRemoteBase(worktreePath, branch, baseBranch, effectiveBase, options)
   }
 
-  // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
   // Why: --no-track leaves no upstream until first push; push.autoSetupRemote=true lets a plain
   // `git push` create+set origin/<branch> (git >=2.37; older clients ignore it). `--local` on a
   // linked worktree writes the shared common-dir config (whole repo) — intentional and idempotent,

@@ -65,6 +65,7 @@ export type GithubWorkItemApi = {
   workItemByOwnerRepo: (args: {
     repoPath: string
     repoId?: string
+    sourceContext?: TaskSourceContext | null
     owner: string
     repo: string
     host?: string

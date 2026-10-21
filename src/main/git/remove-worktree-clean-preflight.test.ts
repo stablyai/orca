@@ -43,7 +43,8 @@ beforeEach(() => {
 
 describe('assertWorktreeCleanForRemoval', () => {
   beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
+    // Calls after the status read are the dirty refusal's `.gitmodules` probe: no file, exit 1.
+    gitExecFileAsyncMock.mockReset().mockRejectedValue(new Error('git config exited with code 1'))
   })
 
   it('returns without checking git status for force removals', async () => {
@@ -57,7 +58,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all'],
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
       { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
     )
   })
@@ -81,7 +82,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     ).resolves.toBeUndefined()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '-z', '--untracked-files=all'],
+      ['status', '--porcelain', '-z', '--untracked-files=all', '--ignore-submodules=none'],
       { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
     )
   })
@@ -94,7 +95,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     ).rejects.toThrow('git timed out.')
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all'],
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
       { cwd: '/repo-feature', timeout: 25 }
     )
   })

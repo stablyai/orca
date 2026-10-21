@@ -52,6 +52,27 @@ function openCodeSource(sessionTable = 'session'): void {
 }
 
 describe('managed data accounts', () => {
+  it('resolves a pinned OpenCode profile by ID after selection changes', async () => {
+    openCodeSource()
+    const first = (await service.add('opencode', source, 'First')).activeAccountId
+    if (!first) {
+      throw new Error('Expected selected first profile')
+    }
+    const original = service.environmentForAccount('opencode', first)
+    const second = (await service.add('opencode', source, 'Second')).activeAccountId
+    if (!second) {
+      throw new Error('Expected selected second profile')
+    }
+    expect(service.launchEnvironment('opencode')).toEqual(
+      service.environmentForAccount('opencode', second)
+    )
+    expect(service.environmentForAccount('opencode', first)).toEqual(original)
+    await service.remove('opencode', first)
+    expect(() => service.environmentForAccount('opencode', first)).toThrow(
+      'Managed account not found.'
+    )
+  })
+
   it.each(['before write', 'after write', 'unrestricted'])(
     'preserves credentials and original metadata when removal persistence fails %s',
     async (failure) => {

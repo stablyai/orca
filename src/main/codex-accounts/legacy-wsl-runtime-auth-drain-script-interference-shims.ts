@@ -1,16 +1,33 @@
-// Why: installs node-backed sha256sum/mv/rm shims on PATH so the real guest script can be
-// interfered with at exact points - a hash read, an install rename, a source removal.
-import { chmodSync, writeFileSync } from 'node:fs'
+// Installs the hash and mutation shims each real guest-script case needs.
+import { chmodSync, existsSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { DRAIN_APPLY_INTERRUPTION_JS } from './legacy-wsl-runtime-auth-drain-interruption-source'
+import type { DrainApplyInterference } from './legacy-wsl-runtime-auth-drain-script-run-types'
 
 export function installDrainInterferenceShims(
   binDir: string,
-  options: { killAfterDestinationInstall?: boolean; killAfterSourceRemoval?: boolean }
+  options: Pick<
+    DrainApplyInterference,
+    | 'killAfterDestinationInstall'
+    | 'killAfterSourceRemoval'
+    | 'rewriteAfterHashCall'
+    | 'replaceTargetOnHashOf'
+  >
 ): void {
   const shimPath = join(binDir, 'sha256sum')
-  writeFileSync(
-    shimPath,
-    `#!/usr/bin/env node
+  const nativeHash = '/usr/bin/sha256sum'
+  // Hash-boundary interference needs the counter; other cases use the real guest utility.
+  if (
+    process.platform === 'linux' &&
+    !options.rewriteAfterHashCall &&
+    !options.replaceTargetOnHashOf &&
+    existsSync(nativeHash)
+  ) {
+    symlinkSync(nativeHash, shimPath)
+  } else {
+    writeFileSync(
+      shimPath,
+      `#!/usr/bin/env node
   const { createHash } = require('node:crypto')
   const fs = require('node:fs')
   const file = process.argv[process.argv.length - 1]
@@ -30,8 +47,9 @@ export function installDrainInterferenceShims(
   fs.renameSync(staged, process.env.REPLACE_PATH)
   }
   `
-  )
-  chmodSync(shimPath, 0o755)
+    )
+    chmodSync(shimPath, 0o755)
+  }
   if (options.killAfterDestinationInstall || options.killAfterSourceRemoval) {
     const mvShimPath = join(binDir, 'mv')
     writeFileSync(
@@ -39,6 +57,7 @@ export function installDrainInterferenceShims(
       `#!/usr/bin/env node
   const { spawnSync } = require('node:child_process')
   const fs = require('node:fs')
+  ${DRAIN_APPLY_INTERRUPTION_JS}
   const args = process.argv.slice(2)
   const result = spawnSync('/bin/mv', args, { stdio: 'inherit' })
   const from = args.at(-2) ?? ''
@@ -52,7 +71,7 @@ export function installDrainInterferenceShims(
   from.includes('/account/auth.json.orca-drain-snapshot-') &&
   to.endsWith('/account/auth.json')
   if (result.status === 0 && (sourceInstalled || destinationInstalled)) {
-  process.kill(process.ppid, 'SIGKILL')
+  interruptDrainApply(1)
   }
   process.exit(result.status ?? 1)
   `

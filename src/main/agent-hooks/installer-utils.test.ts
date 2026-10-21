@@ -23,7 +23,6 @@ import {
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   readHooksJsonWithRaw,
   wrapWindowsHookCommand,
   writeManagedScript,
@@ -120,6 +119,18 @@ describe('writeHooksJson', () => {
     expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
     expect(existsSync(targetPath)).toBe(false)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps an owner-only config owner-only when it rewrites it',
+    () => {
+      writeFileSync(configPath, '{"hooks":{}}\n')
+      chmodSync(configPath, 0o600)
+
+      writeHooksJson(configPath, { hooks: { Stop: [] } })
+
+      expect(statSync(configPath).mode & 0o777).toBe(0o600)
+    }
+  )
 
   it('writes the config as formatted JSON', () => {
     const config: HooksConfig = {
@@ -675,36 +686,6 @@ describe('wrapWindowsHookCommand', () => {
       expect(result.status).toBe(7)
     }
   )
-})
-
-describe('wrapWindowsCmdHookCommand', () => {
-  it('returns the bare, directly-spawnable path for a cmd-safe managed script', () => {
-    // Direct-spawn consumers need a launchable argv[0], not a cmd builtin such as `if`.
-    const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
-    const command = wrapWindowsCmdHookCommand(scriptPath)
-    expect(command).toBe(scriptPath)
-    expect(command).not.toMatch(/^if\b/)
-    expect(command).not.toMatch(/powershell/i)
-  })
-
-  it.skipIf(process.platform !== 'win32')(
-    'resolves the launcher to a real executable file, not a shell fragment',
-    () => {
-      // POSIX temp paths contain `/`, which selects the encoded fallback instead.
-      const scriptPath = join(tmpDir, 'codex-hook.cmd')
-      writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n', 'utf-8')
-      const command = wrapWindowsCmdHookCommand(scriptPath)
-      expect(command).toBe(scriptPath)
-      expect(existsSync(command)).toBe(true)
-    }
-  )
-
-  it('falls back to the encoded launcher when cmd.exe would split or expand the path', () => {
-    const scriptPath = 'C:\\Users\\Jane Doe\\%ORCA_TEST%\\codex-hook.cmd'
-    const command = wrapWindowsCmdHookCommand(scriptPath)
-    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
-  })
 })
 
 describe('wrapRuntimeHomeHookCommand', () => {

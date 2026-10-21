@@ -49,7 +49,6 @@ function reservedRecord(): AgentSessionRecord {
       leaseDeadlineAt: NOW + 30_000,
       lastRenewedAt: NOW,
       handoffOperationId: 'op-1',
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'reserved',
       unreconciled: false,
@@ -73,7 +72,7 @@ function runtimeState(
     probeOwner,
     logger: createStructuredAgentSessionLogger()
   } as StructuredAgentSessionHostDeps
-  return new StructuredAgentSessionHostRuntimeState(deps)
+  return new StructuredAgentSessionHostRuntimeState(deps, new Map())
 }
 
 function liveRecord(): AgentSessionRecord {
@@ -149,7 +148,7 @@ describe('host runtime-state owner probe', () => {
       probeOwner,
       logger: log.logger
     } as unknown as StructuredAgentSessionHostDeps
-    const state = new StructuredAgentSessionHostRuntimeState(deps, onEventSinkFailure)
+    const state = new StructuredAgentSessionHostRuntimeState(deps, new Map(), onEventSinkFailure)
 
     await (
       state as unknown as { leaseRenewer: { renewNow: () => Promise<void> } }

@@ -278,7 +278,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     submitRetryDelayMs: 1200
   },
   rovo: {
-    detectCmd: 'rovo',
+    // Why: Rovo Dev is an `acli` subcommand with no binary of its own on PATH; `acli rovodev run [instruction]` is one-shot.
+    detectCmd: 'acli',
+    launchCmd: 'acli rovodev run',
     promptInjectionMode: 'stdin-after-start'
   },
   hermes: {

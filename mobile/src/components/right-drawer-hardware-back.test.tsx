@@ -31,6 +31,7 @@ vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
 vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
   useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 })
 }))
 vi.mock('react-native-gesture-handler', () => {

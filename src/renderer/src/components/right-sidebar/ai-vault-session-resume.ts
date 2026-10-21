@@ -15,10 +15,12 @@ import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
   canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
@@ -170,13 +172,13 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
   if (workspaceKey?.type === 'folder') {
-    return state.folderWorkspaces.some(
+    return selectFolderWorkspaces(state).some(
       (workspace) => workspace.id === workspaceKey.folderWorkspaceId
     )
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
+  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId)
 }
 
 function resolveSupportedResumeWorktreeId(args: {
@@ -248,13 +250,11 @@ export function aiVaultSessionRowResumeGating(
 }
 
 export function aiVaultSessionResumeLabel(
-  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'>
+  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'> &
+    Partial<Pick<AiVaultSessionResumeState, 'worktreeId'>>
 ): string {
   if (state.usesSessionWorktree) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-      'Resume in Worktree'
-    )
+    return aiVaultResumeInSessionWorkspaceLabel(state.worktreeId)
   }
   return translate(
     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',

@@ -1,3 +1,7 @@
+import {
+  RuntimeHostDescriptorSchema,
+  type RuntimeHostDescriptor
+} from '../../../shared/runtime-host-descriptor'
 import type { DeviceScope } from '../../../shared/runtime-types'
 
 const PAIRING_OFFER_VERSION = 2
@@ -9,6 +13,7 @@ export type WebPairingOffer = {
   publicKeyB64: string
   pairedDeviceId?: string
   scope?: DeviceScope
+  hostDescriptor?: RuntimeHostDescriptor
 }
 
 export type WebPairingStartupDecision =
@@ -104,13 +109,16 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
     typeof parsed.pairedDeviceId === 'string' && parsed.pairedDeviceId.length > 0
       ? parsed.pairedDeviceId
       : null
+  // Why safeParse: a descriptor this build cannot read is dropped, never a reason to refuse pairing.
+  const hostDescriptor = RuntimeHostDescriptorSchema.safeParse(parsed.hostDescriptor).data
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: normalizeWebSocketEndpoint(parsed.endpoint),
     deviceToken: parsed.deviceToken,
     publicKeyB64: parsed.publicKeyB64,
     ...(pairedDeviceId ? { pairedDeviceId } : {}),
-    ...(scope ? { scope } : {})
+    ...(scope ? { scope } : {}),
+    ...(hostDescriptor ? { hostDescriptor } : {})
   }
 }
 

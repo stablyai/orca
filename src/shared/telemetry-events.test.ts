@@ -537,14 +537,24 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
-  it('accepts structured native chat as a boolean adoption signal', () => {
+  it('accepts the Chat UI switch as a boolean adoption signal', () => {
     expect(
       eventSchemas.settings_changed.safeParse({
-        setting_key: 'experimentalStructuredNativeChat',
+        setting_key: 'experimentalNativeChat',
         value_kind: 'bool'
       }).success
     ).toBe(true)
   })
+
+  it.each(['experimentalStructuredNativeChat', 'openAgentTabsInChatByDefault'])(
+    'rejects the retired %s key',
+    (settingKey) => {
+      expect(
+        eventSchemas.settings_changed.safeParse({ setting_key: settingKey, value_kind: 'bool' })
+          .success
+      ).toBe(false)
+    }
+  )
 
   it('rejects non-whitelisted setting keys', () => {
     const parsed = eventSchemas.settings_changed.safeParse({

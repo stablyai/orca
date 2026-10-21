@@ -12,7 +12,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
-import { SshConnectionStore } from './ssh/ssh-connection-store'
+import { SshConnectionStore } from './ssh/connection/ssh-connection-store'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
@@ -23,7 +23,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))

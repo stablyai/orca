@@ -261,6 +261,44 @@ describe('scanWorkspacePorts attribution work', () => {
   })
 })
 
+describe('scanWorkspacePorts lsof flags', () => {
+  afterEach(() => {
+    resetWorkspacePortScanTimeoutBackoffForTests()
+    vi.restoreAllMocks()
+    runPortScanCommandMock.mockReset()
+  })
+
+  it('runs both macOS lsof commands without blocking on mounted file systems', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: 'p123\ncnode\nd0x1\nn127.0.0.1:3000\n', spawnMs: 5 }
+      }
+      if (command === 'lsof') {
+        return { stdout: 'p123\nfcwd\nn/repo/service\n', spawnMs: 5 }
+      }
+      return { stdout: '123 node /repo/service/server.js\n', spawnMs: 5 }
+    })
+
+    const scan = await scanWorkspacePorts(worktrees, urlWatcherStub())
+
+    const lsofArgs = runPortScanCommandMock.mock.calls
+      .filter(([command]) => command === 'lsof')
+      .map(([, args]) => args)
+    expect(lsofArgs).toEqual([
+      ['-b', '-w', '-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pcnd'],
+      ['-b', '-w', '-a', '-p', '123', '-d', 'cwd', '-Fn']
+    ])
+    expect(scan.ports).toEqual([
+      expect.objectContaining({
+        port: 3000,
+        pid: 123,
+        owner: expect.objectContaining({ confidence: 'cwd', path: '/repo' })
+      })
+    ])
+  })
+})
+
 describe('scanWorkspacePorts command timeout', () => {
   afterEach(() => {
     vi.useRealTimers()

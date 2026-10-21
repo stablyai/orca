@@ -21,21 +21,18 @@ vi.mock('./runtime-local-worktree-create', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const TARGET_ID = 'remote-1'
 const REMOTE_PATH = '/srv/app'
 
 type RuntimeInternals = {
   resolveRepoSelector: (selector: string) => Promise<unknown>
-  createManagedRemoteWorktree: (repo: unknown, args: unknown) => Promise<unknown>
   resolveLineageForWorktreeCreate: (input: unknown) => Promise<unknown>
   recordCreatedWorktreeLineage: (worktree: unknown, resolution: unknown) => unknown
 }
 
-function makeRuntime(repo: Record<string, unknown>): {
-  runtime: OrcaRuntimeService
-  createRemote: ReturnType<typeof vi.fn>
-} {
+function makeRuntime(repo: Record<string, unknown>): OrcaRuntimeService {
   const store = {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
     getProjectHostSetups: () => []
@@ -49,11 +46,7 @@ function makeRuntime(repo: Record<string, unknown>): {
     workspaceLineage: null,
     warnings: []
   })
-  const createRemote = vi.fn().mockResolvedValue({
-    worktree: { id: 'wt-1', path: '/srv/app-feature', branch: 'feature' }
-  })
-  vi.spyOn(internals, 'createManagedRemoteWorktree').mockImplementation(createRemote)
-  return { runtime, createRemote }
+  return runtime
 }
 
 describe('createManagedWorktree execution-host routing', () => {
@@ -68,38 +61,18 @@ describe('createManagedWorktree execution-host routing', () => {
     )
   })
 
-  it('creates on the SSH host for a repo stamped executionHostId only', async () => {
-    const { runtime, createRemote } = makeRuntime({
-      id: 'repo-remote',
-      path: REMOTE_PATH,
-      kind: 'git',
-      executionHostId: `ssh:${TARGET_ID}`
-    })
+  // The SSH host is not served here: the create refuses rather than running `git worktree add`.
+  it.each([
+    ['a repo stamped executionHostId only', { executionHostId: `ssh:${TARGET_ID}` }],
+    ['a legacy connectionId-only repo', { connectionId: TARGET_ID }]
+  ])('refuses %s instead of creating locally', async (_name, host) => {
+    const runtime = makeRuntime({ id: 'repo-remote', path: REMOTE_PATH, kind: 'git', ...host })
 
-    await runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'feature' } as never)
+    await expect(
+      runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'feature' })
+    ).rejects.toThrow(SshHostNotServedError)
 
     // A local `git worktree add` against a remote path is the silent-substitution failure.
     expect(createRuntimeLocalManagedWorktreeMock).not.toHaveBeenCalled()
-    expect(createRemote).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'repo-remote', connectionId: TARGET_ID }),
-      expect.anything()
-    )
-  })
-
-  it('still creates on the SSH host for a legacy connectionId-only repo', async () => {
-    const { runtime, createRemote } = makeRuntime({
-      id: 'repo-remote',
-      path: REMOTE_PATH,
-      kind: 'git',
-      connectionId: TARGET_ID
-    })
-
-    await runtime.createManagedWorktree({ repoSelector: 'repo-remote', name: 'feature' } as never)
-
-    expect(createRuntimeLocalManagedWorktreeMock).not.toHaveBeenCalled()
-    expect(createRemote).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: TARGET_ID }),
-      expect.anything()
-    )
   })
 })

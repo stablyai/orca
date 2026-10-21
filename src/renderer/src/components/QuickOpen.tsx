@@ -1,15 +1,8 @@
 import { useQuickOpenInteraction } from './use-quick-open-interaction'
-import React, {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore
-} from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import {
   CommandDialog,
   CommandInput,
@@ -24,11 +17,7 @@ import {
 } from '../../../shared/quick-open-query-target'
 import { openQuickOpenFile } from './quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
-import {
-  quickOpenHistoryScope,
-  readQuickOpenHistory,
-  subscribeQuickOpenHistory
-} from '@/lib/quick-open-file-history'
+import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
@@ -79,11 +68,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   const { opening, invalidate, begin } = useQuickOpenInteraction(activeWorktreeId)
   const [selectedPath, setSelectedPath] = useState('')
   const worktreePath = activeWorktree?.path ?? null
-  const scope =
-    activeWorktreeId && worktreePath
-      ? quickOpenHistoryScope(useAppStore.getState(), activeWorktreeId, worktreePath)
-      : null
-  const history = useSyncExternalStore(subscribeQuickOpenHistory, () => readQuickOpenHistory(scope))
+  const history = useQuickOpenHistory(activeWorktreeId, worktreePath)
   const { files, loading, loadError, truncated, recentError } = useRuntimeFileListForWorktree({
     enabled: visible && !absoluteQuery,
     worktreeId: activeWorktreeId,
@@ -241,7 +226,6 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         ) : (
           filtered.map((item) => {
             const { directory, filename } = splitTrailingSegment(item.path)
-            const FileIcon = getFileTypeIcon(item.path)
 
             return (
               <CommandItem
@@ -259,7 +243,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
                     drops the one Radix needs to open the tooltip. */}
                 <FilePathCursorTooltip path={item.path}>
                   <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1">
-                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <FileTypeIcon
+                      filePath={item.path}
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                    />
                     {/* shrink-0 + max-w-full: the directory gives up all of its
                         width before the filename loses a character. */}
                     <span className="min-w-0 max-w-full shrink-0 truncate text-foreground">

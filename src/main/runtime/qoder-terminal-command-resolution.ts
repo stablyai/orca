@@ -2,45 +2,10 @@ import type { PreflightRuntimeContext } from '../preflight/agent-detection'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import {
-  resolveStartupShell,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../shared/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import type { RuntimeStore } from './runtime-store-contract'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
-import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-
-export async function resolveQoderTerminalCommandForWorkspace(
-  launch: TerminalCreateOptions,
-  workspace: TerminalWorkspaceLaunchScope,
-  store: RuntimeStore | null | undefined,
-  platform: NodeJS.Platform
-): Promise<TerminalCreateOptions> {
-  if (launch.launchAgent !== 'qoder') {
-    return launch
-  }
-  return resolveQoderTerminalCommand(launch, {
-    connectionId: workspace.connectionId,
-    context:
-      !workspace.connectionId && store
-        ? {
-            projectRuntime: resolveLocalProjectRuntimeForWorktreeId(store, workspace.id),
-            wslDistro: parseWslUncPath(workspace.path)?.distro
-          }
-        : undefined,
-    shell: resolveStartupShell(
-      platform,
-      resolveLocalWindowsAgentStartupShell({
-        platform,
-        isRemote: Boolean(workspace.connectionId),
-        terminalWindowsShell: launch.shellOverride ?? store?.getSettings().terminalWindowsShell
-      })
-    )
-  })
-}
 
 export async function resolveQoderTerminalCommand<
   T extends Pick<TerminalCreateOptions, 'launchAgent' | 'command' | 'launchConfig'>

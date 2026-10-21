@@ -1,4 +1,3 @@
-import { useCallback, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -8,9 +7,10 @@ import {
 } from '../../../../shared/native-chat-ask-row'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
+import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
 
 const ROW_CLASS_NAME =
-  'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-muted-foreground'
+  'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-chat-foreground-faint'
 
 /**
  * The row a question tool call draws in place of its raw input. The agent is
@@ -50,23 +50,7 @@ export function NativeChatAwaitingInputRow({
   )
   // Seeded from `open`: a row remounted open was clipped when the reader opened
   // it, and dropping the toggle as it folds would drop keyboard focus with it.
-  const [clipped, setClipped] = useState(open)
-  const observerRef = useRef<ResizeObserver | null>(null)
-  // Attached to the question only while it sits on the line; an open row keeps its verdict.
-  const measureLine = useCallback((line: HTMLSpanElement | null) => {
-    observerRef.current?.disconnect()
-    observerRef.current = null
-    if (!line) {
-      return
-    }
-    const measure = (): void => setClipped(line.scrollWidth > line.clientWidth)
-    measure()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    observerRef.current = new ResizeObserver(measure)
-    observerRef.current.observe(line)
-  }, [])
+  const [clipped, measureLine] = useNativeChatClippedLine(open)
 
   const question = subject?.kind === 'question' ? subject.text : null
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
@@ -93,14 +77,17 @@ export function NativeChatAwaitingInputRow({
           )
   const header = (
     <>
-      <NativeChatToolRunIcon iconName="message-square-more" className="text-muted-foreground" />
+      <NativeChatToolRunIcon
+        iconName="message-square-more"
+        className="text-chat-foreground-faint"
+      />
       <span className={cn('shrink-0', pending && 'animate-pulse motion-reduce:animate-none')}>
         {label}
       </span>
       {question !== null && toggles && open ? null : (
         <span
           ref={question === null ? undefined : measureLine}
-          className="min-w-0 truncate text-foreground/85"
+          className="min-w-0 truncate text-chat-foreground"
         >
           {text}
         </span>
@@ -109,7 +96,7 @@ export function NativeChatAwaitingInputRow({
         <ChevronRight
           aria-hidden
           className={cn(
-            'size-3.5 shrink-0 text-muted-foreground transition-all',
+            'size-3.5 shrink-0 text-chat-foreground-faint transition-all motion-reduce:transition-none',
             open
               ? 'rotate-90'
               : 'can-hover:opacity-0 group-hover/ask-row:opacity-100 group-focus-visible/ask-row:opacity-100'
@@ -130,7 +117,7 @@ export function NativeChatAwaitingInputRow({
           onClick={() => setOpen(!open)}
           className={cn(
             ROW_CLASS_NAME,
-            'group/ask-row rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70'
+            'group/ask-row rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
           )}
           aria-expanded={open}
         >
@@ -141,13 +128,13 @@ export function NativeChatAwaitingInputRow({
       )}
       {toggles && open && question !== null ? (
         // Indented to the label, past the icon slot and its gap.
-        <p className="whitespace-pre-wrap break-words pl-5.5 text-sm leading-relaxed text-foreground/85">
+        <p className="whitespace-pre-wrap break-words pl-5.5 text-sm leading-relaxed text-chat-foreground">
           {question}
         </p>
       ) : null}
       {open && questions !== null ? (
         // Numbers hang in the icon slot so each question starts under the label.
-        <ol className="list-decimal space-y-1 pl-5.5 text-sm leading-relaxed text-foreground/85 marker:text-muted-foreground">
+        <ol className="list-decimal space-y-1 pl-5.5 text-sm leading-relaxed text-chat-foreground marker:text-chat-foreground-faint">
           {questions.map((entry) => (
             <li key={entry} className="whitespace-pre-wrap break-words">
               {entry}

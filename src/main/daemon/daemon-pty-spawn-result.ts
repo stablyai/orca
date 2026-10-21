@@ -7,7 +7,7 @@ import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequen
 import { takeHistoryRecoveryFreeze } from './daemon-history-recovery-freeze'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { SessionNotFoundError, type CreateOrAttachResult } from './types'
-import type { PtySpawnResult } from '../providers/types'
+import type { PtySpawnResult } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
   protected async finishSpawn(
@@ -34,7 +34,13 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
     let result = initialResult
     const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult =>
-      this.resultForExitBeforeSpawnReply(sessionId, result, operation) ?? spawnResult
+      this.resultForExitBeforeSpawnReply(sessionId, result, operation) ??
+      (result.isNew && !historyRecovery.identityChanged
+        ? {
+            ...spawnResult,
+            startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history'
+          }
+        : spawnResult)
     let historySeedSegments = restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null
     const adoptSpawnResultSession = async (spawnResult: CreateOrAttachResult): Promise<void> => {
       const requestedSessionId = sessionId

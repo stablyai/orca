@@ -1,10 +1,61 @@
 import { getLineText } from './cell-geometry'
 import type { TerminalDocumentScope, TerminalDocumentSelection } from './document-scope'
-import { notify } from './host-notify'
-import { repositionOverlay, stopEdgeScroll } from './selection-overlay'
+import type { TerminalDocumentLine } from './document-terminal-shape'
 
 /** What counts as one word for select-all and for word seeding. */
 const WORD_RE = /[\p{L}\p{N}_./:@~+=?&#%-]/u
+
+type SelectionUnit = { text: string; start: number; end: number }
+
+function selectionUnits(line: TerminalDocumentLine, cols: number): SelectionUnit[] | null {
+  const cells: SelectionUnit[] = []
+  for (let col = 0; col < Math.min(cols, line.length);) {
+    const cell = line.getCell?.(col)
+    if (!cell?.getChars || !cell.getWidth) {
+      return null
+    }
+    const width = cell.getWidth()
+    if (width <= 0) {
+      col++
+      continue
+    }
+    cells.push({ text: cell.getChars() || ' ', start: col, end: col + width - 1 })
+    col += width
+  }
+  if (typeof Intl.Segmenter !== 'function') {
+    return cells
+  }
+  // A grapheme can occupy several xterm cells; UTF-16 length is never its cell width.
+  const columns = cells.flatMap((cell) => Array.from({ length: cell.text.length }, () => cell))
+  const text = cells.map((cell) => cell.text).join('')
+  return Array.from(
+    new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text),
+    (part) => ({
+      text: part.segment,
+      start: columns[part.index].start,
+      end: columns[part.index + part.segment.length - 1].end
+    })
+  )
+}
+
+function wordCellRange(line: TerminalDocumentLine | undefined, col: number, cols: number) {
+  const units = line && selectionUnits(line, cols)
+  const index = units?.findIndex((unit) => unit.start <= col && col <= unit.end) ?? -1
+  if (!units || index < 0) {
+    return null
+  }
+  let start = index
+  let end = index
+  if (WORD_RE.test(units[index].text)) {
+    while (start > 0 && WORD_RE.test(units[start - 1].text)) {
+      start--
+    }
+    while (end + 1 < units.length && WORD_RE.test(units[end + 1].text)) {
+      end++
+    }
+  }
+  return { start: units[start].start, end: units[end].end }
+}
 
 /** The ordered ends of the selection, whichever way the user dragged it. */
 export type TerminalSelectionRange = {
@@ -13,6 +64,17 @@ export type TerminalSelectionRange = {
 }
 
 export function seedWordSelection(scope: TerminalDocumentScope, col: number, absRow: number) {
+  const cells = wordCellRange(scope.term?.buffer.active.getLine(absRow), col, scope.term?.cols ?? 0)
+  if (cells) {
+    scope.sel = {
+      anchor: { col: cells.start, row: absRow },
+      focus: { col: cells.end, row: absRow },
+      activeHandle: null
+    }
+    applyXtermSelection(scope)
+    return
+  }
+  // Small host/test seams can expose text only; keep their existing ASCII behavior.
   const line = getLineText(scope, absRow)
   if (!line) {
     scope.sel = {
@@ -86,33 +148,4 @@ export function applyXtermSelection(scope: TerminalDocumentScope) {
   try {
     scope.term.select(r.start.col, r.start.row, length)
   } catch {}
-}
-
-export function cancelSelect(scope: TerminalDocumentScope) {
-  scope.selMode = 'navigate'
-  scope.sel = null
-  stopEdgeScroll(scope)
-  if (scope.term) {
-    try {
-      scope.term.clearSelection()
-    } catch {}
-    // Why: some xterm renderers cache cells and skip repaint on
-    // clearSelection alone, leaving the previously-highlighted cells
-    // visually selected. Force a full refresh so the selection layer
-    // actually clears on screen.
-    try {
-      scope.term.refresh(0, scope.term.rows - 1)
-    } catch {}
-  }
-  scope.selectionOverlay!.classList.remove('active')
-  notify(scope, { type: 'set-select-mode', enabled: false })
-}
-
-export function enterSelect(scope: TerminalDocumentScope, col: number, absRow: number) {
-  scope.selMode = 'select'
-  seedWordSelection(scope, col, absRow)
-  scope.selectionOverlay!.classList.add('active')
-  notify(scope, { type: 'set-select-mode', enabled: true })
-  notify(scope, { type: 'haptic', kind: 'selection' })
-  repositionOverlay(scope)
 }

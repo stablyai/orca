@@ -17,7 +17,6 @@ import {
   type AgentSessionQueuedSendReceipt
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire-refusals'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -36,15 +35,15 @@ export type StructuredAgentTurnHost = Pick<
 >
 
 export type StructuredSessionTurn = {
+  /** Carries its sender as `from`, which the chat shows and no fingerprint covers. */
   body: AgentJournalMessageItem
   /** Reused on a retry, so the host replays its recorded answer instead of sending twice. */
   operationId: string
   expectedRuntimeFence: number
-} & (
-  | { delivery: 'now' }
-  /** A queued card records who it is from. */
-  | { delivery: 'queue'; source: AgentMessageSource }
-)
+  delivery: AgentTurnDelivery
+  /** Host-local admission for an automated send. */
+  beforeRun?: () => void
+}
 
 export type StructuredSessionTurnSend = {
   kind: 'structured-session'
@@ -53,6 +52,9 @@ export type StructuredSessionTurnSend = {
   /** Scopes the host's operation ledger, so one sender's sends cannot exhaust another's budget. */
   callerKey: string
   turn: StructuredSessionTurn
+  /** The caller's own readiness budget for the agent to take the message, its start included;
+   *  the orchestration readiness timeout by default. */
+  budgetMs?: number
 }
 
 /**
@@ -136,8 +138,7 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    // The source is host-local and outside the fingerprint: a retry under the same id replays.
-    turn.delivery === 'queue' ? { ...message, source: turn.source } : message
+    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }
@@ -146,8 +147,9 @@ async function sendStructuredSessionTurn(
   if ('queued' in result.value) {
     return { kind: 'queued', clientMessageId, queued: result.value.queued }
   }
-  // Accepted is not delivered: the agent may still be starting, so wait the start out. A wait
-  // that fails or runs out leaves the first answer standing.
+  // Accepted is not delivered: the agent may still be starting. One budget, the caller's, covers
+  // the start and the answer; a start that outlasts it leaves the message held for the agent, and
+  // the answer `pending`, which the caller reports as a turn start nobody observed yet.
   const answered = agentSessionSendSubmission(result.value)
   if (answered?.dispatchState !== 'pending') {
     return { kind: 'sent', clientMessageId, submission: answered }
@@ -156,7 +158,7 @@ async function sendStructuredSessionTurn(
   // hand-off, which the queue sent under a fresh id.
   const settled = await send.host
     .waitForSendSettlement(send.sessionId, answered.clientMessageId, {
-      budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
+      budgetMs: send.budgetMs ?? ORCHESTRATION_READINESS_TIMEOUT_MS
     })
     .catch(() => undefined)
   return {

@@ -181,6 +181,36 @@ it('indexes nothing at all from a read that was incomplete from the start', asyn
   expect(owed()).toMatchObject({ state: 'failed', fail_count: 1 })
 })
 
+it('leaves the row untouched when the read was cancelled', async () => {
+  replayTranscriptRead({
+    messages: userMessages('complete span', 3),
+    outcome: { byteOffset: 100 }
+  })
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    replayTranscriptRead({
+      mode: 'append',
+      previousByteOffset: 100,
+      messages: userMessages('cut short', 5),
+      outcome: { session: null, byteOffset: 100, incomplete: true, cancelled: true }
+    })
+  }
+
+  // A cancel is no evidence against the file: no failure count, no hold-out.
+  expect(indexedMessages()).toBe(3)
+  expect(cursor()).toBe(100)
+  expect(owed()).toMatchObject({ state: 'current', fail_count: 0 })
+})
+
+it('records no row for a first read that was cancelled', async () => {
+  replayTranscriptRead({
+    messages: userMessages('cut short', 2),
+    outcome: { session: null, byteOffset: 0, incomplete: true, cancelled: true }
+  })
+
+  expect(indexedMessages()).toBe(0)
+  expect(owed()).toBeUndefined()
+})
+
 it('drops a file whose parser returned no session', async () => {
   replayTranscriptRead({
     messages: userMessages('was indexed', 3),

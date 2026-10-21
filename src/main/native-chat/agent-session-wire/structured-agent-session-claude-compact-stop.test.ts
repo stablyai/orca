@@ -92,7 +92,7 @@ beforeEach(async () => {
     })
   )
   expect(attached).toMatchObject({ ok: true })
-  await adapter.awaitStarted(SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
 })
 
 afterEach(async () => {

@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { transcriptRowOffset, transcriptWindowHeight } from './native-chat-window-test-layout'
 import {
   estimateNativeChatRowHeight,
   NATIVE_CHAT_ROW_GAP_PX,
@@ -82,12 +83,8 @@ export function overrideLayoutProperty(name: string, descriptor: PropertyDescrip
   }
 }
 
-/** The spacer's reserved height, which is the transcript's whole rendered height:
- *  windowed rows are absolutely positioned inside it, so a row growing in place
- *  reaches the document only through the height the window reserves for it. */
 export function reservedTranscriptHeight(root: ParentNode): number {
-  const spacer = root.querySelector<HTMLElement>('[data-native-chat-window]')
-  return spacer ? Number.parseFloat(spacer.style.height) || 0 : 0
+  return transcriptWindowHeight(root)
 }
 
 // The virtualizer measures with `offsetHeight` — not `clientHeight`, not a
@@ -191,14 +188,22 @@ export function stubLayout({
     restores.push(
       overrideLayoutProperty('offsetTop', {
         get(this: HTMLElement): number {
-          return this.hasAttribute('data-native-chat-window') ? aboveTranscriptPx(this) : 0
+          return this.hasAttribute('data-native-chat-window')
+            ? aboveTranscriptPx(this)
+            : this.hasAttribute('data-index')
+              ? transcriptRowOffset(this)
+              : 0
         }
       }),
       // happy-dom has no `offsetParent` at all, so production's walk to the
       // scroll root ends before it starts and every margin reads zero.
       overrideLayoutProperty('offsetParent', {
         get(this: HTMLElement): HTMLElement | null {
-          return this.parentElement?.closest<HTMLElement>('[data-native-chat-scroll]') ?? null
+          return this.hasAttribute('data-index')
+            ? this.parentElement
+            : (this.parentElement?.closest<HTMLElement>('[data-index]') ??
+                this.parentElement?.closest<HTMLElement>('[data-native-chat-scroll]') ??
+                null)
         }
       })
     )
@@ -251,12 +256,15 @@ export function stubResizeObserver(): () => void {
 }
 
 /** Deliver one round of resize callbacks; true when anything was delivered. */
-export function deliverResizes(): boolean {
+export function deliverResizes(accept: (target: Element) => boolean = () => true): boolean {
   let delivered = false
   // A copy: a callback may disconnect its own observer mid-delivery.
   for (const observation of Array.from(resizeObservations)) {
     const entries: ResizeObserverEntry[] = []
     for (const [target, lastHeight] of observation.observed) {
+      if (!accept(target)) {
+        continue
+      }
       const height = (target as HTMLElement).offsetHeight
       if (height !== lastHeight) {
         observation.observed.set(target, height)
@@ -306,7 +314,7 @@ export function windowState(container: HTMLElement): { totalSize: number; indexe
   if (!spacer) {
     throw new Error('transcript is not windowed: no spacer, every row is mounted')
   }
-  const totalSize = Number.parseFloat(spacer.style.height)
+  const totalSize = transcriptWindowHeight(container)
   if (!(totalSize > 0)) {
     throw new Error(`transcript reserved no height (${spacer.style.height})`)
   }
@@ -324,6 +332,7 @@ export function scrollTranscript(container: HTMLElement, top: number): void {
   if (!scroller) {
     throw new Error('no transcript scroll root')
   }
+  fireEvent.wheel(scroller, { deltaY: top - scroller.scrollTop })
   scroller.scrollTop = top
   fireEvent.scroll(scroller)
 }

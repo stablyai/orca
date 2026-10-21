@@ -11,7 +11,7 @@ import { detectLanguage } from './language-detect'
  */
 export function openDocumentInFloatingWorkspace(
   openFile: EditorFilesSlice['openFile'],
-  document: FileDocument,
+  document: Pick<FileDocument, 'filePath' | 'relativePath'>,
   options: { targetGroupId?: string } = {}
 ): string {
   return openFile(

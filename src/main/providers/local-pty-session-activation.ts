@@ -39,7 +39,7 @@ import {
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
-import type { PtySpawnOptions, PtySpawnResult } from './types'
+import type { PtySpawnOptions, PtySpawnResult } from './pty-provider-contract'
 
 export function activateLocalPtySession(args: {
   id: string
@@ -218,6 +218,7 @@ export function activateLocalPtySession(args: {
     id,
     incarnationId,
     pid,
+    startupCwdSource: 'request',
     ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
   }

@@ -149,7 +149,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
   it('preserves the legacy home while a non-default Codex home lane is selected', async () => {
     const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
       ...options(),
-      isHostSystemDefaultRealHome: () => false
+      isHostSystemDefaultRealHomeSelected: () => false
     })
 
     expect(result).toEqual({ useRealCodexHome: false })
@@ -180,7 +180,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
 
   function options() {
     return {
-      isHostSystemDefaultRealHome: () => true,
+      isHostSystemDefaultRealHomeSelected: () => true,
       legacyCodexHomePath: legacyHome,
       systemCodexHomePath: systemHome
     }
@@ -373,7 +373,7 @@ describe('per-account resume repin', () => {
 
   function repinOptions() {
     return {
-      isHostSystemDefaultRealHome: () => false,
+      isHostSystemDefaultRealHomeSelected: () => false,
       getSelectedHostAccountCodexHomePath: () => selectedHome
     }
   }

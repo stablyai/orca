@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import * as openCodeCapabilities from '../../opencode/opencode-launch-capabilities'
 
 const applyAgentWorkspaceTrust = vi.hoisted(() =>
   vi.fn<(preset: string, path: string, context: unknown) => Promise<object>>(async () => ({}))
@@ -41,9 +42,8 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
     getLocalPtyStartupPromise: notReachedByOptionBuilding,
     getLocalPtyProviderStartupPromise: notReachedByOptionBuilding,
     adoptStablePane: notReachedByOptionBuilding,
-    assertFolderWorkspacePtyPathUsable: notReachedByOptionBuilding,
+    assertWorkspaceAcceptsNewPty: notReachedByOptionBuilding,
     resolvePtySpawnStartupCwd: notReachedByOptionBuilding,
-    localStartupCwdDirectoryExists: notReachedByOptionBuilding,
     prepareCodexResumeHome: notReachedByOptionBuilding,
     noCodexResumeLaunch: notReachedByOptionBuilding,
     resolveCodexResumeLaunch: notReachedByOptionBuilding,
@@ -80,7 +80,7 @@ function seed(
   ctx.preAdoptedStablePane = input.restored ? RESTORED_PANE : null
 }
 
-async function build(route: 'renderer' | 'runtime', input: BuildInput) {
+async function build(route: 'renderer' | 'runtime', input: BuildInput, deps = makeDeps()) {
   const args = {
     cols: 80,
     rows: 24,
@@ -90,13 +90,13 @@ async function build(route: 'renderer' | 'runtime', input: BuildInput) {
     command: input.command
   }
   if (route === 'renderer') {
-    const ctx = createPtyIpcSpawnState(makeDeps(), args)
+    const ctx = createPtyIpcSpawnState(deps, args)
     seed(ctx, input)
     await buildPtyIpcSpawnOptions(ctx)
     ctx.finishTerminalInstall()
     return ctx.spawnOptions
   }
-  const ctx = createRuntimePtySpawnState(makeDeps(), args)
+  const ctx = createRuntimePtySpawnState(deps, args)
   seed(ctx, input)
   await buildRuntimePtySpawnOptions(ctx)
   ctx.finishTerminalInstall()
@@ -106,6 +106,28 @@ async function build(route: 'renderer' | 'runtime', input: BuildInput) {
 beforeEach(() => {
   applyAgentWorkspaceTrust.mockReset()
   applyAgentWorkspaceTrust.mockResolvedValue({})
+})
+
+it('samples window history after OpenCode preparation while host history stays early', async () => {
+  const probe = vi.spyOn(openCodeCapabilities, 'probeOpenCodeLaunchCapabilities')
+  try {
+    for (const route of ['renderer', 'runtime'] as const) {
+      let settings = { ...getDefaultSettings('/tmp'), terminalScopeHistoryByWorktree: true }
+      probe.mockImplementationOnce(async () => {
+        await Promise.resolve()
+        settings = { ...settings, terminalScopeHistoryByWorktree: false }
+        return null
+      })
+      const options = await build(
+        route,
+        { launchAgent: 'opencode', command: 'opencode' },
+        { ...makeDeps(), getSettings: () => settings }
+      )
+      expect(options.historyIsolationEnabled).toBe(route === 'runtime')
+    }
+  } finally {
+    probe.mockRestore()
+  }
 })
 
 describe.each(['renderer', 'runtime'] as const)('%s spawn builder agent trust', (route) => {

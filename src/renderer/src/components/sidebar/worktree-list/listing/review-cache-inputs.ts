@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export type WorktreeListReviewCacheState = Pick<
   AppState,
@@ -24,7 +25,7 @@ export function selectWorktreeListReviewCacheInputs(
   groupBy: WorktreeGroupBy,
   cardProperties: readonly WorktreeCardProperty[]
 ): WorktreeListReviewCacheInputs {
-  const hasFolderWorkspaces = state.folderWorkspaces.length > 0
+  const hasFolderWorkspaces = selectFolderWorkspaces(state).length > 0
   const newCardStyle = state.settings?.experimentalNewWorktreeCardStyle === true
   const folderCardsNeedReview =
     hasFolderWorkspaces &&

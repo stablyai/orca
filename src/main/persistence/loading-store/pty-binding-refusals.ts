@@ -1,8 +1,11 @@
 import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalSessionPartition } from '../../../shared/workspace-layout/terminal-owner-invariants'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 import type { PtyBindingSourceExpectation } from './store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isClosedPaneFenced } from '../terminal-topology/closed-pane-binding-fence'
 
 export type PtyBindingRefusalRequest = {
   tabId: string
@@ -14,7 +17,7 @@ export type PtyBindingRefusalRequest = {
 }
 
 /**
- * The five fences a binding must clear before anything is mutated, so a refusal leaves nothing
+ * The fences a binding must clear before anything is mutated, so a refusal leaves nothing
  * half-written. Order matters: every `false` here is returned before the write path or the
  * fast lane can run, which is what the relay's lease expiry and the stable-owner throw rely on.
  */
@@ -24,8 +27,8 @@ export function ptyBindingIsRefused(
   bindingWorktreeId: string,
   paneKey: string,
   /** Every host partition: a close is recorded where the tab lived, which need not be where this
-   *  binding lands (a relay reattach binds into `local`). */
-  partitions: readonly WorkspaceSessionState[] = [session]
+   *  binding lands (older relay reattaches left SSH panes in `local`). */
+  partitions: readonly TerminalSessionPartition[]
 ): boolean {
   if (args.expectedSourceBinding) {
     const expected = args.expectedSourceBinding
@@ -68,8 +71,19 @@ export function ptyBindingIsRefused(
   if (
     !existingTab &&
     partitions.some((partition) =>
-      hasClosedTerminalTabRecord(partition.closedTerminalTabTombstonesByTabId, args.tabId)
+      hasClosedTerminalTabRecord(partition.session.closedTerminalTabTombstonesByTabId, args.tabId)
     )
+  ) {
+    return true
+  }
+  // Switch point: a pane main closed or took back is not minted again by a start already under way.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    !layoutContainsLeafId(
+      session.terminalLayoutsByTabId?.[args.tabId]?.root ?? null,
+      args.leafId
+    ) &&
+    isClosedPaneFenced(paneKey)
   ) {
     return true
   }

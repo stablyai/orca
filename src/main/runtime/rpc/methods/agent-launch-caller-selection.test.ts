@@ -1,6 +1,6 @@
 /**
  * A launch from a paired client moves that client's view to the new tab and nobody else's: the view
- * intent belongs to the connection that asked. In-process callers and workspace-creating launches
+ * intent belongs to the connection that asked. In-process callers and worktree-creating launches
  * keep today's behaviour.
  */
 
@@ -9,15 +9,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import {
   CAPABLE_CLIENT,
   STRUCTURED_PREFERENCE,
   methodNamed,
   rpcContext,
   runtimeStub,
+  setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -45,6 +45,10 @@ const EXISTING_LAUNCH = { agent: 'claude', target: { kind: 'existing', worktree:
 const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
+}
+const FOLDER_LAUNCH = {
+  agent: 'claude',
+  target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
 }
 const CALLER = 'device-1'
 const REVEAL_WARNING =
@@ -151,6 +155,56 @@ describe('a paired client launching into an existing workspace', () => {
     expect(result.warning).toBeUndefined()
   })
 
+  it('still tells a caller that shows the tab itself that its folder was gone', async () => {
+    const runtime = selectionRuntime({
+      settings: {},
+      terminalPaneKey: PANE_KEY,
+      terminalWarning: REVEAL_WARNING,
+      terminalStartupCwdFallback: true
+    })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.warning).toBe(STARTUP_CWD_FALLBACK_SENTENCE)
+  })
+
+  // A folder workspace has no setup for a host activation to run, so its create moves only the caller.
+  it('selects the chat in a folder workspace it creates without activating it on the host', async () => {
+    const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+
+    // A desktop client of a remote server; a phone may not create folder workspaces at all.
+    await launch(FOLDER_LAUNCH, runtime, { ...CAPABLE_CLIENT, clientKind: 'runtime' })
+
+    expect(chatActivation()).toBe(false)
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledExactlyOnceWith(
+      'folder:fw-new',
+      { sessionId: 'sess-1' },
+      CALLER
+    )
+  })
+
+  it.each(['focused', 'background'] as const)(
+    'keeps a paired %s chat inactive on the host',
+    async (presentation) => {
+      const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+      await launch({ ...EXISTING_LAUNCH, presentation }, runtime)
+      expect(chatActivation()).toBe(false)
+      expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledTimes(
+        presentation === 'focused' ? 1 : 0
+      )
+    }
+  )
+
+  it('focuses a paired terminal only for the caller', async () => {
+    const runtime = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
+    await launch({ ...EXISTING_LAUNCH, presentation: 'focused' }, runtime)
+    expect(runtime.createTerminal).toHaveBeenCalledWith(
+      'id:wt-7',
+      expect.objectContaining({ presentation: 'background', surfaceOwner: false })
+    )
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledOnce()
+  })
+
   it('selects nothing when the runtime reported no pane for the terminal', async () => {
     const runtime = selectionRuntime({ settings: {} })
 
@@ -191,7 +245,7 @@ describe('launches that keep the host-wide behaviour', () => {
     expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 
-  it('a workspace-creating launch from a paired client keeps the create navigation', async () => {
+  it('a worktree-creating launch from a paired client keeps the create navigation', async () => {
     const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
 
     await launch(CREATE_LAUNCH, runtime)
@@ -209,12 +263,11 @@ describe('a replayed launch', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-caller-'))
     const store = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
-    setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(store)
   })
 
   afterEach(async () => {
-    setStructuredAgentSessionHost(null)
+    setAgentLaunchRecordStore(null)
     await rm(directory, { recursive: true, force: true })
   })
 

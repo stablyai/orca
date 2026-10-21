@@ -25,6 +25,11 @@ export type UsageEventAggregationOptions<TEvent, TMetric> = {
   cloneSessionForMerge(session: UsageSession<TMetric>): UsageSession<TMetric>
 }
 
+export type UsageEventAggregationResult<TMetric> = {
+  sessions: UsageSession<TMetric>[]
+  dailyAggregates: UsageDailyAggregate<TMetric>[]
+}
+
 export function createUsageEventAggregation<
   TEvent extends UsageAttributedEventFields,
   TMetric extends object
@@ -214,15 +219,17 @@ export function createUsageEventAggregation<
     )
   }
 
-  function aggregate(events: TEvent[]): {
-    sessions: UsageSession<TMetric>[]
-    dailyAggregates: UsageDailyAggregate<TMetric>[]
-  } {
+  /** Finalization closes the stream and releases its lookup indexes. */
+  function createAccumulator() {
     const sessionsById = new Map<string, UsageSession<TMetric>>()
     const dailyByKey = new Map<string, UsageDailyAggregate<TMetric>>()
     const breakdownsBySession = new Map<string, UsageSessionBreakdownIndex<TMetric>>()
+    let result: UsageEventAggregationResult<TMetric> | null = null
 
-    for (const event of events) {
+    function add(event: TEvent): void {
+      if (result) {
+        throw new Error('Cannot add usage events after finalization')
+      }
       const eventMetric = metric.fromEvent(event)
       const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
       if (!sessionsById.has(event.sessionId)) {
@@ -269,14 +276,34 @@ export function createUsageEventAggregation<
       metric.fold(daily, eventMetric)
     }
 
-    return {
-      sessions: finalizeSessions(sessionsById),
-      dailyAggregates: sortDailyAggregates(dailyByKey)
+    function finalize(): UsageEventAggregationResult<TMetric> {
+      if (result) {
+        return result
+      }
+      result = {
+        sessions: finalizeSessions(sessionsById),
+        dailyAggregates: sortDailyAggregates(dailyByKey)
+      }
+      sessionsById.clear()
+      dailyByKey.clear()
+      breakdownsBySession.clear()
+      return result
     }
+
+    return { add, finalize }
+  }
+
+  function aggregate(events: TEvent[]) {
+    const accumulator = createAccumulator()
+    for (const event of events) {
+      accumulator.add(event)
+    }
+    return accumulator.finalize()
   }
 
   return {
     aggregate,
+    createAccumulator,
     finalizeSessions,
     sortDailyAggregates,
     mergeSessions: (

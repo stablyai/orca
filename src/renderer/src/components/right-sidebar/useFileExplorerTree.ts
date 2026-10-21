@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
@@ -15,6 +15,7 @@ import {
 import { refreshFileExplorerExpandedDirs } from './file-explorer-expanded-dirs-refresh'
 import { collectStaleDirCachePaths } from './file-explorer-stale-dir-cache'
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
+import { describeFileExplorerReadError } from './file-explorer-read-error'
 import {
   clearFileExplorerDirsLoading,
   EMPTY_FILE_EXPLORER_LOADING_DIRS,
@@ -84,6 +85,16 @@ export function useFileExplorerTree(
   // Why: separates a failed root read from a superseded one — loadDir returns false for both.
   const rootReadFailedRef = useRef(false)
 
+  useEffect(() => {
+    const tracker = dirLoadTrackerRef.current
+    const refreshGeneration = refreshGenerationRef
+    return () => {
+      // A replaced host must not keep launching the old tree's queued directory reads.
+      refreshGeneration.current++
+      tracker?.reset()
+    }
+  }, [])
+
   const loadDir = useCallback(
     async (
       dirPath: string,
@@ -137,7 +148,7 @@ export function useFileExplorerTree(
           // empty tree, which made authorization/path bugs look like a real
           // empty worktree. Preserve the message so the UI can distinguish
           // "no files" from "could not read this worktree".
-          setRootError(error instanceof Error ? error.message : String(error))
+          setRootError(describeFileExplorerReadError(error))
           setSourceWorkspaceId(null)
           rootReadFailedRef.current = true
         }
@@ -146,7 +157,7 @@ export function useFileExplorerTree(
           [dirPath]: {
             ...prev[dirPath],
             children: prev[dirPath]?.children ?? [],
-            error: error instanceof Error ? error.message : String(error)
+            error: describeFileExplorerReadError(error)
           }
         }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
@@ -185,7 +196,7 @@ export function useFileExplorerTree(
       }
       return statUserOpenedPath(
         {
-          settings: route.settings,
+          target: route.target,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId: route.connectionId

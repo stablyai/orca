@@ -16,4 +16,7 @@ export type PtyModelRestoreNeededEvent = {
   /** Main's PTY output sequence at emit time — everything at or before this
    *  point is only recoverable from the model snapshot. */
   markerSeq?: number
+  /** Hidden-delivery drop episode this marker reports (gate markers only). A
+   *  repeat for an episode the renderer already disclosed as lost is the same gap. */
+  hiddenDropEpisode?: number
 }

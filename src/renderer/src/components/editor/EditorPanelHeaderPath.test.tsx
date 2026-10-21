@@ -11,6 +11,11 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 
+// Why: the reveal owner is confirmed against the catalog, which this test does not seed.
+vi.mock('@/lib/resolved-worktree-execution-host', () => ({
+  getResolvedExecutionHostIdForWorktree: () => 'local'
+}))
+
 vi.mock('@/lib/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
 }))
@@ -268,7 +273,7 @@ describe('EditorPanelHeaderPath reveal in file manager', () => {
 
     fireEvent.click(openPathMenu())
 
-    expect(openInFileManager).toHaveBeenCalledWith('/repo/notes.md')
+    expect(openInFileManager).toHaveBeenCalledWith('/repo/notes.md', 'local')
   })
 
   it.each([

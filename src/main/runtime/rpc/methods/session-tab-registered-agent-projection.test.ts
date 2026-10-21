@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -68,6 +69,24 @@ describe('a tab of an agent beyond Claude and Codex', () => {
   it('reaches a client that advertises the registered-agents capability unchanged', () => {
     const payload = snapshot()
     expect(projectSessionTabAgentStatus(payload, 'runtime', REGISTERED_AGENTS_CLIENT)).toBe(payload)
+  })
+
+  it('holds a Pi tab for clients that understand registered agents but cannot show Pi dialogs', () => {
+    const payload = {
+      ...snapshot(),
+      tabs: [...snapshot().tabs, chatTab('pi', false)]
+    }
+    const old = projectSessionTabAgentStatus(payload, 'runtime', REGISTERED_AGENTS_CLIENT)
+    expect(old.tabs.map((tab) => tab.id)).not.toContain('agent-session:pi-session')
+    expect(
+      projectSessionTabAgentStatus(payload, 'runtime', [
+        ...REGISTERED_AGENTS_CLIENT,
+        PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
+      ])
+    ).toBe(payload)
+    expect(
+      projectSessionTabAgentStatus(payload, 'mobile', REGISTERED_AGENTS_CLIENT).tabs.at(-1)
+    ).toMatchObject({ title: STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE })
   })
 
   it('stays listed on a phone under the title that names the fix', () => {

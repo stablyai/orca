@@ -4,7 +4,6 @@ import type {
   AgentSessionQueuePause,
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
-import { mobileQueuePauseLabel } from './mobile-structured-queued-message-cards'
 import {
   reduceMobileQueuePause,
   reduceMobileQueuedMessageFeed
@@ -43,12 +42,11 @@ describe('reduceMobileQueuePause', () => {
     expect(reduceMobileQueuePause(paused, batch([draft('a', 1)]))).toBeNull()
   })
 
-  it('keeps a pause that names no reason, which reads as a plain pause', () => {
+  it('keeps a pause that names no reason', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a malformed or newer host's pause, with no reason this build can read.
     const reasonless = {} as AgentSessionQueuePause
     const paused = reduceMobileQueuePause(null, batch([draft('a', 1)], reasonless))
     expect(paused).toBe(reasonless)
-    expect(mobileQueuePauseLabel(reasonless)).toBe('Queue paused')
   })
 })
 

@@ -13,20 +13,28 @@ import {
   DIRECTOR_REHOME_AUDIENCE_ENV,
   DIRECTOR_REHOME_IDENTITY_ENV,
   assertRegionalRehomeDisabled,
+  assertReserveCompatibleTrafficMove,
+  assertShadowCellsKeepReserveCells,
   deployDirector,
+  DIRECTOR_RESERVE_PLACEMENT_ENV,
   directorDeploymentEnvironment,
+  DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV,
   directorCellSetAddition,
   directorStartupProbeArguments,
   directorTopologyChange,
   environmentUpdateValue,
   parseArguments,
+  readDirectorPlacement,
+  readReserveCells,
   revisionEnvironment,
   revisionSecretEnvironment,
   suppliedAdminIdentityToken,
   taggedRevisionOrigin,
   taggedTraffic,
   trafficTags,
-  waitForEvacuationCapacity
+  candidateUpdateArguments,
+  waitForEvacuationCapacity,
+  waitForServingInstances
 } from './deploy-relay-blue-green.mjs'
 
 // Terraform declares these values; audited blue/green stamps the same values without targeting
@@ -418,6 +426,9 @@ test('requires exactly one active revision and reads queried tag metadata', () =
   assert.deepEqual(trafficTags(service), ['candidate-123'])
 })
 
+const adminToken = (email) =>
+  `e30.${Buffer.from(JSON.stringify(email ? { email } : {})).toString('base64url')}.sig`
+
 function directorHarness({
   deployFailure,
   deleteFailure,
@@ -428,7 +439,17 @@ function directorHarness({
   // Reproduces gcloud dropping minScale from a newly created revision.
   dropRequestedMinimum = false,
   servingServiceAccount,
-  servingImageDigest = `sha256:${'f'.repeat(64)}`
+  servingImageDigest = `sha256:${'f'.repeat(64)}`,
+  reserveCells = {},
+  servingEnvironment = {},
+  placements = {},
+  callerEmail,
+  // The revision template's Cloud SQL transport; a Terraform apply changes it under the serving one.
+  templateTransport,
+  spreadFailure,
+  // The service-level cap gcloud's `--max` sets; Cloud Run divides it by traffic share.
+  serviceMaximum,
+  serviceCapSticks = false
 } = {}) {
   const state = {
     activeRevision: 'relay-00001-old',
@@ -439,7 +460,8 @@ function directorHarness({
         'relay-00001-old',
         {
           env: {
-            ORCA_RELAY_ROLE: 'director'
+            ORCA_RELAY_ROLE: 'director',
+            ...servingEnvironment
           },
           secrets: {
             [DIRECTOR_REGIONAL_PLACEMENT_ENV]: {
@@ -454,14 +476,27 @@ function directorHarness({
         }
       ]
     ]),
-    nextRevision: 2
+    nextRevision: 2,
+    latestCreated: 'relay-00001-old',
+    serviceMaximum,
+    serviceCapClears: 0,
+    templateTransport
   }
   const removed = []
   const healthProtocols = []
+  const trafficMoves = []
+  const spreadWaits = []
   let pendingCleanupFailure = cleanupFailsBeforeRemoval
   const operations = {
     describeService: () => ({
+      metadata: {
+        annotations: state.serviceMaximum === undefined
+          ? {}
+          : { 'run.googleapis.com/maxScale': String(state.serviceMaximum) }
+      },
       status: {
+        url: 'https://relay-hash-uc.a.run.app',
+        latestCreatedRevisionName: state.latestCreated,
         traffic: [
           { percent: 100, revisionName: state.activeRevision },
           ...[...state.tags].map(([tag, revisionName]) => ({
@@ -478,13 +513,15 @@ function directorHarness({
         metadata: {
           annotations: {
             'autoscaling.knative.dev/minScale': String(value?.minimum ?? 0),
-            'autoscaling.knative.dev/maxScale': String(value?.maximum ?? 5)
+            'autoscaling.knative.dev/maxScale': String(value?.maximum ?? 5),
+            ...value?.transport?.annotations
           }
         },
         spec: {
           serviceAccountName: value?.serviceAccount,
           containers: [
             {
+              name: value?.transport?.name,
               image: value?.image,
               env: [
                 ...Object.entries(value?.env ?? {}).map(([name, value]) => ({ name, value })),
@@ -493,7 +530,8 @@ function directorHarness({
                   valueSource: { secretKeyRef }
                 }))
               ]
-            }
+            },
+            ...value?.transport?.sidecars ?? []
           ]
         }
       }
@@ -501,7 +539,8 @@ function directorHarness({
     deployCandidate: (config, tag, env, image, minimum, maximum, regionalVersion) => {
       const revision = `relay-${String(state.nextRevision++).padStart(5, '0')}-new`
       state.revisions.set(revision, {
-        env: { ORCA_RELAY_ROLE: 'director', ...env },
+        // gcloud --update-env-vars keeps every variable the deploy does not name.
+        env: { ORCA_RELAY_ROLE: 'director', ...servingEnvironment, ...env },
         secrets: {
           [DIRECTOR_REGIONAL_PLACEMENT_ENV]: {
             secret: DIRECTOR_REGIONAL_PLACEMENT_SECRET,
@@ -513,10 +552,16 @@ function directorHarness({
         serviceAccount:
           config['runtime-service-account'] ??
           state.revisions.get(state.activeRevision)?.serviceAccount,
-        image: image ?? state.revisions.get(state.activeRevision)?.image
+        image: image ?? state.revisions.get(state.activeRevision)?.image,
+        transport: state.templateTransport
       })
+      state.latestCreated = revision
       state.tags.set(tag, revision)
       if (deployFailure) throw deployFailure
+    },
+    clearServiceMaximumInstances: () => {
+      state.serviceCapClears += 1
+      if (!serviceCapSticks) state.serviceMaximum = 100
     },
     listRevisions: () =>
       [...state.revisions].map(([name]) => ({ metadata: { name } })),
@@ -537,16 +582,25 @@ function directorHarness({
         if (cleanupReportsFailure) throw new Error('gcloud reported failed latest revision')
         return
       }
-      const promote = args.find((argument) => argument.startsWith('--to-tags='))
-      assert.ok(promote)
-      const tag = promote.slice('--to-tags='.length).split('=')[0]
-      state.activeRevision = state.tags.get(tag)
+      const move = args.find((argument) => /^--to-(tags|revisions)=/.test(argument))
+      assert.ok(move)
+      trafficMoves.push(move)
+      const [target, percent] = move.slice(move.indexOf('=') + 1).split('=')
+      if (percent !== '100') return
+      state.activeRevision = move.startsWith('--to-tags=') ? state.tags.get(target) : target
     },
     waitForHealth: async (_origin, connectionCapacityProtocol) => {
       healthProtocols.push(connectionCapacityProtocol)
-    }
+    },
+    waitForServingInstances: async (_config, revision, required) => {
+      spreadWaits.push({ revision, required })
+      if (spreadFailure) throw spreadFailure
+    },
+    readReserveCells: async (_config, origin) => reserveCells[origin],
+    readDirectorPlacement: async (_config, origin) => placements[origin] ?? 'unreported',
+    adminIdentityToken: () => adminToken(callerEmail)
   }
-  return { state, removed, healthProtocols, operations }
+  return { state, removed, healthProtocols, trafficMoves, spreadWaits, operations }
 }
 
 test('director deploy removes stale and promoted Cloud Run tags', async () => {
@@ -672,6 +726,113 @@ test('director candidate inherits the serving warm-instance floor', async () => 
   assert.equal(rollback.minimum, 0)
 })
 
+test('a multi-instance floor moves part of the traffic until every floor instance serves', async () => {
+  const harness = directorHarness({ servingMinimum: 5 })
+  await deployDirector({}, 'candidate-new', harness.operations)
+  assert.deepEqual(harness.trafficMoves, ['--to-tags=candidate-new=20', '--to-tags=candidate-new=100'])
+  assert.deepEqual(harness.spreadWaits, [{ revision: 'relay-00003-new', required: 5 }])
+  assert.equal(harness.state.activeRevision, 'relay-00003-new')
+})
+
+test('a candidate pins its own maximum, never the service-wide cap', () => {
+  const args = candidateUpdateArguments(
+    { service: 'relay', project: 'p', region: 'r', role: 'director' },
+    'candidate-new',
+    {},
+    'relay@sha256:abc',
+    5,
+    5,
+    '1'
+  )
+  assert.equal(args[args.indexOf('--max-instances') + 1], '5')
+  assert.ok(!args.includes('--max'))
+})
+
+test('a service cap below two full revisions is cleared before any candidate exists', async () => {
+  const harness = directorHarness({ servingMinimum: 5, serviceMaximum: 5 })
+  await deployDirector({ 'max-instances': '5' }, 'candidate-new', harness.operations)
+  assert.equal(harness.state.serviceCapClears, 1)
+  assert.equal(harness.state.serviceMaximum, 100)
+  assert.equal(harness.state.activeRevision, 'relay-00003-new')
+})
+
+test('a service cap with room for two revisions, or none, is left alone', async () => {
+  for (const serviceMaximum of [undefined, 10, 100]) {
+    const harness = directorHarness({ servingMinimum: 5, serviceMaximum })
+    await deployDirector({ 'max-instances': '5' }, 'candidate-new', harness.operations)
+    assert.equal(harness.state.serviceCapClears, 0)
+  }
+})
+
+test('a service cap that will not clear stops the deploy before traffic moves', async () => {
+  const harness = directorHarness({ servingMinimum: 5, serviceMaximum: 5, serviceCapSticks: true })
+  await assert.rejects(
+    deployDirector({ 'max-instances': '5' }, 'candidate-new', harness.operations),
+    /still caps instances at 5, below two revisions of 5/
+  )
+  assert.equal(harness.state.activeRevision, 'relay-00001-old')
+  assert.deepEqual(harness.trafficMoves, [])
+})
+
+test('a floor of one moves all traffic at once', async () => {
+  const harness = directorHarness()
+  await deployDirector({}, 'candidate-new', harness.operations)
+  assert.deepEqual(harness.trafficMoves, ['--to-tags=candidate-new=100'])
+  assert.deepEqual(harness.spreadWaits, [])
+})
+
+test('a candidate that never spreads returns traffic to the warm serving revision', async () => {
+  const failure = new Error('candidate served from 1 of 5 instances before the deadline')
+  const harness = directorHarness({ servingMinimum: 5, spreadFailure: failure })
+  await assert.rejects(deployDirector({}, 'candidate-new', harness.operations), failure)
+  assert.deepEqual(harness.trafficMoves, [
+    '--to-tags=candidate-new=20',
+    '--to-revisions=relay-00001-old=100'
+  ])
+  assert.equal(harness.state.activeRevision, 'relay-00001-old')
+  assert.equal(harness.state.tags.size, 0)
+})
+
+test('the spread wait counts distinct instances that served since the partial move', async () => {
+  const reads = [new Set(['a']), new Set(['a', 'b']), new Set(['a', 'b', 'c'])]
+  const seen = []
+  await waitForServingInstances({}, 'relay-00003-new', 3, '2026-10-20T05:25:00.000Z', {
+    readInstances: (_config, revision, since) => {
+      seen.push([revision, since])
+      return reads.shift()
+    },
+    pollIntervalMs: 0,
+    timeoutMs: 60_000
+  })
+  assert.equal(seen.length, 3)
+  assert.deepEqual(seen[0], ['relay-00003-new', '2026-10-20T05:25:00.000Z'])
+})
+
+test('the spread wait retries a failed log read', async () => {
+  let reads = 0
+  await waitForServingInstances({}, 'relay-00003-new', 2, '2026-10-20T05:25:00.000Z', {
+    readInstances: () => {
+      reads += 1
+      if (reads === 1) throw new Error('RESOURCE_EXHAUSTED')
+      return new Set(['a', 'b'])
+    },
+    pollIntervalMs: 0,
+    timeoutMs: 60_000
+  })
+  assert.equal(reads, 2)
+})
+
+test('the spread wait fails at its deadline', async () => {
+  await assert.rejects(
+    waitForServingInstances({}, 'relay-00003-new', 5, '2026-10-20T05:25:00.000Z', {
+      readInstances: () => new Set(['a']),
+      pollIntervalMs: 0,
+      timeoutMs: 0
+    }),
+    /served from 1 of 5 instances before the deadline/
+  )
+})
+
 test('director deploy rejects a serving maximum above the checked budget', async () => {
   const harness = directorHarness({ servingMaximum: 6 })
   await assert.rejects(
@@ -694,6 +855,105 @@ test('director deploy refuses to move traffic onto a candidate that lost the flo
   )
   // Traffic never moved, so the original revision still serves.
   assert.equal(harness.state.activeRevision, 'relay-00001-old')
+})
+
+const SERVING_IMAGE = `relay@sha256:${'f'.repeat(64)}`
+
+// What a Terraform apply of relay_director_cloud_sql_proxy_sidecar puts in the template.
+const SIDECAR_TRANSPORT = {
+  name: 'relay',
+  annotations: { 'run.googleapis.com/container-dependencies': '{"relay":["cloud-sql-proxy"]}' },
+  sidecars: [{ name: 'cloud-sql-proxy', image: 'gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:1' }]
+}
+
+// The apply leaves its revision at 0%, as the director service declares no traffic block.
+function applySidecarTemplate(harness) {
+  const serving = harness.state.revisions.get(harness.state.activeRevision)
+  harness.state.templateTransport = SIDECAR_TRANSPORT
+  harness.state.revisions.set('relay-00009-terraform', { ...serving, transport: SIDECAR_TRANSPORT })
+  harness.state.latestCreated = 'relay-00009-terraform'
+}
+
+test('a deploy after a sidecar apply refuses the new shape unless the apply revision is named', async () => {
+  const harness = directorHarness()
+  applySidecarTemplate(harness)
+  await assert.rejects(
+    deployDirector({}, 'candidate-new', harness.operations),
+    /unrelated revision shape/
+  )
+  assert.equal(harness.state.activeRevision, 'relay-00001-old')
+})
+
+test('a deploy adopts the shape of the named Terraform apply revision', async () => {
+  const harness = directorHarness()
+  applySidecarTemplate(harness)
+  await deployDirector(
+    { image: SERVING_IMAGE, 'shape-baseline-revision': 'relay-00009-terraform' },
+    'candidate-new',
+    harness.operations
+  )
+  const active = harness.state.revisions.get(harness.state.activeRevision)
+  assert.equal(active.transport, SIDECAR_TRANSPORT)
+  assert.equal(
+    harness.state.revisions.get(harness.state.tags.get('selector-rollback')).transport,
+    SIDECAR_TRANSPORT
+  )
+})
+
+test('the named shape baseline must be the unserved latest revision on the serving image', async () => {
+  const stale = directorHarness()
+  applySidecarTemplate(stale)
+  await assert.rejects(
+    deployDirector({ 'shape-baseline-revision': 'relay-00000-stale' }, 'candidate-new', stale.operations),
+    /not the latest created revision/
+  )
+  const serving = directorHarness()
+  await assert.rejects(
+    deployDirector({ 'shape-baseline-revision': 'relay-00001-old' }, 'candidate-new', serving.operations),
+    /already serving/
+  )
+  const otherImage = directorHarness()
+  applySidecarTemplate(otherImage)
+  otherImage.state.revisions.get('relay-00009-terraform').image = `relay@sha256:${'e'.repeat(64)}`
+  await assert.rejects(
+    deployDirector({ image: SERVING_IMAGE, 'shape-baseline-revision': 'relay-00009-terraform' }, 'candidate-new', otherImage.operations),
+    /does not run the serving image/
+  )
+  const newImage = directorHarness()
+  applySidecarTemplate(newImage)
+  await assert.rejects(
+    deployDirector(
+      { image: `relay@sha256:${'e'.repeat(64)}`, 'shape-baseline-revision': 'relay-00009-terraform' },
+      'candidate-new',
+      newImage.operations
+    ),
+    /must keep the serving image/
+  )
+  for (const harness of [stale, serving, otherImage, newImage]) {
+    assert.equal(harness.state.activeRevision, 'relay-00001-old')
+  }
+})
+
+test('--shape-baseline-revision takes only a revision name, and only for a director', () => {
+  const base = ['--project', 'p', '--region', 'r', '--service', 's', '--image', 'i@sha256:' + 'a'.repeat(64), '--release-id', 'x']
+  assert.throws(
+    () => parseArguments([...base, '--role', 'director', '--shape-baseline-revision', 'Bad_Name']),
+    /must be a Cloud Run revision name/
+  )
+  assert.throws(
+    () => parseArguments([...base, '--role', 'cell', '--director-origin', 'https://d', '--admin-audience', 'a', '--shape-baseline-revision', 'relay-1']),
+    /--shape-baseline-revision requires --role director/
+  )
+  const director = [...base, '--role', 'director', '--shape-baseline-revision', 'relay-1']
+  assert.equal(parseArguments(director)['shape-baseline-revision'], 'relay-1')
+  for (const [extra, refusal] of [
+    [['--bootstrap-runtime-identity', 'true'], /cannot combine with a runtime identity bootstrap/],
+    [['--capacity-cell-id', 'c1', '--director-cells-json', '[]'], /cannot combine with a director topology change/],
+    [['--director-cells-json', '[]'], /cannot combine with a director topology change/],
+    [['--prune-revisions', 'true'], /cannot combine with revision pruning/]
+  ]) {
+    assert.throws(() => parseArguments([...director, ...extra]), refusal)
+  }
 })
 
 test('director deploy rejects unrelated revision-shape drift', async () => {
@@ -853,4 +1113,231 @@ test('sets a reviewed cohort only behind repeated disabled-control verification'
     assertRegionalRehomeDisabled: async () => { verified++ } })
   assert.ok(verified >= 2)
   assert.equal(harness.state.revisions.get('relay-00003-new').env[DIRECTOR_CORRECTION_COHORT_ENV], '1')
+})
+
+test('director deploy refuses a traffic move between reserve-support revisions while a cell is reserve', async () => {
+  const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
+  const oldServing = directorHarness({
+    reserveCells: { [candidateOrigin]: ['production-gce-c3'] }
+  })
+  await assert.rejects(
+    deployDirector({}, 'candidate-new', oldServing.operations),
+    /differ in reserve-mode support while cells are reserve \(production-gce-c3\)/
+  )
+  assert.equal(oldServing.state.activeRevision, 'relay-00001-old')
+  const rollbackToOld = directorHarness({
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'] }
+  })
+  await assert.rejects(deployDirector({}, 'candidate-new', rollbackToOld.operations), /flip them to db first/)
+  assert.equal(rollbackToOld.state.activeRevision, 'relay-00001-old')
+  const allDb = directorHarness({ reserveCells: { [candidateOrigin]: [] } })
+  await deployDirector({}, 'candidate-new', allDb.operations)
+  assert.equal(allDb.state.activeRevision, 'relay-00003-new')
+})
+
+test('two revisions that both read the census may move traffic with reserve cells', () => {
+  assert.doesNotThrow(() => assertReserveCompatibleTrafficMove(['c3'], ['c3']))
+  assert.doesNotThrow(() => assertReserveCompatibleTrafficMove(undefined, undefined))
+  assert.throws(() => assertReserveCompatibleTrafficMove(undefined, ['c3']), /flip them to db first/)
+})
+
+test('reads a census-less director as unsupported and fails closed on any other refusal', async () => {
+  const environment = process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+  process.env.ORCA_RELAY_ADMIN_ID_TOKEN = 'aaa.bbb.ccc'
+  const config = { 'admin-audience': 'https://relay.onorca.dev/v1/admin/drain' }
+  try {
+    assert.equal(
+      await readReserveCells(config, 'https://old.example.test', ['c1'], async () =>
+        new Response('404 Not Found', { status: 404 })
+      ),
+      undefined
+    )
+    const modes = { c1: 'db', c2: 'reserve' }
+    assert.deepEqual(
+      await readReserveCells(config, 'https://new.example.test', ['c1', 'c2'], async (url, init) => {
+        assert.equal(url, 'https://new.example.test/v1/admin/cell-admit-mode')
+        const { cellId } = JSON.parse(init.body)
+        return new Response(JSON.stringify({ v: 1, cellId, admitMode: modes[cellId], updatedAt: 1 }))
+      }),
+      ['c2']
+    )
+    await assert.rejects(
+      readReserveCells(config, 'https://new.example.test', ['c1'], async () =>
+        new Response(JSON.stringify({ error: 'invalid_token' }), { status: 401 })
+      ),
+      /cell admit mode read failed for c1: invalid_token/
+    )
+  } finally {
+    if (environment === undefined) delete process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+    else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
+  }
+})
+
+test('a same-image deploy reads no admit modes, and keeps the serving reserve placement', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const harness = directorHarness({ servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' } })
+  let reads = 0
+  harness.operations.readReserveCells = async () => {
+    reads += 1
+    return []
+  }
+  await deployDirector({ image: `relay@${servingImageDigest}` }, 'candidate-new', harness.operations)
+  assert.equal(reads, 0)
+  assert.equal(harness.state.revisions.get(harness.state.activeRevision).env[DIRECTOR_RESERVE_PLACEMENT_ENV], 'on')
+})
+
+test('turning reserve placement off is refused while any cell is reserve, even on the same image', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
+  const reserved = directorHarness({
+    servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'], [candidateOrigin]: ['production-gce-c3'] },
+    placements: { 'https://relay-hash-uc.a.run.app': 'on', [candidateOrigin]: 'off' }
+  })
+  await assert.rejects(
+    deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', reserved.operations),
+    /reserve placement would turn off while cells are reserve \(production-gce-c3\); flip them to db first/
+  )
+  assert.equal(reserved.state.activeRevision, 'relay-00001-old')
+  const allDb = directorHarness({
+    servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': [], [candidateOrigin]: [] }
+  })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', allDb.operations)
+  assert.equal(allDb.state.revisions.get(allDb.state.activeRevision).env[DIRECTOR_RESERVE_PLACEMENT_ENV], 'off')
+})
+
+test('--reserve-placement takes only a known mode, and only for a director', () => {
+  const base = ['--project', 'p', '--region', 'r', '--service', 's', '--image', `relay@sha256:${'a'.repeat(64)}`, '--release-id', '1']
+  assert.equal(parseArguments([...base, '--role', 'director', '--reserve-placement', 'on'])['reserve-placement'], 'on')
+  assert.throws(() => parseArguments([...base, '--role', 'director', '--reserve-placement', 'yes']), /must be preserve, off, dry-run or on/)
+  assert.throws(
+    () => parseArguments([...base, '--role', 'cell', '--director-origin', 'https://d', '--admin-audience', 'a', '--reserve-placement', 'on']),
+    /require --role director/
+  )
+  assert.equal(directorDeploymentEnvironment({ 'reserve-placement': 'preserve' })[DIRECTOR_RESERVE_PLACEMENT_ENV], undefined)
+  assert.equal(directorDeploymentEnvironment({ 'reserve-placement': 'dry-run' })[DIRECTOR_RESERVE_PLACEMENT_ENV], 'dry-run')
+})
+
+test('the guard reads placement as built, so a director that never placed does not block turning it off', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
+  // Configured on, but the serving director reports off: it was never feeding the dead-man.
+  const harness = directorHarness({
+    servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'], [candidateOrigin]: ['production-gce-c3'] },
+    placements: { 'https://relay-hash-uc.a.run.app': 'off', [candidateOrigin]: 'off' }
+  })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', harness.operations)
+  assert.equal(harness.state.revisions.get(harness.state.activeRevision).env[DIRECTOR_RESERVE_PLACEMENT_ENV], 'off')
+})
+
+test('a shadow-cell change on the same image is checked, and a shrink past a reserve cell is refused', () => {
+  assert.throws(
+    () => assertShadowCellsKeepReserveCells('production-gce-c1,production-gce-c3', 'production-gce-c1', ['production-gce-c3']),
+    /would drop reserve cells \(production-gce-c3\); flip them to db first/
+  )
+  assert.throws(() => assertShadowCellsKeepReserveCells('all', 'production-gce-c1', ['production-gce-c3']), /production-gce-c3/)
+  assert.throws(() => assertShadowCellsKeepReserveCells('all', undefined, ['production-gce-c3']), /production-gce-c3/)
+  assert.doesNotThrow(() => assertShadowCellsKeepReserveCells('production-gce-c1', 'all', ['production-gce-c3']))
+  assert.doesNotThrow(() => assertShadowCellsKeepReserveCells('production-gce-c1,production-gce-c3', 'production-gce-c1', []))
+  // A reserve cell the serving list never polled is not being dropped by this deploy.
+  assert.doesNotThrow(() => assertShadowCellsKeepReserveCells('production-gce-c1', 'production-gce-c1', ['production-gce-c3']))
+})
+
+test('reads a director placement from runtime-status, and reports an image without the field', async () => {
+  const environment = process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+  process.env.ORCA_RELAY_ADMIN_ID_TOKEN = 'aaa.bbb.ccc'
+  const config = { 'admin-audience': 'https://relay.onorca.dev/v1/admin/drain' }
+  try {
+    const answer = (body) => async () => new Response(JSON.stringify({ v: 1, role: 'director', ...body }))
+    assert.equal(await readDirectorPlacement(config, 'https://d.example.test', answer({ reservePlacement: 'on' })), 'on')
+    assert.equal(await readDirectorPlacement(config, 'https://d.example.test', answer({})), 'unreported')
+    await assert.rejects(readDirectorPlacement(config, 'https://d.example.test', answer({ reservePlacement: 'maybe' })), /reports reserve placement maybe/)
+    await assert.rejects(
+      readDirectorPlacement(config, 'https://d.example.test', async () => new Response('{}', { status: 401 })),
+      /runtime status failed/
+    )
+  } finally {
+    if (environment === undefined) delete process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+    else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
+  }
+})
+
+// Why: staging drifted to a director that trusts gha-deploy while every staging workflow
+// authenticates as gha-relay; the deploy, not Terraform, owns the live value.
+test('a director deploy sets the trusted deploy identity only when asked', () => {
+  const config = { project: 'onorca-cloud-staging' }
+  const relay = 'orca-cloud-staging-gha-relay@onorca-cloud-staging.iam.gserviceaccount.com'
+  assert.equal(
+    directorDeploymentEnvironment({ ...config, 'deploy-service-account': relay })
+      .ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
+    relay
+  )
+  assert.equal(
+    'ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT' in directorDeploymentEnvironment(config),
+    false
+  )
+  assert.throws(
+    () =>
+      directorDeploymentEnvironment({
+        ...config,
+        'deploy-service-account': 'foreign@other-project.iam.gserviceaccount.com'
+      }),
+    /selected project/
+  )
+})
+
+// Staging's director trusted gha-deploy while the workflow authenticated as gha-relay: a bare 401.
+test('the guard names the deploy identity a drifted director trusts instead of reading into a 401', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const harness = directorHarness({
+    servingEnvironment: { ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'gha-deploy@p.iam.gserviceaccount.com' },
+    callerEmail: 'gha-relay@p.iam.gserviceaccount.com'
+  })
+  await assert.rejects(
+    deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', harness.operations),
+    /serving director trusts gha-deploy@p\.iam\.gserviceaccount\.com for deploy admin reads, but this deploy authenticates as gha-relay@p\.iam\.gserviceaccount\.com/
+  )
+  const trusted = directorHarness({
+    servingEnvironment: { ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'gha-relay@p.iam.gserviceaccount.com' },
+    callerEmail: 'gha-relay@p.iam.gserviceaccount.com'
+  })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', trusted.operations)
+})
+
+test('a director deploy takes --admin-audience alone for the reserve guard', () => {
+  const base = ['--project', 'p', '--region', 'r', '--service', 's', '--image', `relay@sha256:${'e'.repeat(64)}`, '--role', 'director', '--release-id', 'x']
+  const audience = ['--admin-audience', 'https://relay.example.test']
+  assert.equal(parseArguments([...base, ...audience])['admin-audience'], 'https://relay.example.test')
+  assert.throws(
+    () => parseArguments([...base, '--expected-rehome-generation', '1', '--rehome-control-origin', 'https://relay.example.test']),
+    /durable rehome verification arguments must be configured together/
+  )
+  assert.throws(
+    () => parseArguments([...base, ...audience, '--expected-rehome-generation', '1']),
+    /durable rehome verification arguments must be configured together/
+  )
+})
+
+test('--shadow-seat-feed-cells sets the director setting, and preserve keeps the serving one', async () => {
+  assert.equal(
+    directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'c1, c2' })[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV],
+    'c1,c2'
+  )
+  assert.equal(directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'all' })[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV], 'all')
+  assert.equal(directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'preserve' })[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV], undefined)
+  assert.throws(() => directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'C1;x' }), /must be preserve, all, or a comma list/)
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const harness = directorHarness({ servingEnvironment: { [DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV]: 'c1,c3' } })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'shadow-seat-feed-cells': 'preserve' }, 'candidate-new', harness.operations)
+  assert.equal(harness.state.revisions.get(harness.state.activeRevision).env[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV], 'c1,c3')
+  const shrink = directorHarness({
+    servingEnvironment: { [DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV]: 'c1,c3' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['c3'], 'https://candidate-new---relay-hash-uc.a.run.app': ['c3'] }
+  })
+  await assert.rejects(
+    deployDirector({ image: `relay@${servingImageDigest}`, 'shadow-seat-feed-cells': 'c1' }, 'candidate-new', shrink.operations),
+    /would drop reserve cells \(c3\)/
+  )
 })

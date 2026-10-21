@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
@@ -5,22 +6,33 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../../../sha
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  getRepoExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import {
-  findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
+  floatingWorkspaceToWorktree,
+  isFloatingWorkspaceId
+} from '../../../../../../shared/floating-workspace-worktree'
+import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  selectFolderWorkspaces,
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+// Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
+// row's identity to hold while the resolved directory is unchanged.
+let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -41,7 +53,7 @@ export function applyDetectedWorktreeUpdates(
       }
       repoChanged = true
       changed = true
-      const next = { ...worktree, ...updates }
+      const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
       if (updates.displayNameIsPinned !== undefined) {
         next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
         if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
@@ -61,44 +73,55 @@ export function folderWorkspaceMatchesHost(
   workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>,
   executionHostId: ExecutionHostId
 ): boolean {
-  return (
-    (parseExecutionHostId(workspace.executionHostId)?.id ??
-      (workspace.connectionId?.trim()
-        ? toSshExecutionHostId(workspace.connectionId)
-        : LOCAL_EXECUTION_HOST_ID)) === executionHostId
-  )
+  return getRepoExecutionHostId(workspace) === executionHostId
+}
+
+/** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
+export function getFolderWorkspaceWorktree(folderWorkspace: FolderWorkspace): Worktree {
+  const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+  if (cached) {
+    return cached
+  }
+  const worktree = folderWorkspaceToWorktree(folderWorkspace)
+  folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+  return worktree
 }
 
 export function findKnownWorktreeById(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
+  state: Pick<
+    AppState,
+    'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
+  >,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  if (isFloatingWorkspaceId(worktreeId)) {
+    // The floating workspace has no repo/folder row; mint the same synthetic row the host resolves
+    // with, from the host-resolved directory. Before resolution there is no path to answer with.
+    const path = state.floatingWorkspacePath
+    if (!path || (executionHostId && executionHostId !== LOCAL_EXECUTION_HOST_ID)) {
+      return undefined
+    }
+    if (floatingWorkspaceWorktreeCache?.path !== path) {
+      floatingWorkspaceWorktreeCache = { path, worktree: floatingWorkspaceToWorktree(path) }
+    }
+    return floatingWorkspaceWorktreeCache.worktree
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
         (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
     )
-    if (!folderWorkspace) {
-      return undefined
-    }
-    const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
-    if (cached) {
-      return cached
-    }
-    const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
-    return worktree
+    return folderWorkspace ? getFolderWorkspaceWorktree(folderWorkspace) : undefined
   }
   const visible = executionHostId
-    ? (findIndexedWorktreeOwnerForHost(
-        state.worktreesByRepo,
-        worktreeId,
-        executionHostId
-      ) as Worktree | null)
-    : findWorktreeById(state.worktreesByRepo, worktreeId)
+    ? selectWorkspaceByHostTarget(
+        state,
+        hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
+      )
+    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }
@@ -124,84 +147,49 @@ export function findKnownWorktreeById(
 }
 
 export function getFolderWorkspaceMetaUpdates(
-  updates: Partial<WorktreeMeta>
-): Partial<
-  Pick<
-    FolderWorkspace,
-    | 'name'
-    | 'comment'
-    | 'isArchived'
-    | 'isUnread'
-    | 'isPinned'
-    | 'sortOrder'
-    | 'manualOrder'
-    | 'lastActivityAt'
-    | 'workspaceStatus'
-    | 'createdWithAgent'
-    | 'pendingFirstAgentMessageRename'
-    | 'firstAgentMessageRenameError'
-    | 'diffComments'
-  >
-> {
-  const next: Partial<
-    Pick<
-      FolderWorkspace,
-      | 'name'
-      | 'comment'
-      | 'isArchived'
-      | 'isUnread'
-      | 'isPinned'
-      | 'sortOrder'
-      | 'manualOrder'
-      | 'lastActivityAt'
-      | 'workspaceStatus'
-      | 'createdWithAgent'
-      | 'pendingFirstAgentMessageRename'
-      | 'firstAgentMessageRenameError'
-      | 'diffComments'
-    >
-  > = {}
+  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+) {
+  const next: Partial<FolderWorkspace> & WorkspaceAttachmentMutation = Object.fromEntries(
+    (
+      [
+        'comment',
+        'isArchived',
+        'isUnread',
+        'isPinned',
+        'sortOrder',
+        'manualOrder',
+        'lastActivityAt',
+        'workspaceStatus',
+        'createdWithAgent',
+        'pendingFirstAgentMessageRename',
+        'firstAgentMessageRenameError',
+        'diffComments',
+        'linkedItems',
+        'linkedItemsBase',
+        'linkedItemsSelectionChanged',
+        'linkedTaskSourceContext'
+      ] as const
+    )
+      .filter((field) => updates[field] !== undefined)
+      .map((field) => [field, updates[field]])
+  )
   if (updates.displayName !== undefined) {
     next.name = updates.displayName
-    next.pendingFirstAgentMessageRename = false
-    next.firstAgentMessageRenameError = null
+    next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename ?? false
+    next.firstAgentMessageRenameError =
+      updates.firstAgentMessageRenameError === undefined
+        ? null
+        : updates.firstAgentMessageRenameError
   }
-  if (updates.comment !== undefined) {
-    next.comment = updates.comment
+  if (
+    updates.comment !== undefined &&
+    updates.lastActivityAt === undefined &&
+    !ORCA_SIDEBAR_INPUTS_IS_MAIN
+  ) {
     next.lastActivityAt = Date.now()
   }
-  if (updates.isArchived !== undefined) {
-    next.isArchived = updates.isArchived
-  }
-  if (updates.isUnread !== undefined) {
-    next.isUnread = updates.isUnread
-  }
-  if (updates.isPinned !== undefined) {
-    next.isPinned = updates.isPinned
-  }
-  if (updates.sortOrder !== undefined) {
-    next.sortOrder = updates.sortOrder
-  }
-  if (updates.manualOrder !== undefined) {
-    next.manualOrder = updates.manualOrder
-  }
-  if (updates.lastActivityAt !== undefined) {
-    next.lastActivityAt = updates.lastActivityAt
-  }
-  if (updates.workspaceStatus !== undefined) {
-    next.workspaceStatus = updates.workspaceStatus
-  }
-  if (updates.createdWithAgent !== undefined) {
-    next.createdWithAgent = updates.createdWithAgent
-  }
-  if (updates.pendingFirstAgentMessageRename !== undefined) {
-    next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
-  }
-  if (updates.firstAgentMessageRenameError !== undefined) {
-    next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
-  }
-  if (updates.diffComments !== undefined) {
-    next.diffComments = updates.diffComments
+  if (updates.linkedWorkItem !== undefined) {
+    next.linkedTask = updates.linkedWorkItem
   }
   return next
 }

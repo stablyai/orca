@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { paneKeyMatchSuffix, REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import { potentiallyLiveRemoteAttachmentSql } from './remote-attachment-liveness'
+import { REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST } from '../row-column-lists'
 
 export function beginRemoteAttachmentStop(
   this: OrchestrationDb,
@@ -71,17 +72,19 @@ export function findActiveRemoteAttachmentForPane(
   paneKey: string
 ): RemoteDispatchAttachmentRow | undefined {
   if (!parsePaneKey(paneKey)) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
     return this.db
       .prepare(
-        `SELECT * FROM remote_dispatch_attachments
+        `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
          WHERE ${potentiallyLiveRemoteAttachmentSql()} AND pane_key = ?
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(paneKey) as RemoteDispatchAttachmentRow | undefined
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned attachment projection returns RemoteDispatchAttachmentRow rows; the adapter exposes unknown.
   return this.db
     .prepare(
-      `SELECT * FROM remote_dispatch_attachments
+      `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
        WHERE ${potentiallyLiveRemoteAttachmentSql()} AND pane_key IS NOT NULL
          AND instr(pane_key, ':') > 1
          AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?

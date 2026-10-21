@@ -40,7 +40,6 @@ function createCoordinator() {
   const coordinator = createAgentCompletionCoordinator({
     paneKey: PANE,
     getPtyId: () => 'pty-1',
-    getSettings: () => null,
     inspectProcess: vi.fn(),
     dispatchCompletion,
     dispatchHookLifecycle,

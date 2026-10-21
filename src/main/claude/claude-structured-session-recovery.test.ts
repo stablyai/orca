@@ -10,7 +10,9 @@ import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  tick
+  tick,
+  claudeStartupSettled,
+  claudeOpened
 } from './claude-structured-session-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import {
@@ -349,7 +351,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
-    await adapter.awaitStarted('session-1')
+    await claudeStartupSettled(adapter, 'session-1')
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
     const oldSession = (
@@ -386,7 +388,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     expect(oldPrompt.settled()).toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toEqual([])
 
-    const replacement = await adapter.acquire({
+    await adapter.acquire({
       identity: {
         ...identityFor(),
         providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
@@ -395,6 +397,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-10',
       events: journalSink
     })
+    const replacement = await claudeOpened(adapter, 'session-1')
 
     expect(disposeTranslator).toHaveBeenCalledOnce()
     expect(settlePrompt).toHaveBeenCalledOnce()
@@ -412,7 +415,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       identity: {
         ...identityFor(),
         providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
-      }
+      },
+      spawnToken: expect.any(String)
     })
     expect(oldPrompt.settled()).toBe(true)
     expect(events.filter((event) => event.type === 'ended')).toEqual([

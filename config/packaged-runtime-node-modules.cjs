@@ -10,6 +10,11 @@ const {
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
+const { adoptPackagedNativeBuildEntries } = require('./packaged-native-build-entries.cjs')
+const {
+  NATIVE_BUILD_PACKAGES,
+  TRANSIENT_NATIVE_BUILD_ENTRY_FILTER
+} = require('./scripts/native-build-entry.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -18,6 +23,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
+  '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
   'i18next',
@@ -26,6 +32,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'posthog-node',
   'proper-lockfile',
   'qrcode',
+  'smol-toml',
   'ssh2',
   'tweetnacl',
   'ws',
@@ -35,9 +42,15 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
 // Why macOS only: serve-sim drives the iOS Simulator, and its native addon is a Mach-O that
 // Windows signing rejects as a PE file.
 const DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS = ['serve-sim']
+/** The compiled binary each workspace Windows addon loads, relative to its package. */
+const WORKSPACE_WINDOWS_ADDON_BINARIES = [
+  ['@orca/windows-registry', 'build/Release/orca_windows_registry.node'],
+  ['@orca/windows-security', 'build/Release/orca_windows_security.node']
+]
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
-  '@orca/windows-registry'
+  '@orca/windows-registry',
+  '@orca/windows-security'
 ]
 
 const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
@@ -214,8 +227,55 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
   return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
     from: packageDir,
-    to: join('node_modules', ...packageName.split('/'))
+    to: join('node_modules', ...packageName.split('/')),
+    ...(packageName === '@orca/process-host' ? { filter: ['package.json', 'dist/**/*'] } : {}),
+    // Why: another worktree can rename these away mid-copy, failing the walk with ENOENT.
+    ...(NATIVE_BUILD_PACKAGES[packageName] ? { filter: TRANSIENT_NATIVE_BUILD_ENTRY_FILTER } : {})
   }))
+}
+
+function listProcessHostModules(directory, extension, prefix = '') {
+  if (!existsSync(directory)) {
+    return []
+  }
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${prefix}${entry.name}`
+    if (entry.isDirectory()) {
+      return entry.name === '__fixtures__'
+        ? []
+        : listProcessHostModules(join(directory, entry.name), extension, `${relativePath}/`)
+    }
+    return entry.name.endsWith(extension) && !entry.name.endsWith(`.test${extension}`)
+      ? [relativePath.slice(0, -extension.length)]
+      : []
+  })
+}
+
+// Why: the resource filter copies whatever dist holds, so a missing, partial, or stale build
+// would ship a package main cannot load. Mirrors the package tsconfig include/exclude.
+function assertProcessHostOutputBuilt(packageDir = readPackage('@orca/process-host').packageDir) {
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+  const publicTargets = [
+    manifest.main,
+    ...Object.values(manifest.exports ?? {}).map((target) =>
+      typeof target === 'string' ? target : target?.default
+    )
+  ].filter((target) => typeof target === 'string')
+  const sources = listProcessHostModules(join(packageDir, 'src'), '.ts')
+  const sourceSet = new Set(sources)
+  const missing = [
+    ...new Set([...publicTargets, ...sources.map((module) => `./dist/${module}.js`)])
+  ].filter((target) => !existsSync(join(packageDir, target)))
+  const stale = listProcessHostModules(join(packageDir, 'dist'), '.js')
+    .filter((module) => !sourceSet.has(module))
+    .map((module) => `./dist/${module}.js`)
+  if (missing.length > 0 || stale.length > 0) {
+    throw new Error(
+      `@orca/process-host output in ${packageDir} does not match its source ` +
+        `(missing: ${missing.join(', ') || 'none'}; stale: ${stale.join(', ') || 'none'}). ` +
+        'Run `pnpm build:packages` before packaging.'
+    )
+  }
 }
 
 function normalizeAsarEntryPath(entry) {
@@ -566,10 +626,20 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
   }
 
   // Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
-  // @orca/windows-registry is a workspace link present on every host, so its presence proves nothing.
+  // the @orca/windows-* addons are workspace links present on every host, so their presence proves nothing.
   const missingWindowsAddons = []
   if (electronPlatformName === 'win32' && !isInstalled('@vscode/windows-process-tree')) {
     missingWindowsAddons.push('@vscode/windows-process-tree')
+  }
+  // Why the binary, not the package: the link exists everywhere, and a missing or foreign-arch
+  // .node would otherwise surface only at runtime (secure files unrestricted, orcad refusing to start).
+  if (electronPlatformName === 'win32') {
+    for (const [name, binary] of WORKSPACE_WINDOWS_ADDON_BINARIES) {
+      const addon = join(nodeModulesDir, name, binary)
+      if (!existsSync(addon) || readPeMachine(addon) !== PE_MACHINE[architecture]) {
+        missingWindowsAddons.push(`${name} (${binary} for ${architecture})`)
+      }
+    }
   }
 
   if (missing.length === 0 && missingWindowsAddons.length === 0) {
@@ -595,6 +665,8 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
 
 function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, electronArch) {
   const architecture = normalizeElectronArchitecture(electronArch)
+  // Before the node-pty prune, which judges build/Release.
+  adoptPackagedNativeBuildEntries(resourcesDir, electronPlatformName, architecture)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
@@ -617,6 +689,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,

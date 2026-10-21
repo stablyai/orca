@@ -3,8 +3,9 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,
@@ -141,11 +142,8 @@ export function focusRendererTerminalHandle(
     return false
   }
 
-  store.setActiveWorktree(target.worktreeId)
-  store.markWorktreeVisited(target.worktreeId)
-  store.setActiveView('terminal')
+  revealWorkspaceSurface(store, target.worktreeId)
   store.setActiveTabType('terminal', target.worktreeId)
-  store.revealWorktreeInSidebar(target.worktreeId)
   if (target.leafId) {
     activateTabAndFocusPane(target.tabId, target.leafId)
   } else {
@@ -298,7 +296,7 @@ function getTerminalHandleFocusHint(showActions: boolean): string {
     : `${prefix}Ctrl+click to switch terminal`
 }
 
-async function focusRuntimeTerminalHandle(
+export async function focusRuntimeTerminalHandle(
   handle: string,
   runtimeEnvironmentId: string | null
 ): Promise<void> {

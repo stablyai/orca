@@ -37,9 +37,9 @@ type ClaudeConfigEnv = {
 // half-stale refresh timer stays inside setTimeout's 32-bit range.
 const NEVER_STALE_MS = 2 ** 30
 const LOCK_RETRIES = { retries: 4, factor: 2, minTimeout: 50, maxTimeout: 250 }
-// Why: concurrent grants in one process retry the file lock in lockstep, so a launch burst
+// Why: concurrent updates in one process retry the file lock in lockstep, so a launch burst
 // would lose most of them to `locked`; queue them so only Claude itself contends for the lock.
-const grantQueueByConfigFile = new Map<string, Promise<void>>()
+const updateQueueByConfigFile = new Map<string, Promise<void>>()
 
 function pathApi(style: ClaudeTrustPathStyle): typeof posix {
   return style === 'win32' ? win32 : posix
@@ -75,7 +75,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export type ClaudeFolderTrustChange =
+export type ClaudeGlobalConfigChange =
   | { kind: 'unchanged' }
   | { kind: 'refuse' }
   | { kind: 'changed'; config: Record<string, unknown> }
@@ -83,7 +83,7 @@ export type ClaudeFolderTrustChange =
 export function applyClaudeFolderTrust(
   config: Record<string, unknown>,
   folderKeys: readonly string[]
-): ClaudeFolderTrustChange {
+): ClaudeGlobalConfigChange {
   if (config.projects !== undefined && !isPlainObject(config.projects)) {
     return { kind: 'refuse' }
   }
@@ -193,30 +193,45 @@ function replaceConfig(replacement: ReplacementFile, config: Record<string, unkn
   renameFileWithWindowsRetry(replacement.path, replacement.target)
 }
 
-/**
- * Sets `projects[<folder>].hasTrustDialogAccepted` in Claude's global config. Never
- * creates the file, never breaks Claude's lock, and never rewrites a file it could
- * not read and parse.
- */
-export function grantClaudeFolderTrust(args: {
+/** Sets `projects[<folder>].hasTrustDialogAccepted` in Claude's global config. */
+export async function grantClaudeFolderTrust(args: {
   configFile: string
   folderKeys: readonly string[]
 }): Promise<ClaudeFolderTrustOutcome> {
-  return runKeyedSerializedOperation(grantQueueByConfigFile, args.configFile, () =>
-    grantClaudeFolderTrustNow(args)
+  const outcome = await updateClaudeGlobalConfig(args.configFile, (config) =>
+    applyClaudeFolderTrust(config, args.folderKeys)
+  )
+  return outcome === 'updated' ? 'granted' : outcome
+}
+
+export type ClaudeGlobalConfigUpdateOutcome =
+  | Exclude<ClaudeFolderTrustOutcome, 'granted'>
+  | 'updated'
+
+/**
+ * Orca's one writer of a Claude global config. Never creates the file, never breaks Claude's
+ * lock, and never rewrites a file it could not read and parse. `change` must be pure: it runs
+ * once to plan and again under the lock.
+ */
+export function updateClaudeGlobalConfig(
+  configFile: string,
+  change: (config: Record<string, unknown>) => ClaudeGlobalConfigChange
+): Promise<ClaudeGlobalConfigUpdateOutcome> {
+  return runKeyedSerializedOperation(updateQueueByConfigFile, configFile, () =>
+    updateClaudeGlobalConfigNow({ configFile, change })
   )
 }
 
-async function grantClaudeFolderTrustNow(args: {
+async function updateClaudeGlobalConfigNow(args: {
   configFile: string
-  folderKeys: readonly string[]
-}): Promise<ClaudeFolderTrustOutcome> {
+  change: (config: Record<string, unknown>) => ClaudeGlobalConfigChange
+}): Promise<ClaudeGlobalConfigUpdateOutcome> {
   const probe = readConfigAt(resolveConfigTarget(args.configFile))
   if (typeof probe === 'string') {
     return probe
   }
   // Why: most launches need nothing, so skip Claude's lock unless a write is due.
-  const planned = applyClaudeFolderTrust(probe.config, args.folderKeys).kind
+  const planned = args.change(probe.config).kind
   if (planned !== 'changed') {
     return planned === 'refuse' ? 'unreadable' : 'unchanged'
   }
@@ -249,7 +264,7 @@ async function grantClaudeFolderTrustNow(args: {
       if (current.path !== replacement.target) {
         return 'unreadable'
       }
-      const change = applyClaudeFolderTrust(current.config, args.folderKeys)
+      const change = args.change(current.config)
       if (change.kind === 'refuse') {
         return 'unreadable'
       }
@@ -257,7 +272,7 @@ async function grantClaudeFolderTrustNow(args: {
         return 'unchanged'
       }
       replaceConfig(replacement, change.config)
-      return 'granted'
+      return 'updated'
     } finally {
       await release().catch(() => {})
     }

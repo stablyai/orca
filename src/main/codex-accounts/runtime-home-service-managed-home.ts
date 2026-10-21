@@ -1,4 +1,6 @@
+import { statSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   syncSystemCodexResourcesIntoManagedHome,
   getSystemCodexHomePath,
@@ -47,10 +49,17 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   protected getManagedAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
     const homes: string[] = []
+    let hostAccountsRootMissing: boolean | undefined
     for (const account of settings.codexManagedAccounts) {
       const wslHome = this.getWslManagedHomePath(account)
       if (wslHome) {
         homes.push(wslHome)
+        continue
+      }
+      // Why: no host home can be owned without the accounts root, so a lookup poll skips the
+      // per-account ownership-marker reads (and their warnings) until one exists.
+      hostAccountsRootMissing ??= this.isManagedAccountsRootDefinitivelyAbsent()
+      if (hostAccountsRootMissing) {
         continue
       }
       const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
@@ -59,6 +68,16 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       }
     }
     return homes
+  }
+
+  private isManagedAccountsRootDefinitivelyAbsent(): boolean {
+    try {
+      statSync(this.getManagedAccountsRoot())
+      return false
+    } catch (error) {
+      // Any other read error stays with the ownership check, which reports it as indeterminate.
+      return isDefinitiveAbsence(error)
+    }
   }
 
   protected getManagedHostAccountHomesForSessionDiscovery(): string[] {

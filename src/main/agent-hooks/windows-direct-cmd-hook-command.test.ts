@@ -1,12 +1,15 @@
 // The registered command must not depend on the shell Claude selects.
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
-import { wrapWindowsDirectCmdHookCommand } from './windows-direct-cmd-hook-command'
+import { WINDOWS_CMD_SAFE_PATH, wrapWindowsHookCommand } from './installer-utils'
+import {
+  wrapWindowsBatchHookCommand,
+  wrapWindowsDirectCmdHookCommand
+} from './windows-direct-cmd-hook-command'
 import { getWindowsClaudeHookEntry } from '../claude/windows-hook-files'
 import { getManagedScript } from '../claude/hook-script'
 import { getWindowsPowerShellExecutablePath } from './windows-powershell-hook-launcher'
@@ -51,6 +54,22 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
     ]) {
       expect(wrapWindowsDirectCmdHookCommand(path), path).toBeNull()
     }
+  })
+})
+
+describe('wrapWindowsBatchHookCommand', () => {
+  it('registers a cmd-safe .cmd hook by its bare path', () => {
+    expect(wrapWindowsBatchHookCommand(SAFE_PATH)).toBe(wrapWindowsDirectCmdHookCommand(SAFE_PATH))
+  })
+
+  it('keeps the encoded launcher for a path the shells cannot carry bare', () => {
+    const spaced = 'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\gemini-hook.cmd'
+    expect(wrapWindowsBatchHookCommand(spaced)).toBe(wrapWindowsHookCommand(spaced))
+    // Guarded Unicode .cmd paths take the cheaper policy switch.
+    const unicode = 'C:\\Users\\rené\\.orca\\agent-hooks\\gemini-hook.cmd'
+    expect(wrapWindowsBatchHookCommand(unicode)).toBe(
+      wrapWindowsHookCommand(unicode, {}, { useProcessPolicyEnvironment: true })
+    )
   })
 })
 
@@ -103,8 +122,10 @@ describe.skipIf(process.platform !== 'win32')(
           PATH: process.env.PATH,
           PATHEXT: process.env.PATHEXT,
           ComSpec: process.env.ComSpec,
+          ORCA_BACKGROUND_LAUNCH: '1',
           HOME: cwd,
-          USERPROFILE: cwd
+          // PowerShell starts batch files through cmd, whose AutoRun may read the host profile.
+          USERPROFILE: process.env.USERPROFILE ?? cwd
         },
         input: '{"hook_event_name":"PreToolUse"}',
         timeoutMs: 5_000

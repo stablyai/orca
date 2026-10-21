@@ -46,7 +46,6 @@ export function useAutomationsPageListState({
     [hostCatalog.entries, hostCatalog.resolution]
   )
   const scopedExternal = useScopedExternalAutomations({
-    catalogEntries: hostCatalog.entries,
     scopeEntries: externalScopeEntries
   })
   const unscopedRows = useMemo(() => unscopedAutomationListRows(automations), [automations])

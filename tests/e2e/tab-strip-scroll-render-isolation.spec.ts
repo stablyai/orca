@@ -243,7 +243,7 @@ test.describe('Tab strip scroll render isolation', () => {
 
     // A narrower pane shrinks the strip and the track without a scroll event.
     await strip.evaluate((el) => {
-      el.closest<HTMLElement>('[data-native-file-drop-target]')!.style.maxWidth = '700px'
+      el.closest<HTMLElement>('[data-os-file-drop-owner]')!.style.maxWidth = '700px'
     })
     await expectThumbToTrackStrip(strip)
   })

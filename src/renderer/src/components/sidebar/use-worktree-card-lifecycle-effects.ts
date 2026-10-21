@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
@@ -28,6 +29,8 @@ export function useWorktreeCardLifecycleEffects({
   issueCacheKey,
   fetchIssue,
   showLinearIssue,
+  linearSourceContext,
+  linearWorkspaceId,
   fetchLinearIssue
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
   Pick<
@@ -41,6 +44,8 @@ export function useWorktreeCardLifecycleEffects({
     | 'linkedGiteaPR'
     | 'branch'
     | 'issueCacheKey'
+    | 'linearSourceContext'
+    | 'linearWorkspaceId'
   > &
   Pick<
     Foundation,
@@ -51,6 +56,7 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
+  const hostedReviewExactKey = !branch || branch === 'HEAD' ? hostedReviewCacheKey : undefined
   useEffect(() => {
     if (
       !newCardStyle ||
@@ -69,11 +75,13 @@ export function useWorktreeCardLifecycleEffects({
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      ...(hostedReviewExactKey ? { exactReviewKey: hostedReviewExactKey } : {}),
       linkedGitHubPR: worktree.linkedPR ?? null,
       ...(cachedBranchFallbackGitHubPRNumber !== null
         ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
         : {}),
-      currentHeadOid: worktree.head ?? null,
+      currentHeadOid: hostedReviewExactKey ? null : (worktree.head ?? null),
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
@@ -96,7 +104,8 @@ export function useWorktreeCardLifecycleEffects({
     linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
-    hostedReviewCacheKey
+    hostedReviewCacheKey,
+    hostedReviewExactKey
   ])
 
   // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
@@ -156,7 +165,9 @@ export function useWorktreeCardLifecycleEffects({
       if (!isWindowVisible()) {
         return
       }
-      void fetchLinearIssue(linearIssueId, 'all')
+      void fetchLinearIssue(linearIssueId, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      })
     }
     refreshLinearIssueIfVisible()
     window.addEventListener('focus', refreshLinearIssueIfVisible)
@@ -165,18 +176,28 @@ export function useWorktreeCardLifecycleEffects({
       window.removeEventListener('focus', refreshLinearIssueIfVisible)
       document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
     }
-  }, [worktree.linkedLinearIssue, fetchLinearIssue, showLinearIssue])
+  }, [
+    worktree.linkedLinearIssue,
+    fetchLinearIssue,
+    showLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId
+  ])
 
   useEffect(() => {
     if (!newCardStyle || !hoverDetailsOpen || showLinearIssue || !worktree.linkedLinearIssue) {
       return
     }
-    void fetchLinearIssue(worktree.linkedLinearIssue, 'all')
+    void fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+      sourceContext: linearSourceContext
+    })
   }, [
     newCardStyle,
     hoverDetailsOpen,
     showLinearIssue,
     worktree.linkedLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId,
     fetchLinearIssue
   ])
 }

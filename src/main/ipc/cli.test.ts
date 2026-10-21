@@ -31,6 +31,7 @@ vi.mock('../startup/hydrate-shell-path', () => ({
 vi.mock('../wsl', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
 
 import { registerCliHandlers } from './cli'
+import { WslCliUnreachableError } from '../cli/wsl-cli-status'
 
 type WslHandler = (event: unknown, args?: { distro?: string | null }) => Promise<{ state: string }>
 
@@ -56,6 +57,33 @@ describe('WSL CLI registration IPC', () => {
     recordRemovedMock.mockReset().mockResolvedValue(undefined)
     getDefaultWslDistroMock.mockReset().mockReturnValue('Ubuntu')
     registerCliHandlers()
+  })
+
+  it('returns a retryable status instead of rejecting when the distro does not answer', async () => {
+    const getStatus = vi.fn(async () => {
+      throw new WslCliUnreachableError('Ubuntu')
+    })
+    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+      return { getStatus }
+    })
+
+    await expect(getWslHandler('cli:getWslInstallStatus')({})).resolves.toMatchObject({
+      state: 'unsupported',
+      supported: false,
+      unsupportedReason: 'wsl_unreachable',
+      detail: expect.stringContaining('refresh to try again')
+    })
+  })
+
+  it('still rejects on WSL command failures that are not timeouts', async () => {
+    const getStatus = vi.fn(async () => {
+      throw new Error('permission denied')
+    })
+    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
+      return { getStatus }
+    })
+
+    await expect(getWslHandler('cli:getWslInstallStatus')({})).rejects.toThrow('permission denied')
   })
 
   it('records a successful explicit-distro installation', async () => {

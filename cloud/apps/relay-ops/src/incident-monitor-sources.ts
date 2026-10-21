@@ -144,6 +144,13 @@ export const GOOGLE_METRICS: GoogleMetricDefinition[] = [
       'resource.type="cloud_run_revision" AND metric.label."response_code_class"="5xx"',
     aggregation: 'window-sum',
     emptyIsZero: true
+  },
+  {
+    signal: 'auth.requests',
+    type: 'run.googleapis.com/request_count',
+    resourceFilter: 'resource.type="cloud_run_revision"',
+    aggregation: 'window-sum',
+    emptyIsZero: true
   }
 ]
 
@@ -445,10 +452,7 @@ function transientFetchFailure(error: unknown): boolean {
   return name === 'AbortError' || name === 'TimeoutError'
 }
 
-function retryableAdminStatus(status: number, body: string): boolean {
-  if (ADMIN_RETRYABLE_STATUSES.has(status)) return true
-  // 401/403/400/413 and a 404 for 'director_only' are decisions, not weather.
-  if (status !== 404) return false
+function adminErrorMessage(body: string): string | null {
   const parsed = AdminErrorBodySchema.safeParse(
     ((): unknown => {
       try {
@@ -458,10 +462,25 @@ function retryableAdminStatus(status: number, body: string): boolean {
       }
     })()
   )
+  return parsed.success ? parsed.data.error : null
+}
+
+function retryableAdminStatus(status: number, body: string): boolean {
+  if (ADMIN_RETRYABLE_STATUSES.has(status)) return true
+  // 401/403/400/413 and a 404 for 'director_only' are decisions, not weather.
+  if (status !== 404) return false
+  const message = adminErrorMessage(body)
   return (
-    parsed.success &&
-    ADMIN_TRANSIENT_ERROR_MESSAGES.some((message) => parsed.data.error.includes(message))
+    message !== null &&
+    ADMIN_TRANSIENT_ERROR_MESSAGES.some((transient) => message.includes(transient))
   )
+}
+
+// Step 5: cell-status refuses a reserve cell with exactly this 404 body; any other 404 stays a failure.
+class AdminReserveCellRefusal extends Error {
+  constructor(status: number) {
+    super(`Relay admin telemetry returned ${status}`)
+  }
 }
 
 async function adminPost(
@@ -495,6 +514,9 @@ async function adminPost(
     // Status only: the body carries a director error message, which must not
     // reach the log the way an identity would.
     const errorBody = await response.text().catch(() => '')
+    if (response.status === 404 && adminErrorMessage(errorBody) === 'cell_in_reserve_mode') {
+      throw new AdminReserveCellRefusal(response.status)
+    }
     if (lastAttempt || !retryableAdminStatus(response.status, errorBody)) {
       throw new Error(`Relay admin telemetry returned ${response.status}`)
     }
@@ -538,23 +560,32 @@ export async function directorSignals(
   }
   const statuses: Array<{
     cell: RelayOpsEnvironment['cells'][number]
-    status: z.infer<typeof CellStatusSchema>['status']
+    status: ({ reserve: false } & z.infer<typeof CellStatusSchema>['status']) | { reserve: true }
   }> = []
   for (const cell of environment.cells) {
+    let response: unknown
+    try {
+      response = await adminPost(
+        fetchImpl,
+        environment.directorOrigin,
+        token,
+        '/v1/admin/cell-status',
+        { v: 1, cellId: cell.cellId },
+        wait
+      )
+    } catch (error) {
+      if (!(error instanceof AdminReserveCellRefusal)) throw error
+      statuses.push({ cell, status: { reserve: true } })
+      continue
+    }
     statuses.push({
       cell,
-      status: CellStatusSchema.parse(
-        await adminPost(
-          fetchImpl,
-          environment.directorOrigin,
-          token,
-          '/v1/admin/cell-status',
-          { v: 1, cellId: cell.cellId },
-          wait
-        )
-      ).status
+      status: { reserve: false, ...CellStatusSchema.parse(response).status }
     })
   }
+  const reserveCellIds = new Set(
+    statuses.filter(({ status }) => status.reserve).map(({ cell }) => cell.cellId)
+  )
   const migrationEntries: Array<{
     sourceCellId: string
     migration: z.infer<typeof MigrationStatusSchema>
@@ -563,6 +594,8 @@ export async function directorSignals(
   for (const source of environment.cells) {
     for (const target of environment.cells) {
       if (source.cellId === target.cellId || !migrationTargets.has(target.cellId)) continue
+      // The director refuses migration reads, and every migration, on a reserve cell.
+      if (reserveCellIds.has(source.cellId)) continue
       migrationEntries.push({
         sourceCellId: source.cellId,
         migration: MigrationStatusSchema.parse(
@@ -594,6 +627,24 @@ export async function directorSignals(
   const signals: Record<string, IncidentSignal> = {}
   for (const { cell, status } of statuses) {
     const prefix = `cell.${cell.cellId}`
+    if (status.reserve) {
+      // cell-status carries the live cap; unset in Terraform keeps the evaluator's default, as there.
+      if (cell.connectionHardCap !== null) {
+        addSignal(signals, `${prefix}.connection_hard_cap`, cell.connectionHardCap, nowAt)
+      }
+      // Legacy admission needs relay_cells.enabled, which only cell-status reads: left missing.
+      if (selector.generation !== 0) {
+        addSignal(
+          signals,
+          `${prefix}.admission_state`,
+          ['existing-only', 'migration-only', 'general'].indexOf(
+            selectorCellState(selector, cell.cellId)
+          ),
+          nowAt
+        )
+      }
+      continue
+    }
     const admissionState = effectiveAdmissionState(
       selector,
       status.enabled,
@@ -638,12 +689,13 @@ export async function directorSignals(
   return {
     source: { observedAt: nowAt, signals },
     selector,
-    cells: statuses.map(({ cell }) => ({
+    cells: statuses.map(({ cell, status }) => ({
       cellId: cell.cellId,
       region: cell.region,
       runtimeKnown: true,
       powered: true,
-      expectedAdmissionState: selectorCellState(expectedSelector, cell.cellId)
+      expectedAdmissionState: selectorCellState(expectedSelector, cell.cellId),
+      ...(status.reserve ? { reserve: true } : {})
     }))
   }
 }

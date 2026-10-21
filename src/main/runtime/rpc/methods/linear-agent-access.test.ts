@@ -1,4 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
+import './linear-agent-project-access.spec'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'

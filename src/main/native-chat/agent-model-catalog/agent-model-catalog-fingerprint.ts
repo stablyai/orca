@@ -4,30 +4,43 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from './agent-model-catalog-store'
-import type { AgentSessionStoredAgent } from '../../../shared/agent-session-stored-agent'
+import {
+  isLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../../../shared/agent-session-account-home'
 
 /**
  * Everything that changes which models a listing can answer with: the agent,
- * the account home the CLI reads credentials/config from, and the execution
- * host that runs the binary. Login-state or CLI-version drift under the same
- * key is corrected by the next refresh, never by the fingerprint.
+ * the account home the CLI reads credentials/config from, the execution host
+ * that runs the binary, and for an agent whose project config adds or removes
+ * models, the folder it listed in. Login-state or CLI-version drift under the
+ * same key is corrected by later listings, never by the fingerprint.
  */
 export type AgentModelCatalogIdentity = {
   agent: string
-  accountHomeVariable: string
-  accountHomePath: string
   /** Null on the native host; WSL distros each carry their own CLI. */
   wslDistro: string | null
-}
+  /** Only for an agent whose models differ by folder; absent keys the account's catalog. */
+  folder?: string
+} & (
+  | { accountHomeVariable: string; accountHomePath: string; accountHome?: never }
+  | { accountHome: AgentSessionAccountHome; accountHomeVariable?: never; accountHomePath?: never }
+)
 
 export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity): string {
+  const account = identity.accountHome
+  const parts = account
+    ? isLegacyAgentSessionAccountHome(account)
+      ? [account.variable, account.path]
+      : [account.kind, account.locator]
+    : [identity.accountHomeVariable, identity.accountHomePath]
   return createHash('sha256')
     .update(
       JSON.stringify([
         identity.agent,
-        identity.accountHomeVariable,
-        identity.accountHomePath,
-        identity.wslDistro ?? ''
+        ...parts,
+        identity.wslDistro ?? '',
+        ...(identity.folder ? [identity.folder] : [])
       ])
     )
     .digest('hex')
@@ -40,23 +53,24 @@ export function agentModelCatalogIdentityForRecord(
 ): AgentModelCatalogIdentity {
   return {
     agent: record.provider,
-    accountHomeVariable: record.accountHome.variable,
-    accountHomePath: record.accountHome.path,
+    accountHome: record.accountHome,
     wslDistro: record.location.wslDistro
   }
 }
 
+/** `folder` only for an agent whose catalog is kept per folder. */
 export function agentModelCatalogFingerprintForRecord(
-  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>,
+  folder?: string
 ): string {
-  return agentModelCatalogFingerprint(agentModelCatalogIdentityForRecord(record))
+  return agentModelCatalogFingerprint({ ...agentModelCatalogIdentityForRecord(record), folder })
 }
 
 /** A live session's store handle, pinned to the account home it spawned under.
  *  Native only: both structured adapters refuse non-native locations at launch. */
 export function agentModelCatalogSessionAccess(
   store: AgentModelCatalogStore | undefined,
-  agent: Pick<AgentSessionStoredAgent, 'agent' | 'accountHomeVariable'>,
+  agent: { agent: string; accountHomeVariable: string },
   accountHomePath: string | null
 ): AgentModelCatalogSessionAccess | undefined {
   if (!store || !accountHomePath) {

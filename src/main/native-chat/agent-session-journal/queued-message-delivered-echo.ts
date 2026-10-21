@@ -1,10 +1,11 @@
+import { journalItemDeclaresEcho, type JournalItemEcho } from './journal-item-echo'
 // A draft sent back to waiting rests on its submission's "never delivered"
 // claim. The provider echoing that message proves the claim wrong: the first
 // delivery happened. The reducer keeps such an echo apart (a rejected
 // submission may not claim it), so it is read here, from the row itself.
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   isProviderUserMessageEcho,
   journalEchoClaimant,
@@ -21,13 +22,19 @@ export function draftDeliveredByEcho(
   drafts: () => readonly QueuedMessageRow[],
   row: JournalRow
 ): string | null {
-  const echoes = appendedItems(row).filter(
-    (item) =>
+  const declared = new Set<string>()
+  const echoes = appendedItems(row).filter((item) => {
+    if (journalItemDeclaresEcho(state.itemEchoes, item.itemId, item)) {
+      declared.add(item.itemId)
+    }
+    return (
+      !declared.has(item.itemId) &&
       isProviderUserMessageEcho(item.itemId, item.body) &&
       !state.items.has(item.itemId) &&
       !state.aliases.has(item.itemId) &&
       journalEchoClaimant(state, item.itemId, item.body) === null
-  )
+    )
+  })
   if (echoes.length === 0) {
     return null
   }
@@ -58,7 +65,10 @@ export function draftsDeliveredByAppliedEcho(
   }
   const delivered = new Set<string>()
   for (const item of state.items.values()) {
-    if (!isProviderUserMessageEcho(item.itemId, item.body)) {
+    if (
+      journalItemDeclaresEcho(state.itemEchoes, item.itemId) ||
+      !isProviderUserMessageEcho(item.itemId, item.body)
+    ) {
       continue
     }
     for (const candidate of spent) {
@@ -107,22 +117,18 @@ function echoProvesDelivered(
 ): boolean {
   return (
     sequence > spent.since &&
-    structuredAgentSessionPayloadFingerprint({
-      method: 'agentSession.send',
-      sessionId: state.sessionId,
-      fields: { body }
-    }) === spent.draft.fingerprint
+    agentSessionSendBodyFingerprint(state.sessionId, body) === spent.draft.fingerprint
   )
 }
 
-function appendedItems(row: JournalRow): { itemId: string; body: AgentJournalItemBody }[] {
+function appendedItems(
+  row: JournalRow
+): (JournalItemEcho & { itemId: string; body: AgentJournalItemBody })[] {
   if (row.kind === 'item') {
-    return [{ itemId: row.itemId, body: row.body }]
+    return [row]
   }
   if (row.kind === 'lifecycle-batch') {
-    return row.mutations.flatMap((mutation) =>
-      mutation.kind === 'item' ? [{ itemId: mutation.itemId, body: mutation.body }] : []
-    )
+    return row.mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation] : []))
   }
   return []
 }

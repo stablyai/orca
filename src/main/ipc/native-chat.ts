@@ -14,6 +14,9 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { agentHookServer } from '../agent-hooks/server'
+import { nativeChatTranscriptPathOnExecutionHost } from '../native-chat/ssh-transcript-path'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -40,7 +43,11 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   return readNativeChatTranscriptTail({
     agent,
     sessionId,
-    transcriptPath: args.transcriptPath,
+    transcriptPath: nativeChatTranscriptPathOnExecutionHost(
+      agentHookServer.getStatusSnapshot(),
+      sessionId,
+      args.transcriptPath
+    ),
     limit
   })
 }
@@ -193,7 +200,11 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
     agent,
     sessionId,
-    transcriptPath,
+    transcriptPath: nativeChatTranscriptPathOnExecutionHost(
+      agentHookServer.getStatusSnapshot(),
+      sessionId,
+      transcriptPath
+    ),
     initialLimit: limit,
     onTranscriptPending: () => {
       if (!canPublish()) {
@@ -325,5 +336,10 @@ export function registerNativeChatHandlers(): void {
   })
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
+  })
+  // Local chats only: a paired host never sends its agent output, so its chats show the message.
+  ipcMain.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
+    const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
+    return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
   })
 }

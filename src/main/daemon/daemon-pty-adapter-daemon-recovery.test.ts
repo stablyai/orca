@@ -313,6 +313,54 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    it('signals every active pane and respawns as soon as the daemon dies, before any input', async () => {
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        await healingAdapter.spawn({ sessionId: 'pane-b', cols: 80, rows: 24 })
+
+        await server.shutdown()
+
+        // Why revert-sensitive: without the disconnect hook nothing is signalled until a
+        // keystroke hits the dead endpoint, so panes sit on stale output and eat that keystroke.
+        await waitFor(() => recovered.includes('pane-a') && recovered.includes('pane-b'))
+        await waitFor(() => respawn.mock.calls.length === 1)
+        await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        expect(() => healingAdapter.write('pane-a', 'after-recovery')).not.toThrow()
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        warn.mockRestore()
+        healingAdapter.dispose()
+      }
+    })
+
+    it('does not respawn on a dropped connection when no session is active', async () => {
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const client = (idleAdapter as unknown as { client: DaemonClient }).client
+        await idleAdapter.listProcesses()
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+        await new Promise((r) => setTimeout(r, 50))
+
+        expect(respawn).not.toHaveBeenCalled()
+      } finally {
+        idleAdapter.dispose()
+      }
+    })
+
     it('keeps dropping writes silently on an adapter that cannot respawn', async () => {
       // Why revert-sensitive: legacy adapters are built with no respawn, so a remount
       // reattaches to nothing and rebuilds the pane EMPTY, losing scrollback the user
@@ -351,11 +399,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         const client = (healingAdapter as unknown as { client: DaemonClient }).client
 
         await server.shutdown()
-        await waitFor(() => !client.isConnected())
+        // The dropped connection alone starts recovery; no write is needed to find the death.
+        await waitFor(() => respawn.mock.calls.length === 1)
         expect(() => healingAdapter.write('pane-a', 'first-death')).toThrow(
           PtyWriteUnavailableError
         )
-        await waitFor(() => respawn.mock.calls.length === 1)
         await waitFor(() => client.isConnected())
 
         // Only the mounted pane rebinds; background-b keeps the awaiting set non-empty.
@@ -363,7 +411,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         recovered.length = 0
 
         await server.shutdown()
-        await waitFor(() => !client.isConnected())
+        await waitFor(() => recovered.includes('pane-a'))
 
         // Why revert-sensitive: the storm latch is otherwise only released when the
         // awaiting set empties, which a never-rebinding background session prevents

@@ -154,7 +154,10 @@ async function minifyWebOutput() {
         const result = await transform(readFileSync(targetPath, 'utf8'), {
           legalComments: 'none',
           loader,
-          minify: true,
+          // Vite asset scripts already have short names; keep them stable across asset hash changes.
+          minifyIdentifiers: !outputPath.startsWith('assets/'),
+          minifySyntax: true,
+          minifyWhitespace: true,
           target: 'es2020'
         })
         writeFileSync(targetPath, result.code)
@@ -178,6 +181,11 @@ try {
 
   rmSync(webOutput, { force: true, recursive: true })
   renameSync(stagingOutput, webOutput)
+  // The installed browser client shares renderer bytes; only its selected files may be served.
+  writeFileSync(
+    join(rendererOutput, '.orca-web-client-files.json'),
+    JSON.stringify([...selectedFiles].sort())
+  )
 } finally {
   rmSync(stagingOutput, { force: true, recursive: true })
 }

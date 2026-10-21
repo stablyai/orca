@@ -1,7 +1,5 @@
 import type * as Contract from './pty-pending-data-drain-contract'
 
-export type * from './pty-pending-data-drain-contract'
-
 type LinkedLaneName = Contract.PtyPendingDataDrainDisposition
 type NodeLaneName = LinkedLaneName | 'none' | 'selected'
 

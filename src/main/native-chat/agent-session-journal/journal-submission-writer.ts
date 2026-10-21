@@ -5,7 +5,9 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { queuedMessageConsumeHook, type JournalQueuedMessages } from './journal-queued-messages'
+import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import type { JournalQueuedMessages } from './journal-queued-messages'
+import { journalSubmissionHook, type JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
 import type {
@@ -24,6 +26,7 @@ export type JournalSubmissionWriterDeps = {
   identity: AgentSessionJournalIdentity
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
+  claimAttachments: JournalAttachmentClaim
 }
 
 export class JournalSubmissionWriter {
@@ -42,10 +45,10 @@ export class JournalSubmissionWriter {
     /** The send's ledger answer, committed with this row. */
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    const { identity, queuedMessages, rowWriter, state } = this.deps
+    const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
     return rowWriter.append(
       journalSubmissionRowBuilder(state, identity, input, consume),
-      consume && queuedMessageConsumeHook(queuedMessages, input.clientMessageId, consume),
+      journalSubmissionHook(queuedMessages, claimAttachments, input, consume),
       receipt
     )
   }
@@ -63,5 +66,16 @@ export class JournalSubmissionWriter {
     hook?: JournalRowTransactionHook
   ): Promise<AgentJournalCursor> {
     return this.deps.rowWriter.append(journalDispatchRowBuilder(this.deps.state, input), hook)
+  }
+
+  /** A provider's late receipt, decided at its turn in the queue: a send a write ahead of it
+   *  already settled gets no row, so repeated receipts save and publish once. */
+  async acceptLate(input: Extract<ResolveDispatchInput, { state: 'accepted' }>): Promise<void> {
+    const { rowWriter, state } = this.deps
+    await rowWriter.enqueueRows(() =>
+      journalDispatchRowApplies(state().submissions.get(input.clientMessageId))
+        ? [journalDispatchRowBuilder(state, input)]
+        : []
+    )
   }
 }

@@ -1,36 +1,90 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  NATIVE_FILE_DROP_TARGET,
-  hasNativeFileDragTypes
-} from '../../../../shared/native-file-drop'
+import { hasNativeFileDragTypes } from '../../../../shared/native-file-drop'
+import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
+import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
+  getFocusedDropRuntimeId,
   getSidebarProjectDropAffordance,
-  isRemoteRuntimeActive,
-  resolveSidebarProjectDropPath
+  isSidebarProjectDropRefusedByFocus,
+  resolveSidebarProjectDropPath,
+  routeSidebarProjectDrop,
+  type SidebarProjectDropRoute
 } from './sidebar-project-drop'
 import { translate } from '@/i18n/i18n'
 import { userNamedFileAccess } from '@/lib/local-file-access'
+import { listWslHostWindowsPathAccess } from '@/lib/windows-path-access'
+import type { AppState } from '@/store/types'
+
+function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
+  return listWslHostWindowsPathAccess(
+    state.runtimeEnvironments,
+    state.settings?.experimentalWslHosts === true
+  )
+}
+
+/** Says why a drop was refused; true when it was. */
+function refuseSidebarProjectDrop(route: SidebarProjectDropRoute): boolean {
+  if (route.kind === 'windows-drive-on-wsl-host') {
+    toast.error(
+      translate(
+        'auto.components.sidebar.useSidebarProjectDrop.windowsDriveOnWslHost',
+        'Folders on a Windows drive stay on this computer, not in {{value0}}.',
+        { value0: route.distro }
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.useSidebarProjectDrop.windowsDriveOnWslHostDescription',
+          'Git in WSL is slow on Windows drives. Switch the host to this computer to add it, or drop a folder from \\\\wsl.localhost\\{{value0}}.',
+          { value0: route.distro }
+        )
+      }
+    )
+    return true
+  }
+  if (route.kind === 'runtime-focused') {
+    toast.error(
+      translate(
+        'auto.components.sidebar.useSidebarProjectDrop.849ef13dc0',
+        'Local folder drops are unavailable for server runtimes.'
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be',
+          'Use Add Project to enter a host path.'
+        )
+      }
+    )
+    return true
+  }
+  return false
+}
 
 type SidebarProjectDropHandlers = {
   onDragEnter: (event: React.DragEvent<HTMLElement>) => void
-  onDragOver: (event: React.DragEvent<HTMLElement>) => void
   onDragLeave: (event: React.DragEvent<HTMLElement>) => void
 }
 
+/** The sidebar owns OS folder drops and offers to add the dropped folder as a project. */
 export function useSidebarProjectDrop(): {
-  nativeDropTarget: typeof NATIVE_FILE_DROP_TARGET.projectSidebar
+  dropOwnerRef: (root: HTMLElement | null) => void
   dropHandlers: SidebarProjectDropHandlers
   affordance: ReturnType<typeof getSidebarProjectDropAffordance>
 } {
   const openModal = useAppStore((s) => s.openModal)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isHandlingDrop, setIsHandlingDrop] = useState(false)
   const dragDepthRef = useRef(0)
-  const remoteRuntimeActive = isRemoteRuntimeActive(settings)
+  const wslDropHosts = useMemo(
+    () => getWslDropHosts({ runtimeEnvironments, settings }),
+    [runtimeEnvironments, settings]
+  )
+  const focusedRuntimeId = getFocusedDropRuntimeId(settings)
+  const remoteRuntimeActive = isSidebarProjectDropRefusedByFocus(focusedRuntimeId, wslDropHosts)
   const mountedRef = useMountedRef()
 
   const clearDragState = useCallback(() => {
@@ -62,19 +116,14 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
-      if (remoteRuntimeActive) {
-        toast.error(
-          translate(
-            'auto.components.sidebar.useSidebarProjectDrop.849ef13dc0',
-            'Local folder drops are unavailable for server runtimes.'
-          ),
-          {
-            description: translate(
-              'auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be',
-              'Use Add Project to enter a host path.'
-            )
-          }
-        )
+      // Why: re-read live state; a runtime can be focused while the drop is prepared.
+      const state = useAppStore.getState()
+      const route = routeSidebarProjectDrop({
+        path: pathResolution.path,
+        focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
+        wslHosts: getWslDropHosts(state)
+      })
+      if (refuseSidebarProjectDrop(route)) {
         return
       }
 
@@ -96,7 +145,12 @@ export function useSidebarProjectDrop(): {
           )
           return
         }
-        openModal('add-repo', { droppedLocalPath: pathResolution.path })
+        openModal(
+          'add-repo',
+          route.kind === 'wsl-host'
+            ? { droppedHostPath: { hostId: route.hostId, path: route.linuxPath } }
+            : { droppedLocalPath: pathResolution.path }
+        )
       } catch (error) {
         if (mountedRef.current) {
           toast.error(
@@ -115,17 +169,24 @@ export function useSidebarProjectDrop(): {
         }
       }
     },
-    [mountedRef, openModal, remoteRuntimeActive]
+    [mountedRef, openModal]
   )
 
-  useEffect(() => {
-    return window.api.ui.onFileDrop((data) => {
-      if (data.target !== NATIVE_FILE_DROP_TARGET.projectSidebar) {
-        return
+  const ownerRef = useRef<HTMLElement | null>(null)
+  const [sequence] = useState(createOsFileDropSequence)
+  const dropOwnerRef = useOsFileDropOwner(ownerRef, {
+    consumer: 'main-reader',
+    sequence,
+    // A remote runtime cannot add a local folder, so the drag shows "not allowed".
+    canAccept: !remoteRuntimeActive,
+    onDrop: async (prepared) => {
+      for (const failure of prepared.failures) {
+        const message = getNativeFileDropRejectionMessage(failure)
+        toast.error(message.title, { description: message.description })
       }
-      void handleProjectDropPaths(data.paths)
-    })
-  }, [handleProjectDropPaths])
+      await handleProjectDropPaths(prepared.paths)
+    }
+  })
 
   const dropHandlers = useMemo<SidebarProjectDropHandlers>(
     () => ({
@@ -134,14 +195,6 @@ export function useSidebarProjectDrop(): {
           return
         }
         dragDepthRef.current += 1
-        setIsDragOver(true)
-      },
-      onDragOver: (event) => {
-        if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
-          return
-        }
-        event.preventDefault()
-        event.dataTransfer.dropEffect = remoteRuntimeActive ? 'none' : 'copy'
         setIsDragOver(true)
       },
       onDragLeave: (event) => {
@@ -154,16 +207,17 @@ export function useSidebarProjectDrop(): {
         }
       }
     }),
-    [remoteRuntimeActive]
+    []
   )
 
   return {
-    nativeDropTarget: NATIVE_FILE_DROP_TARGET.projectSidebar,
+    dropOwnerRef,
     dropHandlers,
     affordance: getSidebarProjectDropAffordance({
       isDragOver,
       isHandlingDrop,
-      remoteRuntimeActive
+      remoteRuntimeActive,
+      wslDropsOnly: focusedRuntimeId !== null && !remoteRuntimeActive
     })
   }
 }

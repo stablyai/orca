@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 import { accessSyncMock, spawnMock, statSyncMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, BUNDLED_RESOURCES_PATH } from './pty-ipc-test-constants'
 

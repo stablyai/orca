@@ -225,7 +225,7 @@ describe('ensureHooksConfirmed', () => {
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
 
     expect(decision).toBe('run')
-    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
     expect(pending).toHaveLength(0)
   })
 
@@ -249,6 +249,23 @@ describe('ensureHooksConfirmed', () => {
     expect(decision).toBe('run')
     expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
     expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to pick a host when the repo id is on two hosts and none is given', async () => {
+    const { state, pending } = createTestState()
+    Object.assign(state, {
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'Local', executionHostId: 'local' }
+      ]
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('skip')
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+    expect(pending).toHaveLength(0)
   })
 
   it('checks runtime-owned repo hooks through the repo owner runtime', async () => {

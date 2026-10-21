@@ -5,7 +5,7 @@ import type { AgentSessionFailureKind } from './agent-session-failure'
 import type { AgentSessionRefusalReason } from './agent-session-refusal-details'
 import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
-import type { AgentSessionWriteRefusal } from './agent-session-write-failure'
+import type { AgentSessionWriteKind, AgentSessionWriteRefusal } from './agent-session-write-failure'
 
 /** What the person can do about a refusal with this reason. */
 export type AgentSessionRefusalAction =
@@ -37,6 +37,13 @@ export type AgentSessionRefusalReasonWords =
     }
   /** A start that failed: the sentence that failure has everywhere, whose next step is a send. */
   | { fact: AgentSessionFailureKind; action: AgentSessionRefusalAction }
+  /** A failure's sentence, naming the agent, then `step`: the whole notice for `writes`. */
+  | {
+      fact: AgentSessionFailureKind
+      action: AgentSessionRefusalAction
+      step: AgentSessionWriteNoticeSentence
+      writes: readonly AgentSessionWriteKind[]
+    }
 
 function codeWords(action: AgentSessionRefusalAction): AgentSessionRefusalReasonWords {
   return { words: 'code', action }
@@ -66,6 +73,11 @@ const REASON_WORDS = {
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),
     journalWriteFailed: causeWords('recordFailed', 'retry'),
+    // Any other write reads the code's words, as a client before this reason does.
+    stopFailed: { fact: 'stopFailed', action: 'retry', step: 'tryAgain', writes: ['stop'] },
+    // The card's Cancel button stays; its notice names the step.
+    cancelNotSaved: causeWords('cancelNotSaved', 'retry', 'tryAgain'),
+    attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',
       'goElsewhere',
@@ -78,24 +90,36 @@ const REASON_WORDS = {
     conversationCommandInFlight: causeWords('commandRunning', 'wait', 'waitForCommand'),
     // The chat's agent process is being replaced, which a start or restart does.
     handoffInFlight: AGENT_STARTING,
+    continuationSuperseded: causeWords('continuationSuperseded', 'nothingLeft'),
     turnActive: causeWords('turnActive', 'wait', 'waitForTurn'),
     promptPending: causeWords('promptPending', 'actFirst', 'answerFirst'),
     backgroundTasksRunning: causeWords('backgroundTasksRunning', 'wait', 'waitForBackgroundTasks'),
     messagesUnsettled: causeWords('messagesUnsettled', 'actFirst', 'settleEarlierMessage'),
+    queueTooLarge: causeWords('queueTooLarge', 'actFirst', 'shrinkQueue'),
     // The rewind control words its own refusals; anywhere else says only that it did not happen.
     rewindRefused: codeWords('hostFinding'),
     rewindUnconfirmed: codeWords('hostFinding'),
     promptGone: causeWords('questionChanged', 'nothingLeft'),
+    // An approval or question waited on the person when its agent stopped: said naming the agent,
+    // with sending a message as the step on.
+    promptOwnerEnded: { fact: 'providerExited', action: 'nothingLeft' },
     optionRejected: causeWords('optionRejected', 'retry'),
     providerStarting: AGENT_STARTING,
     goalsUnsupported: causeWords('goalsUnsupported', 'hostFinding'),
     providerRejected: causeWords('agentRefused', 'retry'),
     providerStartFailed: { fact: 'providerStartFailed', action: 'retry' },
     notSignedIn: { fact: 'notSignedIn', action: 'actFirst' },
+    cliMissing: { fact: 'cliMissing', action: 'actFirst' },
     historyTooLarge: { fact: 'historyTooLarge', action: 'goElsewhere' },
     managedAccountEnvOverride: { fact: 'managedAccountEnvOverride', action: 'actFirst' },
     accountSwitchInProgress: { fact: 'accountSwitchInProgress', action: 'wait' },
     managedAccountUnsupported: { fact: 'managedAccountUnsupported', action: 'actFirst' },
+    launchFolderMissing: { fact: 'launchFolderMissing', action: 'actFirst' },
+    historyInOtherAccount: { fact: 'historyInOtherAccount', action: 'actFirst' },
+    claudeAccountFolderMissing: { fact: 'claudeAccountFolderMissing', action: 'actFirst' },
+    claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
+    agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
+    runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },
   agent_session_ownership_unknown: {
@@ -135,7 +159,7 @@ const REASON_WORDS = {
   agent_session_identity_required: {
     recordMissing: causeWords('chatNotFound', 'goElsewhere', 'startNewChat'),
     transcriptNotFound: codeWords('retry'),
-    transcriptUnreadable: codeWords('hostFinding')
+    transcriptUnreadable: causeWords('historyUnavailable', 'retry', 'tryAgain')
   },
   agent_session_operation_conflict: {
     fingerprintMismatch: codeWords('hostFinding'),
@@ -143,7 +167,7 @@ const REASON_WORDS = {
     handoffInFlight: codeWords('retry')
   },
   agent_session_operation_expired: { operationExpired: codeWords('retry') },
-  agent_session_operation_capacity: { operationCapacity: codeWords('wait') },
+  agent_session_operation_capacity: { operationCapacity: codeWords('updateOrca') },
   agent_session_operation_unknown: {
     outcomeUnknown: codeWords('checkChat'),
     resultLost: codeWords('checkChat'),
@@ -164,14 +188,15 @@ const REASON_WORDS = {
       history: { cause: 'chatSavedByNewerOrca', step: 'updateOrcaToOpenChat' }
     }
   },
-  // Thrown, so a client meets these only as an RPC error. The code's own words ask for an update,
-  // which only a method the host doesn't know proves; no reason here means an older Orca. An
-  // unsupported location or agent, or no chat host, is not fixed by updating, and a client missing
-  // the capability words this with its own older copy.
+  // Mostly thrown as an RPC error; `hostUnsupported` is also returned and recorded. The code's own
+  // words ask for an update, which only a method the host doesn't know proves; no reason here means
+  // an older Orca. An unsupported location or agent, or no chat host, is not fixed by updating, and
+  // a client missing the capability words this with its own older copy. Only `hostUnsupported`
+  // names its cause: this agent or location can't run as a chat.
   structured_agent_session_unsupported: {
     clientCapabilityMissing: causeWords('notAvailable', 'hostFinding'),
     hostDisabled: causeWords('notAvailable', 'hostFinding'),
-    hostUnsupported: causeWords('notAvailable', 'hostFinding')
+    hostUnsupported: causeWords('cannotRunHere', 'hostFinding')
   },
   agent_session_owner_restart_failed: {}
 } satisfies {

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
+import { contentTypeForExtension } from './mobile-web-bundle-manifest.mjs'
 import { fileURLToPath } from 'node:url'
 
 export const projectDir = fileURLToPath(new URL('../..', import.meta.url))
@@ -103,7 +104,7 @@ export async function readBridgeProtocolVersion() {
 export async function readBridgeWindowCaps() {
   const sources = await Promise.all(
     [
-      'mobile/src/mobile-web-shell/bridge/bridge-caps.ts',
+      'src/shared/mobile-bridge-frame-bytes.ts',
       'mobile/src/mobile-web-shell/bridge-host-subscriptions.ts'
     ].map((path) => readFile(join(projectDir, path), 'utf8'))
   )
@@ -119,7 +120,7 @@ export async function readBridgeWindowCaps() {
       .reduce((product, factor) => product * factor, 1)
   }
   return {
-    maxMessageBytes: read('BRIDGE_MAX_MESSAGE_BYTES'),
+    maxMessageBytes: read('MOBILE_BRIDGE_MAX_FRAME_BYTES'),
     maxUnackedFrames: read('BRIDGE_MAX_UNACKED_FRAMES'),
     maxUnackedBytes: read('BRIDGE_MAX_UNACKED_BYTES')
   }
@@ -265,7 +266,8 @@ export function installShellDouble({
   replies,
   streams = [],
   windowCaps = null,
-  safeAreaInsets = null
+  safeAreaInsets = null,
+  ownsHostArea = false
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -325,6 +327,8 @@ export function installShellDouble({
     storage,
     // Omitted when a check names none, which is every shell before the field.
     ...(safeAreaInsets === null ? {} : { safeAreaInsets }),
+    // Only the wide host-area session sends it, so every other check runs without.
+    ...(ownsHostArea ? { ownsHostArea: true } : {}),
     ...patch
   })
   globalThis.__orcaRenderCheckResendInit = (patch) => {
@@ -565,7 +569,7 @@ export async function createBundleServer({
       (real) => {
         const bytes = transformChunk ? transformChunk(path, real) : real
         const headers = {
-          'content-type': file.endsWith('.js') ? 'text/javascript' : 'text/html'
+          'content-type': contentTypeForExtension(extname(file).slice(1))
         }
         // The document carries the shell's real policy, so a directive the page violates fails
         // here rather than on a phone. Assets carry none, exactly as the native handler does.
