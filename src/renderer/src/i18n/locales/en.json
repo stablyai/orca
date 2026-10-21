@@ -13135,7 +13135,8 @@
           "78648745bc": "Editor Keybindings",
           "1b23c01cc6": "Default",
           "77674e2d1e": "Vim",
-          "a30ca600ee": "Use Vim modal keybindings in the code editor instead of standard editing."
+          "8b3d6e0f2c": "Emacs",
+          "4f1e9c2a7d": "Use Vim modal or Emacs keybindings in the code editor instead of standard editing."
         },
         "usageCredentialHost": {
           "outdated": "Update Orca on {{host}} to save this key there.",

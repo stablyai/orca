@@ -1,4 +1,8 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  EDITOR_KEYBINDINGS_PRESETS,
+  type EditorKeybindingsPreset,
+  type GlobalSettings
+} from '../../../../shared/global-settings-types'
 import { SearchableSetting } from './SearchableSetting'
 import { Label } from '../ui/label'
 import { SettingsSegmentedControl } from './SettingsFormControls'
@@ -9,11 +13,19 @@ type EditorKeybindingsSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/** Settings control that selects the file editor's keybinding preset (Default or Vim). */
+function isEditorKeybindingsPreset(value: unknown): value is EditorKeybindingsPreset {
+  return EDITOR_KEYBINDINGS_PRESETS.some((preset) => preset === value)
+}
+
+/** Settings control that selects the file editor's keybinding preset (Default, Vim or Emacs). */
 export function EditorKeybindingsSetting({
   settings,
   updateSettings
 }: EditorKeybindingsSettingProps): React.JSX.Element {
+  // Why: profiles saved before the preset existed, or with a retired preset, must still render.
+  const preset = isEditorKeybindingsPreset(settings.editorKeybindings)
+    ? settings.editorKeybindings
+    : 'default'
   return (
     <SearchableSetting
       title={translate(
@@ -21,10 +33,10 @@ export function EditorKeybindingsSetting({
         'Editor Keybindings'
       )}
       description={translate(
-        'auto.components.settings.EditorKeybindingsSetting.a30ca600ee',
-        'Use Vim modal keybindings in the code editor instead of standard editing.'
+        'auto.components.settings.EditorKeybindingsSetting.4f1e9c2a7d',
+        'Use Vim modal or Emacs keybindings in the code editor instead of standard editing.'
       )}
-      keywords={['editor', 'code', 'vim', 'keybindings', 'keymap', 'modal', 'motions']}
+      keywords={['editor', 'code', 'vim', 'emacs', 'keybindings', 'keymap', 'modal', 'motions']}
       className="flex items-center justify-between gap-4 py-2"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
@@ -36,8 +48,8 @@ export function EditorKeybindingsSetting({
         </Label>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.EditorKeybindingsSetting.a30ca600ee',
-            'Use Vim modal keybindings in the code editor instead of standard editing.'
+            'auto.components.settings.EditorKeybindingsSetting.4f1e9c2a7d',
+            'Use Vim modal or Emacs keybindings in the code editor instead of standard editing.'
           )}
         </p>
       </div>
@@ -46,10 +58,8 @@ export function EditorKeybindingsSetting({
           'auto.components.settings.EditorKeybindingsSetting.78648745bc',
           'Editor Keybindings'
         )}
-        value={settings.editorKeybindings === 'vim' ? 'vim' : 'default'}
-        onChange={(option) =>
-          updateSettings({ editorKeybindings: option === 'vim' ? 'vim' : 'default' })
-        }
+        value={preset}
+        onChange={(option) => updateSettings({ editorKeybindings: option })}
         options={[
           {
             value: 'default',
@@ -61,6 +71,13 @@ export function EditorKeybindingsSetting({
           {
             value: 'vim',
             label: translate('auto.components.settings.EditorKeybindingsSetting.77674e2d1e', 'Vim')
+          },
+          {
+            value: 'emacs',
+            label: translate(
+              'auto.components.settings.EditorKeybindingsSetting.8b3d6e0f2c',
+              'Emacs'
+            )
           }
         ]}
       />

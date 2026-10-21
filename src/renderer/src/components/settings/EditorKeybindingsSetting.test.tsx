@@ -61,6 +61,24 @@ describe('EditorKeybindingsSetting', () => {
     expect(radio(container, 'Vim')?.getAttribute('aria-checked')).toBe('true')
   })
 
+  it('selects Emacs when the preference is enabled', () => {
+    const { container } = renderSetting('emacs')
+    expect(radio(container, 'Emacs')?.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('falls back to Default for an unknown stored preset', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates a profile written by a build with a preset this build no longer knows.
+    const { container } = renderSetting('retired' as GlobalSettings['editorKeybindings'])
+    expect(radio(container, 'Default')?.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('persists the emacs choice', () => {
+    const updateSettings = vi.fn()
+    const { container } = renderSetting('default', updateSettings)
+    act(() => radio(container, 'Emacs')?.click())
+    expect(updateSettings).toHaveBeenCalledWith({ editorKeybindings: 'emacs' })
+  })
+
   it('persists the vim choice', () => {
     const updateSettings = vi.fn()
     const { container } = renderSetting('default', updateSettings)

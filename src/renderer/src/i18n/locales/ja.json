@@ -12793,8 +12793,7 @@
         "EditorKeybindingsSetting": {
           "78648745bc": "エディターのキーバインド",
           "1b23c01cc6": "デフォルト",
-          "77674e2d1e": "Vim",
-          "a30ca600ee": "標準の編集の代わりに、コードエディターで Vim のモーダルキーバインドを使用します。"
+          "77674e2d1e": "Vim"
         },
         "usageCredentialHost": {
           "outdated": "このキーを {{host}} に保存するには、そのホストの Orca を更新してください。",
