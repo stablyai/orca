@@ -104,6 +104,7 @@ it('publishes naming activity without needing a chat summary', async () => {
   const count = events.length
   feed.publishConversationName('unknown-session')
   expect(events).toHaveLength(count + 1)
+  expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
 })
 
 it('shows a closed chat its naming failure only while it keeps the name that failed', async () => {

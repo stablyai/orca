@@ -4,8 +4,6 @@ import type {
   AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { structuredAgentSessionNamingSnapshot } from '../../../main/native-chat/agent-session-wire/structured-agent-session-status-feed-deps'
-import { createStructuredAgentSessionLogger } from '../../../main/native-chat/agent-session-wire/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({
   subscribeStatus: vi.fn(),
@@ -123,13 +121,11 @@ describe('structured agent session status feed', () => {
     const feed = getStructuredAgentSessionStatusFeed(LOCAL)
     feed.activate()
     await vi.advanceTimersByTimeAsync(0)
-    const naming = structuredAgentSessionNamingSnapshot({
-      sessions: new Map(),
-      getRecord: () => null,
-      now: () => 1,
-      logger: createStructuredAgentSessionLogger(),
-      namingActiveSessionIds: () => []
-    })
+    const naming: AgentSessionStatusEvent = {
+      type: 'snapshot',
+      sessions: [],
+      namingActiveSessionIds: []
+    }
     hostEmit()(naming)
     expect(feed.getNamingActive('session-1')).toBe(false)
     expect(feed.getSessionSleepState('session-1')).toBeUndefined()
