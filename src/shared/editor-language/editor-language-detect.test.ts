@@ -90,6 +90,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
   })
 
+  it('maps .http and .rest request files to the http language id (case-insensitive)', () => {
+    expect(detectLanguage('regression-tests/login.http')).toBe('http')
+    expect(detectLanguage('C:\\repo\\api\\Orders.REST')).toBe('http')
+  })
+
   it('maps .cts/.mts files to the Monaco built-in typescript language id (case-insensitive)', () => {
     expect(detectLanguage('config/vitest.config.mts')).toBe('typescript')
     expect(detectLanguage('scripts/postinstall.cts')).toBe('typescript')
