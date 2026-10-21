@@ -179,6 +179,18 @@ describe('web rate limits and accounts preload API', () => {
     })
   })
 
+  it('turns automatic Claude switching on for the paired server', async () => {
+    const enabled = { ...snapshot(null).claude, autoSwitchEnabled: true }
+    callResults['accounts.setClaudeAutoSwitch'] = enabled
+    const { api } = await install()
+
+    await expect(api.claudeAccounts.setAutoSwitch({ enabled: true })).resolves.toEqual(enabled)
+    expect(calls).toContainEqual({
+      method: 'accounts.setClaudeAutoSwitch',
+      params: { enabled: true }
+    })
+  })
+
   it('streams usage pushed by the server and stops when the last listener leaves', async () => {
     const { api } = await install()
     const received: RateLimitState[] = []

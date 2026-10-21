@@ -23,6 +23,27 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('accounts.claude.autoSwitch', 'Switch accounts before a usage limit'),
+    description: translate(
+      'accounts.claude.autoSwitchDescription',
+      'When the selected account passes 90% of its 5-hour or weekly limit, Orca switches to the account with the most room left, as if you had switched by hand.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.usage',
+        'usage'
+      ),
+      ...translateSearchKeyword('accounts.claude.keyword.auto', 'auto')
+    ]
+  },
+  {
     title: translate(
       'accounts.claude.switchSessions.settingTitle',
       'When you switch accounts while Claude is running'

@@ -59,7 +59,9 @@ export async function fetchActiveClaudeRateLimits(
     )
   }
   try {
-    return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+    const usage = await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+    // Why: a successful reading names its account too, as failures and live session posts do.
+    return { ...usage, usageMetadata: { ...metadata, ...usage.usageMetadata } }
   } catch (error) {
     const { failureKind } = classifyClaudeOAuthUsageError(error)
     // Why: the 429 wait gates the poll, and both messages tell the user why usage is missing.
