@@ -19,6 +19,13 @@ import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 import type { PageStorageForInit } from './page-storage-keys'
+import {
+  flushRetainedBridgeFrames,
+  parkRetainedBridgeHost,
+  postOrQueueRetainedBridgeFrame,
+  takeRetainedBridgeHost,
+  type RetainedBridgeHostBinding
+} from './retained-shell-session-store'
 
 class BridgeViewGoneError extends Error {
   constructor() {
@@ -147,6 +154,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const buildId = ready?.buildId ?? null
   const viewRef = useRef<MountedView | null>(null)
   const hostRef = useRef<MountedHost | null>(null)
+  const bindingRef = useRef<RetainedBridgeHostBinding | null>(null)
   /**
    * The device Back key across a host rebuild, which is the one thing here that outlives a host.
    *
@@ -185,82 +193,149 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     argsRef.current = args
     clientIdRef.current = clientId
     clientRef.current = client
+    if (bindingRef.current !== null) {
+      bindingRef.current.args = args
+      bindingRef.current.clientId = clientId
+    }
   })
   const snapshot = args.snapshot
+  const hasSnapshot = snapshot !== null
 
   // Commit-phase, not passive: a native frame that arrives between the two carries the session id
   // the handler is fenced on, so only handing the host over here keeps it off the retired client.
   useLayoutEffect(() => {
-    if (client === null || sessionId === null || buildId === null || snapshot === null) {
+    const currentSnapshot = argsRef.current.snapshot
+    if (client === null || sessionId === null || buildId === null || currentSnapshot === null) {
       return
     }
     const latest = argsRef.current
-    // The host outlives every render after this one, so each callback it holds reads the ref at
-    // call time: a closure captured here would settle frames into a screen that has moved on, and
-    // adding one is an entry in `MobileWebShellBridgeArgs` and a line here, nothing else.
-    const host = createBridgeHost({
-      client,
-      buildId,
+    const postToMounted = (json: string): Promise<void> => {
+      const mounted = viewRef.current
+      return mounted === null || mounted.sessionId !== sessionId
+        ? Promise.reject(new BridgeViewGoneError())
+        : mounted.handle.postBridgeMessage(json)
+    }
+    const resumed = takeRetainedBridgeHost({
+      hostId: latest.hostId,
       sessionId,
-      route: latest.route,
-      safeAreaInsets: latest.safeAreaInsets,
-      keyboardInset: latest.keyboardInset,
-      pageRoutes: latest.pageRoutes,
-      pageRouteGrants: latest.pageRouteGrants,
-      routeGrants: latest.routeGrants,
-      ownsHostArea: latest.ownsHostArea === true,
-      sessionEstablished: latest.sessionEstablished,
-      ...(establishedBackRef.current?.sessionId === sessionId
-        ? { sessionBack: establishedBackRef.current.back }
-        : {}),
-      host: snapshot.host,
-      readClientIdentity: () => clientIdRef.current,
-      post: (json) => {
-        const mounted = viewRef.current
-        return mounted === null || mounted.sessionId !== sessionId
-          ? Promise.reject(new BridgeViewGoneError())
-          : mounted.handle.postBridgeMessage(json)
-      },
-      onDiagnostic: createBridgeDiagnosticReporter((diagnostic) => {
-        const line = bridgeDiagnosticLine(diagnostic)
-        if (line !== null) {
-          recordShellLifecycleLine(latest.hostId, line)
-        }
-      }),
-      onNavigate: (href) => argsRef.current.onNavigate(href),
-      onNavigateBack: () => argsRef.current.onNavigateBack(),
-      onExternalLink: (url) => argsRef.current.onExternalLink(url),
-      onHaptic: (kind) => argsRef.current.onHaptic(kind),
-      serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
-      readStorage: () => argsRef.current.readStorage(),
-      onStorageWrite: (key, value) => argsRef.current.onStorageWrite(key, value),
-      onPageFault: (error) => argsRef.current.onPageFault(error),
-      onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
-      onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
-      onBinaryFramesDropped: (total) => argsRef.current.onBinaryFramesDropped(total),
-      onPageReady: () => argsRef.current.onPageReady(),
-      onPagePainted: () => argsRef.current.onPagePainted(),
-      onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
+      buildId,
+      client
     })
+    let host: BridgeHost
+    let binding: RetainedBridgeHostBinding
+    if (resumed !== null) {
+      host = resumed.host
+      binding = resumed.binding
+      binding.args = latest
+      binding.clientId = clientIdRef.current
+      binding.disposed = false
+      binding.post = postToMounted
+      if (viewRef.current !== null && viewRef.current.sessionId === sessionId) {
+        flushRetainedBridgeFrames(binding, postToMounted)
+      }
+    } else {
+      binding = {
+        args: latest,
+        clientId: clientIdRef.current,
+        post: postToMounted,
+        queuedOutboundFrames: [],
+        disposed: false,
+        overflowed: false
+      }
+      // The host outlives every render after this one, so each callback it holds reads the ref at
+      // call time: a closure captured here would settle frames into a screen that has moved on, and
+      // adding one is an entry in `MobileWebShellBridgeArgs` and a line here, nothing else.
+      host = createBridgeHost({
+        client,
+        buildId,
+        sessionId,
+        route: latest.route,
+        safeAreaInsets: latest.safeAreaInsets,
+        keyboardInset: latest.keyboardInset,
+        pageRoutes: latest.pageRoutes,
+        pageRouteGrants: latest.pageRouteGrants,
+        routeGrants: latest.routeGrants,
+        ownsHostArea: latest.ownsHostArea === true,
+        sessionEstablished: latest.sessionEstablished,
+        ...(establishedBackRef.current?.sessionId === sessionId
+          ? { sessionBack: establishedBackRef.current.back }
+          : {}),
+        host: currentSnapshot.host,
+        readClientIdentity: () => binding.clientId,
+        post: (json) =>
+          postOrQueueRetainedBridgeFrame(binding, json, () => new BridgeViewGoneError()),
+        onDiagnostic: createBridgeDiagnosticReporter((diagnostic) => {
+          const line = bridgeDiagnosticLine(diagnostic)
+          if (line !== null) {
+            recordShellLifecycleLine(binding.args.hostId, line)
+          }
+        }),
+        onNavigate: (href) => binding.args.onNavigate(href),
+        onNavigateBack: () => binding.args.onNavigateBack(),
+        onExternalLink: (url) => binding.args.onExternalLink(url),
+        onHaptic: (kind) => binding.args.onHaptic(kind),
+        serveNativeVerb: (verb, params) => binding.args.serveNativeVerb(verb, params),
+        readStorage: () => binding.args.readStorage(),
+        onStorageWrite: (key, value) => binding.args.onStorageWrite(key, value),
+        onPageFault: (error) => binding.args.onPageFault(error),
+        onRouteParamClear: (param, value) => binding.args.onRouteParamClear(param, value),
+        onRouteRefused: (issue) => binding.args.onRouteRefused(issue),
+        onBinaryFramesDropped: (total) => binding.args.onBinaryFramesDropped(total),
+        onPageReady: () => binding.args.onPageReady(),
+        onPagePainted: () => binding.args.onPagePainted(),
+        onPageBackClaim: (claimed) => binding.args.onPageBackClaim(claimed)
+      })
+      // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps
+      // the retired host's number and the next drop reports the new host's first, so the line falls —
+      // which reads as frames coming back rather than as a fresh count.
+      latest.onBinaryFramesDropped(0)
+    }
+    bindingRef.current = binding
     hostRef.current = { sessionId, host }
-    // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps
-    // the retired host's number and the next drop reports the new host's first, so the line falls —
-    // which reads as frames coming back rather than as a fresh count.
-    latest.onBinaryFramesDropped(0)
     return () => {
       // Read before the teardown and stamped with the session, so a replacement built for this
       // same document takes the key over rather than refusing the first press on it.
       establishedBackRef.current = { sessionId, back: host.readSessionBack() }
       hostRef.current = null
-      host.dispose()
+      if (bindingRef.current === binding) {
+        bindingRef.current = null
+      }
+      if (
+        !parkRetainedBridgeHost({
+          hostId: argsRef.current.hostId,
+          sessionId,
+          buildId,
+          client,
+          host,
+          binding
+        })
+      ) {
+        binding.post = null
+        binding.disposed = true
+        host.dispose()
+      }
     }
-  }, [buildId, client, sessionId, snapshot])
+  }, [buildId, client, hasSnapshot, sessionId])
 
   return {
     bridgeEnabled: ready !== null,
     viewRef: useCallback(
       (handle: OrcaMobileWebShellViewHandle | null) => {
         viewRef.current = handle === null || sessionId === null ? null : { sessionId, handle }
+        if (handle === null || sessionId === null) {
+          if (bindingRef.current !== null) {
+            bindingRef.current.post = null
+          }
+          return
+        }
+        if (bindingRef.current !== null) {
+          flushRetainedBridgeFrames(bindingRef.current, (json) => {
+            const mounted = viewRef.current
+            return mounted === null || mounted.sessionId !== sessionId
+              ? Promise.reject(new BridgeViewGoneError())
+              : mounted.handle.postBridgeMessage(json)
+          })
+        }
       },
       [sessionId]
     ),
@@ -302,7 +377,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishRoute(route)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishSafeAreaInsets: useCallback(
       (insets: BridgeSafeAreaInsets) => {
@@ -311,7 +386,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishSafeAreaInsets(insets)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     publishKeyboardInset: useCallback(
       (height: number) => {
@@ -320,7 +395,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           mounted.host.publishKeyboardInset(height)
         }
       },
-      [buildId, client, sessionId, snapshot]
+      [buildId, client, hasSnapshot, sessionId]
     ),
     // Fenced on the session the way inbound frames are, and answering false rather than throwing
     // when there is no host: the caller is a hardware key handler, and a press it cannot forward

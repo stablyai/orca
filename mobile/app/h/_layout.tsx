@@ -34,7 +34,16 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
 export default function HostGroupLayout() {
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
-  const { hostId, action } = useGlobalSearchParams<{ hostId?: string; action?: string }>()
+  const { hostId: rawHostId, action } = useGlobalSearchParams<{
+    hostId?: string
+    action?: string
+  }>()
+  const lastHostIdRef = useRef<string | undefined>(rawHostId)
+  if (typeof rawHostId === 'string' && rawHostId !== '') {
+    lastHostIdRef.current = rawHostId
+  }
+  const hostId =
+    typeof rawHostId === 'string' && rawHostId !== '' ? rawHostId : lastHostIdRef.current
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)

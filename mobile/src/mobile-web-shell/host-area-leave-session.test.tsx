@@ -130,9 +130,15 @@ describe('leaving a wide detail session for its host route', () => {
 })
 
 describe('the same hop on a phone', () => {
-  it('pushes, as it always has', async () => {
+  it('pushes a host route from a detail session, as it always has', async () => {
     await hopFromSession(PHONE, HOST)
     expect(device.dismissTo).not.toHaveBeenCalled()
     expect(applied([HOST, DETAIL])).toEqual([HOST, DETAIL, HOST])
+  })
+
+  it('pops back to the home screen via dismissTo when exiting to /', async () => {
+    await hopFromSession(PHONE, '/')
+    expect(device.dismissTo).toHaveBeenCalledWith('/')
+    expect(applied(['/', HOST])).toEqual(['/'])
   })
 })

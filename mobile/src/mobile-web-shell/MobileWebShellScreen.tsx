@@ -3,9 +3,11 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
+  clearRetainedNativeWebShellSlot,
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
 } from '../../modules/orca-mobile-web-shell/src'
+import { registerRetainedNativeWebShellClearer } from './retained-shell-session-store'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -45,6 +47,8 @@ import {
 import { ShellDownloadProgress } from './ShellDownloadProgress'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
+
+registerRetainedNativeWebShellClearer(clearRetainedNativeWebShellSlot)
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
@@ -282,7 +286,7 @@ export function MobileWebShellScreen({
     onNavigate: (href: string) => {
       // Wide, this host's route is the area-owning session below: back to it, or in place of this
       // one from a cold deep link, never a second on top. `dismissTo` takes the href's params.
-      if (isWideLayout && isHostRouteOf(href, hostId)) {
+      if (href === '/' || (isWideLayout && isHostRouteOf(href, hostId))) {
         router.dismissTo(href)
         return
       }

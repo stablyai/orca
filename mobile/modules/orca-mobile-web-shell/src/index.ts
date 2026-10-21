@@ -1,4 +1,4 @@
-import { requireNativeViewManager } from 'expo-modules-core'
+import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
 import type { NativeSyntheticEvent, ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
@@ -81,6 +81,16 @@ export const OrcaMobileWebShellView: ComponentType<
 > = requireNativeViewManager<
   OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>
 >('OrcaMobileWebShell')
+
+export function clearRetainedNativeWebShellSlot(): void {
+  try {
+    requireOptionalNativeModule<{ clearRetainedSlot?: () => void }>(
+      'OrcaMobileWebShell'
+    )?.clearRetainedSlot?.()
+  } catch {
+    // Native module is absent in Jest/Node unit tests.
+  }
+}
 
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,

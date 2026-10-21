@@ -104,15 +104,19 @@ export function reconcileManifestCache(
   view: ServedView
 ): MobileWebShellStep {
   const cached = session.cached
-  if (cached?.buildId === manifest.buildId) {
+  const activeMatchesManifest =
+    session.state.kind === 'ready' && session.state.buildId === manifest.buildId
+  if (cached?.buildId === manifest.buildId || activeMatchesManifest) {
     const live = session.state.kind === 'activating' || session.state.kind === 'ready'
     if (live && sameRouteView(view, session)) {
       return step(session, view)
     }
-    return openCached(session, cached, view)
+    if (cached !== null) {
+      return openCached(session, cached, view)
+    }
   }
   const live =
-    cached !== null && (session.state.kind === 'activating' || session.state.kind === 'ready')
+    (cached !== null && session.state.kind === 'activating') || session.state.kind === 'ready'
   if (live) {
     return step(
       session,
@@ -189,9 +193,12 @@ export function generationActivated(
   }
   const downloadLanded =
     (session.state.kind === 'activating' && session.state.source === 'download') ||
-    (session.requestedBuildId !== null &&
-      cachedBuildId !== null &&
-      event.buildId !== cachedBuildId)
+    (session.requestedBuildId !== null && cachedBuildId !== null && event.buildId !== cachedBuildId)
+  const awaitingActivation =
+    session.state.kind === 'activating' || (session.state.kind === 'ready' && downloadLanded)
+  if (!awaitingActivation) {
+    return step(session, {})
+  }
   const offered =
     downloadLanded && session.offeredRoutes !== null
       ? {
