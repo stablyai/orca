@@ -62,22 +62,23 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const pendingStartup = data.command
-          ? {
-              command: data.command,
-              ...(data.env ? { env: data.env } : {}),
-              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
-              ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
-              ...(data.resumeProviderSession
-                ? { resumeProviderSession: data.resumeProviderSession }
-                : {}),
-              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-              ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
-              ...(data.startupCommandDelivery
-                ? { startupCommandDelivery: data.startupCommandDelivery }
-                : {})
-            }
-          : undefined
+        const pendingStartup =
+          data.command || data.env
+            ? {
+                command: data.command ?? '',
+                ...(data.env ? { env: data.env } : {}),
+                ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
+                ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+                ...(data.resumeProviderSession
+                  ? { resumeProviderSession: data.resumeProviderSession }
+                  : {}),
+                ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+                ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+                ...(data.startupCommandDelivery
+                  ? { startupCommandDelivery: data.startupCommandDelivery }
+                  : {})
+              }
+            : undefined
         const tab = store.createTab(
           worktreeId,
           data.targetGroupId,
