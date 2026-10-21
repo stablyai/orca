@@ -1,13 +1,15 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import { getEffectiveLayoutForWorktree } from '@/components/terminal/split-group-mount'
 import { collectLayoutGroupIds } from '@/runtime/web-session-tabs-sync/tab-group-layout-tree'
-import { getGroupActiveTab } from '@/store/slices/editor/tabs/editor-open-target-group'
+
+// Only the fields read here, so the link router's partial test stores type-check.
+type LinkTab = Pick<Tab, 'id' | 'groupId'> & Partial<Pick<Tab, 'contentType' | 'lastFocusedAt'>>
 
 /** Optional maps: the link router's injected accessor and test stubs reach this before hydration. */
 export type VisibleBrowserLinkState = {
   layoutByWorktree?: Record<string, TabGroupLayoutNode | undefined>
   groupsByWorktree?: Record<string, TabGroup[]>
-  unifiedTabsByWorktree?: Record<string, Tab[]>
+  unifiedTabsByWorktree?: Record<string, LinkTab[]>
   activeGroupIdByWorktree?: Record<string, string | undefined>
 }
 
@@ -49,10 +51,10 @@ export function findVisibleBrowserLinkTarget(
   )
   const groups = state.groupsByWorktree?.[worktreeId] ?? []
   const tabsById = new Map((state.unifiedTabsByWorktree?.[worktreeId] ?? []).map((t) => [t.id, t]))
-  let best: Tab | undefined
+  let best: LinkTab | undefined
   for (const groupId of collectLayoutGroupIds(layout)) {
     const group = groups.find((g) => g.id === groupId)
-    const tab = group ? getGroupActiveTab(group, tabsById) : null
+    const tab = group?.activeTabId ? tabsById.get(group.activeTabId) : undefined
     if (!tab || tab.groupId !== groupId || tab.contentType !== 'browser') {
       continue
     }
