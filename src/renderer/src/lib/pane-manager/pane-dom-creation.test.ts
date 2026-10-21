@@ -3,12 +3,17 @@ import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createPaneDOM } from './pane-dom-creation'
 import { terminalMouseEncodingRestoreAnsi } from './terminal-mouse-encoding-tracker'
+import { TERMINAL_WEB_LINK_URL_REGEX } from '../terminal-web-link-url-regex'
 
 const csiHandlers = vi.hoisted(() => new Map<string, (params: (number | number[])[]) => boolean>())
 
 const webLinksAddonMock = vi.hoisted(() => ({
   handler: null as ((event: MouseEvent, uri: string) => void) | null,
-  options: null as { hover?: (event: MouseEvent, uri: string) => void; leave?: () => void } | null
+  options: null as {
+    hover?: (event: MouseEvent, uri: string) => void
+    leave?: () => void
+    urlRegex?: RegExp
+  } | null
 }))
 
 vi.mock('@xterm/addon-fit', () => ({
@@ -81,6 +86,7 @@ describe('createPaneDOM link tooltips', () => {
     expect(pane.linkTooltip.style.left).toBe('')
     expect(pane.linkTooltip.style.bottom).toBe('')
     expect(pane.linkTooltip.style.display).toBe('none')
+    expect(webLinksAddonMock.options?.urlRegex).toBe(TERMINAL_WEB_LINK_URL_REGEX)
   })
 
   // Why: the caller owns the hint, so dropping the wiring is a compile error rather

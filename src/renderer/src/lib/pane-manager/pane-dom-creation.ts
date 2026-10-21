@@ -4,6 +4,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
+import { TERMINAL_WEB_LINK_URL_REGEX } from '../terminal-web-link-url-regex'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
@@ -75,6 +76,7 @@ export function createPaneDOM(
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
     {
+      urlRegex: TERMINAL_WEB_LINK_URL_REGEX,
       hover: (_event, uri) => {
         if (uri) {
           linkTooltipHoverToken += 1

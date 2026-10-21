@@ -1,6 +1,7 @@
 import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
+import { TERMINAL_WEB_LINK_URL_REGEX } from '@/lib/terminal-web-link-url-regex'
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
 
 /**
@@ -14,13 +15,16 @@ export function installPreviewTerminalLinks(terminal: Terminal): void {
   // and kills the renderer — guard before any provider registers.
   installGuardedLinkProviderRegistration(terminal)
   terminal.loadAddon(
-    new WebLinksAddon((event, uri) => {
-      if (!isTerminalHttpLinkActivation(event)) {
-        return
-      }
-      event.preventDefault()
-      void window.api.shell.openUrl(uri).catch(() => undefined)
-      terminal.clearSelection()
-    })
+    new WebLinksAddon(
+      (event, uri) => {
+        if (!isTerminalHttpLinkActivation(event)) {
+          return
+        }
+        event.preventDefault()
+        void window.api.shell.openUrl(uri).catch(() => undefined)
+        terminal.clearSelection()
+      },
+      { urlRegex: TERMINAL_WEB_LINK_URL_REGEX }
+    )
   )
 }
