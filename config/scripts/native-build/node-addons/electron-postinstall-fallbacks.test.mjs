@@ -48,6 +48,6 @@ describe('describeMissingElectronLibrary', () => {
   it('names the library and the packages to install', () => {
     const message = describeMissingElectronLibrary('libatk-1.0.so.0')
     expect(message).toContain('libatk-1.0.so.0 is missing')
-    expect(message).toContain('sudo apt-get install -y libgtk-3-0 libatk1.0-0')
+    expect(message).toContain('sudo apt-get install -y libgtk-3-0t64 libatk1.0-0t64')
   })
 })
