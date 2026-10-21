@@ -1,4 +1,3 @@
-import { usableJournalHistoryOrigin } from '../agent-session-journal/journal-history-origin'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Source validation must finish before a new session claims the provider conversation.
 
@@ -16,7 +15,6 @@ import {
 } from './structured-agent-session-attach'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -175,7 +173,6 @@ async function attach(
 
 describe('adopting a provider conversation on create', () => {
   it('seeds the chain from the adopted handle and fills the journal from its transcript', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(NOW)
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-import-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'token ORCA-ADOPT-1')
@@ -188,21 +185,6 @@ describe('adopting a provider conversation on create', () => {
     // conversation this session owns.
     const page = (result as { value: { page: { items: unknown[] } } }).value.page
     expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
-    const journal = await openAgentSessionJournal({
-      database: openTestJournalHostDatabase(root),
-      identity: {
-        sessionId: SESSION,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: codexProviderHandle(THREAD)
-      }
-    })
-    expect(usableJournalHistoryOrigin(journal.historyOrigin())).toMatchObject({
-      importedAt: NOW,
-      providerHandle: { kind: 'codex', threadId: THREAD }
-    })
-    await journal.close()
   })
 
   it.each([

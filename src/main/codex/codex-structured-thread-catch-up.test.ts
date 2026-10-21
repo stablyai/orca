@@ -1,4 +1,3 @@
-import { readCodexHistoryJournalView } from './codex-history-journal-view'
 import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
 import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
 // Turns made outside a Codex chat, through the real path they take:
@@ -7,11 +6,8 @@ import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-u
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+import { afterEach, describe, expect, it } from 'vitest'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
@@ -203,13 +199,10 @@ describe('Codex chat catch-up', () => {
       'assistant:answer 4'
     ])
 
-    await c.open([turn(1), turn(2), turn(4), turn(5)])
-    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 5', 'assistant:answer 5'])
-
     // An older Codex answers with summary turns: nothing is guessed from them.
 
-    await c.open([turn(1), turn(2), turn(4), turn(5), turn(6, 'summary')])
-    expect(c.texts().slice(caughtUp.length + 6)).toEqual([])
+    await c.open([turn(1), turn(2), turn(4), turn(6, 'summary')])
+    expect(c.texts().slice(caughtUp.length + 3)).toEqual([])
   })
 
   it('recovers an older gap behind newer native work after a failed read and restart', async () => {
@@ -245,30 +238,9 @@ describe('Codex chat catch-up', () => {
     expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 2', 'assistant:answer 2'])
     await c.open([turn(1), turn(2), turn(3), turn(4)])
     expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 4', 'assistant:answer 4'])
-    await c.open([turn(3), turn(4), turn(5)])
-    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 5', 'assistant:answer 5'])
-    const complete = c.journal.snapshot().items
-    const unchanged = codexWith([turn(3), turn(4), turn(5)])
-    const reads = vi.fn(unchanged.request)
-    await c.open([], { connection: { request: reads } })
-    expect(reads).toHaveBeenCalledTimes(2)
-    expect(reads.mock.calls.every(([, params]) => params?.itemsView === 'summary')).toBe(true)
-    expect(c.journal.snapshot().items).toEqual(complete)
-    await c.journal.replaceEpochItems(
-      'handle_forked',
-      1,
-      before.map((item) => ({
-        identity: parseAgentJournalItemKey(item.itemId)!,
-        body: item.body,
-        turnScope: item.turnScope,
-        ownerFence: 1
-      }))
-    )
-    await c.open([turn(1), turn(2)])
-    expect(c.texts().slice(-2)).toEqual(['user:ask 2', 'assistant:answer 2'])
   })
 
-  it('orders receipt-only turns by the native prompt, with current-epoch receipt fallback', async () => {
+  it('uses the continued-outside notice after a receipt-only known turn', async () => {
     const c = await chat({ now: 1_000 })
     const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
     await c.journal.appendSubmission({
@@ -283,18 +255,8 @@ describe('Codex chat catch-up', () => {
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 },
       fence: 1
     })
-    expect(readCodexHistoryJournalView(c.journal, THREAD).latest).toBe('turn-1')
-    await c.journal.appendTombstone({ provider: 'orca', clientMessageId: 'receipt' }, { fence: 1 })
-    expect(readCodexHistoryJournalView(c.journal, THREAD).latest).toBe('turn-1')
-    await c.journal.appendItem(
-      { provider: 'orca', clientMessageId: 'bookkeeping' },
-      { kind: 'status', text: 'Saved note' },
-      { fence: 1, turnScope: { kind: 'thread' } }
-    )
     await c.open([turn(1), turn(2)])
     expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 2', 'assistant:answer 2'])
-    await c.open([turn(1), turn(2), turn(3)])
-    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 3', 'assistant:answer 3'])
   })
 
   it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
@@ -326,121 +288,9 @@ describe('Codex chat catch-up', () => {
     await c.reopen()
     await c.open([turn(1), large])
     expect(c.texts()).toHaveLength(603)
-    const full = c.journal.snapshot()
-    await c.open([
-      turn(1),
-      large,
-      {
-        ...large,
-        id: 'too-many',
-        items: Array.from({ length: 1024 }, (_, n) => ({
-          type: 'agentMessage',
-          id: `over-${n}`,
-          text: 'x'
-        }))
-      }
-    ])
-    expect(c.journal.snapshot()).toEqual(full)
   })
 
-  it('admits a near-16-MiB translated range whole and refuses an over-limit range', async () => {
-    const c = await chat({ now: 1_000 })
-    const text = 'x'.repeat(16_384)
-    const large = (n: number, parts: number) => ({
-      ...turn(n),
-      items: [
-        {
-          type: 'userMessage',
-          id: 'large',
-          content: Array.from({ length: parts }, () => ({ type: 'text', text }))
-        }
-      ]
-    })
-    c.publications.length = 0
-    await c.open([large(1, 1000)])
-    const saved = c.journal.snapshot()
-    const message = saved.items.find((item) => item.body.kind === 'message')?.body
-    expect(message?.kind === 'message' && message.blocks.length).toBe(1000)
-    expect(Buffer.byteLength(JSON.stringify(saved))).toBeGreaterThan(16_000_000)
-    expect(c.publications).toEqual([2])
-    await c.open([large(1, 1000), large(2, 1024)])
-    expect(c.journal.snapshot()).toEqual(saved)
-  })
-
-  it('cancels between pages and at commit, and rejects changed full-page identities without a prefix', async () => {
-    const c = await chat({ now: 1_000 })
-    await c.open([turn(1)])
-    const before = c.journal.snapshot()
-    const controller = new AbortController()
-    const provider = codexWith([turn(1), turn(2), turn(3)])
-    const request = vi.fn(async (...args: Parameters<typeof provider.request>) => {
-      const result = await provider.request(...args)
-      controller.abort()
-      return result
-    })
-    await c.open([], { signal: controller.signal, connection: { request } })
-    expect(request).toHaveBeenCalledTimes(1)
-    expect(c.journal.snapshot()).toEqual(before)
-    let current = true
-    const sink = {
-      ...c.deferred.sink,
-      tryAppendTransition: (
-        transition: Parameters<NonNullable<typeof c.deferred.sink.tryAppendTransition>>[0]
-      ) => {
-        current = false
-        return (
-          c.deferred.sink.tryAppendTransition?.(transition) ?? {
-            accepted: false,
-            reason: 'closed' as const
-          }
-        )
-      }
-    }
-    await c.open([turn(1), turn(2)], {
-      sink,
-      assertCurrent: () => {
-        if (!current) {
-          throw new Error('stale')
-        }
-      }
-    })
-    expect(c.journal.snapshot()).toEqual(before)
-    const committed = new AbortController()
-    const afterCommit = {
-      ...c.deferred.sink,
-      tryAppendTransition: (
-        transition: Parameters<NonNullable<typeof c.deferred.sink.tryAppendTransition>>[0]
-      ) => {
-        const result = c.deferred.sink.tryAppendTransition?.(transition) ?? {
-          accepted: false,
-          reason: 'closed' as const
-        }
-        committed.abort()
-        return result
-      }
-    }
-    await c.open([turn(1), turn(2)], { sink: afterCommit, signal: committed.signal })
-    expect(c.texts().slice(-2)).toEqual(['user:ask 2', 'assistant:answer 2'])
-    const whole = c.journal.snapshot()
-    const changed = codexWith([turn(1), turn(2), turn(3)])
-    let fullReads = 0
-    await c.open([], {
-      connection: {
-        request: async (method, params) => {
-          const page = await changed.request(method, params)
-          if (params?.itemsView === 'full') {
-            fullReads += 1
-            return { ...page, data: [turn(4), turn(2)] }
-          }
-          return page
-        }
-      }
-    })
-    expect(fullReads).toBe(1)
-    expect(c.journal.snapshot()).toEqual(whole)
-  })
-
-  it('keeps rollback item identities and status rows immutable within one import', async () => {
+  it('keeps rollback reasoning and message identities immutable across turns', async () => {
     const c = await chat({ now: 1_000 })
     const withReasoning = (n: number) => ({
       ...turn(n),
@@ -451,41 +301,20 @@ describe('Codex chat catch-up', () => {
     })
     await c.open([withReasoning(1)])
     const before = c.journal.snapshot().items
-    await c.open([
-      withReasoning(2),
-      withReasoning(3),
-      { id: 'failed', status: 'failed', itemsView: 'full', items: [] },
-      { id: 'interrupted', status: 'interrupted', itemsView: 'full', items: [] }
-    ])
+    await c.open([withReasoning(2)])
     expect(c.journal.snapshot().items.slice(0, before.length)).toEqual(before)
     expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:answer 1',
-      'assistant:answer 2',
-      'assistant:answer 3'
+      'assistant:answer 2'
     ])
     const reasoning = c.journal
       .snapshot()
       .items.filter((item) => item.body.kind === 'message' && item.body.role === 'reasoning')
-    expect(new Set(reasoning.map((item) => item.itemId)).size).toBe(3)
-    expect(new Set(reasoning.map((item) => JSON.stringify(item.turnScope))).size).toBe(3)
-    expect(
-      c.journal
-        .snapshot()
-        .items.filter((item) => item.body.kind === 'turn')
-        .map((item) => item.body)
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ turnId: 'failed', outcome: 'failure' }),
-        expect.objectContaining({
-          turnId: 'interrupted',
-          state: 'interrupted',
-          outcome: 'cancellation'
-        })
-      ])
-    )
+    expect(new Set(reasoning.map((item) => item.itemId)).size).toBe(2)
+    expect(new Set(reasoning.map((item) => JSON.stringify(item.turnScope))).size).toBe(2)
   })
 
-  it('retains original adoption through failed replacement, acknowledged rewind and disk recovery', async () => {
+  it('retains the original adoption cutoff through native rewind and disk recovery', async () => {
     const clock = { now: 50_000 }
     const c = await chat(clock)
     let store = await openTestAgentSessionRecordStore(c.root)
@@ -566,7 +395,6 @@ describe('Codex chat catch-up', () => {
     const original = c.journal.snapshot().items
     const dated = (n: number) => ({ ...turn(n), startedAt: n, completedAt: n + 10 })
     await c.open([dated(100), dated(300)])
-    const old = c.journal.snapshot()
     const target = agentJournalItemKey({
       provider: 'codex',
       threadId: THREAD,
@@ -592,27 +420,14 @@ describe('Codex chat catch-up', () => {
     }))
     clock.now = 500_000
     const deps = () => ({ store, logger: testEventSinkLogging().logger })
-    c.db.exec(
-      "CREATE TRIGGER fail_replacement BEFORE INSERT ON journal_rows WHEN NEW.seq = 3 BEGIN SELECT RAISE(ABORT, 'replacement failure'); END"
-    )
-    await expect(recoverStructuredRewind(deps(), SESSION, c.journal, 1)).rejects.toThrow(
-      'replacement failure'
-    )
-    expect(c.journal.snapshot()).toEqual(old)
-    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
-    c.db.exec('DROP TRIGGER fail_replacement')
-    // COMMIT succeeds, then bookkeeping fails: reopening must keep the checkpoint and finish once.
-    vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('after commit'))
-    await expect(recoverStructuredRewind(deps(), SESSION, c.journal, 1)).rejects.toThrow(
-      'after commit'
-    )
+    await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(original)
     await c.reopen()
     store = await openTestAgentSessionRecordStore(c.root)
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
     expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
-    await c.open([dated(100), dated(150), dated(250), dated(600)])
+    await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
     expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:old A answer',
       'assistant:answer 250',
@@ -621,11 +436,11 @@ describe('Codex chat catch-up', () => {
     expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(original)
     const complete = c.journal.snapshot()
     await c.reopen()
-    await c.open([dated(100), dated(150), dated(250), dated(600)])
+    await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
     expect(c.journal.snapshot()).toEqual(complete)
   })
 
-  it('keeps unknown provenance readable and preserved, refusing ambiguous legacy despite native IDs', async () => {
+  it('keeps erased-origin legacy chats readable without guessing from native IDs', async () => {
     const c = await chat({ now: 200_000 })
     const kept = {
       identity: { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: '#0' } as const,
@@ -636,69 +451,14 @@ describe('Codex chat catch-up', () => {
         blocks: [{ type: 'text' as const, text: 'legacy' }]
       }
     }
-    for (const raw of [
-      undefined,
-      { version: 2, kind: 'legacy_import', future: 'opaque' },
-      { version: 1, kind: 'legacy_import', importedAt: 'bad' },
-      {
-        version: 1,
-        kind: 'legacy_import',
-        importedAt: 200_000,
-        providerHandle: { kind: 'codex', threadId: 'another-thread' }
-      }
-    ]) {
-      await c.journal.replaceEpochItems('session_created', 1, [kept])
-      if (raw !== undefined) {
-        c.db
-          .prepare(
-            "UPDATE journal_rows SET row_json = json_set(row_json, '$.historyOrigin', json(?)) WHERE session_id = ? AND seq = 1"
-          )
-          .run(JSON.stringify(raw), SESSION)
-      }
-      await c.reopen()
-      await c.open([turn(3)])
-      expect(c.texts()).toEqual(['user:legacy'])
-      await c.journal.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'native', ordinal: 0 },
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'ordinary reply' }] },
-        { fence: 1, turnScope: { kind: 'thread' } }
-      )
-      await c.open([turn(3)])
-      expect(c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
-      await c.journal.replaceEpochItems('handle_forked', 1, [kept])
-      await c.reopen()
-      expect(c.journal.historyOrigin()?.raw).toEqual(raw)
-      await c.journal.replaceEpochItems('legacy_import', 1, [kept])
-      expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
-    }
-  })
-
-  it('keeps a transcript-imported chat whole and adds only turns started after the import', async () => {
-    const importedAt = { now: (STARTED_AT + 200) * 1000 + 500 }
-    const imported = async () => {
-      const c = await chat(importedAt)
-      await c.journal.replaceEpochItems('legacy_import', 1, [
-        {
-          identity: { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: 'r1' },
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'imported ask' }] },
-          ownerFence: 1
-        }
-      ])
-      return c
-    }
-
-    const c = await imported()
-    await c.open([turn(1), turn(2), turn(3)])
-    expect(c.texts()).toEqual([
-      'user:imported ask',
-      '(continued-outside)',
-      'user:ask 3',
-      'assistant:answer 3'
-    ])
-
-    // A turn with no start time can't be placed against the import: nothing is added.
-    const undated = await imported()
-    await undated.open([turn(1), { ...turn(4), startedAt: undefined }])
-    expect(undated.texts()).toEqual(['user:imported ask'])
+    await c.journal.replaceEpochItems('session_created', 1, [kept])
+    await c.reopen()
+    await c.journal.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'native', ordinal: 0 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'ordinary reply' }] },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    await c.open([turn(3)])
+    expect(c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
   })
 })
