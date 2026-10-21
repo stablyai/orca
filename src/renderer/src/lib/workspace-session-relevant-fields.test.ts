@@ -10,6 +10,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     activeWorkspaceExecutionHostId: true,
     activeWorktreeId: true,
     activeTabId: true,
+    worktreeSplitViewPair: true,
     tabsByWorktree: true,
     ptyIdsByTabId: true,
     terminalLayoutsByTabId: true,

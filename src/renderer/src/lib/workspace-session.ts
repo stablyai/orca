@@ -1,4 +1,3 @@
-import { pendingAgentLaunchPane } from '../../../shared/agent-launch-pane-verdict'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type {
   PersistedOpenFile,
@@ -16,6 +15,7 @@ import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnec
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
 import { pickCloseIntents, type CloseIntentFields } from './workspace-session-close-intents'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
 
 export { buildActiveConnectionIdsAtShutdown }
 
@@ -61,6 +61,7 @@ export type WorkspaceSessionSnapshot = Pick<
 > &
   CloseIntentFields & {
     activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
+    worktreeSplitViewPair?: AppState['worktreeSplitViewPair']
     sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
     /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
     pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
@@ -74,6 +75,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'activeWorkspaceExecutionHostId',
   'activeWorktreeId',
   'activeTabId',
+  'worktreeSplitViewPair',
   'tabsByWorktree',
   'ptyIdsByTabId',
   'terminalLayoutsByTabId',
@@ -202,33 +204,6 @@ export function buildEditorSessionData(
   }
 }
 
-export function buildSanitizedTabsByWorktree(
-  tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
-): WorkspaceSessionState['tabsByWorktree'] {
-  // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
-  // Same for the recovery ledger: it describes a mounted pane's in-flight heal, so a persisted one would refuse the first recovery after restart.
-  // A launch pane's outcome is not saved: a reload asks main again, which keeps it until it quits; after a restart the pane spawns like any other.
-  return Object.fromEntries(
-    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => {
-        const {
-          pendingActivationSpawn: _unused,
-          recovery: _recovery,
-          restoredFromSession: _restored,
-          ...rest
-        } = tab
-        void _unused
-        void _recovery
-        void _restored
-        return rest.agentLaunchPane
-          ? { ...rest, agentLaunchPane: pendingAgentLaunchPane(rest.agentLaunchPane) }
-          : rest
-      })
-    ])
-  )
-}
-
 export function buildTerminalSessionData(
   snapshot: WorkspaceSessionSnapshot
 ): Pick<WorkspaceSessionState, 'activeWorktreeIdsOnShutdown' | 'remoteSessionIdsByTabId'> {
@@ -303,6 +278,7 @@ export function buildWorkspaceSessionPayload(
     activeWorkspaceExecutionHostId: snapshot.activeWorkspaceExecutionHostId,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
+    worktreeSplitViewPair: snapshot.worktreeSplitViewPair ?? null,
     tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),
     terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
     localOnlyScrollbackByTabId: snapshot.localOnlyScrollbackByTabId,

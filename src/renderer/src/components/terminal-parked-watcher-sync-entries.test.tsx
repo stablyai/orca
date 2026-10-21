@@ -80,6 +80,7 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
     pendingStartupByTabId: {},
     // Another workspace is on screen, so the mounted one is hidden and parks.
     renderedActiveWorktreeId: 'repo-1::/worktree-9',
+    splitPartnerWorktreeId: null,
     startupTerminalTabHold: null,
     tabsByWorktree: {
       [PARKED_WORKTREE_ID]: [

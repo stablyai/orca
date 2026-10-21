@@ -78,6 +78,7 @@ export function startOnScreenAttentionScan(
   let lastActiveView: unknown = undefined
   let lastActiveTabId: unknown = undefined
   let lastActiveWorktreeId: unknown = undefined
+  let lastSplitViewPair: unknown = undefined
   let lastActiveHostId: unknown = undefined
   let lastActiveGroupIds: unknown = undefined
   let lastGroups: unknown = undefined
@@ -121,6 +122,7 @@ export function startOnScreenAttentionScan(
       s.activeView === lastActiveView &&
       s.activeTabId === lastActiveTabId &&
       s.activeWorktreeId === lastActiveWorktreeId &&
+      s.worktreeSplitViewPair === lastSplitViewPair &&
       s.activeWorkspaceExecutionHostId === lastActiveHostId &&
       s.activeGroupIdByWorktree === lastActiveGroupIds &&
       s.groupsByWorktree === lastGroups &&
@@ -140,6 +142,7 @@ export function startOnScreenAttentionScan(
     lastActiveView = s.activeView
     lastActiveTabId = s.activeTabId
     lastActiveWorktreeId = s.activeWorktreeId
+    lastSplitViewPair = s.worktreeSplitViewPair
     lastActiveHostId = s.activeWorkspaceExecutionHostId
     lastActiveGroupIds = s.activeGroupIdByWorktree
     lastGroups = s.groupsByWorktree

@@ -5827,6 +5827,8 @@
           "503ec0f8e6": "프로젝트의 새 그룹",
           "3350101edb": "경로 복사",
           "copyWorktreeName": "워크트리 이름 복사",
+          "openInSplitView": "분할 화면에서 열기",
+          "closeSplitView": "분할 화면 닫기",
           "f4475537d8": "삭제",
           "f5ac91531d": "Orca에서 프로젝트 제거",
           "b42391d8bf": "삭제 중…",

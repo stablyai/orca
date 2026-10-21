@@ -9,6 +9,7 @@ import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-clo
 import type { PairedTerminalTabCloseIntent } from './paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
+import type { WorktreeSplitViewPair } from './worktree-split-view-pair'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -41,6 +42,8 @@ export type WorkspaceSessionState = {
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeWorktreeId: string | null
   activeTabId: string | null
+  /** Side-by-side worktree pair at shutdown; absent or null means no split. */
+  worktreeSplitViewPair?: WorktreeSplitViewPair | null
   /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>

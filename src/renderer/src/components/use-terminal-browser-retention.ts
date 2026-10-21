@@ -20,6 +20,7 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
     setBrowserGuestRetentionRevision,
+    splitPartnerWorktreeId,
     workspaceSurfaceIds,
     workspaceSurfaceIdSet
   } = controller
@@ -42,6 +43,9 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
       return
     }
     const recency = browserGuestWorktreeRecencyRef.current
+    if (splitPartnerWorktreeId) {
+      touchBrowserGuestWorktreeRecency(recency, splitPartnerWorktreeId)
+    }
     touchBrowserGuestWorktreeRecency(recency, renderedActiveWorktreeId)
     for (let index = recency.length - 1; index >= 0; index--) {
       if (!workspaceSurfaceIdSet.has(recency[index])) {
@@ -60,7 +64,9 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     const evictedWorktreeIds = selectBrowserGuestEvictionWorktreeIds({
       orderedWorktreeIds,
       activeWorktreeId: renderedActiveWorktreeId,
-      isRetained: (worktreeId) => mountedWorktreeIdsRef.current.has(worktreeId),
+      // Why: the split partner is on screen, so like the active one it neither counts nor evicts.
+      isRetained: (worktreeId) =>
+        worktreeId !== splitPartnerWorktreeId && mountedWorktreeIdsRef.current.has(worktreeId),
       holdsLiveGuests: (worktreeId) =>
         worktreeHoldsLiveBrowserGuests(
           state.browserTabsByWorktree[worktreeId] ?? [],
@@ -82,6 +88,7 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     workspaceSurfaceIds,
     browserGuestRetentionBudgetEnabled,
     browserGuestRetentionRevision

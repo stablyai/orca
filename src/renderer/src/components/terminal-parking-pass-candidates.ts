@@ -8,6 +8,7 @@ import {
 import { getTerminalParkingPolicyOverrides } from './terminal-pane/terminal-parking-e2e-overrides'
 import { canWatcherCoverParkedTerminalTab } from './terminal-pane/terminal-parked-tab-watchers'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
+import { isWorktreeSurfaceShown } from '../store/slices/worktree-split-view'
 
 export type TerminalParkingPassCandidates = ReturnType<typeof collectTerminalParkingPassCandidates>
 
@@ -21,6 +22,7 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
+    splitPartnerWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalSshParkingEnabled,
@@ -55,7 +57,10 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
       terminalWorktreeParkCooldownUntilRef.current.delete(worktreeId)
       continue
     }
-    const isVisible = activeView === 'terminal' && renderedActiveWorktreeId === worktreeId
+    const isVisible = isWorktreeSurfaceShown(
+      { activeView, renderedActiveWorktreeId, splitPartnerWorktreeId },
+      worktreeId
+    )
     const shouldMeasureHiddenWorktree =
       !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktreeId)
     const hasActivityTerminalPortal = portalWorktreeIds.has(worktreeId)

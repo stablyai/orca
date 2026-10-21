@@ -5827,6 +5827,8 @@
           "503ec0f8e6": "来自项目的新组",
           "3350101edb": "复制路径",
           "copyWorktreeName": "复制工作树名称",
+          "openInSplitView": "在分屏视图中打开",
+          "closeSplitView": "关闭分屏视图",
           "f4475537d8": "删除",
           "f5ac91531d": "从 Orca 中删除项目",
           "b42391d8bf": "正在删除...",

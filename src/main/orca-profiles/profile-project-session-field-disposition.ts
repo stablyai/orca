@@ -49,6 +49,8 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   // Residue here specifically: the owner-removal path nulls this when it deletes the tab it names,
   // but repo removal does not, so it can outlive the tab.
   activeTabId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  // Residue: can name a removed repo's worktree; harmless because restore drops a pair with a dead side.
+  worktreeSplitViewPair: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   tabsByWorktree: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'copiedByBespokeRule' },
   // Keyed by tab id, so both paths follow the tab ids the terminal maps gave up or carried over.
   terminalLayoutsByTabId: {

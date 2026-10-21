@@ -26,6 +26,7 @@ import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-pla
 import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { restoreActiveTabIdByWorktree } from './workspace-terminal-active-tabs'
 import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/paired-terminal-tab-close-intents'
+import { restorableWorktreeSplitViewPair } from '../../../../shared/worktree-split-view-pair'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -53,7 +54,16 @@ export function createWorkspaceTerminalHydrationActions(
             worktreesByRepo: runtimeSessionPlaceholders.worktreesByRepo,
             detectedWorktreesByRepo: s.detectedWorktreesByRepo
           },
-          collectPersistedWorktreeIdsForSessionHydration(session)
+          // Why the pair too: a tabless side of a not-yet-listed SSH repo must still restore.
+          [
+            ...collectPersistedWorktreeIdsForSessionHydration(session),
+            ...(session.worktreeSplitViewPair
+              ? [
+                  session.worktreeSplitViewPair.leftWorktreeId,
+                  session.worktreeSplitViewPair.rightWorktreeId
+                ]
+              : [])
+          ]
         )
         const knownRepoIds = new Set(runtimeSessionPlaceholders.repos.map((r) => r.id))
         // Why: the Floating Workspace isn't a repo worktree, but its tabs use the normal session pipeline so daemon PTYs survive app restart.
@@ -154,6 +164,12 @@ export function createWorkspaceTerminalHydrationActions(
           activeWorkspaceExecutionHostId,
           activeTabId,
           activeTabIdByWorktree,
+          // Why here: set with activeWorktreeId so the first frame already renders the split.
+          worktreeSplitViewPair: restorableWorktreeSplitViewPair(
+            session.worktreeSplitViewPair,
+            activeWorktreeId,
+            validWorktreeIds
+          ),
           restoredRuntimeHostIdByWorkspaceSessionKey:
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
           // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and

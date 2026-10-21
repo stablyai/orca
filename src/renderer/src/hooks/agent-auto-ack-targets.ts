@@ -8,6 +8,10 @@ import {
   selectFloatingWorkspacePanelVisible,
   type FloatingWorkspacePanelVisibilityState
 } from '@/store/floating-workspace-panel-selector'
+import {
+  selectWorktreeSplitPartnerId,
+  type WorktreeSplitViewPair
+} from '@/store/slices/worktree-split-view'
 
 export type AutoAckTabTarget = {
   tabId: string
@@ -19,6 +23,7 @@ export type AutoAckTabTarget = {
 export type AutoAckTargetState = FloatingWorkspacePanelVisibilityState & {
   activeView: string
   activeWorktreeId: string | null
+  worktreeSplitViewPair?: WorktreeSplitViewPair | null
   layoutByWorktree?: Readonly<Record<string, TabGroupLayoutNode | undefined>>
   groupsByWorktree: Readonly<Record<string, readonly Pick<TabGroup, 'id' | 'activeTabId'>[]>>
   activeGroupIdByWorktree: Readonly<Record<string, string | null | undefined>>
@@ -55,6 +60,18 @@ function resolveWorkspaceAutoAckTargets(
   return targets
 }
 
+/** The active workspace and, in split view, the partner shown beside it. */
+function terminalViewWorkspaceIds(state: AutoAckTargetState): string[] {
+  if (state.activeView !== 'terminal' || !state.activeWorktreeId) {
+    return []
+  }
+  const partnerId = selectWorktreeSplitPartnerId({
+    activeWorktreeId: state.activeWorktreeId,
+    worktreeSplitViewPair: state.worktreeSplitViewPair ?? null
+  })
+  return partnerId ? [state.activeWorktreeId, partnerId] : [state.activeWorktreeId]
+}
+
 /**
  * Surfaces whose visible content counts as "seen" right now, each paired with the worktree that
  * owns it.
@@ -68,25 +85,22 @@ export function resolveAutoAckTabTargets(state: AutoAckTargetState): AutoAckTabT
   const targets = selectFloatingWorkspacePanelVisible(state)
     ? resolveWorkspaceAutoAckTargets(state, FLOATING_TERMINAL_WORKTREE_ID)
     : []
-  if (state.activeView !== 'terminal' || !state.activeWorktreeId) {
-    return targets
-  }
-  for (const target of resolveWorkspaceAutoAckTargets(state, state.activeWorktreeId)) {
-    if (!targets.some((existing) => existing.tabId === target.tabId)) {
-      targets.push(target)
+  for (const worktreeId of terminalViewWorkspaceIds(state)) {
+    for (const target of resolveWorkspaceAutoAckTargets(state, worktreeId)) {
+      if (!targets.some((existing) => existing.tabId === target.tabId)) {
+        targets.push(target)
+      }
     }
   }
   return targets
 }
 
-/** The workspaces on screen: an open floating panel, and the active workspace in its own view. */
+/** The workspaces on screen: an open floating panel, and the terminal view's workspaces. */
 export function onScreenWorkspaceIds(state: AutoAckTargetState): string[] {
   const workspaceIds = selectFloatingWorkspacePanelVisible(state)
     ? [FLOATING_TERMINAL_WORKTREE_ID]
     : []
-  if (state.activeView === 'terminal' && state.activeWorktreeId) {
-    workspaceIds.push(state.activeWorktreeId)
-  }
+  workspaceIds.push(...terminalViewWorkspaceIds(state))
   return workspaceIds
 }
 

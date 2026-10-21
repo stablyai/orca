@@ -30,6 +30,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
     setActiveTab,
+    splitPartnerWorktreeId,
     tabs,
     terminalWorktreeParkingTimersRef
   } = controller
@@ -52,7 +53,8 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   )
   const manuallyParkedTerminalWorktreeIds = useManualTerminalWorktreeParking({
     activeView,
-    renderedActiveWorktreeId
+    renderedActiveWorktreeId,
+    splitPartnerWorktreeId
   })
   const effectiveParkedTerminalWorktreeIds = useMemo(
     () =>

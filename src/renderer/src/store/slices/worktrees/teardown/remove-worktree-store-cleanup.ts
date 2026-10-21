@@ -8,6 +8,7 @@ import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
+import { splitViewPairAfterRemoval } from '../../worktree-split-view'
 
 /** Clears worktree-owned renderer state after successful removal so a reused identity cannot inherit stale preferences. */
 export function applyRemoveWorktreeSuccessState(
@@ -86,6 +87,7 @@ export function applyRemoveWorktreeSuccessState(
       activeWorkspaceExecutionHostId: removedActiveWorktree
         ? null
         : s.activeWorkspaceExecutionHostId,
+      ...splitViewPairAfterRemoval(s, new Set(worktreeIds)),
       // Why: closeBrowserTab records a Cmd+Shift+T undo snapshot, but a deleted worktree's tabs can't be restored; purge it.
       recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
       rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree),

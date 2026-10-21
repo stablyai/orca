@@ -62,10 +62,13 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
 const StructuredAgentSessionPaneOverlayLayer = memo(
   function StructuredAgentSessionPaneOverlayLayer({
     worktreeId,
-    isWorktreeActive
+    isWorktreeActive,
+    ownsWorkspaceInput = true
   }: {
     worktreeId: string
     isWorktreeActive: boolean
+    /** False for a split-view partner, which must not claim the focused group. */
+    ownsWorkspaceInput?: boolean
   }): React.JSX.Element {
     const { unifiedTabs, groups, activeGroupId } = useAppStore(
       useShallow((state) => ({
@@ -98,6 +101,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
             isFocusedGroup={Boolean(
               isWorktreeActive &&
+              ownsWorkspaceInput &&
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}

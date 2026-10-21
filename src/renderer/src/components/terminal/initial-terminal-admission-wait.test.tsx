@@ -89,6 +89,7 @@ function Watcher(): null {
     pairedRuntimeParkingEnvironmentIds: new Set(),
     pendingStartupByTabId: {},
     renderedActiveWorktreeId: 'wt-1',
+    splitPartnerWorktreeId: null,
     startupTerminalTabHold: null,
     terminalParkingEnabled: false,
     terminalProviderSnapshotCapabilityRevision: 0,

@@ -18,6 +18,7 @@ export const SESSION_FIELD_OWNERS = {
   activeWorkspaceExecutionHostId: 'view',
   activeWorktreeId: 'view',
   activeTabId: 'view',
+  worktreeSplitViewPair: 'view',
   tabsByWorktree: 'layout',
   terminalLayoutsByTabId: 'layout',
   localOnlyScrollbackByTabId: 'fact',

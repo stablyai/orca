@@ -17,6 +17,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeWorktreeId: 'global',
   activeWorkspaceExecutionHostId: 'global',
   activeTabId: 'global',
+  worktreeSplitViewPair: 'global',
   browserUrlHistory: 'global',
   workspaceDocHistory: 'global',
   // Why global rather than per-partition: this is the client's own record of which connections it

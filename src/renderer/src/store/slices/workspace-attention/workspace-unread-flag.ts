@@ -8,6 +8,10 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspace-execution-host'
 import type { AppState } from '../../types'
+import {
+  getWorktreeSplitViewSideHostId,
+  selectWorktreeSplitPartnerId
+} from '../worktree-split-view'
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { workspaceHasLiveMarker } from './workspace-live-markers'
@@ -251,12 +255,23 @@ export function settleWorkspaceUnreadFlag(
   }
 }
 
-/** The host whose row is on screen: the active workspace's, else null (every same-id row). */
+/** The host whose row is on screen: the active workspace's or split partner's, else null (every same-id row). */
 export function onScreenHostId(
-  state: Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>,
+  state: Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'> &
+    Partial<Pick<AppState, 'worktreeSplitViewPair'>>,
   worktreeId: string
 ): ExecutionHostId | null {
-  return worktreeId === state.activeWorktreeId ? state.activeWorkspaceExecutionHostId : null
+  if (worktreeId === state.activeWorktreeId) {
+    return state.activeWorkspaceExecutionHostId
+  }
+  const pair = state.worktreeSplitViewPair ?? null
+  return pair &&
+    selectWorktreeSplitPartnerId({
+      activeWorktreeId: state.activeWorktreeId,
+      worktreeSplitViewPair: pair
+    }) === worktreeId
+    ? getWorktreeSplitViewSideHostId(pair, worktreeId)
+    : null
 }
 
 /** The flag {@link clearWorkspaceUnreadFlag} would clear. */

@@ -8,7 +8,6 @@ import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-d
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
@@ -17,6 +16,7 @@ import {
   buildPersistedBrowserTabsByWorktree
 } from './workspace-session-browser-tabs'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
@@ -64,6 +64,9 @@ export function buildWorkspaceSessionPatch(
   }
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
+  }
+  if (changed.has('worktreeSplitViewPair')) {
+    patch.worktreeSplitViewPair = snapshot.worktreeSplitViewPair ?? null
   }
   // Why: without these the debounced writer kept the first focus's key and host forever.
   if (changed.has('activeWorkspaceKey')) {

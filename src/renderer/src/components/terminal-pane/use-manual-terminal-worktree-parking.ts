@@ -41,6 +41,7 @@ export function combineTerminalWorktreeParkIds(
 export function useManualTerminalWorktreeParking(args: {
   activeView: string
   renderedActiveWorktreeId: string | null
+  splitPartnerWorktreeId: string | null
 }): ReadonlySet<string> {
   const [manuallyParkedWorktreeIds, setManuallyParkedWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -90,12 +91,15 @@ export function useManualTerminalWorktreeParking(args: {
   }, [parkWorktree])
 
   useEffect(() => {
-    const revealedWorktreeId = args.renderedActiveWorktreeId
-    if (args.activeView !== 'terminal' || !revealedWorktreeId) {
+    if (args.activeView !== 'terminal') {
       return
     }
-    setManuallyParkedWorktreeIds((current) => removeWorktreeId(current, revealedWorktreeId))
-  }, [args.activeView, args.renderedActiveWorktreeId])
+    for (const revealedWorktreeId of [args.renderedActiveWorktreeId, args.splitPartnerWorktreeId]) {
+      if (revealedWorktreeId) {
+        setManuallyParkedWorktreeIds((current) => removeWorktreeId(current, revealedWorktreeId))
+      }
+    }
+  }, [args.activeView, args.renderedActiveWorktreeId, args.splitPartnerWorktreeId])
 
   return manuallyParkedWorktreeIds
 }

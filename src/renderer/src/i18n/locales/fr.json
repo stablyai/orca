@@ -5981,6 +5981,8 @@
           "503ec0f8e6": "Nouveau groupe à partir du projet",
           "3350101edb": "Copier le chemin",
           "copyWorktreeName": "Copier le nom du worktree",
+          "openInSplitView": "Ouvrir en vue partagée",
+          "closeSplitView": "Fermer la vue partagée",
           "f4475537d8": "Supprimer",
           "f5ac91531d": "Retirer le projet d'Orca",
           "b42391d8bf": "Suppression…",

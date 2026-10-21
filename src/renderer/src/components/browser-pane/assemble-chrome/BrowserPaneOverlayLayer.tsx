@@ -121,10 +121,14 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 // Why: memoize so parent re-renders on props this layer doesn't consume don't rerun its selector or assignments mapping (focused-split state comes from the store selector below, not props).
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
-  isWorktreeActive
+  isWorktreeActive,
+  ownsWorkspaceInput = true
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  /** False for a split-view partner: painted beside the active worktree but not owning focus,
+   *  shortcuts or the focused-group chrome. */
+  ownsWorkspaceInput?: boolean
 }): React.JSX.Element {
   const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
     useShallow((state) => ({
@@ -183,7 +187,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
         const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
           ? 'inactive'
           : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
-            isFloatingWorkspace || knownFocusedGroupId === undefined
+            isFloatingWorkspace || !ownsWorkspaceInput || knownFocusedGroupId === undefined
             ? 'owned-target'
             : assignment?.groupId === knownFocusedGroupId
               ? 'focused'
@@ -263,15 +267,21 @@ function ClientHostedBrowserRowOverlaySlot({
 export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive,
+  ownsWorkspaceInput = true,
   mountEligible
 }: {
   worktreeId: string
   isWorktreeActive: boolean
+  ownsWorkspaceInput?: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
   return (
     <DeferredBrowserContent mountEligible={mountEligible}>
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
+      <BrowserPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isWorktreeActive}
+        ownsWorkspaceInput={ownsWorkspaceInput}
+      />
     </DeferredBrowserContent>
   )
 })
