@@ -90,7 +90,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
       onChangeText={bufferedTerminalDraftState.setInput}
       onContentSizeChange={onContentSizeChange}
-      numberOfLines={1}
       placeholder="Type a command…"
       placeholderTextColor={colors.textMuted}
       autoCapitalize="none"

@@ -230,7 +230,7 @@ describe('multiline command input', () => {
     })
     expect(dockHierarchy()).toEqual(hierarchy)
     expect(field().props.multiline).toBe(true)
-    expect(field().props.numberOfLines).toBe(1)
+    expect(field().props.numberOfLines).toBeUndefined()
     expect(field().props.submitBehavior).toBe('newline')
     expect(field().props.returnKeyType).toBe('default')
     expect(field().props.value).toBe(buffer)
