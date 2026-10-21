@@ -6,12 +6,15 @@ import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   useNativeChatLaunchDraftAdoption,
-  useNativeChatLaunchDraftSignal
+  useNativeChatLaunchDraftSignal,
+  useNativeChatTerminalDraftPickup
 } from './use-native-chat-launch-draft-adoption'
 
 const mocks = vi.hoisted(() => ({
   markNativeChatLaunchDraftAdopted: vi.fn(),
   clearNativeChatLaunchDraft: vi.fn(),
+  seedNativeChatLaunchDraft: vi.fn(),
+  resolveNativeChatLaunchDraft: vi.fn(),
   storeState: { nativeChatLaunchDraftByTabId: {} as Record<string, NativeChatLaunchDraft> }
 }))
 
@@ -24,7 +27,9 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => ({
     ...mocks.storeState,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted,
-    clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft
+    clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
+    seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft,
+    resolveNativeChatLaunchDraft: mocks.resolveNativeChatLaunchDraft
   })
   return { useAppStore }
 })
@@ -234,6 +239,16 @@ describe('useNativeChatLaunchDraftAdoption', () => {
     expect(setDraft).not.toHaveBeenCalled()
   })
 
+  it('swaps in a newer seed while the composer still holds the copy it replaces', () => {
+    const { setDraft, setCaret } = setup({
+      launchDraft: launchDraft({ text: 'newer text', replacesText: SEED_TEXT }),
+      draft: SEED_TEXT
+    })
+
+    expect(setDraft).toHaveBeenCalledWith('newer text', { unsaved: true })
+    expect(setCaret).toHaveBeenCalledWith('newer text'.length)
+  })
+
   it('does nothing for a different agent or a missing seed', () => {
     setup({ launchDraft: launchDraft({ agent: 'codex' }) })
     setup({ launchDraft: null })
@@ -373,5 +388,59 @@ describe('launch draft adoption across a split', () => {
     expect(setDraft).toHaveBeenCalledWith('')
     expect(setCaret).toHaveBeenCalledWith(0)
     expect(mocks.clearNativeChatLaunchDraft).toHaveBeenCalledWith('tab-1')
+  })
+})
+
+describe('useNativeChatTerminalDraftPickup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(Date, 'now').mockReturnValue(SEEDED_AT)
+    mocks.storeState.nativeChatLaunchDraftByTabId = {}
+  })
+
+  function renderPickup(args: { ownsTabWideLaunchDraft?: boolean; terminalText?: string | null }) {
+    const readTerminalDraft = vi.fn(() => args.terminalText ?? null)
+    const { rerender } = renderHook(() =>
+      useNativeChatTerminalDraftPickup({
+        terminalTabId: 'tab-1',
+        agent: 'claude',
+        ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft ?? true,
+        readTerminalDraft
+      })
+    )
+    return { readTerminalDraft, rerender }
+  }
+
+  it('seeds the input line once, when chat view opens', () => {
+    const { readTerminalDraft, rerender } = renderPickup({ terminalText: 'fix the test' })
+    rerender()
+
+    expect(readTerminalDraft).toHaveBeenCalledTimes(1)
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: 'fix the test',
+      createdAt: SEEDED_AT,
+      fromTerminal: true
+    })
+  })
+
+  it('resolves its earlier seed once the input line is empty', () => {
+    const earlier = launchDraft({ fromTerminal: true, adopted: true })
+    mocks.storeState.nativeChatLaunchDraftByTabId = { 'tab-1': earlier }
+    renderPickup({ terminalText: '' })
+
+    expect(mocks.resolveNativeChatLaunchDraft).toHaveBeenCalledWith('tab-1', earlier)
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
+  it('does not read the input line of a split pane', () => {
+    const { readTerminalDraft } = renderPickup({
+      ownsTabWideLaunchDraft: false,
+      terminalText: 'fix the test'
+    })
+
+    expect(readTerminalDraft).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 })

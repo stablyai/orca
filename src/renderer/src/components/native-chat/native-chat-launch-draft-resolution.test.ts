@@ -58,6 +58,17 @@ describe('launchDraftResolvedByTranscript', () => {
     )
   })
 
+  it('resolves a draft read off the input line only by a new tail user turn', () => {
+    // Earlier turns can carry any timestamp: a remote host's clock can run ahead of the renderer.
+    const entry = { createdAt: SEEDED_AT, fromTerminal: true }
+    const earlier = { ...userMessage('u1', 'earlier turn'), timestamp: SEEDED_AT + 60_000 }
+    const baseline = { userTurnCount: 1, lastUserTurnId: 'u1' }
+    expect(launchDraftResolvedByTranscript(entry, [earlier], baseline)).toBe(false)
+
+    const next = { ...userMessage('u2', 'submitted'), timestamp: SEEDED_AT + 61_000 }
+    expect(launchDraftResolvedByTranscript(entry, [earlier, next], baseline)).toBe(true)
+  })
+
   it('does not resolve when "load earlier" only prepends history', () => {
     const tail = { ...userMessage('u9', 'earlier turn'), timestamp: SEEDED_AT - 600_000 }
     const baseline = { userTurnCount: 1, lastUserTurnId: 'u9' }
