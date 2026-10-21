@@ -602,7 +602,7 @@ const ORCA_CLI_MARKDOWN = [
   "source/remote identity prevents URL validation and may leave provider links unavailable.",
   "Old runtimes that predate these existing fields may ignore them; verify with `worktree show --json`.",
   "",
-  "Pinning uses `--pin` / `--unpin`; `worktree ps` and `worktree list` report the current value as `pinned`.",
+  "Pinning uses `--pin` / `--unpin`; `worktree ps` and `worktree list` report the current value as `pinned` (`isPinned` in `--json`).",
   "",
   "## Terminals",
   "",
