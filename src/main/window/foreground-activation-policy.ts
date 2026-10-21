@@ -13,7 +13,7 @@ import { app as electronApp, type BrowserWindow } from 'electron'
  */
 
 type ActivationPolicyApp = {
-  dock?: { hide: () => void }
+  dock?: { hide: () => void; show: () => void }
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
 }
 
@@ -27,8 +27,32 @@ type PolicyEnv = Readonly<Record<string, string | undefined>>
 let userForegroundAccepted = false
 
 /** Lets this process show and take focus after an explicit user request. */
-export function acceptUserForegroundRequest(): void {
+export function acceptUserForegroundRequest(
+  options: {
+    app?: ActivationPolicyApp
+    env?: PolicyEnv
+    platform?: NodeJS.Platform
+    warn?: (message: string, error: unknown) => void
+  } = {}
+): void {
+  if (userForegroundAccepted) {
+    return
+  }
+  // Read this before the latch flips, or a windowless macOS process looks normal and keeps its Dock hidden.
+  const restoreMacPolicy =
+    (options.platform ?? process.platform) === 'darwin' &&
+    isWindowlessLaunch(options.env ?? process.env)
   userForegroundAccepted = true
+  if (!restoreMacPolicy) {
+    return
+  }
+  try {
+    const app = options.app ?? electronApp
+    app.setActivationPolicy('regular')
+    void app.dock?.show()
+  } catch (error) {
+    options.warn?.('[window] Failed to restore regular activation policy', error)
+  }
 }
 
 /** Test isolation: the latch is process-global. */
