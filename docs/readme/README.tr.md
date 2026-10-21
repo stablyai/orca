@@ -159,9 +159,9 @@ Orca'yı ajanlar da kullanır - her akışı `orca worktree create`, `snapshot`,
 
 **Kutudan çıkan diğerleri:**
 
-- **[Hızlı açma](https://www.onorca.dev/docs/model/quick-open)** - Worktree'ler, dosyalar, ajanlar, komutlar ve depo bağlamı arasında akışınızdan çıkmadan arama yapın.
+- **[Hızlı açma](https://www.onorca.dev/docs/model/quick-open)** - Worktree'ler, dosyalar, ajanlar, komutlar ve repo bağlamı arasında akışınızdan çıkmadan arama yapın.
 - **[Hesap değiştirme ve kullanım takibi](https://www.onorca.dev/docs/agents/usage-tracking)** - Claude ve Codex kullanımınızı ve limit sıfırlanma zamanlarını görün, yeniden giriş yapmadan hesaplar arasında geçiş yapın.
-- **[Zengin depo önizlemeleri](https://www.onorca.dev/docs/editing/markdown)** - Çalışma alanında Markdown, görsel, PDF ve depo dokümanlarını önizleyin.
+- **[Zengin repo önizlemeleri](https://www.onorca.dev/docs/editing/markdown)** - Çalışma alanında Markdown, görsel, PDF ve repo dokümanlarını önizleyin.
 - **[Bilgisayar Kullanımı](https://www.onorca.dev/docs/cli/computer-use)** - Bir akış gerçek etkileşim gerektirdiğinde ajanların masaüstü uygulamalarını ve görünür arayüzü kullanmasına izin verin.
 - **[Bildirimler ve okunmadı durumu](https://www.onorca.dev/docs/notifications)** - Bir ajan bittiğinde ya da ilginizi istediğinde haberiniz olsun; sonra dönmek için konuşmaları okunmadı olarak işaretleyin.
 - **Ve çok daha fazlası** - her gün sürüm çıkarıyoruz, bu liste sürekli geride kalıyor. Asıl özellik listesi [changelog](https://github.com/stablyai/orca/releases).
@@ -248,7 +248,7 @@ Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulam
 
 - **Geri bildirim ve fikirler:** Hızlı sürüm çıkarıyoruz. Eksik bulduğunuz bir şey mi var? [Yeni bir özellik isteyin](https://github.com/stablyai/orca/issues).
 - **Gizlilik:** Orca'nın hangi anonim kullanım verisini topladığını ve bunu nasıl kapatacağınızı [gizlilik ve telemetri dokümanlarında](https://www.onorca.dev/docs/telemetry) bulabilirsiniz.
-- **Destek olun:** Günlük sürümleri takip etmek için bu depoyu [yıldızlayın](https://github.com/stablyai/orca).
+- **Destek olun:** Günlük sürümleri takip etmek için bu repoyu [yıldızlayın](https://github.com/stablyai/orca).
 
 ---
 
@@ -256,7 +256,7 @@ Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulam
 
 Katkıda bulunmak veya yerelde çalıştırmak ister misiniz? [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) rehberimize bakın.
 
-Mobil uygulamayı bir masaüstü sunucusuyla eşleştiren relay de bu depoda,
+Mobil uygulamayı bir masaüstü sunucusuyla eşleştiren relay de bu repoda,
 [`cloud/`](../../cloud/README.md) altında yer alıyor; ayrı bir pnpm workspace'i ve kurulum rehberi var.
 
 <a href="https://github.com/stablyai/orca/graphs/contributors">
