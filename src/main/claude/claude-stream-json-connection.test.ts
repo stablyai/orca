@@ -1,5 +1,6 @@
+import { getAppEnvironment, setAppEnvironment } from '../../shared/app-environment'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
@@ -20,7 +21,10 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  closeTestJournalHostDatabases
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
@@ -48,6 +52,7 @@ afterEach(async () => {
     await connection.close()
   }
   await Promise.all(childClosures.splice(0))
+  closeTestJournalHostDatabases()
   for (const dir of scratchDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
@@ -159,6 +164,29 @@ function processState(pid: number): 'running' | 'exited' {
 }
 
 describe('Claude stream-json connection', () => {
+  it('passes opted-in inbox tools and caller identity through the real SDK child argv', async () => {
+    const scenario = scriptScenario([HOLD_OPEN])
+    mkdirSync(join(scenario.cwd, 'out', 'cli'), { recursive: true })
+    writeFileSync(join(scenario.cwd, 'out', 'cli', 'index.js'), '')
+    const previous = getAppEnvironment()
+    setAppEnvironment({ ...previous, getAppPath: () => scenario.cwd, getPath: () => scenario.cwd })
+    try {
+      const launch = launchFor(scenario, {
+        ORCA_WORK_INBOX_ROUTING: '1',
+        ORCA_AGENT_SESSION_ID: 'own-session'
+      })
+      await open(launch)
+      const report = await until(() => readReportSafely(scenario), 'inbox SDK argv')
+      const at = report.argv.indexOf('--mcp-config')
+      expect(at).toBeGreaterThan(-1)
+      const config = JSON.parse(report.argv[at + 1])
+      expect(config.mcpServers.orca_work_inbox.env.ORCA_AGENT_SESSION_ID).toBe('own-session')
+      expect(report.argv.join(' ')).toContain('mcp__orca_work_inbox__ask_user')
+      expect(report.argv).not.toContain('--dangerously-skip-permissions')
+    } finally {
+      setAppEnvironment(previous)
+    }
+  })
   it('passes the Claude Code system-prompt preset through to SDK query', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     let captured: Options | undefined
@@ -434,8 +462,7 @@ describe('Claude stream-json connection', () => {
         item.body.kind === 'status' && item.body.providerFrame ? [item.body.providerFrame.kind] : []
       )
     ).toEqual([])
-    // The journal owns a SQLite connection now; afterEach removes this temp root and an open
-    // handle blocks that on Windows.
+    // The chat drains here; afterEach closes the host-owned SQLite connection before cleanup.
     await journal.close()
   })
 

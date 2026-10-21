@@ -8,7 +8,7 @@ import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-c
 import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/pi-process-owner-env'
-import { planCodexNoDaemonLaunch } from '../../pty/codex-no-daemon-launch-command'
+import { prepareAgentWorkInboxLaunch } from '../../runtime/work-inbox/work-inbox-agent-launch'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
@@ -130,7 +130,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
-  const env = openCodeLaunch.env
+  let env = openCodeLaunch.env
   const launchCommand = openCodeLaunch.command
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
@@ -151,15 +151,19 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   if (!connectionId && !input.isDaemonHostSpawn) {
     spawnOptions.codexHomePathOverride = { value: input.selectedCodexHomePath }
   }
-  const noDaemonLaunch = planCodexNoDaemonLaunch({
+  const inboxLaunch = await prepareAgentWorkInboxLaunch({
     command: launchCommand,
-    executesOnThisHost: !connectionId && input.codexRuntime !== 'wsl',
+    agent: launchAgent,
+    remote: Boolean(connectionId) || input.codexRuntime === 'wsl',
+    codexHome: input.selectedCodexHomePath,
     shellOverride: input.shellOverride,
     env,
     envToDelete: input.envToDelete,
     cwd: input.cwd
   })
-  const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
+  env = inboxLaunch.env
+  spawnOptions.env = env
+  const command = inboxLaunch.command
   if (command !== undefined) {
     spawnOptions.command = command
   }

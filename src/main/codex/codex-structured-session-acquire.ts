@@ -1,3 +1,4 @@
+import { codexWorkInboxLaunchArgs } from './codex-work-inbox-launch'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
@@ -125,7 +126,10 @@ export async function acquireCodexStructuredSession(input: {
     const connection = await open(
       {
         command: launch.command,
-        args: launch.args,
+        args:
+          launch.env?.ORCA_WORK_INBOX_ROUTING === '1'
+            ? [...codexWorkInboxLaunchArgs(), ...(launch.args ?? [])]
+            : launch.args,
         cwd: launch.cwd,
         ...(launch.env ? { env: launch.env } : {}),
         ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})

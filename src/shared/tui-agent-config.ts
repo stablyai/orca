@@ -27,6 +27,7 @@ function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
 const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
+    builtinToolsLaunch: 'mcp-json',
     promptInjectionMode: 'argv',
     pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).

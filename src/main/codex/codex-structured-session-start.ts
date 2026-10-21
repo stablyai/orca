@@ -1,3 +1,4 @@
+import { WORK_INBOX_ROUTING_INSTRUCTIONS } from '../../shared/work-inbox-routing-instructions'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -106,6 +107,26 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  if (launch.env?.ORCA_WORK_INBOX_ROUTING === '1') {
+    await waitForPromiseWithSignal(
+      connection.request(
+        'thread/inject_items',
+        {
+          threadId: opened.threadId,
+          items: [
+            {
+              type: 'message',
+              role: 'developer',
+              content: [{ type: 'input_text', text: WORK_INBOX_ROUTING_INSTRUCTIONS }]
+            }
+          ]
+        },
+        { timeoutMs: deps.requestTimeoutMs }
+      ),
+      openInput.signal
+    )
+    current()
+  }
   start.setPrimaryThreadId(opened.threadId)
   const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
   if (restored && !restored.accepted) {

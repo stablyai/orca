@@ -22,6 +22,8 @@ import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-reso
 import { providerStderrForDisplay } from '../provider-process/provider-spawn-failure-report'
 import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 
+import { claudeWorkInboxOptions } from './claude-work-inbox-options'
+
 export { ClaudeControlRequestError }
 
 /** How long a proven close waits for messages already written before the exit; whatever still
@@ -143,6 +145,7 @@ export async function openClaudeStreamJsonConnection(
     prompt: inbox.messages,
     options: {
       ...launch.options,
+      ...claudeWorkInboxOptions(launch.options, launch.env),
       cwd: launch.cwd,
       // Why env is never omitted: the SDK inherits process.env when it is, which is
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
