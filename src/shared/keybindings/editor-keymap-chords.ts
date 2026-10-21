@@ -10,7 +10,7 @@ import { getEffectiveKeybindingsForAction } from './effective'
 
 /**
  * Chords the Emacs editor preset owns: every modified key monaco-emacs binds plus Orca's additions
- * (`C-x h`, `S-C-z`). `Ctrl` is the physical Control key on every platform (never `Mod`), because
+ * (`C-x h`, `C-?`, `C-M-_`, `S-C-z`). `Ctrl` is the physical Control key on every platform (never `Mod`), because
  * Emacs chords are Control chords on macOS too. While an Emacs editor has focus, Orca yields these
  * to the editor instead of running app shortcuts such as Ctrl+P, Ctrl+W or Ctrl+B on Linux/Windows.
  */
@@ -29,6 +29,8 @@ export const EMACS_EDITOR_CHORDS: readonly string[] = [
   'Ctrl+Shift+2',
   'Ctrl+Shift+Backspace',
   'Ctrl+Shift+Z',
+  'Ctrl+Shift+Slash',
+  'Ctrl+Alt+Shift+Minus',
   'Alt+Shift+Period',
   'Alt+Shift+Comma',
   'Alt+Shift+5'
