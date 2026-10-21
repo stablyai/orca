@@ -231,6 +231,7 @@ function addScriptRuntime(
     disposeSkillUploadSessions: settled(),
     getRuntimeId: () => undefined,
     closeNotificationDismissals: settled(),
+    flushPaneGrids: () => null,
     closeRepositoryAddScripts: vi.fn(closeRepositoryAddScripts),
     hasUnsettledRepositoryAddScriptRuns: vi.fn(hasUnsettledRepositoryAddScriptRuns)
   }
