@@ -284,7 +284,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     }
     titleTrackerEntry.applyingChunk = true
     titleTrackerEntry.chunkTouchedSessionTabs = false
-    let bobApprovalPrompted = false
+    let bobApproval: boolean | undefined
     try {
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
@@ -319,8 +319,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       // Why: Bob has no hook for a pending approval (see bob-approval-prompt.ts); this is the
       // only signal that the pane is blocked on the user, so it emits agent status directly
       // rather than a side-effect fact.
-      bobApprovalPrompted =
-        titleTrackerEntry.bobApprovalDetector?.observe(agentStatusChunk.cleanData) === true
+      bobApproval = titleTrackerEntry.bobApprovalDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -334,7 +333,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
             : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
         this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
         // Why last: the modal is still on screen, so a same-chunk OSC status must not land after it.
-        if (bobApprovalPrompted) {
+        if (bobApproval) {
           this.emitBobApprovalWaiting(ptyId)
         }
       } finally {

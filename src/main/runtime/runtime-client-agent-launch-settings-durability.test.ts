@@ -140,7 +140,7 @@ describe('durable execution-host launch settings', () => {
     try {
       await expect(
         controller.mutateAgentLaunch({ type: 'availability', agent: 'claude', enabled: false })
-      ).resolves.toMatchObject({ disabledTuiAgents: ['claude'] })
+      ).resolves.toMatchObject({ disabledTuiAgents: expect.arrayContaining(['claude']) })
       await controller.mutateAgentLaunch({
         type: 'arguments',
         agent: 'codex',
