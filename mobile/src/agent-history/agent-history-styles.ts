@@ -168,6 +168,22 @@ export const styles = StyleSheet.create({
   resumeButtonDisabled: {
     opacity: 0.45
   },
+  cardActionGroup: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  stopButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgRaised,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle
+  },
   preview: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,

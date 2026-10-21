@@ -52,6 +52,7 @@ export function AiVaultVirtualRow({
   onToggleGroup,
   onToggleSessionDetails,
   onJumpToOriginalPane,
+  onCloseOriginalPane,
   onJumpToWorktree,
   onResume,
   onContinueInNewSession,
@@ -89,6 +90,7 @@ export function AiVaultVirtualRow({
   onToggleGroup: (key: string) => void
   onToggleSessionDetails: (sessionId: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
+  onCloseOriginalPane?: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
   onResume: (session: AiVaultSession, worktreeId: string) => void
   onContinueInNewSession: (session: AiVaultSession, worktreeId: string) => void
@@ -239,7 +241,12 @@ export function AiVaultVirtualRow({
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }
-          resumeHidden={structuredSessionOpen}
+          onCloseOriginalPane={
+            canJumpToOriginalPane && onCloseOriginalPane
+              ? () => onCloseOriginalPane(row.session)
+              : undefined
+          }
+          resumeHidden={canJumpToOriginalPane}
           showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           subagentResume={{ getState: getSessionResumeState, onResume }}

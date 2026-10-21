@@ -26,6 +26,7 @@ export function useAiVaultOriginalPaneActions(): {
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   /** Settles false when the pane is gone and nothing was switched. */
   jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
+  closeOriginalPane: (session: AiVaultSession) => boolean
   jumpToWorktree: (worktreeId: string) => void
 } {
   const originalPaneLookupState = useAppStore(
@@ -102,6 +103,39 @@ export function useAiVaultOriginalPaneActions(): {
     [isStructuredSessionOpen]
   )
 
+  const closeOriginalPane = useCallback((session: AiVaultSession): boolean => {
+    const state = useAppStore.getState()
+    if (session.structuredSession) {
+      const structuredTab = findStructuredAgentSessionTab(state.unifiedTabsByWorktree, {
+        workspaceId: session.structuredSession.workspaceId,
+        sessionId: session.structuredSession.sessionId
+      })
+      if (structuredTab) {
+        state.closeUnifiedTab(structuredTab.id)
+        return true
+      }
+    }
+    const target = findOriginalAiVaultSessionPane(state, session)
+    if (target) {
+      state.closeTab(target.tabId)
+      return true
+    }
+    if (session.openTab) {
+      const tabs = state.tabsByWorktree[session.openTab.worktreeId] ?? []
+      if (tabs.some((tab) => tab.id === session.openTab?.tabId)) {
+        state.closeTab(session.openTab.tabId)
+        return true
+      }
+    }
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.AiVaultPanel.originalPaneUnavailable',
+        'Original pane is no longer available.'
+      )
+    )
+    return false
+  }, [])
+
   const jumpToWorktree = useCallback((worktreeId: string): void => {
     revealSessionWorkspace(worktreeId)
   }, [])
@@ -111,6 +145,7 @@ export function useAiVaultOriginalPaneActions(): {
     getSessionLiveState,
     isStructuredSessionOpen,
     jumpToOriginalPane,
+    closeOriginalPane,
     jumpToWorktree
   }
 }

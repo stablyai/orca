@@ -55,6 +55,7 @@ export function AiVaultSessionVirtualList({
   getSessionResumeInChat,
   onToggleGroup,
   onJumpToOriginalPane,
+  onCloseOriginalPane,
   onJumpToWorktree,
   onResume,
   onContinueInNewSession,
@@ -94,6 +95,7 @@ export function AiVaultSessionVirtualList({
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
   onToggleGroup: (key: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
+  onCloseOriginalPane?: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
   onResume: (session: AiVaultSession, worktreeId: string) => void
   onContinueInNewSession: (session: AiVaultSession, worktreeId: string) => void
@@ -304,6 +306,7 @@ export function AiVaultSessionVirtualList({
                 onToggleGroup={onToggleGroup}
                 onToggleSessionDetails={toggleSessionDetails}
                 onJumpToOriginalPane={onJumpToOriginalPane}
+                onCloseOriginalPane={onCloseOriginalPane}
                 onJumpToWorktree={onJumpToWorktree}
                 onResume={onResume}
                 onContinueInNewSession={onContinueInNewSession}

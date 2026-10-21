@@ -110,6 +110,12 @@ export type AiVaultSessionSubagentInfo = {
   status: AiVaultSubagentRunStatus | null
 }
 
+export type AiVaultSessionOpenTab = {
+  worktreeId: string
+  tabId: string
+  leafId?: string
+}
+
 export type AiVaultSession = {
   id: string
   executionHostId: ExecutionHostId
@@ -157,6 +163,8 @@ export type AiVaultSession = {
     sessionId: string
     workspaceId: string
   }
+  /** Present when this session is currently open in a workspace tab on the host. */
+  openTab?: AiVaultSessionOpenTab
 }
 
 export type AiVaultSubagentListArgs = {

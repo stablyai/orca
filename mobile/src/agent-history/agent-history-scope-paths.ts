@@ -8,6 +8,12 @@ import {
   type AiVaultScope
 } from '../../../src/shared/ai-vault-types'
 
+export const MOBILE_AGENT_HISTORY_SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
+  { scope: 'workspace', label: 'Workspace' },
+  { scope: 'project', label: 'Project' },
+  { scope: 'all', label: 'All' }
+]
+
 // Why: the renderer's deriveAiVault* helpers are renderer-located and
 // Metro-unresolvable, so mobile does its own minimal derivation seeded by the
 // active worktree's path plus same-repo sibling worktrees (mobile already loads

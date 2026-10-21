@@ -6,6 +6,7 @@ import {
   MessageSquarePlus,
   PanelTopOpen,
   Play,
+  Square,
   Trash2
 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -25,6 +26,7 @@ export function SessionActionMenuItems({
   onResumeInNewChat,
   onResumeInNewCli,
   onJumpToOriginalPane,
+  onCloseOriginalPane,
   showJumpToWorktree,
   jumpWorkspaceId,
   onJumpToWorktree,
@@ -47,6 +49,7 @@ export function SessionActionMenuItems({
   // Offered only on rows native chat owns, where it forks: see ai-vault-session-cli-fork.
   onResumeInNewCli?: () => void
   onJumpToOriginalPane?: () => void
+  onCloseOriginalPane?: () => void
   showJumpToWorktree: boolean
   jumpWorkspaceId?: string | null
   onJumpToWorktree?: () => void
@@ -68,6 +71,7 @@ export function SessionActionMenuItems({
   // Why: Jump/Resume items act on this conversation; the hand-off starts a new one, so it sits apart.
   const hasItemsAboveHandOff = Boolean(
     onJumpToOriginalPane ||
+    onCloseOriginalPane ||
     showJumpToWorktree ||
     !resumeHidden ||
     onResumeInNewChat ||
@@ -97,6 +101,15 @@ export function SessionActionMenuItems({
           {translate(
             'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
             'Jump to Original Pane'
+          )}
+        </Item>
+      ) : null}
+      {onCloseOriginalPane ? (
+        <Item onSelect={onCloseOriginalPane}>
+          <Square className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.closeOriginalPane',
+            'Close Open Session'
           )}
         </Item>
       ) : null}

@@ -10,6 +10,7 @@ import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
+  createMobileAiVaultResumeMutationId,
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
@@ -18,12 +19,17 @@ import {
 } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { MOBILE_AGENT_HISTORY_SCOPE_TABS } from './agent-history-scope-paths'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
-import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import {
+  MobileAgentSessionHistoryList,
+  useMobileAgentHistoryOpenTabActions
+} from './MobileAgentSessionHistoryList'
+import { openHistorySession } from './worktree-navigation-actions'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
@@ -34,21 +40,17 @@ export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
+  origin?: string
 }
-
-const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
-  { scope: 'workspace', label: 'Workspace' },
-  { scope: 'project', label: 'Project' },
-  { scope: 'all', label: 'All' }
-]
 
 export function MobileAgentSessionHistoryPanel({
   hostId,
   worktreeId,
-  name = ''
+  name = '',
+  origin
 }: MobileAgentSessionHistoryPanelProps) {
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
-  // screen, and the session it resumes into is a native route the shell has to push.
+  // screen, and the session it resumes into is a native route the shell has to open.
   const router = useWorkspaceRouteHandoff()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
@@ -117,8 +119,23 @@ export function MobileAgentSessionHistoryPanel({
     retry
   } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
 
-  const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
+  const openTabActions = useMobileAgentHistoryOpenTabActions({
+    client,
+    connected: connState === 'connected',
+    hostId,
+    worktreeId,
+    worktrees,
+    origin,
+    router,
+    onRefresh,
+    sessions: screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS,
+    launchInFlightRef: resumeLaunchInFlightRef,
+    setResumingSessionId,
+    setResumeMessage
+  })
+  const sessions = openTabActions.sessionsWithOpenTabs
+  const { closingSessionId, closedSessionIds, onJumpToOpenSession } = openTabActions
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -130,9 +147,10 @@ export function MobileAgentSessionHistoryPanel({
         scope,
         scopeFilterPaths,
         activeWorktreePath,
-        now
+        now,
+        closedSessionIds
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now]
+    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, closedSessionIds]
   )
 
   const resumeHost = useMemo(
@@ -145,13 +163,18 @@ export function MobileAgentSessionHistoryPanel({
   )
 
   const resumeActionStateBySessionId = useMemo(
-    () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
-    [resumingSessionId, sessions]
+    () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId, closingSessionId),
+    [closingSessionId, resumingSessionId, sessions]
   )
 
   const onResumeSession = useCallback(
     async (session: AiVaultSession): Promise<void> => {
       if (resumeLaunchInFlightRef.current) {
+        return
+      }
+      // The tab is already open; focusing it must not spawn a second terminal.
+      if (session.openTab && !closedSessionIds.has(session.id)) {
+        await onJumpToOpenSession(session, session.openTab)
         return
       }
       if (!client || connState !== 'connected') {
@@ -178,13 +201,14 @@ export function MobileAgentSessionHistoryPanel({
           worktrees: freshWorktrees
         } = await loadMobileResumeMetadata(client)
         assertCurrentOwner()
+        const resumeWorktrees = freshWorktrees ?? worktrees
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
           // Why: resolve against live worktrees so a workspace deleted or
           // archived since panel mount can't be picked; the mount-time list is
           // only a fallback when the fresh fetch fails.
-          worktrees: freshWorktrees ?? worktrees,
+          worktrees: resumeWorktrees,
           repos,
           folderWorkspaces,
           projectGroups
@@ -234,11 +258,11 @@ export function MobileAgentSessionHistoryPanel({
           return
         }
         setResumeMessage('Agent session queued.')
-        router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
-            typeof router.push
-          >[0]
+        const resumedName = getWorktreeLabel(
+          resumeWorktrees.find((item) => item.worktreeId === target.worktreeId)?.displayName,
+          target.worktreeId
         )
+        openHistorySession(router, origin, hostId, worktreeId, target.worktreeId, resumedName)
       } catch (err) {
         triggerError()
         setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
@@ -251,12 +275,15 @@ export function MobileAgentSessionHistoryPanel({
       client,
       connState,
       hostId,
+      origin,
       resumeHost,
       hostTerminalWindowsShell,
       router,
       worktreeId,
       worktrees,
-      claimResumeOwnership
+      claimResumeOwnership,
+      closedSessionIds,
+      onJumpToOpenSession
     ]
   )
 
@@ -316,7 +343,7 @@ export function MobileAgentSessionHistoryPanel({
       ) : (
         <>
           <View style={styles.scopeTabs}>
-            {SCOPE_TABS.map((tab) => {
+            {MOBILE_AGENT_HISTORY_SCOPE_TABS.map((tab) => {
               const active = scope === tab.scope
               return (
                 <Pressable
@@ -369,6 +396,8 @@ export function MobileAgentSessionHistoryPanel({
               showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
               resumeActionStateBySessionId={resumeActionStateBySessionId}
               onResume={onResumeSession}
+              onJumpToOpenTab={onJumpToOpenSession}
+              onCloseOpenTab={openTabActions.onCloseOpenSession}
               onRefresh={() => void onRefresh()}
             />
           )}
@@ -380,9 +409,3 @@ export function MobileAgentSessionHistoryPanel({
 
 const EMPTY_SESSIONS: AiVaultSession[] = []
 const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
-
-function createMobileAiVaultResumeMutationId(sessionId: string): string {
-  const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'
-  const randomPart = Math.random().toString(36).slice(2, 10)
-  return `ai-vault-resume:${sessionPart}:${Date.now().toString(36)}:${randomPart}`
-}
