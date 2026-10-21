@@ -14,6 +14,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/persistence/moving-wsl-projects/wsl-move-session-freeze.test.ts',
   'src/main/persistence/moving-wsl-projects/wsl-move-main-rewrite-stores.test.ts',
   'src/main/persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite.test.ts',
+  'src/main/persistence/moving-wsl-projects/wsl-move-retention.test.ts',
   'src/main/wsl-move-scan-pruning.test.ts',
   'src/main/repo-backfill-wsl-move.test.ts',
   'src/main/acp/acp-structured-host-live-listing.test.ts',

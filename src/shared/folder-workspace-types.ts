@@ -3,6 +3,7 @@ import type { TaskSourceContext } from './task-source-context'
 import type { TuiAgent } from './tui-agent'
 import type { DiffComment } from './diff-comment-types'
 import type { SmartTier } from './sidebar-list/sort-stamps'
+import type { OrcadRetainedMarker } from './orcad-retained-marker'
 import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
@@ -48,6 +49,8 @@ export type FolderWorkspace = {
   createdAt: number
   updatedAt: number
   diffComments?: DiffComment[]
+  /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */
+  orcadRetained?: OrcadRetainedMarker
 }
 
 export type FolderWorkspaceLinkedTask = WorkspaceLinkedItem

@@ -18,6 +18,7 @@ import {
   ORCAD_MIGRATION_MANIFEST_VERSION,
   parseOrcadMigrationManifest
 } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { withoutOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -99,9 +100,10 @@ export function exportWslMoveManifest(
 ): WslMoveManifestExport {
   const blockers: string[] = []
   const missing: string[] = []
+  // The retained mark is this desktop's record; the host must never receive it.
   const repos = pickLocalRows(store.getRepos(), request.repoIds, isLocalRepo, (id) =>
     missing.push(id)
-  )
+  ).map(withoutOrcadRetainedMarker)
   const allGroups = store.getProjectGroups()
   const allFolders = store.getFolderWorkspaces()
   const folderWorkspaces = pickLocalRows(
@@ -113,7 +115,7 @@ export function exportWslMoveManifest(
         workspace.id
       ).kind === 'local',
     (id) => missing.push(id)
-  )
+  ).map(withoutOrcadRetainedMarker)
   // The signed scope must name exactly the rows it carries: a stale plan is replanned, not signed.
   if (missing.length > 0) {
     throw new WslMoveScopeChangedError(missing)

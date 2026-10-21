@@ -44,7 +44,7 @@ type FenceView = { readable: true; state: WslMoveFenceState } | { readable: fals
 let loaded: { userDataKey: string; view: FenceView } | null = null
 
 // `app.setName` can respell the same folder; Windows paths compare case-insensitively.
-function userDataKey(userDataPath: string): string {
+export function userDataKey(userDataPath: string): string {
   const resolved = resolve(userDataPath)
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }

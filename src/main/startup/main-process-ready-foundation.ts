@@ -15,6 +15,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { recoverInterruptedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-reset'
 import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl-move-startup-rewrite'
+import { installWslMoveRetention } from '../persistence/moving-wsl-projects/wsl-move-retention'
 import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
 import { registerWslMoveRendererRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
 import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
@@ -176,6 +177,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite({ userDataPath }, () =>
     recoverInterruptedWslMoves(userDataPath)
   )
+  // Re-marks retained rows a downgrade stripped; never awaited, since nothing it writes gates a read.
+  void state.wslMoveStartupRewriteReady.then(() => installWslMoveRetention({ userDataPath, store }))
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
   // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —

@@ -7,6 +7,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
 import { isSmartTier } from './sidebar-list/sort-stamps'
+import { normalizeOrcadRetainedMarker } from './orcad-retained-marker'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -58,6 +59,7 @@ export function normalizeFolderWorkspaces(
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
+    const orcadRetained = normalizeOrcadRetainedMarker(raw.orcadRetained)
     seen.add(raw.id)
     // Why: `executionHostId` is deliberately NOT persisted. It is a fetch-time renderer
     // stamp that can name a `runtime:*` authority the desktop store does not own, and it
@@ -129,7 +131,8 @@ export function normalizeFolderWorkspaces(
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
       // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
       // PersistedState.folderWorkspaceDiffComments.
-      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {}),
+      ...(orcadRetained ? { orcadRetained } : {})
     })
   }
   return workspaces.sort(

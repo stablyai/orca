@@ -195,6 +195,19 @@ describe('exportWslMoveManifest', () => {
     expect(result.manifest.payload.repositories.map((row) => row.path)).toEqual(['/home/me/app'])
   })
 
+  it("never signs this desktop's retained mark into the manifest", () => {
+    const state = sourceState()
+    const mark = { migrationId: 'move-0', environmentId: 'wsl:Ubuntu' }
+    state.repos = state.repos.map((row) =>
+      row.id === 'app' ? { ...row, orcadRetained: mark } : row
+    )
+    const store = storeFor(state)
+    const { manifest } = exportWslMoveManifest(store, REQUEST)
+    expect(manifest.payload.repositories.map((row) => row.orcadRetained)).toEqual([undefined])
+    // The stored row keeps its mark.
+    expect(store.getRepos().find((row) => row.id === 'app')?.orcadRetained).toEqual(mark)
+  })
+
   it('refuses with a reason instead of dropping state the move cannot carry', () => {
     const state = sourceState()
     const record: SleepingAgentSessionRecord = {

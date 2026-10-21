@@ -50,7 +50,12 @@ export function assertLocalWslScopeMatchesPayload(manifest: OrcadMigrationManife
   }
   const sameIds = (declared: readonly string[], rows: readonly { id: string }[]): boolean => {
     const ids = new Set(rows.map((row) => row.id))
-    return declared.length === ids.size && declared.every((id) => ids.has(id))
+    // A doubled declared id would let one payload row through unscoped.
+    return (
+      new Set(declared).size === declared.length &&
+      declared.length === ids.size &&
+      declared.every((id) => ids.has(id))
+    )
   }
   if (
     !sameIds(source.scopeRepoIds, payload.repositories) ||
