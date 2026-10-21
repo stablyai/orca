@@ -116,6 +116,8 @@ export function isAutosaveSuspendedForFile(
 ): boolean {
   return (
     file.externalMutation === 'changed' ||
+    file.externalMutation === 'deleted' ||
+    file.externalMutation === 'renamed' ||
     file.pendingDiskBaselineVerification === true ||
     file.pendingLiveDiskVerification === true ||
     file.pendingOwnerMigration === true

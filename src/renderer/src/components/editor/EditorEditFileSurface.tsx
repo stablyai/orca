@@ -19,6 +19,7 @@ import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { MissingEditorFileBanner } from './MissingEditorFileBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
@@ -168,6 +169,10 @@ export function EditorEditFileSurface({
         currentContent={currentContent}
         reloadContent={reloadContent}
       />
+    ) : activeFile.isDirty &&
+      activeFile.readOnly !== true &&
+      (activeFile.externalMutation === 'deleted' || activeFile.externalMutation === 'renamed') ? (
+      <MissingEditorFileBanner file={activeFile} />
     ) : null
 
   if (isChangesMode) {
