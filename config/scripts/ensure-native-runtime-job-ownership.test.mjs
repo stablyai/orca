@@ -21,7 +21,8 @@ const NODE_PTY_PATCH = readFileSync(
 const JOB_EXPORTS = {
   listJobProcessIds: () => [],
   terminateJob: () => true,
-  assignCurrentProcessToJob: () => true
+  assignCurrentProcessToJob: () => true,
+  getShellCreationTime: () => 1234
 }
 
 const fixtureDir = mkdtempSync(join(tmpdir(), 'node-pty-job-ownership-'))
@@ -33,7 +34,8 @@ function writeAddon(name, { cygwinBreakawayDenied }) {
     path,
     Buffer.concat([
       Buffer.from('MZ fake addon '),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+      Buffer.from('getShellCreationTime')
     ])
   )
   return path
@@ -191,7 +193,8 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
         addonPath,
         Buffer.concat([
           peImage({ arch }),
-          cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+          cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+          Buffer.from('getShellCreationTime')
         ])
       )
     }

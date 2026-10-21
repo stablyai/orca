@@ -184,3 +184,7 @@ ci-shards/
 /.build/windows-native-benchmark/
 
 .local/static-analysis-research/
+
+# Cross-built guest cleanup artifacts and manifests are regenerated from source.
+/resources/guest-tree-kill/
+/resources/guest-tree-kill.staging-*/

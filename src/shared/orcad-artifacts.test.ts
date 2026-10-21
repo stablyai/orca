@@ -11,8 +11,10 @@ import {
   ORCAD_NODE_PTY_JS_ARTIFACTS,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RIPGREP_ARTIFACTS,
-  ORCAD_RIPGREP_LICENSE_ARTIFACTS,
   ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME,
+  ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS,
+  ORCAD_WINDOWS_PROCESS_TREE_FILENAME,
+  ORCAD_RIPGREP_LICENSE_ARTIFACTS,
   ORCAD_WINDOWS_SECURITY_FILENAME,
   orcadArtifactFilenames,
   orcadBunRuntimeFilename,
@@ -54,6 +56,38 @@ describe('standalone runtime artifacts', () => {
       `ripgrep/${platform}-${arch}/${bundledRipgrepBinaryName(`${platform}-${arch}`)}`
     ])
   })
+
+  it.each(SERVER_TARGETS)('keeps guest cleanup artifacts in the correct %s slot', (target) => {
+    const expected = target.startsWith('win32-') ? [...ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS] : []
+    const guestArtifacts = (filenames: string[]): string[] =>
+      filenames.filter((filename) => filename.startsWith('guest-tree-kill/'))
+
+    expect(guestArtifacts(orcadArtifactFilenames(target, []))).toEqual(expected)
+    expect(guestArtifacts(orcadTemplateTargetFilenames(target))).toEqual(expected)
+    expect(guestArtifacts(orcadTemplateCommonFilenames([]))).toEqual([])
+  })
+
+  it.each(['win32-x64', 'win32-arm64'])(
+    'keeps all Windows addons and guest cleanup together in the %s slot',
+    (target) => {
+      const required = [
+        ORCAD_WINDOWS_PROCESS_TREE_FILENAME,
+        ORCAD_WINDOWS_SECURITY_FILENAME,
+        ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME,
+        ...ORCAD_WINDOWS_GUEST_TREE_KILL_ARTIFACTS
+      ]
+      for (const filenames of [
+        orcadArtifactFilenames(target, []),
+        orcadTemplateTargetFilenames(target)
+      ]) {
+        expect(filenames.slice(-required.length)).toEqual(required)
+        expect(new Set(filenames).size).toBe(filenames.length)
+      }
+      for (const filename of required) {
+        expect(orcadTemplateCommonFilenames([])).not.toContain(filename)
+      }
+    }
+  )
 
   it('ships the binary redistribution notices with every install', () => {
     const sourceDir = join(__dirname, '../../resources/licenses/ripgrep')

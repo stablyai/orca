@@ -37,6 +37,10 @@ function startBuild(mode, options = {}) {
     "console.log('windows launcher only')"
   )
   writeFileSync(
+    join(directory, 'config', 'scripts', 'build-guest-tree-kill.mjs'),
+    options.guestHelperScript ?? "console.log('guest helpers built')"
+  )
+  writeFileSync(
     join(directory, 'config', 'scripts', 'build-windows-agent-hook.mjs'),
     "console.log('windows agent hook only')"
   )
@@ -356,17 +360,31 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     )
     expect(delivered).toEqual(Array.from({ length: accepted }, (_, index) => index + 1))
   })
+})
 
+describe('platform native build dispatch', () => {
   it.each(['linux', 'win32'])('keeps the %s entry point out of macOS builds', async (platform) => {
     const build = startBuild('success', { platform })
     const result = await build.closed
     expect(result).toMatchObject({ code: 0, signal: null })
     expect(build.events()).toEqual([])
     expect(result.output).toContain(
-      platform === 'win32' ? 'windows launcher only' : 'wayland clipboard only'
+      platform === 'win32' ? 'guest helpers built\nwindows launcher only' : 'wayland clipboard only'
     )
     if (platform === 'win32') {
       expect(result.output).toContain('windows agent hook only')
     }
+  })
+
+  it('stops Windows packaging preparation when guest helper construction fails', async () => {
+    const build = startBuild('success', {
+      platform: 'win32',
+      guestHelperScript: "console.error('guest helpers failed'); process.exit(7)"
+    })
+    const result = await build.closed
+    expect(result).toMatchObject({ code: 7, signal: null })
+    expect(build.events()).toEqual([])
+    expect(result.stderr).toContain('guest helpers failed')
+    expect(result.output).not.toContain('windows launcher only')
   })
 })

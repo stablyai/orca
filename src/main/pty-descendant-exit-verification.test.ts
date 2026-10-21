@@ -186,7 +186,8 @@ describe('descendant exit verification across partial process-table reads', () =
       })
       await vi.advanceTimersByTimeAsync(200)
 
-      await pending
+      await expect(pending).resolves.toBe(scenario === 'ambiguous parent' ? 'unverifiable' : 'live')
+      expect(sendSignal).not.toHaveBeenCalledWith(child.pid, 'SIGTERM')
       expect(sendSignal).not.toHaveBeenCalledWith(child.pid, 'SIGKILL')
     }
   )
@@ -204,6 +205,34 @@ describe('descendant exit verification across partial process-table reads', () =
     })
     await vi.advanceTimersByTimeAsync(200)
 
+    await expect(pending).resolves.toBe('live')
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [20, 'SIGKILL']
+    ])
+  })
+
+  it('signals an initially unverifiable birth-second target when fresh ownership returns', async () => {
+    const root = row(10, 1)
+    const child = row(20, 10, STARTED_DURING)
+    const snapshot = collectDescendantRows(10, [root, child], CAPTURED_AT)
+    const readTable = vi
+      .fn()
+      .mockImplementationOnce(async () => capture([child]))
+      .mockImplementation(async () => capture([root, child]))
+    const sendSignal = vi.fn()
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
+      readTable,
+      sendSignal,
+      requireIdentityBeforeSignal: true,
+      graceMs: 100,
+      verifyMs: 200
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendSignal).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(sendSignal.mock.calls).toEqual([[20, 'SIGTERM']])
+    await vi.advanceTimersByTimeAsync(150)
     await expect(pending).resolves.toBe('live')
     expect(sendSignal.mock.calls).toEqual([
       [20, 'SIGTERM'],

@@ -159,7 +159,8 @@ export async function terminateDescendantSnapshotWithVerdict(
   while (Date.now() < deadline) {
     const capture = await readProcessTableBeforeDeadline(
       readTable,
-      deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
+      deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+      deps.keepAlive
     )
     // A read that missed its own deadline is not an answer, and surrendering on
     // the first slow one spends none of the window this verification was given:
@@ -186,37 +187,39 @@ export async function terminateDescendantSnapshotWithVerdict(
         }
         return 'exited'
       }
+      // Both signals need current ownership when second-resolution start time is ambiguous.
+      const freshPids =
+        deps.requireIdentityBeforeSignal &&
+        live.some(
+          (row) =>
+            !hasUnambiguousStartIdentity(
+              row,
+              snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+            )
+        )
+          ? rederiveSnapshotPids(snapshot, capture)
+          : undefined
+      const hasSafeIdentity = (row: ProcessTableRow): boolean =>
+        hasUnambiguousStartIdentity(
+          row,
+          snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+        ) ||
+        (deps.requireIdentityBeforeSignal === true &&
+          snapshot.reDerivedPids?.has(row.pid) === true &&
+          freshPids?.has(row.pid) === true)
       for (const row of live) {
-        if (!signalled.has(row.pid)) {
+        if (
+          !signalled.has(row.pid) &&
+          (!deps.requireIdentityBeforeSignal || hasSafeIdentity(row))
+        ) {
           sendSignal(row.pid, 'SIGTERM')
           signalled.add(row.pid)
         }
       }
       if (Date.now() >= deadline - verifyMs + graceMs) {
         const pending = live.filter((row) => !forced.has(row.pid))
-        const freshPids =
-          deps.requireIdentityBeforeSignal &&
-          pending.some(
-            (row) =>
-              snapshot.reDerivedPids?.has(row.pid) === true &&
-              !hasUnambiguousStartIdentity(
-                row,
-                snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
-              )
-          )
-            ? rederiveSnapshotPids(snapshot, capture)
-            : undefined
         for (const row of pending) {
-          // Birth-second identity needs ownership from this read, not a stale walk.
-          if (
-            (deps.requireIdentityBeforeSignal === true &&
-              snapshot.reDerivedPids?.has(row.pid) === true &&
-              freshPids?.has(row.pid) === true) ||
-            hasUnambiguousStartIdentity(
-              row,
-              snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
-            )
-          ) {
+          if (hasSafeIdentity(row)) {
             sendSignal(row.pid, 'SIGKILL')
             forced.add(row.pid)
           }
@@ -227,7 +230,8 @@ export async function terminateDescendantSnapshotWithVerdict(
   }
   const finalCapture = await readProcessTableBeforeDeadline(
     readTable,
-    deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
+    deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+    deps.keepAlive
   )
   if (!finalCapture) {
     return 'unverifiable'

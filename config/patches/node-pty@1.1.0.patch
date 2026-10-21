@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
+index 5f63978..837360b 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -1,13 +1,18 @@
@@ -8,7 +8,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
      'dependencies': [
 -      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
 +      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
-     ],
++    ],
 +    # Orca: GCC 9 (Ubuntu 20.04 floor) accepts C++20 as gnu++2a, but rejects
 +    # the newer gnu++20 spelling emitted by Node 24's gyp flags.
 +    'cflags_cc!': [
@@ -16,7 +16,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
 +    ],
 +    'cflags_cc': [
 +      '-std=gnu++2a'
-+    ],
+     ],
      'conditions': [
        ['OS=="win"', {
 -        'msvs_configuration_attributes': {
@@ -25,7 +25,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
-@@ -42,32 +39,6 @@
+@@ -42,32 +47,6 @@
              '-lshlwapi'
            ],
          },
@@ -58,7 +58,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
        ]
      }, { # OS!="win"
        'targets': [
-@@ -88,6 +85,16 @@
+@@ -88,6 +67,16 @@
                'libraries!': [
                  '-lutil'
                ]
@@ -76,7 +76,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
            ]
          }
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
-index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8360130ef 100644
+index 1ac5758..e619813 100644
 --- a/deps/winpty/src/winpty.gyp
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
@@ -118,7 +118,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
 diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441e02a974c 100644
+index 8c4fca9..0a01730 100644
 --- a/lib/conpty_console_list_agent.js
 +++ b/lib/conpty_console_list_agent.js
 @@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
@@ -139,7 +139,7 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
 diff --git a/lib/terminal.js b/lib/terminal.js
-index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece13476348780cfd 100644
+index e2f9bc9..6c63bfa 100644
 --- a/lib/terminal.js
 +++ b/lib/terminal.js
 @@ -172,6 +172,21 @@ var Terminal = /** @class */ (function () {
@@ -165,7 +165,7 @@ index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece134763
      Terminal.prototype._parseEnv = function (env) {
          var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71ededb01f 100644
+index 1ec12f7..1779098 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -263,6 +263,118 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
                  }
                  else {
                      // Stop processing immediately on unexpected error and log
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb..26c2a4c 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -136,6 +136,9 @@ var WindowsPtyAgent = /** @class */ (function () {
+         if (this._useConpty) {
+             if (!this._useConptyDll) {
+                 this._inSocket.readable = false;
++                // The non-DLL path previously only flipped `readable`, leaving the
++                // conin PipeWrap alive until the host exited (#947).
++                this._inSocket.destroy();
+                 this._outSocket.readable = false;
+                 this._getConsoleProcessList().then(function (consoleProcessList) {
+                     consoleProcessList.forEach(function (pid) {
+@@ -154,9 +157,10 @@ var WindowsPtyAgent = /** @class */ (function () {
+                 // Close the input write handle to signal the end of session.
+                 this._inSocket.destroy();
+                 this._ptyNative.kill(this._pty, this._useConptyDll);
+-                this._outSocket.on('data', function () {
+-                    _this._conoutSocketWorker.dispose();
+-                });
++                // Orca: dispose unconditionally, as the non-DLL branch above does.
++                // Waiting for another 'data' event leaks the conout worker on every
++                // self-exiting shell, because no more data ever arrives (F24).
++                this._conoutSocketWorker.dispose();
+             }
+         }
+         else {
+diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
+index 3c38f89..58d8e80 100644
+--- a/lib/windowsTerminal.js
++++ b/lib/windowsTerminal.js
+@@ -50,6 +50,27 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         // Create new termal.
+         _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
+         _this._socket = _this._agent.outSocket;
++        // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
++        _this._socket.on('error', function (err) {
++            var code = err && err.code;
++            // PTY output can report EPIPE before `_close()` wins the race.
++            _this._close();
++            if (code === 'EPIPE' || code === 'ERR_STREAM_PUSH_AFTER_EOF' || code === 'ERR_STREAM_DESTROYED') {
++                return;
++            }
++            // EIO, happens when someone closes our child process: the only process
++            // in the terminal.
++            // node < 0.6.14: errno 5
++            // node >= 0.6.14: read EIO
++            if (typeof code === 'string') {
++                if (~code.indexOf('errno 5') || ~code.indexOf('EIO'))
++                    return;
++            }
++            // Throw anything else.
++            if (_this.listeners('error').length < 2) {
++                throw err;
++            }
++        });
+         // Not available until `ready` event emitted.
+         _this._pid = _this._agent.innerPid;
+         _this._fd = _this._agent.fd;
+@@ -76,23 +97,6 @@ var WindowsTerminal = /** @class */ (function (_super) {
+                     _this._deferreds = [];
+                 }
+             });
+-            // Shutdown if `error` event is emitted.
+-            _this._socket.on('error', function (err) {
+-                // Close terminal session.
+-                _this._close();
+-                // EIO, happens when someone closes our child process: the only process
+-                // in the terminal.
+-                // node < 0.6.14: errno 5
+-                // node >= 0.6.14: read EIO
+-                if (err.code) {
+-                    if (~err.code.indexOf('errno 5') || ~err.code.indexOf('EIO'))
+-                        return;
+-                }
+-                // Throw anything else.
+-                if (_this.listeners('error').length < 2) {
+-                    throw err;
+-                }
+-            });
+             // Cleanup after the socket is closed.
+             _this._socket.on('close', function () {
+                 _this.emit('exit', _this._agent.exitCode);
+@@ -103,6 +107,20 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         _this._name = name;
+         _this._readable = true;
+         _this._writable = true;
++        // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
++        // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
++        _this._agent.inSocket.on('error', function () {
++            if (!_this._writable) {
++                return;
++            }
++            _this._close();
++            try {
++                _this._agent.kill();
++            }
++            catch (_a) {
++                // The failing pipe may have raced process exit; the terminal is already unwritable.
++            }
++        });
+         _this._forwardEvents();
+         return _this;
+     }
+@@ -196,4 +214,4 @@ var WindowsTerminal = /** @class */ (function (_super) {
+     return WindowsTerminal;
+ }(terminal_1.Terminal));
+ exports.WindowsTerminal = WindowsTerminal;
+-//# sourceMappingURL=windowsTerminal.js.map
+\ No newline at end of file
++//# sourceMappingURL=windowsTerminal.js.map
 diff --git a/lib/utils.js b/lib/utils.js
 index af7918b6902a105a7c49813bc0bb4d687d87a7d4..1fca29d71f11ece98b8224b81ab78a6bc5b41a6d 100644
 --- a/lib/utils.js
@@ -279,7 +391,7 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..1fca29d71f11ece98b8224b81ab78a6b
      var relative = ['..', '.'];
      var lastError;
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
+index 181ccab..67f31fa 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
 @@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
@@ -297,7 +409,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a52c690e0a 100644
+index 7b4b9e1..2ae787c 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -648,7 +760,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
  }
  #endif
 diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
-index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650dad503ec6 100644
+index 98733dc..3dd5ad9 100644
 --- a/src/unixTerminal.ts
 +++ b/src/unixTerminal.ts
 @@ -306,6 +306,14 @@ interface IWriteTask {
@@ -737,7 +849,7 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..4bc8d760fe00e208f211570930cd163b
    const relative = ['..', '.'];
    let lastError: unknown;
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d64..5239ba4e40 100644
+index 7b286d3..247dc85 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,8 @@
@@ -1014,7 +1126,7 @@ index 7b286d3d64..5239ba4e40 100644
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,29 +677,229 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,29 +677,258 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1113,6 +1225,35 @@ index 7b286d3d64..5239ba4e40 100644
 +static bool ownsShell(const pty_baton* handle, DWORD expectedShellPid) {
 +  return handle != nullptr && handle->hJob != nullptr && expectedShellPid != 0 &&
 +         handle->shellPid == expectedShellPid;
++}
++
++// Orca: read identity through the held shell handle, never by reopening its PID.
++static Napi::Value PtyGetShellCreationTime(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  Napi::HandleScope scope(env);
++  if (info.Length() != 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
++    throw Napi::Error::New(env, "Usage: pty.getShellCreationTime(id, shellPid)");
++  }
++  std::lock_guard<std::mutex> guard(ptyJobMutex);
++  const pty_baton* handle = get_pty_baton_locked(info[0].As<Napi::Number>().Int32Value());
++  const DWORD expectedShellPid = info[1].As<Napi::Number>().Uint32Value();
++  if (handle == nullptr || handle->hShell == nullptr || expectedShellPid == 0 ||
++      handle->shellPid != expectedShellPid) {
++    return env.Undefined();
++  }
++  FILETIME creationTime, exitTime, kernelTime, userTime;
++  if (!GetProcessTimes(handle->hShell, &creationTime, &exitTime, &kernelTime, &userTime)) {
++    return env.Undefined();
++  }
++  ULARGE_INTEGER timestamp;
++  timestamp.LowPart = creationTime.dwLowDateTime;
++  timestamp.HighPart = creationTime.dwHighDateTime;
++  constexpr ULONGLONG WINDOWS_EPOCH_OFFSET_100NS = 116444736000000000ULL;
++  if (timestamp.QuadPart < WINDOWS_EPOCH_OFFSET_100NS) {
++    return env.Undefined();
++  }
++  const ULONGLONG creationTimeMs = (timestamp.QuadPart - WINDOWS_EPOCH_OFFSET_100NS) / 10000ULL;
++  return Napi::Number::New(env, static_cast<double>(creationTimeMs));
 +}
 +
 +/**
@@ -1258,10 +1399,11 @@ index 7b286d3d64..5239ba4e40 100644
  /**
  * Init
  */
-@@ -577,6 +910,10 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +939,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
++  exports.Set("getShellCreationTime", Napi::Function::New(env, PtyGetShellCreationTime));
 +  exports.Set("terminateJob", Napi::Function::New(env, PtyTerminateJob));
 +  exports.Set("listJobProcessIds", Napi::Function::New(env, PtyListJobProcessIds));
 +  exports.Set("assignCurrentProcessToJob", Napi::Function::New(env, PtyAssignCurrentProcessToJob));
@@ -1269,120 +1411,8 @@ index 7b286d3d64..5239ba4e40 100644
    return exports;
  };
  
-diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
-index a358ffb177357e177661033c1b092f9c9d0e5f5a..26c2a4c58799ce649f5113131e4c52f7ed2d87ad 100644
---- a/lib/windowsPtyAgent.js
-+++ b/lib/windowsPtyAgent.js
-@@ -136,6 +136,9 @@ var WindowsPtyAgent = /** @class */ (function () {
-         if (this._useConpty) {
-             if (!this._useConptyDll) {
-                 this._inSocket.readable = false;
-+                // The non-DLL path previously only flipped `readable`, leaving the
-+                // conin PipeWrap alive until the host exited (#947).
-+                this._inSocket.destroy();
-                 this._outSocket.readable = false;
-                 this._getConsoleProcessList().then(function (consoleProcessList) {
-                     consoleProcessList.forEach(function (pid) {
-@@ -154,9 +157,10 @@ var WindowsPtyAgent = /** @class */ (function () {
-                 // Close the input write handle to signal the end of session.
-                 this._inSocket.destroy();
-                 this._ptyNative.kill(this._pty, this._useConptyDll);
--                this._outSocket.on('data', function () {
--                    _this._conoutSocketWorker.dispose();
--                });
-+                // Orca: dispose unconditionally, as the non-DLL branch above does.
-+                // Waiting for another 'data' event leaks the conout worker on every
-+                // self-exiting shell, because no more data ever arrives (F24).
-+                this._conoutSocketWorker.dispose();
-             }
-         }
-         else {
-diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
-index 3c38f89..e20b3e6 100644
---- a/lib/windowsTerminal.js
-+++ b/lib/windowsTerminal.js
-@@ -50,6 +50,27 @@ var WindowsTerminal = /** @class */ (function (_super) {
-         // Create new termal.
-         _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
-         _this._socket = _this._agent.outSocket;
-+        // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
-+        _this._socket.on('error', function (err) {
-+            var code = err && err.code;
-+            // PTY output can report EPIPE before `_close()` wins the race.
-+            _this._close();
-+            if (code === 'EPIPE' || code === 'ERR_STREAM_PUSH_AFTER_EOF' || code === 'ERR_STREAM_DESTROYED') {
-+                return;
-+            }
-+            // EIO, happens when someone closes our child process: the only process
-+            // in the terminal.
-+            // node < 0.6.14: errno 5
-+            // node >= 0.6.14: read EIO
-+            if (typeof code === 'string') {
-+                if (~code.indexOf('errno 5') || ~code.indexOf('EIO'))
-+                    return;
-+            }
-+            // Throw anything else.
-+            if (_this.listeners('error').length < 2) {
-+                throw err;
-+            }
-+        });
-         // Not available until `ready` event emitted.
-         _this._pid = _this._agent.innerPid;
-         _this._fd = _this._agent.fd;
-@@ -76,23 +99,6 @@ var WindowsTerminal = /** @class */ (function (_super) {
-                     _this._deferreds = [];
-                 }
-             });
--            // Shutdown if `error` event is emitted.
--            _this._socket.on('error', function (err) {
--                // Close terminal session.
--                _this._close();
--                // EIO, happens when someone closes our child process: the only process
--                // in the terminal.
--                // node < 0.6.14: errno 5
--                // node >= 0.6.14: read EIO
--                if (err.code) {
--                    if (~err.code.indexOf('errno 5') || ~err.code.indexOf('EIO'))
--                        return;
--                }
--                // Throw anything else.
--                if (_this.listeners('error').length < 2) {
--                    throw err;
--                }
--            });
-             // Cleanup after the socket is closed.
-             _this._socket.on('close', function () {
-                 _this.emit('exit', _this._agent.exitCode);
-@@ -103,6 +109,20 @@ var WindowsTerminal = /** @class */ (function (_super) {
-         _this._name = name;
-         _this._readable = true;
-         _this._writable = true;
-+        // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
-+        // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
-+        _this._agent.inSocket.on('error', function () {
-+            if (!_this._writable) {
-+                return;
-+            }
-+            _this._close();
-+            try {
-+                _this._agent.kill();
-+            }
-+            catch (_a) {
-+                // The failing pipe may have raced process exit; the terminal is already unwritable.
-+            }
-+        });
-         _this._forwardEvents();
-         return _this;
-     }
-@@ -196,4 +216,4 @@ var WindowsTerminal = /** @class */ (function (_super) {
-     return WindowsTerminal;
- }(terminal_1.Terminal));
- exports.WindowsTerminal = WindowsTerminal;
--//# sourceMappingURL=windowsTerminal.js.map
-\ No newline at end of file
-+//# sourceMappingURL=windowsTerminal.js.map
 diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
-index d7054449516f0c9a62af351c2caa17331206d530..0c28a32e2e1db2b3f208ddde8443cd4e67bb1ad6 100644
+index d705444..0c28a32 100644
 --- a/src/windowsPtyAgent.ts
 +++ b/src/windowsPtyAgent.ts
 @@ -143,6 +143,9 @@ export class WindowsPtyAgent {
@@ -1410,14 +1440,13 @@ index d7054449516f0c9a62af351c2caa17331206d530..0c28a32e2e1db2b3f208ddde8443cd4e
      } else {
        // Because pty.kill closes the handle, it will kill most processes by itself.
 diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
-index 13f6c6d..eda63c8 100644
+index 13f6c6d..444e38f 100644
 --- a/src/windowsTerminal.ts
 +++ b/src/windowsTerminal.ts
 @@ -51,6 +51,30 @@ export class WindowsTerminal extends Terminal {
      this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
      this._socket = this._agent.outSocket;
--
-+
+ 
 +    // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
 +    this._socket.on('error', err => {
 +      const code = (<any>err).code;
@@ -1445,11 +1474,10 @@ index 13f6c6d..eda63c8 100644
      // Not available until `ready` event emitted.
      this._pid = this._agent.innerPid;
      this._fd = this._agent.fd;
-@@ -82,25 +108,6 @@ export class WindowsTerminal extends Terminal {
+@@ -82,25 +106,6 @@ export class WindowsTerminal extends Terminal {
          }
        });
--
-+
+ 
 -      // Shutdown if `error` event is emitted.
 -      this._socket.on('error', err => {
 -        // Close terminal session.
@@ -1472,9 +1500,8 @@ index 13f6c6d..eda63c8 100644
        // Cleanup after the socket is closed.
        this._socket.on('close', () => {
          this.emit('exit', this._agent.exitCode);
-@@ -114,6 +121,19 @@ export class WindowsTerminal extends Terminal {
--
-+
+@@ -114,6 +119,19 @@ export class WindowsTerminal extends Terminal {
+ 
      this._readable = true;
      this._writable = true;
 +    // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
@@ -1490,7 +1517,6 @@ index 13f6c6d..eda63c8 100644
 +        // The failing pipe may have raced process exit; the terminal is already unwritable.
 +      }
 +    });
--
-+
+ 
      this._forwardEvents();
    }

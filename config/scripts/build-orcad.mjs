@@ -32,6 +32,7 @@ import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-s
 import { smokeSessionScannerService } from './session-scanner-service-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
+import { buildGuestTreeKill } from './build-guest-tree-kill.mjs'
 import { stageOrcadWindowsCliLauncher } from './orcad-windows-cli-launcher.mjs'
 import { stageOrcadWindowsSecurity } from './orcad-windows-security.mjs'
 import { stageOrcadLinearSdk } from './orcad-linear-sdk-package.mjs'
@@ -172,6 +173,10 @@ writeFileSync(
 stageNodePty(BUILD_TARGET)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
+if (targetIsWindows) {
+  const helperRoot = await buildGuestTreeKill({ root: ROOT })
+  cpSync(helperRoot, join(OUT_DIR, 'guest-tree-kill'), { recursive: true })
+}
 stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)
 stageOrcadWindowsSecurity(ROOT, OUT_DIR, BUILD_TARGET, undefined, undefined, {
   enabled: process.env.ORCA_REUSE_PREPARED_WINDOWS_SECURITY === 'true',

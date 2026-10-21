@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import type { killWithDescendantSweep } from '../pty-descendant-termination'
+import type { SpawnTreeIdentity } from './session-subprocess-handle'
 import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -8,13 +10,13 @@ import {
   setPtyOwnerHostColors
 } from '../../shared/pty-owner-color-query-colors'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn<typeof killWithDescendantSweep>())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
-function createMockSubprocess() {
+function createMockSubprocess(spawnIdentity?: SpawnTreeIdentity) {
   const written: string[] = []
   const signals: string[] = []
   let onData: ((data: string) => void) | null = null
@@ -41,6 +43,7 @@ function createMockSubprocess() {
       return resumeCalls
     },
     foregroundProcess: null as string | null,
+    spawnIdentity,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
@@ -718,6 +721,16 @@ describe('Session', () => {
         terminateOwnedTree?: () => string
       }
       expect(deps.terminateOwnedTree?.()).toBe('terminated')
+    })
+
+    it('agent kill anchors the sweep to the spawn-captured root creation time', () => {
+      // Without the anchor the Windows probe proves only ancestry, so a PID
+      // recycled onto another Orca descendant reads as ours (#10680).
+      createSession({ launchAgent: 'claude' })
+      subprocess.spawnIdentity = { rootCreationTimeMs: 555 }
+      session.kill()
+      const [, , deps = {}] = killWithDescendantSweepMock.mock.calls[0]
+      expect(deps.expectedRootCreationTimeMs).toBe(555)
     })
 
     it('agent kill root callback is a no-op after the session already exited', () => {
