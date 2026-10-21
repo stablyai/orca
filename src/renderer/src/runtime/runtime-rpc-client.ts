@@ -9,22 +9,21 @@ import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-ca
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import {
+  clearRuntimeCompatibilityCache,
+  getCachedRuntimeCompatibilityCheck,
+  rememberRuntimeEnvironmentCompatibility,
+  runtimeCompatibilityChecks,
+  RUNTIME_CAPABILITY_STATUS_TTL_MS,
+  type RuntimeCompatibilityCacheEntry
+} from './runtime-compatibility-cache'
 
-const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
-const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
-// Why: capability verdicts must eventually follow a saved environment's version changes.
-const RUNTIME_CAPABILITY_STATUS_TTL_MS = 60_000
-
-type RuntimeCompatibilityCacheEntry = {
-  check: Promise<void>
-  failedAt: number | null
-  // False while probing so recovery can drop a doomed pending compatibility check.
-  provenCompatible: boolean
-  status: RuntimeStatus | null
-  statusCheckedAt: number | null
-}
-
-const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
+export {
+  clearRecentRuntimeCompatibilityFailure,
+  clearRuntimeCompatibilityCache,
+  markRuntimeEnvironmentCompatible,
+  peekRuntimeEnvironmentCapability
+} from './runtime-compatibility-cache'
 
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
@@ -103,7 +102,8 @@ export async function ensureRuntimeEnvironmentCompatible(
     failedAt: null,
     provenCompatible: false,
     status: null,
-    statusCheckedAt: null
+    statusCheckedAt: null,
+    statusObservedAt: null
   }
   const check = (async () => {
     const response = await callRuntimeEnvironmentWithRevision({
@@ -119,6 +119,7 @@ export async function ensureRuntimeEnvironmentCompatible(
     assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
+    entry.statusObservedAt = entry.statusCheckedAt
   })()
   entry.check = check
   rememberRuntimeEnvironmentCompatibility(environmentId, entry)
@@ -137,93 +138,6 @@ export async function ensureRuntimeEnvironmentCompatible(
   }
 }
 
-function getCachedRuntimeCompatibilityCheck(
-  environmentId: string,
-  options: { reuseRecentCompatibilityFailure?: boolean }
-): RuntimeCompatibilityCacheEntry | null {
-  const cached = runtimeCompatibilityChecks.get(environmentId)
-  if (!cached) {
-    return null
-  }
-  if (
-    cached.failedAt !== null &&
-    Date.now() - cached.failedAt >= RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS
-  ) {
-    runtimeCompatibilityChecks.delete(environmentId)
-    return null
-  }
-  if (cached.failedAt !== null && options.reuseRecentCompatibilityFailure !== true) {
-    return null
-  }
-  runtimeCompatibilityChecks.delete(environmentId)
-  runtimeCompatibilityChecks.set(environmentId, cached)
-  return cached
-}
-
-function rememberRuntimeEnvironmentCompatibility(
-  environmentId: string,
-  entry: RuntimeCompatibilityCacheEntry
-): void {
-  // Why: saved/removed remote runtimes can churn through unique ids in long
-  // renderer sessions; compatibility cache entries should not grow forever.
-  runtimeCompatibilityChecks.delete(environmentId)
-  runtimeCompatibilityChecks.set(environmentId, entry)
-  while (runtimeCompatibilityChecks.size > RUNTIME_COMPATIBILITY_CACHE_MAX) {
-    const oldest = runtimeCompatibilityChecks.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    runtimeCompatibilityChecks.delete(oldest)
-  }
-}
-
-// Why: a live status answer invalidates failures and pending probes from the
-// dropped connection; only proven-compatible successes remain reusable.
-export function clearRecentRuntimeCompatibilityFailure(
-  environmentId: string,
-  observedStatus?: RuntimeStatus
-): void {
-  const trimmed = environmentId.trim()
-  if (!trimmed) {
-    return
-  }
-  const cached = runtimeCompatibilityChecks.get(trimmed)
-  if (
-    cached &&
-    (!cached.provenCompatible ||
-      (observedStatus &&
-        cached.status !== null &&
-        cached.status.runtimeId !== observedStatus.runtimeId))
-  ) {
-    // Why: a saved endpoint can reconnect to a different runtime version; its predecessor's
-    // positive capability verdict must not route a structured request to the replacement.
-    runtimeCompatibilityChecks.delete(trimmed)
-  }
-}
-
-export function clearRuntimeCompatibilityCache(environmentId?: string | null): void {
-  const trimmed = environmentId?.trim()
-  if (trimmed) {
-    runtimeCompatibilityChecks.delete(trimmed)
-    return
-  }
-  runtimeCompatibilityChecks.clear()
-}
-
-export function markRuntimeEnvironmentCompatible(environmentId: string): void {
-  const trimmed = environmentId.trim()
-  if (!trimmed) {
-    return
-  }
-  rememberRuntimeEnvironmentCompatibility(trimmed, {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: true,
-    status: null,
-    statusCheckedAt: null
-  })
-}
-
 export async function getRuntimeEnvironmentStatus(
   environmentId: string,
   timeoutMs?: number
@@ -234,7 +148,8 @@ export async function getRuntimeEnvironmentStatus(
     failedAt: null,
     provenCompatible: false,
     status: null,
-    statusCheckedAt: null
+    statusCheckedAt: null,
+    statusObservedAt: null
   }
   // Why: publish the in-flight probe before awaiting so concurrent cold-cache
   // capability lookups coalesce onto this one status.get (via the cache-hit path
@@ -251,6 +166,7 @@ export async function getRuntimeEnvironmentStatus(
     assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
+    entry.statusObservedAt = entry.statusCheckedAt
     entry.provenCompatible = true
   })()
   entry.check = check

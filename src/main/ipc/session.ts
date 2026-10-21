@@ -101,4 +101,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
         typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
     }
   )
+
+  // Why: render-time planning only needs to know a local copy exists; a stat never reads bytes.
+  ipcMain.on(
+    'session:has-terminal-scrollback-sync',
+    (event, args: { ref?: unknown } | undefined) => {
+      event.returnValue =
+        typeof args?.ref === 'string' ? store.hasTerminalScrollbackSnapshot(args.ref) : false
+    }
+  )
 }
