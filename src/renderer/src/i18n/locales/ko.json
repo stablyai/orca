@@ -7131,7 +7131,7 @@
             "tintColor": "사이드바 색조",
             "tintColorDescription": "사이드바, 탭 표시줄, 사이드 패널 표면에 섞이는 색상입니다.",
             "tintOpacity": "색조 강도",
-            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
+            "tintOpacityDescription": "사이드바, 탭 표시줄, 사이드 패널 표면에 색조를 얼마나 강하게 섞을지 조절합니다."
           },
           "workspaceCardLayoutGuidance": "워크스페이스 사이드바에서 관리됩니다.",
           "interfaceDefaultFont": "기본 글꼴",

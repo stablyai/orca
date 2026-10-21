@@ -7128,7 +7128,7 @@
             "tintColor": "サイドバーの色合い",
             "tintColorDescription": "サイドバー、タブバー、サイドパネルの表面に混ぜる色。",
             "tintOpacity": "色合いの強さ",
-            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
+            "tintOpacityDescription": "サイドバー、タブバー、サイドパネルの表面に色合いをどの程度強く混ぜるかを調整します。"
           },
           "workspaceCardLayoutGuidance": "ワークスペースサイドバーで管理されます。",
           "872af9556e": "システムトレイ",

@@ -92,7 +92,7 @@ export function LeftSidebarAppearanceSetting({
             )}
             description={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacityDescription',
-              'Controls how strongly the tint is mixed into the sidebar.'
+              'Controls how strongly the tint is mixed into the sidebar, tab bar, and side panel surfaces.'
             )}
             value={settings.leftSidebarTintOpacity ?? DEFAULT_LEFT_SIDEBAR_TINT_OPACITY}
             defaultValue={DEFAULT_LEFT_SIDEBAR_TINT_OPACITY}

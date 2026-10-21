@@ -7128,7 +7128,7 @@
             "tintColor": "边栏色调",
             "tintColorDescription": "混入侧边栏、标签栏和侧面板表面的颜色。",
             "tintOpacity": "色调强度",
-            "tintOpacityDescription": "控制色调混入边栏的强度。"
+            "tintOpacityDescription": "控制色调混入侧边栏、标签栏和侧面板表面的强度。"
           },
           "workspaceCardLayoutGuidance": "从工作区侧边栏管理。",
           "872af9556e": "系统托盘",

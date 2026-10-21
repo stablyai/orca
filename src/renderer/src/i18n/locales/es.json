@@ -7159,7 +7159,7 @@
             "tintColor": "Tinte de la barra lateral",
             "tintColorDescription": "El color que se mezcla en las superficies de las barras laterales, la barra de pestañas y el panel lateral.",
             "tintOpacity": "Intensidad del tinte",
-            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
+            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en las superficies de las barras laterales, la barra de pestañas y el panel lateral."
           },
           "workspaceCardLayoutGuidance": "Gestionado desde la barra lateral del espacio de trabajo.",
           "872af9556e": "Bandeja del sistema",

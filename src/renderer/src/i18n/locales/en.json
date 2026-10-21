@@ -7452,7 +7452,7 @@
             "tintColor": "Sidebar Tint",
             "tintColorDescription": "The color mixed into the sidebar, tab bar, and side panel surfaces.",
             "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar, tab bar, and side panel surfaces."
           },
           "workspaceCardLayoutGuidance": "Managed from the workspace sidebar.",
           "interfaceDefaultFont": "Default font",

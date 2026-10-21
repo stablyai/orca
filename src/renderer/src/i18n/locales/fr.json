@@ -7306,7 +7306,7 @@
             "tintColor": "Teinte de la barre latérale",
             "tintColorDescription": "La couleur mélangée aux surfaces des barres latérales, de la barre d'onglets et du panneau latéral.",
             "tintOpacity": "Intensité de la teinte",
-            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée à la barre latérale."
+            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée aux surfaces des barres latérales, de la barre d'onglets et du panneau latéral."
           },
           "workspaceCardLayoutGuidance": "Géré depuis la barre latérale des espaces de travail.",
           "interfaceDefaultFont": "Police par défaut",
