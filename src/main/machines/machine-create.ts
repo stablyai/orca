@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import {
   MachineProviderError,
-  isConfirmedMachineTransition,
   type MachineLifetime,
   type MachineProviderCapabilities
 } from '../../shared/machine-provider-protocol'
-import type { MachineProviderKey, MachineRecord } from '../../shared/machine-inventory'
+import { isConfirmedMachineTransition } from '../../shared/machine-provider-transitions'
+import {
+  MACHINE_CREATE_RECONCILE_WINDOW_MS,
+  type MachineProviderKey,
+  type MachineRecord
+} from '../../shared/machine-inventory'
 import { applyMachine, dropPendingCreate } from './machine-inventory-records'
 import type { MachineProviderClient, MachineProviderEntry } from './machine-provider-client'
+import { pollWhileMachineState } from './machine-state-polling'
 
 const CANCEL_RECONCILE_DELAYS_MS = [0, 10_000, 60_000]
 
@@ -28,8 +33,15 @@ export class MachineCreateFlow {
 
   constructor(
     private readonly client: MachineProviderClient,
-    private readonly refresh: (providerKey: MachineProviderKey) => Promise<unknown>,
-    private readonly delay: (ms: number) => Promise<void>
+    private readonly deps: {
+      refresh: (providerKey: MachineProviderKey) => Promise<unknown>
+      read: (
+        providerKey: MachineProviderKey,
+        machineId: string,
+        onStderr?: (chunk: string) => void
+      ) => Promise<MachineRecord>
+      delay: (ms: number) => Promise<void>
+    }
   ) {}
 
   /** Single-flight per operationId: a retried request joins the running create. */
@@ -42,9 +54,15 @@ export class MachineCreateFlow {
     if (inFlight) {
       return inFlight
     }
-    const flight = this.run(providerKey, params, operationId).finally(() =>
+    // Why before any await: a cancel that arrives while capabilities load must still stop the create.
+    const controller = new AbortController()
+    this.controllers.set(operationId, controller)
+    const flight = this.run(providerKey, params, operationId, controller).finally(() => {
       this.flights.delete(operationId)
-    )
+      if (this.controllers.get(operationId) === controller) {
+        this.controllers.delete(operationId)
+      }
+    })
     this.flights.set(operationId, flight)
     return flight
   }
@@ -52,30 +70,36 @@ export class MachineCreateFlow {
   private async run(
     providerKey: MachineProviderKey,
     params: MachineCreateParams,
-    operationId: string
+    operationId: string,
+    controller: AbortController
   ): Promise<MachineRecord> {
     const provider = this.client.provider(providerKey)
     assertCreateParams(await this.client.capabilities(provider), params)
+    // Nothing was asked of the provider yet, so a cancel here leaves nothing to reconcile.
+    if (controller.signal.aborted) {
+      throw new MachineProviderError('cancelled', 'The create was canceled before it started.')
+    }
+    const startedAt = this.client.now()
     this.client.commit(provider, (inventory) =>
       inventory.pendingCreates.push({
         operationId,
-        startedAt: this.client.now(),
+        startedAt,
         name: params.name,
         lifetime: params.lifetime
       })
     )
-    const controller = new AbortController()
-    this.controllers.set(operationId, controller)
     try {
+      const onStderr = this.client.progress(provider, 'create', operationId)
       const machine = await this.client.callForMachine(provider, 'create', {
         operationId,
         params: { ...params },
-        signal: controller.signal
+        signal: controller.signal,
+        onStderr
       })
       if (!isConfirmedMachineTransition('create', machine.state)) {
         throw new MachineProviderError('invalid-response', `create reported ${machine.state}.`)
       }
-      return this.client.commit(provider, (inventory) => {
+      const created = this.client.commitMutation(provider, machine.id, (inventory) => {
         dropPendingCreate(inventory, operationId)
         return applyMachine(
           inventory,
@@ -84,6 +108,7 @@ export class MachineCreateFlow {
           this.client.now()
         )
       })
+      return this.untilRunning(providerKey, created, startedAt, onStderr)
     } catch (error) {
       if (!isUnknownOutcome(error)) {
         this.client.commit(provider, (inventory) => dropPendingCreate(inventory, operationId))
@@ -95,12 +120,26 @@ export class MachineCreateFlow {
       }
       const found = await this.findCreated(provider, operationId)
       if (found) {
-        return found
+        // An adopted machine may still be creating; it is handed over once it runs, like any other.
+        return this.untilRunning(providerKey, found, startedAt)
       }
       throw error
-    } finally {
-      this.controllers.delete(operationId)
     }
+  }
+
+  /** Resolves once the machine runs, so a created machine always has access. */
+  private untilRunning(
+    providerKey: MachineProviderKey,
+    record: MachineRecord,
+    startedAt: number,
+    onStderr?: (chunk: string) => void
+  ): Promise<MachineRecord> {
+    return pollWhileMachineState(record, 'creating', {
+      read: () => this.deps.read(providerKey, record.id, onStderr),
+      delay: this.deps.delay,
+      now: () => this.client.now(),
+      deadline: startedAt + MACHINE_CREATE_RECONCILE_WINDOW_MS
+    }).then((settled) => this.client.settled(this.client.provider(providerKey), settled))
   }
 
   /** Kills the local process; the pending row stays until a list proves what happened. */
@@ -114,7 +153,7 @@ export class MachineCreateFlow {
     provider: MachineProviderEntry,
     operationId: string
   ): Promise<MachineRecord | null> {
-    await this.refresh(provider.providerKey)
+    await this.deps.refresh(provider.providerKey)
     return (
       this.client
         .inventory(provider.providerKey)
@@ -124,16 +163,27 @@ export class MachineCreateFlow {
     )
   }
 
-  // Killing local ssh does not stop a remote create, which may only appear in list later.
+  // Killing local ssh does not stop a remote create, which may only appear in list later. Once the
+  // local process has exited, two successful lists at least 10 s apart without the tag settle it as
+  // never created; a failed list proves nothing and only the later checks can.
   private async reconcileCancelled(
     provider: MachineProviderEntry,
     operationId: string
   ): Promise<void> {
     let elapsed = 0
+    let cleanMisses = 0
     for (const at of CANCEL_RECONCILE_DELAYS_MS) {
-      await this.delay(at - elapsed)
+      await this.deps.delay(at - elapsed)
       elapsed = at
+      const listedFrom = this.client.now()
       if (await this.findCreated(provider, operationId).catch(() => null)) {
+        return
+      }
+      const inventory = this.client.inventory(provider.providerKey)
+      const listed = !inventory.lastFailure && (inventory.listedAt ?? -1) >= listedFrom
+      cleanMisses = listed ? cleanMisses + 1 : 0
+      if (cleanMisses >= 2) {
+        this.client.commit(provider, (current) => dropPendingCreate(current, operationId))
         return
       }
     }

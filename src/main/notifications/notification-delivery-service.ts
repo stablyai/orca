@@ -95,10 +95,12 @@ export function createNotificationDeliveryService(
 
       // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
       // The execution host pushed its own phones and retires them itself on acknowledgement.
+      // Machines belong to this desktop, so their expiry stays off phones (whose decoders predate it).
       if (
         !request.mobileDeliveredByHost &&
         deps.dispatchMobileNotification &&
-        request.source !== 'test'
+        request.source !== 'test' &&
+        request.source !== 'machine-expiry'
       ) {
         if (
           reserveNotificationCooldown(

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   MachineProviderError,
-  isConfirmedMachineTransition,
   parseMachineProviderResponse,
   type MachineProviderRequest
 } from './machine-provider-protocol'
+import { isConfirmedMachineTransition } from './machine-provider-transitions'
 
 const NOW = '2026-10-18T12:00:00Z'
 const FINGERPRINT = `SHA256:${'A'.repeat(43)}`
@@ -224,6 +224,54 @@ describe('isConfirmedMachineTransition', () => {
     expect(isConfirmedMachineTransition('sleep', 'running')).toBe(false)
     expect(isConfirmedMachineTransition('archive', 'archived')).toBe(true)
     expect(isConfirmedMachineTransition('delete', 'running')).toBe(false)
-    expect(isConfirmedMachineTransition('delete', 'unknown')).toBe(true)
+    // Only a deleted or not-found answer, or a read that finds nothing, proves a delete.
+    expect(isConfirmedMachineTransition('delete', 'unknown')).toBe(false)
+  })
+})
+
+describe('second-provider protocol additions', () => {
+  it('reads a state from a newer provider as unknown instead of failing the list', () => {
+    const parsed = parseMachineProviderResponse(
+      respond({
+        kind: 'inventory',
+        machines: [machine({ state: 'hibernating', access: undefined })]
+      }),
+      request({ verb: 'list', machineId: undefined })
+    )
+    expect(parsed).toMatchObject({ kind: 'inventory', machines: [{ state: 'unknown' }] })
+  })
+
+  it('accepts stopping as a sleep or archive still in progress', () => {
+    expect(isConfirmedMachineTransition('sleep', 'stopping')).toBe(true)
+    expect(isConfirmedMachineTransition('archive', 'stopping')).toBe(true)
+    expect(isConfirmedMachineTransition('wake', 'stopping')).toBe(false)
+  })
+
+  it('reads an explicit deleted answer as the not-found a delete settles on', () => {
+    expect(
+      parseMachineProviderResponse(
+        respond({ kind: 'deleted', machineId: 'sbx-1' }),
+        request({ verb: 'delete', machineId: 'sbx-1' })
+      )
+    ).toMatchObject({ kind: 'error', code: 'not-found' })
+  })
+
+  it('refuses a deleted answer for another verb or machine', () => {
+    expect(
+      errorCode(() =>
+        parseMachineProviderResponse(
+          respond({ kind: 'deleted', machineId: 'sbx-1' }),
+          request({ verb: 'sleep', machineId: 'sbx-1' })
+        )
+      )
+    ).toBe('invalid-response')
+    expect(
+      errorCode(() =>
+        parseMachineProviderResponse(
+          respond({ kind: 'deleted', machineId: 'sbx-2' }),
+          request({ verb: 'delete', machineId: 'sbx-1' })
+        )
+      )
+    ).toBe('invalid-response')
   })
 })

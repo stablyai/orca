@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MachineProviderKey } from '../../shared/machine-inventory'
+import type { MachineProgressEvent, MachineProviderKey } from '../../shared/machine-inventory'
 import { MachineService } from './machine-service'
 
 // Drives the real runner and response parser against the fake provider script; nothing is stubbed
@@ -16,7 +16,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-async function realService(): Promise<MachineService> {
+async function realService(
+  onProgress?: (event: MachineProgressEvent) => void
+): Promise<MachineService> {
   const userDataPath = await mkdtemp(join(tmpdir(), 'orca-machine-contract-'))
   roots.push(userDataPath)
   process.env.FAKE_MACHINE_PROVIDER_STATE = join(userDataPath, 'provider-state.json')
@@ -41,11 +43,25 @@ async function realService(): Promise<MachineService> {
       disconnect: vi.fn()
     },
     pairing: { add: vi.fn(), repair: vi.fn() },
-    removeSshTarget: vi.fn(async () => undefined)
+    removeSshTarget: vi.fn(async () => undefined),
+    onProgress
   })
 }
 
 describe('MachineService against a real provider process', () => {
+  it('streams create stderr tagged with the operation, never stdout', async () => {
+    const events: MachineProgressEvent[] = []
+    const service = await realService((event) => events.push(event))
+    await service.create(KEY, { name: 'dev', lifetime: 'persistent' }, { operationId: 'op-ui' })
+    expect(events.map((event) => event.chunk).join('')).toBe('provisioning machine\n')
+    expect(events[0]).toMatchObject({
+      operationId: 'op-ui',
+      providerKey: KEY,
+      verb: 'create',
+      stream: 'stderr'
+    })
+  })
+
   it('applies nothing when another account answers not-found, then re-checks the account', async () => {
     const service = await realService()
     const created = await service.create(KEY, { name: 'dev', lifetime: 'persistent' })

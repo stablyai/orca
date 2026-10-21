@@ -1,3 +1,4 @@
+import { restoreRetiredRuntimeEnvironments } from './runtime-environment-retirement-gate'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -134,6 +135,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
   reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+  restoreRetiredRuntimeEnvironments(getUserDataPath())
 
   registerRuntimeEnvironmentConnectivityHandlers({
     store,

@@ -115,6 +115,53 @@ describe('createNotificationDeliveryService', () => {
     expect(harness.order).toEqual(['tray', 'mobile'])
   })
 
+  it('shows a machine expiry banner on this desktop only, behind the master switch', () => {
+    const request = makeRequest({
+      source: 'machine-expiry',
+      worktreeId: undefined,
+      attentionKey: 'machine-expiry:box',
+      machineExpiry: {
+        title: 'box deletes at 4:12 PM',
+        body: '3 unpushed commits on it will be lost unless you push first.'
+      }
+    })
+    const on = makeHarness(makeSettings())
+    expect(createNotificationDeliveryService(on.deps).dispatch(request)).toEqual({
+      delivered: true
+    })
+    expect(on.deliverNative).toHaveBeenCalledWith(
+      request,
+      expect.objectContaining({ title: 'box deletes at 4:12 PM' }),
+      expect.anything()
+    )
+    expect(on.dispatchMobileNotification).not.toHaveBeenCalled()
+
+    const off = makeHarness(makeSettings({ enabled: false }))
+    expect(createNotificationDeliveryService(off.deps).dispatch(request)).toEqual({
+      delivered: false,
+      reason: 'disabled'
+    })
+  })
+
+  it('raises a machine expiry with every window hidden, and honours a mute on its host', () => {
+    const request = makeRequest({
+      source: 'machine-expiry',
+      worktreeId: undefined,
+      attentionKey: 'machine-expiry:box-hidden',
+      notificationSourceId: 'runtime:env-machine',
+      machineExpiry: { title: 'box deletes at 4:12 PM', body: 'Orca couldn’t check unsaved work.' }
+    })
+    const hidden = makeHarness(makeSettings(), false)
+    expect(createNotificationDeliveryService(hidden.deps).dispatch(request)).toEqual({
+      delivered: true
+    })
+    const muted = makeHarness(makeSettings({ mutedNotificationSourceIds: ['runtime:env-machine'] }))
+    expect(createNotificationDeliveryService(muted.deps).dispatch(request)).toEqual({
+      delivered: false,
+      reason: 'host-muted'
+    })
+  })
+
   it('keeps the desktop source gates distinct per source', () => {
     const harness = makeHarness(makeSettings({ terminalBell: false }))
     const service = createNotificationDeliveryService(harness.deps)

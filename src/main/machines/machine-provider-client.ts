@@ -9,11 +9,15 @@ import {
 import type {
   MachineInventoryStore,
   MachineProviderInventory,
+  MachineProgressEvent,
   MachineProviderKey,
-  MachineProviderSnapshot
+  MachineProviderSnapshot,
+  MachineRecord
 } from '../../shared/machine-inventory'
 import { readMachineInventoryStore, writeMachineInventoryStore } from './machine-inventory-store'
 import { runMachineProviderVerb, type MachineProviderSource } from './machine-provider-process'
+import { MachineMutationFence } from './machine-mutation-fence'
+import { markUnreachable, requireRecord } from './machine-inventory-records'
 
 export type MachineProviderEntry = {
   providerKey: MachineProviderKey
@@ -25,6 +29,9 @@ export type MachineProviderClientDeps = {
   userDataPath: string
   listProviders: () => readonly MachineProviderEntry[]
   onChanged?: (snapshot: MachineProviderSnapshot) => void
+  onProgress?: (event: MachineProgressEvent) => void
+  /** Stops dialing a gone machine's managed server; its record stays for the Gone link. */
+  retireEnvironment?: (environmentId: string) => void
   runVerb?: typeof runMachineProviderVerb
   now?: () => number
 }
@@ -34,6 +41,7 @@ export type MachineProviderCallArgs = {
   operationId?: string
   params?: Record<string, unknown>
   signal?: AbortSignal
+  onStderr?: (chunk: string) => void
 }
 
 /** Runs provider verbs with the stored account context and owns the persisted inventory. */
@@ -41,6 +49,7 @@ export class MachineProviderClient {
   private readonly store: MachineInventoryStore
   private readonly writable: boolean
   private readonly capabilitiesChecked = new Set<string>()
+  private readonly retiredEnvironments = new Set<string>()
 
   constructor(private readonly deps: MachineProviderClientDeps) {
     const loaded = readMachineInventoryStore(deps.userDataPath)
@@ -70,14 +79,96 @@ export class MachineProviderClient {
     return created
   }
 
+  readonly fence = new MachineMutationFence()
+
+  /** A lifecycle result: reads that began before it can no longer overwrite this machine. */
+  commitMutation<T>(
+    provider: MachineProviderEntry,
+    machineId: string,
+    change: (inventory: MachineProviderInventory) => T
+  ): T {
+    const result = this.commit(provider, change)
+    this.fence.mutated(provider.providerKey, machineId)
+    return result
+  }
+
+  /** A lifecycle that polled to its settled state: reads that began before the settle are stale. */
+  settled(provider: MachineProviderEntry, record: MachineRecord): MachineRecord {
+    this.fence.mutated(provider.providerKey, record.id)
+    return record
+  }
+
+  /** Loss of contact seen by a read or connect that began at `startedAt`, unless a newer result settled it. */
+  markUnreachableSince(
+    provider: MachineProviderEntry,
+    machineId: string,
+    startedAt: number,
+    error: unknown
+  ): void {
+    if (!this.fence.changedSince(provider.providerKey, machineId, startedAt)) {
+      this.commit(provider, (inventory) => markUnreachable(inventory, machineId, error))
+    }
+  }
+
+  /** A read's answer for one machine; dropped when a mutation of it finished since the read began. */
+  commitRead(
+    provider: MachineProviderEntry,
+    machineId: string,
+    readStartedAt: number,
+    change: (inventory: MachineProviderInventory) => MachineRecord
+  ): MachineRecord {
+    return this.fence.changedSince(provider.providerKey, machineId, readStartedAt)
+      ? requireRecord(this.inventory(provider.providerKey), machineId)
+      : this.commit(provider, change)
+  }
+
   /** Applies a change to one provider's inventory, persists, and publishes its snapshot. */
   commit<T>(provider: MachineProviderEntry, change: (inventory: MachineProviderInventory) => T): T {
     const result = change(this.inventory(provider.providerKey))
+    this.retireGoneEnvironments(this.inventory(provider.providerKey))
     if (this.writable) {
       writeMachineInventoryStore(this.deps.userDataPath, this.store)
     }
     this.deps.onChanged?.(this.snapshot(provider))
     return result
+  }
+
+  hasWarnedExpiry(key: string): boolean {
+    return this.store.warnedExpiries?.includes(key) ?? false
+  }
+
+  /** Records a warning; keys for machines this host no longer tracks are dropped to stay bounded. */
+  markWarnedExpiry(key: string, liveKeys: ReadonlySet<string>): void {
+    this.store.warnedExpiries = [
+      ...(this.store.warnedExpiries ?? []).filter((existing) => liveKeys.has(existing)),
+      key
+    ]
+    if (this.writable) {
+      writeMachineInventoryStore(this.deps.userDataPath, this.store)
+    }
+  }
+
+  // Once per session per server: the retirement itself persists across launches.
+  private retireGoneEnvironments(inventory: MachineProviderInventory): void {
+    const retire = this.deps.retireEnvironment
+    if (!retire) {
+      return
+    }
+    // A gone SSH machine's deployed server, or the paired server an orca-server machine ran.
+    const gone = inventory.machines.filter((machine) => machine.state === 'gone')
+    for (const environmentId of gone.flatMap((machine) => [
+      machine.managedEnvironmentId,
+      machine.runtimeEnvironmentId
+    ])) {
+      if (environmentId && !this.retiredEnvironments.has(environmentId)) {
+        this.retiredEnvironments.add(environmentId)
+        try {
+          retire(environmentId)
+        } catch (error) {
+          console.warn(`[machines] could not retire server ${environmentId}:`, error)
+        }
+      }
+    }
   }
 
   snapshot(provider: MachineProviderEntry): MachineProviderSnapshot {
@@ -88,6 +179,28 @@ export class MachineProviderClient {
       name: provider.name,
       machines: [...inventory.machines]
     }
+  }
+
+  /** A stderr sink tagged for the UI action that asked for it; none without an operationId. */
+  progress(
+    provider: MachineProviderEntry,
+    verb: MachineProgressEvent['verb'],
+    operationId: string | undefined,
+    machineId?: string
+  ): ((chunk: string) => void) | undefined {
+    const onProgress = this.deps.onProgress
+    if (!onProgress || operationId === undefined) {
+      return undefined
+    }
+    return (chunk) =>
+      onProgress({
+        operationId,
+        providerKey: provider.providerKey,
+        verb,
+        stream: 'stderr',
+        chunk,
+        ...(machineId !== undefined ? { machineId } : {})
+      })
   }
 
   now(): number {
@@ -165,7 +278,8 @@ export class MachineProviderClient {
         ...(args.machineId !== undefined ? { machineId: args.machineId } : {}),
         ...(contextId !== undefined ? { contextId } : {}),
         ...(args.params ? { params: args.params } : {}),
-        ...(args.signal ? { signal: args.signal } : {})
+        ...(args.signal ? { signal: args.signal } : {}),
+        ...(args.onStderr ? { onStderr: args.onStderr } : {})
       })
     } catch (error) {
       // A sign-in change is exactly when the account must be asked again.

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   MachineActionResult,
   MachineProviderSnapshot
@@ -5,7 +6,7 @@ import type {
 import { MachineProviderError } from '../../../../shared/machine-provider-protocol'
 import { MACHINES_DISABLED, toMachineActionResult } from '../../../machines/machine-action-result'
 import { MachineSelector, MachinesList } from '../../../../shared/rpc-contract/machine-params'
-import { getMachineService } from '../../../machines/desktop-machine-service'
+import { getMachineService } from '../../../machines/machine-service-registration'
 import type { MachineService } from '../../../machines/machine-service'
 import { defineMethod, type RpcContext } from '../core'
 
@@ -18,11 +19,13 @@ function run<T>(action: (service: MachineService) => Promise<T>): Promise<Machin
   return service ? toMachineActionResult(() => action(service)) : Promise.resolve(MACHINES_DISABLED)
 }
 
+// A short hash: enough to tell a log's devices apart without writing their ids into it.
 function callerLabel(ctx: RpcContext): string {
   const caller = ctx.caller
-  return caller?.kind === 'paired-device'
-    ? `device ${caller.deviceId}`
-    : (caller?.kind ?? 'unknown')
+  if (caller?.kind !== 'paired-device') {
+    return caller?.kind ?? 'unknown'
+  }
+  return `device ${createHash('sha256').update(caller.deviceId).digest('hex').slice(0, 8)}`
 }
 
 async function listMachines(

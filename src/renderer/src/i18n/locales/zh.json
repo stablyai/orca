@@ -20624,5 +20624,21 @@
       "preparingLabel": "正在准备更新",
       "preparingAriaLabel": "正在准备更新。点击展开。"
     }
+  },
+  "machines": {
+    "expiryWarning": {
+      "title": "{{machine}} 将于 {{time}} 删除",
+      "unknownWork": "Orca 无法检查其中是否有未保存的工作。",
+      "noWork": "其中的所有内容都会一起删除。Orca 没有发现未提交或未推送的工作。",
+      "work": "{{work}}将会丢失，除非你先推送。"
+    },
+    "workAtRisk": {
+      "uncommitted_one": "{{count}} 个未提交的更改",
+      "uncommitted_other": "{{count}} 个未提交的更改",
+      "unpushed_one": "{{count}} 个未推送的提交",
+      "unpushed_other": "{{count}} 个未推送的提交",
+      "neverPushed_one": "{{count}} 个从未推送的分支",
+      "neverPushed_other": "{{count}} 个从未推送的分支"
+    }
   }
 }

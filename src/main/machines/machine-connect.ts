@@ -89,12 +89,13 @@ export async function connectMachineSsh(
   const existing = targets.getTarget(id)
   if (!existing) {
     targets.ensureTarget(id, fields)
-  } else if (endpointChanged(existing, fields)) {
-    // Disconnect first so no live session keeps talking to the old endpoint; updateTarget then
-    // drops the stale runtime resolution for the new host.
+  } else if (endpointChanged(existing, fields) || pinnedKeysChanged(existing, fields.owner)) {
+    // Disconnect first: a live session keeps talking to the old endpoint, and was verified against
+    // the old host-key pins, which the connect below must check again. updateTarget then drops the
+    // stale runtime resolution.
     await targets.disconnect(id)
     targets.updateTarget(id, fields)
-  } else if (pinnedKeysChanged(existing, fields.owner) || existing.label !== fields.label) {
+  } else if (existing.label !== fields.label) {
     targets.updateTarget(id, { label: fields.label, owner: fields.owner })
   }
   const state = await targets.connect(id)

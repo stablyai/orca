@@ -28,7 +28,11 @@ export type NotificationSettings = {
   notifyHiddenWorkspaces: boolean
 }
 
-export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type NotificationEventSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'machine-expiry'
+  | 'test'
 
 export type StructuredNotificationRead = StructuredAttentionRead & {
   paneKey: string
@@ -71,6 +75,8 @@ export type NotificationDispatchRequest = {
   structuredOrigin?: StructuredAttentionOrigin
   /** The execution host already pushed this to its paired phones, so main must not fan it out again. */
   mobileDeliveredByHost?: boolean
+  /** `machine-expiry` only: the already-localized banner for a machine about to be deleted. */
+  machineExpiry?: { title: string; body: string }
 }
 
 export type NotificationDispatchResult = {

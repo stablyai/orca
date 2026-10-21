@@ -1,3 +1,4 @@
+import { StringDecoder } from 'node:string_decoder'
 import { runProcess } from '@orca/process-host'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import {
@@ -86,6 +87,8 @@ export type RunMachineProviderVerbArgs = {
   execPath?: string
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  /** Decoded stderr as it arrives, for progress; stdout may carry credentials and is never streamed. */
+  onStderr?: (chunk: string) => void
   run?: (spec: ProcessSpec) => Promise<ProcessResult>
 }
 
@@ -118,7 +121,8 @@ export async function runMachineProviderVerb(
       timeoutMs: TIMEOUT_MS[args.verb],
       maxOutputBytes: MAX_STDOUT_BYTES,
       killOnOutputLimit: true,
-      signal: args.signal
+      signal: args.signal,
+      ...(args.onStderr ? { onStderr: decodeChunks(args.onStderr) } : {})
     })
   } catch (error) {
     throw new MachineProviderError(
@@ -177,6 +181,17 @@ function parseResponse(
     lastLine(stderr) ||
       `The provider exited with code ${result.code ?? result.signal ?? 'unknown'}.`
   )
+}
+
+// One decoder per run, so a multi-byte character split across chunks is not mangled.
+function decodeChunks(forward: (chunk: string) => void): (chunk: Buffer | string) => void {
+  const decoder = new StringDecoder('utf8')
+  return (chunk) => {
+    const text = typeof chunk === 'string' ? chunk : decoder.write(chunk)
+    if (text) {
+      forward(text)
+    }
+  }
 }
 
 function lastLine(text: string): string {

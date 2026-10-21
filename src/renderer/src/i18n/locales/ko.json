@@ -20624,5 +20624,21 @@
       "preparingLabel": "업데이트 준비 중",
       "preparingAriaLabel": "업데이트 준비 중입니다. 클릭하여 펼치세요."
     }
+  },
+  "machines": {
+    "expiryWarning": {
+      "title": "{{machine}}은(는) {{time}}에 삭제됩니다",
+      "unknownWork": "Orca가 저장되지 않은 작업을 확인하지 못했습니다.",
+      "noWork": "안의 모든 것이 함께 삭제됩니다. 커밋하거나 푸시하지 않은 작업은 없습니다.",
+      "work": "{{work}}은(는) 먼저 푸시하지 않으면 사라집니다."
+    },
+    "workAtRisk": {
+      "uncommitted_one": "커밋하지 않은 변경 {{count}}개",
+      "uncommitted_other": "커밋하지 않은 변경 {{count}}개",
+      "unpushed_one": "푸시하지 않은 커밋 {{count}}개",
+      "unpushed_other": "푸시하지 않은 커밋 {{count}}개",
+      "neverPushed_one": "푸시하지 않은 브랜치 {{count}}개",
+      "neverPushed_other": "푸시하지 않은 브랜치 {{count}}개"
+    }
   }
 }

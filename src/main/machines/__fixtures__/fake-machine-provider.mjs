@@ -95,6 +95,7 @@ function run() {
       if (existing) {
         return respond(state, { kind: 'machine', machine: view(existing) })
       }
+      process.stderr.write('provisioning machine\n')
       const created = {
         id: `m-${state.machines.length + 1}`,
         name: request.params?.name ?? 'machine',

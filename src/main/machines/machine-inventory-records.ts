@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 import { MachineProviderError, type ProviderMachine } from '../../shared/machine-provider-protocol'
 import {
   isStalePendingCreate,
@@ -50,11 +51,9 @@ export function applyMachine(
   const { access, ...rest } = machine
   const record: MachineRecord = {
     ...rest,
+    // Pairing codes are credentials: the row keeps none, and the hash is recorded only on pairing.
     ...(access?.kind === 'orca-server'
-      ? {
-          access: { ...access, pairingCode: '' },
-          pairingCodeSha256: pairingCodeSha256(access.pairingCode)
-        }
+      ? { access: { ...access, pairingCode: '' } }
       : access
         ? { access }
         : {}),
@@ -64,7 +63,11 @@ export function applyMachine(
     ...(existing?.sshTargetId ? { sshTargetId: existing.sshTargetId } : {}),
     ...(existing?.runtimeEnvironmentId
       ? { runtimeEnvironmentId: existing.runtimeEnvironmentId }
-      : {})
+      : {}),
+    ...(existing?.managedEnvironmentId
+      ? { managedEnvironmentId: existing.managedEnvironmentId }
+      : {}),
+    ...(existing?.pairingCodeSha256 ? { pairingCodeSha256: existing.pairingCodeSha256 } : {})
   }
   inventory.machines = existing
     ? inventory.machines.map((entry) => (entry === existing ? record : entry))
@@ -76,17 +79,21 @@ export function applyInventory(
   inventory: MachineProviderInventory,
   providerKey: MachineProviderKey,
   machines: readonly ProviderMachine[],
-  now: number
+  now: number,
+  /** Machines a lifecycle result newer than this list already settled; the list leaves them be. */
+  settledSince: (machineId: string) => boolean = () => false
 ): void {
   const listed = new Set(machines.map((machine) => machine.id))
   for (const machine of machines) {
-    applyMachine(inventory, providerKey, machine, now)
+    if (!settledSince(machine.id)) {
+      applyMachine(inventory, providerKey, machine, now)
+    }
   }
   // Absent from a successful list: gone. Rows nothing points at are simply dropped.
   inventory.machines = inventory.machines.flatMap((record) =>
-    listed.has(record.id)
+    listed.has(record.id) || settledSince(record.id)
       ? [record]
-      : record.sshTargetId || record.runtimeEnvironmentId
+      : record.sshTargetId || record.runtimeEnvironmentId || record.managedEnvironmentId
         ? [{ ...record, state: 'gone' as const, access: undefined }]
         : []
   )
@@ -135,4 +142,49 @@ export function failureOf(error: unknown, at: number): MachineProviderFailure {
 
 export function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Gone rows kept only as Gone links for worktrees; beyond this the oldest are dropped. */
+export const MAX_GONE_MACHINE_RECORDS = 50
+
+/**
+ * Drops gone rows no repo or workspace on this host still runs on, then caps the rest. A row's
+ * links are its SSH target and its runtime or managed server environments, as execution host ids.
+ */
+export function pruneGoneRecords(
+  inventory: MachineProviderInventory,
+  isHostReferenced: (hostId: string) => boolean
+): void {
+  const linked = (record: MachineRecord): boolean =>
+    [
+      record.sshTargetId ? toSshExecutionHostId(record.sshTargetId) : null,
+      record.runtimeEnvironmentId ? toRuntimeExecutionHostId(record.runtimeEnvironmentId) : null,
+      record.managedEnvironmentId ? toRuntimeExecutionHostId(record.managedEnvironmentId) : null
+    ].some((hostId) => hostId !== null && isHostReferenced(hostId))
+  const kept = inventory.machines.filter((record) => record.state !== 'gone' || linked(record))
+  const newestGoneFirst = kept
+    .filter((record) => record.state === 'gone')
+    .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
+  const dropped = new Set(newestGoneFirst.slice(MAX_GONE_MACHINE_RECORDS))
+  inventory.machines = kept.filter((record) => !dropped.has(record))
+}
+
+const FAILURE_BACKOFF_MS = [30_000, 120_000, 600_000]
+
+/** A failing provider backs off; otherwise the cache answers while it is younger than `maxAgeMs`. */
+export function isInventoryFresh(
+  inventory: MachineProviderInventory,
+  now: number,
+  consecutiveFailures: number,
+  maxAgeMs: number | undefined
+): boolean {
+  if (consecutiveFailures > 0 && inventory.lastFailure) {
+    const step = Math.min(consecutiveFailures, FAILURE_BACKOFF_MS.length) - 1
+    return now - inventory.lastFailure.at < (FAILURE_BACKOFF_MS[step] ?? 0)
+  }
+  return (
+    maxAgeMs !== undefined &&
+    inventory.listedAt !== undefined &&
+    now - inventory.listedAt < maxAgeMs
+  )
 }

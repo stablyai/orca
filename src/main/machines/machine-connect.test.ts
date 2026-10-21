@@ -128,13 +128,14 @@ describe('connectMachineSsh', () => {
     expect(store.getTarget(id)?.remoteRuntimeResolution).toBeUndefined()
   })
 
-  it('reconnects in place when only the pinned keys change', async () => {
+  it('disconnects before reconnecting when only the pinned keys change', async () => {
     const { store, targets, calls } = harness()
     await connectMachineSsh(targets, record(), sshAccess())
     calls.length = 0
     const rotated = `SHA256:${'C'.repeat(43)}`
     await connectMachineSsh(targets, record(), sshAccess({ hostKeyFingerprints: [rotated] }))
-    expect(calls).toEqual(['update', 'connect'])
+    // A live session was verified against the old pins; only a fresh one checks the new ones.
+    expect(calls).toEqual(['disconnect', 'update', 'connect'])
     const owner = store.getTarget(machineSshTargetId(record().providerKey, 'sbx-1'))?.owner
     expect(owner?.type === 'machine' ? owner.hostKeyFingerprints : null).toEqual([rotated])
   })

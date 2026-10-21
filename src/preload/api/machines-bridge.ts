@@ -1,9 +1,21 @@
 import { ipcRenderer } from 'electron'
-import type { MachineProviderSnapshot } from '../../shared/machine-inventory'
+import type {
+  MachineExpiryWarning,
+  MachineProgressEvent,
+  MachineProviderSnapshot
+} from '../../shared/machine-inventory'
 import type { PreloadApi } from '../api-types'
 
 export const machinesApi = {
   snapshots: () => ipcRenderer.invoke('machines:snapshots'),
+  expiryWarnings: () => ipcRenderer.invoke('machines:expiryWarnings'),
+  workAtRisk: (args) => ipcRenderer.invoke('machines:workAtRisk', args),
+  onExpiryWarning: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, warning: MachineExpiryWarning): void =>
+      callback(warning)
+    ipcRenderer.on('machines:expiryWarning', listener)
+    return () => ipcRenderer.removeListener('machines:expiryWarning', listener)
+  },
   list: (args) => ipcRenderer.invoke('machines:list', args),
   get: (args) => ipcRenderer.invoke('machines:get', args),
   create: (args) => ipcRenderer.invoke('machines:create', args),
@@ -18,5 +30,11 @@ export const machinesApi = {
       callback(snapshot)
     ipcRenderer.on('machines:changed', listener)
     return () => ipcRenderer.removeListener('machines:changed', listener)
+  },
+  onProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: MachineProgressEvent): void =>
+      callback(event)
+    ipcRenderer.on('machines:progress', listener)
+    return () => ipcRenderer.removeListener('machines:progress', listener)
   }
 } satisfies PreloadApi['machines']

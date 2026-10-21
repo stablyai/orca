@@ -5,6 +5,10 @@ import type {
   MachineTarget
 } from '../../shared/machine-inventory'
 import type { MachineLifetime } from '../../shared/machine-provider-protocol'
+import { listEnvironments } from '../../shared/runtime-environment-store'
+import { retireRuntimeEnvironment } from './runtime-environments/runtime-environment-retirement-gate'
+import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
+import { isMachineHostReferenced } from '../machines/machine-host-references'
 import { MACHINES_DISABLED, toMachineActionResult } from '../machines/machine-action-result'
 import { createDesktopMachineService } from '../machines/desktop-machine-service'
 import type { Store } from '../persistence'
@@ -12,6 +16,8 @@ import type { PluginService } from '../plugins/plugin-service'
 
 const CHANNELS = [
   'machines:snapshots',
+  'machines:expiryWarnings',
+  'machines:workAtRisk',
   'machines:list',
   'machines:get',
   'machines:create',
@@ -36,15 +42,32 @@ export function registerMachineHandlers(store: Store, pluginService?: PluginServ
   for (const channel of CHANNELS) {
     ipcMain.removeHandler(channel)
   }
-  const service = createDesktopMachineService(app.getPath('userData'), pluginService, () =>
-    isEnabled(store)
-  )
+  const { service, expiryWarnings, workAtRisk } = createDesktopMachineService({
+    userDataPath: app.getPath('userData'),
+    pluginService,
+    isEnabled: () => isEnabled(store),
+    isHostReferenced: (hostId) =>
+      isMachineHostReferenced(
+        store,
+        () => listEnvironments(app.getPath('userData')).map((environment) => environment.id),
+        hostId
+      ),
+    retireEnvironment: (environmentId) =>
+      retireRuntimeEnvironment(environmentId, {
+        userDataPath: app.getPath('userData'),
+        invalidateTransport: invalidateRuntimeEnvironmentTransport
+      })
+  })
   const onTarget =
     (run: (key: MachineProviderKey, machineId: string) => Promise<unknown>) =>
     (_event: unknown, args: MachineTarget) =>
       act(store, () => run(args.providerKey, args.machineId))
 
   ipcMain.handle('machines:snapshots', () => act(store, () => service.snapshots()))
+  ipcMain.handle('machines:workAtRisk', (_event, args: MachineTarget) =>
+    act(store, () => workAtRisk(args))
+  )
+  ipcMain.handle('machines:expiryWarnings', () => act(store, () => expiryWarnings.activeWarnings()))
   ipcMain.handle(
     'machines:list',
     (_event, args: { providerKey: MachineProviderKey; maxAgeMs?: number; force?: boolean }) =>
@@ -89,9 +112,8 @@ export function registerMachineHandlers(store: Store, pluginService?: PluginServ
     'machines:sleep',
     onTarget((key, id) => service.sleep(key, id))
   )
-  ipcMain.handle(
-    'machines:wake',
-    onTarget((key, id) => service.wake(key, id))
+  ipcMain.handle('machines:wake', (_event, args: MachineTarget & { operationId?: string }) =>
+    act(store, () => service.wake(args.providerKey, args.machineId, args))
   )
   ipcMain.handle(
     'machines:archive',
@@ -101,8 +123,7 @@ export function registerMachineHandlers(store: Store, pluginService?: PluginServ
     'machines:delete',
     onTarget((key, id) => service.delete(key, id))
   )
-  ipcMain.handle(
-    'machines:connect',
-    onTarget((key, id) => service.connect(key, id))
+  ipcMain.handle('machines:connect', (_event, args: MachineTarget & { operationId?: string }) =>
+    act(store, () => service.connect(args.providerKey, args.machineId, args))
   )
 }

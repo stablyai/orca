@@ -182,7 +182,7 @@ describe('MachineService create', () => {
     expect(service.snapshots()[0]?.pendingCreates).toEqual([])
   })
 
-  it('keeps a cancelled create pending and checks for a leftover at 0s, 10s and 60s', async () => {
+  it('settles a cancelled create as never created after two clean lists', async () => {
     let releaseCreate: () => void = () => undefined
     const { service, delay, verbs } = await setup({
       create: (args) =>
@@ -201,11 +201,42 @@ describe('MachineService create', () => {
     expect(service.cancelCreate('op-cancel')).toBe(true)
     releaseCreate()
     await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
+    // Two clean lists 10 s apart without the tag settle it as never created.
+    await vi.waitFor(() => expect(service.snapshots()[0]?.pendingCreates).toEqual([]))
+    expect(verbs().filter((verb) => verb === 'list')).toHaveLength(2)
+    expect(delay.mock.calls.map(([ms]) => ms)).toEqual([0, 10_000])
+  })
+
+  it('keeps a cancelled create pending through a failed list and checks again at 60s', async () => {
+    let releaseCreate: () => void = () => undefined
+    const { service, delay, verbs } = await setup({
+      create: () =>
+        new Promise((_resolve, reject) => {
+          releaseCreate = () => reject(new MachineProviderError('cancelled', 'cancelled'))
+        }),
+      list: [
+        fail('unavailable'),
+        inventory([]),
+        inventory([machine({ creatingOperationId: 'op-cancel' })])
+      ]
+    })
+    const pending = service.create(
+      KEY,
+      { name: 'dev', lifetime: 'persistent' },
+      { operationId: 'op-cancel' }
+    )
+    await vi.waitFor(() => expect(verbs()).toContain('create'))
+    service.cancelCreate('op-cancel')
+    releaseCreate()
+    await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
+    // The failed first list proves nothing, so the 60 s check runs and finds the leftover.
     await vi.waitFor(() => expect(verbs().filter((verb) => verb === 'list')).toHaveLength(3))
     expect(delay.mock.calls.map(([ms]) => ms)).toEqual([0, 10_000, 50_000])
-    expect(service.snapshots()[0]?.pendingCreates).toEqual([
-      expect.objectContaining({ operationId: 'op-cancel' })
-    ])
+    await vi.waitFor(() =>
+      expect(service.snapshots()[0]?.machines).toEqual([
+        expect.objectContaining({ creatingOperationId: 'op-cancel' })
+      ])
+    )
   })
 
   it('drops the pending row when the provider definitively refuses', async () => {

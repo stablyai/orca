@@ -12,6 +12,7 @@ import type { MachineProviderKey } from '../../shared/machine-inventory'
 import type { MachineSshTargets } from './machine-connect'
 import type { RunMachineProviderVerbArgs } from './machine-provider-process'
 import { MachineService, type MachineServiceDeps } from './machine-service'
+import { SshTargetStartWindow } from '../ssh/ssh-target-start-window'
 
 export const KEY: MachineProviderKey = 'plugin:acme.omarchy/omarchy'
 export const PROVIDER_NOW = '2026-10-18T12:00:00.000Z'
@@ -112,6 +113,7 @@ export async function setup(handlers: Partial<Record<MachineProviderVerb, Handle
   const clock = { now: LOCAL_NOW }
   const removeSshTarget = vi.fn(async (_id: string) => undefined)
   const delay = vi.fn(async (_ms: number) => undefined)
+  const starts = new SshTargetStartWindow({ now: () => clock.now, delay })
   const deps: MachineServiceDeps = {
     userDataPath,
     listProviders: () => [
@@ -122,9 +124,21 @@ export async function setup(handlers: Partial<Record<MachineProviderVerb, Handle
     removeSshTarget,
     runVerb,
     now: () => clock.now,
-    delay
+    delay,
+    starts
   }
   const service = new MachineService(deps)
   const verbs = () => calls.map((call) => call.verb)
-  return { service, deps, calls, verbs, userDataPath, sshTargets, removeSshTarget, delay, clock }
+  return {
+    service,
+    deps,
+    calls,
+    verbs,
+    userDataPath,
+    sshTargets,
+    removeSshTarget,
+    delay,
+    clock,
+    starts
+  }
 }

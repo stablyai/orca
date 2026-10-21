@@ -101,15 +101,25 @@ const MACHINE_LIFETIMES = ['persistent', 'temporary'] as const
 const lifetimeSchema = z.enum(MACHINE_LIFETIMES)
 export type MachineLifetime = z.infer<typeof lifetimeSchema>
 
-const providerMachineStateSchema = z.enum([
+const PROVIDER_MACHINE_STATES = [
   'creating',
   'running',
+  // A sleep or archive the provider accepted but has not finished.
+  'stopping',
   'sleeping',
   'waking',
   'archived',
   'error',
   'unknown'
-])
+] as const
+// Why tolerant: a state from a newer provider reads as unknown instead of failing the whole list.
+const providerMachineStateSchema = z
+  .string()
+  .max(64)
+  .transform(
+    (state): (typeof PROVIDER_MACHINE_STATES)[number] =>
+      PROVIDER_MACHINE_STATES.find((known) => known === state) ?? 'unknown'
+  )
 export type ProviderMachineState = z.infer<typeof providerMachineStateSchema>
 
 const providerMachineSchema = z
@@ -119,6 +129,10 @@ const providerMachineSchema = z
     lifetime: lifetimeSchema,
     state: providerMachineStateSchema,
     createdAt: timestamp,
+    /**
+     * When a temporary machine is deleted. The provider owns enforcing it, ideally with the
+     * platform's own TTL; Orca only shows and warns about it and never deletes on its own.
+     */
     expiresAt: timestamp.optional(),
     image: shortText(256).optional(),
     creatingOperationId: shortText(128).optional(),
@@ -187,6 +201,12 @@ const responseSchema = z.discriminatedUnion('kind', [
       )
   }),
   z.object({ ...envelope, kind: z.literal('machine'), machine: providerMachineSchema }),
+  // A delete's success; an `error` with code `not-found` still means the same.
+  z.object({
+    ...envelope,
+    kind: z.literal('deleted'),
+    machineId: z.string().regex(MACHINE_ID_PATTERN)
+  }),
   z.object({
     ...envelope,
     kind: z.literal('error'),
@@ -201,7 +221,8 @@ const responseSchema = z.discriminatedUnion('kind', [
     message: z.string().max(4096)
   })
 ])
-export type MachineProviderResponse = z.infer<typeof responseSchema>
+// A `deleted` answer is read as `not-found`, so callers never see it.
+export type MachineProviderResponse = Exclude<z.infer<typeof responseSchema>, { kind: 'deleted' }>
 export type MachineProviderSuccess = Exclude<MachineProviderResponse, { kind: 'error' }>
 
 export type MachineProviderRequest = {
@@ -283,6 +304,14 @@ export function parseMachineProviderResponse(
   if (response.kind === 'error') {
     return response
   }
+  if (response.kind === 'deleted') {
+    if (request.verb !== 'delete' || response.machineId !== request.machineId) {
+      throw invalid(`The provider answered ${request.verb} with a deleted response.`)
+    }
+    // Why not-found: it is what older providers answer, and the delete path already settles on it.
+    const { machineId: _deleted, ...rest } = response
+    return { ...rest, kind: 'error', code: 'not-found', message: 'The machine was deleted.' }
+  }
   if (response.kind !== EXPECTED_KIND[request.verb]) {
     throw invalid(`The provider answered ${request.verb} with a ${response.kind} response.`)
   }
@@ -294,23 +323,4 @@ export function parseMachineProviderResponse(
     throw invalid(`The provider answered ${request.verb} for a different machine.`)
   }
   return response
-}
-
-const CONFIRMED_STATES: Partial<Record<MachineProviderVerb, readonly ProviderMachineState[]>> = {
-  create: ['creating', 'running'],
-  wake: ['running', 'waking'],
-  sleep: ['sleeping'],
-  archive: ['archived']
-}
-
-/** Lifecycle verbs must report the state they moved to; anything else is unconfirmed. */
-export function isConfirmedMachineTransition(
-  verb: MachineProviderVerb,
-  state: ProviderMachineState
-): boolean {
-  if (verb === 'delete') {
-    return state !== 'running' && state !== 'waking'
-  }
-  const confirmed = CONFIRMED_STATES[verb]
-  return confirmed ? confirmed.includes(state) : true
 }

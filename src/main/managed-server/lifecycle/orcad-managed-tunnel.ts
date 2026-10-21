@@ -5,6 +5,8 @@ import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { probeManagedOrcadTunnel } from './orcad-managed-tunnel-resume'
 import { ensureManagedOrcadServing } from './orcad-managed-serving'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
+import { ensureTunnelAfterHostStart } from './orcad-managed-tunnel-start'
+import { sshTargetStarts } from '../../ssh/ssh-target-start-window'
 import { getRemoteRuntimeSharedControlAnsweredAt } from '../../ipc/runtime-environments/runtime-environment-shared-control-answers'
 import {
   getSshConnectionManager,
@@ -32,9 +34,15 @@ const managedTunnels = new OrcadManagedTunnelManager({
     ensureManagedOrcadServing({
       ...input,
       probe: probeManagedOrcadTunnel,
-      answeredAt: getRemoteRuntimeSharedControlAnsweredAt
+      answeredAt: (environmentId) => answeredSinceHostStart(input.target.id, environmentId)
     })
 })
+
+/** A machine slept and woke since its server last answered; that answer proves nothing now. */
+function answeredSinceHostStart(targetId: string, environmentId: string): number | null {
+  const at = getRemoteRuntimeSharedControlAnsweredAt(environmentId)
+  return at === null || sshTargetStarts.changedSince(targetId, at) ? null : at
+}
 
 const pairingRepairs = new Map<string, ManagedOrcadPairingRepairs>()
 
@@ -48,7 +56,7 @@ function pairingRecovery(userDataPath: string): ManagedOrcadPairingRecovery {
     resolve: (environmentId) => resolveEnvironment(userDataPath, environmentId),
     repairs,
     ensure: (environment) =>
-      managedTunnels.ensure(environment, () =>
+      ensureTunnelAfterHostStart(managedTunnels, environment, () =>
         resolveEnvironmentOrNull(userDataPath, environment.id)
       )
   }
@@ -61,7 +69,9 @@ export async function ensureOrcadManagedTunnel(
 ): Promise<KnownRuntimeEnvironment> {
   const { id } = resolveEnvironment(userDataPath, selector)
   await buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-    managedTunnels.ensure(environment, () => resolveEnvironmentOrNull(userDataPath, id))
+    ensureTunnelAfterHostStart(managedTunnels, environment, () =>
+      resolveEnvironmentOrNull(userDataPath, id)
+    )
   )
   return resolveEnvironment(userDataPath, id)
 }

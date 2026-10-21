@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { MachineProviderKey } from '../machine-inventory'
 import { MACHINE_ID_PATTERN } from '../machine-provider-command'
-import { OptionalBoolean, OptionalString } from './rpc-param-primitives'
+import { OptionalBoolean } from './rpc-param-primitives'
 
 const providerKey = z.custom<MachineProviderKey>(
   (value) => typeof value === 'string' && /^plugin:.+\/[^/]+$/.test(value),
@@ -10,7 +10,8 @@ const providerKey = z.custom<MachineProviderKey>(
 
 /** Every provider, or one; `refresh` asks providers instead of returning the cache. */
 export const MachinesList = z.object({
-  providerKey: OptionalString,
+  // Validated like MachineSelector's: a malformed key is refused, not read as "every provider".
+  providerKey: providerKey.optional(),
   refresh: OptionalBoolean
 })
 

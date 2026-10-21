@@ -87,6 +87,14 @@ describe('runMachineProviderVerb', () => {
     expect(listed).toMatchObject({ kind: 'inventory', machines: [{ id: 'm-1' }] })
   })
 
+  it('streams stderr to the caller while the provider runs', async () => {
+    const chunks: string[] = []
+    await rejection(
+      runMachineProviderVerb(fakeArgs({ mode: 'auth', onStderr: (chunk) => chunks.push(chunk) }))
+    )
+    expect(chunks.join('')).toContain('Permission denied')
+  })
+
   it('classifies a rejected ssh login as auth-required without waiting for a timeout', async () => {
     const startedAt = Date.now()
     const error = await rejection(runMachineProviderVerb(fakeArgs({ mode: 'auth' })))

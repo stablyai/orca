@@ -3,18 +3,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
+import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { MACHINE_METHODS } from './machines'
 
 const { getMachineService } = vi.hoisted(() => ({ getMachineService: vi.fn() }))
-vi.mock('../../../machines/desktop-machine-service', () => ({ getMachineService }))
+vi.mock('../../../machines/machine-service-registration', () => ({ getMachineService }))
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read no runtime member; only the reply envelope needs getRuntimeId.
 const RUNTIME = { getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService
 const KEY = 'plugin:acme.omarchy/omarchy'
 
-function dispatch(method: string, params?: unknown) {
+function dispatch(method: string, params?: unknown, options?: RpcDispatchStreamingOptions) {
   const request: RpcRequest = { id: 'machines-1', authToken: 'token', method, params }
-  return new RpcDispatcher({ runtime: RUNTIME, methods: MACHINE_METHODS }).dispatch(request)
+  return new RpcDispatcher({ runtime: RUNTIME, methods: MACHINE_METHODS }).dispatch(
+    request,
+    options
+  )
 }
 
 afterEach(() => getMachineService.mockReset())
@@ -60,5 +64,21 @@ describe('machines RPC', () => {
     expect(
       await dispatch('machines.sleep', { providerKey: KEY, machineId: '$(id)' })
     ).toMatchObject({ ok: false })
+  })
+
+  it("logs a paired device's wake by a short hash, never its device id", async () => {
+    getMachineService.mockReturnValue({ wake: vi.fn(async () => ({ id: 'sbx-1' })) })
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    await dispatch(
+      'machines.wake',
+      { providerKey: KEY, machineId: 'sbx-1' },
+      {
+        pairedDeviceId: 'desktop-device-1'
+      }
+    )
+    const line = String(info.mock.calls.at(-1)?.[0])
+    expect(line).toMatch(/by device [0-9a-f]{8}\b/)
+    expect(line).not.toContain('desktop-device-1')
+    info.mockRestore()
   })
 })

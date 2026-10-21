@@ -30,6 +30,20 @@ import {
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
 
+let desktopDeliveryService: ReturnType<typeof createNotificationDeliveryService> | null = null
+
+/**
+ * Raises a notification from main itself (no renderer involved), through the same gates and
+ * cooldowns as renderer dispatches. Not delivered before the handlers register.
+ */
+export function dispatchDesktopNotification(
+  request: NotificationDispatchRequest
+): NotificationDispatchResult | Promise<NotificationDispatchResult> {
+  return desktopDeliveryService
+    ? desktopDeliveryService.dispatch(request)
+    : { delivered: false, reason: 'not-supported' }
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
   ipcMain.handle('notifications:getDesktopAwayState', () => readDesktopAwayState(powerMonitor))
@@ -146,7 +160,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   )
 
-  const deliveryService = createNotificationDeliveryService({
+  const deliveryService = (desktopDeliveryService = createNotificationDeliveryService({
     readNotificationSettings: () => store.getSettings().notifications,
     findActiveWindow: () =>
       BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
@@ -166,7 +180,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         announced.record(request.paneKey, request.notificationId, request.structuredOrigin)
       }
     }
-  })
+  }))
 
   // A remote host reported no pending prompt: its alerts relayed to this desktop's phones are over.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')

@@ -20849,5 +20849,21 @@
       "unavailable": "This workspace is protected or unavailable."
     },
     "rowActions": "Actions for {{name}}"
+  },
+  "machines": {
+    "expiryWarning": {
+      "title": "{{machine}} deletes at {{time}}",
+      "unknownWork": "Orca couldn’t check for unsaved work on it.",
+      "noWork": "Everything on it is deleted with it. Orca found no uncommitted or unpushed work.",
+      "work": "{{work}} on it will be lost unless you push first."
+    },
+    "workAtRisk": {
+      "uncommitted_one": "{{count}} uncommitted change",
+      "uncommitted_other": "{{count}} uncommitted changes",
+      "unpushed_one": "{{count}} unpushed commit",
+      "unpushed_other": "{{count}} unpushed commits",
+      "neverPushed_one": "{{count}} branch never pushed",
+      "neverPushed_other": "{{count}} branches never pushed"
+    }
   }
 }

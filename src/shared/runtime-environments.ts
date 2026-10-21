@@ -110,7 +110,9 @@ export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.e
   orcadDeployment: OrcadDeploymentLinkSchema.optional(),
   /** When a migration into this managed server began committing; older snapshots predate it. */
   orcadMigratedAt: z.string().datetime().optional(),
-  reconciliation: RuntimeEnvironmentReconciliationRecordSchema.optional()
+  reconciliation: RuntimeEnvironmentReconciliationRecordSchema.optional(),
+  /** Its host is gone for good; kept so its worktrees still resolve, but never dialed. */
+  retiredAt: z.string().datetime().optional()
 })
   .refine(
     ({ pendingSshAccessOperation, sshAccess, orcadDeployment, connectionDependency }) =>
