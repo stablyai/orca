@@ -144,8 +144,8 @@ export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-view
 // Why the DIP conversion: CDP emulates the guest viewport in window DIP, but UI zoom
 // redefines this renderer's CSS px, so an unconverted `${width}px` host box outgrows the
 // emulated page and leaves an unpainted strip beside it (STA-7568).
-function applyViewportPresetSizeStyles(
-  viewport: BrowserPageViewport,
+export function applyViewportPresetSizeStyles(
+  viewport: Pick<BrowserPageViewport, 'content' | 'scroller'>,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
@@ -198,9 +198,9 @@ export function scrollBrowserPageViewport(
 }
 
 export function getBrowserPageViewportScrollState(
-  browserPageId: string
+  browserPageId: string,
+  scroller = browserPageViewports.get(browserPageId)?.scroller
 ): BrowserPageViewportScrollState | null {
-  const scroller = browserPageViewports.get(browserPageId)?.scroller
   if (!scroller) {
     return null
   }

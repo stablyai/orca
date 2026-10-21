@@ -21,7 +21,10 @@ export type ClientHostedMarkerFixture = {
 }
 
 export async function startClientHostedMarkerFixture(
-  markers: { created: string; moved: string } = { created: 'survivor', moved: 'moved-on' }
+  markers: { created: string; moved: string; responsive?: boolean } = {
+    created: 'survivor',
+    moved: 'moved-on'
+  }
 ): Promise<ClientHostedMarkerFixture> {
   const server = createServer((request, response) => {
     const marker = request.url === '/moved' ? markers.moved : markers.created
@@ -29,9 +32,11 @@ export async function startClientHostedMarkerFixture(
       'cache-control': 'no-store',
       'content-type': 'text/html; charset=utf-8'
     })
+    const viewport = markers.responsive
+      ? '<meta name="viewport" content="width=device-width, initial-scale=1">'
+      : ''
     response.end(
-      `<!doctype html><html><head><title>${marker}</title></head>` +
-        `<body><h1 id="marker">${marker}</h1></body></html>`
+      `<!doctype html><html><head><title>${marker}</title>${viewport}</head><body><h1 id="marker">${marker}</h1></body></html>`
     )
   })
   await new Promise<void>((resolve, reject) => {
