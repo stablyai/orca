@@ -77,7 +77,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const previousState = this.state
     // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
-    const codexFetchGated = codexHome.skip
+    const codexSuperseded =
+      codexGeneration !== this.codexFetchGeneration ||
+      !this.isSameCodexTarget(codexTarget, this.codexFetchTarget)
+    const codexFetchGated = codexHome.skip || codexSuperseded
     const codexHomePath = codexHome.homePath
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
@@ -148,9 +151,11 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
       // A gated slot makes no attempt and cannot settle a fetching chip.
-      codex: codexFetchGated
-        ? codexStateBeforeFetch
-        : this.withFetchingStatus(previousState.codex, 'codex'),
+      codex: codexSuperseded
+        ? this.state.codex
+        : codexFetchGated
+          ? codexStateBeforeFetch
+          : this.withFetchingStatus(previousState.codex, 'codex'),
       gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')

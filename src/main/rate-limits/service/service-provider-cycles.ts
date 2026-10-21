@@ -13,6 +13,13 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
     const codexHome = await this.resolveCodexHome(codexTarget)
+    if (
+      signal.aborted ||
+      codexGeneration !== this.codexFetchGeneration ||
+      !this.isSameCodexTarget(codexTarget, this.codexFetchTarget)
+    ) {
+      return
+    }
     // Why: return before the "fetching" mark — a skipped cycle never settles it (#STA-4422).
     if (codexHome.skip) {
       if (
