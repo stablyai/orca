@@ -239,8 +239,7 @@ export default function MonacoEditor({
     }
   }, [mountedEditor, vimModeEnabled])
 
-  // Same lifecycle as the Vim effect; monaco-emacs has no Ex commands, so it only needs the editor
-  // and the status node.
+  // Same lifecycle as the Vim effect; `C-x C-s` routes to Orca's save like `:w` does.
   useEffect(() => {
     const ed = mountedEditor
     const statusNode = keymapStatusBarRef.current
@@ -249,7 +248,9 @@ export default function MonacoEditor({
     }
     let cancelled = false
     let controller: { dispose: () => void } | null = null
-    void installMonacoEmacsMode(ed, statusNode)
+    void installMonacoEmacsMode(ed, statusNode, {
+      onSave: () => propsRef.current.onSave(ed.getValue())
+    })
       .then((installed) => {
         if (cancelled) {
           installed.dispose()

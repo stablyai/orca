@@ -31,8 +31,8 @@ async function pressNativeControlChord(app: ElectronApplication, keyCode: string
 // the kill ring (C-k / C-y), mark + region copy (C-SPC / M-w), the C-x prefix echo, and C-g.
 // It also proves the editor keybinding context: an Orca chord that collides with an Emacs chord
 // (Ctrl+P, bound to quick open here the way it is by default on Linux/Windows) reaches the editor
-// while it has focus and still opens quick open everywhere else. Saving goes through autosave:
-// with the Emacs preset Ctrl+S is incremental search, not save.
+// while it has focus and still opens quick open everywhere else. Autosave stays off: every write
+// below goes through `C-x C-s`, since with the Emacs preset Ctrl+S is incremental search.
 test('@golden emacs keybindings drive the Monaco file editor', async ({
   electronApp,
   orcaPage,
@@ -46,14 +46,9 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
 
   await waitForSessionReady(orcaPage)
 
-  // Enable the Emacs preset (and a short autosave, so edits can be read back from disk) before
-  // the editor mounts.
+  // Enable the Emacs preset before the editor mounts.
   await orcaPage.evaluate(() =>
-    window.__store?.getState().updateSettings({
-      editorKeybindings: 'emacs',
-      editorAutoSave: true,
-      editorAutoSaveDelayMs: 300
-    })
+    window.__store?.getState().updateSettings({ editorKeybindings: 'emacs', editorAutoSave: false })
   )
   await expect
     .poll(() => orcaPage.evaluate(() => window.__store?.getState().settings?.editorKeybindings))
@@ -121,21 +116,62 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   await expect(statusBar).not.toContainText('Mark set', { timeout: 5_000 })
   await kb.press('Enter')
   await kb.press('Control+y')
+  await expect(viewLines).toContainText('export const hello = "world"export const hello', {
+    timeout: 5_000
+  })
+  // Nothing is on disk until C-x C-s routes through Orca's save.
+  expect(countOccurrences(readFileSync(indexPath, 'utf8'), 'export const hello = "world"')).toBe(1)
+  const saveWithEmacs = async (): Promise<void> => {
+    await kb.press('Control+x')
+    await expect(statusBar).toContainText('C-x', { timeout: 5_000 })
+    await kb.press('Control+s')
+  }
+  await saveWithEmacs()
   await expect
     .poll(() => countOccurrences(readFileSync(indexPath, 'utf8'), 'export const hello = "world"'), {
       timeout: 10_000
     })
     .toBe(2)
 
-  // Kill ring: C-a then C-k kills the duplicated line's text; C-y brings it back.
+  // Incremental search: C-s opens the find widget seeded by the current word; inside the widget
+  // C-s / C-r step through matches and C-g closes it, handing focus back to the editor.
+  const findWidget = monaco.locator('.find-widget.visible')
+  const matchesCount = findWidget.locator('.matchesCount')
+  await kb.press('Control+a')
+  await kb.press('Control+s')
+  await expect(findWidget).toBeVisible({ timeout: 5_000 })
+  await findWidget.locator('textarea').first().fill('hello')
+  // The caret sits on line 2, so the first match is the second occurrence; C-s wraps to the first.
+  await expect(matchesCount).toHaveText('2 of 2', { timeout: 5_000 })
+  await kb.press('Control+s')
+  await expect(matchesCount).toHaveText('1 of 2', { timeout: 5_000 })
+  await kb.press('Control+r')
+  await expect(matchesCount).toHaveText('2 of 2', { timeout: 5_000 })
+  await kb.press('Control+g')
+  await expect(findWidget).toHaveCount(0, { timeout: 5_000 })
+  await expect
+    .poll(
+      () =>
+        orcaPage.evaluate(
+          () =>
+            document.activeElement?.closest('[data-orca-file-editor] .monaco-editor') !== null &&
+            document.activeElement?.closest('.find-widget') === null
+        ),
+      { timeout: 5_000 }
+    )
+    .toBe(true)
+
+  // Kill ring: C-a then C-k kills the current line's text; C-y brings it back.
   await kb.press('Control+a')
   await kb.press('Control+k')
+  await saveWithEmacs()
   await expect
     .poll(() => countOccurrences(readFileSync(indexPath, 'utf8'), 'export const hello = "world"'), {
       timeout: 10_000
     })
     .toBe(1)
   await kb.press('Control+y')
+  await saveWithEmacs()
   await expect
     .poll(() => countOccurrences(readFileSync(indexPath, 'utf8'), 'export const hello = "world"'), {
       timeout: 10_000
@@ -145,6 +181,7 @@ test('@golden emacs keybindings drive the Monaco file editor', async ({
   // Plain Tab indents instead of running formatDocument (monaco-emacs's upstream default).
   await kb.press('Control+a')
   await kb.press('Tab')
+  await saveWithEmacs()
   await expect
     .poll(() => readFileSync(indexPath, 'utf8'), { timeout: 10_000 })
     .toMatch(/^\s+export const hello = "world"/m)
