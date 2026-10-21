@@ -129,6 +129,34 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
   })
 
+  it('preserves parent references in the standard issue list', async () => {
+    const parent = {
+      id: 'parent-id',
+      identifier: 'LIN-1',
+      title: 'Launch',
+      url: 'https://linear.app/acme/issue/LIN-1'
+    }
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        issues: {
+          nodes: [
+            { ...rawIssue('LIN-2'), parent },
+            { ...rawIssue('LIN-1'), parent: null }
+          ]
+        }
+      }
+    })
+    const { listIssues } = await import('./linear-issue-listing')
+
+    const result = await listIssues('all', 36, 'workspace-1')
+
+    expect(result.items.map((issue) => issue.parent)).toEqual([parent, null])
+    expect(rawRequest).toHaveBeenCalledTimes(1)
+    expect(rawRequest.mock.calls[0]?.[0]).toMatch(
+      /parent\s*\{\s*id\s+identifier\s+title\s+url\s*\}/
+    )
+  })
+
   it('maps Linear branch names from raw issue reads', async () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1', undefined, 'team/lin-1-fix')] } }

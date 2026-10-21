@@ -65,6 +65,53 @@ describe('Linear issue context', () => {
     isAuthError.mockReturnValue(false)
   })
 
+  it.each([
+    {
+      id: 'parent-id',
+      identifier: 'ENG-1',
+      title: 'Launch',
+      url: 'https://linear.app/acme/issue/ENG-1'
+    },
+    null,
+    undefined
+  ])('preserves parent context in issue reads and searches (%j)', async (parent) => {
+    const acme = workspace('workspace-acme', 'acme')
+    const issue = { ...rawIssue('ENG-2'), parent }
+    const rawRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { issue } })
+      .mockResolvedValueOnce({ data: { searchIssues: { nodes: [issue] } } })
+    getStatus.mockReturnValue({ workspaces: [acme] })
+    getClients.mockReturnValue([makeEntry({ workspace: acme, rawRequest })])
+    const { readLinearIssueContext, searchLinearIssuesForAgents } = await import('./issue-context')
+
+    const read = await readLinearIssueContext(
+      {
+        input: 'ENG-2',
+        workspaceId: acme.id,
+        include: {
+          attachments: false,
+          children: false,
+          comments: false,
+          relations: false,
+          activity: false
+        },
+        depth: 0
+      },
+      async () => {
+        throw new Error('unused')
+      }
+    )
+    const search = await searchLinearIssuesForAgents({ query: 'Launch', workspaceId: acme.id })
+
+    expect(read.issue.parent).toEqual(parent)
+    expect(search.issues[0]?.parent).toEqual(parent)
+    expect(rawRequest).toHaveBeenCalledTimes(2)
+    for (const [query] of rawRequest.mock.calls) {
+      expect(query).toMatch(/parent\s*\{\s*id\s+identifier\s+title\s+url\s*\}/)
+    }
+  })
+
   it('resolves --current worktree links written as split Linear CLI metadata', async () => {
     const stably = workspace('workspace-stably', 'stably')
     const rawRequest = vi.fn().mockResolvedValue({ data: { issue: rawIssue('STA-335') } })

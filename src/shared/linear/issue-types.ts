@@ -21,6 +21,7 @@ export type LinearIssue = {
     key: string
   }
   project?: LinearProjectSummary
+  parent?: LinearIssueChildSummary | null
   subIssues?: LinearIssueChildSummary[]
   labels: string[]
   labelIds: string[]

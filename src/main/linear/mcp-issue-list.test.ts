@@ -47,6 +47,35 @@ describe('MCP-compatible Linear issue listing', () => {
     getStatus.mockReturnValue({ workspaces: [entry.workspace] })
   })
 
+  it('keeps parent references and root issues in one list request', async () => {
+    const parent = {
+      id: 'parent-id',
+      identifier: 'ENG-1',
+      title: 'Launch',
+      url: 'https://linear.app/acme/issue/ENG-1'
+    }
+    rawRequest.mockResolvedValue({
+      data: {
+        issues: {
+          nodes: [
+            { ...issueNode('child-id', 'ENG-2', '2026-07-02T00:00:00.000Z'), parent },
+            { ...issueNode('parent-id', 'ENG-1', '2026-07-01T00:00:00.000Z'), parent: null }
+          ],
+          pageInfo: { hasNextPage: false }
+        }
+      }
+    })
+    const { listMcpIssues } = await import('./mcp-issue-list')
+
+    const result = await listMcpIssues({ workspaceId: 'workspace-1' })
+
+    expect(result.issues.map((issue) => issue.parent)).toEqual([parent, null])
+    expect(rawRequest).toHaveBeenCalledTimes(1)
+    expect(rawRequest.mock.calls[0]?.[0]).toMatch(
+      /parent\s*\{\s*id\s+identifier\s+title\s+url\s*\}/
+    )
+  })
+
   it('passes rich filters, ordering, archive scope, and cursor to Linear', async () => {
     rawRequest.mockResolvedValue({
       data: {

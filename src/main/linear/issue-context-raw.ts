@@ -16,6 +16,7 @@ export type RawIssue = {
   title: string
   url: string
   description?: string | null
+  parent?: Pick<RawIssue, 'id' | 'identifier' | 'title' | 'url'> | null
   priority?: number | null
   estimate?: number | null
   dueDate?: string | null
@@ -121,6 +122,7 @@ export const ISSUE_FIELDS = `
   branchName
   createdAt
   updatedAt
+  parent { id identifier title url }
   state { id name type color }
   team { id name key color }
   project { id name color }
@@ -226,6 +228,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     identifier: issue.identifier,
     title: issue.title,
     url: issue.url,
+    parent: issue.parent,
     description: issue.description,
     state: issue.state ?? null,
     team: issue.team ?? null,
@@ -251,6 +254,7 @@ export function pickSearchIssue(
     identifier: issue.identifier,
     title: issue.title,
     url: issue.url,
+    parent: issue.parent,
     state: issue.state,
     team: issue.team,
     project: issue.project,

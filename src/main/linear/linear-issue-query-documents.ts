@@ -13,6 +13,7 @@ export type LinearIssueNode = {
   branchName?: string | null
   description?: string | null
   url: string
+  parent?: Pick<LinearIssueNode, 'id' | 'identifier' | 'title' | 'url'> | null
   dueDate?: string | null
   estimate?: number | null
   priority: number
@@ -75,6 +76,7 @@ export const LINEAR_ISSUE_NODE_FIELDS = `
   estimate
   updatedAt
   labelIds
+  parent { id identifier title url }
   state {
     name
     type

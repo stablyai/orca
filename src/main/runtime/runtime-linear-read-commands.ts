@@ -161,6 +161,7 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
           identifier: issue.identifier,
           title: issue.title,
           url: issue.url,
+          parent: issue.parent,
           state: issue.state,
           team: issue.team,
           project: issue.project ?? null,

@@ -35,6 +35,9 @@ export function formatLinearIssue(result: LinearIssueContextResult): string {
     `Assignee: ${issue.assignee?.displayName ?? 'unassigned'}`,
     `Project: ${issue.project?.name ?? 'none'}`
   ]
+  if (issue.parent) {
+    lines.push(`Parent: ${issue.parent.identifier} ${issue.parent.title}`)
+  }
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)
   if (issue.labels.length > 0) {
@@ -257,7 +260,8 @@ export function printLinearProjectListWarnings(result: LinearProjectListResult):
 function formatSearchRow(issue: LinearSearchIssueSummary): string {
   const state = issue.state?.name ?? 'unknown'
   const assignee = issue.assignee?.displayName ?? 'unassigned'
-  return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}`
+  const parent = issue.parent ? ` [parent: ${issue.parent.identifier}]` : ''
+  return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}${parent}`
 }
 
 function formatPriority(priority: number | null | undefined): string {
