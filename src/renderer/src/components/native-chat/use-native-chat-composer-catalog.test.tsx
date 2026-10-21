@@ -106,6 +106,31 @@ describe('composer catalog authority', () => {
       sessionSkills: []
     })
   })
+  it('uses Pi skill names from the report while preserving namespaced commands', () => {
+    const reported = [
+      { name: 'skill:review', kind: 'skill' as const, description: 'Review skill' },
+      { name: 'skill:command', kind: 'command' as const }
+    ]
+    const { result } = renderHook(() => useNativeChatComposerCatalog('pi', transport(reported)))
+    expect(result.current.sessionSkills).toEqual([
+      { name: 'skill:review', description: 'Review skill' }
+    ])
+    expect(
+      buildNativeChatPickerItems(
+        result.current.agentCommands,
+        [],
+        '',
+        '/skill:',
+        result.current.sessionSkills
+      ).map(({ token }) => token)
+    ).toEqual(['/model', '/effort', '/skill:command', '/resume', '/skill:review'])
+    expect(result.current.agentCommands.map(({ name }) => name)).toEqual([
+      'model',
+      'effort',
+      'skill:command',
+      'resume'
+    ])
+  })
   // Orca's /resume takes an agent command's place, but a skill of that name stays the agent's.
   it("puts Orca's /resume in place of an agent command and beside a namesake skill", () => {
     const reported = [

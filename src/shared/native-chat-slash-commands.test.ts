@@ -97,6 +97,17 @@ describe('a session that reports its own command surface', () => {
     expect(sessionReportedSkills(reported).map((skill) => skill.name)).toEqual(['ref-oss'])
   })
 
+  it('preserves Pi-reported names and keeps namespaced commands out of skills', () => {
+    const namespaced = [
+      { name: 'skill:review', kind: 'skill' as const, description: 'Pi review' },
+      { name: 'skill:command', kind: 'command' as const }
+    ]
+    expect(sessionReportedSkills(namespaced)).toEqual([
+      { name: 'skill:review', description: 'Pi review' }
+    ])
+    expect(sessionSlashCommandSuggestions('pi', namespaced)).toEqual([{ name: 'skill:command' }])
+  })
+
   it('prefers the description the session reported over the curated one', () => {
     expect(
       sessionSlashCommandSuggestions('claude', [

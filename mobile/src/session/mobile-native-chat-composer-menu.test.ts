@@ -49,6 +49,29 @@ describe('mobileComposerSlashItems', () => {
     expect(items.map((item) => item.token)).toEqual(['$review-pr'])
   })
 
+  it('keeps Pi commands and namespaced skills distinct', () => {
+    const items = mobileComposerSlashItems({
+      agent: 'pi',
+      structured: {
+        reported: [
+          { name: 'review', kind: 'command' },
+          { name: 'skill:review', kind: 'skill', path: '/repo/.pi/skills/review/SKILL.md' }
+        ],
+        conversationCommands: []
+      },
+      query: 'review'
+    })
+    expect(items).toEqual([
+      expect.objectContaining({ kind: 'command', token: '/review', skillCollision: false }),
+      expect.objectContaining({
+        kind: 'skill',
+        name: 'review',
+        token: '/skill:review',
+        path: '/repo/.pi/skills/review/SKILL.md'
+      })
+    ])
+  })
+
   it('falls back to the host commands, with no skills, before the session reports', () => {
     const items = mobileComposerSlashItems({
       agent: 'claude',

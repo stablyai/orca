@@ -12,6 +12,7 @@ import type { AgentType } from './agent-status-types'
  *  `transcript`: the agent writes its reply as a transcript row the chat shows.
  *  Absent: the agent answers in its own terminal, or the effect is the answer. */
 export type NativeChatCommandReply = 'composer' | 'transcript'
+export type NativeChatSkillPrefix = '$' | '/' | '/skill:'
 
 export type SlashCommandSuggestion = {
   /** The command token without its leading slash, e.g. `clear`. */
@@ -224,7 +225,7 @@ export function classifyNativeChatSend(
   draft: string,
   commands: readonly SlashCommandSuggestion[],
   pickerSkillOriginToken: string | null,
-  skillPrefix: '/' | '$' | null
+  skillPrefix: NativeChatSkillPrefix | null
 ): NativeChatSendClassification {
   // Why: the supported TUIs only treat a line-leading token as a command, so a
   // draft with leading whitespace is prose; trimming here would claim a "Ran"

@@ -34,6 +34,13 @@ describe('native chat agent picker profiles', () => {
     expect(getNativeChatAgentProfile('opencode2')).toMatchObject({ skillSourceOwner: 'opencode' })
   })
 
+  it('uses Pi-owned roots and its namespaced skill invocation', () => {
+    expect(getNativeChatAgentProfile('pi')).toMatchObject({
+      skillPrefix: '/skill:',
+      skillSourceOwner: 'pi'
+    })
+  })
+
   it('does not grant custom or unverified agents a skill grammar', () => {
     expect(getNativeChatAgentProfile('custom-agent')).toBeNull()
   })

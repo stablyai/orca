@@ -67,6 +67,13 @@ describe('isNativeChatSkillForAgent', () => {
     expect(isNativeChatSkillForAgent('grok', skill({}), shared)).toBe(true)
   })
 
+  it('shows Pi its own and shared roots while keeping other agent roots out', () => {
+    expect(isNativeChatSkillForAgent('pi', skill({}), discovery('pi'))).toBe(true)
+    expect(isNativeChatSkillForAgent('pi', skill({}), discovery(null))).toBe(true)
+    expect(isNativeChatSkillForAgent('pi', skill({}), discovery('claude'))).toBe(false)
+    expect(isNativeChatSkillForAgent('claude', skill({}), discovery('pi'))).toBe(false)
+  })
+
   it('aliases OpenClaude to Claude roots without exposing them to other agents', () => {
     const claude = discovery('claude')
     expect(isNativeChatSkillForAgent('claude', skill({}), claude)).toBe(true)
