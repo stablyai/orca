@@ -6,7 +6,11 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+import {
+  getVisibleUsageProvider,
+  isUsageEmptyState,
+  isUsageMeterVisible
+} from './status-bar-provider-visibility'
 import {
   getUsageProviderAccountsSectionId,
   usageRowSignInOpensSettings
@@ -15,7 +19,7 @@ import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
 import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
-import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
+import { isAnyUsageProviderFetching, isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
@@ -102,8 +106,19 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
-    rateLimits
+  const {
+    claude,
+    codex,
+    gemini,
+    opencodeGo,
+    kimi,
+    antigravity,
+    minimax,
+    grok,
+    cursor,
+    zcode,
+    commandCode
+  } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -121,7 +136,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
     cursorAuthConfigured: rateLimits.cursorAuthConfigured,
-    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
+    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured,
+    commandCodeAuthConfigured: rateLimits.commandCodeAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -132,41 +148,41 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
-  const showClaude =
-    visibleClaude !== null &&
-    statusBarItems.includes('claude') &&
-    isStatusBarItemAvailable('claude', detectedAgentIds)
-  const showCodex =
-    visibleCodex !== null &&
-    statusBarItems.includes('codex') &&
-    isStatusBarItemAvailable('codex', detectedAgentIds)
-  const showGemini =
-    visibleGemini !== null &&
-    statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
-  const showKimi =
-    visibleKimi !== null &&
-    statusBarItems.includes('kimi') &&
-    isStatusBarItemAvailable('kimi', detectedAgentIds)
-  const showAntigravity =
-    visibleAntigravity !== null &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+  const visibleCommandCode = getVisibleUsageProvider('command-code', commandCode, usageSettings)
+  const showClaude = isUsageMeterVisible('claude', visibleClaude, statusBarItems, detectedAgentIds)
+  const showCodex = isUsageMeterVisible('codex', visibleCodex, statusBarItems, detectedAgentIds)
+  const showGemini = isUsageMeterVisible('gemini', visibleGemini, statusBarItems, detectedAgentIds)
+  const showKimi = isUsageMeterVisible('kimi', visibleKimi, statusBarItems, detectedAgentIds)
+  const showAntigravity = isUsageMeterVisible(
+    'antigravity',
+    visibleAntigravity,
+    statusBarItems,
+    detectedAgentIds
+  )
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
-  const showGrok =
-    visibleGrok !== null &&
-    statusBarItems.includes('grok') &&
-    isStatusBarItemAvailable('grok', detectedAgentIds)
+  const showGrok = isUsageMeterVisible('grok', visibleGrok, statusBarItems, detectedAgentIds)
   // Why: a Cursor session can come from the IDE alone, so PATH detection of
   // cursor-agent would hide a real meter from IDE-only users.
   const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
   // Why: a saved Coding Plan key is site-auth, not a CLI on PATH — a subscriber
   // without the ZCode CLI must still earn the meter (same exemption as MiniMax/Cursor).
-  const showZcode =
-    visibleZcode !== null &&
-    statusBarItems.includes('zcode') &&
-    (rateLimits.zcodePlanApiKeyConfigured || isStatusBarItemAvailable('zcode', detectedAgentIds))
+  const showZcode = isUsageMeterVisible(
+    'zcode',
+    visibleZcode,
+    statusBarItems,
+    detectedAgentIds,
+    rateLimits.zcodePlanApiKeyConfigured
+  )
+  // Why: Command Code's login is the CLI's own file, so it earns the meter the
+  // same way a saved ZCode key does.
+  const showCommandCode = isUsageMeterVisible(
+    'command-code',
+    visibleCommandCode,
+    statusBarItems,
+    detectedAgentIds,
+    rateLimits.commandCodeAuthConfigured
+  )
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -186,26 +202,29 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMiniMax ||
     showGrok ||
     showCursor ||
-    showZcode
+    showZcode ||
+    showCommandCode
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode },
+    {
+      claude,
+      codex,
+      gemini,
+      opencodeGo,
+      kimi,
+      antigravity,
+      minimax,
+      grok,
+      cursor,
+      zcode,
+      commandCode
+    },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching =
-    claude?.status === 'fetching' ||
-    codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
-    minimax?.status === 'fetching' ||
-    grok?.status === 'fetching' ||
-    cursor?.status === 'fetching' ||
-    zcode?.status === 'fetching'
+  const anyFetching = isAnyUsageProviderFetching(rateLimits)
 
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
@@ -224,7 +243,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
-    showZcode ? visibleZcode : null
+    showZcode ? visibleZcode : null,
+    showCommandCode ? visibleCommandCode : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
     // Why: the bar collapses chips from the end, so placeholders give way first.

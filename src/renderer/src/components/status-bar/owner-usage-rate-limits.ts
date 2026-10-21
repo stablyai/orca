@@ -48,7 +48,8 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   minimax: 'minimax',
   grok: 'grok',
   cursor: 'cursor',
-  zcode: 'zcode'
+  zcode: 'zcode',
+  commandCode: 'command-code'
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the keys of a Record<UsageProviderKey, …>.
@@ -90,6 +91,7 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
     opencodeGoApiKeyConfigured: partial.opencodeGoApiKeyConfigured === true,
     grokAuthConfigured: partial.grokAuthConfigured === true,
     cursorAuthConfigured: partial.cursorAuthConfigured === true,
+    commandCodeAuthConfigured: partial.commandCodeAuthConfigured === true,
     zcodePlanApiKeyConfigured: partial.zcodePlanApiKeyConfigured === true,
     claudeTarget: partial.claudeTarget ?? { runtime: 'host', wslDistro: null },
     codexTarget: partial.codexTarget ?? { runtime: 'host', wslDistro: null },
@@ -101,6 +103,24 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
 /** Stands in for a provider this device has set up but the owning host has not; carries no numbers. */
 export function isOwnerNotSetUpPlaceholder(provider: ProviderRateLimits): boolean {
   return provider.usageMetadata?.ownerNotSetUp !== undefined
+}
+
+const FETCHING_PROVIDER_KEYS = [
+  'claude',
+  'codex',
+  'gemini',
+  'opencodeGo',
+  'kimi',
+  'antigravity',
+  'minimax',
+  'grok',
+  'cursor',
+  'zcode',
+  'commandCode'
+] as const
+
+export function isAnyUsageProviderFetching(rateLimits: RateLimitState): boolean {
+  return FETCHING_PROVIDER_KEYS.some((key) => rateLimits[key]?.status === 'fetching')
 }
 
 function isSetUpHere(local: RateLimitState, key: UsageProviderKey): boolean {

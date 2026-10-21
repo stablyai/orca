@@ -11,6 +11,10 @@ import { ClaudeAccountService } from './claude-accounts/service'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
+import {
+  getCommandCodeRuntimeTarget,
+  resolveCommandCodeHome
+} from './command-code/command-code-runtime-home'
 import { isWslDistroRunningForBackgroundWork } from './wsl-background-distro-gate'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from './minimax/minimax-api-key-store'
@@ -57,6 +61,11 @@ export function createProviderAccountServices(
   // Why: Kimi's CLI refreshes its OAuth token in whichever runtime it runs in, so the
   // usage fetch must read the WSL-side credentials when that's the configured runtime (#12370).
   rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store.getSettings())))
+  // Why: Command Code's login lives in the CLI's own home, so the usage fetch must
+  // read the same runtime's file the CLI would — including a WSL distro's home.
+  rateLimits.setCommandCodeHomeResolver(() =>
+    resolveCommandCodeHome(getCommandCodeRuntimeTarget(store.getSettings()))
+  )
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,

@@ -15,6 +15,7 @@ describe('getUsageProviderAccountsSectionId', () => {
     expect(getUsageProviderAccountsSectionId('grok')).toBe('accounts-grok')
     expect(getUsageProviderAccountsSectionId('cursor')).toBe('accounts-cursor')
     expect(getUsageProviderAccountsSectionId('zcode')).toBe('accounts-zcode')
+    expect(getUsageProviderAccountsSectionId('command-code')).toBe('accounts-command-code')
   })
 
   it('does not invent an Accounts section for CLI-owned credentials', () => {

@@ -164,7 +164,8 @@ describe('Cursor compact usage headline', () => {
     'kimi',
     'antigravity',
     'minimax',
-    'opencode-go'
+    'opencode-go',
+    'command-code'
   ] as const)('preserves %s selection', (provider) => {
     const p: ProviderRateLimits = { ...cursorPools(7, 90), provider }
     expect(getUsageHeadlineSection(p)).toEqual(getTightestUsageSection(p))

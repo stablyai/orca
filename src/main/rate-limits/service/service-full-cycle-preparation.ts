@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchCommandCodeRateLimits } from '../command-code-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
@@ -52,6 +53,7 @@ export type FetchAllCyclePrepared = {
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
+  commandCodeResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -167,7 +169,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      commandCode: this.withFetchingStatus(previousState.commandCode, 'command-code')
     })
 
     // Why its own promise: the keychain read and the desktop state.vscdb read
@@ -186,6 +189,19 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
         : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    // Why its own promise: resolving a WSL home is an async probe and reading the
+    // CLI login can park on a UNC read; neither may delay the other providers.
+    const commandCodeResultPromise = (
+      this.commandCodeHomeResolver
+        ? this.commandCodeHomeResolver().then((home) =>
+            fetchCommandCodeRateLimits({ home, signal })
+          )
+        : fetchCommandCodeRateLimits({ signal })
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -311,7 +327,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise
+      antigravityResultPromise,
+      commandCodeResultPromise
     }
   }
 }

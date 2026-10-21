@@ -141,7 +141,8 @@ describe('createUISlice hydratePersistedUI', () => {
       'antigravity',
       'grok',
       'cursor',
-      'zcode'
+      'zcode',
+      'command-code'
     ])
     expect(setUI).toHaveBeenCalledWith({
       statusBarItems: [
@@ -153,7 +154,8 @@ describe('createUISlice hydratePersistedUI', () => {
         'antigravity',
         'grok',
         'cursor',
-        'zcode'
+        'zcode',
+        'command-code'
       ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
@@ -161,7 +163,8 @@ describe('createUISlice hydratePersistedUI', () => {
       _antigravityStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true,
       _cursorStatusBarDefaultAdded: true,
-      _zcodeStatusBarDefaultAdded: true
+      _zcodeStatusBarDefaultAdded: true,
+      _commandCodeStatusBarDefaultAdded: true
     })
   })
 
@@ -179,7 +182,8 @@ describe('createUISlice hydratePersistedUI', () => {
         _antigravityStatusBarDefaultAdded: true,
         _grokStatusBarDefaultAdded: true,
         _cursorStatusBarDefaultAdded: true,
-        _zcodeStatusBarDefaultAdded: true
+        _zcodeStatusBarDefaultAdded: true,
+        _commandCodeStatusBarDefaultAdded: true
       })
     )
 

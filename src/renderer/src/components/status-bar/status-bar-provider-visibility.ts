@@ -1,5 +1,8 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -24,6 +27,9 @@ export type UsageProviderSettings = Pick<
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
+  // Why: the Command Code login lives in the CLI's own ~/.commandcode/auth.json;
+  // main reports presence so the bar survives reloads before the first poll.
+  commandCodeAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -37,6 +43,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  commandCode?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -89,7 +96,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
     settings?.cursorAuthConfigured === true ||
-    settings?.zcodePlanApiKeyConfigured === true
+    settings?.zcodePlanApiKeyConfigured === true ||
+    settings?.commandCodeAuthConfigured === true
   )
 }
 
@@ -132,6 +140,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'zcode') {
     return settings.zcodePlanApiKeyConfigured === true
   }
+  if (providerId === 'command-code') {
+    return settings.commandCodeAuthConfigured === true
+  }
   return false
 }
 
@@ -140,7 +151,7 @@ export function createPendingProviderSnapshot(providerId: UsageProviderId): Prov
     provider: providerId,
     session: null,
     weekly: null,
-    ...(providerId === 'opencode-go' ? { monthly: null } : {}),
+    ...(providerId === 'opencode-go' || providerId === 'command-code' ? { monthly: null } : {}),
     // Why antigravity joins these: it reports one pool per model group, so its pending skeleton
     // has to be bucket-shaped too or the segment changes shape once the first reading lands.
     ...(providerId === 'gemini' || providerId === 'cursor' || providerId === 'antigravity'
@@ -150,6 +161,23 @@ export function createPendingProviderSnapshot(providerId: UsageProviderId): Prov
     error: null,
     status: 'fetching'
   }
+}
+
+// Why: one rule for "this provider earns a slot in the status bar" — a live or
+// pending reading, an item the user left checked, and a CLI on PATH. A stored
+// credential (ZCode's saved key, Command Code's CLI login) waives the PATH leg
+// because a subscriber without the CLI installed still owns the meter.
+export function isUsageMeterVisible(
+  providerId: UsageProviderId,
+  visible: ProviderRateLimits | null,
+  statusBarItems: StatusBarItem[],
+  detectedAgentIds: TuiAgent[] | null,
+  credentialConfigured?: boolean
+): boolean {
+  if (visible === null || !statusBarItems.includes(providerId)) {
+    return false
+  }
+  return credentialConfigured === true || isStatusBarItemAvailable(providerId, detectedAgentIds)
 }
 
 export function getVisibleUsageProvider(
@@ -191,7 +219,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (providers.commandCode !== undefined && isProviderSnapshotPending(providers.commandCode))
   ) {
     return false
   }
@@ -206,6 +235,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.commandCode)
   )
 }

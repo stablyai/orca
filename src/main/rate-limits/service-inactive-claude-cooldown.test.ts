@@ -140,6 +140,17 @@ vi.mock('./zcode-usage-fetcher', () => ({
     status: 'unavailable'
   })
 }))
+
+vi.mock('./command-code-usage-fetcher', () => ({
+  fetchCommandCodeRateLimits: async () => ({
+    provider: 'command-code',
+    session: null,
+    weekly: null,
+    updatedAt: fixture.now,
+    error: null,
+    status: 'unavailable'
+  })
+}))
 vi.mock('./antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: async () => ({
     provider: 'antigravity',

@@ -37,6 +37,15 @@ describe('getAccountsPaneSearchEntries', () => {
       expect.arrayContaining(['glm', 'zai', 'zhipu', 'bigmodel', 'coding plan'])
     )
   })
+
+  it('keeps the Command Code credits section discoverable in pane order', () => {
+    const entries = getAccountsPaneSearchEntries()
+    const titles = entries.map((entry) => entry.title)
+    expect(titles.indexOf('Command Code')).toBe(titles.indexOf('GLM Coding Plan') + 1)
+    expect(entries.find((entry) => entry.title === 'Command Code')?.keywords).toEqual(
+      expect.arrayContaining(['command code', 'credits', 'balance', 'cmd'])
+    )
+  })
 })
 
 describe('getAccountsMiniMaxSearchEntries', () => {

@@ -1700,7 +1700,8 @@
           "e2b0ee267f": "stale"
         },
         "ZcodePlanAccountsSection": {
-          "keyRequired": "GLM Coding Plan API key is required."
+          "keyRequired": "GLM Coding Plan API key is required.",
+          "resetIn": " — resets in {{value0}}"
         },
         "accounts": {
           "search": {

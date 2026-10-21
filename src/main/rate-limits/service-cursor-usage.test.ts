@@ -25,6 +25,10 @@ vi.mock('./grok-fetcher', () => ({ fetchGrokRateLimits: vi.fn() }))
 vi.mock('./grok-auth', () => ({ readGrokAuthSession: vi.fn(() => ({ status: 'missing' })) }))
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
 
+vi.mock('./command-code-usage-fetcher', () => ({
+  fetchCommandCodeRateLimits: vi.fn()
+}))
+
 vi.mock('./antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))

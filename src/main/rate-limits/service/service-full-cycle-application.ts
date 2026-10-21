@@ -40,7 +40,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise
+      antigravityResultPromise,
+      commandCodeResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -192,12 +193,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, commandCodeSettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        commandCodeResultPromise
+      ])
     if (signal.aborted) {
       return
     }
@@ -216,6 +219,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         }
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
+    const commandCode = settleSiblingProviderResult('command-code', commandCodeSettled)
+    // Why: the credentials live in the CLI's own file, so "configured" is exactly
+    // "a login was readable this cycle" — a credential-read failure carries no
+    // provenance, while a readable login keeps it even when the request fails.
+    this.commandCodeAuthConfigured = commandCode.usageMetadata?.authProvenance != null
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
     // switch — the Accounts pane would name the new account beside the old
@@ -233,12 +241,22 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount !== undefined &&
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
+    // Why: same rule as Cursor — the CLI's login can move to another account (or
+    // another runtime), and a failed refresh then must not keep the previous
+    // account's credits beside the new account's error.
+    const previousCommandCodeAccount = previousState.commandCode?.usageMetadata?.authProvenance
+    const commandCodeAccount = commandCode.usageMetadata?.authProvenance
+    const commandCodeAccountChanged =
+      previousCommandCodeAccount !== undefined &&
+      commandCodeAccount !== undefined &&
+      previousCommandCodeAccount !== commandCodeAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
     this.trackActiveFailureStreak('antigravity', antigravity)
+    this.trackActiveFailureStreak('command-code', commandCode)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
@@ -250,7 +268,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      commandCode: commandCodeAccountChanged
+        ? commandCode
+        : this.applyStalePolicy(commandCode, previousState.commandCode)
     })
   }
 }

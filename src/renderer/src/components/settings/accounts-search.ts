@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
+import { getAccountsCommandCodeSearchEntries } from './accounts-command-code-search'
 
 export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
   {
@@ -286,5 +287,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGrokSearchEntries(),
   ...getAccountsAntigravitySearchEntries(),
   ...getAccountsCursorSearchEntries(),
-  ...getAccountsZcodePlanSearchEntries()
+  ...getAccountsZcodePlanSearchEntries(),
+  ...getAccountsCommandCodeSearchEntries()
 ])

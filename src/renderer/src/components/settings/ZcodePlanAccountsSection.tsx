@@ -3,10 +3,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
-import {
-  ZCODE_PLAN_SITE_CONSOLE_URLS,
-  type ZcodePlanSite
-} from '../../../../shared/zcode-plan-sites'
+import { ZCODE_PLAN_SITE_CONSOLE_URLS } from '../../../../shared/zcode-plan-sites'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import { useNow } from '../../hooks/use-now'
@@ -16,7 +13,12 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
-import { collectZcodeUsageWindows, ZcodeUsageWindowView } from './zcode-plan-usage-windows'
+import { collectProviderUsageWindows, ProviderUsageWindowView } from './provider-usage-windows'
+import {
+  ZCODE_PLAN_SEARCH_KEYWORDS,
+  zcodeSiteLabel,
+  zcodeWindowLabel
+} from './zcode-plan-accounts-labels'
 import { useZcodePlanCredentials } from './use-zcode-plan-credentials'
 import { ZcodeCliSetupSection } from './ZcodeCliSetupSection'
 import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
@@ -28,28 +30,6 @@ import {
   type UsageCredentialHost
 } from './usage-credential-host'
 import type { UsageHostSettingsModel } from './use-usage-host-settings'
-
-const SEARCH_KEYWORDS = [
-  'glm',
-  'zai',
-  'z.ai',
-  'zhipu',
-  'bigmodel',
-  'coding plan',
-  'usage',
-  'rate limit',
-  'zcode'
-]
-
-function siteLabel(site: ZcodePlanSite): string {
-  if (site === 'bigmodel') {
-    return translate(
-      'auto.components.settings.ZcodePlanAccountsSection.site.bigmodel',
-      'Zhipu · BigModel (open.bigmodel.cn)'
-    )
-  }
-  return translate('auto.components.settings.ZcodePlanAccountsSection.site.zai', 'Z.AI (z.ai)')
-}
 
 export function ZcodePlanAccountsSection({
   host,
@@ -99,7 +79,7 @@ export function ZcodePlanAccountsSection({
   }
 
   const usage = zcodeUsage ?? null
-  const usageWindows = collectZcodeUsageWindows(usage)
+  const usageWindows = collectProviderUsageWindows(usage)
   const staleUsageError = usage?.status === 'error' ? (usage.error ?? null) : null
 
   return (
@@ -164,7 +144,7 @@ export function ZcodePlanAccountsSection({
                 {translate(
                   'auto.components.settings.ZcodePlanAccountsSection.keyStored',
                   'API key saved · {{value0}}',
-                  { value0: siteLabel(site ?? 'zai') }
+                  { value0: zcodeSiteLabel(site ?? 'zai') }
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -264,7 +244,7 @@ export function ZcodePlanAccountsSection({
           'auto.components.settings.ZcodePlanAccountsSection.siteDescription',
           'Pick the console your Coding Plan belongs to: Z.AI for the international site, Zhipu BigModel for the mainland site.'
         )}
-        keywords={SEARCH_KEYWORDS}
+        keywords={ZCODE_PLAN_SEARCH_KEYWORDS}
         className="space-y-2"
       >
         <Label htmlFor="zcode-plan-site">
@@ -286,7 +266,7 @@ export function ZcodePlanAccountsSection({
           <SelectContent>
             {(['zai', 'bigmodel'] as const).map((option) => (
               <SelectItem key={option} value={option}>
-                {siteLabel(option)}
+                {zcodeSiteLabel(option)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -296,7 +276,7 @@ export function ZcodePlanAccountsSection({
       <SearchableSetting
         title={translate('auto.components.settings.ZcodePlanAccountsSection.keyTitle', 'API key')}
         description={zcodePlanKeyDescription(host)}
-        keywords={SEARCH_KEYWORDS}
+        keywords={ZCODE_PLAN_SEARCH_KEYWORDS}
         className="space-y-2"
       >
         <div className="flex items-center justify-between gap-2">
@@ -387,11 +367,16 @@ export function ZcodePlanAccountsSection({
             'auto.components.settings.ZcodePlanAccountsSection.usageDescription',
             'Live quota windows for the linked Coding Plan, refreshed with the status bar usage cycle.'
           )}
-          keywords={SEARCH_KEYWORDS}
+          keywords={ZCODE_PLAN_SEARCH_KEYWORDS}
         >
           <div className="space-y-1">
             {usageWindows.map((row) => (
-              <ZcodeUsageWindowView key={row.kind} row={row} now={now} />
+              <ProviderUsageWindowView
+                key={row.kind}
+                row={row}
+                now={now}
+                labels={zcodeWindowLabel}
+              />
             ))}
             {usage?.planType ? (
               <p className="text-xs text-muted-foreground">

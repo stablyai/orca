@@ -46,6 +46,10 @@ vi.mock('./zcode-usage-fetcher', () => ({
   hasZcodeCliPlanCredentials: vi.fn(() => false)
 }))
 
+vi.mock('./command-code-usage-fetcher', () => ({
+  fetchCommandCodeRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))

@@ -33,6 +33,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'cursor') {
     return 'Cursor'
   }
+  if (provider === 'command-code') {
+    return 'Command Code'
+  }
   return provider
 }
 
@@ -164,6 +167,14 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
     return translate('auto.components.status.bar.tooltip.cursor.expired.label', 'Sign-in expired')
   }
+  // Why: the Command Code CLI rotates its own login on the next run, so a lapsed
+  // session is fixed by signing the CLI in, not by Orca retrying the fetch.
+  if (p.provider === 'command-code' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate(
+      'auto.components.status.bar.tooltip.commandCode.expired.label',
+      'Sign-in expired'
+    )
+  }
   // Why: an unsubscribed account is a settled answer about the account, not a
   // failed refresh; "Refresh failed" sends the user hunting a bug that is not there.
   if (p.usageMetadata?.failureKind === 'no-subscription') {
@@ -210,6 +221,12 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     return translate(
       'auto.components.status.bar.tooltip.cursor.expired.message',
       'Run cursor-agent login in a terminal on the computer running Orca, then retry usage.'
+    )
+  }
+  if (p.provider === 'command-code' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate(
+      'auto.components.status.bar.tooltip.commandCode.expired.message',
+      'Run cmd login in a terminal on the computer running Orca, then retry usage.'
     )
   }
   if (p.provider === 'claude') {

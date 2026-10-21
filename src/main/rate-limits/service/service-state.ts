@@ -10,6 +10,7 @@ import {
   type InternalRateLimitState,
   type CodexHomePathResolver,
   type KimiHomeResolver,
+  type CommandCodeHomeResolver,
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
@@ -35,12 +36,16 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
-    zcode: null
+    zcode: null,
+    commandCode: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
   // at construction the way Grok's auth-file probe does; each fetch cycle sets it.
   protected cursorAuthConfigured = false
+  // Why: same as Cursor — the Command Code credential read is async (WSL homes are
+  // UNC reads), so each fetch cycle sets this from its result.
+  protected commandCodeAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
@@ -56,7 +61,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    'command-code': 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -69,7 +75,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    'command-code': 0
   }
   protected mainWindow: BrowserWindow | null = null
   protected detachWindowListeners: (() => void) | null = null
@@ -97,6 +104,7 @@ export abstract class RateLimitServiceState {
   }
   // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
   protected kimiHomeResolver: KimiHomeResolver | null = null
+  protected commandCodeHomeResolver: CommandCodeHomeResolver | null = null
   protected claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   protected claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',

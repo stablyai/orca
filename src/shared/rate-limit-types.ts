@@ -98,6 +98,7 @@ export type ProviderRateLimits = {
     | 'antigravity'
     | 'cursor'
     | 'zcode'
+    | 'command-code'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -182,6 +183,7 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  commandCode: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -217,6 +219,13 @@ export type RateLimitState = {
    * keep the ZCode bar visible across reloads between snapshot refreshes.
    */
   zcodePlanApiKeyConfigured?: boolean
+  /**
+   * True when the Command Code CLI's own login is readable
+   * (~/.commandcode/auth.json, or COMMAND_CODE_API_KEY on the host runtime).
+   * The API key itself never leaves main; the status bar uses this to keep the
+   * Command Code bar visible across reloads between snapshot refreshes.
+   */
+  commandCodeAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

@@ -3,6 +3,7 @@ import type { ZcodePlanSite } from '../../../shared/zcode-plan-sites'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
 import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
+import type { CommandCodeHomeResolution } from '../../command-code/command-code-runtime-home'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service'
 
@@ -38,6 +39,7 @@ export type CodexHomePathResolver = (
   target?: CodexAccountSelectionTarget
 ) => CodexRateLimitHomeResolution | Promise<CodexRateLimitHomeResolution>
 export type KimiHomeResolver = () => Promise<KimiHomeResolution>
+export type CommandCodeHomeResolver = () => Promise<CommandCodeHomeResolution>
 export type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -132,6 +134,7 @@ export type InternalRateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
+  commandCode: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

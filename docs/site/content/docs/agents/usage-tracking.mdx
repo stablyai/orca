@@ -2,7 +2,7 @@
 title: Usage & rate-limit tracking
 ---
 
-Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls. Plan- and balance-based providers — Command Code and the GLM Coding Plan — are read from the CLI's own sign-in instead (see below).
 
 ## What's shown
 
@@ -13,6 +13,15 @@ Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code
 ## How it works
 
 Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+
+## Plan and balance providers
+
+Some providers publish usage for a signed-in plan rather than writing a local ledger. Orca reads the login the CLI already stores — never a copy — and asks the provider for the same figures its own usage screen shows:
+
+- **Command Code** (`COMMAND_CODE_API_KEY`, else `~/.commandcode/auth.json`): credits remaining, the 5-hour and weekly windows, the plan's monthly credit bar, and the renewal date. The full breakdown lives at [commandcode.ai/usage](https://commandcode.ai/usage).
+- **GLM Coding Plan**: see Settings → AI Provider Accounts for the saved plan key.
+
+The key stays in the main process; only the percentages and balances reach the UI. A signed-out machine shows the provider as unconfigured instead of guessing.
 
 ## Multi-account accounting
 

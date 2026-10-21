@@ -79,6 +79,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     grokAuthConfigured: false,
     cursorAuthConfigured: false,
     zcodePlanApiKeyConfigured: false,
+    commandCodeAuthConfigured: false,
     ...overrides
   }
 }
@@ -89,6 +90,13 @@ describe('hasUsageProviderSettings', () => {
     expect(hasUsageProviderSettings(settings)).toBe(true)
     expect(getVisibleUsageProvider('zcode', null, settings)?.status).toBe('fetching')
     expect(getVisibleUsageProvider('zcode', null, usageSettings())).toBeNull()
+  })
+
+  it('keeps a readable Command Code CLI login visible without a first result', () => {
+    const settings = usageSettings({ commandCodeAuthConfigured: true })
+    expect(hasUsageProviderSettings(settings)).toBe(true)
+    expect(getVisibleUsageProvider('command-code', null, settings)?.status).toBe('fetching')
+    expect(getVisibleUsageProvider('command-code', null, usageSettings())).toBeNull()
   })
 
   it('treats persisted managed accounts as configured usage providers', () => {

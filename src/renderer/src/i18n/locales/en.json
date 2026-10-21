@@ -287,7 +287,8 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "commandCodeToggleDescription": "Show Command Code credits and usage windows."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -1490,12 +1491,6 @@
       }
     },
     "components": {
-      "hostPicker": {
-        "searchHosts": "Search hosts…",
-        "noHostsMatch": "No hosts match.",
-        "moreHosts_one": "{{count}} more host. Search by name to find it.",
-        "moreHosts_other": "{{count}} more hosts. Search by name to find one."
-      },
       "BrowserCookieImportDisclosure": {
         "title": "Google logins aren't imported",
         "description": "Sign in to Google directly in Orca."
@@ -2401,8 +2396,6 @@
         "851017590d": "Add Linear access",
         "228b25028f": "Browse and start work on your assigned Linear issues directly from here.",
         "6d56559467": "Connect your Linear account",
-        "linearLoginUnreadableTitle": "Reconnect Linear",
-        "linearLoginUnreadableBody": "Unable to read saved Linear login. Reconnect it in Settings.",
         "eee68073b2": "Open in Jira",
         "9497f2787c": "Start workspace",
         "eba87f2edb": "No Jira issues found",
@@ -2643,7 +2636,9 @@
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
         "linearWorktreesColumn": "Workspaces",
-        "jiraBoardEmptyColumn": "No issues"
+        "jiraBoardEmptyColumn": "No issues",
+        "linearLoginUnreadableTitle": "Reconnect Linear",
+        "linearLoginUnreadableBody": "Unable to read saved Linear login. Reconnect it in Settings."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -3162,7 +3157,6 @@
               "93e1f6bfca": "Loading",
               "98730088a6": ". Search or open Linear for the full set.",
               "06b887d622": "Showing first",
-              "linearLoginUnreadable": "Unable to read saved Linear login. Reconnect it in Settings.",
               "2c4b1c2c08": "number",
               "f2cc1e0ff6": "Linear / Projects",
               "906b5e4cb8": "Linear / Projects / {{value0}}",
@@ -3177,7 +3171,8 @@
               "df4bd63c1d": "Unassigned",
               "30402d2c6e": "Try search or refresh.",
               "a2f31c4cd6": "No Linear projects found",
-              "c9b6e9f90d": "Unable to load Linear projects"
+              "c9b6e9f90d": "Unable to load Linear projects",
+              "linearLoginUnreadable": "Unable to read saved Linear login. Reconnect it in Settings."
             }
           }
         },
@@ -3527,7 +3522,6 @@
             "retry": "Retry",
             "retrying": "Retrying…",
             "retryUnavailable": "Retry could not reconnect yet. Try again shortly.",
-            "openNewTerminal": "Open new terminal",
             "a7e2fd2699": "file an issue",
             "5c8ce20be6": "If this persists, please",
             "cc6d997c65": "Restart the terminal daemon from here to clear stale daemon state.",
@@ -3540,7 +3534,8 @@
             "remoteTerminalClosed": "Remote terminal was closed.",
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
-            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again."
+            "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
+            "openNewTerminal": "Open new terminal"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -3708,12 +3703,12 @@
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
-            "pairingRefusedTitle": "This host no longer accepts this computer",
-            "pairingRefusedBody": "Orca couldn't pair with it again over SSH. Nothing on the host was stopped. Reconnect to try again.",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
-            "reconnectButton": "Reconnect"
+            "reconnectButton": "Reconnect",
+            "pairingRefusedTitle": "This host no longer accepts this computer",
+            "pairingRefusedBody": "Orca couldn't pair with it again over SSH. Nothing on the host was stopped. Reconnect to try again."
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Host unavailable",
@@ -4179,7 +4174,8 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
-            "zcodeUsageMenu": "ZCode Usage"
+            "zcodeUsageMenu": "ZCode Usage",
+            "commandCodeUsageMenu": "Command Code Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4369,10 +4365,6 @@
             "f8b8dbed85": "Usage unavailable",
             "remoteOwnerUnreachable": "Usage unavailable — cannot reach {{server}}",
             "remoteOwnerNoUsage": "Usage unavailable — {{server}} does not report usage. Update Orca on that host.",
-            "remoteOwnerNotConfigured": "Not configured on {{server}}",
-            "claudeNoUsageFromHost": "No usage from {{server}}",
-            "claudeUnknownOnHost": "Claude usage isn't available from {{server}}. It may not be signed in there, or it may use API-key billing.",
-            "remoteOwnerSignInSavedHere": "Its sign-in is saved on this computer only.",
             "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
             "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
             "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
@@ -4418,7 +4410,18 @@
                 "label": "Sign-in expired",
                 "message": "Claude usage has expired. Start Claude in this account to refresh it."
               }
-            }
+            },
+            "commandCode": {
+              "credits": "Credits",
+              "expired": {
+                "label": "Sign-in expired",
+                "message": "Run cmd login in a terminal on the computer running Orca, then retry usage."
+              }
+            },
+            "remoteOwnerNotConfigured": "Not configured on {{server}}",
+            "claudeNoUsageFromHost": "No usage from {{server}}",
+            "claudeUnknownOnHost": "Claude usage isn't available from {{server}}. It may not be signed in there, or it may use API-key billing.",
+            "remoteOwnerSignInSavedHere": "Its sign-in is saved on this computer only."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -6270,8 +6273,6 @@
           "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
           "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
           "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
-          "remoteEditorHint": "Only VS Code can open folders on an SSH host.",
-          "remoteRuntimeEditorHint": "Apps on this computer can open this server’s files only when Orca reaches it over SSH.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
           "remoteLaunchFailed": "Could not open the path in VS Code.",
@@ -6284,7 +6285,9 @@
           "3921d3d9a5": "Workspace folder was not found.",
           "f387af445b": "Workspace path is not a valid local path.",
           "3ec372b664": "file-manager",
-          "wsl": "WSL"
+          "wsl": "WSL",
+          "remoteEditorHint": "Only VS Code can open folders on an SSH host.",
+          "remoteRuntimeEditorHint": "Apps on this computer can open this server’s files only when Orca reaches it over SSH."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "Unread:",
@@ -6674,7 +6677,6 @@
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
           "serverSaved": "Remote server added.",
-          "serverAlreadyPaired": "This server is already paired as {{value0}}; updated its connection.",
           "serverSaveFailed": "Failed to add remote server.",
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
@@ -6738,6 +6740,7 @@
           "identityFileFromConfigHint": "Left empty on purpose: Orca uses every key ~/.ssh/config resolves for {{value0}}. Type a path to use just that key.",
           "sshConfigPickerRetry": "Try again",
           "sshConfigPickerResolving": "Reading…",
+          "serverAlreadyPaired": "This server is already paired as {{value0}}; updated its connection.",
           "pairingHelpShareComputer": "Create this under Settings → Remote Orca Servers → Share this computer on the other computer."
         },
         "ForgetSshWorkspaceDialog": {
@@ -6752,7 +6755,8 @@
         },
         "MarkdownImageLightbox": {
           "image": "Image",
-          "expand": "Expand image"
+          "expand": "Expand image",
+          "close": "Close"
         },
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
@@ -7264,6 +7268,8 @@
           "0d9e293a02": "Refresh",
           "c9b33eb5c0": "Refreshing…",
           "13647f9f80": "Re-read your shell PATH and re-detect installed agents",
+          "dc4a2ffdc0": "Expand command override",
+          "cea7d97be1": "Collapse command override",
           "db9e9e5887": "Customize command",
           "959b67385b": "Set default",
           "24e032fa34": "Default",
@@ -7273,6 +7279,9 @@
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
           "agentPermissions": "Agent Permissions",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
@@ -7806,10 +7815,10 @@
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "d93c7cd531": "Configure app-level network routing.",
           "c46cdbbd4e": "Network",
+          "configureProxy": "Configure proxy",
           "nodeDistMirrorLabel": "Node.js Download Mirror",
           "nodeDistMirrorPlaceholder": "https://mirror.example.com/nodejs/dist",
-          "nodeDistMirrorDescription": "Optional. A copy of nodejs.org/dist that Orca uses first when it installs Node on SSH and WSL servers. Each file is still checked against the release Orca expects.",
-          "configureProxy": "Configure proxy"
+          "nodeDistMirrorDescription": "Optional. A copy of nodejs.org/dist that Orca uses first when it installs Node on SSH and WSL servers. Each file is still checked against the release Orca expects."
         },
         "GeneralPane": {
           "editor_preview_tabs": "Reuse a preview tab when browsing files",
@@ -8662,7 +8671,6 @@
           "e57dde9d93": "Unsaved changes"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "Revoking here doesn't stop someone with SSH access to this computer from pairing again. To cut them off, remove their SSH access.",
           "8b82879581": "Anyone with an active grant can connect until you revoke it. Revoking shared access disconnects active clients immediately.",
           "68ec21309f": "Revoke access",
           "6f6d5188ed": "Revoke {{value0}}",
@@ -8673,6 +8681,7 @@
           "f031182867": "Shared Server Access",
           "df142657a5": "Not used yet",
           "b18d1764ef": "Last used {{value0}}",
+          "sshAccessCaveat": "Revoking here doesn't stop someone with SSH access to this computer from pairing again. To cut them off, remove their SSH access.",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Active links",
           "noActiveLinks": "No active links.",
@@ -8714,7 +8723,7 @@
           "b5b5114cb0": "Removed {{value0}}.",
           "6cb6eae14f": "Failed to save runtime environment.",
           "7b5986c8df": "Connected to {{value0}}. To create new projects there by default, choose it under Advanced > Default host for new projects.",
-          "serverAlreadyPaired": "This server is already paired as {{value0}}; updated its connection.",
+          "5ef712f407": "A server named \"{{value0}}\" already exists.",
           "0c55a47480": "Name and pairing code are required.",
           "e6410d72c3": "Failed to load runtime environments.",
           "6ef71985da": "No endpoint",
@@ -8778,9 +8787,10 @@
           "cloudVmWorkflow": "Cloud VM",
           "cloudVmWorkflowHelp": "Manage recipe-created cloud machines",
           "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "repair": "Re-pair…",
+          "serverAlreadyPaired": "This server is already paired as {{value0}}; updated its connection.",
           "managedAccessRevoked": "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",
           "connectAccessRevoked": "{{value0}} no longer accepts this computer. Connect to try again.",
-          "repair": "Re-pair…",
           "serverAccessRevoked": "Access revoked",
           "orcaVersionLastSeen": "Orca v{{value0}} (last seen)",
           "pairedTwice": "Same server as {{value0}}, paired twice. Remove one so its projects can be edited.",
@@ -9637,6 +9647,16 @@
                 "codingPlan": "coding plan",
                 "rateLimit": "rate limit"
               }
+            },
+            "commandCode": {
+              "title": "Command Code",
+              "description": "Credits, plan usage windows, and the renewal date for your Command Code CLI sign-in.",
+              "kw": {
+                "commandCode": "command code",
+                "credits": "credits",
+                "balance": "balance",
+                "cmd": "cmd"
+              }
             }
           }
         },
@@ -9722,6 +9742,7 @@
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "agentPermissions": "Agent Permissions",
+            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
             "agentRuntime": "Agent Runtime",
             "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default.",
             "runtime": "runtime",
@@ -9912,7 +9933,11 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "commandCodeUsageTitle": "Command Code Usage",
+            "commandCodeUsageDescription": "Show Command Code credits and usage windows in the status bar.",
+            "commandCode": "command code",
+            "commandCodeCredits": "credits"
           }
         },
         "auto": {
@@ -10377,8 +10402,6 @@
             "e9d948d3c3": "Save editor and editable diff changes automatically after a short pause.",
             "ae21e806ce": "Auto Save Files",
             "c56cb6f1c2": "network",
-            "nodeDistMirror": "mirror",
-            "nodeDistNodejs": "nodejs",
             "3566fce83f": "localhost",
             "91a46caafc": "no_proxy",
             "3a73054565": "bypass",
@@ -10461,7 +10484,9 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "nodeDistMirror": "mirror",
+            "nodeDistNodejs": "nodejs"
           }
         },
         "git": {
@@ -13099,6 +13124,32 @@
           "failed": "Re-pair failed",
           "descriptionShareComputer": "{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this computer, create a link for another Orca, then paste it here."
         },
+        "CommandCodeAccountsSection": {
+          "window": {
+            "session": "5-hour",
+            "weekly": "Weekly",
+            "monthly": "Monthly"
+          },
+          "title": "Command Code",
+          "subtitle": "Shows credits, plan usage windows, and the renewal date from your Command Code CLI sign-in.",
+          "usagePage": "Usage page",
+          "signedIn": "Signed in",
+          "signedInHint": "Orca reads the Command Code login the CLI stored on this machine (COMMAND_CODE_API_KEY, else ~/.commandcode/auth.json). Orca keeps the key in the main process and sends it to the Command Code API for usage requests.",
+          "notSignedIn": "Not signed in",
+          "notSignedInHint": "In a terminal, run cmd login, then click Refresh usage here.",
+          "refresh": "Refresh usage",
+          "usageTitle": "Credits and usage",
+          "usageDescription": "Same figures as the /usage overlay in the Command Code CLI.",
+          "creditsLeft": "{{value0}} credits available",
+          "renews": "Renews {{value0}}",
+          "plan": "Plan: {{value0}}"
+        },
+        "providerUsageWindows": {
+          "session": "5 hours",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "resetIn": " — resets in {{value0}}"
+        },
         "usageCredentialHost": {
           "outdated": "Update Orca on {{host}} to save this key there.",
           "unreachable": "Could not reach {{host}}, so whether a key is saved there is unknown.",
@@ -15672,6 +15723,23 @@
                 "shared": {
                   "e7894927a2": "Codex",
                   "9deecb021c": "Claude"
+                },
+                "notes": {
+                  "styles": {
+                    "db6691aa0a": ".ravs-window { position: absolute; inset: 0; --ravs-soft-surface: color-mix(in srgb, var(--foreground) 2%, var(--card)); --ravs-soft-fill: color-mix(in srgb, var(--foreground) 6%, transparent); --ravs-panel-border: color-mix(in srgb, var(--foreground) 18%, var(--border)); --ravs-emphasis-border: color-mix(in srgb, var(--foreground) 44%, var(--border)); --ravs-floating-shadow: 0 14px 30px rgb(0 0 0 / 0.22), 0 2px 6px rgb(0 0 0 / 0.12); background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); } .ravs-difftoolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--ravs-soft-surface); font-size: 11px; color: var(--muted-foreground); } .ravs-diff-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); } .ravs-ai-chip { margin-left: auto; display: inline-flex; align-items: stretch; overflow: hidden; border-radius: 6px; border: 1px solid var(--border); background: var(--ravs-soft-surface); opacity: 0; transform: translateY(-2px); transition: opacity 320ms ease, transform 320ms ease; } .ravs-ai-chip.is-visible { opacity: 1; transform: none; } .ravs-ai-chip .ravs-count-btn, .ravs-ai-chip .ravs-send-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font-size: 11px; color: var(--muted-foreground); background: transparent; line-height: 1; } .ravs-ai-chip .ravs-count-btn { border-right: 1px solid var(--border); } .ravs-ai-chip .ravs-send-btn { padding: 3px 7px; position: relative; } .ravs-send-glow { position: absolute; inset: 0; background: rgba(34, 197, 94, 0.18); opacity: 0; transition: opacity 280ms ease; pointer-events: none; } .ravs-ai-chip .ravs-send-btn.is-flash .ravs-send-glow { opacity: 1; } .ravs-count-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); font-weight: 600; } .ravs-diffbody { flex: 1; min-height: 0; position: relative; background: var(--editor-surface, var(--card)); } .ravs-diffscroll { position: absolute; inset: 0; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.55; color: var(--foreground); padding: 4px 0 8px; transition: opacity 240ms ease; } .ravs-diffscroll.is-hidden { opacity: 0; pointer-events: none; } .ravs-term { position: absolute; inset: 0; background: var(--editor-surface, var(--card)); color: var(--foreground); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; overflow: hidden; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 240ms ease; z-index: 4; } .ravs-term.is-visible { opacity: 1; } .ravs-term-body { flex: 1; min-height: 0; padding: 10px 12px; overflow: hidden; display: flex; flex-direction: column; gap: 6px; } .ravs-term-line { white-space: pre-wrap; word-break: break-word; line-height: 1.45; } .ravs-term-muted { color: var(--muted-foreground); } .ravs-term-glyph { color: rgb(217 119 6); margin-right: 6px; } .ravs-term-check { color: rgb(16 185 129); font-weight: 700; margin-right: 6px; } .ravs-term-spinner { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 999px; border: 1.5px solid color-mix(in srgb, var(--foreground) 20%, transparent); border-top-color: var(--foreground); vertical-align: -1px; animation: ravs-term-spin 0.9s linear infinite; } @keyframes ravs-term-spin { to { transform: rotate(360deg) } } .ravs-hunk-header { display: grid; grid-template-columns: 36px 36px 16px minmax(0,1fr); align-items: center; padding: 1px 8px 1px 0; background: rgba(99, 102, 241, 0.06); color: var(--muted-foreground); font-size: 10.5px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); } .ravs-hunk-header .ravs-text { grid-column: 4 / -1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgb(99 102 241); font-size: 10.5px; } .ravs-diff-line { display: grid; grid-template-columns: 36px 36px 16px minmax(0,1fr); align-items: stretch; position: relative; } .ravs-ln { text-align: right; padding: 0 6px 0 0; color: var(--muted-foreground); font-size: 10.5px; user-select: none; opacity: 0.85; } .ravs-marker { text-align: center; color: var(--muted-foreground); font-weight: 700; opacity: 0.7; } .ravs-text-cell { padding-right: 8px; white-space: pre; overflow: hidden; } .ravs-tok-kw { color: #a855f7; } .ravs-tok-id { color: #2563eb; } .ravs-tok-str { color: #16a34a; } .ravs-diff-line.is-add { background: color-mix(in srgb, var(--git-decoration-added) 14%, transparent); } .ravs-diff-line.is-add .ravs-marker { color: color-mix(in srgb, var(--git-decoration-added) 72%, transparent); opacity: 1; } .ravs-diff-line.is-rem { background: color-mix(in srgb, var(--git-decoration-deleted) 14%, transparent); } .ravs-diff-line.is-rem .ravs-marker { color: color-mix(in srgb, var(--git-decoration-deleted) 72%, transparent); opacity: 1; } .ravs-add-note-btn { position: absolute; left: 4px; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid color-mix(in srgb, currentColor 22%, var(--border)); border-radius: 4px; background: var(--ravs-soft-fill); color: var(--foreground); z-index: 5; opacity: 0; box-shadow: 0 1px 2px rgb(0 0 0 / 0.14); pointer-events: none; transition: opacity 160ms ease; } .ravs-add-note-btn.is-visible { opacity: 1; } .ravs-note-row { padding: 4px 8px 4px 0; max-height: 0; overflow: hidden; opacity: 0; transition: max-height 360ms cubic-bezier(.4,0,.2,1), opacity 280ms ease 60ms, padding 360ms cubic-bezier(.4,0,.2,1); } .ravs-note-row.is-visible { max-height: 90px; opacity: 1; } .ravs-note-card { margin: 0 12px; position: relative; border: 1px solid var(--ravs-panel-border); border-left: 3px solid var(--ravs-emphasis-border); border-radius: 6px; background-color: var(--card); padding: 5px 8px 5px 10px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.16); } .ravs-note-meta { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); } .ravs-note-body { font-size: 11.5px; color: var(--foreground); line-height: 1.35; margin-top: 2px; } .ravs-popover { position: absolute; left: 12px; right: 12px; max-width: none; z-index: 20; padding: 8px 10px; border: 1px solid var(--ravs-panel-border); border-left: 3px solid var(--ravs-emphasis-border); border-radius: 6px; background-color: var(--card); color: var(--foreground); box-shadow: var(--ravs-floating-shadow); display: flex; flex-direction: column; gap: 6px; opacity: 0; transform: translateY(-4px) scale(0.985); pointer-events: none; transition: opacity 180ms ease, transform 180ms ease; } .ravs-popover.is-visible { opacity: 1; transform: none; pointer-events: auto; } .ravs-pop-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); } .ravs-pop-input { min-height: 38px; max-height: 80px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--editor-surface, var(--card)); font-size: 12px; line-height: 1.4; color: var(--foreground); white-space: pre-wrap; word-break: break-word; overflow: hidden; } .ravs-pop-footer { display: flex; justify-content: flex-end; gap: 6px; } .ravs-pop-btn { font-size: 11px; font-weight: 500; padding: 4px 9px; border-radius: 5px; line-height: 1; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 5px; } .ravs-pop-btn.is-cancel { color: var(--muted-foreground); background: transparent; } .ravs-pop-btn.is-add { color: var(--primary-foreground); background: var(--primary); } .ravs-send-menu { position: absolute; z-index: 30; right: 8px; top: 6px; min-width: 200px; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: var(--ravs-floating-shadow); opacity: 0; transform: translateY(-4px) scale(0.985); pointer-events: none; transition: opacity 180ms ease, transform 180ms ease; } .ravs-send-menu.is-visible { opacity: 1; transform: none; pointer-events: auto; } .ravs-menu-section { padding: 4px 8px 2px; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); } .ravs-menu-row { display: grid; grid-template-columns: 16px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px 8px; border-radius: 5px; font-size: 12px; color: var(--popover-foreground); } .ravs-menu-row.is-hot { background: var(--accent); box-shadow: inset 0 0 0 1px var(--border); } .ravs-cursor { position: absolute; z-index: 40; pointer-events: none; transition: transform 600ms cubic-bezier(.45,.05,.2,1), opacity 200ms ease; transform: translate(-30px, 220px); opacity: 0; } .ravs-cursor.is-visible { opacity: 1; } .ravs-cursor .ravs-ripple { position: absolute; left: -6px; top: -6px; width: 28px; height: 28px; border-radius: 999px; border: 2px solid color-mix(in srgb, var(--foreground) 52%, transparent); opacity: 0; } .ravs-cursor.is-clicking .ravs-ripple { animation: ravs-ripple 460ms ease-out forwards; } @keyframes ravs-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } .ravs-caret { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: ravs-caret-blink 1.05s steps(1) infinite; } @keyframes ravs-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } }"
+                  }
+                },
+                "pr": {
+                  "view": {
+                    "styles": {
+                      "fc9a23c83d": ".ravpr-stage { position: absolute; inset: 0; overflow: hidden; } .ravpr-stack { position: absolute; inset: 0; display: flex; justify-content: flex-end; padding: 4px 34px 4px 2px; overflow: hidden; } .ravpr-sidebar, .ravpr-card { position: absolute; top: 4px; right: 2px; width: 464px; height: calc(100% - 8px); background: var(--card, #fff); border: 1px solid var(--border); border-radius: 10px; color: var(--foreground, #18181b); overflow: hidden; box-shadow: 0 1px 2px rgba(24,24,27,0.04); } .ravpr-sidebar { opacity: 0; transition: opacity 220ms ease; } .ravpr-sidebar.is-visible { opacity: 1; } .ravpr-sidebar.is-hiding { opacity: 0; } .ravpr-card { display: flex; flex-direction: column; min-width: 0; opacity: 0; transition: opacity 260ms ease; } .ravpr-card.is-visible { opacity: 1; } .ravpr-tabs { position: relative; display: flex; align-items: center; gap: 14px; height: 36px; padding: 0 14px; background: rgba(24,24,27,0.015); color: var(--muted-foreground, #71717a); } .ravpr-tab { position: relative; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted-foreground, #71717a); } .ravpr-tab.is-active, .ravpr-tab.is-hovered { color: var(--foreground, #18181b); } .ravpr-tab.is-active::after { content: ''; position: absolute; left: -5px; right: -5px; bottom: -10px; height: 1px; background: var(--foreground, #18181b); } .ravpr-tooltip { position: absolute; top: 34px; left: 106px; z-index: 6; padding: 7px 11px; border-radius: 8px; background: var(--card, #fff); color: var(--foreground, #18181b); font-size: 12px; line-height: 1; box-shadow: 0 8px 22px rgba(0,0,0,0.22); opacity: 0; transform: translateY(-3px); pointer-events: none; transition: opacity 160ms ease, transform 160ms ease; } .ravpr-tooltip.is-visible { opacity: 1; transform: translateY(0); } .ravpr-explorer { padding: 10px 12px 12px; } .ravpr-heading { color: var(--muted-foreground, #71717a); font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; } .ravpr-file-list { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; } .ravpr-file { display: grid; grid-template-columns: 14px minmax(0,1fr) 22px; align-items: center; gap: 8px; min-height: 28px; padding: 4px 6px; border-radius: 6px; } .ravpr-file.is-active { background: rgba(24,24,27,0.06); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } .ravpr-file-icon { width: 12px; height: 12px; border-radius: 3px; background: rgba(24,24,27,0.14); } .ravpr-file-name { height: 8px; border-radius: 999px; background: rgba(24,24,27,0.14); } .ravpr-file-status { width: 14px; height: 8px; border-radius: 999px; background: rgba(24,24,27,0.12); } .ravpr-body { padding: 10px 12px 18px; display: flex; flex-direction: column; gap: 5px; min-height: 0; } .ravpr-number-row { display: flex; align-items: center; gap: 7px; } .ravpr-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; } .ravpr-open { display: inline-flex; align-items: center; justify-content: center; height: 18px; padding: 0 7px; border-radius: 5px; background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.28); color: rgb(4 120 87); font-size: 9px; font-weight: 700; line-height: 1; } .ravpr-title { font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--foreground, #18181b); margin-bottom: 2px; } .ravpr-merge { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; min-height: 30px; flex: 0 0 30px; border-radius: 7px; background: rgb(22 163 74); color: #fff; font-size: 11.5px; font-weight: 700; margin-bottom: 2px; box-shadow: 0 1px 2px rgba(22,163,74,0.18); transition: box-shadow 220ms ease, filter 220ms ease; } .ravpr-merge.is-ready { box-shadow: 0 0 0 3px rgba(34,197,94,0.22), 0 1px 2px rgba(22,163,74,0.18); } .ravpr-section-row, .ravpr-check-row { display: grid; grid-template-columns: 18px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 5px 0; font-size: 11.5px; color: var(--foreground, #18181b); } .ravpr-check-row { padding: 5px 7px; font-size: 10.5px; } .ravpr-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ravpr-meta, .ravpr-check-state { color: var(--muted-foreground, #71717a); font-size: 10.5px; } .ravpr-check-state { font-size: 10px; } .ravpr-ring { display: inline-block; width: 14px; height: 14px; border-radius: 999px; border: 2px solid rgba(245,158,11,0.35); border-top-color: rgb(245 158 11); animation: ravpr-spin 1.1s linear infinite; } .ravpr-check { width: 15px; height: 15px; border-radius: 999px; display: none; align-items: center; justify-content: center; background: rgba(34,197,94,0.14); color: rgb(22 163 74); } .ravpr-section-row.is-done .ravpr-ring, .ravpr-check-row.is-done .ravpr-ring { display: none; } .ravpr-section-row.is-done .ravpr-check, .ravpr-check-row.is-done .ravpr-check { display: inline-flex; } .ravpr-reveal { display: flex; flex-direction: column; gap: 3px; opacity: 0; transform: translateY(4px); transition: opacity 260ms ease, transform 260ms ease; pointer-events: none; } .ravpr-reveal.is-visible { opacity: 1; transform: translateY(0); pointer-events: auto; } .ravpr-check-list, .ravpr-comment-list { display: flex; flex-direction: column; gap: 4px; min-height: 0; } .ravpr-comment-card { border: 1px solid var(--border); border-radius: 8px; background: var(--card, #fff); overflow: hidden; opacity: 0; transform: translateY(4px); transition: opacity 260ms ease, transform 260ms ease; } .ravpr-comment-card.is-visible { opacity: 1; transform: translateY(0); } .ravpr-comment-head { display: grid; grid-template-columns: 18px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 5px 7px; background: rgba(24,24,27,0.015); } .ravpr-avatar { width: 16px; height: 16px; border-radius: 999px; background: rgba(24,24,27,0.16); } .ravpr-author { width: 78px; height: 8px; border-radius: 999px; background: rgba(24,24,27,0.18); } .ravpr-comment-path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; color: var(--muted-foreground, #71717a); } .ravpr-comment-body { padding: 5px 7px 6px; font-size: 11px; line-height: 1.32; color: var(--foreground, #18181b); } .ravpr-comment-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; padding: 1px 4px; border-radius: 4px; background: rgba(24,24,27,0.06); } .ravpr-cursor { position: absolute; z-index: 40; pointer-events: none; transition: transform 600ms cubic-bezier(.45,.05,.2,1), opacity 200ms ease; transform: translate(-30px, 220px); opacity: 0; } .ravpr-cursor.is-visible { opacity: 1; } .ravpr-ripple { position: absolute; left: -6px; top: -6px; width: 28px; height: 28px; border-radius: 999px; border: 2px solid rgba(24,24,27,0.5); opacity: 0; } .ravpr-cursor.is-clicking .ravpr-ripple { animation: ravpr-ripple 460ms ease-out forwards; } @keyframes ravpr-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } @keyframes ravpr-spin { to { transform: rotate(360deg); } }"
+                    }
+                  }
+                },
+                "ship": {
+                  "styles": {
+                    "90cdcd2ecc": ".ravs-ship-root { position: absolute; inset: 0; } .ravs-ship-stack { position: absolute; inset: 0; display: grid; grid-template-columns: 232px minmax(0,1fr); gap: 14px; padding: 4px 2px; /* Why: cards size to their content rather than stretch to the parent's full height, so the two cards don't show empty space below their content. */ align-items: start; } /* Source Control mini-sidebar — ahead-count header, commit textarea + split Commit button, then a CHANGES section with file rows. The file rows are the surface the \"reading\" pulse animates over. */ .ravs-sc-card { display: flex; flex-direction: column; background: var(--card, #fff); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(24,24,27,0.04); } /* Both card headers share the same fixed height so the SC card and PR dialog align across the top edge regardless of header content. */ .ravs-sc-header, .ravs-pr-head { height: 36px; box-sizing: border-box; } .ravs-sc-header { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 1px solid var(--border); } .ravs-sc-ahead { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--foreground, #18181b); } .ravs-sc-ahead svg { color: var(--muted-foreground, #71717a); } .ravs-sc-commit-area { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; } .ravs-sc-textarea { position: relative; border: 1px solid var(--border); border-radius: 6px; background: var(--editor-surface, var(--card)); padding: 6px 26px 6px 8px; min-height: 56px; font-size: 12px; line-height: 1.45; color: var(--foreground, #18181b); white-space: pre-wrap; word-break: break-word; overflow: hidden; } .ravs-sc-textarea .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-sc-sparkle { position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; color: var(--muted-foreground, #71717a); background: transparent; transition: color 160ms ease, background 160ms ease; } .ravs-sc-sparkle.is-scanning { color: rgb(109 40 217); background: color-mix(in srgb, rgb(139 92 246) 18%, transparent); } .ravs-sc-split { display: flex; align-items: stretch; } /* Why: Commit + Create PR are surrounding chrome — the violet AI affordances are the focal points. Render them as quiet secondary buttons so they don't compete with the sparkle/scan signals. */ .ravs-sc-split .ravs-primary { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; background: var(--secondary, #f5f5f5); color: var(--secondary-foreground, #171717); font-size: 11px; font-weight: 500; border-radius: 6px 0 0 6px; border: 1px solid var(--border); transition: background 240ms ease, border-color 240ms ease, color 240ms ease; } .ravs-sc-split .ravs-chev { display: inline-flex; align-items: center; justify-content: center; width: 22px; background: var(--secondary, #f5f5f5); color: var(--muted-foreground, #71717a); border-radius: 0 6px 6px 0; border: 1px solid var(--border); border-left: 1px solid var(--border); transition: background 240ms ease, border-color 240ms ease, color 240ms ease; } /* Why: when AI has filled the commit message, tint the Commit button green to signal \"ready to commit\". Uses the same success-green family as the PR flash so the two beats rhyme. Mix is intentionally strong (~28%) — at 14% it disappeared next to the violet sparkle and PR flash, so users only saw the PR change color. */ .ravs-sc-split.is-ready .ravs-primary, .ravs-sc-split.is-ready .ravs-chev { background: color-mix(in srgb, rgb(34 197 94) 28%, var(--secondary, #f5f5f5)); border-color: rgb(34 197 94); color: rgb(21 128 61); transition: background 220ms ease, border-color 220ms ease, color 220ms ease; } .ravs-sc-split.is-ready .ravs-chev { border-left-color: rgba(34, 197, 94, 0.55); } .ravs-sc-changes-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-foreground, #71717a); } .ravs-sc-changes-count { color: var(--foreground, #18181b); font-weight: 600; margin-left: 2px; } .ravs-sc-view-all { font-size: 10px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted-foreground, #71717a); } .ravs-sc-files { display: flex; flex-direction: column; padding: 2px 6px 8px; flex: 1; min-height: 0; overflow: hidden; } .ravs-sc-file { display: grid; grid-template-columns: 14px minmax(0,1fr) 12px; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 4px; font-size: 11px; line-height: 1.35; color: var(--foreground, #18181b); position: relative; transition: background 220ms ease; } .ravs-sc-ficon { color: rgb(180 83 9); display: inline-flex; } .ravs-sc-fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ravs-sc-fmark { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; text-align: right; color: rgb(180 83 9); } .ravs-sc-file.is-reading { background: color-mix(in srgb, rgb(139 92 246) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, rgb(139 92 246) 28%, transparent); } /* PR dialog — matches the .ravs-sc-card chrome (same border, radius, elevation) so the two cards read as one design language. */ .ravs-pr-dialog { background: var(--card, #fff); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 1px 2px rgba(24,24,27,0.04); display: flex; flex-direction: column; min-width: 0; overflow: hidden; } .ravs-pr-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--border); } .ravs-pr-title-text { font-size: 11px; font-weight: 500; color: var(--foreground, #18181b); } /* Icon-only AI-assist chip — mirrors .ravs-sc-sparkle so the affordance reads identically across both cards. */ .ravs-pr-gen-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border-radius: 4px; color: var(--muted-foreground, #71717a); background: transparent; border: 0; cursor: pointer; transition: color 160ms ease, background 160ms ease; } .ravs-pr-gen-btn:hover { background: rgba(24,24,27,0.06); color: var(--foreground, #18181b); } .ravs-pr-gen-btn.is-scanning { color: rgb(109 40 217); background: color-mix(in srgb, rgb(139 92 246) 18%, transparent); } .ravs-pr-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; } .ravs-pr-field { display: flex; flex-direction: column; gap: 4px; } .ravs-pr-field-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-foreground, #71717a); } .ravs-pr-base { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground, #18181b); background: var(--editor-surface, var(--card)); align-self: flex-start; } .ravs-pr-base svg { color: var(--muted-foreground, #71717a); } .ravs-pr-input { position: relative; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--editor-surface, var(--card)); min-height: 28px; font-size: 12px; line-height: 1.45; color: var(--foreground, #18181b); white-space: pre-wrap; word-break: break-word; overflow: hidden; } .ravs-pr-input.is-body { min-height: 50px; font-size: 11px; line-height: 1.4; } .ravs-pr-input .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-pr-footer { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin-top: 2px; } .ravs-pr-btn { font-size: 11px; font-weight: 500; padding: 5px 10px; border-radius: 6px; line-height: 1; border: 1px solid transparent; outline: none; } .ravs-pr-btn:focus, .ravs-pr-btn:focus-visible { outline: none; } /* Cancel reads as a quiet ghost button so it doesn't compete with the affirmative Create PR action. */ .ravs-pr-btn.is-outline { background: transparent; color: var(--muted-foreground, #71717a); border-color: transparent; } .ravs-pr-btn.is-outline:hover { background: rgba(24,24,27,0.05); color: var(--foreground, #18181b); } /* Quiet secondary fill — see the .ravs-sc-split note above. The flash ring still uses success-green so the \"PR created\" beat reads. The Create-PR button is slightly larger than Cancel so the affirmative action remains the bigger target. */ .ravs-pr-btn.is-solid { background: var(--secondary, #f5f5f5); color: var(--secondary-foreground, #171717); border-color: var(--border); font-size: 12px; padding: 7px 14px; transition: background 220ms ease, border-color 220ms ease, color 220ms ease, box-shadow 220ms ease; } .ravs-pr-btn.is-solid.is-ready { background: color-mix(in srgb, rgb(34 197 94) 28%, var(--secondary, #f5f5f5)); border-color: rgb(34 197 94); color: rgb(21 128 61); } .ravs-pr-btn.is-solid.is-flash { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.30); } .ravs-cursor { position: absolute; z-index: 40; pointer-events: none; transition: transform 600ms cubic-bezier(.45,.05,.2,1), opacity 200ms ease; transform: translate(-30px, 220px); opacity: 0; } .ravs-cursor.is-visible { opacity: 1; } .ravs-cursor .ravs-ripple { position: absolute; left: -6px; top: -6px; width: 28px; height: 28px; border-radius: 999px; border: 2px solid rgba(24,24,27,0.5); opacity: 0; } .ravs-cursor.is-clicking .ravs-ripple { animation: ravs-ripple 460ms ease-out forwards; } @keyframes ravs-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } .ravs-caret { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: ravs-caret-blink 1.05s steps(1) infinite; } @keyframes ravs-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } }"
+                  }
                 }
               }
             },
@@ -16256,9 +16324,7 @@
           "1829437fce": "New Markdown"
         },
         "DiagramViewerModal": {
-          "title": "Diagram"
-        },
-        "PanZoomImageDialog": {
+          "title": "Diagram",
           "zoomOut": "Zoom out",
           "zoomIn": "Zoom in",
           "fit": "Fit to screen",
@@ -16599,11 +16665,11 @@
           "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
           "3fa2b8d417": "Reload from Disk",
           "a95d02c644": "Keep My Edits",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
           "5c02de9b31": "Reloaded from disk",
           "d1e830fa22": "Undo",
-          "90b2ce7d43": "Compare"
+          "90b2ce7d43": "Compare",
+          "overwrite": "Overwrite",
+          "keepHint": "Keeps your version. Your next save replaces the version on disk."
         },
         "ExternalFileChangeCompareDialog": {
           "4b8de20a11": "File changed on disk",
@@ -16709,6 +16775,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "PanZoomImageDialog": {
+          "zoomOut": "Zoom out",
+          "zoomIn": "Zoom in",
+          "fit": "Fit to screen",
+          "close": "Close"
         }
       },
       "diff": {
@@ -18531,6 +18603,12 @@
         "c77189bc0c": "Update filter",
         "19af906d12": "Save filter"
       },
+      "hostPicker": {
+        "searchHosts": "Search hosts…",
+        "noHostsMatch": "No hosts match.",
+        "moreHosts_one": "{{count}} more host. Search by name to find it.",
+        "moreHosts_other": "{{count}} more hosts. Search by name to find one."
+      },
       "OrcaSignInProgress": {
         "waiting": "Waiting for sign-in in your browser",
         "copyLink": "Copy sign-in link",
@@ -18679,15 +18757,12 @@
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "couldNotStart": "{{agent}} couldn't start.",
         "couldNotRestart": "{{agent}} couldn't restart.",
-        "startTimedOut": "{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).",
-        "startTimedOutKeepsHappening": "If this keeps happening, the computer running this chat may be overloaded.",
         "codexCliTooOld": "Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
         "notSignedIn": "{{agent}} is not signed in.",
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
-        "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "signInFirst": "Sign in first.",
         "signInThenRunCommand": "Sign in, then run /{{command}} again.",
@@ -18754,14 +18829,6 @@
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
         "providerRetryLastError": "Last error: {{detail}}.",
-        "usageLimitReached": "{{agent}} hit its usage limit.",
-        "usageLimitReachedNamed": "{{agent}} hit its {{window}} limit.",
-        "usageLimitWindowSession": "session",
-        "usageLimitWindowWeekly": "weekly",
-        "usageLimitWindowWeeklyModel": "weekly model",
-        "usageLimitWindowCredits": "extra usage",
-        "usageLimitResetsAt": "It resets at {{when}}.",
-        "usageLimitSendAfterReset": "Send a message once it resets to continue.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
         "argumentsUnsupportedOption": "Saved Arguments contain an unsupported option ({{option}}).",
@@ -18774,7 +18841,18 @@
         "agentNotSignedIn": "Sign in to {{agent}}.",
         "thenSendAgain": "Then send your message again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
-        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}."
+        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
+        "startTimedOut": "{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).",
+        "startTimedOutKeepsHappening": "If this keeps happening, the computer running this chat may be overloaded.",
+        "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+        "usageLimitReached": "{{agent}} hit its usage limit.",
+        "usageLimitReachedNamed": "{{agent}} hit its {{window}} limit.",
+        "usageLimitWindowSession": "session",
+        "usageLimitWindowWeekly": "weekly",
+        "usageLimitWindowWeeklyModel": "weekly model",
+        "usageLimitWindowCredits": "extra usage",
+        "usageLimitResetsAt": "It resets at {{when}}.",
+        "usageLimitSendAfterReset": "Send a message once it resets to continue."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -18788,12 +18866,10 @@
         "notDoneOption": "The setting wasn't changed.",
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
-        "notDoneQueuedEdit": "Your edit wasn't saved.",
         "restartFailed": "The agent couldn't restart.",
         "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
         "questionChanged": "This question was already answered or has changed.",
         "cancelNotSaved": "Couldn't cancel this question or approval.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
@@ -18848,7 +18924,9 @@
         "clearAfterRetry": "Retry your earlier message, then run /clear.",
         "compactAfterRetry": "Retry your earlier message, then run /compact.",
         "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
-        "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone."
+        "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
+        "notDoneQueuedEdit": "Your edit wasn't saved.",
+        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing."
       },
       "taskList": {
         "title": "Tasks",
@@ -18947,8 +19025,6 @@
         "imagePasteFailed": "Image paste failed.",
         "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
-        "sessionAttachmentsStarting": "{{agent}} chat is still opening. Wait for it to open, then attach the files again.",
-        "sessionAttachmentsFailed": "{{agent}} chat could not open. Use Retry in the chat, then attach the files again.",
         "pasteUnavailable": "Can't paste — this chat isn't accepting input right now.",
         "model": "Model",
         "effort": "Effort",
@@ -18978,6 +19054,7 @@
         },
         "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more.",
         "viewAttachment": "View image",
+        "imagePreview": "Full-size image preview",
         "imagePreviewUnavailable": "Preview unavailable",
         "copyImage": "Copy image",
         "copyImageFailed": "Couldn't copy image",
@@ -19002,13 +19079,15 @@
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
         "permissionFullAccessSharedDescription": "Never asks before edits or commands",
         "pasteFailed": "Paste failed.",
-        "tooManySkills": "Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again.",
         "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command.",
         "optionValueShort": {
           "minimal": "Min",
           "medium": "Med",
           "xhigh": "XHigh"
-        }
+        },
+        "sessionAttachmentsStarting": "{{agent}} chat is still opening. Wait for it to open, then attach the files again.",
+        "sessionAttachmentsFailed": "{{agent}} chat could not open. Use Retry in the chat, then attach the files again.",
+        "tooManySkills": "Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -19024,9 +19103,6 @@
         "interruptedCallsLabel": "Interrupted tool calls: {{value0}}",
         "runningPreview": "Running {{preview}}",
         "runningCommand": "Running command",
-        "showFullOutput": "Show full output",
-        "fullOutputFailed": "Couldn't load the full output.",
-        "fullOutputPartial": "Showing {{shown}} of {{total}}.",
         "runningNamedPreview": "Running {{toolName}} {{preview}}",
         "runningNamed": "Running {{toolName}}",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
@@ -19105,7 +19181,10 @@
         "runLivePlanOne": "Updating the plan",
         "runLivePlanMany": "Updating the plan {{value0}} times",
         "runLiveToolOne": "Using 1 tool",
-        "runLiveToolMany": "Using {{value0}} tools"
+        "runLiveToolMany": "Using {{value0}} tools",
+        "showFullOutput": "Show full output",
+        "fullOutputFailed": "Couldn't load the full output.",
+        "fullOutputPartial": "Showing {{shown}} of {{total}}."
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
@@ -19184,10 +19263,10 @@
         "showTerminal": "Show terminal"
       },
       "resumeInNewChat": {
-        "exitUnconfirmedFromTerminal": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then open this conversation from Session History.",
-        "exitUnconfirmed": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
-        "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
+        "cannotResume": "This {{agent}} conversation can't be resumed in a native chat.",
+        "exitUnconfirmedFromTerminal": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then open this conversation from Session History.",
+        "exitUnconfirmed": "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again."
       },
       "state": {
         "loading": {
@@ -19300,9 +19379,9 @@
         "action": "Rewind to here"
       },
       "drop": {
-        "messageTitle": "Drop to attach to this message",
         "title": "Drop to attach to this chat",
-        "subtitle": "Files are added to your message as paths the agent can read."
+        "subtitle": "Files are added to your message as paths the agent can read.",
+        "messageTitle": "Drop to attach to this message"
       },
       "copyCode": "Copy code",
       "wrapLines": "Wrap lines",
@@ -19387,7 +19466,6 @@
         "cancelEditing": "Cancel editing",
         "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
         "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
-        "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
         "editFailed": "This message can't be edited.",
         "editGone": "This message was already sent or removed. Your edit is in the chat box.",
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
@@ -19398,16 +19476,13 @@
         "expand": "Expand",
         "queued": "Queued",
         "clearAll": "Clear all",
+        "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
         "pasteOrDropImages": "Paste or drop images",
         "saveNeedsContent": "Add text or an image to save"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
-      "explicitChatWsl": "Chat is not available in WSL. Open the agent in a terminal instead.",
-      "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
-      "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
-      "structuredSessionTerminalNotVisible": "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
       "structuredSessionHostDeclinedDescription": "This workspace can't run a {{value0}} chat.",
       "structuredSessionHostUnreachable": "Could not reach {{value0}}",
       "structuredSessionHostUnreachableDescription": "Orca did not open a {{value0}} chat. Check the connection to the server and try again.",
@@ -19423,11 +19498,22 @@
         "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
-      },
       "claudeSignIn": {
         "signingIn": "Signing in…"
+      },
+      "hostPermission": {
+        "checking": "Checking this host's chat permissions…",
+        "launchRefused": "Orca did not start a {{value0}} chat",
+        "outdatedHost": "This host runs an older Orca that ignores chat permissions, so {{value0}} would run here without asking. Update Orca on this host to use {{value1}}.",
+        "unverified": "Orca couldn't confirm the host's permissions for {{value0}}.",
+        "checkAgain": "Check again"
+      },
+      "explicitChatWsl": "Chat is not available in WSL. Open the agent in a terminal instead.",
+      "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
+      "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
+      "structuredSessionTerminalNotVisible": "Orca opened {{value0}} in a terminal, but couldn't show it here when the launch finished. Your chat draft was kept.",
+      "antigravitySignIn": {
+        "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
       },
       "resumeCommand": {
         "description": "Open Agent Session History",
@@ -19436,13 +19522,6 @@
         "replaceTitle": "Replace this chat?",
         "replaceDescription": "Resuming “{{title}}” here will stop what {{agent}} is doing in this chat.",
         "replace": "Replace"
-      },
-      "hostPermission": {
-        "checkAgain": "Check again",
-        "launchRefused": "Orca did not start a {{value0}} chat",
-        "checking": "Checking this host's chat permissions…",
-        "outdatedHost": "This host runs an older Orca that ignores chat permissions, so {{value0}} would run here without asking. Update Orca on this host to use {{value1}}.",
-        "unverified": "Orca couldn't confirm the host's permissions for {{value0}}."
       }
     },
     "tab": {
@@ -19871,6 +19950,7 @@
       "keywordIssuePicker": "issue picker"
     },
     "managed-runtime": {
+      "cancel": "Cancel installation",
       "cancelled": "Installation cancelled.",
       "cancelling": "Cancelling…",
       "damaged": "This copy of {{agent}} is damaged.",
@@ -19888,16 +19968,7 @@
       "progress": "{{agent}} download",
       "readFailed": "Could not check {{agent}} on this host. Retrying.",
       "reinstall": "Reinstall {{agent}}",
-      "reinstallShort": "Reinstall",
-      "remove": "Remove downloaded runtime",
-      "moreActions": "More actions for {{agent}}",
-      "removeConfirm": "Remove",
-      "removeDescription": "{{agent}} chats that are running stop. Their history is kept.",
-      "removeKeep": "Cancel",
-      "removeTitle": "Remove the downloaded {{agent}} runtime from {{host}}?",
-      "removing": "Removing…",
       "retry": "Retry installation",
-      "thisComputer": "this computer",
       "unavailable": "{{agent}} is not available on this host.",
       "update": "Update",
       "verifying": "Checking the downloaded runtime.",
@@ -19921,7 +19992,16 @@
       "checkingDetail": "Checking the downloaded runtime",
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
-      "stepCheck": "Check"
+      "stepCheck": "Check",
+      "reinstallShort": "Reinstall",
+      "remove": "Remove downloaded runtime",
+      "moreActions": "More actions for {{agent}}",
+      "removeConfirm": "Remove",
+      "removeDescription": "{{agent}} chats that are running stop. Their history is kept.",
+      "removeKeep": "Cancel",
+      "removeTitle": "Remove the downloaded {{agent}} runtime from {{host}}?",
+      "removing": "Removing…",
+      "thisComputer": "this computer"
     }
   },
   "dashboardPopout": {
@@ -20249,7 +20329,6 @@
   },
   "aiVault": {
     "antigravityReferenceDescription": "Continues in a new Antigravity CLI conversation using this transcript as a reference.",
-    "searchHitSourceHost": "Found on {{value0}}",
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "Continue in CLI",
@@ -20258,7 +20337,8 @@
       "loading": "Loading subagents…",
       "loadError": "Could not load all subagents.",
       "empty": "No subagents found."
-    }
+    },
+    "searchHitSourceHost": "Found on {{value0}}"
   },
   "common": {
     "retry": "Retry",
@@ -20433,27 +20513,6 @@
       "description": "Agents there use the distro's default Claude and Codex accounts until Orca in WSL is updated."
     },
     "antigravity": {
-      "chatTitle": "Antigravity chats",
-      "chatDescription": "Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.",
-      "chatSignIn": "Sign in",
-      "chatChangeAccount": "Change account",
-      "chatRetry": "Retry sign-in",
-      "chatCancel": "Cancel",
-      "chatCopyLink": "Copy sign-in link",
-      "chatCopyFailed": "Could not copy the link.",
-      "chatStarting": "Starting sign-in…",
-      "chatWaiting": "Finish signing in in your browser.",
-      "chatOpenFailed": "Copy the link and open it in your browser.",
-      "chatVerifying": "Finishing sign-in…",
-      "chatPasteHelp": "If the last page after signing in doesn't load, copy its full address from your browser and paste it here.",
-      "chatContinue": "Continue",
-      "chatSignedInOn": "Signed in on {{host}}.",
-      "chatCancelled": "Sign-in cancelled.",
-      "chatExpired": "Sign-in timed out. Try again.",
-      "chatFailed": "Sign-in failed. Try again.",
-      "chatNotSignedIn": "Not signed in on {{host}}.",
-      "chatOtherClient": "Sign-in is in progress in another client.",
-      "chatReadFailed": "Could not check the sign-in on {{host}}.",
       "scope": "Manage the native agy account on {{host}}.",
       "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
       "docs": "Sign-in instructions",
@@ -20480,7 +20539,28 @@
         "agy": "agy",
         "google": "google",
         "accounts": "accounts"
-      }
+      },
+      "chatTitle": "Antigravity chats",
+      "chatDescription": "Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.",
+      "chatSignIn": "Sign in",
+      "chatChangeAccount": "Change account",
+      "chatRetry": "Retry sign-in",
+      "chatCancel": "Cancel",
+      "chatCopyLink": "Copy sign-in link",
+      "chatCopyFailed": "Could not copy the link.",
+      "chatStarting": "Starting sign-in…",
+      "chatWaiting": "Finish signing in in your browser.",
+      "chatOpenFailed": "Copy the link and open it in your browser.",
+      "chatVerifying": "Finishing sign-in…",
+      "chatPasteHelp": "If the last page after signing in doesn't load, copy its full address from your browser and paste it here.",
+      "chatContinue": "Continue",
+      "chatSignedInOn": "Signed in on {{host}}.",
+      "chatCancelled": "Sign-in cancelled.",
+      "chatExpired": "Sign-in timed out. Try again.",
+      "chatFailed": "Sign-in failed. Try again.",
+      "chatNotSignedIn": "Not signed in on {{host}}.",
+      "chatOtherClient": "Sign-in is in progress in another client.",
+      "chatReadFailed": "Could not check the sign-in on {{host}}."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -20724,15 +20804,15 @@
       "unresponsiveGuidance": "Stop it from the terminal or service that started it, then retry. Connected devices will disconnect.",
       "readyTitle": "Your update is ready",
       "serverSummary": "A background Orca server is still using this app.",
-      "browserSummary": "A background Orca server's browser is still using this app.",
-      "browserGuidance": "End the process below, then retry: its server keeps running without a browser. If another computer uses this Mac as an SSH host, updating Orca there lets the browser pause for updates on its own.",
       "instanceSummary": "Another Orca instance is still using this app.",
       "serverGuidance": "Stop the server from the terminal or service that started it, then retry. Connected devices will disconnect.",
       "mixedGuidance": "Close any other Orca windows and stop the server from the terminal or service that started it. Connected devices will disconnect. Then retry.",
       "instanceGuidance": "Quit other Orca instances, then retry. Your downloaded update will be kept ready.",
       "waitingAriaLabel": "Update waiting for other Orca instances. Click to expand.",
       "preparingLabel": "Preparing update",
-      "preparingAriaLabel": "Preparing update. Click to expand."
+      "preparingAriaLabel": "Preparing update. Click to expand.",
+      "browserSummary": "A background Orca server's browser is still using this app.",
+      "browserGuidance": "End the process below, then retry: its server keeps running without a browser. If another computer uses this Mac as an SSH host, updating Orca there lets the browser pause for updates on its own."
     }
   },
   "jira": {
@@ -20830,6 +20910,7 @@
     }
   },
   "workspaceSpace": {
+    "deleteOne": "Delete {{value0}}",
     "table": {
       "lastActive": "Last active",
       "actions": "Actions"

@@ -145,6 +145,21 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.zcodeUsageMenu', 'ZCode Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        {isStatusBarItemAvailable('command-code', detectedAgentIds) && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('command-code')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('command-code')
+            }}
+          >
+            <AgentIcon agent="command-code" size={14} />
+            {translate(
+              'auto.components.status.bar.StatusBar.commandCodeUsageMenu',
+              'Command Code Usage'
+            )}
+          </DropdownMenuCheckboxItem>
+        )}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('cursor')}
           onCheckedChange={() => {

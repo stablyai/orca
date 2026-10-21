@@ -7,6 +7,7 @@ import {
   type CodexAccountSelectionTarget,
   type CodexHomePathResolver,
   type KimiHomeResolver,
+  type CommandCodeHomeResolver,
   type ClaudeAccountSelectionTarget,
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
@@ -33,6 +34,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setKimiHomeResolver(resolver: KimiHomeResolver): void {
     this.kimiHomeResolver = resolver
+  }
+
+  setCommandCodeHomeResolver(resolver: CommandCodeHomeResolver): void {
+    this.commandCodeHomeResolver = resolver
   }
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
@@ -144,6 +149,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
       cursorAuthConfigured: this.cursorAuthConfigured,
+      commandCodeAuthConfigured: this.commandCodeAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(

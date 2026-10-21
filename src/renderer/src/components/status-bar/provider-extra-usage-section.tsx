@@ -29,6 +29,10 @@ export function getExtraUsageLabel(provider: ProviderRateLimits['provider']): st
   if (provider === 'codex') {
     return translate('auto.components.status.bar.tooltip.f21b2ba897', 'Credits')
   }
+  // Why: Command Code reports plan credits (1 credit = $1), not a currency balance.
+  if (provider === 'command-code') {
+    return translate('auto.components.status.bar.tooltip.commandCode.credits', 'Credits')
+  }
   return translate('auto.components.status.bar.tooltip.c03c61f53f', 'Balance')
 }
 

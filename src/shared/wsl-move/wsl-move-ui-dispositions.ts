@@ -168,6 +168,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'osc52ClipboardDefaultOnNoticePending',
   // One-shot migration flags.
   '_antigravityStatusBarDefaultAdded',
+  '_commandCodeStatusBarDefaultAdded',
   '_cursorStatusBarDefaultAdded',
   '_expandedWorktreeCardPropertiesDefaulted',
   '_explorerDisplayRootMigrated',

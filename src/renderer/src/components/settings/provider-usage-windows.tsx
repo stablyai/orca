@@ -1,23 +1,31 @@
-import { translate } from '@/i18n/i18n'
 import { formatResetDuration } from '../../../../shared/rate-limit-reset-format'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import { translate } from '@/i18n/i18n'
 import { Badge } from '../ui/badge'
 
-export type ZcodeUsageWindowKind = 'session' | 'weekly' | 'monthly'
+export type ProviderUsageWindowKind = 'session' | 'weekly' | 'monthly'
 
-export type ZcodeUsageWindowRow = {
-  kind: ZcodeUsageWindowKind
+export type ProviderUsageWindowRow = {
+  kind: ProviderUsageWindowKind
   window: RateLimitWindow
 }
 
-function windowLabel(kind: ZcodeUsageWindowKind): string {
+// Why a labeler and not a label map: labels must resolve during render so they
+// follow a language change, and so nothing calls `translate` at module load.
+export type ProviderUsageWindowLabeler = (kind: ProviderUsageWindowKind) => string
+
+function windowLabel(kind: ProviderUsageWindowKind, labels?: ProviderUsageWindowLabeler): string {
+  const custom = labels?.(kind)
+  if (custom) {
+    return custom
+  }
   if (kind === 'session') {
-    return translate('auto.components.settings.ZcodePlanAccountsSection.window.session', '5 hours')
+    return translate('auto.components.settings.providerUsageWindows.session', '5 hours')
   }
   if (kind === 'weekly') {
-    return translate('auto.components.settings.ZcodePlanAccountsSection.window.weekly', 'Weekly')
+    return translate('auto.components.settings.providerUsageWindows.weekly', 'Weekly')
   }
-  return translate('auto.components.settings.ZcodePlanAccountsSection.window.mcp', 'MCP monthly')
+  return translate('auto.components.settings.providerUsageWindows.monthly', 'Monthly')
 }
 
 function formatWindowReset(window: RateLimitWindow, now: number): string | null {
@@ -29,9 +37,11 @@ function formatWindowReset(window: RateLimitWindow, now: number): string | null 
 }
 
 // Why: a window only renders when its data survived the fetcher's mapping, so
-// error snapshots and MCP-less plans show exactly the windows they reported.
-export function collectZcodeUsageWindows(usage: ProviderRateLimits | null): ZcodeUsageWindowRow[] {
-  const rows: ZcodeUsageWindowRow[] = []
+// error snapshots and plan-less accounts show exactly the windows they reported.
+export function collectProviderUsageWindows(
+  usage: ProviderRateLimits | null
+): ProviderUsageWindowRow[] {
+  const rows: ProviderUsageWindowRow[] = []
   if (usage?.session) {
     rows.push({ kind: 'session', window: usage.session })
   }
@@ -44,12 +54,14 @@ export function collectZcodeUsageWindows(usage: ProviderRateLimits | null): Zcod
   return rows
 }
 
-export function ZcodeUsageWindowView({
+export function ProviderUsageWindowView({
   row,
-  now
+  now,
+  labels
 }: {
-  row: ZcodeUsageWindowRow
+  row: ProviderUsageWindowRow
   now: number
+  labels?: ProviderUsageWindowLabeler
 }): React.JSX.Element {
   const resetLabel = formatWindowReset(row.window, now)
   return (
@@ -58,10 +70,10 @@ export function ZcodeUsageWindowView({
         <span className="tabular-nums">{Math.round(row.window.usedPercent)}%</span>
       </Badge>
       <span className="text-muted-foreground">
-        {windowLabel(row.kind)}
+        {windowLabel(row.kind, labels)}
         {resetLabel
           ? translate(
-              'auto.components.settings.ZcodePlanAccountsSection.resetIn',
+              'auto.components.settings.providerUsageWindows.resetIn',
               ' — resets in {{value0}}',
               { value0: resetLabel }
             )
