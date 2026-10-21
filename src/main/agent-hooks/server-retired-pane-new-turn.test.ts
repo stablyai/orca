@@ -35,6 +35,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   cursor: 'beforeSubmitPrompt',
   pi: 'before_agent_start',
   omp: 'before_agent_start',
+  gjc: 'before_agent_start',
   'prime-agent': 'before_agent_start',
   droid: 'UserPromptSubmit',
   grok: 'user_prompt_submit',

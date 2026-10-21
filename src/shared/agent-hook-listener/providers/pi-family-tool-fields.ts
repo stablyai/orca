@@ -1,3 +1,4 @@
+import { isOmpFamilyAgent } from '../../omp-family-agent'
 import type { ToolSnapshot } from '../listener-event'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { deriveToolInputPreview, hasOwnField, readString, toolUpdate } from '../tool-input-preview'
@@ -16,10 +17,10 @@ function serializeQuestionPrompt(toolInput: unknown): string | undefined {
 }
 
 function isPiCompatibleAskTool(
-  agentKind: 'pi' | 'omp' | 'prime-agent',
+  agentKind: 'pi' | 'omp' | 'gjc' | 'prime-agent',
   toolName: string | undefined
 ): boolean {
-  return agentKind === 'omp'
+  return isOmpFamilyAgent(agentKind)
     ? toolName === 'ask'
     : agentKind === 'pi' && isAskUserQuestionTool(toolName)
 }
@@ -27,7 +28,7 @@ function isPiCompatibleAskTool(
 export function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: 'pi' | 'omp' | 'gjc' | 'prime-agent'
 ): ToolSnapshot {
   // Why: arbitrary modals are not tool approvals or structured question cards.
   if (
@@ -58,7 +59,7 @@ export function extractPiToolFields(
     const interactivePrompt =
       isPiCompatibleAskTool(agentKind, toolName) &&
       (eventName === 'tool_call' || eventName === 'tool_execution_start')
-        ? agentKind === 'omp'
+        ? isOmpFamilyAgent(agentKind)
           ? serializeQuestionPrompt(rawToolInput)
           : deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
@@ -68,7 +69,7 @@ export function extractPiToolFields(
     )
   }
   if (
-    agentKind === 'omp' &&
+    isOmpFamilyAgent(agentKind) &&
     (eventName === 'tool_approval_requested' || eventName === 'tool_approval_resolved')
   ) {
     return toolUpdate(

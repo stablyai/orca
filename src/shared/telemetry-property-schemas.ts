@@ -19,6 +19,7 @@ export const AGENT_KIND_VALUES = [
   'mimo-code',
   'pi',
   'omp',
+  'gjc',
   'prime-agent',
   'qoder',
   'qoder-cn',

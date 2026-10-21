@@ -11,6 +11,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   cursor: 'synthetic-title',
   pi: 'synthetic-title',
   omp: 'synthetic-title',
+  gjc: 'none',
   droid: 'synthetic-title',
   hermes: 'synthetic-title',
   devin: 'synthetic-title',

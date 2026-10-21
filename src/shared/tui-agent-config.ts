@@ -24,7 +24,7 @@ function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
   }
 }
 
-const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
+const TUI_AGENT_CONFIG_SOURCE: Record<Exclude<TuiAgent, 'gjc'>, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
@@ -354,10 +354,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(
-  Object.entries(TUI_AGENT_CONFIG_SOURCE).map(([agent, source]) => [
-    agent,
-    resolveTuiAgentConfig(source)
-  ])
+  Object.entries({
+    ...TUI_AGENT_CONFIG_SOURCE,
+    gjc: { ...TUI_AGENT_CONFIG_SOURCE.omp, detectCmd: 'gjc', draftPromptEnvVar: undefined }
+  }).map(([agent, source]) => [agent, resolveTuiAgentConfig(source)])
 ) as Record<TuiAgent, TuiAgentConfig>
 
 export function isTuiAgent(value: unknown): value is TuiAgent {

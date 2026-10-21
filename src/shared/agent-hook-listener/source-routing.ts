@@ -18,6 +18,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
+  '/hook/gjc': 'gjc',
   '/hook/prime-agent': 'prime-agent',
   '/hook/droid': 'droid',
   '/hook/command-code': 'command-code',

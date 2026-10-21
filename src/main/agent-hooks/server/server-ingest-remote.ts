@@ -1,3 +1,4 @@
+import { isOmpFamilyAgent } from '../../../shared/omp-family-agent'
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
@@ -142,7 +143,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     }
     if (
       envelope.source !== undefined &&
-      (source === 'omp' || validatedPayload.agentType === 'omp') &&
+      (isOmpFamilyAgent(source) || isOmpFamilyAgent(validatedPayload.agentType)) &&
       envelope.source !== validatedPayload.agentType
     ) {
       return
@@ -182,7 +183,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       return
     }
     const restartedAuthority =
-      statusDisposition === 'restart' && effectiveSource === 'omp'
+      statusDisposition === 'restart' && isOmpFamilyAgent(effectiveSource)
         ? this.restoreRetiredStatusRestart(paneKey)
         : undefined
     if (restartedAuthority && restartedAuthority.paneKey !== paneKey) {

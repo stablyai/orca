@@ -135,6 +135,14 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://omp.sh'
     },
     {
+      id: 'gjc',
+      label: 'GJC',
+      cmd: 'gjc',
+      searchAliases: ['gajae-code', 'gajae code'],
+      // Why: no faviconDomain — gjc ships a bundled mascot PNG in AGENT_FAVICON_ASSETS.
+      homepageUrl: 'https://github.com/Yeachan-Heo/gajae-code'
+    },
+    {
       id: 'prime-agent',
       label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
       cmd: 'prime-agent',

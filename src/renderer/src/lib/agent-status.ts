@@ -110,6 +110,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   'mimo-code': true,
   pi: true,
   omp: true,
+  gjc: true,
   'prime-agent': true,
   qoder: true,
   'qoder-cn': true,
