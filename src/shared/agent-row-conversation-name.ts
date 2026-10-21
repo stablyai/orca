@@ -6,6 +6,10 @@
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
+import {
+  AGENT_IDENTITY_ALIASES_LOWER,
+  isAgentCommandLineTitle
+} from './agent-command-line-title'
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
@@ -33,11 +37,6 @@ const SYNTHETIC_STATUS_TITLES_LOWER: ReadonlySet<string> = new Set(
 // Why: retained rows without a live tab synthesize `title: 'Agent'`
 // (worktree-agent-row-fallback-tab.ts); it is a placeholder, not a name.
 const FALLBACK_TAB_TITLE_LOWER = 'agent'
-
-const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> = {
-  claude: ['claude code'],
-  gemini: ['gemini cli']
-}
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
 const DEFAULT_TERMINAL_TITLE_RE = /^terminal \d+$/i
@@ -95,6 +94,7 @@ function conversationNameFromLiveTitle(
     SYNTHETIC_STATUS_TITLES_LOWER.has(lower) ||
     lower === FALLBACK_TAB_TITLE_LOWER ||
     isAgentIdentityStatusTitle(lower, agentType, agentTypeLabelLower) ||
+    isAgentCommandLineTitle(stripped, agentType) ||
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
     isClaudeManagementTitle(stripped) ||
