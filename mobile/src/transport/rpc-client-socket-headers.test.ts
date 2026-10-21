@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createEndpointAuthSocket } from './endpoint-auth-headers'
 import { connect } from './rpc-client'
 import { RpcClientSocketFactory } from './rpc-client-socket-factory'
 import type { ConnectionLogEntry } from './types'
@@ -55,6 +56,13 @@ afterEach(() => {
 })
 
 describe('direct socket edge-auth headers', () => {
+  it('disables redirects so credentials stay at the chosen secure endpoint', () => {
+    const headers = { 'CF-Access-Client-Secret': 'synthetic-secret' }
+    const socket = createEndpointAuthSocket('wss://tunnel.example', headers)
+    expect(seenWebSocketArgs[0]?.[2]).toEqual({ headers, followRedirects: false })
+    socket.close()
+  })
+
   it('attaches headers to the WebSocket handshake', () => {
     const headers = { 'CF-Access-Client-Id': 'id-abc', 'CF-Access-Client-Secret': 'secret-xyz' }
     const client = connect('wss://tunnel.example:443/runtime', 'device-token', 'server-key', {
@@ -63,7 +71,7 @@ describe('direct socket edge-auth headers', () => {
 
     expect(seenWebSocketArgs).toHaveLength(1)
     expect(seenWebSocketArgs[0]?.[0]).toBe('wss://tunnel.example:443/runtime')
-    expect(seenWebSocketArgs[0]?.[2]).toEqual({ headers })
+    expect(seenWebSocketArgs[0]?.[2]).toEqual({ headers, followRedirects: false })
     client.close()
   })
 
@@ -139,8 +147,8 @@ describe('direct socket edge-auth headers', () => {
     const first = factory.open()
     const second = factory.open()
     expect(seenWebSocketArgs).toHaveLength(2)
-    expect(seenWebSocketArgs[0]?.[2]).toEqual({ headers })
-    expect(seenWebSocketArgs[1]?.[2]).toEqual({ headers })
+    expect(seenWebSocketArgs[0]?.[2]).toEqual({ headers, followRedirects: false })
+    expect(seenWebSocketArgs[1]?.[2]).toEqual({ headers, followRedirects: false })
     first.clearTimers()
     second.clearTimers()
   })

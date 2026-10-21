@@ -114,3 +114,115 @@ diff --git a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm b/Libraries/Tex
  - (void)dictationRecordingDidEnd
  {
    _dictationRecognizing = YES;
+diff --git a/Libraries/WebSocket/WebSocket.js b/Libraries/WebSocket/WebSocket.js
+index 36aafbbbab176cbeee8cd9fcb72bf155253438c7..de700e67e743988812558dcbfff2c2f0f7faa68a 100644
+--- a/Libraries/WebSocket/WebSocket.js
++++ b/Libraries/WebSocket/WebSocket.js
+@@ -98,7 +98,7 @@ class WebSocket extends EventTarget {
+   constructor(
+     url: string,
+     protocols: ?string | ?Array<string>,
+-    options: ?{headers?: {origin?: string, ...}, ...},
++    options: ?{headers?: {origin?: string, ...}, followRedirects?: boolean, ...},
+   ) {
+     super();
+     this.url = url;
+@@ -106,7 +106,15 @@ class WebSocket extends EventTarget {
+       protocols = [protocols];
+     }
+ 
+-    const {headers = {}, ...unrecognized} = options || {};
++    const {headers = {}, followRedirects, ...unrecognized} = options || {};
++
++    if (
++      followRedirects === false &&
++      Platform.OS === 'android' &&
++      NativeWebSocketModule.getConstants?.().supportsNoRedirects !== true
++    ) {
++      throw new Error('Update the Orca app to use edge authentication');
++    }
+ 
+     // Preserve deprecated backwards compatibility for the 'origin' option
+     // $FlowFixMe[prop-missing]
+@@ -145,7 +153,12 @@ class WebSocket extends EventTarget {
+     );
+     this._socketId = nextWebSocketId++;
+     this._registerEvents();
+-    NativeWebSocketModule.connect(url, protocols, {headers}, this._socketId);
++    NativeWebSocketModule.connect(
++      url,
++      protocols,
++      followRedirects === false ? {headers, followRedirects: false} : {headers},
++      this._socketId,
++    );
+   }
+ 
+   get binaryType(): ?BinaryType {
+diff --git a/React/CoreModules/RCTWebSocketModule.mm b/React/CoreModules/RCTWebSocketModule.mm
+index 5d95b90bca818a75a925a6a8b4b786b11d1a9355..9d6bb6148633770c1aae618d3d3eedf1c25c5a3e 100644
+--- a/React/CoreModules/RCTWebSocketModule.mm
++++ b/React/CoreModules/RCTWebSocketModule.mm
+@@ -48,6 +48,18 @@ @implementation RCTWebSocketModule {
+ 
+ RCT_EXPORT_MODULE()
+ 
++- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants>)constantsToExport
++{
++  return (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants>)[self getConstants];
++}
++
++- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants>)getConstants
++{
++  return facebook::react::typedConstants<JS::NativeWebSocketModule::Constants>({
++      .supportsNoRedirects = true,
++  });
++}
++
+ - (dispatch_queue_t)methodQueue
+ {
+   return dispatch_get_main_queue();
+diff --git a/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt b/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt
+index b7752d1692837791e831370b9f7089f561f93b77..9db65da6fbed371a07122ab5f386cab112316328 100644
+--- a/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt
++++ b/ReactAndroid/src/main/java/com/facebook/react/modules/websocket/WebSocketModule.kt
+@@ -40,6 +40,9 @@ import okio.ByteString
+ public class WebSocketModule(context: ReactApplicationContext) :
+     NativeWebSocketModuleSpec(context) {
+ 
++  public override fun getTypedExportedConstants(): Map<String, Any> =
++      mapOf("supportsNoRedirects" to true)
++
+   public interface ContentHandler {
+     public fun onMessage(text: String, params: WritableMap)
+ 
+@@ -89,6 +92,13 @@ public class WebSocketModule(context: ReactApplicationContext) :
+ 
+     applyCustomBuilder(okHttpBuilder)
+ 
++    if (options?.hasKey("followRedirects") == true &&
++        options.getType("followRedirects") == ReadableType.Boolean &&
++        !options.getBoolean("followRedirects")) {
++      // Credentials must not follow redirects to another origin or cleartext transport.
++      okHttpBuilder.followRedirects(false).followSslRedirects(false)
++    }
++
+     val client = okHttpBuilder.build()
+ 
+     val builder = Request.Builder().tag(id).url(url)
+diff --git a/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js b/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js
+index e48223552a7da3d4ac478286c8aeead70e43dad2..b6e09c168bd8fde56fe2c3a0c922a84e3a7d04a5 100644
+--- a/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js
++++ b/src/private/specs_DEPRECATED/modules/NativeWebSocketModule.js
+@@ -13,10 +13,11 @@ import type {TurboModule} from '../../../../Libraries/TurboModule/RCTExport';
+ import * as TurboModuleRegistry from '../../../../Libraries/TurboModule/TurboModuleRegistry';
+ 
+ export interface Spec extends TurboModule {
++  +getConstants: () => {supportsNoRedirects: boolean};
+   +connect: (
+     url: string,
+     protocols: ?Array<string>,
+-    options: {headers?: Object},
++    options: {headers?: Object, followRedirects?: boolean},
+     socketID: number,
+   ) => void;
+   +send: (message: string, forSocketID: number) => void;

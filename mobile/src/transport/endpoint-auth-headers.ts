@@ -89,7 +89,7 @@ export function describeEndpointAuthHeadersForLog(headers: EndpointAuthHeaders |
 // Browser controls and stores exclude this native-only constructor path.
 export function createEndpointAuthSocket(url: string, headers: EndpointAuthHeaders): WebSocket {
   // React Native's third constructor argument is absent from DOM WebSocket types.
-  return Reflect.construct(WebSocket, [url, undefined, { headers }])
+  return Reflect.construct(WebSocket, [url, undefined, { headers, followRedirects: false }])
 }
 
 export function edgeAuthHeadersForEndpoint(
