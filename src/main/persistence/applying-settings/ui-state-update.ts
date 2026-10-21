@@ -21,6 +21,7 @@ import {
 } from '../../../shared/execution-host'
 import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+import { normalizeManualTagOrder } from '../../../shared/worktree/manual-tag-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
@@ -34,6 +35,7 @@ import {
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeTagOrderBy,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -123,6 +125,9 @@ export function updatePersistedUI(
     projectOrderBy: sanitizedUpdates.projectOrderBy
       ? normalizeProjectOrderBy(sanitizedUpdates.projectOrderBy)
       : normalizeProjectOrderBy(operations.state.ui?.projectOrderBy),
+    tagOrderBy: sanitizedUpdates.tagOrderBy
+      ? normalizeTagOrderBy(sanitizedUpdates.tagOrderBy)
+      : normalizeTagOrderBy(operations.state.ui?.tagOrderBy),
     activeView: currentUI.activeView,
     rightSidebarTab: nextRightSidebarTab,
     rightSidebarExplorerView: nextRightSidebarExplorerView,
@@ -183,6 +188,10 @@ export function updatePersistedUI(
       sanitizedUpdates.manualRepoOrder !== undefined
         ? normalizeManualRepoOrder(sanitizedUpdates.manualRepoOrder)
         : normalizeManualRepoOrder(operations.state.ui?.manualRepoOrder),
+    manualTagOrder:
+      sanitizedUpdates.manualTagOrder !== undefined
+        ? normalizeManualTagOrder(sanitizedUpdates.manualTagOrder)
+        : normalizeManualTagOrder(operations.state.ui?.manualTagOrder),
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
       sanitizedUpdates.browserDefaultZoomLevel ?? operations.state.ui?.browserDefaultZoomLevel
     ),

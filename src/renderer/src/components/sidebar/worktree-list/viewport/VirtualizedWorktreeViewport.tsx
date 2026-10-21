@@ -113,6 +113,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     projectGroups,
     groupBy,
     projectOrderBy: props.projectOrderBy,
+    tagOrderBy: props.tagOrder.by,
     scrollRef,
     onReorderHostSections: props.onReorderHostSections,
     onHostDragActiveChange: props.onHostDragActiveChange,
@@ -229,7 +230,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     onMoveWorktreesToStatus: props.onMoveWorktreesToStatus,
     onMoveWorktreesToStatusAtIndex: props.onMoveWorktreesToStatusAtIndex,
     onReorderWorktrees: props.onReorderWorktrees,
-    onPinWorktrees: props.onPinWorktrees
+    onPinWorktrees: props.onPinWorktrees,
+    onTagWorktrees: props.onTagWorktrees
   })
 
   const { handleWorktreeRowPointerDown, handleWorktreeRowClickCapture } = useWorktreePointerDrag({

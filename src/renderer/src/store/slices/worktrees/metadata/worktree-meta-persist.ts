@@ -12,6 +12,7 @@ import {
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
+import { assertWorkspaceTagWriteCapability } from '../../../../runtime/runtime-workspace-tag-capabilities'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -123,6 +124,9 @@ async function persistWorktreeMetaUntracked(
         'Update the remote runtime to link Linear issues'
       )
     )
+  }
+  if ('tags' in updates) {
+    await assertWorkspaceTagWriteCapability(target)
   }
   let compatibleUpdates = updates
   const legacySelection = getLegacyWorkspaceReviewSelectionUpdates(updates)

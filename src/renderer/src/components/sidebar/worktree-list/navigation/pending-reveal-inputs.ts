@@ -16,6 +16,7 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
+import { narrowTagRevealKeys } from '../../../../../../shared/sidebar-list/tag-groups'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 
 export const MAX_REVEAL_RETRIES = 8
@@ -73,7 +74,7 @@ export function expandGroupsForWorktreeReveal(
     }
   )
   if (folderGroupKeys.length > 0) {
-    for (const groupKey of folderGroupKeys) {
+    for (const groupKey of narrowTagRevealKeys(folderGroupKeys, args.collapsedGroups)) {
       if (args.collapsedGroups.has(groupKey)) {
         args.toggleGroup(groupKey)
       }

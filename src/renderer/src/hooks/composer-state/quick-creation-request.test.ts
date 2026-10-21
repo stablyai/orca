@@ -38,6 +38,7 @@ function createInput(
     issueCommand: undefined,
     pendingFirstAgentMessageRename: false,
     note: '',
+    tags: [],
     startupPlan: null,
     quickPrompt: '',
     launchDraftPrompt: '',
@@ -150,5 +151,12 @@ describe('quick composer creation request', () => {
       buildQuickCreationRequest(createInput({ setupOnly: true, agent: 'claude' }))
     ).not.toHaveProperty('setupOnly')
     expect(buildQuickCreationRequest(createInput())).toHaveProperty('setupOnly', false)
+  })
+
+  it('carries chosen tags for post-create persistence and omits an empty list', () => {
+    expect(buildQuickCreationRequest(createInput({ tags: ['billing team'] })).tags).toEqual([
+      'billing team'
+    ])
+    expect(buildQuickCreationRequest(createInput())).not.toHaveProperty('tags')
   })
 })

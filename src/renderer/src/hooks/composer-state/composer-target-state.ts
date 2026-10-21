@@ -176,6 +176,7 @@ export function useComposerTargetState(
     linkedWorkItem: sourceContextState.linkedWorkItem,
     name: sourceContextState.name,
     note: sourceContextState.note,
+    tags: sourceContextState.tags,
     persistDraft: composerTargetStore.persistDraft,
     repoId: initialTargetState.repoId,
     pendingInitialWorkspaceTarget: initialTargetState.pendingInitialWorkspaceTarget,

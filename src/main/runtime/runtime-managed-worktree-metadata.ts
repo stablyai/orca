@@ -11,6 +11,7 @@ import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest
 } from '../persistence/worktree-sort-order-write'
+import { applyWorktreeTagChanges } from '../../shared/worktree/worktree-tags'
 import type { RuntimeStore } from './runtime-store-contract'
 import {
   isWslMoveSourceHost,
@@ -21,9 +22,11 @@ import {
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
-type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+export type ManagedWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
   lineage?: { parentWorktree?: string; noParent?: boolean }
+  /** Incremental tag edits, applied against the stored tags at write time. */
+  tagChanges?: { add?: string[]; remove?: string[] }
 }
 
 type Ports = {
@@ -37,12 +40,12 @@ type Ports = {
 
 export async function updateRuntimeManagedWorktreeMetadata(args: {
   selector: string
-  updates: Updates
+  updates: ManagedWorktreeMetaUpdates
   store: RuntimeStore
   ports: Ports
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
-  const { lineage, ...metaUpdates } = args.updates
+  const { lineage, tagChanges, ...metaUpdates } = args.updates
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
     : undefined
@@ -53,7 +56,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     shouldDropWslMoveProjectUpdate(
       args.store,
       wslMoveProjectRefForWorkspace(worktree.id),
-      lineage ? args.updates : metaUpdates
+      lineage || tagChanges ? args.updates : metaUpdates
     )
   ) {
     return worktree
@@ -126,6 +129,11 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       capture: { source: 'manual-action', confidence: 'explicit' },
       createdAt
     })
+  }
+  if (tagChanges && (tagChanges.add?.length || tagChanges.remove?.length)) {
+    // Why here: read and write stay in one synchronous step, so concurrent CLI edits cannot drop each other.
+    const stored = args.store.getWorktreeMetaForHost?.(target.id, target.hostId)
+    persisted.tags = applyWorktreeTagChanges(persisted.tags ?? stored?.tags, tagChanges)
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   // Why: a resolution snapshot taken before a removal still returns the workspace (#22712).

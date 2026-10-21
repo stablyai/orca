@@ -51,6 +51,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
+import { getWorktreeSetTagParams } from '../worktree-tag-flags'
 
 function getPresentStringFlag(
   flags: Map<string, string | boolean>,
@@ -235,6 +236,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
+    const tagParams = await getWorktreeSetTagParams(flags, client)
     const result = await client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
@@ -243,6 +245,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       isUnread,
+      ...tagParams,
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })

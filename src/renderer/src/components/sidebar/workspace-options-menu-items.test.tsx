@@ -83,6 +83,8 @@ function setState(context: WorkspaceViewOptionContext, catalogHydrated = true): 
     setSortBy: noop,
     projectOrderBy: 'manual',
     setProjectOrderBy: noop,
+    tagOrderBy: 'name',
+    setTagOrderBy: noop,
     showSleepingWorkspaces: !context.hideSleepingWorkspaces,
     setShowSleepingWorkspaces: noop,
     alwaysShowDefaultBranchWorkspace: true,
@@ -156,7 +158,8 @@ const CONTEXTS: WorkspaceViewOptionContext[] = [
     projectCount: 3,
     mayHaveServerHosts: true
   },
-  { ...BASE_CONTEXT, newCardStyle: true, hideWorkspacesFromOtherDevices: true }
+  { ...BASE_CONTEXT, newCardStyle: true, hideWorkspacesFromOtherDevices: true },
+  { ...BASE_CONTEXT, groupBy: 'tag' }
 ]
 
 describe('Workspace options menu renders from the shared option list', () => {

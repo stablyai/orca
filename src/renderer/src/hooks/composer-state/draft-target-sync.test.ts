@@ -32,6 +32,7 @@ function createState(overrides: Partial<DraftTargetSyncInput> = {}): DraftTarget
     linkedWorkItem: null,
     name: 'workspace-name',
     note: 'note',
+    tags: ['billing team'],
     persistDraft: true,
     pendingInitialWorkspaceTarget: null,
     repoId: '',
@@ -73,6 +74,7 @@ describe('useDraftTargetSync', () => {
         name: 'workspace-name',
         prompt: 'Fix the issue',
         attachments: ['/tmp/context.txt'],
+        tags: ['billing team'],
         baseBranch: 'main',
         compareBaseRef: 'origin/main'
       })

@@ -9,6 +9,7 @@ import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../shared/worktree/meta-
 import { normalizeGitHubPRSuppressionUpdate } from '../../../shared/worktree/github-pr-suppression'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
+import { applyNormalizedWorktreeTags } from '../../../shared/worktree/worktree-tags'
 
 type WorktreeMetaIdentity = {
   instanceId: string
@@ -50,6 +51,7 @@ export function mergeWorktreeMetaForWrite(
   )
     ? sourceContext
     : null
+  applyNormalizedWorktreeTags(updated)
   updated.instanceId ||= randomUUID()
   return updated
 }

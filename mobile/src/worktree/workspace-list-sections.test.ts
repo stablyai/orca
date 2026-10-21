@@ -273,6 +273,20 @@ describe('buildSections', () => {
     )
   })
 
+  it('shows the desktop tag grouping as a flat list until mobile has a tag view', () => {
+    const sections = buildSections(
+      [worktree({ worktreeId: 'a', repo: 'aaa' }), worktree({ worktreeId: 'b', repo: 'zzz' })],
+      'name',
+      { ...NO_WORKSPACE_ROW_FILTERS },
+      '',
+      'tag',
+      new Set()
+    )
+
+    expect(sections.map((section) => section.key)).toEqual(['all'])
+    expect(sections[0]?.data).toHaveLength(2)
+  })
+
   it('matches desktop Name sort by display name', () => {
     const beta = worktree({ worktreeId: 'beta', displayName: 'Beta', repo: 'aaa' })
     const alpha = worktree({ worktreeId: 'alpha', displayName: 'Alpha', repo: 'zzz' })

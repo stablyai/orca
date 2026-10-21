@@ -4,6 +4,7 @@ import type { ProjectSectionModel } from '../project-section-grouping'
 import { ALL_GROUP_KEY } from './group-keys'
 import type { SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
 import { getGroupKeyForWorktree } from './worktree-group-keys'
+import { getTagGroupKeys } from './tag-groups'
 
 export function getRenderedNaturalAnchorRepoIds({
   groupBy,
@@ -34,6 +35,14 @@ export function getRenderedNaturalAnchorRepoIds({
   if (groupBy === 'repo') {
     for (const worktree of worktrees) {
       renderedRepoIds.add(worktree.repoId)
+    }
+    return renderedRepoIds
+  }
+  if (groupBy === 'tag') {
+    for (const worktree of worktrees) {
+      if (getTagGroupKeys(worktree).some((groupKey) => !collapsedGroups.has(groupKey))) {
+        renderedRepoIds.add(worktree.repoId)
+      }
     }
     return renderedRepoIds
   }

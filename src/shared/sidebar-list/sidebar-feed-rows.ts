@@ -8,8 +8,6 @@ import {
 } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import { getLogicalRepoOrderRankById } from '../project-section-order'
-import type { ProjectSectionModel } from '../project-section-grouping'
-import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import {
   filterFolderWorkspacesFromOtherDevices,
@@ -48,18 +46,24 @@ import type {
   Row,
   WorktreeGroupBy
 } from './row-types'
+import type { SidebarFeedCatalog } from './sidebar-feed-catalog'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
 import type { SortBy } from './smart-sort'
+import type { TagSectionOrder } from './tag-section-order'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
 import { prGroupOfReviewFact } from './workspace-review-facts'
+
+export type { SidebarFeedCatalog } from './sidebar-feed-catalog'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
 export type SidebarFeedView = {
   groupBy: WorktreeGroupBy
   sortBy: SortBy
   projectOrderBy: ProjectOrderBy
+  /** Tag mode's section order; the phone has no Tag mode and leaves it out. */
+  tagOrder?: TagSectionOrder
   collapsedGroups: ReadonlySet<string>
   filters: WorkspaceRowFilters
   workspaceHostScope: ExecutionHostScope
@@ -73,13 +77,6 @@ export type SidebarFeedView = {
   localHostLabel: string
   /** The desktop window's own saved host order, which it writes; a phone reads the host's. */
   workspaceHostOrder?: readonly ExecutionHostId[]
-}
-
-/** The catalog the feed does not carry: every host's repos (repo.list), groups and projects. */
-export type SidebarFeedCatalog = {
-  repos: readonly Repo[]
-  projectGroups: readonly ProjectGroup[]
-  projectGrouping: ProjectSectionModel
 }
 
 export type SidebarFeedRows = {
@@ -248,7 +245,8 @@ export function planSidebarFeedRows(
     hostLabelById: new Map(hostOptions.map((host) => [host.id, host.label])),
     defaultHostId,
     pinnedDisplayPolicy: view.pinnedDisplayPolicy,
-    filterRepoIds: view.filters.filterRepoIds
+    filterRepoIds: view.filters.filterRepoIds,
+    tagOrder: view.tagOrder
   })
   return {
     visibleWorktrees,

@@ -39,6 +39,7 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
   const rowModel = useSidebarSectionRows({
     groupBy: args.groupBy,
     projectOrderBy: args.projectOrderBy,
+    tagOrder: args.tagOrder,
     pinnedDisplayPolicy: args.pinnedDisplayPolicy,
     defaultHostId,
     worktrees: visibleWorktrees,

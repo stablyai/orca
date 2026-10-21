@@ -6,6 +6,7 @@ import {
   WORKSPACE_GROUP_BY_CHOICES,
   WORKSPACE_PROJECT_ORDER_CHOICES,
   WORKSPACE_SORT_BY_CHOICES,
+  WORKSPACE_TAG_ORDER_CHOICES,
   WORKSPACE_CARD_DISPLAY_CHOICES,
   type WorkspaceViewChoice
 } from '../../../../shared/workspace-view/workspace-view-options'
@@ -46,6 +47,8 @@ const recentLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent')
 const compactLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
+const tagsLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tags', 'Tags')
 
 export const GROUP_BY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_GROUP_BY_CHOICES>>(
   WORKSPACE_GROUP_BY_CHOICES,
@@ -55,7 +58,8 @@ export const GROUP_BY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_GROUP_
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.e029a2d775', 'Status'),
     'pr-status': () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.0f9b959b31', 'PR'),
-    repo: projectLabel
+    repo: projectLabel,
+    tag: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tag', 'Tag')
   }
 )
 
@@ -102,6 +106,34 @@ export const PROJECT_ORDER_OPTIONS = localizeChoices<
   }
 )
 
+export const TAG_ORDER_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_TAG_ORDER_CHOICES>>(
+  WORKSPACE_TAG_ORDER_CHOICES,
+  {
+    name: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderName', 'Name'),
+    manual: manualLabel,
+    activity: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderActivity', 'Activity')
+  },
+  {
+    name: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderNameHint',
+        'Alphabetical, ignoring case'
+      ),
+    manual: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderManualHint',
+        'Drag tag headers to arrange them'
+      ),
+    activity: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrderActivityHint',
+        'Most recent agent activity in the tag'
+      )
+  }
+)
+
 export const CARD_LAYOUT_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_LAYOUT_CHOICES>>(
   WORKSPACE_CARD_LAYOUT_CHOICES,
   {
@@ -134,6 +166,7 @@ export const PROPERTY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_P
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation', 'Automation'),
     comment: () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.26c71e536c', 'Notes'),
+    tags: tagsLabel,
     ports: () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports'),
     'inline-agents': () =>
@@ -154,6 +187,7 @@ const CARD_DISPLAY_LABELS: Record<
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues', 'Jira issues'),
   comment: () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.8d62c68b35', 'Notes'),
+  tags: tagsLabel,
   automation: () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation', 'Automation'),
   cli: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cli', 'Orca CLI'),

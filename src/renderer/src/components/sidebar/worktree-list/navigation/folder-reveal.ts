@@ -18,7 +18,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
+import { getFolderWorkspaceLaneKeys } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/folder-workspace-host-id'
 import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
@@ -134,18 +134,21 @@ export function getFolderWorkspaceRevealGroupKeys(
   // keys come from the same function grouping uses, so the two cannot disagree.
   const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
   if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
-    const laneKey = getFolderWorkspaceLaneKey(
+    const laneKeys = getFolderWorkspaceLaneKeys(
       { folderWorkspace, projectGroup: owningGroup },
       options.groupBy,
       options.workspaceStatuses ?? []
     )
+    const defaultHostId = options.hostScopedGroups ? options.defaultHostId : undefined
     keys.push(
-      options.hostScopedGroups && options.defaultHostId
-        ? getHostSectionCollapseKey(
-            laneKey,
-            getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)
+      ...(defaultHostId
+        ? laneKeys.map((laneKey) =>
+            getHostSectionCollapseKey(
+              laneKey,
+              getFolderWorkspaceHostId(folderWorkspace, owningGroup, defaultHostId)
+            )
           )
-        : laneKey
+        : laneKeys)
     )
   }
   if (owningGroup && options?.defaultHostId) {

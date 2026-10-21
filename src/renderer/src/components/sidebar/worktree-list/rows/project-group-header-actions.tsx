@@ -26,7 +26,8 @@ export function ProjectGroupHeaderMenu({
   hostId,
   label,
   onRename,
-  onDelete
+  onDelete,
+  copy
 }: {
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
@@ -34,6 +35,8 @@ export function ProjectGroupHeaderMenu({
   label: string
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  /** Overrides for headers that are not project groups, such as tag sections. */
+  copy?: { actionsLabel: string; renameLabel: string; deleteLabel: string }
 }): React.JSX.Element {
   return (
     <DropdownMenu modal={false}>
@@ -44,11 +47,14 @@ export function ProjectGroupHeaderMenu({
           size="icon-xs"
           className={REPO_HEADER_ACTION_BUTTON_CLASS}
           data-repo-header-action=""
-          aria-label={translate(
-            'auto.components.sidebar.WorktreeList.79465e9034',
-            'Group actions for {{value0}}',
-            { value0: label }
-          )}
+          aria-label={
+            copy?.actionsLabel ??
+            translate(
+              'auto.components.sidebar.WorktreeList.79465e9034',
+              'Group actions for {{value0}}',
+              { value0: label }
+            )
+          }
           onClick={(event) => event.stopPropagation()}
           onKeyDown={stopRepoHeaderKeyboardToggle}
           onPointerDown={handleRepoHeaderActionPointerDown}
@@ -69,10 +75,12 @@ export function ProjectGroupHeaderMenu({
         onKeyDown={stopRepoHeaderMenuEvent}
       >
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
-          {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
+          {copy?.renameLabel ??
+            translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
-          {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
+          {copy?.deleteLabel ??
+            translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -49,6 +49,7 @@ import type {
 import { orderMainWorktreeFirst, getRenderedNaturalAnchorRepoIds } from './section-order'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { DEFAULT_TAG_SECTION_ORDER, type TagSectionOrder } from './tag-section-order'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
@@ -76,6 +77,8 @@ export type SidebarRowPlanInputs = {
   defaultHostId: ExecutionHostId
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   filterRepoIds: readonly string[]
+  /** Read only in Tag mode; clients without tag grouping leave it out. */
+  tagOrder?: TagSectionOrder
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -101,7 +104,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    tagOrder = DEFAULT_TAG_SECTION_ORDER
   } = inputs
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
@@ -144,6 +148,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
+              tagOrderBy: tagOrder.by,
+              manualTagOrder: tagOrder.manual,
               folderWorkspaces: renderableFolderWorkspaces
             })
       if (pinned.length > 0) {

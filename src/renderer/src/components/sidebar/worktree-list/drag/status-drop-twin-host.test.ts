@@ -364,7 +364,8 @@ describe('a sidebar drop on one card of a twin', () => {
         onMoveWorktreesToStatus,
         onMoveWorktreesToStatusAtIndex,
         onReorderWorktrees,
-        onPinWorktrees
+        onPinWorktrees,
+        onTagWorktrees: vi.fn()
       })
     )
     const ctx: WorktreeDropCommitContext = result.current

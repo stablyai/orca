@@ -2,6 +2,7 @@ import type { PersistedUIState } from '../persisted-ui-state-types'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
+  TagOrderBy,
   WorktreeCardProperty
 } from '../ui-chrome-types'
 
@@ -22,7 +23,8 @@ export const WORKSPACE_GROUP_BY_CHOICES = [
   { id: 'none', label: 'None' },
   { id: 'workspace-status', label: 'Status' },
   { id: 'pr-status', label: 'PR' },
-  { id: 'repo', label: 'Project' }
+  { id: 'repo', label: 'Project' },
+  { id: 'tag', label: 'Tag' }
 ] as const satisfies readonly WorkspaceViewChoice<PersistedUIState['groupBy']>[]
 
 export const WORKSPACE_SORT_BY_CHOICES = [
@@ -46,6 +48,12 @@ export const WORKSPACE_PROJECT_ORDER_CHOICES = [
   { id: 'recent', label: 'Recent', description: 'Most recent workspace activity' }
 ] as const satisfies readonly WorkspaceViewChoice<ProjectOrderBy>[]
 
+export const WORKSPACE_TAG_ORDER_CHOICES = [
+  { id: 'name', label: 'Name', description: 'Alphabetical, ignoring case' },
+  { id: 'manual', label: 'Manual', description: 'Drag tag headers to arrange them' },
+  { id: 'activity', label: 'Activity', description: 'Most recent agent activity in the tag' }
+] as const satisfies readonly WorkspaceViewChoice<TagOrderBy>[]
+
 /** Card layout is the `compactWorktreeCards` setting, not UI state. */
 export const WORKSPACE_CARD_LAYOUT_CHOICES = [
   { id: 'detailed', label: 'Detailed' },
@@ -65,6 +73,7 @@ export const WORKSPACE_CARD_PROPERTY_CHOICES = [
   { id: 'pr', label: 'PR/MR link' },
   { id: 'automation', label: 'Automation' },
   { id: 'comment', label: 'Notes' },
+  { id: 'tags', label: 'Tags' },
   { id: 'ports', label: 'Ports' },
   { id: 'inline-agents', label: 'Agent activity' },
   { id: 'host', label: 'Host' }
@@ -76,6 +85,7 @@ export const WORKSPACE_CARD_DISPLAY_CHOICES = [
   { id: 'linear-issue', label: 'Linear issues' },
   { id: 'jira-issue', label: 'Jira issues' },
   { id: 'comment', label: 'Notes' },
+  { id: 'tags', label: 'Tags' },
   { id: 'automation', label: 'Automation' },
   { id: 'cli', label: 'Orca CLI' },
   { id: 'ports', label: 'Ports' },
@@ -124,6 +134,7 @@ export const WORKSPACE_VIEW_OPTIONS = [
   { key: 'groupBy', section: 'group', label: 'Group by' },
   { key: 'sortBy', section: 'arrange', label: 'Sort by' },
   { key: 'projectOrderBy', section: 'arrange', label: 'Project order' },
+  { key: 'tagOrderBy', section: 'arrange', label: 'Tag order' },
   { key: 'cardLayout', section: 'arrange', label: 'Card layout' },
   // Also holds the agent activity layout choice.
   { key: 'cardProperties', section: 'arrange', label: 'Show properties' },
@@ -171,6 +182,7 @@ const SHOWN: Record<WorkspaceViewOptionKey, (context: WorkspaceViewOptionContext
   groupBy: () => true,
   sortBy: () => true,
   projectOrderBy: (context) => context.groupBy === 'repo',
+  tagOrderBy: (context) => context.groupBy === 'tag',
   cardLayout: (context) => !context.newCardStyle,
   cardProperties: (context) => !context.newCardStyle,
   cardDisplay: (context) => context.newCardStyle,

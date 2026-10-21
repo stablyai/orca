@@ -45,6 +45,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     groupBy: 'repo',
     sortBy: 'name',
     projectOrderBy: 'manual',
+    tagOrderBy: 'name',
     showActiveOnly: false,
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,

@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { TagSectionOrder } from '../../../../../../shared/sidebar-list/tag-section-order'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
@@ -45,6 +46,8 @@ type SectionRowsArgs = {
   agentSendTargetWorktreeId?: string | null
   groupBy: WorktreeGroupBy
   projectOrderBy: ProjectOrderBy
+  /** Omitted: tag sections sort by name. */
+  tagOrder?: TagSectionOrder
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   worktrees: Worktree[]
@@ -174,7 +177,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        tagOrder: args.tagOrder
       }),
     [
       args.groupBy,
@@ -196,7 +200,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
-      args.filterRepoIds
+      args.filterRepoIds,
+      args.tagOrder
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({

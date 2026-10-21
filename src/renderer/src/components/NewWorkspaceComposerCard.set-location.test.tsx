@@ -26,7 +26,9 @@ vi.mock('@/store', () => ({
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
         projects: [],
-        repos: []
+        repos: [],
+        worktreesByRepo: {},
+        folderWorkspaces: []
       }),
     { getState: () => ({}) }
   )

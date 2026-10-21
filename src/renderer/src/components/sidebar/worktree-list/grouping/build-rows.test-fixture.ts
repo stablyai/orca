@@ -21,6 +21,7 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
+import type { TagSectionOrder } from '../../../../../../shared/sidebar-list/tag-section-order'
 import type { PRCacheView } from '../../../../../../shared/sidebar-list/workspace-review-facts'
 import { createSidebarPRGroupReader } from './pr-group-key'
 
@@ -51,7 +52,8 @@ export function buildSidebarRowPlan(
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
-  filterRepoIds: readonly string[] = []
+  filterRepoIds: readonly string[] = [],
+  tagOrder?: TagSectionOrder
 ) {
   return planSidebarRows({
     groupBy,
@@ -74,7 +76,8 @@ export function buildSidebarRowPlan(
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    tagOrder
   })
 }
 

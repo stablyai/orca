@@ -7,6 +7,7 @@ import {
   WORKSPACE_GROUP_BY_CHOICES,
   WORKSPACE_PROJECT_ORDER_CHOICES,
   WORKSPACE_SORT_BY_CHOICES,
+  WORKSPACE_TAG_ORDER_CHOICES,
   getWorkspaceCardDisplayChoiceLabel
 } from '../../../../shared/workspace-view/workspace-view-options'
 import {
@@ -16,6 +17,7 @@ import {
   PROJECT_ORDER_OPTIONS,
   PROPERTY_OPTIONS,
   SORT_OPTIONS,
+  TAG_ORDER_OPTIONS,
   getWorktreeCardDisplayOptions
 } from './sidebar-workspace-option-items'
 import {
@@ -36,6 +38,7 @@ describe('desktop Workspace options copy', () => {
     expect(desktopCopy(GROUP_BY_OPTIONS)).toEqual(sharedCopy(WORKSPACE_GROUP_BY_CHOICES))
     expect(desktopCopy(SORT_OPTIONS)).toEqual(sharedCopy(WORKSPACE_SORT_BY_CHOICES))
     expect(desktopCopy(PROJECT_ORDER_OPTIONS)).toEqual(sharedCopy(WORKSPACE_PROJECT_ORDER_CHOICES))
+    expect(desktopCopy(TAG_ORDER_OPTIONS)).toEqual(sharedCopy(WORKSPACE_TAG_ORDER_CHOICES))
     expect(desktopCopy(CARD_LAYOUT_OPTIONS)).toEqual(sharedCopy(WORKSPACE_CARD_LAYOUT_CHOICES))
     expect(desktopCopy(AGENT_ACTIVITY_DISPLAY_OPTIONS)).toEqual(
       sharedCopy(WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES)

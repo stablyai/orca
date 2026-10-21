@@ -13,6 +13,7 @@ import {
 import type { RenderRow } from '../listing/render-row'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import { getFolderWorkspaceRowNavigationKey } from '../../../../../../shared/sidebar-list/row-builders'
 
 export function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'header') {
@@ -22,7 +23,7 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return getFolderWorkspaceHostIdentity(row.folderWorkspace)
+    return getFolderWorkspaceRowNavigationKey(row)
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`

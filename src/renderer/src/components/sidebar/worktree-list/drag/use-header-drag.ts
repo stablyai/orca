@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { ProjectOrderBy, TagOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type {
@@ -17,6 +17,12 @@ import {
   getRepoHeaderSectionEndByRepoId
 } from '../../worktree-header-section-boundaries'
 import { useHostHeaderDrag } from '../../host-header-drag'
+import { useOrderedHeaderDrag } from '../../ordered-header-drag'
+import { isTagHeaderActionTarget, readTagHeaderRects } from './tag-header-drag-dom'
+import {
+  mergeManualTagOrder,
+  normalizeManualTagOrder
+} from '../../../../../../shared/worktree/manual-tag-order'
 import { useRepoHeaderDrag } from '../../project-header-drag'
 import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-drop'
 import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
@@ -58,6 +64,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   projectGroups: readonly ProjectGroup[]
   groupBy: WorktreeGroupBy
   projectOrderBy: ProjectOrderBy
+  tagOrderBy: TagOrderBy
   scrollRef: React.RefObject<HTMLDivElement | null>
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
   onHostDragActiveChange: (active: boolean) => void
@@ -73,6 +80,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     projectGroups,
     groupBy,
     projectOrderBy,
+    tagOrderBy,
     scrollRef,
     onReorderHostSections,
     onHostDragActiveChange,
@@ -80,10 +88,15 @@ export function useWorktreeSidebarHeaderDrag(args: {
     directScrollInputUntilRef
   } = args
   const reorderRepos = useAppStore((s) => s.reorderRepos)
+  const manualTagOrder = useAppStore((s) => s.manualTagOrder)
+  const setManualTagOrder = useAppStore((s) => s.setManualTagOrder)
+  const manualTagOrderRef = useRef(manualTagOrder)
+  manualTagOrderRef.current = manualTagOrder
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
+  const canReorderTagHeadersInMode = groupBy === 'tag' && tagOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
   const projectGroupByIdForHeaderDrag = useMemo(
     () => new Map(projectGroups.map((group) => [group.id, group])),
@@ -120,6 +133,41 @@ export function useWorktreeSidebarHeaderDrag(args: {
         .map((row) => row.hostId),
     [rows]
   )
+  // Why labels, not group keys: the persisted order stores tag spellings, and
+  // Untagged is a catch-all lane that must stay pinned last.
+  const tagHeaderLabels = useMemo(
+    () =>
+      rows.flatMap((row) =>
+        row.type === 'header' && row.icon.kind === 'tag' && row.label ? [row.label] : []
+      ),
+    [rows]
+  )
+  const orderedTagLabels = useMemo(
+    () => normalizeManualTagOrder(tagHeaderLabels),
+    [tagHeaderLabels]
+  )
+  // Why: host sections repeat one tag's header under every host holding it, so a
+  // dragged header has no single position to move. Order still applies; only the
+  // drag rests until the sidebar shows one header per tag again.
+  const hasDuplicateTagHeaders = orderedTagLabels.length !== tagHeaderLabels.length
+  const canReorderTagHeaders = canReorderTagHeadersInMode && !hasDuplicateTagHeaders
+  const commitTagOrder = useCallback(
+    (orderedTags: string[]) => {
+      suppressScrollCorrectionForHeaderCommit()
+      setManualTagOrder(mergeManualTagOrder(manualTagOrderRef.current, orderedTags))
+    },
+    [setManualTagOrder, suppressScrollCorrectionForHeaderCommit]
+  )
+  // Drag applies only in manual order; still construct the controller inert for stable hook order.
+  const tagDrag = useOrderedHeaderDrag({
+    orderedIds: canReorderTagHeaders ? orderedTagLabels : [],
+    onCommit: commitTagOrder,
+    getScrollContainer: () => scrollRef.current,
+    readHeaderRects: readTagHeaderRects,
+    isActionTarget: isTagHeaderActionTarget,
+    // Why: tag sections are virtualized and user-created, so only some are mounted.
+    requireAllHeaderRects: false
+  })
   const hostDrag = useHostHeaderDrag({
     orderedHostIds,
     onCommit: onReorderHostSections,
@@ -224,6 +272,8 @@ export function useWorktreeSidebarHeaderDrag(args: {
 
   return {
     canReorderRepoHeaders,
+    canReorderTagHeaders,
+    tagDrag,
     canReorderProjectGroupHeaders,
     orderedHostIds,
     hostDrag,

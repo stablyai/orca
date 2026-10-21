@@ -37,6 +37,8 @@ export type ComposerCardSourceProps = Pick<
   | 'projectError'
   | 'creating'
   | 'note'
+  | 'tags'
+  | 'tagDraft'
   | 'baseBranch'
   | 'selectedRepoIsRemote'
   | 'selectedRepoConnectionId'
@@ -101,6 +103,8 @@ export type ComposerCardActionProps = {
   onToggleAdvanced: () => void
   createDisabled: boolean
   onNoteChange: ComposerModel['setNote']
+  onTagsChange: ComposerModel['setTags']
+  onTagDraftChange: ComposerModel['setTagDraft']
   onBaseBranchChange: ComposerModel['handleBaseBranchChange']
   onBaseBranchPrSelect: ComposerModel['handleBaseBranchPrSelect']
   baseBranchLinkedPrNumber: number | null

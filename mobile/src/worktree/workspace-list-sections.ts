@@ -213,7 +213,8 @@ export function buildMobileWorkspacePlan(
       if (pinned.length > 0) {
         sections.push(makeSection('pinned', 'Pinned', pinned, { icon: 'pin' }))
       }
-      if (groupMode === 'none') {
+      // Why tag: mobile has no tag view yet, so desktop's tag grouping shows as a flat list.
+      if (groupMode === 'none' || groupMode === 'tag') {
         if (canonicalGroupWorktrees.length > 0) {
           sections.push(makeSection('all', 'All', canonicalGroupWorktrees))
         }

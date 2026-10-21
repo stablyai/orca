@@ -13,6 +13,8 @@ import {
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
+const NO_TAGS: readonly string[] = []
+
 function getVisibleContextLabel(
   projectLabel: string | undefined,
   hostLabel: string | undefined,
@@ -252,8 +254,14 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleRowIndicators = showTitleRowIndicators ? (
     <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
   ) : null
+  // Why no re-normalizing: tags are normalized on write and on load.
+  const visibleTags = cardProps.includes('tags') ? (worktree.tags ?? NO_TAGS) : NO_TAGS
   const hasSecondaryCardContent =
-    hasMetaRow || !!remoteBranchConflict || showInlineAgentList || showLineageChildChip
+    hasMetaRow ||
+    !!remoteBranchConflict ||
+    visibleTags.length > 0 ||
+    showInlineAgentList ||
+    showLineageChildChip
   const titleOnlyCard = !hasSecondaryCardContent
 
   return {
@@ -282,6 +290,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cardStyle,
     detailsAndPorts,
     titleRowIndicators,
+    visibleTags,
     titleOnlyCard
   }
 }

@@ -11,7 +11,10 @@ import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
+import type {
+  WorktreeOccurrence,
+  WorktreeOccurrencePlan
+} from '../../../../../../shared/worktree-occurrence-plan'
 import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
@@ -65,7 +68,15 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       pinnedDisplayPolicy: args.pinnedDisplayPolicy,
       filterRepoIds: args.filterRepoIds ?? []
     }).occurrencePlan
-  const occurrence = plan.preferredByIdentity.get(getWorktreeHostIdentity(args.worktree))
+  const identity = getWorktreeHostIdentity(args.worktree)
+  const occurrence =
+    args.groupBy === 'tag'
+      ? getTagRevealOccurrence(plan, identity, (key) =>
+          args.collapsedGroups.has(
+            args.hostScopedGroups ? getHostSectionCollapseKey(key, hostId) : key
+          )
+        )
+      : plan.preferredByIdentity.get(identity)
   if (!occurrence) {
     return []
   }
@@ -81,4 +92,23 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
     path = path.parent
   }
   return [...new Set(keys)].filter((key) => args.collapsedGroups.has(key))
+}
+
+/** Tag mode repeats a row once per tag: reveal through an open section if any, else the first. */
+function getTagRevealOccurrence(
+  plan: WorktreeOccurrencePlan<Worktree>,
+  identity: string,
+  isCollapsed: (sectionKey: string) => boolean
+): WorktreeOccurrence<Worktree> | undefined {
+  const preferred = plan.preferredByIdentity.get(identity)
+  if (preferred?.placement !== 'natural') {
+    return preferred
+  }
+  const natural = [...plan.bySection.values()].flatMap((occurrences) =>
+    occurrences.filter(
+      (occurrence) =>
+        occurrence.placement === 'natural' && getWorktreeHostIdentity(occurrence.row) === identity
+    )
+  )
+  return natural.find((occurrence) => !isCollapsed(occurrence.sectionPath.key)) ?? natural[0]
 }

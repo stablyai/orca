@@ -5,6 +5,7 @@ import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../../shared/manual-repo-order'
+import { normalizeManualTagOrder } from '../../../../../shared/worktree/manual-tag-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
@@ -117,6 +118,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
+          tagOrderBy: ui.tagOrderBy ?? 'name',
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
@@ -127,6 +129,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
           automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
           manualRepoOrder,
+          manualTagOrder: normalizeManualTagOrder(ui.manualTagOrder),
           // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
           repos: orderedRepos,
           hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,

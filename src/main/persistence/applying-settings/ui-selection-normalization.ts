@@ -1,14 +1,10 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultUIState } from '../../../shared/constants'
 import { isPluginPanelTabKey } from '../../../shared/plugins/plugin-manifest'
+import { isWorkspaceGroupBy } from '../../../shared/workspace-group-by'
 
 export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
-  if (
-    groupBy === 'none' ||
-    groupBy === 'workspace-status' ||
-    groupBy === 'repo' ||
-    groupBy === 'pr-status'
-  ) {
+  if (isWorkspaceGroupBy(groupBy)) {
     return groupBy
   }
   if (groupBy === 'flat') {
@@ -57,6 +53,13 @@ export function normalizeProjectOrderBy(
     return projectOrderBy
   }
   return getDefaultUIState().projectOrderBy
+}
+
+export function normalizeTagOrderBy(tagOrderBy: unknown): PersistedState['ui']['tagOrderBy'] {
+  if (tagOrderBy === 'name' || tagOrderBy === 'manual' || tagOrderBy === 'activity') {
+    return tagOrderBy
+  }
+  return getDefaultUIState().tagOrderBy
 }
 
 export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {

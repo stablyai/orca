@@ -27,6 +27,11 @@ export function renderWorktreeSidebarDropIndicators(args: {
           className="z-40"
         />
       ) : null}
+      {headerDrag.canReorderTagHeaders &&
+      headerDrag.tagDrag.state.draggingId !== null &&
+      headerDrag.tagDrag.state.dropIndicatorY !== null ? (
+        <WorktreeSidebarDropIndicator y={headerDrag.tagDrag.state.dropIndicatorY} />
+      ) : null}
       {worktreeDragState.draggingWorktreeId !== null &&
       worktreeDragState.dropIndicatorY !== null ? (
         <WorktreeSidebarDropIndicator y={worktreeDragState.dropIndicatorY} />

@@ -13,6 +13,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 vi.mock('@/store', () => {
   const state = {
     unifiedTabsByWorktree: {},
+    folderWorkspaces: [],
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     browserTabsByWorktree: {},

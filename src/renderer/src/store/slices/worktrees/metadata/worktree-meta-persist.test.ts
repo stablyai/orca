@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  WORKTREE_TAGS_RUNTIME_CAPABILITY
+} from '../../../../../../shared/protocol-version'
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
@@ -224,5 +227,39 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
       })
     ).rejects.toThrow('atomic support required')
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('persistWorktreeMeta tags compatibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.target = { kind: 'environment', environmentId: 'env-1' }
+    mocks.assertCapability.mockResolvedValue(undefined)
+  })
+
+  it('refuses to send tags to a host that would strip them', async () => {
+    mocks.assertCapability.mockRejectedValue(new Error('update required'))
+
+    await expect(persistWorktreeMeta(mocks.target, 'repo::/feature', { tags: [] })).rejects.toThrow(
+      'update required'
+    )
+
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      'env-1',
+      WORKTREE_TAGS_RUNTIME_CAPABILITY,
+      'Update the remote runtime to tag workspaces'
+    )
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('sends tags to capable hosts', async () => {
+    await persistWorktreeMeta(mocks.target, 'repo::/feature', { tags: ['billing'] })
+
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.target,
+      'worktree.set',
+      { worktree: 'id:repo::/feature', tags: ['billing'] },
+      { timeoutMs: 15_000 }
+    )
   })
 })

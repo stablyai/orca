@@ -4,11 +4,11 @@ import type { CreateWorktreeResult } from '../../../shared/worktree/create-types
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime-remote-fetch-controller'
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from '../runtime-worktree-drift-probe'
-import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
-  updateRuntimeManagedWorktreeMetadata
+  updateRuntimeManagedWorktreeMetadata,
+  type ManagedWorktreeMetaUpdates
 } from '../runtime-managed-worktree-metadata'
 import { resolveRuntimeGitHubWorktreeBase } from '../runtime-github-worktree-base'
 import { resolveRuntimeGitLabWorktreeBase } from '../runtime-gitlab-worktree-base'
@@ -115,16 +115,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  async updateManagedWorktreeMeta(
-    worktreeSelector: string,
-    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
-      pushTarget?: GitPushTarget | null
-      lineage?: {
-        parentWorktree?: string
-        noParent?: boolean
-      }
-    }
-  ) {
+  async updateManagedWorktreeMeta(worktreeSelector: string, updates: ManagedWorktreeMetaUpdates) {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }

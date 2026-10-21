@@ -17,6 +17,7 @@ import type {
   RightSidebarExplorerView,
   RightSidebarTab,
   StatusBarItem,
+  TagOrderBy,
   TaskResumeState,
   ThreadReadFilter,
   TopLevelView,
@@ -27,6 +28,7 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { WorkspaceGroupBy } from './workspace-group-by'
 
 export type PersistedUIState = {
   jiraSavedFilterState?: JiraSavedFilterState
@@ -43,10 +45,14 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project header ordering in `groupBy: 'repo'`, independent of `sortBy`: 'manual' uses persisted order + header drag, 'recent' by latest visible activity. */
   projectOrderBy: ProjectOrderBy
+  /** Tag header ordering in `groupBy: 'tag'`: 'name' alphabetical, 'manual' persisted order + header drag, 'activity' by latest agent activity. */
+  tagOrderBy?: TagOrderBy
+  /** User-defined tag section order for `tagOrderBy: 'manual'`; tags missing here append after the listed ones. */
+  manualTagOrder?: string[]
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
@@ -215,6 +221,8 @@ export type PersistedUIState = {
   _jiraIssueWorktreeCardPropertyDefaulted?: boolean
   /** One-shot backfill flag for 'host', which became a toggleable property after earlier profiles were already stamped. */
   _hostWorktreeCardPropertyDefaulted?: boolean
+  /** One-shot backfill flag for 'tags', so a later deliberate uncheck sticks across restarts. */
+  _tagsWorktreeCardPropertyDefaulted?: boolean
   /** Agent total when the star countdown began or was deferred; preserved across app updates. */
   starNagBaselineAgents?: number | null
   /** Legacy baseline version retained for older builds; no longer resets the countdown. */

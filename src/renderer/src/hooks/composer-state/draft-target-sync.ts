@@ -19,6 +19,7 @@ export type DraftTargetSyncInput = Pick<
   | 'linkedWorkItem'
   | 'name'
   | 'note'
+  | 'tags'
   | 'persistDraft'
   | 'pendingInitialWorkspaceTarget'
   | 'repoId'
@@ -51,6 +52,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     linkedWorkItem,
     name,
     note,
+    tags,
     persistDraft,
     pendingInitialWorkspaceTarget,
     repoId,
@@ -94,6 +96,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
       name,
       prompt: agentPrompt,
       note,
+      ...(tags.length > 0 ? { tags } : {}),
       attachments: attachmentPaths,
       linkedWorkItem,
       linkedTaskSourceContext: taskSourceContext,
@@ -118,6 +121,7 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     linkedGitLabMR,
     linkedWorkItem,
     note,
+    tags,
     name,
     repoId,
     selectedProjectGroup,

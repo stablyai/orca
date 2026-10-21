@@ -17,6 +17,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'automation',
   'cli',
   'comment',
+  'tags',
   'ports',
   // Why: agent activity is the primary reason users opt into the feature, so
   // the Default mode keeps it inline on each card while Compact removes the
@@ -55,6 +56,7 @@ export const WORKTREE_CARD_PROPERTIES = [
   'automation',
   'cli',
   'comment',
+  'tags',
   'ports',
   'inline-agents',
   'host'

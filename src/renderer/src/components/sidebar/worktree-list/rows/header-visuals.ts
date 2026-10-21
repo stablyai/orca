@@ -1,4 +1,4 @@
-import { CircleX, FolderTree, List, Pin } from 'lucide-react'
+import { CircleX, FolderTree, List, Pin, Tag, Tags } from 'lucide-react'
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
@@ -70,10 +70,23 @@ const ALL_GROUP_META = {
   icon: List
 } as const
 
+const TAG_GROUP_META = {
+  tone: 'text-foreground',
+  icon: Tag
+} as const
+
+const UNTAGGED_GROUP_META = {
+  get label() {
+    return translate('auto.components.sidebar.worktree.list.groups.untagged', 'Untagged')
+  },
+  tone: 'text-muted-foreground',
+  icon: Tags
+} as const
+
 type SidebarHeaderVisual = {
   icon: React.ComponentType<{ className?: string }>
   tone: string
-  /** Set for headers the builder leaves unnamed: Pinned, All and the PR lanes. */
+  /** Set for headers the builder leaves unnamed: Pinned, All, Untagged and the PR lanes. */
   label?: string
 }
 
@@ -91,6 +104,10 @@ export function getSidebarHeaderVisual(
       return PROJECT_GROUP_META
     case 'pr-status':
       return PR_GROUP_META[icon.prGroup]
+    case 'tag':
+      return TAG_GROUP_META
+    case 'untagged':
+      return UNTAGGED_GROUP_META
     case 'workspace-status': {
       const { icon: statusIcon, tone } = getWorkspaceStatusVisualMeta(
         workspaceStatuses.find((status) => status.id === icon.status) ?? icon.status

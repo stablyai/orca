@@ -30,7 +30,7 @@ export type HostFeedListSources = {
   search: string
 }
 
-/** The builder names data headers; Pinned, All and the PR lanes each client names itself. */
+/** The builder names data headers; Pinned, All, Untagged and PR lanes each client names. */
 function headerTitle(row: GroupHeaderRow): string {
   switch (row.icon.kind) {
     case 'pinned':
@@ -39,8 +39,11 @@ function headerTitle(row: GroupHeaderRow): string {
       return row.label ?? 'All'
     case 'pr-status':
       return row.label ?? PR_GROUP_LABELS[row.icon.prGroup]
+    case 'untagged':
+      return row.label ?? 'Untagged'
     case 'project':
     case 'workspace-status':
+    case 'tag':
       return row.label ?? ''
   }
 }

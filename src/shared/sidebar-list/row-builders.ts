@@ -112,14 +112,24 @@ export function appendWorktreeRows(
  *  share a folder id. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  sectionKey?: string
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
-    key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
+    key: `folder-workspace:${getFolderWorkspaceRowNavigationKey({ folderWorkspace: pair.folderWorkspace, sectionKey })}`,
+    ...(sectionKey ? { sectionKey } : {}),
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
     groupDepth
   }
+}
+
+/** Navigation and DOM-option key for a folder row; section-scoped when the row can repeat. */
+export function getFolderWorkspaceRowNavigationKey(
+  row: Pick<FolderWorkspaceRow, 'folderWorkspace' | 'sectionKey'>
+): string {
+  const workspaceKey = getFolderWorkspaceHostIdentity(row.folderWorkspace)
+  return row.sectionKey ? `${row.sectionKey}:${workspaceKey}` : workspaceKey
 }

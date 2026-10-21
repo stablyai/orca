@@ -1,8 +1,14 @@
 import type { ProjectGroup } from '../project-group-types'
 import type { ServedProjectSections } from '../project-section-catalog-schema'
-import type { ProjectSectionRepo } from '../project-section-grouping'
+import type { ProjectSectionModel, ProjectSectionRepo } from '../project-section-grouping'
 import type { Repo } from '../repo-types'
-import type { SidebarFeedCatalog } from './sidebar-feed-rows'
+
+/** The catalog the feed does not carry: every host's repos (repo.list), groups and projects. */
+export type SidebarFeedCatalog = {
+  repos: readonly Repo[]
+  projectGroups: readonly ProjectGroup[]
+  projectGrouping: ProjectSectionModel
+}
 
 /** A repo as a served catalog or a host's repo.list names it, before the builder reads it. */
 export type SidebarCatalogRepo = ProjectSectionRepo &

@@ -19,6 +19,11 @@ describe('the card properties the phone offers', () => {
     expect(display).toContain('cli')
   })
 
+  it('hides Tags until the phone renders tag chips', () => {
+    expect(ids(phoneCardPropertyChoices(WORKSPACE_CARD_PROPERTY_CHOICES))).not.toContain('tags')
+    expect(ids(phoneCardPropertyChoices(WORKSPACE_CARD_DISPLAY_CHOICES))).not.toContain('tags')
+  })
+
   it('drops Ports from what it counts without touching the shared value', () => {
     const shared: readonly WorktreeCardProperty[] = Object.freeze(['issue', 'ports', 'cli'])
     expect(withoutPhoneHiddenProperties(shared)).toEqual(['issue', 'cli'])

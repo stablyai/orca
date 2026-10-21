@@ -2,7 +2,8 @@ import type { WorkspaceViewChoice } from '../../../src/shared/workspace-view/wor
 import type { WorktreeCardProperty } from '../../../src/shared/ui-chrome-types'
 
 // Product call: the phone has no port scan, and ports are not worth one; the desktop keeps them.
-const PHONE_HIDDEN_CARD_PROPERTIES: ReadonlySet<WorktreeCardProperty> = new Set(['ports'])
+// Tags: the phone does not render tag chips yet.
+const PHONE_HIDDEN_CARD_PROPERTIES: ReadonlySet<WorktreeCardProperty> = new Set(['ports', 'tags'])
 
 /** The shared choices the phone offers, in the shared order. */
 export function phoneCardPropertyChoices<Choice extends WorkspaceViewChoice<WorktreeCardProperty>>(

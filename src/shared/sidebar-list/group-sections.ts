@@ -3,7 +3,7 @@ import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { getWorkspaceStatusFromGroupKey } from '../workspace-statuses'
-import type { PRGroupKey } from './group-keys'
+import { PR_GROUP_ORDER, getPRLaneKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import {
   getLaneHostWorktreeCounts,
@@ -24,8 +24,10 @@ import type {
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
   Row,
+  SidebarHeaderIcon,
   WorktreeGroupBy
 } from './row-types'
+import { UNTAGGED_GROUP_KEY } from './tag-groups'
 
 /** Everything section emission reads that stays fixed for one planSidebarRows call. */
 export type SectionAppendContext = {
@@ -109,12 +111,24 @@ export function appendOrderedGroups(
               }
             })()
           : (() => {
-              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+              const icon: SidebarHeaderIcon =
+                groupBy !== 'tag'
+                  ? {
+                      kind: 'pr-status',
+                      prGroup:
+                        PR_GROUP_ORDER.find((prGroup) => getPRLaneKey(prGroup) === key) ??
+                        'in-progress'
+                    }
+                  : key === UNTAGGED_GROUP_KEY
+                    ? { kind: 'untagged' }
+                    : { kind: 'tag' }
               return {
                 type: 'header' as const,
                 key,
+                // Why: a tag's spelling is data; Untagged and the PR lanes are named by each client.
+                ...(icon.kind === 'tag' ? { label: group.label } : {}),
                 count: group.items.length + folderPairs.length,
-                icon: { kind: 'pr-status' as const, prGroup },
+                icon,
                 hostWorktreeCounts: getLaneHostWorktreeCounts(
                   group.items,
                   folderPairs,
@@ -186,7 +200,9 @@ export function appendOrderedGroups(
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
       })
       for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
+        result.push(
+          buildFolderWorkspaceRow(pair, projectGroupDepth, groupBy === 'tag' ? key : undefined)
+        )
       }
     }
   }
