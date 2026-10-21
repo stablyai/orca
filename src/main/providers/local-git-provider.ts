@@ -1,3 +1,4 @@
+import { getFileBlame } from '../git/blame'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
@@ -108,6 +109,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
       }),
     getCommitCompare: (worktreePath, commitId) =>
       getCommitCompare(worktreePath, commitId, interactive),
+    getBlame: (worktreePath, filePath, revision, contentsSource) =>
+      getFileBlame(worktreePath, filePath, interactive, revision, contentsSource),
     getUpstreamStatus: (worktreePath, pushTarget) =>
       getUpstreamStatus(worktreePath, pushTarget, base),
     pushBranch: (worktreePath, publish, pushTarget, pushOptions) =>

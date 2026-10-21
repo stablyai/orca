@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
+import type { GitBlameContentsSource } from '../../../../shared/git-blame'
 import type { DecoratedDiffComment } from '../diff-comments/decorated-diff-comment'
 import type { DiffSection } from './diff-section-types'
 
@@ -17,6 +18,12 @@ export type DiffSectionItemProps = {
   } | null
   sectionHeight: number | undefined
   worktreeId?: string
+  originalBlamePath?: string
+  originalBlameRevision?: string
+  originalContentsSource?: GitBlameContentsSource
+  modifiedBlameRevision?: string
+  modifiedContentsSource?: GitBlameContentsSource
+  modifiedBufferDirty?: boolean
   loadSection: (index: number) => void
   loadDeferredSection?: (index: number) => void
   retrySection: (index: number) => void

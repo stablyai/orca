@@ -17,6 +17,7 @@ import { registerFilesystemGitModelDiscoveryHandlers } from './filesystem/filesy
 import { registerFilesystemGitPullRequestGenerationHandlers } from './filesystem/filesystem-git-pull-request-generation-handlers'
 import { registerFilesystemGitRemoteHandlers } from './filesystem/filesystem-git-remote-handlers'
 import { registerFilesystemGitDiffHandlers } from './filesystem/filesystem-git-diff-handlers'
+import { registerFilesystemGitBlameHandlers } from './filesystem/filesystem-git-blame-handlers'
 import { registerFilesystemGitIndexHandlers } from './filesystem/filesystem-git-index-handlers'
 import { registerFilesystemGitUrlHandlers } from './filesystem/filesystem-git-url-handlers'
 
@@ -42,6 +43,7 @@ export function registerFilesystemHandlers(
   registerFilesystemGitPullRequestGenerationHandlers(context)
   registerFilesystemGitRemoteHandlers(context)
   registerFilesystemGitDiffHandlers(context)
+  registerFilesystemGitBlameHandlers(context)
   registerFilesystemGitIndexHandlers(context)
   registerFilesystemGitUrlHandlers(context)
   registerLocalLogTailHandlers(store)
