@@ -346,7 +346,7 @@ describe('cursor sidecar enrichment', () => {
     expect(session?.updatedAt).toBe(new Date(UPDATED_AT_MS).toISOString())
   })
 
-  it('keeps a transcript title and timestamps over meta.json', async () => {
+  it('uses the meta.json title the user can rename, and keeps transcript timestamps', async () => {
     const cursorHome = await createCursorHome()
     await writeChatMeta(cursorHome, 'workspace-hash', 'chat-3', { title: 'Meta Title' })
     await writeTranscript(cursorHome, 'slug', 'chat-3', [
@@ -360,10 +360,26 @@ describe('cursor sidecar enrichment', () => {
 
     const { session } = await parseCursorCached(await cursorCandidate(cursorHome))
 
-    expect(session?.title).toBe('transcript first prompt')
+    expect(session?.title).toBe('Meta Title')
     expect(session?.createdAt).toBe('2026-01-01T00:00:00.000Z')
     // cwd is never in the transcript, so it still comes from meta.json.
     expect(session?.cwd).toBe('/private/tmp/workspace')
+  })
+
+  it('keeps the first prompt when meta.json has no title', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-3b')
+    await writeTranscript(cursorHome, 'slug', 'chat-3b', [
+      JSON.stringify({
+        role: 'user',
+        message: { content: 'transcript first prompt' }
+      })
+    ])
+    resetSessionParseCacheForTests()
+
+    const { session } = await parseCursorCached(await cursorCandidate(cursorHome))
+
+    expect(session?.title).toBe('transcript first prompt')
   })
 
   it('builds the resume command from the meta.json cwd', async () => {
@@ -417,6 +433,28 @@ describe('cursor sidecar enrichment', () => {
     // never do this, because the cached cwd is already non-null.
     expect(session?.cwd).toBe('/repo/second')
     expect(session?.resumeCommand).toContain('/repo/second')
+  })
+
+  it('picks up a renamed meta.json title without re-reading the transcript', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-10', { title: 'First Name' })
+    await writeTranscript(cursorHome, 'slug', 'chat-10', [
+      JSON.stringify({ role: 'user', message: { content: 'hi' } })
+    ])
+    resetSessionParseCacheForTests()
+    expect((await parseCursorCached(await cursorCandidate(cursorHome))).session?.title).toBe(
+      'First Name'
+    )
+
+    const future = new Date(Date.now() + 10_000)
+    await writeChatMeta(cursorHome, 'workspace-hash', 'chat-10', { title: 'Renamed' })
+    await utimes(join(cursorHome, 'chats', 'workspace-hash', 'chat-10', 'meta.json'), future, future)
+
+    const { session, stats } = await parseCursorCached(await cursorCandidate(cursorHome))
+
+    expect(stats.reused).toBe(1)
+    expect(stats.fullParses).toBe(0)
+    expect(session?.title).toBe('Renamed')
   })
 
   it('keeps the stored merge when a sidecar-only re-merge is cancelled', async () => {
