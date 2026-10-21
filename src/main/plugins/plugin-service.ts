@@ -18,9 +18,9 @@ import {
 } from './plugin-discovery'
 import { PluginEventBus } from './plugin-event-bus'
 import { PluginAuditLog } from './plugin-audit-log'
-import { executePluginHostCallRequest } from './plugin-host-call-adapter'
+import { executePluginServiceHostCall } from './plugin-service-host-call'
 import { PluginContentVerifier } from './plugin-content-integrity'
-import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
+import type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { PluginPanelController } from './plugin-panel-controller'
 import { PluginWorkerController } from './plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
@@ -57,7 +57,7 @@ export class PluginService {
   private disposed = false
   private readonly installed = new PluginInstallationState({
     pluginsDir: () => getUserPluginsDir(this.options.userDataPath),
-    deactivate: (pluginKey) => this.workerController.deactivate(pluginKey),
+    deactivate: (pluginKey) => this.deactivatePlugin(pluginKey),
     notifyChanged: () => this.notifyChanged(false)
   })
 
@@ -92,7 +92,10 @@ export class PluginService {
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false),
-      onWorkerGone: (pluginKey) => this.eventBus.clear(pluginKey)
+      onWorkerGone: (pluginKey) => {
+        this.eventBus.clear(pluginKey)
+        this.panels.clearMessages(pluginKey)
+      }
     })
   }
 
@@ -167,6 +170,7 @@ export class PluginService {
       this.options.getKeybindings?.()
     )
     this.contentPacksReady = true
+    this.panels.reconcile()
     const nextSpecs = collectApprovedWorkerSpecs(next, (plugin) => this.isRuntimeApproved(plugin))
     // Notify before slow shutdown so feature-off unmounts panels immediately.
     this.notifyChanged(true)
@@ -242,29 +246,21 @@ export class PluginService {
       : null
   }
 
-  /** Host API chokepoint for both transports (worker fork IPC + panel
-   *  bridge); serve RPC reuses it through the same entry points. */
   async executeHostCall(
     pluginKey: string,
     method: string,
     params: unknown,
     options: { viaPanel: boolean }
   ): Promise<PluginPanelActionOutcome> {
-    return executePluginHostCallRequest({
-      pluginKey,
+    return executePluginServiceHostCall(pluginKey, {
       request: { method, params },
       viaPanel: options.viaPanel,
-      resolvePolicy: (boundPluginKey) => ({
-        grantedCapabilities: this.getGrantedCapabilities(boundPluginKey),
-        services: this.runtimeDelegate
-          ? bindPluginHostServices({
-              delegate: this.runtimeDelegate,
-              pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
-            })
-          : null,
-        audit: this.audit
-      })
+      getGrantedCapabilities: (key) => this.getGrantedCapabilities(key),
+      runtimeDelegate: this.runtimeDelegate,
+      userDataPath: this.options.userDataPath,
+      panels: this.panels,
+      eventBus: this.eventBus,
+      audit: this.audit
     })
   }
 
@@ -303,6 +299,7 @@ export class PluginService {
   }
 
   async deactivatePlugin(pluginKey: string): Promise<void> {
+    this.panels.revokePlugin(pluginKey)
     await this.workerController.deactivate(pluginKey)
     this.notifyChanged(false)
   }
@@ -323,6 +320,7 @@ export class PluginService {
       this.options.getKeybindings?.()
     )
     this.contentPacksReady = true
+    this.panels.reconcile()
     const nextSpecs = collectApprovedWorkerSpecs(this.installed.discovered, (plugin) =>
       this.isRuntimeApproved(plugin)
     )

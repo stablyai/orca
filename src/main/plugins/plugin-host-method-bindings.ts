@@ -1,11 +1,14 @@
 import {
   getPluginHostMethodSpec,
+  panelPostMessageParams,
   PLUGIN_HOST_API_V0,
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
+import type { PluginPanelCallAdmission } from '../../shared/plugins/plugin-panel-call-admission'
+import type { PluginPanelJsonValue } from '../../shared/plugins/plugin-panel-data'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 
 export type PluginWorktreeContext = {
@@ -46,6 +49,12 @@ export type PluginHostServices = {
     getAll(pluginId: string): Record<string, unknown>
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
+  panelMessageAdmission?: PluginPanelCallAdmission
+  postPanelMessage?: (
+    pluginId: string,
+    panelId: string,
+    data: PluginPanelJsonValue
+  ) => { delivered: number }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
 }
 
@@ -111,6 +120,13 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('notifications.show', async (params, { pluginId, services }) => {
     const { title, body } = params as { title: string; body?: string }
     return services.dispatchPluginNotification({ pluginId, title, body })
+  }),
+  definePluginMethod('panel.postMessage', async (params, { pluginId, services }) => {
+    if (!services.postPanelMessage) {
+      throw new Error('panel messages are not available')
+    }
+    const { panelId, data } = panelPostMessageParams.parse(params)
+    return services.postPanelMessage(pluginId, panelId, data)
   }),
   definePluginMethod('storage.get', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }

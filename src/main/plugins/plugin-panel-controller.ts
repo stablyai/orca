@@ -1,8 +1,11 @@
-import type {
-  PluginPanelActionOutcome,
-  PluginPanelEntry
+import {
+  PANEL_MESSAGE_TYPE,
+  panelActionCallSchema,
+  type PluginPanelActionOutcome,
+  type PluginPanelEntry,
+  type PluginPanelMessage
 } from '../../shared/plugins/plugin-panel-bridge'
-import { panelActionCallSchema } from '../../shared/plugins/plugin-panel-bridge'
+import { panelPostMessageParams } from '../../shared/plugins/plugin-host-api'
 import {
   admitPluginPanelCall,
   createPluginPanelCallAdmission,
@@ -29,6 +32,11 @@ type PluginPanelControllerOptions = {
   panelAdmission?: PluginPanelCallAdmission
 }
 
+type RetainedPanelMessage = {
+  binding: PluginPanelSessionBinding
+  message: PluginPanelMessage
+}
+
 type LoadedPluginPanel = {
   entry: { html: string }
   binding: PluginPanelSessionBinding
@@ -36,6 +44,8 @@ type LoadedPluginPanel = {
 
 export class PluginPanelController {
   private readonly sessions = new PluginPanelSessions()
+  private readonly messages = new Map<string, Map<string, RetainedPanelMessage>>()
+  readonly messageAdmission = createPluginPanelCallAdmission()
   private readonly boundOwnerSignals = new WeakSet<AbortSignal>()
   private readonly panelAdmission: PluginPanelCallAdmission
 
@@ -94,6 +104,96 @@ export class PluginPanelController {
     return this.options.executeHostCall(binding.pluginKey, parsed.data.action, parsed.data.params)
   }
 
+  postMessage(pluginKey: string, panelId: string, data: unknown): { delivered: number } {
+    const parsed = panelPostMessageParams.parse({ panelId, data })
+    const plugin = this.options.resolveApprovedPlugin(pluginKey)
+    if (!plugin?.manifest.contributes.panels.some((panel) => panel.id === panelId)) {
+      throw new Error('unknown or unavailable plugin panel')
+    }
+    const binding = {
+      pluginKey,
+      panelId,
+      rootDir: plugin.rootDir,
+      manifestRevision: JSON.stringify(plugin.manifest)
+    }
+    const message: PluginPanelMessage = { type: PANEL_MESSAGE_TYPE, data: parsed.data }
+    let panels = this.messages.get(pluginKey)
+    if (!panels) {
+      panels = new Map()
+      this.messages.set(pluginKey, panels)
+    }
+    // Snapshot the value so later caller mutations cannot change replay.
+    panels.set(panelId, { binding, message: structuredClone(message) })
+    return {
+      delivered: this.sessions.deliver(pluginKey, panelId, message, (session) =>
+        this.isCurrent(session)
+      )
+    }
+  }
+
+  connect(
+    ownerKey: string,
+    token: string,
+    id: string,
+    send: (message: PluginPanelMessage) => void
+  ): boolean {
+    const binding = this.sessions.resolve(ownerKey, token)
+    if (!binding || !this.isCurrent(binding)) {
+      return false
+    }
+    if (!this.sessions.connect(ownerKey, token, id, send)) {
+      return false
+    }
+    const retained = this.messages.get(binding.pluginKey)?.get(binding.panelId)
+    try {
+      if (retained && this.isCurrent(retained.binding)) {
+        send(structuredClone(retained.message))
+      }
+    } catch {
+      this.disconnect(ownerKey, token, id)
+      return false
+    }
+    return true
+  }
+
+  disconnect(ownerKey: string, token: string, id: string): void {
+    this.sessions.disconnect(ownerKey, token, id)
+  }
+
+  clearMessages(pluginKey: string): void {
+    this.messages.delete(pluginKey)
+    this.messageAdmission.clear(pluginKey)
+  }
+
+  revokePlugin(pluginKey: string): void {
+    this.sessions.revokePlugin(pluginKey)
+    this.clearMessages(pluginKey)
+  }
+
+  reconcile(): void {
+    this.sessions.reconcile((binding) => this.isCurrent(binding))
+    for (const [pluginKey, panels] of this.messages) {
+      for (const [panelId, retained] of panels) {
+        if (!this.isCurrent(retained.binding)) {
+          panels.delete(panelId)
+        }
+      }
+      if (panels.size === 0) {
+        this.clearMessages(pluginKey)
+      }
+    }
+  }
+
+  private isCurrent(binding: PluginPanelSessionBinding): boolean {
+    const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
+    return Boolean(
+      plugin &&
+      plugin.rootDir === binding.rootDir &&
+      JSON.stringify(plugin.manifest) === binding.manifestRevision &&
+      plugin.manifest.contributes.panels.some((panel) => panel.id === binding.panelId)
+    )
+  }
+
   revokeOwner(ownerKey: string): void {
     this.sessions.revokeOwner(ownerKey)
   }
@@ -111,6 +211,8 @@ export class PluginPanelController {
   }
 
   revokeAll(): void {
+    this.messages.clear()
+    this.messageAdmission.clear()
     this.sessions.clear()
     this.panelAdmission.clear()
   }

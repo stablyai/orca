@@ -162,6 +162,32 @@ export function registerPluginHandlers(
     }
   )
 
+  ipcMain.on('plugins:panelMessageSubscription', (event, args: unknown) => {
+    const parsed = z
+      .object({
+        sessionToken: z.string().min(32).max(128),
+        subscriptionId: z.string().min(1).max(128),
+        enabled: z.boolean()
+      })
+      .strict()
+      .safeParse(args)
+    if (!parsed.success) {
+      return
+    }
+    const ownerKey = rendererPanelOwner(event.sender.id)
+    const { sessionToken, subscriptionId, enabled } = parsed.data
+    if (!enabled) {
+      pluginService.panels.disconnect(ownerKey, sessionToken, subscriptionId)
+      return
+    }
+    pluginService.panels.connect(ownerKey, sessionToken, subscriptionId, (message) => {
+      if (event.sender.isDestroyed()) {
+        throw new Error('panel owner closed')
+      }
+      event.sender.send('plugins:panelMessage', { sessionToken, subscriptionId, message })
+    })
+  })
+
   // Panel-originated actions relayed by the renderer's postMessage bridge
   // host. Capability enforcement happens in main, never in the renderer.
   ipcMain.handle(

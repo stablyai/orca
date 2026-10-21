@@ -177,3 +177,129 @@ describe('PluginPanelController identity binding', () => {
     expect(executeHostCall).not.toHaveBeenCalled()
   })
 })
+
+describe('worker panel messages', () => {
+  async function setup() {
+    const plugin = await createPlugin()
+    const other = { ...plugin, pluginKey: 'orca-samples.other' }
+    let current: ValidDiscoveredPlugin | null = plugin
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (key) => (key === other.pluginKey ? other : current),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      log: () => vi.fn()
+    })
+    return {
+      plugin,
+      other,
+      controller,
+      replace: (next: ValidDiscoveredPlugin | null) => {
+        current = next
+      }
+    }
+  }
+
+  it('delivers to attached sessions only, isolated by plugin and owner', async () => {
+    const { plugin, other, controller } = await setup()
+    const one = await controller.open('one', plugin.pluginKey, 'dashboard')
+    const two = await controller.open('two', plugin.pluginKey, 'dashboard')
+    const foreign = await controller.open('other', other.pluginKey, 'dashboard')
+    const receive = vi.fn()
+    const receiveOther = vi.fn()
+    expect(controller.connect('wrong', one!.sessionToken, 'sub', receive)).toBe(false)
+    expect(controller.connect('one', one!.sessionToken, 'sub', receive)).toBe(true)
+    controller.connect('other', foreign!.sessionToken, 'sub', receiveOther)
+    expect(controller.postMessage(plugin.pluginKey, 'dashboard', { value: 1 })).toEqual({
+      delivered: 1
+    })
+    expect(receive).toHaveBeenLastCalledWith({ type: 'orca-panel-message', data: { value: 1 } })
+    expect(receiveOther).not.toHaveBeenCalled()
+    controller.connect('two', two!.sessionToken, 'sub', receive)
+    expect(controller.postMessage(plugin.pluginKey, 'dashboard', null)).toEqual({ delivered: 2 })
+    controller.disconnect('one', one!.sessionToken, 'sub')
+    controller.revokeOwner('two')
+    expect(controller.postMessage(plugin.pluginKey, 'dashboard', false)).toEqual({ delivered: 0 })
+  })
+
+  it('replays only the latest snapshot after a late panel attaches', async () => {
+    const { plugin, controller } = await setup()
+    controller.postMessage(plugin.pluginKey, 'dashboard', 'old')
+    const value = { value: 2 }
+    expect(controller.postMessage(plugin.pluginKey, 'dashboard', value)).toEqual({ delivered: 0 })
+    value.value = 99
+    const entry = await controller.open('late', plugin.pluginKey, 'dashboard')
+    const receive = vi.fn()
+    controller.connect('late', entry!.sessionToken, 'sub', receive)
+    expect(receive).toHaveBeenCalledExactlyOnceWith({
+      type: 'orca-panel-message',
+      data: { value: 2 }
+    })
+    controller.connect('late', entry!.sessionToken, 'replacement', receive)
+    controller.disconnect('late', entry!.sessionToken, 'sub')
+    expect(controller.postMessage(plugin.pluginKey, 'dashboard', 3)).toEqual({ delivered: 1 })
+  })
+
+  it('clears replay on worker restart while keeping attached panels', async () => {
+    const { plugin, controller } = await setup()
+    const entry = await controller.open('one', plugin.pluginKey, 'dashboard')
+    const receive = vi.fn()
+    controller.connect('one', entry!.sessionToken, 'sub', receive)
+    controller.postMessage(plugin.pluginKey, 'dashboard', 'before restart')
+    controller.clearMessages(plugin.pluginKey)
+    const late = await controller.open('late', plugin.pluginKey, 'dashboard')
+    const lateReceive = vi.fn()
+    controller.connect('late', late!.sessionToken, 'sub', lateReceive)
+    expect(lateReceive).not.toHaveBeenCalled()
+    expect(controller.postMessage(plugin.pluginKey, 'dashboard', 'new worker')).toEqual({
+      delivered: 2
+    })
+  })
+
+  it.each(['disable', 'uninstall', 'manifest change'])(
+    'revokes stale delivery and replay on %s',
+    async (reason) => {
+      const { plugin, controller, replace } = await setup()
+      const entry = await controller.open('one', plugin.pluginKey, 'dashboard')
+      const receive = vi.fn()
+      controller.connect('one', entry!.sessionToken, 'sub', receive)
+      controller.postMessage(plugin.pluginKey, 'dashboard', 'stale')
+      receive.mockClear()
+      replace(
+        reason === 'manifest change'
+          ? { ...plugin, manifest: { ...plugin.manifest, version: '1.0.1' } }
+          : null
+      )
+      controller.reconcile()
+      replace(plugin)
+      expect(controller.postMessage(plugin.pluginKey, 'dashboard', 'fresh')).toEqual({
+        delivered: 0
+      })
+      expect(receive).not.toHaveBeenCalled()
+      controller.revokePlugin(plugin.pluginKey)
+      const next = await controller.open('one', plugin.pluginKey, 'dashboard')
+      controller.connect('one', next!.sessionToken, 'sub', receive)
+      expect(receive).not.toHaveBeenCalled()
+    }
+  )
+
+  it('rejects unknown panel ids, oversized and non-JSON messages without retaining them', async () => {
+    const { plugin, controller } = await setup()
+    expect(() => controller.postMessage(plugin.pluginKey, 'other-panel', 1)).toThrow()
+    for (const value of [
+      undefined,
+      new Date(),
+      BigInt(1),
+      { nested: undefined },
+      'x'.repeat(65537)
+    ]) {
+      expect(() => controller.postMessage(plugin.pluginKey, 'dashboard', value)).toThrow()
+    }
+    const cyclic: { self?: unknown } = {}
+    cyclic.self = cyclic
+    expect(() => controller.postMessage(plugin.pluginKey, 'dashboard', cyclic)).toThrow()
+    const entry = await controller.open('one', plugin.pluginKey, 'dashboard')
+    const receive = vi.fn()
+    controller.connect('one', entry!.sessionToken, 'sub', receive)
+    expect(receive).not.toHaveBeenCalled()
+  })
+})

@@ -1,0 +1,40 @@
+---
+title: Plugin panel messages
+---
+
+Workers can send live data to their panels.
+
+`panel.postMessage` lets a plugin worker update its sandboxed panels without rewriting their HTML. Development-folder and marketplace plugins use the same channel. The method is worker-only and requires current plugin consent, with no additional capability.
+
+## Host API
+
+```js
+const { delivered } = await orca.host.call('panel.postMessage', {
+  panelId: 'budget', // An id from this plugin's contributes.panels.
+  data: { remaining: 75, updatedAt: new Date().toISOString() }
+})
+```
+
+`data` is a JSON value (including `null`, strings, numbers, booleans, arrays and objects). Non-finite numbers, undefined values, functions, binary data and cyclic values are rejected. Messages are limited to 64 KiB, including transport-envelope overhead, and 30 calls per 10 seconds per plugin across all its panels. Invalid and oversized calls also spend the rate budget. The shared panel traversal limits also bound deeply nested or very wide values.
+
+`delivered` counts open sessions attached to receive messages, across desktop windows. It means the host forwarded the message, not that the panel acknowledged it. Closed panels return zero. Unknown panel ids fail; a plugin cannot target another plugin's panels. The latest successful message is retained in memory even if no panel is open. It is replayed when a panel's iframe finishes loading and attaches its session. There is no persistent storage or HTML reload.
+
+Retained data is cleared when the plugin is disabled, uninstalled, its manifest changes, or its worker exits or restarts. Closing a window revokes its sessions. Unmounting a panel detaches delivery; an unchanged panel document can reattach without reloading.
+
+## Panel listener
+
+The panel receives `{ type: 'orca-panel-message', data }` through its window message event:
+
+```js
+window.addEventListener('message', (event) => {
+  if (event.source !== window.parent) return
+  if (event.data?.type !== 'orca-panel-message') return
+  document.getElementById('remaining').textContent = String(event.data.data.remaining)
+})
+```
+
+Check the parent window's identity. The iframe uses an opaque origin (`sandbox="allow-scripts"`), so origin-string checks cannot authenticate this bridge. The host uses `postMessage` with `'*'` for this reason. The sandbox and network CSP remain unchanged. Render values as text, not HTML.
+
+The host attaches delivery only after the iframe load event so the listener is installed before replay. Older clients without the new preload subscription keep rendering their panels normally.
+
+The [Hello Orca example](https://github.com/stablyai/orca/tree/main/examples/plugins/hello-orca) posts a counter and time every three seconds. Run **Hello: Ping** to start its lazy worker, then open the panel. The worker may also start on one of its declared events.

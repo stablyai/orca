@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { createPluginPanelCallAdmission } from '../../shared/plugins/plugin-panel-call-admission'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
@@ -245,5 +246,64 @@ describe('terminal.sendText', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('panel.postMessage host admission', () => {
+  function setup() {
+    const postPanelMessage = vi.fn().mockReturnValue({ delivered: 2 })
+    const services = {
+      ...createServices(vi.fn()),
+      postPanelMessage,
+      panelMessageAdmission: createPluginPanelCallAdmission({
+        limits: { maxMessages: 2 },
+        now: () => 0
+      })
+    }
+    const call = (params: unknown, viaPanel = false, pluginId = 'orca-samples.demo') =>
+      executePluginHostCall({
+        pluginId,
+        method: 'panel.postMessage',
+        params,
+        viaPanel,
+        grantedCapabilities: [],
+        services
+      })
+    return { call, postPanelMessage }
+  }
+
+  it('requires no extra capability and binds the authenticated plugin identity', async () => {
+    const { call, postPanelMessage } = setup()
+    await expect(call({ panelId: 'hello', data: { counter: 1 } })).resolves.toEqual({
+      ok: true,
+      value: { delivered: 2 }
+    })
+    expect(postPanelMessage).toHaveBeenCalledExactlyOnceWith('orca-samples.demo', 'hello', {
+      counter: 1
+    })
+    await expect(call({ panelId: 'hello', data: 2 }, true)).resolves.toMatchObject({
+      ok: false,
+      code: 'panel_forbidden'
+    })
+  })
+
+  it('charges invalid and oversized messages before parsing and isolates budgets by plugin', async () => {
+    const { call, postPanelMessage } = setup()
+    await expect(call({ panelId: 'hello', data: undefined })).resolves.toMatchObject({
+      ok: false,
+      code: 'invalid_params'
+    })
+    await expect(call({ panelId: 'hello', data: 'x'.repeat(65537) })).resolves.toMatchObject({
+      ok: false,
+      code: 'invalid_request'
+    })
+    await expect(call({ panelId: 'hello', data: 3 })).resolves.toMatchObject({
+      ok: false,
+      code: 'rate_limited'
+    })
+    expect(postPanelMessage).not.toHaveBeenCalled()
+    await expect(
+      call({ panelId: 'hello', data: 4 }, false, 'orca-samples.other')
+    ).resolves.toMatchObject({ ok: true })
   })
 })

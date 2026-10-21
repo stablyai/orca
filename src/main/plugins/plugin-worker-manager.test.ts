@@ -389,3 +389,23 @@ describe('PluginWorkerManager idle reap', () => {
     expect(disposed).toBe(true)
   })
 })
+
+describe('worker host call lifetime', () => {
+  it('rejects late host calls from a stopped worker before they can restore panel replay', async () => {
+    let execute: Parameters<PluginWorkerFactory>[0]['executeHostCall'] | undefined
+    const subject = manager(async (options) => {
+      execute = options.executeHostCall
+      return worker()
+    })
+    await subject.ensureActive(spec('orca-samples.demo'))
+    expect(execute).toBeDefined()
+    await expect(
+      execute?.('panel.postMessage', { panelId: 'hello', data: 'live' })
+    ).resolves.toMatchObject({ ok: true })
+    await subject.deactivate('orca-samples.demo')
+    await expect(
+      execute?.('panel.postMessage', { panelId: 'hello', data: 'stale' })
+    ).rejects.toThrow('cancelled')
+    await subject.disposeAll()
+  })
+})

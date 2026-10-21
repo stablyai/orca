@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { PluginPanelJsonValue } from './plugin-panel-data'
 import { isPluginPanelAction } from './plugin-host-api'
 
 /**
@@ -14,20 +15,18 @@ import { isPluginPanelAction } from './plugin-host-api'
 
 export const PANEL_ACTION_REQUEST_TYPE = 'orca-panel-action'
 export const PANEL_ACTION_RESULT_TYPE = 'orca-panel-action-result'
+export const PANEL_MESSAGE_TYPE = 'orca-panel-message'
+export type PluginPanelMessage = { type: typeof PANEL_MESSAGE_TYPE; data: PluginPanelJsonValue }
+
 export const PANEL_PING_TYPE = 'orca-panel-ping'
 export const PANEL_PONG_TYPE = 'orca-panel-pong'
 export const PLUGIN_PANEL_FRAME_NAME_PREFIX = 'orca-plugin-panel:'
 
-/** Per-plugin bridge budgets, enforced host-side. */
-export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
-export const PANEL_MESSAGE_RATE_LIMIT = { maxMessages: 30, perMs: 10_000 }
-
-/** Size cap for the reserved liveness lane. Deliberately size-only: any
- *  per-window count on this lane can be spent by the panel's own pongs and
- *  would drop the next genuine reply, which is the starvation this reserved
- *  lane exists to prevent. Aggregate cost stays bounded because pongs are also
- *  charged to the data budget and cost O(1) plus a walk capped here. */
-export const PANEL_CONTROL_MESSAGE_MAX_BYTES = 1024
+export {
+  PANEL_MESSAGE_MAX_BYTES,
+  PANEL_MESSAGE_RATE_LIMIT,
+  PANEL_CONTROL_MESSAGE_MAX_BYTES
+} from './plugin-panel-message-limits'
 
 /** Watchdog cadence: a panel that misses a pong deadline is demoted to an
  *  errored badge. Busy-loop detection is valid only while the runtime frame-

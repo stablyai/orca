@@ -1,6 +1,7 @@
 import type {
   PluginPanelActionOutcome,
-  PluginPanelEntry
+  PluginPanelEntry,
+  PluginPanelMessage
 } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
@@ -162,6 +163,10 @@ export type PluginsApi = {
     action: string
     params?: unknown
   }) => Promise<PluginPanelActionOutcome>
+  onPanelMessage: (
+    sessionToken: string,
+    callback: (message: PluginPanelMessage) => void
+  ) => () => void
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
   listMarketplaces: () => Promise<PluginMarketplaceHostSourceState[]>
   addMarketplace: (source: PluginMarketplaceGitSource) => Promise<PluginMarketplaceHostSourceState>

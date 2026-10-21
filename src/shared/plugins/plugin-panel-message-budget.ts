@@ -2,7 +2,7 @@ import {
   PANEL_CONTROL_MESSAGE_MAX_BYTES,
   PANEL_MESSAGE_MAX_BYTES,
   PANEL_MESSAGE_RATE_LIMIT
-} from './plugin-panel-bridge'
+} from './plugin-panel-message-limits'
 
 /**
  * Per-plugin bridge budgets: message size cap and a sliding-window rate
