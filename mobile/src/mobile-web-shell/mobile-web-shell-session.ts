@@ -24,7 +24,12 @@ import {
   gateVerdict,
   ROUTE_UNAVAILABLE
 } from './mobile-web-shell-gates'
-import { pageRouteRefusalVerdict, routeViewOf, sameRouteView } from './page-route-policy'
+import {
+  isHostIndexPathname,
+  pageRouteRefusalVerdict,
+  routeViewOf,
+  sameRouteView
+} from './page-route-policy'
 import { pageDocumentStatePatch } from './page-document-state'
 import {
   cachedFallback,
@@ -166,7 +171,8 @@ function onManifestRead(
  * B3's contract, and the only place it is interpreted.
  *
  * `generation-unreadable` and `document-load-failed` say the bytes on disk are suspect, so the
- * host's cache goes and the flow runs once more. `render-process-gone` says nothing about the
+ * host page's cache goes and the flow runs once more. A child route shares those bytes and does
+ * not delete them. `render-process-gone` says nothing about the
  * bytes — renderer memory pressure and a WebView provider update look identical from here — so it
  * remounts and never deletes. `isolation-unavailable` is terminal on the first report: the fence is
  * the whole reason this view exists, and a device that cannot install it will not on a retry.
@@ -200,9 +206,11 @@ function onShellFailed(
   // Through the gate, not straight back to the manifest check: the gates a ready session holds are
   // whatever the last reconnect stored, so a recovery that trusted them walled hosts whose status
   // had gone unreadable underneath a workspace that was, until this failure, working.
-  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, [
-    { kind: 'delete-cache' }
-  ])
+  // Child routes share these bytes, so only the host page deletes them.
+  const before: readonly MobileWebShellSessionEffect[] = isHostIndexPathname(session.routePathname)
+    ? [{ kind: 'delete-cache' }]
+    : []
+  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, before)
 }
 
 /** The decision below, plus one record of it: a release build logs nothing, so what the shell

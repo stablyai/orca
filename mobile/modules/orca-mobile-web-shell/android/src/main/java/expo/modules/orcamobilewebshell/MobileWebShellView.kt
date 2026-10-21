@@ -109,6 +109,8 @@ internal class OrcaMobileWebShellView(
   private var generationDirectory = ""
   private var sessionId = ""
   private var bridgeEnabled = false
+  // Host page only. A child route must not take or replace the parked WebView.
+  private var retainsSlot = true
   private var bridgeInstalled = false
   private var bridgeChannel: MobileWebShellBridgeChannel? = null
   private val bridgeGate = MobileWebShellBridgeGate()
@@ -139,6 +141,10 @@ internal class OrcaMobileWebShellView(
     bridgeEnabled = value
   }
 
+  fun setRetainsSlot(value: Boolean) {
+    retainsSlot = value
+  }
+
   /**
    * Props arrive in no defined order, so neither setter starts anything; this does, once both are
    * in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
@@ -156,9 +162,11 @@ internal class OrcaMobileWebShellView(
     }
     if (applied == null && webView == null) {
       harvestRetiringView(this, next)
-      val retained = retainedPool.takeMatchingOrEvict(next)
-      if (retained != null && attachRetainedSlot(retained)) {
-        return
+      if (retainsSlot) {
+        val retained = retainedPool.takeMatchingOrEvict(next)
+        if (retained != null && attachRetainedSlot(retained)) {
+          return
+        }
       }
     }
     applied = next
@@ -351,7 +359,7 @@ internal class OrcaMobileWebShellView(
       currentApplied != null &&
       currentServed != null &&
       currentBlocker != null
-    if (canRetain) {
+    if (retainsSlot && canRetain) {
       val channel = currentChannel ?: MobileWebShellBridgeChannel(null)
       channel.owner = null
       view.webViewClient = ParkedWebViewClient

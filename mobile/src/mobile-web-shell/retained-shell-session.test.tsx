@@ -29,6 +29,7 @@ const doubles = vi.hoisted(() => {
     ],
     routes: [
       { pathname: '/h/[hostId]', grants: ['navigate'] },
+      { pathname: '/h/[hostId]/accounts', grants: ['navigate'] },
       { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'] }
     ]
   }
@@ -266,6 +267,37 @@ describe('single-host LRU retained shell session', () => {
     await hostRoot.unmount()
 
     // Re-entering '/h/host-1' must hit the retained parent session (session-1) immediately.
+    const reentered = await mountForHost('host-1', store, '/h/host-1')
+    expect(reentered.firstRender).toEqual({
+      stateKind: 'ready',
+      sessionId: 'session-1',
+      pageFrame: 'painted',
+      pageReady: true
+    })
+    await reentered.unmount()
+  })
+
+  it('keeps the parked host page when Account usage opens and then fails', async () => {
+    const { store } = createCachedStore()
+    const hostRoot = await mountForHost('host-1', store, '/h/host-1')
+    await act(async () => {
+      hostRoot.view().reportDocumentLoaded()
+      hostRoot.view().reportPageReady()
+      hostRoot.view().reportPagePainted()
+    })
+    await hostRoot.unmount()
+
+    const accounts = await mountForHost('host-1', store, '/h/host-1/accounts')
+    await act(async () => {
+      accounts.view().reportDocumentLoaded()
+      accounts.view().reportPageReady()
+      accounts.view().reportPagePainted()
+    })
+    await act(async () => {
+      accounts.view().reportShellFailure('document-load-failed')
+    })
+    await accounts.unmount()
+
     const reentered = await mountForHost('host-1', store, '/h/host-1')
     expect(reentered.firstRender).toEqual({
       stateKind: 'ready',

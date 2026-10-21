@@ -254,6 +254,20 @@ export function isHostRouteOf(href: string, hostId: string): boolean {
   return path === `/h/${hostId}` || path === `/h/${encodeURIComponent(hostId)}`
 }
 
+/** `/h/<id>` itself. Account usage and workspace screens sit further down the path. */
+export function isHostIndexPathname(pathname: string): boolean {
+  const [path] = pathname.split(/[?#]/)
+  const parts = path.split('/')
+  if (parts.length !== 3 || parts[0] !== '' || parts[1] !== 'h' || parts[2] === '') {
+    return false
+  }
+  try {
+    return isHostRouteOf(path, decodeURIComponent(parts[2]))
+  } catch {
+    return false
+  }
+}
+
 /** The `/h/<host>` route a pathname sits under, or null outside a host. */
 function hostAreaRoot(pathname: string): string | null {
   const [empty, h, host] = pathname.split('/')

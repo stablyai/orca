@@ -266,6 +266,8 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var bridgeReceiver = MobileWebShellBridgeReceiver()
   private let bridgeGate = MobileWebShellBridgeGate()
   private var bridgeEnabled = false
+  // Host page only. A child route must not take or replace the parked WebView.
+  private var retainsSlot = true
   private var bridgeInstalled = false
   private var bridgeTarget = MobileWebShellBridgeTarget<WKFrameInfo>()
   private var webView: WKWebView!
@@ -335,6 +337,10 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     bridgeEnabled = value
   }
 
+  func setRetainsSlot(_ value: Bool) {
+    retainsSlot = value
+  }
+
   /// Props arrive in no defined order, so neither setter starts anything; this does, once both are
   /// in. A repeat of the same triple is not a retry: a retry is a remount under a new React key.
   /// `bridgeEnabled` is in the record because a document-start script only takes effect at the next
@@ -346,7 +352,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       bridgeEnabled: bridgeEnabled
     )
     guard applied?.matches(next) != true else { return }
-    if applied == nil, let retained = Self.takeMatchingOrEvict(next) {
+    if retainsSlot, applied == nil, let retained = Self.takeMatchingOrEvict(next) {
       attachRetainedSlot(retained)
       return
     }
@@ -411,6 +417,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   func destroyWebView() {
     guard let view = webView else { return }
     if
+      retainsSlot,
       !renderProcessGone,
       !isolationFailed,
       loadState.hasCommittedDocument,

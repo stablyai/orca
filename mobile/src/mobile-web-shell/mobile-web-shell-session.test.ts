@@ -351,6 +351,29 @@ describe('recovery follows the shell view contract', () => {
     }
   )
 
+  it('does not delete the host cache when Account usage fails to open', () => {
+    const routes = [...CACHED.routes, { pathname: '/h/[hostId]/accounts', grants: ['navigate'] }]
+    const cached = { ...CACHED, routes }
+    const manifest = { ...MANIFEST, routes }
+    const ready = run(
+      createMobileWebShellSession('/h/host-1/accounts'),
+      { type: 'gates-changed', gates: gates() },
+      { type: 'cache-read', generation: cached },
+      { type: 'manifest-read', manifest },
+      {
+        type: 'activated',
+        generationDirectory: cached.directory,
+        sessionId: 'session-accounts',
+        buildId: manifest.buildId,
+        totalBytes: manifest.totalBytes,
+        elapsedMs: 12
+      }
+    )
+    expect(ready.session.state.kind).toBe('ready')
+    const step = run(ready.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    expect(step.effects).toEqual([{ kind: 'open-cache' }])
+  })
+
   it('takes a recovery through the gate rather than back to a manifest check', () => {
     const ready = readySession()
     // A reconnect whose status probe failed. Stored, not acted on: a workspace on screen is not

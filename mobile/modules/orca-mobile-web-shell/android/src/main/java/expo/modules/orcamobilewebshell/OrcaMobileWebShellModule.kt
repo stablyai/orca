@@ -34,6 +34,10 @@ class OrcaMobileWebShellModule : Module() {
         view.setBridgeEnabled(value)
       }
 
+      Prop("retainsSlot") { view: OrcaMobileWebShellView, value: Boolean ->
+        view.setRetainsSlot(value)
+      }
+
       AsyncFunction("postBridgeMessage") { view: OrcaMobileWebShellView, json: String ->
         view.postBridgeMessage(json)
       }

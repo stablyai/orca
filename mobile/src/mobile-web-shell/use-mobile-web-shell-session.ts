@@ -304,18 +304,18 @@ export function useMobileWebShellSession(args: {
 
   const retry = useCallback(() => {
     // A fresh epoch first: a failed download still in flight must not land on the retried session.
-    evictRetainedShellSessionForHost(hostIdRef.current)
+    evictRetainedShellSessionForHost(hostIdRef.current, routePathname)
     invalidate()
     startedAtRef.current = runtime.now()
     dispatch(epochRef.current, { type: 'retry-pressed' })
-  }, [dispatch, invalidate, runtime])
+  }, [dispatch, invalidate, routePathname, runtime])
 
   const reportShellFailure = useCallback(
     (reason: MobileWebShellFailureReason) => {
-      evictRetainedShellSessionForHost(hostIdRef.current)
+      evictRetainedShellSessionForHost(hostIdRef.current, routePathname)
       dispatch(epochRef.current, { type: 'shell-failed', reason })
     },
-    [dispatch]
+    [dispatch, routePathname]
   )
 
   const reportDocumentStarted = useCallback(() => {

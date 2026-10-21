@@ -416,6 +416,7 @@ export function MobileWebShellScreen({
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
+        retainsSlot={isHostRouteOf(route.pathname, hostId)}
         onBridgeMessage={bridge.onBridgeMessage}
         onExternalNavigation={(event) => {
           const target = cancelledShellNavigationTarget(event.nativeEvent.url)

@@ -4,6 +4,7 @@ import type {
   MobileWebShellGates,
   MobileWebShellSession
 } from './mobile-web-shell-session-contract'
+import { isHostRouteOf } from './page-route-policy'
 import type { MobileWebShellBridgeArgs } from './use-mobile-web-shell-bridge'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 
@@ -63,10 +64,20 @@ export function evictRetainedShellSession(): void {
   clearNativeSlot?.()
 }
 
-export function evictRetainedShellSessionForHost(hostId: string): void {
-  if (retainedEntry?.hostId === hostId) {
-    evictRetainedShellSession()
+export function evictRetainedShellSessionForHost(hostId: string, routePathname?: string): void {
+  const entry = retainedEntry
+  if (entry?.hostId !== hostId) {
+    return
   }
+  // A child route retrying itself must not drop the parked host page.
+  if (
+    routePathname !== undefined &&
+    entry.routePathname !== routePathname &&
+    isHostRouteOf(entry.routePathname, entry.hostId)
+  ) {
+    return
+  }
+  evictRetainedShellSession()
 }
 
 export function readRetainedShellSession(args: {
@@ -137,6 +148,15 @@ export function recordRetainedShellSession(args: {
     existing.session.state.sessionId === args.session.state.sessionId
   ) {
     existing.session = args.session
+    return
+  }
+  // A child route paints its own document and must leave the parked host page in the slot.
+  if (
+    existing !== null &&
+    existing.hostId === args.hostId &&
+    isHostRouteOf(existing.routePathname, existing.hostId) &&
+    !isHostRouteOf(args.routePathname, args.hostId)
+  ) {
     return
   }
   disposeBridgeOf(existing)

@@ -25,6 +25,8 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
    * without a channel, and only when this is true.
    */
   bridgeEnabled?: boolean
+  /** False on every shell route except the host page, so a child route cannot evict the parked WebView. */
+  retainsSlot?: boolean
   onLoadState?: (event: NativeSyntheticEvent<MobileWebShellLoadStatePayload>) => void
   /**
    * The page posted `json` through `window.orcaBridge`. Native has already refused anything from
