@@ -90,20 +90,8 @@ export async function listWorkItems(
     connectionId,
     localGitOptions
   )
-  if (!projectRef) {
-    // Why: issues need a project ref, but local MRs keep listMergeRequests' cwd fallback for hosts glab doesn't list.
-    if (!connectionId) {
-      return listMergeRequests(
-        repoPath,
-        state,
-        page,
-        perPage,
-        preference,
-        query,
-        connectionId,
-        localGitOptions
-      )
-    }
+  // Why: SSH repos have no local cwd, so a cwd-inferred glab could resolve an unrelated project.
+  if (!projectRef && connectionId) {
     return {
       items: [],
       page,
@@ -134,16 +122,19 @@ export async function listWorkItems(
           items: [] as GitLabWorkItem[],
           error: undefined as ClassifiedError | undefined
         })
-      : fetchIssuesAsWorkItems(
-          repoPath,
-          projectRef,
-          issueState,
-          page,
-          perPage,
-          query,
-          connectionId,
-          localGitOptions
-        )
+      : projectRef
+        ? fetchIssuesAsWorkItems(
+            repoPath,
+            projectRef,
+            issueState,
+            page,
+            perPage,
+            query,
+            connectionId,
+            localGitOptions
+          )
+        : // Why: mirrors listMergeRequests' cwd fallback for local hosts glab doesn't list.
+          fetchCwdIssuesAsWorkItems(repoPath, issueState, page, perPage, query, localGitOptions)
   ])
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
@@ -158,6 +149,46 @@ export async function listWorkItems(
     totalCount: mrs.totalCount,
     totalPages: mrs.totalPages,
     ...(error ? { error } : {})
+  }
+}
+
+async function fetchCwdIssuesAsWorkItems(
+  repoPath: string,
+  state: IssueListState,
+  page: number,
+  perPage: number,
+  query: string | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<{ items: GitLabWorkItem[]; error: ClassifiedError | undefined }> {
+  const stateFlag = state === 'closed' ? ['--closed'] : state === 'all' ? ['--all'] : []
+  const searchFlag = query?.trim() ? ['--search', query.trim()] : []
+  await acquire()
+  try {
+    const { stdout } = await glabExecFileAsync(
+      [
+        'issue',
+        'list',
+        '--output',
+        'json',
+        '--per-page',
+        String(perPage),
+        '--page',
+        String(page),
+        '--order',
+        'updated_at',
+        '--sort',
+        'desc',
+        ...stateFlag,
+        ...searchFlag
+      ],
+      glabRepoExecOptions(repoPath, null, localGitOptions)
+    )
+    const data = parseGlabJsonList<Parameters<typeof mapIssueToWorkItem>[0]>(stdout)
+    return { items: data.map((d) => mapIssueToWorkItem(d, 'unknown')), error: undefined }
+  } catch (err) {
+    return { items: [], error: classifyListFetchError(err) }
+  } finally {
+    release()
   }
 }
 

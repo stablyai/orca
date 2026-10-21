@@ -161,31 +161,60 @@ describe('gitlab client — combined listWorkItems', () => {
     ])
   })
 
-  it('falls back to cwd-inferred MRs for an unresolved local project', async () => {
+  it('falls back to cwd-inferred MRs and issues for an unresolved local project', async () => {
     resolveIssueSourceMock.mockResolvedValue({ source: null, fellBack: false })
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify([
-        {
-          id: 300,
-          iid: 3,
-          title: 'fallback mr',
-          state: 'opened',
-          web_url: 'https://gitlab.example.test/g/p/-/merge_requests/3',
-          updated_at: '2026-05-05',
-          source_project_id: 5,
-          target_project_id: 5
-        }
-      ])
-    })
+    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
+      stdout: JSON.stringify(
+        args[0] === 'mr'
+          ? [
+              {
+                id: 300,
+                iid: 3,
+                title: 'fallback mr',
+                state: 'opened',
+                web_url: 'https://gitlab.example.test/g/p/-/merge_requests/3',
+                updated_at: '2026-05-05',
+                source_project_id: 5,
+                target_project_id: 5
+              }
+            ]
+          : [
+              {
+                id: 400,
+                iid: 23,
+                title: 'fallback issue',
+                state: 'opened',
+                web_url: 'https://gitlab.example.test/g/p/-/issues/23',
+                updated_at: '2026-05-06'
+              }
+            ]
+      )
+    }))
 
-    const result = await listWorkItems('/repo', 'opened', 1, 20, undefined, 'fix login')
+    const result = await listWorkItems('/repo', 'closed', 1, 20, undefined, 'fix login')
     expect(result.error).toBeUndefined()
-    expect(result.items).toMatchObject([{ type: 'mr', title: 'fallback mr' }])
+    expect(result.items).toMatchObject([
+      { type: 'issue', number: 23, title: 'fallback issue' },
+      { type: 'mr', number: 3, title: 'fallback mr' }
+    ])
     expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    for (const kind of ['mr', 'issue']) {
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        expect.arrayContaining([kind, 'list', '--closed', '--search', 'fix login']),
+        { cwd: '/repo' }
+      )
+    }
+  })
+
+  it("keeps the cwd fallback MR-only for state === 'merged'", async () => {
+    resolveIssueSourceMock.mockResolvedValue({ source: null, fellBack: false })
+    glabExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await listWorkItems('/repo', 'merged')
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['mr', 'list', '--search', 'fix login']),
-      { cwd: '/repo' }
+    expect(glabExecFileAsyncMock.mock.calls[0][0]).toEqual(
+      expect.arrayContaining(['mr', 'list', '--merged'])
     )
   })
 
