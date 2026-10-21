@@ -5,6 +5,7 @@ import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
+  TerminalSelectionCells,
   TerminalWebViewHandle
 } from '../terminal/terminal-webview-contract'
 
@@ -17,7 +18,7 @@ type TerminalPaneViewProps = {
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
-  onSelectionCopy: (handle: string, text: string) => void
+  onSelectionCopy: (handle: string, text: string, cells?: TerminalSelectionCells) => void
   onSelectionEvicted: (handle: string) => void
   onModesChanged: (handle: string, modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
@@ -79,7 +80,7 @@ export function TerminalPaneView({
         shownAtMount={active}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}
-        onSelectionCopy={(t) => onSelectionCopy(handle, t)}
+        onSelectionCopy={(t, g) => onSelectionCopy(handle, t, g)}
         onSelectionEvicted={() => onSelectionEvicted(handle)}
         onModesChanged={(m) => onModesChanged(handle, m)}
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}

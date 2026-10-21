@@ -2,6 +2,7 @@ import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 import { cancelSelect } from './selection-mode'
 import { repositionOverlay } from './selection-overlay'
+import { selRange } from './selection-range'
 
 export function startSelectionMenuButtons(scope: TerminalDocumentScope) {
   scope.btnCopy!.addEventListener('click', function (e) {
@@ -12,7 +13,14 @@ export function startSelectionMenuButtons(scope: TerminalDocumentScope) {
     }
     const text = scope.term.getSelection ? scope.term.getSelection() : ''
     if (text && text.length > 0) {
-      notify(scope, { type: 'selection', text: text })
+      // Why: the host joins rows the agent hard-wrapped, which needs the start column and width.
+      const range = selRange(scope)
+      notify(scope, {
+        type: 'selection',
+        text: text,
+        startCol: range ? range.start.col : 0,
+        cols: scope.term.cols
+      })
     } else {
       cancelSelect(scope)
     }

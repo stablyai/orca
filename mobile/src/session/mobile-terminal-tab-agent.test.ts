@@ -5,7 +5,8 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId,
-  resolveMobileTerminalTabOwnedAgentId
+  resolveMobileTerminalTabOwnedAgentId,
+  terminalHandleRunsAgent
 } from './mobile-terminal-tab-agent'
 
 function agentStatus(agentType: string | undefined): AgentStatusEntry {
@@ -132,5 +133,36 @@ describe('getMobileSessionTabTitle', () => {
         isActive: true
       })
     ).toBe('Codex Chat')
+  })
+})
+
+describe('terminalHandleRunsAgent', () => {
+  const tabs: MobileSessionTab[] = [
+    { ...terminalTab('zsh', { id: 'shell' }), terminal: 'term-shell' },
+    { ...terminalTab('zsh', { id: 'agent', agentType: 'claude' }), terminal: 'term-agent' },
+    { ...terminalTab('✳ Claude Code', { id: 'titled' }), terminal: 'term-titled' }
+  ]
+
+  it('joins only for a terminal whose agent Orca identified, not one named by its title', () => {
+    expect(terminalHandleRunsAgent(tabs, 'term-agent')).toBe(true)
+    expect(terminalHandleRunsAgent(tabs, 'term-shell')).toBe(false)
+    expect(terminalHandleRunsAgent(tabs, 'term-titled')).toBe(false)
+    expect(terminalHandleRunsAgent(tabs, 'term-missing')).toBe(false)
+  })
+
+  it('joins only for TUI agents and ignores a status row restored from disk', () => {
+    const restored = terminalTab('zsh', { agentType: 'claude' })
+    const others: MobileSessionTab[] = [
+      { ...terminalTab('zsh', { agentType: 'dsb' }), terminal: 'term-hook' },
+      {
+        ...restored,
+        terminal: 'term-restored',
+        agentStatus: { ...restored.agentStatus!, restoredUnconfirmed: true }
+      },
+      { ...terminalTab('zsh', { launchAgent: 'codex' }), terminal: 'term-launched' }
+    ]
+    expect(terminalHandleRunsAgent(others, 'term-hook')).toBe(false)
+    expect(terminalHandleRunsAgent(others, 'term-restored')).toBe(false)
+    expect(terminalHandleRunsAgent(others, 'term-launched')).toBe(true)
   })
 })

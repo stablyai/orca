@@ -1,3 +1,4 @@
+import type { TerminalSelectionGeometry } from '../../../src/shared/terminal-selection-gutter'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
@@ -62,9 +63,12 @@ function toNonNegativeInteger(value: unknown): number {
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme
 
+/** What the WebView knows about a selection; the host adds whether the pane runs an agent. */
+export type TerminalSelectionCells = Pick<TerminalSelectionGeometry, 'startCol' | 'cols'>
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
-  onSelectionCopy?: (text: string) => void
+  onSelectionCopy?: (text: string, cells?: TerminalSelectionCells) => void
   onSelectionEvicted?: () => void
   onModesChanged?: (modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void

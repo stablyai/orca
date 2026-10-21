@@ -2,6 +2,7 @@ import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../src/shared/age
 import { resolveExplicitTerminalTitleAgentType } from '../../../src/shared/terminal-title-agent-type'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
@@ -33,6 +34,23 @@ export function resolveMobileTerminalTabOwnedAgentId(
     return tab.launchAgent
   }
   return null
+}
+
+/** Whether the terminal behind a handle runs a TUI agent Orca identified, for the copy join. */
+export function terminalHandleRunsAgent(
+  tabs: readonly MobileSessionTab[],
+  handle: string
+): boolean {
+  const tab = tabs.find((t) => t.type === 'terminal' && t.terminal === handle)
+  if (tab?.type !== 'terminal') {
+    return false
+  }
+  // Same evidence as the desktop probe, minus its shell veto: no foreground signal reaches mobile.
+  const status = tab.agentStatus
+  return (
+    (status?.restoredUnconfirmed !== true && isTuiAgent(status?.agentType)) ||
+    isTuiAgent(tab.launchAgent)
+  )
 }
 
 export function resolveMobileTerminalTabAgentId(
