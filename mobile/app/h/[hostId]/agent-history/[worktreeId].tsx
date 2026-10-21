@@ -25,13 +25,16 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     hostId?: string | string[]
     worktreeId?: string | string[]
     name?: string | string[]
+    origin?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   const name = firstParam(params.name)
+  const origin = firstParam(params.origin)
   const executionHost = useWorkspaceExecutionHost()
   const routeParams = {
     ...(name === '' ? {} : { name }),
+    ...(origin === '' ? {} : { origin }),
     ...workspaceRouteParams(executionHost)
   }
 
@@ -39,8 +42,9 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     hostId && worktreeId
       ? shellScreenRoute({
           pathname: `/h/${encodeURIComponent(hostId)}/agent-history/${encodeURIComponent(worktreeId)}`,
-          // Omitted rather than empty: the page reads the label off the search half, and a `name=`
-          // with nothing after it is a label, where an absent one lets the panel derive its own.
+          // Omitted rather than empty: the page reads the label and origin off the search half, and a
+          // `name=` or `origin=` with nothing after it is a named empty, where an absent one lets the
+          // panel derive its own.
           ...(Object.keys(routeParams).length === 0 ? {} : { params: routeParams })
         })
       : null

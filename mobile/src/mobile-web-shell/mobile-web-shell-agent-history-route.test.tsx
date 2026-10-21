@@ -96,6 +96,22 @@ describe('the agent-history route that hands off to the shell', () => {
     expect(dependencies.routes).toEqual([{ pathname: '/h/host-1/agent-history/wt-1' }])
   })
 
+  it('forwards origin into the shell route when the caller named one', async () => {
+    dependencies.params = {
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      name: 'my worktree',
+      origin: 'session'
+    }
+    await renderRoute()
+    expect(dependencies.routes).toEqual([
+      {
+        pathname: '/h/host-1/agent-history/wt-1',
+        params: { name: 'my worktree', origin: 'session' }
+      }
+    ])
+  })
+
   /**
    * The ids encoding cannot save: `encodeURIComponent('..')` is `'..'`, which the bridge's segment
    * rule refuses, so the route refuses here rather than handing the page a route it would refuse.

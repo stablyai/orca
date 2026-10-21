@@ -24,6 +24,7 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import { openHistorySession } from './worktree-navigation-actions'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
@@ -34,6 +35,7 @@ export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
+  origin?: string
 }
 
 const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
@@ -45,7 +47,8 @@ const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
 export function MobileAgentSessionHistoryPanel({
   hostId,
   worktreeId,
-  name = ''
+  name = '',
+  origin
 }: MobileAgentSessionHistoryPanelProps) {
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
@@ -178,13 +181,14 @@ export function MobileAgentSessionHistoryPanel({
           worktrees: freshWorktrees
         } = await loadMobileResumeMetadata(client)
         assertCurrentOwner()
+        const resumeWorktrees = freshWorktrees ?? worktrees
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
           // Why: resolve against live worktrees so a workspace deleted or
           // archived since panel mount can't be picked; the mount-time list is
           // only a fallback when the fresh fetch fails.
-          worktrees: freshWorktrees ?? worktrees,
+          worktrees: resumeWorktrees,
           repos,
           folderWorkspaces,
           projectGroups
@@ -234,11 +238,11 @@ export function MobileAgentSessionHistoryPanel({
           return
         }
         setResumeMessage('Agent session queued.')
-        router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
-            typeof router.push
-          >[0]
+        const resumedName = getWorktreeLabel(
+          resumeWorktrees.find((item) => item.worktreeId === target.worktreeId)?.displayName,
+          target.worktreeId
         )
+        openHistorySession(router, origin, hostId, worktreeId, target.worktreeId, resumedName)
       } catch (err) {
         triggerError()
         setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
@@ -251,6 +255,7 @@ export function MobileAgentSessionHistoryPanel({
       client,
       connState,
       hostId,
+      origin,
       resumeHost,
       hostTerminalWindowsShell,
       router,

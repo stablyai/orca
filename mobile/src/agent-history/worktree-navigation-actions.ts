@@ -2,6 +2,7 @@ import { GitBranch } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { RouteHandoff } from '../navigation/route-handoff'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { MobileAgentSessionHistoryIcon } from './MobileAgentSessionHistoryIcon'
@@ -15,6 +16,27 @@ type Args = {
   hostCapabilities: readonly string[]
   navigate: (target: string) => void
   onDone: () => void
+}
+
+export function openHistorySession(
+  router: RouteHandoff,
+  origin: string | undefined,
+  hostId: string,
+  fromWorktreeId: string,
+  toWorktreeId: string,
+  name?: string
+): void {
+  if (origin === 'session' && toWorktreeId === fromWorktreeId) {
+    router.back()
+    return
+  }
+  const query = name === undefined ? '' : `?name=${encodeURIComponent(name)}`
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional `?name=` query suffix on `/h/[hostId]/session/[worktreeId]`.
+  router.replace(
+    `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}` as Parameters<
+      RouteHandoff['replace']
+    >[0]
+  )
 }
 
 // Why: builds the per-worktree "navigate to a screen" action-sheet actions
