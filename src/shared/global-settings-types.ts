@@ -49,9 +49,6 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export const EDITOR_KEYBINDINGS_PRESETS = ['default', 'vim', 'emacs'] as const
-export type EditorKeybindingsPreset = (typeof EDITOR_KEYBINDINGS_PRESETS)[number]
-
 export type GlobalSettings = GlobalSettingsBase & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
@@ -93,11 +90,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
-  /**
-   * In-editor keybinding preset for the Monaco file editor. Defaults to `'default'` (standard
-   * bindings); `'vim'` enables modal editing via monaco-vim, `'emacs'` enables monaco-emacs.
-   */
-  editorKeybindings?: EditorKeybindingsPreset
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */

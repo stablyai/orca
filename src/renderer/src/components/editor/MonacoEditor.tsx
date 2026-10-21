@@ -27,10 +27,12 @@ import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
 import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
 import { installMonacoVimMode } from './monaco-vim-mode'
+import { installMonacoEmacsMode } from './monaco-emacs-mode'
 import { VimCheatsheet } from './VimCheatsheet'
+import { isEditorKeybindingsPreset } from '../../../../shared/editor-keybindings-preset'
 
-/** Reserved height (px) for the Vim status bar row; keep in sync with the render class. */
-const VIM_STATUS_BAR_HEIGHT = 22
+/** Reserved height (px) for the keymap status bar row; keep in sync with the render class. */
+const KEYMAP_STATUS_BAR_HEIGHT = 22
 
 type MonacoEditorProps = {
   fileId: string
@@ -78,10 +80,10 @@ export default function MonacoEditor({
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
-  // Why: the editor + overlays live in their own flex child so the Vim status bar can occupy a
+  // Why: the editor + overlays live in their own flex child so the keymap status bar can occupy a
   // real row below the editor instead of overlapping it.
   const editorBodyRef = useRef<HTMLDivElement | null>(null)
-  const vimStatusBarRef = useRef<HTMLDivElement | null>(null)
+  const keymapStatusBarRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const languageRef = useRef(language)
@@ -120,10 +122,14 @@ export default function MonacoEditor({
     [filePath, modelOwnerKey]
   )
   useEditorModelRekeyCarry(fileId, modelUri)
-  // Why: Vim's modal editing and status bar only apply to the editable, full-height file editor —
+  // Why: keymap presets and their status bar only apply to the editable, full-height file editor —
   // not read-only diffs or the auto-height inline editors used for previews.
-  const vimModeEnabled =
-    (settings?.editorKeybindings ?? 'default') === 'vim' && !readOnly && !autoHeight
+  const editorKeybindings =
+    !readOnly && !autoHeight && isEditorKeybindingsPreset(settings?.editorKeybindings)
+      ? settings.editorKeybindings
+      : 'default'
+  const vimModeEnabled = editorKeybindings === 'vim'
+  const emacsModeEnabled = editorKeybindings === 'emacs'
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -203,7 +209,7 @@ export default function MonacoEditor({
   // guard against the editor unmounting before the import settles.
   useEffect(() => {
     const ed = mountedEditor
-    const statusNode = vimStatusBarRef.current
+    const statusNode = keymapStatusBarRef.current
     if (!ed || !vimModeEnabled || !statusNode) {
       return
     }
@@ -229,6 +235,33 @@ export default function MonacoEditor({
       controller?.dispose()
     }
   }, [mountedEditor, vimModeEnabled])
+
+  // Same lifecycle as the Vim effect; monaco-emacs has no Ex commands, so it only needs the editor
+  // and the status node.
+  useEffect(() => {
+    const ed = mountedEditor
+    const statusNode = keymapStatusBarRef.current
+    if (!ed || !emacsModeEnabled || !statusNode) {
+      return
+    }
+    let cancelled = false
+    let controller: { dispose: () => void } | null = null
+    void installMonacoEmacsMode(ed, statusNode)
+      .then((installed) => {
+        if (cancelled) {
+          installed.dispose()
+        } else {
+          controller = installed
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to enable Emacs keybindings', error)
+      })
+    return () => {
+      cancelled = true
+      controller?.dispose()
+    }
+  }, [mountedEditor, emacsModeEnabled])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -306,7 +339,7 @@ export default function MonacoEditor({
     <div
       ref={editorContainerRef}
       data-orca-file-editor
-      // Why: a flex column lets the Vim status bar occupy a real row below the editor instead of
+      // Why: a flex column lets the keymap status bar occupy a real row below the editor instead of
       // overlaying it. autoHeight editors are content-sized (and never show the bar), so they keep
       // the plain block layout.
       className={autoHeight ? 'relative' : 'flex h-full flex-col'}
@@ -379,20 +412,20 @@ export default function MonacoEditor({
         />
       </div>
 
-      {vimModeEnabled ? (
+      {editorKeybindings !== 'default' ? (
         <div
-          // Why: the monaco-vim status node must stay a dedicated element the adapter owns, so the
-          // cheatsheet hint lives as a sibling in this row rather than inside the node React and
-          // monaco-vim would otherwise both mutate.
+          // Why: the keymap adapters own the status node's text, so the cheatsheet hint lives as a
+          // sibling in this row rather than inside the node React and the adapter would both mutate.
           className="flex shrink-0 items-center gap-2 border-t border-border bg-editor-surface px-2"
-          style={{ height: VIM_STATUS_BAR_HEIGHT }}
+          style={{ height: KEYMAP_STATUS_BAR_HEIGHT }}
         >
           <div
-            ref={vimStatusBarRef}
-            data-orca-vim-statusbar
+            ref={keymapStatusBarRef}
+            data-orca-vim-statusbar={vimModeEnabled ? '' : undefined}
+            data-orca-emacs-statusbar={emacsModeEnabled ? '' : undefined}
             className="min-w-0 flex-1 overflow-hidden font-mono text-xs text-muted-foreground"
           />
-          <VimCheatsheet />
+          {vimModeEnabled ? <VimCheatsheet /> : null}
         </div>
       ) : null}
     </div>

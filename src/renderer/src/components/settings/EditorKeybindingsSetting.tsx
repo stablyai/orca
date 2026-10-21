@@ -1,8 +1,5 @@
-import {
-  EDITOR_KEYBINDINGS_PRESETS,
-  type EditorKeybindingsPreset,
-  type GlobalSettings
-} from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { isEditorKeybindingsPreset } from '../../../../shared/editor-keybindings-preset'
 import { SearchableSetting } from './SearchableSetting'
 import { Label } from '../ui/label'
 import { SettingsSegmentedControl } from './SettingsFormControls'
@@ -11,10 +8,6 @@ import { translate } from '@/i18n/i18n'
 type EditorKeybindingsSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-}
-
-function isEditorKeybindingsPreset(value: unknown): value is EditorKeybindingsPreset {
-  return EDITOR_KEYBINDINGS_PRESETS.some((preset) => preset === value)
 }
 
 /** Settings control that selects the file editor's keybinding preset (Default, Vim or Emacs). */
