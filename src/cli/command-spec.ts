@@ -10,6 +10,7 @@ export type CommandSpec = {
   allowedFlags: string[]
   // Flag repeatability varies by command, even for the same flag name.
   repeatableFlags?: string[]
+  valueFlags?: string[]
   positionalArgs?: string[]
   variadicPositional?: boolean
   examples?: string[]

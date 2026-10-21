@@ -268,82 +268,91 @@ function createHarness(
 }
 
 describe('remote runtime terminal split authority', () => {
-  it('addresses a graph-backed split by stable leaf identity across a parked remount', async () => {
-    const harness = createHarness(true, { rendererMounted: true, graphOnlySource: true })
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // Main writes the split and starts its terminal under the new pane's stable id; no window
-      // is asked, so a parked or remounting tab cannot hold the split up.
-      const started = await harness.runtime.splitTerminal(harness.handle, {
-        direction: 'vertical'
+  it.each([undefined, { ORCA_TEST_ENV: 'two words=ok', EMPTY: '' }])(
+    'addresses a graph-backed split across a parked remount with env %j',
+    async (env) => {
+      const harness = createHarness(true, { rendererMounted: true, graphOnlySource: true })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main writes the split and starts its terminal under the new pane's stable id; no window
+        // is asked, so a parked or remounting tab cannot hold the split up.
+        const started = await harness.runtime.splitTerminal(harness.handle, {
+          direction: 'vertical',
+          env
+        })
+        const startedLeafId = started.leafId ?? ''
+        expect(harness.rendererSplitTerminal).not.toHaveBeenCalled()
+        expect(started).toMatchObject({ tabId: TAB_ID, handle: expect.stringMatching(/^term_/) })
+        expect(harness.spawn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tabId: TAB_ID,
+            leafId: startedLeafId,
+            ...(env !== undefined ? { env: expect.objectContaining(env) } : {})
+          })
+        )
+        expect(collectLeafIds(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root)).toEqual([
+          SOURCE_LEAF_ID,
+          startedLeafId
+        ])
+        return
+      }
+
+      const split = harness.runtime.splitTerminal(harness.handle, { direction: 'vertical', env })
+      await vi.waitFor(() => expect(harness.rendererSplitTerminal).toHaveBeenCalled())
+
+      const newLeafId = harness.rendererSplitTerminal.mock.calls[0]?.[2]?.newLeafId
+      expect(newLeafId).toEqual(expect.any(String))
+      if (typeof newLeafId !== 'string') {
+        throw new Error('split notifier did not receive a pre-minted leaf id')
+      }
+      expect(harness.rendererSplitTerminal).toHaveBeenCalledWith(TAB_ID, 1, {
+        direction: 'vertical',
+        command: undefined,
+        ...(env !== undefined ? { env } : {}),
+        worktreeId: WORKTREE_ID,
+        sourceLeafId: SOURCE_LEAF_ID,
+        telemetrySource: undefined,
+        newLeafId
       })
-      const startedLeafId = started.leafId ?? ''
-      expect(harness.rendererSplitTerminal).not.toHaveBeenCalled()
-      expect(started).toMatchObject({ tabId: TAB_ID, handle: expect.stringMatching(/^term_/) })
-      expect(harness.spawn).toHaveBeenCalledWith(
-        expect.objectContaining({ tabId: TAB_ID, leafId: startedLeafId })
-      )
-      expect(collectLeafIds(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root)).toEqual([
-        SOURCE_LEAF_ID,
-        startedLeafId
-      ])
-      return
-    }
-
-    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
-    await vi.waitFor(() => expect(harness.rendererSplitTerminal).toHaveBeenCalled())
-
-    const newLeafId = harness.rendererSplitTerminal.mock.calls[0]?.[2]?.newLeafId
-    expect(newLeafId).toEqual(expect.any(String))
-    if (typeof newLeafId !== 'string') {
-      throw new Error('split notifier did not receive a pre-minted leaf id')
-    }
-    expect(harness.rendererSplitTerminal).toHaveBeenCalledWith(TAB_ID, 1, {
-      direction: 'vertical',
-      command: undefined,
-      worktreeId: WORKTREE_ID,
-      sourceLeafId: SOURCE_LEAF_ID,
-      telemetrySource: undefined,
-      newLeafId
-    })
-    harness.runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Restored terminal',
-          activeLeafId: SOURCE_LEAF_ID,
-          layout: {
-            type: 'split',
-            direction: 'vertical',
-            ratio: 0.5,
-            first: { type: 'leaf', leafId: SOURCE_LEAF_ID },
-            second: { type: 'leaf', leafId: newLeafId }
+      harness.runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: TAB_ID,
+            worktreeId: WORKTREE_ID,
+            title: 'Restored terminal',
+            activeLeafId: SOURCE_LEAF_ID,
+            layout: {
+              type: 'split',
+              direction: 'vertical',
+              ratio: 0.5,
+              first: { type: 'leaf', leafId: SOURCE_LEAF_ID },
+              second: { type: 'leaf', leafId: newLeafId }
+            }
           }
-        }
-      ],
-      leaves: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: SOURCE_LEAF_ID,
-          paneRuntimeId: 7,
-          ptyId: SOURCE_PTY_ID
-        },
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: newLeafId,
-          paneRuntimeId: 8,
-          ptyId: SPLIT_PTY_ID
-        }
-      ]
-    })
+        ],
+        leaves: [
+          {
+            tabId: TAB_ID,
+            worktreeId: WORKTREE_ID,
+            leafId: SOURCE_LEAF_ID,
+            paneRuntimeId: 7,
+            ptyId: SOURCE_PTY_ID
+          },
+          {
+            tabId: TAB_ID,
+            worktreeId: WORKTREE_ID,
+            leafId: newLeafId,
+            paneRuntimeId: 8,
+            ptyId: SPLIT_PTY_ID
+          }
+        ]
+      })
 
-    await expect(split).resolves.toMatchObject({
-      tabId: TAB_ID,
-      handle: expect.stringMatching(/^term_/)
-    })
-  })
+      await expect(split).resolves.toMatchObject({
+        tabId: TAB_ID,
+        handle: expect.stringMatching(/^term_/)
+      })
+    }
+  )
 
   it('reveals a persisted split while its mounted source is still publishing its PTY binding', async () => {
     const harness = createHarness(true, { rendererMounted: true, rendererPtyId: null })

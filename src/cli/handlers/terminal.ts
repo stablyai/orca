@@ -29,6 +29,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../flags'
+import { REPEATED_FLAG_SEPARATOR } from '../args'
 import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
@@ -40,7 +41,8 @@ import {
 } from '../../shared/windows-terminal-shell'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
-  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_ENV_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
   getBrowserWorktreeSelector,
@@ -54,6 +56,31 @@ import { terminalSendHandler } from './terminal-send'
 
 // Long terminal waits must outlive the ordinary transport timeout.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+function terminalEnvironmentFromFlags(
+  flags: Map<string, string | boolean>
+): Record<string, string> | undefined {
+  if (!flags.has('env')) {
+    return undefined
+  }
+  const value = getOptionalStringFlag(flags, 'env')
+  if (value === undefined) {
+    throw new RuntimeClientError('invalid_argument', '--env must be KEY=VALUE')
+  }
+  return Object.fromEntries(
+    value.split(REPEATED_FLAG_SEPARATOR).map((assignment) => {
+      const separator = assignment.indexOf('=')
+      const key = assignment.slice(0, separator)
+      if (separator < 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--env must be KEY=VALUE with a name containing letters, digits or underscores and not starting with a digit'
+        )
+      }
+      return [key, assignment.slice(separator + 1)] as const
+    })
+  )
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const terminal = await getTerminalHandle(flags, cwd, client)
@@ -168,6 +195,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const command = getOptionalStringFlag(flags, 'command')
+    const env = terminalEnvironmentFromFlags(flags)
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
@@ -202,6 +230,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
+      ...(env !== undefined ? { env } : {}),
       ...(shell !== undefined ? { shell } : {}),
       title: getOptionalStringFlag(flags, 'title'),
       focus,
@@ -214,6 +243,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal switch': terminalFocusHandler,
   'terminal close': terminalCloseHandler,
   'terminal split': async ({ flags, client, cwd, json }) => {
+    const env = terminalEnvironmentFromFlags(flags)
     const directionFlag = getOptionalStringFlag(flags, 'direction')
     if (
       directionFlag !== undefined &&
@@ -228,21 +258,33 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       : undefined
     // Why refused rather than sent: an older host strips the unknown param and splits again,
     // starting a second copy of the command the retry exists to avoid.
-    if (retrySplit !== undefined) {
+    if (retrySplit !== undefined || env !== undefined) {
       const status = await client.getCliStatus()
       if (!status.result.runtime.reachable) {
         throw new RuntimeClientError(
           'runtime_unavailable',
-          'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
+          retrySplit !== undefined
+            ? 'Orca could not verify --retry-split support on the execution host, so nothing was split. Wait for the execution host to become reachable and retry.'
+            : 'Orca could not verify split --env support on the execution host. No terminal was split; retry when the host is reachable.'
         )
       }
       if (
+        retrySplit !== undefined &&
         status.result.runtime.capabilities?.includes(TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY) !==
-        true
+          true
       ) {
         throw new RuntimeClientError(
           'incompatible_runtime',
           'This Orca host does not support --retry-split and would split again. Nothing was split; check `orca terminal list --json` for the pane instead.'
+        )
+      }
+      if (
+        env !== undefined &&
+        !status.result.runtime.capabilities?.includes(TERMINAL_SPLIT_ENV_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host cannot reliably apply split --env. No terminal was split; update Orca on the execution host.'
         )
       }
     }
@@ -250,7 +292,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
       command: getOptionalStringFlag(flags, 'command'),
-      ...(retrySplit !== undefined ? { retrySplit } : {})
+      ...(retrySplit !== undefined ? { retrySplit } : {}),
+      ...(env !== undefined ? { env } : {})
     })
     printResult(result, json, formatTerminalSplit)
   }

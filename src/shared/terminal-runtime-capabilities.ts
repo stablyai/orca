@@ -28,6 +28,8 @@ export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
 
 // Why: an older host strips terminal.split's `retrySplit` and splits again, duplicating the command.
 export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1' as const
+// Older hosts drop environment overrides on renderer-backed splits.
+export const TERMINAL_SPLIT_ENV_RUNTIME_CAPABILITY = 'terminal.split-env.v1' as const
 
 export const TERMINAL_RUNTIME_CAPABILITIES = [
   'terminal.binary-stream.v1',
@@ -41,5 +43,6 @@ export const TERMINAL_RUNTIME_CAPABILITIES = [
   ...TERMINAL_QUICK_COMMAND_RUNTIME_CAPABILITIES,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
-  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_ENV_RUNTIME_CAPABILITY
 ] as const
