@@ -98,7 +98,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',
@@ -341,7 +341,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -- "$@"',
+        'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -- "$@"',
         'orca-tcc-login',
         '/bin/bash',
         '/bin/bash',
@@ -366,7 +366,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/opt/homebrew/bin/fish',
         '/bin/zsh',
@@ -388,7 +388,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/bin/zsh',
         '/bin/zsh',
@@ -416,7 +416,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
         '--norc',
         '-p',
         '-c',
-        'export SHELL="$1"; shift; exec -l -- "$@"',
+        'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -l -- "$@"',
         'orca-tcc-login',
         '/Applications/Custom Shell/bin/fish=debug',
         '/Applications/Custom Shell/bin/fish=debug',
@@ -431,7 +431,9 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     await prepareMacosTccLoginShell()
     const wrapped = wrapShellSpawnForMacosTccAttribution('-custom-shell', ['-l'])
 
-    expect(wrapped.args).toContain('export SHELL="$1"; shift; exec -l -- "$@"')
+    expect(wrapped.args).toContain(
+      'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -l -- "$@"'
+    )
     expect(wrapped.args.slice(-2)).toEqual(['-custom-shell', '-l'])
   })
 
