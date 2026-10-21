@@ -169,4 +169,22 @@ describe('RelayConnectionLedger', () => {
       enforcedConnectionUnits: 0
     })
   })
+
+  it('books units only below the placement ceiling and releases each once', () => {
+    const ledger = new RelayConnectionLedger(6, 2)
+    const first = ledger.tryReserveBooking(2)!
+    expect(ledger.tryReserveBooking(2)).not.toBeNull()
+    expect(ledger.tryReserveBooking(2)).toBeNull()
+    // A host control may still rise to the socket ceiling past the bookings.
+    expect(ledger.tryReserveControl(false)).not.toBeNull()
+    first.release()
+    first.release()
+    expect(ledger.counts().reservedConnectionUnits).toBe(1)
+    // Never above the socket ceiling, whatever the caller's ceiling says.
+    expect(ledger.canReserveBooking(100)).toBe(true)
+    ledger.tryReserveControl(false)
+    ledger.tryReserveControl(false)
+    expect(ledger.canReserveBooking(100)).toBe(false)
+  })
 })
+

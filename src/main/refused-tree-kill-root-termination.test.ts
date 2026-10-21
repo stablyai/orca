@@ -19,7 +19,7 @@ import {
   type AppEnvironment
 } from '../shared/app-environment'
 import { installMainProcessTreeKillGate } from './own-chromium-tree-kill-guard'
-import { setProcessTreeKillGate } from '../shared/child-process/process-tree-kill-gate'
+import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 import { resetSelfInitiatedTreeKillLogForTest } from './crash-reporting/self-initiated-tree-kill-log'
 import {
   clearCrashBreadcrumbsForTest,
@@ -30,7 +30,7 @@ import { killLocalPrecheckProcessTree } from './automations/precheck-runner'
 import { killRecipeProcess } from '../shared/ephemeral-vm-recipe-process'
 import { killSpawnedCommandTree } from './git/command-runner/spawned-command-tree-kill'
 import { killCodexAppServerProcessTree } from './codex/codex-app-server-process-tree-kill'
-import { signalProcessTree } from '../shared/child-process/process-tree-termination'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { killSourceControlAgentProcess } from './text-generation/source-control-local-process'
 
 /** A pid Electron reports as one of ours: every gate below must refuse it. */

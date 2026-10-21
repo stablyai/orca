@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Cloud, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
@@ -14,54 +15,15 @@ import {
   useSshConnectInFlight
 } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteWorkspaceSyncStatus } from '../../store/slices/ssh'
-
-function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string | null {
-  switch (status?.phase) {
-    case 'pulling':
-    case 'pushing':
-      return 'Workspace syncing'
-    case 'conflict':
-      return 'Workspace sync conflict'
-    case 'error':
-      return 'Workspace sync error'
-    case 'offline':
-      return 'Workspace sync unavailable'
-    case 'synced':
-    case 'idle':
-    case undefined:
-      return null
-  }
-}
-
-function syncStatusTone(status: RemoteWorkspaceSyncStatus | undefined): string {
-  switch (status?.phase) {
-    case 'conflict':
-    case 'error':
-      return 'text-destructive'
-    case 'offline':
-      return 'text-muted-foreground'
-    case 'pulling':
-    case 'pushing':
-      return 'text-yellow-500'
-    case 'synced':
-      return 'text-emerald-500'
-    case 'idle':
-    case undefined:
-      return 'text-muted-foreground'
-  }
-}
 
 export function SshTargetStatusRow({
   targetId,
   label,
-  status,
-  syncStatus
+  status
 }: {
   targetId: string
   label: string
   status: SshConnectionStatus
-  syncStatus: RemoteWorkspaceSyncStatus | undefined
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const mountedRef = useMountedRef()
@@ -69,7 +31,6 @@ export function SshTargetStatusRow({
   // Why: shared with the sidebar card control and terminal overlay — a connect started here
   // must disable those too, in the window before main broadcasts 'connecting'.
   const connectInFlight = useSshConnectInFlight(targetId)
-  const visibleSyncStatusLabel = syncStatusLabel(syncStatus)
 
   const handleConnect = useCallback(async () => {
     if (isSshConnectInFlight(targetId)) {
@@ -81,10 +42,10 @@ export function SshTargetStatusRow({
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
+      toastSshConnectFailure(
+        targetId,
+        err,
+        translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
       )
     } finally {
       endSshConnect(targetId)
@@ -123,23 +84,6 @@ export function SshTargetStatusRow({
           </span>
           <span aria-hidden="true">·</span>
           <span>{STATUS_LABELS[status]}</span>
-          {visibleSyncStatusLabel ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span
-                className={`inline-flex min-w-0 items-center gap-1 ${syncStatusTone(syncStatus)}`}
-              >
-                {syncStatus?.phase === 'pulling' || syncStatus?.phase === 'pushing' ? (
-                  <Loader2 className="size-2.5 shrink-0 animate-spin" />
-                ) : syncStatus?.phase === 'conflict' || syncStatus?.phase === 'error' ? (
-                  <AlertTriangle className="size-2.5 shrink-0" />
-                ) : (
-                  <Cloud className="size-2.5 shrink-0" />
-                )}
-                <span className="truncate">{visibleSyncStatusLabel}</span>
-              </span>
-            </>
-          ) : null}
         </div>
       </div>
       {busy || connectInFlight ? (

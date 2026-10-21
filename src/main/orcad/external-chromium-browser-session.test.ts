@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir } from 'node:fs/promises'
 
 const runProcessMock = vi.fn<(spec: Spec) => Promise<unknown>>()
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: (spec: Spec) => runProcessMock(spec)
 }))
 vi.mock('node:fs/promises', () => ({

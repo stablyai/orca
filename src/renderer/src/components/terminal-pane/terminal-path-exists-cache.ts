@@ -24,10 +24,7 @@ export function getTerminalPathExistsCacheKey({
   return `${runtimeId || 'active'}\0${absolutePath}`
 }
 
-export function readTerminalPathExistsCache(
-  cache: Map<string, boolean>,
-  key: string
-): boolean | undefined {
+export function readTerminalPathExistsCache<T>(cache: Map<string, T>, key: string): T | undefined {
   const value = cache.get(key)
   if (value !== undefined) {
     cache.delete(key)
@@ -36,10 +33,10 @@ export function readTerminalPathExistsCache(
   return value
 }
 
-export function writeTerminalPathExistsCache(
-  cache: Map<string, boolean>,
+export function writeTerminalPathExistsCache<T>(
+  cache: Map<string, T>,
   key: string,
-  exists: boolean
+  value: T
 ): void {
   if (cache.has(key)) {
     cache.delete(key)
@@ -54,5 +51,5 @@ export function writeTerminalPathExistsCache(
       cache.delete(oldestKey)
     }
   }
-  cache.set(key, exists)
+  cache.set(key, value)
 }

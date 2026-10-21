@@ -22,7 +22,7 @@ import {
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
-import { nativeChatToolRunIconName } from './native-chat-tool-category'
+import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
 import { nativeChatToolRunOutcome } from '../../../../shared/native-chat-tool-run-outcome'
 import {
   nativeChatAskRunBlocks,
@@ -153,8 +153,8 @@ export function NativeChatToolRun({
   } = useMemo(() => nativeChatAskRunBlocks(blocks), [blocks])
   const hasAskCall = asks.length > 0
   const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
-  const showsHeader = !hasAskCall || countToolCalls(headerBlocks) > 0
-  const callCount = countToolCalls(headerBlocks) || headerBlocks.length
+  const callCount = countToolCalls(headerBlocks)
+  const showsHeader = !hasAskCall || callCount > 0
   const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
   // Live is the turn's state, not a call's. Deriving it from "some call is
   // running" flipped the header to settled and back around every call, and a
@@ -194,11 +194,13 @@ export function NativeChatToolRun({
   // to a check would read as a change of identity.
   const settledHeaderIcon = nativeChatToolRunIconName(headerBlocks.filter(isToolCallBlock))
   const fallbackLabel =
-    callCount === 1
-      ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
-      : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
-          value0: callCount
-        })
+    callCount === 0
+      ? translate('components.native-chat.tool.result', 'Result')
+      : callCount === 1
+        ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
+        : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
+            value0: callCount
+          })
 
   // A roster with no tool calls beside it is the whole run: rendering the tool
   // header too would announce "1 tool call" for activity that has none.
@@ -227,7 +229,7 @@ export function NativeChatToolRun({
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="group/tool-run flex min-h-6 w-full items-start gap-1.5 rounded-md py-0.5 text-left text-sm native-chat-message-text leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+          className="group/tool-run flex min-h-6 w-full items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           aria-expanded={open}
           aria-live="polite"
           data-native-chat-tool-run-state={live ? 'live' : 'settled'}
@@ -243,7 +245,7 @@ export function NativeChatToolRun({
           {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
           <span
             className={cn(
-              'min-w-0 line-clamp-2 whitespace-normal break-words text-sm native-chat-message-text leading-relaxed transition-colors',
+              'min-w-0 line-clamp-2 whitespace-normal break-words text-sm leading-relaxed transition-colors',
               live
                 ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
                 : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'

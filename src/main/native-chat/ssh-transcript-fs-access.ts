@@ -1,31 +1,22 @@
-import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { readRemoteTranscriptRange } from '../runtime/orchestration/worker-transcript-remote-range-read'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { SshTranscriptLocation } from './ssh-transcript-path'
 
 export type SshTranscriptHandle = { sshTranscript: SshTranscriptLocation }
 
-// Why: the provider is looked up per call, so a reconnect is picked up and a disconnect throws
-// instead of reading anything on this machine.
-export async function statSshTranscript(location: SshTranscriptLocation) {
-  const stat = await requireSshFilesystemProvider(location.connectionId).stat(location.remotePath)
-  const mtimeMs = stat.mtimeMs ?? stat.mtime
-  return { size: stat.size, mtimeMs, ctimeMs: mtimeMs, dev: stat.dev ?? 0, ino: stat.ino ?? 0 }
+// Why: this process serves no SSH filesystem, so an SSH transcript throws instead of reading
+// anything on this machine.
+export async function statSshTranscript(location: SshTranscriptLocation): Promise<{
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+  dev: number
+  ino: number
+}> {
+  throw new SshHostNotServedError(location.connectionId)
 }
 
 export async function readSshTranscript(
-  handle: SshTranscriptHandle,
-  buffer: Buffer,
-  offset: number,
-  length: number,
-  position: number
+  handle: SshTranscriptHandle
 ): Promise<{ bytesRead: number; buffer: Buffer }> {
-  const { connectionId, remotePath } = handle.sshTranscript
-  const bytes = await readRemoteTranscriptRange(
-    requireSshFilesystemProvider(connectionId),
-    remotePath,
-    position,
-    length
-  )
-  buffer.set(bytes, offset)
-  return { bytesRead: bytes.length, buffer }
+  throw new SshHostNotServedError(handle.sshTranscript.connectionId)
 }

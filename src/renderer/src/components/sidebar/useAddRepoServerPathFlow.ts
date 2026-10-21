@@ -50,11 +50,11 @@ export function useAddRepoServerPathFlow({
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   scanNestedRepos: (
     path: string,
-    connectionId?: string,
-    controls?: {
+    connectionId: string | undefined,
+    controls: {
       scanId?: string
       onProgress?: (scan: NestedRepoScanResult) => void
-      runtimeEnvironmentId?: string | null
+      runtimeEnvironmentId: string | null
     }
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void

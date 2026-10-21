@@ -15,6 +15,8 @@ export type AgentContextCommand = {
   usage: string
   flags: string[]
   positionalArgs: string[]
+  variadicPositional?: boolean
+  repeatableFlags?: string[]
   examples: string[]
   notes: string[]
 }
@@ -40,6 +42,8 @@ export function buildAgentContext(specs: CommandSpec[]): AgentContextSchema {
       // allowedFlags — otherwise agents treat --json/--help as unsupported.
       flags: effectiveAllowedFlags(spec),
       positionalArgs: spec.positionalArgs ?? [],
+      ...(spec.variadicPositional ? { variadicPositional: true } : {}),
+      ...(spec.repeatableFlags ? { repeatableFlags: spec.repeatableFlags } : {}),
       examples: spec.examples ?? [],
       notes: spec.notes ?? []
     }))

@@ -4,7 +4,7 @@
  */
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { createElectronHomeIsolation } from './electron-home-isolation'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { resolveElectronExecutable } from './daemon-generation-runtime-fixture'

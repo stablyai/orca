@@ -136,6 +136,7 @@ type SendAdmissionModules = {
     plan: unknown
     envelope: SentMessage['envelope']
     journal: () => undefined
+    store: { getRecord: () => null }
   }) => Promise<unknown>
 }
 
@@ -144,12 +145,13 @@ async function admitSend(
   admission: Record<string, unknown>,
   sent: SentMessage
 ): Promise<unknown> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's own send plan and admission; with no `prepareSession` it reads only plan, envelope and journal. A drifted export or shape fails this check.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's own send plan and admission; the absent session and journal stop both admission routes after fingerprint validation. A drifted export or shape fails this check.
   const build = { ...plans, ...admission } as unknown as SendAdmissionModules
   return build.admitAndRunAgentSessionMutation({
     plan: build.sendPlan(sent),
     envelope: sent.envelope,
-    journal: () => undefined
+    journal: () => undefined,
+    store: { getRecord: () => null }
   })
 }
 

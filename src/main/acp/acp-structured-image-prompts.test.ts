@@ -5,11 +5,18 @@ import {
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { acpLaunchSpecFor } from './acp-launch-specs'
-import { openAcpAdapterRig } from './acp-structured-adapter.test-support'
+import { openAcpAdapterRig, type AcpAdapterRig } from './acp-structured-adapter.test-support'
 
 afterEach(closeProviderTimelineRigs)
 
 const DATA = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64')
+// What the chat's options report says, by the same rule as the send.
+function acceptsImages(rig: AcpAdapterRig) {
+  return rig.adapter
+    .readOptions({ sessionId: SESSION, fence: 1 })
+    .then((read) => read.acceptsImages)
+}
+
 const withImage: AgentJournalMessageItem = {
   kind: 'message',
   role: 'user',
@@ -35,6 +42,9 @@ describe('ACP image prompts', () => {
         { type: 'text', text: 'what is this?' }
       ]
     })
+    await expect(acceptsImages(rig)).resolves.toBe(true)
+    // The start's answer, not a second handshake.
+    expect(rig.sent('initialize')).toHaveLength(1)
   })
 
   it('refuses the message, sending nothing, when the agent did not advertise images', async () => {
@@ -44,6 +54,7 @@ describe('ACP image prompts', () => {
       rig.adapter.dispatch({ sessionId: SESSION, clientMessageId: 'm1', body: withImage, fence: 1 })
     ).resolves.toMatchObject({ state: 'rejected', rejection: { kind: 'attachmentInvalid' } })
     expect(rig.sent('session/prompt')).toEqual([])
+    await expect(acceptsImages(rig)).resolves.toBe(false)
   })
 
   it('refuses an image for an agent whose row offers none, whatever it advertises', async () => {
@@ -55,5 +66,6 @@ describe('ACP image prompts', () => {
       rig.adapter.dispatch({ sessionId: SESSION, clientMessageId: 'm1', body: withImage, fence: 1 })
     ).resolves.toMatchObject({ state: 'rejected' })
     expect(rig.sent('session/prompt')).toEqual([])
+    await expect(acceptsImages(rig)).resolves.toBe(false)
   })
 })

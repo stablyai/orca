@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs'
 import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -590,24 +591,33 @@ describe('subscribeNativeChatTranscript', () => {
   it('detects same-size and larger in-place transcript replacement', async () => {
     const filePath = await tempFile(claudeLine('u-old', 'user', 'old'))
     const seen: NativeChatMessage[] = []
+    const replacements = new Map([
+      ['u-old', claudeLine('u-new', 'user', 'new')],
+      ['u-new', claudeLine('u-bigger', 'user', 'larger replacement text')]
+    ])
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
       filePath,
-      onAppend: (messages) => seen.push(...messages),
+      onAppend: (messages) => {
+        seen.push(...messages)
+        // Why: rewrite while the drain is paused in delivery, so no stat lands mid-write
+        // (Bun writes, then ftruncates) and replays a version this test already consumed.
+        for (const message of messages) {
+          const next = replacements.get(message.id)
+          replacements.delete(message.id)
+          if (next) {
+            writeFileSync(filePath, next)
+          }
+        }
+      },
       debounceMs: 5,
       reconciliationIntervalMs: 20
     })
-    await waitFor(() => seen.some((message) => message.id === 'u-old'))
-
-    await writeFile(filePath, claudeLine('u-new', 'user', 'new'))
-    await waitFor(() => seen.some((message) => message.id === 'u-new'))
-    await writeFile(filePath, claudeLine('u-bigger', 'user', 'larger replacement text'))
     await waitFor(() => seen.some((message) => message.id === 'u-bigger'))
     sub.unsubscribe()
 
-    expect(seen.filter((message) => message.id === 'u-new')).toHaveLength(1)
-    expect(seen.filter((message) => message.id === 'u-bigger')).toHaveLength(1)
+    expect(seen.map((message) => message.id)).toEqual(['u-old', 'u-new', 'u-bigger'])
   })
 
   it('keeps watching after atomic rename replacement', async () => {

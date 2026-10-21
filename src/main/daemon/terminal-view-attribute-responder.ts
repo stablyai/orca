@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (View-attribute bridge): OSC 4/10/11/12 and DSR ?996n
- * responder handlers for the runtime
+ * Phase 5 slice 2 (View-attribute bridge): OSC 4/10/11/12, DSR ?996n and OSC 7501
+ * feature-detection responder handlers for the runtime
  * headless emulator. The headless xterm core has no theme service, so these
  * handlers compute replies from the renderer's pushed attribute snapshot,
  * with per-PTY OSC SET mutations layered on top — mirroring exactly what the
@@ -16,6 +16,7 @@ import {
   type TerminalViewAttributes,
   type TerminalViewRgb
 } from '../../shared/terminal-view-attributes'
+import { installProgramStatusQueryResponder } from '../../shared/program-status/query-responder'
 
 type ViewAttributeParser = Pick<Terminal['parser'], 'registerOscHandler' | 'registerCsiHandler'>
 
@@ -131,6 +132,7 @@ export function installTerminalViewAttributeResponder(
     }
     return true
   })
+  installProgramStatusQueryResponder({ parser: deps.parser, emitReply: deps.emitReply })
   deps.parser.registerOscHandler(10, (data) => handleSpecialColor(data, 0))
   deps.parser.registerOscHandler(11, (data) => handleSpecialColor(data, 1))
   deps.parser.registerOscHandler(12, (data) => handleSpecialColor(data, 2))

@@ -2,18 +2,18 @@ import { z } from 'zod'
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import {
   forceTerminateProcessTree,
   signalProcessTree
-} from '../../shared/child-process/process-tree-termination'
+} from '@orca/process-host/process-tree-termination'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: vi.fn() }))
-vi.mock('../../shared/child-process/process-tree-termination', () => ({
+vi.mock('@orca/process-host', () => ({ spawnProcess: vi.fn() }))
+vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: vi.fn(),
   forceTerminateProcessTree: vi.fn()
 }))
@@ -77,8 +77,10 @@ function decodedSupervisorSpec(env: unknown): unknown {
   return JSON.parse(Buffer.from(encoded, 'base64').toString() || 'null')
 }
 
-async function untilStopRequested(): Promise<void> {
-  while (child.kill.mock.calls.length === 0) {
+async function untilStopRequested(
+  requested = () => child.kill.mock.calls.length > 0
+): Promise<void> {
+  while (!requested()) {
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
@@ -245,20 +247,38 @@ describe('OpenCode model probe termination evidence', () => {
   })
 
   it('keeps a Windows root exit with inherited pipes unverified and avoids its former pid', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     Object.defineProperty(process, 'platform', { value: 'win32' })
     vi.mocked(signalProcessTree).mockImplementation(async () => {
       child.exitCode = 0
       child.emit('exit', 0, null)
       return false
     })
-    expect(await probeOpenCodeLaunchModelContext(options)).toBeNull()
+    let settled = false
+    const probe = probeOpenCodeLaunchModelContext(options).finally(() => (settled = true))
+    await untilStopRequested(() => vi.mocked(signalProcessTree).mock.calls.length > 0)
+    await vi.advanceTimersByTimeAsync(1_499)
+    expect(settled).toBe(false)
+    expect(forceTerminateProcessTree).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await probe).toBeNull()
     expect(forceTerminateProcessTree).not.toHaveBeenCalled()
   })
 
   it('requires verified termination when a still-live Windows probe does not close', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     Object.defineProperty(process, 'platform', { value: 'win32' })
     vi.mocked(signalProcessTree).mockResolvedValue(true)
-    expect(await probeOpenCodeLaunchModelContext(options)).toBeNull()
+    let settled = false
+    const probe = probeOpenCodeLaunchModelContext(options).finally(() => (settled = true))
+    await untilStopRequested(() => vi.mocked(signalProcessTree).mock.calls.length > 0)
+    await vi.advanceTimersByTimeAsync(1_499)
+    expect(settled).toBe(false)
+    expect(forceTerminateProcessTree).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await probe).toBeNull()
     expect(forceTerminateProcessTree).toHaveBeenCalledOnce()
   })
 })

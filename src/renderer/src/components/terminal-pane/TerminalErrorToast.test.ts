@@ -194,17 +194,6 @@ describe('humanizeTerminalError', () => {
     expect(humanized).toContain('still running')
   })
 
-  it('says a terminal held by the previous Orca version is still running', () => {
-    const raw =
-      "Error invoking remote method 'pty:spawn': SshPtyHeldByPreviousRelayError: SSH_PTY_HELD_BY_PREVIOUS_RELAY: pty2:old-epoch:1"
-    const humanized = humanizeTerminalError(raw)
-    expect(humanized).not.toContain('SSH_PTY_HELD_BY_PREVIOUS_RELAY')
-    expect(humanized).not.toContain('pty2:old-epoch:1')
-    expect(humanized).toContain('previous Orca version')
-    expect(humanized).toContain('still running')
-    expect(isExplainedTerminalError(raw)).toBe(true)
-  })
-
   it('replaces only the unreattachable line in an aggregated error', () => {
     const humanized = humanizeTerminalError('Paste failed.\nSSH_SESSION_EXPIRED: orca:2f1c@@pty-7')
     expect(humanized.startsWith('Paste failed.\n')).toBe(true)
@@ -364,20 +353,6 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
   })
 
-  it('omits client details for a terminal the previous Orca version runs on the host', async () => {
-    const view = render(
-      React.createElement(TerminalErrorToast, {
-        error:
-          "Error invoking remote method 'pty:spawn': SshPtyHeldByPreviousRelayError: SSH_PTY_HELD_BY_PREVIOUS_RELAY: pty2:old-epoch:1",
-        onDismiss: vi.fn()
-      })
-    )
-
-    expect(view.container.textContent).toContain('previous Orca version')
-    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
-    expect(view.container.textContent).not.toContain('OS:')
-  })
-
   it('omits client details for a remote pane whose session cannot be reattached', async () => {
     const error = "Error invoking remote method 'pty:attach': Error: Session not found: pty-7"
     const remote = render(
@@ -458,6 +433,26 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() =>
       expect(view.container.textContent).toContain('Retry could not reconnect yet')
     )
+  })
+
+  // #30486: Retry was the only action, so a pane whose owner stays unverifiable looped on it.
+  it('offers a new terminal beside Retry and leaves this pane alone', () => {
+    const onRetry = vi.fn().mockResolvedValue(false)
+    const onOpenNewTerminal = vi.fn()
+    const onDismiss = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'terminal_pane_owner_unverified',
+        onDismiss,
+        onRetry,
+        onOpenNewTerminal
+      })
+    )
+
+    fireEvent.click(view.getByRole('button', { name: 'Open new terminal' }))
+    expect(onOpenNewTerminal).toHaveBeenCalledOnce()
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(onDismiss).not.toHaveBeenCalled()
   })
 })
 

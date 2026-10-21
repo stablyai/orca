@@ -1,6 +1,6 @@
 import { constants, copyFileSync, linkSync, lstatSync, mkdtempSync, rmSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import { runProcessSync } from '../../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
 // Keep process startup overhead off small recovery copies.
 const MINIMUM_CLONE_BYTES = 8 * 1024 * 1024

@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,22 +21,18 @@ const mocks = vi.hoisted(() => ({
   ensure: vi.fn(),
   verify: vi.fn(),
   flush: vi.fn(),
-  preflight: vi.fn(),
-  hasDirectAuthority: vi.fn()
+  preflight: vi.fn()
 }))
-vi.mock('./orcad-managed-runtime-context', () => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-runtime-context', () => ({
   requireManagedOrcadInfrastructure: mocks.infrastructure
 }))
-vi.mock('./orcad-managed-tunnel', () => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   startOrcadManagedTunnel: mocks.start,
   closeOrcadManagedTunnel: mocks.close,
   ensureOrcadManagedTunnel: mocks.ensure
 }))
 vi.mock('./runtime-ssh-access-verification', () => ({
   verifyRuntimeEnvironmentSshTunnel: mocks.verify
-}))
-vi.mock('./ssh-target-registry', () => ({
-  hasRegisteredDirectSshAuthority: mocks.hasDirectAuthority
 }))
 import {
   fingerprintRuntimeSshTarget,
@@ -131,7 +128,10 @@ describe('independent runtime SSH access coordinator', () => {
       events.push('verify')
       return {
         verifiedRuntimeId: 'runtime',
-        verifiedPairing: { ...pairing, endpoint: 'ws://127.0.0.1:41000' },
+        verifiedConnection: pairedRuntimeConnectionFromOffer({
+          ...pairing,
+          endpoint: 'ws://127.0.0.1:41000'
+        }),
         runtimeStatus: {}
       }
     })
@@ -295,7 +295,10 @@ describe('independent runtime SSH access coordinator', () => {
               ? { generation: 4 }
               : { orcadFence: { environmentId: 'other' } })
         }
-        return { verifiedRuntimeId: 'runtime', verifiedPairing: pairing }
+        return {
+          verifiedRuntimeId: 'runtime',
+          verifiedConnection: pairedRuntimeConnectionFromOffer(pairing)
+        }
       })
       await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('changed')
       expect(current().sshAccess).toBeUndefined()
@@ -355,15 +358,6 @@ describe('independent runtime SSH access coordinator', () => {
     target.generation = undefined
     await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('generation')
     expect(mocks.connect).not.toHaveBeenCalled()
-  })
-
-  it('refuses a connected direct provider even when it has no catalog or leases', async () => {
-    mocks.hasDirectAuthority.mockReturnValue(true)
-    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow(
-      'Disconnect direct SSH authority'
-    )
-    expect(mocks.connect).not.toHaveBeenCalled()
-    expect(current().pendingSshAccessOperation).toBeUndefined()
   })
 
   it('treats a lost successful unlink response as an idempotent no-op', async () => {

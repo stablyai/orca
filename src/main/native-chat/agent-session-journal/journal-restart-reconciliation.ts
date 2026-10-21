@@ -10,6 +10,7 @@
 // through the user's Retry, which rotates the client message id; Orca still
 // never puts a message back on the wire on the user's behalf.
 
+import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type {
@@ -44,13 +45,20 @@ function comparableBody(body: AgentJournalMessageItem | undefined): boolean {
 }
 
 function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmission[] {
-  const { items, submissions } = journal.snapshot()
+  const snapshot = journal.snapshot()
+  const { items, submissions } = agentSessionCurrentContextRows(
+    snapshot.items,
+    snapshot.submissions
+  )
   const bodies = new Map(items.map((item) => [item.itemId, item.body]))
   return submissions.filter((submission) => {
     if (
       (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown') ||
       // Never handed over, so provider history cannot hold it.
-      isQueuedAgentJournalSubmission(submission)
+      isQueuedAgentJournalSubmission(submission) ||
+      // The provider's copy leads with the stopped history it carried, so its fingerprint cannot
+      // match; like an attachment's, its absence is no evidence and it stays `unknown`.
+      journal.stoppedHistoryCarried().has(submission.clientMessageId)
     ) {
       return false
     }

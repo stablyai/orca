@@ -72,7 +72,8 @@ export class BrowserRouteWebContentsRegistry {
       installBrowserRouteGuestQuarantine(state, {
         getPartitionForSession: (routeSession) =>
           this.dependencies.getPartitionForSession(routeSession),
-        reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked)
+        reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked),
+        isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })
     } catch {
       state.popups?.dispose()
@@ -251,14 +252,12 @@ export class BrowserRouteWebContentsRegistry {
     })
   }
 
-  private navigationAllowed(state: GuestState, url: string): boolean {
-    return isBrowserRouteGuestNavigationAllowed(state, url, () =>
-      Boolean(
-        state.registration &&
-        this.registrationMatchesGuest(state, state.registration) &&
-        this.hasLivePageAuthority(state)
-      )
-    )
+  private navigationAllowed(state: GuestState, url: string, allowBlank = true): boolean {
+    const isCurrent = () =>
+      state.registration !== null &&
+      this.registrationMatchesGuest(state, state.registration) &&
+      this.hasLivePageAuthority(state)
+    return isBrowserRouteGuestNavigationAllowed(state, url, isCurrent, allowBlank)
   }
 
   private registrationMatchesGuest(state: GuestState, registration: GuestIdentity): boolean {

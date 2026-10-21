@@ -25,3 +25,12 @@ export function wslClaudeProfilePointer(hostDataRoot: string): string {
   const build = basename(hostDataRoot).replace(/[^\w.-]/g, '_')
   return `.local/share/orca/claude-profiles/selected-wsl-${build}`
 }
+
+/** A saved WSL account's guest folder; null for an older Orca's folder, which holds no login. */
+export function savedWslClaudeAccountHome(account: {
+  id: string
+  wslLinuxAuthPath?: string | null
+}): string | null {
+  const home = account.wslLinuxAuthPath
+  return home?.endsWith(`/claude-profiles/${account.id}/home`) ? home : null
+}

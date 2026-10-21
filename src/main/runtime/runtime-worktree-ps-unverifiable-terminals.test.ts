@@ -9,18 +9,14 @@ describe('unverifiable terminal attribution', () => {
       ['wt-new', {}]
     ])
     applyRuntimeWorktreePsUnverifiableTerminals({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the counters this pass writes are read back.
-      summaries: summaries as Map<string, RuntimeWorktreePsSummary>,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: getSummary below ignores the index.
-      pathIndex: {} as never,
-      missingIds: new Set(),
       countedPtyIds: new Set(),
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass reads only ptyId and worktreeId.
       leaves: [{ ptyId: 'pty-1', worktreeId: 'wt-old' } as never],
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass reads only ptyId and worktreeId.
       ptysById: new Map([['pty-1', { ptyId: 'pty-1', worktreeId: 'wt-new' } as never]]),
       getLivenessVerdict: () => ({ status: 'unverifiable', reason: 'lost contact' }),
-      getSummary: (all, _index, _missing, worktreeId) => all.get(worktreeId) ?? null
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the counters this pass writes are read back.
+      getSummary: (id) => (summaries.get(id) as RuntimeWorktreePsSummary | undefined) ?? null
     })
     expect(summaries.get('wt-new')?.unverifiableTerminalCount).toBe(1)
     expect(summaries.get('wt-old')?.unverifiableTerminalCount).toBeUndefined()

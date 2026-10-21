@@ -2,7 +2,10 @@ import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import {
+  watcherLifecycleState,
+  type RemoteWatcherInstallResult
+} from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 import {
   clearDormantRemoteWatcher,
@@ -25,10 +28,12 @@ export async function closeRemoteWatcherForWorktreePath(
     worktreePath,
     listeners: new Map<number, WebContents>()
   }
+  const waiters = watcherLifecycleState.cancelledRemoteInstallWaiters.get(key)
   for (const source of [
     watcherLifecycleState.pendingRemoteWatcherRetryListeners.get(key)?.listeners,
     watcherLifecycleState.inFlightRemoteInstalls.get(key)?.listeners,
-    watcherLifecycleState.remoteWatchers.get(key)?.listeners
+    watcherLifecycleState.remoteWatchers.get(key)?.listeners,
+    new Map(Array.from(waiters?.values() ?? [], ({ sender }) => [sender.id, sender]))
   ]) {
     for (const [senderId, sender] of source ?? []) {
       if (!sender.isDestroyed()) {
@@ -36,6 +41,8 @@ export async function closeRemoteWatcherForWorktreePath(
       }
     }
   }
+  // Why: a waiter's retry would install after this close; the restore re-subscribes it instead.
+  watcherLifecycleState.cancelledRemoteInstallWaiters.delete(key)
   if (suspended.listeners.size > 0) {
     watcherLifecycleState.suspendedRemoteWatcherListeners.set(key, suspended)
   }
@@ -72,16 +79,35 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
   if (!suspended) {
     return
   }
-  watcherLifecycleState.suspendedRemoteWatcherListeners.delete(key)
+  const suspendedByKey = watcherLifecycleState.suspendedRemoteWatcherListeners
+  const failures: {
+    sender: WebContents
+    signal: AbortSignal
+    error: unknown
+  }[] = []
   const owners = Array.from(suspended.listeners.values(), (sender) => ({
     sender,
     signal: registerWatcherSenderCleanup(sender)
   }))
   for (const { sender, signal } of owners) {
-    if (!isCurrentWatcherSender(sender, signal)) {
+    // Why: a forgotten or replaced snapshot belongs to a newer removal; this restore must not consume it.
+    if (suspendedByKey.get(key) !== suspended) {
+      break
+    }
+    // Why: owners stay suspended until their turn, so an unwatch during an earlier owner's re-subscribe still withdraws them.
+    // Why lifetime first: a reloaded window keeps its id, and its new entry is not this restore's to take.
+    if (!isCurrentWatcherSender(sender, signal) || !suspended.listeners.delete(sender.id)) {
       continue
     }
-    const result = await installRemoteWatcher(sender, connectionId, worktreePath, undefined, signal)
+    let result: RemoteWatcherInstallResult
+    try {
+      result = await installRemoteWatcher(sender, connectionId, worktreePath, undefined, signal)
+    } catch (error) {
+      if (isCurrentWatcherSender(sender, signal)) {
+        failures.push({ sender, signal, error })
+      }
+      continue
+    }
     if (!isCurrentWatcherSender(sender, signal)) {
       continue
     }
@@ -92,8 +118,29 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
     }
     sender.send('fs:changed', {
       worktreePath,
-      events: [{ kind: 'overflow', absolutePath: worktreePath }]
+      events: [{ kind: 'overflow', absolutePath: worktreePath }],
+      connectionId,
+      resync: true
     } satisfies FsChangedPayload)
+  }
+  // Why: an overlapping retried removal may have re-suspended owners into this same entry.
+  if (suspendedByKey.get(key) === suspended && suspended.listeners.size === 0) {
+    suspendedByKey.delete(key)
+  }
+  const liveFailures = failures.filter(({ sender, signal }) =>
+    isCurrentWatcherSender(sender, signal)
+  )
+  if (liveFailures.length > 0) {
+    const current = suspendedByKey.get(key) ?? {
+      connectionId,
+      worktreePath,
+      listeners: new Map<number, WebContents>()
+    }
+    for (const { sender } of liveFailures) {
+      current.listeners.set(sender.id, sender)
+    }
+    suspendedByKey.set(key, current)
+    throw liveFailures[0].error
   }
 }
 

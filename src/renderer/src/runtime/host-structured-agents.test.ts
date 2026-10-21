@@ -10,13 +10,18 @@ import type { RuntimeCapability } from '../../../shared/protocol-version'
 type Statuses = Map<string, RuntimeEnvironmentStatus>
 type StoreState = {
   runtimeStatusByEnvironmentId: Statuses
-  settings: { experimentalStructuredNativeChat: boolean } | null
+  settings: { experimentalNativeChat: boolean } | null
+  ensureNativeDetectedAgents: () => Promise<string[]>
 }
 
-const ON = { experimentalStructuredNativeChat: true }
+const ON = { experimentalNativeChat: true }
 
 const mocks = vi.hoisted(() => {
-  const state: StoreState = { runtimeStatusByEnvironmentId: new Map(), settings: null }
+  const state: StoreState = {
+    runtimeStatusByEnvironmentId: new Map(),
+    settings: null,
+    ensureNativeDetectedAgents: async () => []
+  }
   return {
     callRuntimeRpc: vi.fn(),
     ensureLocalRuntimeCapabilities: vi.fn(),
@@ -36,7 +41,7 @@ vi.mock('./local-runtime-capabilities', () => ({
 }))
 vi.mock('./local-structured-chats', () => ({
   localStructuredChatsInUse: async (settings: StoreState['settings']) =>
-    settings?.experimentalStructuredNativeChat === true
+    settings?.experimentalNativeChat === true
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -50,6 +55,8 @@ vi.mock('@/store', () => ({
 
 import {
   readHostStructuredAgents,
+  hostStructuredAgentsReadFailed,
+  loadHostStructuredAgents,
   resetHostStructuredAgentsForTests
 } from './host-structured-agents'
 import { installHostStructuredAgentsSync } from './host-structured-agents-sync'
@@ -98,7 +105,11 @@ let uninstall: (() => void) | undefined
 
 beforeEach(() => {
   resetHostStructuredAgentsForTests()
-  mocks.state = { runtimeStatusByEnvironmentId: new Map(), settings: ON }
+  mocks.state = {
+    runtimeStatusByEnvironmentId: new Map(),
+    settings: ON,
+    ensureNativeDetectedAgents: async () => []
+  }
   mocks.listeners.clear()
   mocks.capabilitiesKnown.clear()
   mocks.callRuntimeRpc.mockReset().mockResolvedValue(GROK_LIST)
@@ -168,7 +179,7 @@ describe('host structured agents', () => {
 
   // Asking installs a host's structured store; a profile with structured chat off never pays it.
   it('asks no host until structured chat is turned on', async () => {
-    mocks.state = { ...mocks.state, settings: { experimentalStructuredNativeChat: false } }
+    mocks.state = { ...mocks.state, settings: { experimentalNativeChat: false } }
     uninstall = installHostStructuredAgentsSync()
     setStatuses(new Map([['env-1', pairedStatus('rt-1', REGISTERED)]]))
     await Promise.resolve()
@@ -202,5 +213,20 @@ describe('host structured agents', () => {
     await Promise.resolve()
 
     expect(agentIds('local')).toBeUndefined()
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+  })
+
+  it('keeps a completed failure while explicitly rechecking and clears it only on a valid result', async () => {
+    mocks.callRuntimeRpc.mockRejectedValueOnce(new Error('host unreachable'))
+    await loadHostStructuredAgents('local', REGISTERED, null)
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+    const result = Promise.withResolvers<unknown>()
+    mocks.callRuntimeRpc.mockReturnValueOnce(result.promise)
+    const retry = loadHostStructuredAgents('local', REGISTERED, null)
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(true)
+    result.resolve(GROK_LIST)
+    await retry
+    expect(hostStructuredAgentsReadFailed('local', null)).toBe(false)
+    expect(agentIds('local')).toEqual(['claude', 'grok'])
   })
 })

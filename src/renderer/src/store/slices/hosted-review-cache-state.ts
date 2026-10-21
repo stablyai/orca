@@ -6,18 +6,22 @@ import type {
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  stale?: boolean
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
 }
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
 export type HostedReviewFetchOptions = {
+  /** Source-qualified exact lookup; does not replace the branch’s selected review. */
+  exactReviewKey?: string
   force?: boolean
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
@@ -143,10 +147,6 @@ export function shouldRefetchGitHubScopedResultForNoHint(
   )
 }
 
-export function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
-  return inflightHintKey === nextHintKey
-}
-
 export function isStaleMergedGitHubReviewForHead(
   cached: HostedReviewCacheEntry<HostedReviewInfo> | undefined,
   currentHeadOid: string | null | undefined
@@ -210,34 +210,16 @@ export function withHostedReviewCacheEntry(
   return pruned
 }
 
-export function settingsForHostedReviewRepoOwner(
-  settings: AppState['settings'],
+/**
+ * Transport for a review on a known repo: a server's repo goes to that server; local and SSH repos
+ * run on this app's IPC. An unknown repo also stays on this app; focus never names an owner.
+ */
+export function hostedReviewRepoOwnerTarget(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo) {
-    return settings
-  }
-  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
-  // Why: local and SSH-owned reviews are served by the desktop client's local
-  // IPC path, even when the sidebar is focused on a runtime host.
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
-}
-
-export function settingsForHostedReviewActionOwner(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
-    return settings
-  }
-  return settingsForHostedReviewRepoOwner(settings, repo)
+): RuntimeClientTarget {
+  return (
+    (repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+  )
 }
 
 export function hostedReviewBranchLookupArgs(

@@ -267,7 +267,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.equal(String(cellShape(cellId).cap), tfvarsHardCap(cellId), cellId)
     }
     assert.equal(resolveCellShape('production-gce-c12').status, 1)
-    assert.equal(resolveCellShape('production-gce-c35').status, 1)
+    assert.equal(resolveCellShape('production-gce-c36').status, 1)
   })
 
 

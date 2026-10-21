@@ -132,6 +132,29 @@ function sameCellFields(expected: Cell, actual: Cell): boolean {
   )
 }
 
+// Match the frozen default-blank descriptor without formatting every trailing cell.
+function isDefaultBlank(line: BufferLine | undefined, x: number, scratch: Cell): boolean {
+  if (!line || x >= line.length) {
+    return true
+  }
+  const cell = line.getCell(x, scratch)
+  if (!cell) {
+    return true
+  }
+  const chars = cell.getChars()
+  return (
+    cell.getWidth() === 1 &&
+    cell.getBgColorMode() === 0 &&
+    cell.getBgColor() === -1 &&
+    cell.isInverse() === 0 &&
+    (chars === '' ||
+      (chars === ' ' &&
+        cell.isUnderline() === 0 &&
+        cell.isStrikethrough() === 0 &&
+        cell.isOverline() === 0))
+  )
+}
+
 function trimmedEnd(
   buffer: Buffer,
   start: number,
@@ -143,7 +166,7 @@ function trimmedEnd(
     const line = buffer.getLine(end - 1)
     let blank = true
     for (let x = 0; x < cols; x++) {
-      if (cellDescriptor(line, x, cols, scratch) !== DEFAULT_BLANK) {
+      if (!isDefaultBlank(line, x, scratch)) {
         blank = false
         break
       }

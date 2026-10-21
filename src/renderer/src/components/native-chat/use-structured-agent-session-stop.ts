@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionHostStopsConversation } from '@/runtime/structured-agent-session-host-capability'
 import { agentStopDisplayStatus } from '../../../../shared/agent-stop-display-status'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'

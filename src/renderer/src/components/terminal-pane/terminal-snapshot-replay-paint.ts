@@ -71,15 +71,17 @@ export function buildSnapshotReplayPreamble(
 
 /**
  * Writes for a remote image, which folds its normal buffer in ahead of its alt
- * entry. Over a pane already on alt, an image that ends on alt repaints only its
- * alt payload, so the pane's normal buffer and history stay as they are; any
- * other image paints from the normal buffer.
+ * entry. An image with history replaces the pane's normal buffer and history,
+ * even over a live alt screen: a TUI can exit, the shell print and another TUI
+ * start inside the gap. A screen-only image over alt repaints only its alt
+ * payload, since it has no history to replace the pane's pre-TUI scrollback with.
  */
 export function buildFoldedImageReplayWrites(
   data: string,
-  paneOnAlternateScreen: boolean
+  paneOnAlternateScreen: boolean,
+  carriesHistory: boolean
 ): { preamble: string; payload: string } {
-  const split = paneOnAlternateScreen ? splitAtAlternateScreenEntry(data) : null
+  const split = paneOnAlternateScreen && !carriesHistory ? splitAtAlternateScreenEntry(data) : null
   if (split) {
     return {
       preamble: buildSnapshotReplayPreamble({

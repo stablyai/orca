@@ -108,14 +108,18 @@ function resolvedOwner(
     : undefined
 }
 
-/** The one record-to-view projection; every surface and every legacy shape starts here. */
+/** Every surface starts here; foreground Codex tools stay in status records and tool rows. */
 export function projectAgentChildWorkViews(
   records: readonly AgentChildWorkInput[],
   aliases: readonly AgentChildWorkViewAlias[]
 ): AgentChildWorkView[] {
-  const byId = new Map(records.map((record) => [record.childWorkId, record]))
+  const visible = records.filter(
+    (record) =>
+      record.provider !== 'codex' || record.kind !== 'command' || record.residency !== 'foreground'
+  )
+  const byId = new Map(visible.map((record) => [record.childWorkId, record]))
   const aliasesByChild = groupedBy(aliases, (alias) => alias.childWorkId)
-  return records.map((record) => {
+  return visible.map((record) => {
     const providerId = providerIdFor(record, aliasesByChild.get(record.childWorkId) ?? [])
     const owner = resolvedOwner(record, byId)
     return {

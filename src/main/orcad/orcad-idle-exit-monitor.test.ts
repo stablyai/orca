@@ -100,6 +100,22 @@ describe('OrcadIdleExitMonitor', () => {
     expect(h.onIdle).not.toHaveBeenCalled()
   })
 
+  it('restarts the quiet period when the final idle stop declines after an asynchronous check', async () => {
+    const h = harness()
+    await h.monitor.check()
+    const decision = Promise.withResolvers<boolean>()
+    h.onIdle.mockImplementationOnce(() => decision.promise)
+    h.advance(100)
+    const checking = h.monitor.check()
+    await vi.waitFor(() => expect(h.onIdle).toHaveBeenCalledOnce())
+    decision.resolve(false)
+    expect(await checking).toBe(false)
+    h.advance(100)
+    expect(await h.monitor.check()).toBe(false)
+    h.advance(100)
+    expect(await h.monitor.check()).toBe(true)
+  })
+
   it('polls often enough for a short test timeout and at most once a minute', () => {
     expect(resolveOrcadIdlePollMs(15 * 60_000)).toBe(60_000)
     expect(resolveOrcadIdlePollMs(2_000)).toBe(400)

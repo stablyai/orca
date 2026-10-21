@@ -1,4 +1,5 @@
 import { expect } from 'vitest'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
@@ -10,6 +11,7 @@ export const ATTENTION_READ = {
 } as const
 export const REWIND_METHOD = 'agentSession.rewind'
 export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
+export const ITEM_DETAIL_METHOD = 'agentSession.item'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
 
@@ -22,6 +24,7 @@ export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletion
 export const STRUCTURED_CALLS: {
   method: string
   hostMethod: string | null
+  clientCapability?: string
   result?: Record<string, unknown>
 }[] = [
   { method: 'agentSession.createSupport', hostMethod: null, result: { supported: true } },
@@ -59,12 +62,29 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'queuedMessagesResume',
     result: { ok: true, replayed: false }
   },
+  // Editing a queued card in place. Clients call these only on a host advertising
+  // `agent-session.queued-message-edit.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.queuedMessageUpdate',
+    hostMethod: 'queuedMessageUpdate',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageEditHold',
+    hostMethod: 'queuedMessageEditHold',
+    result: { status: 'held' }
+  },
   {
     method: REWIND_METHOD,
     hostMethod: 'rewind',
     result: { ok: true, replayed: false, value: { itemId: 'item-1', epoch: 'rewound-epoch' } }
   },
   { method: 'agentSession.close', hostMethod: 'close', result: { ok: true } },
+  {
+    method: 'agentSession.sleepWorkspace',
+    hostMethod: 'sleepWorkspace',
+    result: { stoppedSessionIds: [] }
+  },
   {
     method: 'agentSession.respondToApproval',
     hostMethod: 'respondToPrompt',
@@ -146,6 +166,13 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'continueInterrupted',
     result: { sessionId: SESSION, outcome: 'superseded' }
   },
+  // Name a chat again after naming failed. Clients call it only on a host advertising
+  // `agent-session.structured.regenerate-name.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.regenerateName',
+    hostMethod: 'regenerateConversationName',
+    result: { accepted: true }
+  },
   { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',
@@ -153,9 +180,20 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, page: { items: [] } }
   },
   {
+    method: 'agentSession.currentRequests',
+    hostMethod: 'readCurrentRequests',
+    clientCapability: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+    result: { json: '[]', nextCursor: null }
+  },
+  {
     method: CONVERSATION_OUTLINE_METHOD,
     hostMethod: 'journalSnapshot',
     result: { sessionId: SESSION, entries: [], omittedEntries: 0 }
+  },
+  {
+    method: ITEM_DETAIL_METHOD,
+    hostMethod: 'journalSnapshot',
+    result: { item: null }
   },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
@@ -190,5 +228,12 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.agents',
     hostMethod: null,
     result: { agents: expect.arrayContaining([expect.objectContaining({ agent: 'codex' })]) }
+  },
+  // Answered from the runtime's shared availability resource, not the host, so the stub's first
+  // generation is the only signal that the gate opened.
+  {
+    method: 'agentSession.subscribeAvailability',
+    hostMethod: null,
+    result: { type: 'availability', agents: [] }
   }
 ]

@@ -4,7 +4,7 @@
 // this routes such panes through the same exit teardown an observed exit runs.
 // See design-docs/terminal-dead-pane-on-bg-exit.md.
 
-const REMOTE_PTY_ID_PREFIX = 'remote:'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 /**
  * A pane binding that exposes its bound transport identity plus a reconcile
@@ -12,7 +12,6 @@ const REMOTE_PTY_ID_PREFIX = 'remote:'
  * the full `PanePtyBinding` shape from pty-connection.
  */
 export type ReconcilableBinding = {
-  reconcileIfSessionDead?: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing?: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
 
@@ -42,7 +41,7 @@ export function shouldReconcileDeadSession(args: {
   if (ptyId === null || ptyId === undefined) {
     return false
   }
-  if (ptyId.startsWith(REMOTE_PTY_ID_PREFIX)) {
+  if (isRemoteRuntimePtyId(ptyId)) {
     return false
   }
   // Why: only local/daemon-backed ids (connectionId null/undefined) are
@@ -91,35 +90,5 @@ export function reconcileMissingSessions(args: {
   const requestedAt = performance.now()
   for (const binding of args.bindings) {
     binding.reconcileIfSessionMissing?.(args.hasPty, requestedAt)
-  }
-}
-
-/**
- * Thin orchestration: fetch the live session listing once and invoke each
- * binding's `reconcileIfSessionDead` with the resolved set.
- *
- * Why a rejected `listSessions()` is swallowed (no reconcile): the local
- * provider listing is NOT `.catch`-wrapped in main, so a rejection means the
- * listing is unknown — closing a pane on an IPC/listing failure is unacceptable.
- * A RESOLVED list (even empty `[]`) is AUTHORITATIVE for local ids: a local id
- * absent from it is genuinely reaped, so there is no zero-total skip.
- */
-export async function reconcileDeadSessions(args: {
-  bindings: Iterable<ReconcilableBinding>
-  listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-}): Promise<void> {
-  let sessions: { id: string }[]
-  // Why: capture the request time BEFORE the round-trip so the decision can tell
-  // a snapshot that predates a fresh binding from one that postdates it.
-  const requestedAt = performance.now()
-  try {
-    sessions = await args.listSessions()
-  } catch {
-    // Why: a rejected listing is "unknown" — never close a pane on it.
-    return
-  }
-  const liveSessionIds = new Set(sessions.map((session) => session.id))
-  for (const binding of args.bindings) {
-    binding.reconcileIfSessionDead?.(liveSessionIds, requestedAt)
   }
 }

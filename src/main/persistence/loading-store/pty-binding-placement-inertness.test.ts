@@ -8,6 +8,9 @@ import { fixture } from './profile-state-delayed-authority-fixture'
 import type * as AgreementModule from '../terminal-topology/terminal-pane-placement-agreement'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 
+// rollback build (switch-off) — delete with the switch-off code post-flip
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const agreementCheck = vi.hoisted(() => ({ throws: false }))
 vi.mock('../terminal-topology/terminal-pane-placement-agreement', async (importOriginal) => {
   const actual = await importOriginal<typeof AgreementModule>()
@@ -26,7 +29,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -64,8 +67,7 @@ const SCENARIOS: Scenario[] = [
       leafId: TEST_LEAF_1,
       ptyId: 'pty-new',
       incarnationId: 'inc-new',
-      startupCwd: '/fixture/local/sub',
-      hostAdmittedMembership: true
+      startupCwd: '/fixture/local/sub'
     },
     placements: (leaf) => [
       [NEW_TAB, 'agrees'],
@@ -110,8 +112,7 @@ const SCENARIOS: Scenario[] = [
       worktreeId: FOLDER_WORKTREE,
       tabId: 'tab-folder',
       leafId: TEST_LEAF_1,
-      ptyId: 'pty-folder',
-      hostAdmittedMembership: true
+      ptyId: 'pty-folder'
     },
     placements: () => [
       [NEW_TAB, 'agrees'],

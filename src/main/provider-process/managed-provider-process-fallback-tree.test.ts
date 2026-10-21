@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 function rootOnly(platform: NodeJS.Platform) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 4242,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -39,8 +39,7 @@ function rootOnly(platform: NodeJS.Platform) {
       return true
     })
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The managed lifecycle reads only events, pid, streams and kill from this fixture.
-  const spawnImpl = (() => child) as unknown as typeof spawnProcess
+  const spawnImpl: PipedProcessSpawner = () => child
   return spawnManagedProviderProcess(
     { command: 'fixture-provider', args: [] },
     { spawnImpl, platform, site: 'fixture-provider-teardown' }

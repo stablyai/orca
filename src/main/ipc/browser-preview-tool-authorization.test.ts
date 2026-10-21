@@ -125,6 +125,7 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:isGuestRegistered',
   'browser:unregisterGuest',
   'browser:respondWebAuthnAccount',
+  'browser:respondPagePrompt',
   'browser:proceedCertificate',
   'browser:activeTabChanged',
   'browser:openDevTools',

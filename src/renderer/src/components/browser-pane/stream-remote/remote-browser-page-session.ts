@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'

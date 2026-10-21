@@ -11,6 +11,24 @@ import {
 import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
 
 const fixtures: { db: Database.Database; root: string; stop: () => void }[] = []
+it.each([undefined, 'zcode'] as const)(
+  'discovers the subscribed session in its own store (%s)',
+  async (agent) => {
+    const resolveDbPath = vi.fn(async () => null)
+    const subscription = subscribeOpenCodeNativeChatTranscript(
+      { agent: agent ?? 'opencode', sessionId: 'second-database-session', onAppend: vi.fn() },
+      undefined,
+      { resolveDbPath },
+      agent
+    )
+    subscription.unsubscribe()
+    expect(resolveDbPath).toHaveBeenCalledWith(
+      'second-database-session',
+      expect.any(AbortSignal),
+      agent
+    )
+  }
+)
 afterEach(() => {
   for (const { db, root, stop } of fixtures.splice(0)) {
     stop()

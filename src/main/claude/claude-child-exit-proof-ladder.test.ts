@@ -1,7 +1,6 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import {
   createClaudeChildTreeReaper,
@@ -22,7 +21,7 @@ function fakeTree(): ClaudeChildTreeReaper & { reap: ReturnType<typeof vi.fn> } 
 }
 
 function rootStoppedBySigterm(stopMs: number, platform: NodeJS.Platform) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 4321,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -35,8 +34,7 @@ function rootStoppedBySigterm(stopMs: number, platform: NodeJS.Platform) {
     })
   })
   const spawner = createClaudeCodeProcessSpawn(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every event, stream and process field used by the spawner and close.
-    return child as unknown as ReturnType<typeof spawnProcess>
+    return child
   }, platform)
   spawner.spawn({
     command: 'fixture-provider',
@@ -58,7 +56,7 @@ function fixtureRoot(
   leavesOnStdinEnd: boolean,
   leavesOnKill = true
 ) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 4321,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -149,13 +147,24 @@ describe('Claude child exit proof ladder', () => {
   ])(
     'on Windows a forced close is proven only by taskkill: taskkill $taskkill',
     async ({ taskkill, proven }) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       const root = fixtureRoot('win32', false)
       const terminateWindowsTree = vi.fn(async () => taskkill)
       const { tree } = windowsTree(root, terminateWindowsTree)
 
-      await expect(
-        proveClaudeChildExitWithReaper({ managed: root.managed, tree }, () => tree)
-      ).resolves.toBe(proven)
+      let settled = false
+      const proof = proveClaudeChildExitWithReaper(
+        { managed: root.managed, tree },
+        () => tree
+      ).finally(() => (settled = true))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(root.child.stdin.writableEnded).toBe(true)
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(settled).toBe(false)
+      expect(terminateWindowsTree).not.toHaveBeenCalled()
+      expect(root.managed.rootVerdict).toBe('live')
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(proof).resolves.toBe(proven)
 
       expect(terminateWindowsTree).toHaveBeenCalledWith(4321)
       // The root still leaves through its held handle whatever taskkill reported.
@@ -175,12 +184,26 @@ describe('Claude child exit proof ladder', () => {
   })
 
   it('on Windows a retried close after a failed taskkill stays unproven once the root exits', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const root = fixtureRoot('win32', false, false)
     const terminateWindowsTree = vi.fn(async () => false)
     const { tree } = windowsTree(root, terminateWindowsTree)
     const close = () => proveClaudeChildExitWithReaper({ managed: root.managed, tree }, () => tree)
 
-    await expect(close()).resolves.toBe(false)
+    let settled = false
+    const proof = close().finally(() => (settled = true))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(root.child.stdin.writableEnded).toBe(true)
+    await vi.advanceTimersByTimeAsync(1_499)
+    expect(settled).toBe(false)
+    expect(terminateWindowsTree).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(terminateWindowsTree).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(999)
+    expect(settled).toBe(false)
+    expect(root.managed.rootVerdict).toBe('live')
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(proof).resolves.toBe(false)
     // The exit lands only after the forced wait: it is not Claude leaving on its own.
     root.child.emit('exit', null, 'SIGKILL')
     await expect(close()).resolves.toBe(false)

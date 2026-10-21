@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
-import type { SshProviderEpoch } from '../../../../shared/ssh-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createTestStore, makeWorktree, makeTab, makeLayout, TEST_REPO } from './store-test-helpers'
@@ -453,14 +452,8 @@ describe('restored folder workspace hydration', () => {
     const worktreeId = 'repo-a::/target'
     const retainedTab = makeTab({ id: 'tab-retained', worktreeId })
     const retiredTab = makeTab({ id: 'tab-retired', worktreeId })
-    const authority = {
-      targetId: 'target-a',
-      providerEpoch: 'epoch-a' as SshProviderEpoch,
-      connectionGeneration: 1
-    }
-
     store.setState({
-      repos: [{ ...TEST_REPO, id: 'repo-a', connectionId: authority.targetId }],
+      repos: [{ ...TEST_REPO, id: 'repo-a', connectionId: 'target-a' }],
       worktreesByRepo: {
         'repo-a': [makeWorktree({ id: worktreeId, repoId: 'repo-a', path: '/target' })]
       },
@@ -481,7 +474,7 @@ describe('restored folder workspace hydration', () => {
         tabsByWorktree: { [worktreeId]: [retainedTab] },
         terminalLayoutsByTabId: {}
       },
-      { directSshAuthority: authority, replaceWorkspaceKeys: [worktreeId] }
+      { replaceWorkspaceKeys: [worktreeId] }
     )
 
     expect(store.getState().unverifiedPtyLossTabIds).toEqual({

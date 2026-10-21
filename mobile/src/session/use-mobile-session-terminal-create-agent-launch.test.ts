@@ -281,8 +281,33 @@ describe('the + menu', () => {
 
     const [first, second] = sendRequest.mock.calls.map(([, params]) => params)
     expect(sentReservation(first).tabId).not.toBe(sentReservation(second).tabId)
-    // Only an agent the host may start as a chat names a session.
-    expect(first).not.toHaveProperty('sessionId')
+    // The host picks the surface, so every launch names a chat; a terminal launch ignores it.
+    expect(sentReservation(first).sessionId).toMatch(/^aider_[A-Za-z0-9_]+$/)
+    expect(sentReservation(first).sessionId).not.toBe(sentReservation(second).sessionId)
+  })
+
+  it('confirms a Grok chat by its reserved session once listed, even when the reply is lost', async () => {
+    const state = scope(scriptedClient().client)
+    state.client = requestPortRpcClient(async (_method, params) => {
+      const { sessionId } = sentReservation(params)
+      // The host lists the chat it created, then the answer never arrives.
+      state.sessionTabsRef.current = [
+        {
+          type: 'agent-session',
+          id: 'grok-chat-tab',
+          title: 'Grok',
+          sessionId: sessionId ?? 'unreserved',
+          agent: 'grok',
+          isActive: false
+        }
+      ]
+      throw markRpcDeliveryUnknown(new Error('response lost'))
+    })
+
+    await create_(state, 'grok', { agentPrompt: 'run the tests' })
+
+    expect(state.showToast).toHaveBeenCalledExactlyOnceWith(PROMPT_UNCONFIRMED_MESSAGE, 2400)
+    expect(state.setCreateError).not.toHaveBeenCalledWith(AGENT_LAUNCH_UNCONFIRMED_MESSAGE)
   })
 
   it("lands by the reply's ids when an older host ignored the reservation", async () => {

@@ -9,18 +9,24 @@ import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
-export const NATIVE_CHAT_TRANSCRIPT_OUTER_CLASS = 'px-3 pt-10 pb-4 sm:px-4'
+// pb clears the last reply's controls, which hang 20px (-mb-5) below the row. px-9 keeps text
+// clear of the message rail, which overlays the right 34px; macOS overlay scrollbars add no gutter.
+export function nativeChatTranscriptOuterClass(railVisible: boolean): string {
+  return railVisible ? 'px-9 pt-10 pb-10' : 'px-3 pt-10 pb-10 sm:px-4'
+}
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'
 
 export type NativeChatAppearanceStyle = CSSProperties &
   Record<`--${string}`, string | number> & {
     '--chat-font-size': string
+    '--chat-ui-font-size': string
     '--chat-code-font-size': string
     '--chat-content-max-width': string
     '--chat-inline-code-ratio': string
     '--chat-estimated-line-height': number
     '--chat-estimated-chars-per-line': number
+    '--chat-estimated-spacing-scale': number
   }
 
 // Width buckets keep a pixel-by-pixel resize from re-deriving the entire transcript.
@@ -66,6 +72,8 @@ export function nativeChatAppearanceStyle(
   const terminalFontSize = settings?.terminalFontSize ?? 14
   const fontSize = matching ? terminalFontSize : appearance.fontSize
   const codeFontSize = matching ? terminalFontSize : appearance.codeFontSize
+  // Message text follows the terminal (10-24); labels, controls and spacing stay in the chat's 12-20.
+  const uiFontSize = Math.max(12, Math.min(20, fontSize))
   const maxWidthPx = width === 'wide' ? 960 : width === 'full' ? Number.POSITIVE_INFINITY : 736
   const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
   const columnWidthPx = Math.min(
@@ -75,6 +83,7 @@ export function nativeChatAppearanceStyle(
   const font = buildFontFamily(settings?.terminalFontFamily ?? '')
   const style: NativeChatAppearanceStyle = {
     '--chat-font-size': `${fontSize}px`,
+    '--chat-ui-font-size': `${uiFontSize}px`,
     '--chat-code-font-size': `${codeFontSize}px`,
     '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',
     '--chat-inline-code-ratio': `${codeFontSize / fontSize}em`,
@@ -83,6 +92,7 @@ export function nativeChatAppearanceStyle(
       1,
       Math.floor((((96 * columnWidthPx) / 736) * 14) / fontSize)
     ),
+    '--chat-estimated-spacing-scale': uiFontSize / 14,
     '--chat-code-font-family': font
   }
   let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)

@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 import { translate } from '@/i18n/i18n'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { useAppStore } from '../../store'
 
 export async function connectRuntimeEnvironmentAndRecordStatus(

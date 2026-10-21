@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 
 const transientMessages = [
   'Execution context was destroyed, most likely because of a navigation.',
   'electronApplication.evaluate: Resulting promise was garbage collected.'
 ]
+
+afterEach(() => vi.useRealTimers())
 
 describe('retryTransientMainEvaluate', () => {
   it('returns the first successful read without retrying', async () => {
@@ -19,8 +21,9 @@ describe('retryTransientMainEvaluate', () => {
   })
 
   it.each(transientMessages)('retries a transient startup failure: %s', async (message) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     let calls = 0
-    await expect(
+    const outcome = expect(
       retryTransientMainEvaluate(async () => {
         calls += 1
         if (calls < 3) {
@@ -29,6 +32,9 @@ describe('retryTransientMainEvaluate', () => {
         return '/isolated/home'
       })
     ).resolves.toBe('/isolated/home')
+    void outcome.catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(400)
+    await outcome
     expect(calls).toBe(3)
   })
 
@@ -46,13 +52,17 @@ describe('retryTransientMainEvaluate', () => {
   it.each(transientMessages)(
     'bounds retries when evaluation keeps failing: %s',
     async (message) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       let calls = 0
-      await expect(
+      const outcome = expect(
         retryTransientMainEvaluate(async () => {
           calls += 1
           throw new Error(message)
         })
       ).rejects.toThrow(message)
+      void outcome.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(800)
+      await outcome
       expect(calls).toBe(5)
     }
   )

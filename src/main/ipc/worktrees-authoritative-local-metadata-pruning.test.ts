@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 import { notifyWorktreesChanged } from './worktree-remote'
 import {
@@ -44,18 +45,11 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -105,7 +99,12 @@ vi.mock('../local-worktree-path-presence', async (importOriginal) => ({
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/workspace/repo'
@@ -369,7 +368,10 @@ describe('authoritative local worktree metadata pruning integration', () => {
     resolveScan([worktree(REPO_PATH)])
     queueMicrotask(() => {
       registerWorktreeRootsForRepo(store as never, REPO_ID, [REPO_PATH, newPath])
-      store.setWorktreeMeta(newId, { hostId: LOCAL_HOST_ID, instanceId: 'new-instance' })
+      store.setWorktreeMeta(hostWorktreeTarget({ id: newId, hostId: LOCAL_HOST_ID }), {
+        hostId: LOCAL_HOST_ID,
+        instanceId: 'new-instance'
+      })
       store.getAllWorktreeLineage.mockReturnValue({
         [newId]: {
           worktreeId: newId,
@@ -467,7 +469,7 @@ describe('authoritative local worktree metadata pruning integration', () => {
     registerWorktreeRootsForRepo(store as never, REPO_ID, [REPO_PATH, newPath])
     const newMetadata = { hostId: LOCAL_HOST_ID, instanceId: 'new-instance' }
     metadata.set(newId, newMetadata)
-    store.setWorktreeMeta(newId, newMetadata)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: newId, hostId: LOCAL_HOST_ID }), newMetadata)
     store.getAllWorktreeLineage.mockReturnValue({
       [newId]: {
         worktreeId: newId,
@@ -648,8 +650,6 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await listDetected()
 
     expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).toHaveBeenCalledTimes(1)
-    expect(store.setWorktreeMeta.mock.calls.some(([worktreeId]) => worktreeId === staleId)).toBe(
-      false
-    )
+    expect(store.setWorktreeMeta.mock.calls.some(([target]) => target.id === staleId)).toBe(false)
   })
 })

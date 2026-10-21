@@ -60,7 +60,7 @@ export function buildRemoteSettingsSections(
       ),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+        : 'Run Orca on another machine and work on it from here.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote',

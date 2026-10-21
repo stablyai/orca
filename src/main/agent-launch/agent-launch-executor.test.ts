@@ -13,11 +13,10 @@ import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-ex
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
 import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { readCreatedWorkspaceLaunch } from './agent-launch-created-workspace'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 }
 
 function harness(options: {
@@ -25,11 +24,17 @@ function harness(options: {
   createSupport?: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
   createSupportThrows?: boolean
   structuredCreateError?: Error
+  terminalCreateError?: Error
   deliveredMessageId?: string | null
   terminalPromptDelivered?: boolean
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
+  worktreeCreateError?: Error
+  onStructuredCreate?: () => void
+  onStructuredPromptDelivery?: () => void
   onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
+  /** A worktree-only factory, as orchestration workers and `worktree.create` pass. */
+  worktreeOnlyFactory?: boolean
 }) {
   const calls: string[] = []
   const carried = (startupPrompt: string | undefined) =>
@@ -38,17 +43,31 @@ function harness(options: {
     async (args: {
       create: Record<string, unknown>
       startupAgent: string | undefined
+      promisedAgentChat?: boolean
       startupPrompt?: string
+      onWorkspaceCreated?: (worktreeId: string) => void
     }) => {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
+      args.onWorkspaceCreated?.('wt-new')
+      if (options.worktreeCreateError) {
+        throw options.worktreeCreateError
+      }
       return {
         worktreeId: 'wt-new',
+        workspacePath: '/repo/task',
         connectionId: null,
         startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined,
         ...carried(args.startupPrompt)
       }
     }
   )
+  const createFolderWorkspace = vi.fn(async (_args: { create: Record<string, unknown> }) => {
+    calls.push('createFolderWorkspace')
+    return { worktreeId: 'folder:fw-new', workspacePath: '/repo/task', connectionId: null }
+  })
+  const createRecoveryShell = vi.fn(async (_worktreeId: string) => {
+    calls.push('createRecoveryShell')
+  })
   const getStructuredAgentSessionCreateSupport = vi.fn(async () => {
     calls.push('createSupport')
     if (options.createSupportThrows) {
@@ -58,6 +77,7 @@ function harness(options: {
   })
   const createStructuredSession = vi.fn(async () => {
     calls.push('createStructuredSession')
+    options.onStructuredCreate?.()
     if (options.structuredCreateError) {
       throw options.structuredCreateError
     }
@@ -65,10 +85,14 @@ function harness(options: {
   })
   const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
+    if (options.terminalCreateError) {
+      throw options.terminalCreateError
+    }
     return { handle: 'term_1', ...carried(args.startupPrompt) }
   })
   const deliverStructuredPrompt = vi.fn(async () => {
     calls.push('deliverStructuredPrompt')
+    options.onStructuredPromptDelivery?.()
     return options.deliveredMessageId === undefined ? 'msg-1' : options.deliveredMessageId
   })
   const deliverTerminalPrompt = vi.fn(async () => {
@@ -76,13 +100,17 @@ function harness(options: {
     return options.terminalPromptDelivered ?? true
   })
   const runtime = {
-    getClientSettings: () =>
-      options.settings === undefined ? STRUCTURED_PREFERENCE : options.settings,
+    requireStore: () => ({
+      getSettings: () => (options.settings === undefined ? STRUCTURED_PREFERENCE : options.settings)
+    }),
     getStructuredAgentSessionCreateSupport
   }
   return {
     calls,
+    runtime,
     createWorktree,
+    createFolderWorkspace,
+    createRecoveryShell,
     createStructuredSession,
     createTerminalAgent,
     deliverStructuredPrompt,
@@ -98,7 +126,9 @@ function harness(options: {
           deliverStructuredPrompt,
           deliverTerminalPrompt
         },
-        workspaces: { createWorktree },
+        workspaces: options.worktreeOnlyFactory
+          ? { createWorktree, createRecoveryShell }
+          : { createWorktree, createFolderWorkspace, createRecoveryShell },
         ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
       })
   }
@@ -110,6 +140,29 @@ const CREATE_INTENT: AgentLaunchIntent = {
 }
 
 describe('a structured launch that creates its own worktree', () => {
+  it('keeps its live inventory through publication and clears it before prompt delivery', async () => {
+    let duringCreate: unknown
+    let duringPrompt: unknown
+    const h = harness({
+      onStructuredCreate: () => (duringCreate = readCreatedWorkspaceLaunch(h.runtime, 'wt-new')),
+      onStructuredPromptDelivery: () =>
+        (duringPrompt = readCreatedWorkspaceLaunch(h.runtime, 'wt-new'))
+    })
+    await h.run({ ...CREATE_INTENT, prompt: { text: 'start', delivery: 'submit' } })
+    expect(duringCreate).toMatchObject({ agent: 'claude', launchId: expect.any(String) })
+    expect(duringPrompt).toBeUndefined()
+    expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
+  })
+
+  it('recovers once and releases intent when creation fails after metadata registration', async () => {
+    const failure = new Error('materialization failed')
+    const h = harness({ worktreeCreateError: failure })
+    await expect(h.run(CREATE_INTENT)).rejects.toBe(failure)
+    expect(h.createRecoveryShell).toHaveBeenCalledExactlyOnceWith('wt-new')
+    expect(h.createStructuredSession).not.toHaveBeenCalled()
+    expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
+  })
+
   it('creates the worktree with no startup agent, then asks the host, then opens a session', async () => {
     const h = harness({})
     const result = await h.run(CREATE_INTENT)
@@ -127,30 +180,29 @@ describe('a structured launch that creates its own worktree', () => {
     })
     expect(result.worktreeId).toBe('wt-new')
     expect(result.receipt.mode).toBe('structured')
-  })
-
-  it('asks the host only after the workspace exists, never before', async () => {
-    const h = harness({})
-    await h.run(CREATE_INTENT)
-    expect(h.calls.indexOf('createSupport')).toBeGreaterThan(
-      h.calls.indexOf('createWorktree(startupAgent=undefined)')
+    expect(h.createWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ promisedAgentChat: true })
     )
   })
 
-  it('falls back to a terminal in the worktree it just created when the host refuses', async () => {
-    const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
-    const result = await h.run(CREATE_INTENT)
+  it.each([undefined, 'chat'] as const)(
+    'keeps the created worktree on host refusal (%s)',
+    async (surface) => {
+      const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
+      const result = await h.run({ ...CREATE_INTENT, surface })
 
-    expect(h.calls).toEqual([
-      'createWorktree(startupAgent=undefined)',
-      'createSupport',
-      'createTerminalAgent'
-    ])
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    // Not a failed launch, and the workspace is the one just created.
-    expect(result.worktreeId).toBe('wt-new')
-    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'wsl_execution_runtime' })
-  })
+      expect(h.calls).toEqual([
+        'createWorktree(startupAgent=undefined)',
+        'createSupport',
+        'createTerminalAgent'
+      ])
+      expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
+      // Not a failed launch, and the workspace is the one just created.
+      expect(result.worktreeId).toBe('wt-new')
+      expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'wsl_execution_runtime' })
+      expect(result.receipt.detail).toContain(surface ? 'You asked for' : 'Your default is')
+    }
+  )
 
   it('falls back to a terminal when the host cannot be reached at all', async () => {
     const h = harness({ createSupportThrows: true })
@@ -206,20 +258,76 @@ describe('a structured launch that creates its own worktree', () => {
     })
   })
 
-  it('does not create a duplicate terminal when structured creation is unknown', async () => {
-    const h = harness({
-      structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
-        'agent_session_operation_unknown',
-        'unknown'
-      )
+  it.each([
+    [
+      'unknown chat creation',
+      {
+        structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
+          'agent_session_operation_unknown',
+          'unknown'
+        )
+      },
+      0
+    ],
+    [
+      'host downgrade terminal failure',
+      {
+        createSupport: { supported: false, reason: 'wsl' as const },
+        terminalCreateError: new Error('spawn failed')
+      },
+      1
+    ],
+    [
+      'definitive refusal fallback failure',
+      {
+        structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
+          'structured_agent_session_unsupported',
+          'unsupported'
+        ),
+        terminalCreateError: new Error('spawn failed')
+      },
+      1
+    ]
+  ] as const)('leaves a shell after %s', async (_label, options, agentStarts) => {
+    const h = harness(options)
+    await expect(h.run(CREATE_INTENT)).rejects.toThrow()
+    expect(h.createRecoveryShell).toHaveBeenCalledWith('wt-new')
+    expect(h.createTerminalAgent).toHaveBeenCalledTimes(agentStarts)
+  })
+
+  it('creates a folder workspace, then opens its structured session there', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
     })
 
-    await expect(h.run(CREATE_INTENT)).rejects.toThrow('unknown')
-    expect(h.calls).toEqual([
-      'createWorktree(startupAgent=undefined)',
-      'createSupport',
-      'createStructuredSession'
-    ])
+    expect(h.calls).toEqual(['createFolderWorkspace', 'createSupport', 'createStructuredSession'])
+    expect(h.createFolderWorkspace).toHaveBeenCalledWith({ create: { projectGroupId: 'group-1' } })
+    expect(result.worktreeId).toBe('folder:fw-new')
+    expect(result.outcome.kind).toBe('structured')
+  })
+
+  it('starts a terminal agent in a new folder workspace, not agent-first', async () => {
+    const h = harness({ settings: null })
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+    })
+
+    expect(h.calls).toEqual(['createFolderWorkspace', 'createTerminalAgent'])
+    expect(result).toMatchObject({ worktreeId: 'folder:fw-new', outcome: { kind: 'terminal' } })
+  })
+
+  it('refuses a folder create from a factory that cannot make one, before anything is created', async () => {
+    const h = harness({ worktreeOnlyFactory: true })
+    await expect(
+      h.run({
+        agent: 'claude',
+        target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+      })
+    ).rejects.toThrow('agent_launch_workspace_factory_required')
+    expect(h.calls).toEqual([])
   })
 
   it('strips a stale startupAgent out of a migrated create payload', async () => {
@@ -249,6 +357,33 @@ describe('a launch the user did not ask to be structured', () => {
     expect(h.calls).toEqual(['createWorktree(startupAgent=claude)'])
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_agent_first' })
     expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'user_default' })
+    expect(h.createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('promisedAgentChat')
+  })
+})
+
+describe("a caller's chat default in place of the host's", () => {
+  const EXISTING: AgentLaunchIntent = {
+    agent: 'claude',
+    target: { kind: 'existing', worktree: 'wt-7' }
+  }
+
+  it('opens a chat when the caller says so, though the host setting is off', async () => {
+    const h = harness({ settings: null })
+    const result = await h.run({ ...EXISTING, nativeChatDefault: true })
+    expect(result.outcome.kind).toBe('structured')
+  })
+
+  it('opens a terminal when the caller says so, though the host setting is on', async () => {
+    const h = harness({})
+    const result = await h.run({ ...EXISTING, nativeChatDefault: false })
+    expect(result.outcome.kind).toBe('terminal')
+    expect(h.calls).not.toContain('createSupport')
+  })
+
+  it('still lets the host refuse a chat it cannot create', async () => {
+    const h = harness({ settings: null, createSupport: { supported: false, reason: 'agent' } })
+    const result = await h.run({ ...EXISTING, nativeChatDefault: true })
+    expect(result.outcome.kind).toBe('terminal')
   })
 })
 
@@ -261,17 +396,20 @@ describe('a launch into a workspace that already exists', () => {
     expect(result.worktreeId).toBe('wt-7')
   })
 
-  it('reuses a running terminal without creating or asking', async () => {
-    const h = harness({})
-    const result = await h.run({
-      agent: 'claude',
-      target: { kind: 'existing', worktree: 'wt-7' },
-      reuseTerminal: { handle: 'term_live' }
-    })
-    expect(h.calls).toEqual([])
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_live' })
-    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'reused_terminal' })
-  })
+  it.each(['claude', 'grok'] as const)(
+    'reuses a running %s terminal without creating or asking',
+    async (agent) => {
+      const h = harness({})
+      const result = await h.run({
+        agent,
+        target: { kind: 'existing', worktree: 'wt-7' },
+        reuseTerminal: { handle: 'term_live' }
+      })
+      expect(h.calls).toEqual([])
+      expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_live' })
+      expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'reused_terminal' })
+    }
+  )
 })
 
 describe('an agent with no structured session', () => {
@@ -732,18 +870,67 @@ describe('the surface is published as the launch stands, before its prompt is de
 describe('a new local worktree whose startup terminal did not come up', () => {
   it('opens its agent in the view a local workspace allows, as an existing one would', async () => {
     const h = harness({
-      settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+      settings: { experimentalNativeChat: true }
     })
     h.createWorktree.mockImplementationOnce(async () => ({
       worktreeId: 'wt-new',
+      workspacePath: '/repo/task',
       connectionId: null,
       startupTerminalHandle: undefined
     }))
 
     await h.run({ ...CREATE_INTENT, agent: 'opencode' })
 
-    expect(h.createTerminalAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ viewMode: 'chat' })
-    )
+    expect(h.createStructuredSession).toHaveBeenCalled()
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
+  })
+})
+
+describe('explicit chat settlement uses resolved facts and launch effects', () => {
+  it.each(['create-worktree', 'create-folder-workspace'] as const)(
+    'settles root and custom cwd after %s without losing launch inputs',
+    async (kind) => {
+      for (const cwd of ['.', '/repo/task', 'packages/api']) {
+        const h = harness({ settings: {} })
+        const result = await h.run({
+          agent: 'claude',
+          surface: 'chat',
+          cwd,
+          target: { kind, create: {} },
+          sessionOptions: { model: 'opus' },
+          prompt: { text: 'do the task', delivery: 'submit' }
+        })
+        expect(result.outcome.kind).toBe(cwd === 'packages/api' ? 'terminal' : 'structured')
+        if (cwd === 'packages/api') {
+          expect(result.receipt.detail).toContain('You asked for')
+          expect(h.createTerminalAgent).toHaveBeenCalledWith(
+            expect.objectContaining({
+              cwd,
+              options: { model: 'opus' },
+              startupPrompt: 'do the task'
+            })
+          )
+          expect(h.createStructuredSession).not.toHaveBeenCalled()
+        }
+      }
+    }
+  )
+
+  it('refuses a definitive no-session factory answer only before workspace creation', async () => {
+    const options = {
+      structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
+        'structured_agent_session_unsupported',
+        'unsupported'
+      )
+    }
+    const existing = harness(options)
+    await expect(
+      existing.run({
+        agent: 'claude',
+        surface: 'chat',
+        target: { kind: 'existing', worktree: 'wt-7' }
+      })
+    ).rejects.toMatchObject({ code: 'agent_launch_surface_unavailable' })
+    expect(existing.createTerminalAgent).not.toHaveBeenCalled()
   })
 })

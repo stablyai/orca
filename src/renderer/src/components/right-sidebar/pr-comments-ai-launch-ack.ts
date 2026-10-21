@@ -309,6 +309,8 @@ export type PendingPRCommentAiAckGitlabTarget = {
   repoPath: string
   repoId: string
   iid: number
+  /** The MR's credential host, pinned at launch; repo ids can repeat across hosts. */
+  ownerHostId: string
 }
 
 /** What a queued comment-resolution launch must still ack once its prompt is delivered. */

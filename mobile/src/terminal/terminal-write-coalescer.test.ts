@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createTerminalWriteCoalescer,
   TERMINAL_WRITE_FLUSH_WINDOW_MS,
-  TERMINAL_WRITE_MAX_PENDING_UNITS
+  TERMINAL_WRITE_MAX_PENDING_UNITS,
+  TERMINAL_INTERACTIVE_WRITE_WINDOW_MS,
+  TERMINAL_INTERACTIVE_WRITE_DURATION_MS
 } from './terminal-write-coalescer'
 
 function createDeliverySink() {
@@ -196,5 +198,82 @@ describe('terminal write coalescer', () => {
     coalescer.clear()
     vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS * 4)
     expect(sink.delivered).toEqual(['a', 'b'])
+  })
+
+  it('shortens an existing output wait when a scroll gesture arrives', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.write('first')
+    vi.advanceTimersByTime(5)
+    coalescer.write('response')
+    vi.advanceTimersByTime(3)
+    coalescer.markInteractive()
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS - 8)
+    expect(sink.delivered).toEqual(['first', 'response'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not postpone output when gestures repeat faster than one frame', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    coalescer.write('first')
+    for (let i = 0; i < 8; i += 1) {
+      coalescer.write(`${i}`)
+      coalescer.markInteractive()
+      expect(vi.getTimerCount()).toBe(1)
+      vi.advanceTimersByTime(2)
+    }
+    expect(sink.delivered).toEqual(['first', '01234567'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('returns sustained unattended output to the original batching window', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    coalescer.write('gesture')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_DURATION_MS)
+    coalescer.write('idle-leading')
+    coalescer.write('idle-trailing')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['gesture', 'idle-leading'])
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['gesture', 'idle-leading', 'idle-trailing'])
+  })
+
+  it('clears interactive state and pending output when a document is replaced', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    coalescer.write('old')
+    coalescer.write('stale')
+    coalescer.clear()
+    coalescer.write('new')
+    coalescer.write('new-trailing')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['old', 'new'])
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['old', 'new', 'new-trailing'])
+  })
+
+  it('expires interactive batching on a monotonic clock after a wall-clock rollback', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+    coalescer.markInteractive()
+    vi.setSystemTime(0)
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_DURATION_MS)
+    coalescer.write('first')
+    coalescer.write('second')
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['first'])
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['first', 'second'])
   })
 })

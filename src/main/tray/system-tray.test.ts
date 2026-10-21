@@ -622,3 +622,80 @@ describe('macOS hardening', () => {
     expect(error).toHaveBeenCalledWith('[system-tray] menu action failed', expect.any(Error))
   })
 })
+
+describe('language changes', () => {
+  it.each(['darwin', 'win32'] as const)(
+    'refreshes the existing %s menu and keeps its actions',
+    async (platform) => {
+      setPlatform(platform)
+      const { createSystemTray, rebuildSystemTrayMenu } = await loadModule()
+      const { setMainUiLanguage } = await import('../i18n/main-i18n')
+      await setMainUiLanguage('en')
+      const options = createOptions()
+      createSystemTray(options)
+      expect(builtMenuItems()[0].label).toBe('Open Orca')
+
+      await setMainUiLanguage('ja')
+      rebuildSystemTrayMenu()
+      expect(builtMenuItems()[0].label).toBe('Open Orca')
+      flushTraySceneMutation()
+
+      expect(trayInstances).toHaveLength(1)
+      expect(trayInstances[0].setContextMenu).toHaveBeenCalledTimes(2)
+      expect(builtMenuItems()[0].label).toBe('Orca を開く')
+      expect(builtMenuItems().at(-1)?.label).toBe('終了')
+      builtMenuItems()[0].click?.()
+      builtMenuItems().at(-1)?.click?.()
+      expect(options.onOpen).toHaveBeenCalledOnce()
+      expect(options.onQuit).toHaveBeenCalledOnce()
+      if (platform === 'darwin') {
+        expect(builtMenuItems()[2].label).toBe('設定')
+        expect(builtMenuItems()[3].label).toBe('アップデートを確認…')
+        builtMenuItems()[2].click?.()
+        builtMenuItems()[3].click?.()
+        expect(options.onOpenSettings).toHaveBeenCalledOnce()
+        expect(options.onCheckForUpdates).toHaveBeenCalledOnce()
+        expect(nativeThemeMock.on).toHaveBeenCalledTimes(1)
+      } else {
+        expect(trayInstances[0].on).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  it('refreshes the attention tooltip and replacements in the active language catalog', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, rebuildSystemTrayMenu, setTrayAttention } = await loadModule()
+    const { mainI18n, setMainUiLanguage } = await import('../i18n/main-i18n')
+    await setMainUiLanguage('en')
+    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'language-test' }))
+    setTrayAttention(true)
+    flushTraySceneMutation()
+    await setMainUiLanguage('ja')
+    rebuildSystemTrayMenu()
+    flushTraySceneMutation()
+    expect(trayInstances[0].setToolTip).toHaveBeenLastCalledWith(
+      'Orca DEV (language-test) - 件のアクティビティが待機中'
+    )
+    expect(builtMenuItems()[0].label).toBe('Orca DEV (language-test)')
+    expect(composeAttentionMock).toHaveBeenCalled()
+
+    mainI18n.addResource('ja', 'translation', 'tray.openOrca', 'Orca を表示')
+    rebuildSystemTrayMenu()
+    flushTraySceneMutation()
+    expect(builtMenuItems()[2].label).toBe('Orca を表示')
+  })
+
+  it('does nothing without a tray or when destroyed before the deferred refresh', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, destroySystemTray, rebuildSystemTrayMenu } = await loadModule()
+    rebuildSystemTrayMenu()
+    flushTraySceneMutation()
+    expect(menuFromTemplateMock).not.toHaveBeenCalled()
+    createSystemTray(createOptions())
+    rebuildSystemTrayMenu()
+    destroySystemTray()
+    menuFromTemplateMock.mockClear()
+    flushTraySceneMutation()
+    expect(menuFromTemplateMock).not.toHaveBeenCalled()
+  })
+})

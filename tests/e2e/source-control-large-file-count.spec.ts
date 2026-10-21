@@ -137,7 +137,7 @@ async function unregisterLargeFileCountRepos(
       const store = window.__store
       const repo = store?.getState().repos.find((entry) => entry.path === pathToRepo)
       if (repo) {
-        await store?.getState().removeProject(repo.id)
+        await store?.getState().removeProject(repo.id, { hostId: 'local' })
       }
     }, repoPath)
   }

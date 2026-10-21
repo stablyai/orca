@@ -1,10 +1,8 @@
 import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
 import {
   unhandledProviderFrameJournalItem,
-  type UnhandledProviderFrameJournalItem,
-  type UnhandledProviderFrameJournalItemOptions
+  type UnhandledProviderFrameJournalItem
 } from '../native-chat/agent-session-wire/unhandled-provider-frame'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   CodexJournalTranslationAdmission,
@@ -18,13 +16,16 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS,
   MAX_CODEX_WORDLESS_ROWS_PER_TURN
 } from './codex-structured-journal-limits'
-import { readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexTurnId, readCodexErrorWillRetry } from './codex-structured-thread-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
 } from '../../shared/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { CodexUsageLimits } from './codex-usage-limits'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 /** A turn's rows by whether a client draws them; each kind has its own cap. */
@@ -70,11 +71,12 @@ export class CodexJournalGenericFrames {
   private bookkeepingBytes = 0
   private fallbackSequence = 0
   private cancelSuppressionFlush: (() => void) | null = null
+  private readonly usageLimits = new CodexUsageLimits()
 
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId'
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account'
     > & {
       attributionFor: CodexRowAttribution
     },
@@ -87,19 +89,34 @@ export class CodexJournalGenericFrames {
   appendUnhandled(
     kind: string,
     payload: unknown,
-    threadId: string,
-    options?: UnhandledProviderFrameJournalItemOptions
+    threadId: string
   ): CodexJournalTranslationAdmission {
-    const translated = unhandledProviderFrameJournalItem(
-      'codex',
-      kind,
-      payload,
-      DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-      options
-    )
+    if (this.usageLimits.observe(kind, payload)) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
-    return translated ? this.appendFrameRow(threadId, payload, translated) : CODEX_JOURNAL_ADMITTED
+    const ended = kind === 'notification:error' && !readCodexErrorWillRetry(payload)
+    const usageLimit = ended ? this.usageLimits.failure(payload) : null
+    const failure =
+      usageLimit ?? (ended ? codexAuthenticationFailure(payload, this.deps.account?.()) : null)
+    return translated
+      ? this.appendFrameRow(threadId, payload, {
+          ...translated,
+          body: failure
+            ? {
+                ...translated.body,
+                ...(usageLimit ? { tone: 'warning' } : {}),
+                ...agentSessionFailureWords(failure, {
+                  provider: 'codex',
+                  agentName: 'Codex',
+                  surface: 'row'
+                })
+              }
+            : translated.body
+        })
+      : CODEX_JOURNAL_ADMITTED
   }
 
   /** One frame's own row, under the identity every frame row gets, however it is worded. */
@@ -141,7 +158,10 @@ export class CodexJournalGenericFrames {
     this.fallbackSequence += 1
     const identity = {
       provider: 'orca' as const,
-      clientMessageId: `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
+      clientMessageId:
+        translated.body.failure?.kind === 'usageLimitReached' && frameTurnId
+          ? `terminal-failure:codex:${JSON.stringify([threadId, frameTurnId])}`
+          : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
     const attribution = this.deps.attributionFor(threadId, frameTurnId)
     const admission = this.deps.sink.tryAppendItem

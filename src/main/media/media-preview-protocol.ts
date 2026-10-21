@@ -6,8 +6,6 @@ import type { LocalFileAccess } from '../../shared/local-file-access'
 import { MEDIA_FILE_MIME_TYPES, MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
 import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
-import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { readSshFileExplorerChunk } from '../runtime/ssh-file-explorer-chunk-read'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'
 
@@ -74,26 +72,9 @@ export async function handleMediaPreviewRequest(request: Request): Promise<Respo
   }
   try {
     const { target, store, mimeType } = grant
+    // Why: this process serves no SSH filesystem.
     if (target.connectionId) {
-      const provider = requireSshFilesystemProvider(target.connectionId)
-      const stats = await provider.stat(target.filePath)
-      if (stats.type !== 'file') {
-        throw new Error('Not a regular file')
-      }
-      return await createMediaRangeResponse(request, mimeType, {
-        size: stats.size,
-        read: async (offset, length) => {
-          const chunk = await readSshFileExplorerChunk(
-            provider,
-            target.filePath,
-            stats.size,
-            offset,
-            length
-          )
-          return Buffer.from(chunk.contentBase64, 'base64')
-        },
-        close: async () => {}
-      })
+      return new Response(null, { status: 404 })
     }
     const filePath = await resolveLocalFileRequestPath(target.filePath, target.access, store)
     const { handle, stats } = await openLocalRegularFile(filePath)

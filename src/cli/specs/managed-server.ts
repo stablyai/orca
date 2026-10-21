@@ -4,7 +4,7 @@ import { GLOBAL_FLAGS } from '../args'
 const SELECTOR_NOTE =
   '--environment names a managed Orca server this machine deployed over SSH (see `orca environment list`); it is a selector here, not a routing flag.'
 const DESKTOP_NOTE =
-  'Runs on this machine’s Orca desktop app, the same action as Settings > Managed servers. A runtime without the SSH registry (headless `orca serve`) refuses it.'
+  'Runs on this machine’s Orca desktop app, the same action as Settings > Orca on your SSH hosts. A runtime without the SSH registry (headless `orca serve`) refuses it.'
 
 export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -29,6 +29,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['environment', 'rollback'],
+    destructive: true,
     summary: 'Roll a managed Orca server back to its previous version',
     usage: 'orca environment rollback --environment <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
@@ -41,7 +42,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
       'orca environment recover --environment <selector> [--accept-changed-state --yes] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'accept-changed-state', 'yes'],
     notes: [
-      'When a rejected build changed profile state, recover refuses rather than restart the previous build over it. --accept-changed-state --yes restores the prelaunch snapshot instead, the same as Restore in Settings > Managed servers; what the rejected build changed is discarded.',
+      'When a rejected build changed profile state, recover refuses rather than restart the previous build over it. --accept-changed-state --yes restores the prelaunch snapshot instead, the same as Restore in Settings > Orca on your SSH hosts; what the rejected build changed is discarded.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],
@@ -58,12 +59,26 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'yes'],
     notes: [
       'Stops orcad on the SSH host and, once the host proves it exited, removes the server from this machine. Its terminals end. Requires --yes.',
-      'If the host cannot prove orcad exited, the server stays linked and the refusal says why; nothing is removed on a guess.',
-      'Pick another Active Server first if this one is active. `orca environment cancel-stop` withdraws a stop orcad has not acted on yet.',
+      'If the host cannot prove orcad exited, the server stays linked and the refusal says why; nothing is removed on a guess. For a host that is gone for good, use `orca environment forget`.',
+      'If this server is the default host for new projects, choose another one first. `orca environment cancel-stop` withdraws a stop orcad has not acted on yet.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],
     examples: ['orca environment stop --environment build-box --yes']
+  },
+  {
+    path: ['environment', 'forget'],
+    destructive: true,
+    summary: 'Unlink a managed Orca server whose SSH host is gone, without stopping it',
+    usage: 'orca environment forget --environment <selector> --yes [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'yes'],
+    notes: [
+      'Removes the server from this machine without contacting its host, so the SSH host can then be removed. Use it when the host was deleted or can never be reached again. Requires --yes.',
+      'Nothing on the host is stopped: if it comes back, orcad may still be running there, and connecting to it again relinks it.',
+      SELECTOR_NOTE,
+      DESKTOP_NOTE
+    ],
+    examples: ['orca environment forget --environment build-box --yes']
   },
   {
     path: ['environment', 'cancel-stop'],

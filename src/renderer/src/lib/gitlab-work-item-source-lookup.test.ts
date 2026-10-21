@@ -71,7 +71,13 @@ describe('GitLab source lookup routing', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'gitlab.workItemByPath',
-      { repo: 'runtime-repo', host: 'gitlab.com', path: 'acme/app', iid: 7, type: 'mr' },
+      expect.objectContaining({
+        repo: 'id:runtime-repo',
+        host: 'gitlab.com',
+        path: 'acme/app',
+        iid: 7,
+        type: 'mr'
+      }),
       { timeoutMs: 30_000 }
     )
     expect(window.api.gl.workItemByPath).not.toHaveBeenCalled()
@@ -104,7 +110,13 @@ describe('GitLab source lookup routing', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'gitlab.listMRs',
-      { repo: 'runtime-repo', state: 'opened', page: 1, perPage: 12, query: 'fix login' },
+      expect.objectContaining({
+        repo: 'id:runtime-repo',
+        state: 'opened',
+        page: 1,
+        perPage: 12,
+        query: 'fix login'
+      }),
       { timeoutMs: 30_000 }
     )
     expect(window.api.gl.listMRs).not.toHaveBeenCalled()

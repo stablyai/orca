@@ -186,8 +186,7 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     items = [startFailureRow(NOT_SIGNED_IN)]
     const outcome = await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN))
     expect(outcome.accepted).toBe(false)
-    expect(outcome.error).toMatch(/^Codex n'est pas connecté/)
-    expect(outcome.error).toContain('/clear')
+    expect(outcome.error).toBe('Codex n’est pas connecté. Exécutez `codex login`. Relancez /clear.')
   })
 
   it('clears the draft for a /compact that started', async () => {
@@ -233,7 +232,7 @@ describe('a conversation command whose reply lands after the fence moved', () =>
     fence = 3
     expect(await commandAcrossFenceMove('clear', commandReply('clear', NOT_SIGNED_IN))).toEqual({
       accepted: false,
-      error: expect.stringMatching(/^Codex is not signed in.*\/clear/)
+      error: "Codex isn't signed in. Run `codex login`. Run /clear again."
     })
   })
 

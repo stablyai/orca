@@ -5,10 +5,12 @@ import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { makeTab } from './store-session-test-harness'
+import { emptyTabLayoutState } from './editor-slice-test-harness'
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
   return createStore<any>()((...args: any[]) => ({
+    ...emptyTabLayoutState(),
     activeWorktreeId: 'wt-1',
     tabsByWorktree: {},
     browserTabsByWorktree: {},

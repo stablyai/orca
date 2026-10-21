@@ -12,6 +12,7 @@ import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { translate } from '@/i18n/i18n'
 import { formatLinearEstimateInput } from '@/components/linear-item-drawer-edit-controls'
 import type { LinearIssueEditSectionProps } from '@/components/linear-item-drawer-types'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function useLinearIssueEditController({
   issue,
@@ -24,7 +25,7 @@ export function useLinearIssueEditController({
   const [estimatePopoverOpen, setEstimatePopoverOpen] = useState(false)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const { isPending, run } = useImmediateMutation()
 
   const {

@@ -1,5 +1,7 @@
 import { expect, vi } from 'vitest'
+import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 import {
   attachParams,
   ATTENTION_READ,
@@ -29,6 +31,10 @@ export function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
       return resolved
     },
     publishStructuredAgentSessionTab: () => {},
+    subscribeStructuredAgentAvailability: (read: (agents: unknown[]) => void) => {
+      read([])
+      return () => {}
+    },
     registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
     registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
     cleanupSubscription: subscriptions.cleanup.bind(subscriptions),
@@ -72,10 +78,18 @@ export async function expectDeclaredSurfaceExecutes(
 ): Promise<void> {
   const retirement = vi.fn()
   const runtime = runtimeStub({ retireStructuredAttention: retirement })
-  for (const { method, hostMethod, result } of STRUCTURED_CALLS) {
+  for (const { method, hostMethod, result, clientCapability } of STRUCTURED_CALLS) {
+    const atRestCreate =
+      method === 'agentSession.create' &&
+      build.capabilities.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) &&
+      clientCapabilities.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
+    const expectedHostMethod = atRestCreate ? 'create' : hostMethod
+    const otherCreateMethod =
+      method === 'agentSession.create' ? (atRestCreate ? 'attach' : 'create') : null
     // Two methods share one host method, so "has been called" would already be
     // true from the earlier one: only this call's own delta pins the pairing.
-    const before = hostMethod ? hostCalls[hostMethod].mock.calls.length : 0
+    const before = expectedHostMethod ? hostCalls[expectedHostMethod].mock.calls.length : 0
+    const otherBefore = otherCreateMethod ? hostCalls[otherCreateMethod].mock.calls.length : 0
     const replies = await callBuild(
       build,
       method,
@@ -83,11 +97,26 @@ export async function expectDeclaredSurfaceExecutes(
       { clientKind: 'runtime', clientCapabilities },
       runtime
     )
-    if (hostMethod) {
+    if (clientCapability && !clientCapabilities.includes(clientCapability)) {
+      expect(replies).toMatchObject([
+        {
+          ok: false,
+          error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+        }
+      ])
+      if (expectedHostMethod) {
+        expect(hostCalls[expectedHostMethod].mock.calls.length).toBe(before)
+      }
+      continue
+    }
+    if (expectedHostMethod) {
       expect(
-        hostCalls[hostMethod].mock.calls.length - before,
-        `${build.label}: ${method} did not reach the host`
+        hostCalls[expectedHostMethod].mock.calls.length - before,
+        `${build.label}: ${method} did not reach the host: ${JSON.stringify(replies)}`
       ).toBe(1)
+    }
+    if (otherCreateMethod) {
+      expect(hostCalls[otherCreateMethod].mock.calls.length - otherBefore).toBe(0)
     }
     if (method === 'agentSession.acknowledgeAttention') {
       expect(retirement).toHaveBeenCalledExactlyOnceWith(ATTENTION_READ)
@@ -108,5 +137,14 @@ export async function expectDeclaredSurfaceExecutes(
         result
       })
     }
+  }
+}
+
+export function expectItemDetailNegotiation(builds: readonly AgentSessionWireBuild[]): void {
+  expect(builds[0]?.capabilities).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+  for (const build of builds) {
+    expect(build.capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)).toBe(
+      build.methodNames.includes('agentSession.item')
+    )
   }
 }

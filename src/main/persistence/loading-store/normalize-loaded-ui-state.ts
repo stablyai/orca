@@ -1,3 +1,4 @@
+import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/status-bar-compact-change-notice'
 import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
@@ -165,16 +166,30 @@ export function normalizeLoadedUiState(
     markNeedsSave()
   }
   // Why: only upgraded profiles still on the new default get the one-time usage-display notice; fresh profiles stay quiet.
-  const usagePercentageDisplayChangeNoticeDismissed =
-    resolveUsagePercentageDisplayChangeNoticeDismissed({
-      rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
-      rawUsagePercentageDisplay: parsed.ui?.usagePercentageDisplay,
-      isExistingProfile: isExistingPersistedProfile({
-        repoCount: parsed.repos?.length ?? 0,
-        onboardingClosedAt: normalizedOnboarding.closedAt,
-        ui: parsed.ui
-      })
+  const percentageNoticeDismissed = resolveUsagePercentageDisplayChangeNoticeDismissed({
+    rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
+    rawUsagePercentageDisplay: parsed.ui?.usagePercentageDisplay,
+    isExistingProfile: isExistingPersistedProfile({
+      repoCount: parsed.repos?.length ?? 0,
+      onboardingClosedAt: normalizedOnboarding.closedAt,
+      ui: parsed.ui
     })
+  })
+  const statusBarCompactChangeNoticeDismissed = resolveStatusBarCompactChangeNoticeDismissed({
+    rawDismissed: parsed.ui?.statusBarCompactChangeNoticeDismissed,
+    rawUsageMode: parsed.ui?.statusBarUsageMode,
+    isExistingProfile: isExistingPersistedProfile({
+      repoCount: parsed.repos?.length ?? 0,
+      onboardingClosedAt: normalizedOnboarding.closedAt,
+      ui: parsed.ui
+    })
+  })
+  if (parsed.ui?.statusBarCompactChangeNoticeDismissed !== statusBarCompactChangeNoticeDismissed) {
+    markNeedsSave()
+  }
+  // Why: one rollout card is enough; the Compact notice supersedes the older percentage notice.
+  const usagePercentageDisplayChangeNoticeDismissed =
+    percentageNoticeDismissed || !statusBarCompactChangeNoticeDismissed
   if (
     parsed.ui?.usagePercentageDisplayChangeNoticeDismissed !==
     usagePercentageDisplayChangeNoticeDismissed
@@ -196,6 +211,7 @@ export function normalizeLoadedUiState(
     rightSidebarExplorerView,
     setupGuideSidebarDismissed,
     usagePercentageDisplayChangeNoticeDismissed,
+    statusBarCompactChangeNoticeDismissed,
     setupGuideBrowserMilestoneMigrated:
       typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
         ? parsed.ui.setupGuideBrowserMilestoneMigrated

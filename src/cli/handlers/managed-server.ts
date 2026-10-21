@@ -1,11 +1,12 @@
 /**
- * `orca environment status|update|rollback|recover|stop|cancel-stop`: the Managed servers
+ * `orca environment status|update|rollback|recover|stop|forget|cancel-stop`: the Managed servers
  * actions over runtime RPC. Each call is gated on the runtime's managedServer.v1 capability, and
  * an older runtime's method_not_found reads the same as a missing capability.
  */
 import type {
   OrcadManagedCancelStopResult,
   OrcadManagedDeployResult,
+  OrcadManagedForgetResult,
   OrcadManagedRecoveryResult,
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
@@ -205,6 +206,27 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       context.json,
       ['unlinked'],
       () => `Stopped ${params.selector} and unlinked it from this machine.`
+    )
+  },
+  'environment forget': async (context) => {
+    const params = selectorOf(context)
+    if (context.flags.get('yes') !== true) {
+      throw new RuntimeClientError(
+        'confirmation_required',
+        `Forgetting ${params.selector} unlinks it from this machine without stopping it on its host. Re-run with --yes to confirm.`
+      )
+    }
+    const response = await callManagedServer<OrcadManagedForgetResult>(
+      context,
+      'managedServer.forget',
+      params
+    )
+    report(
+      response,
+      context.json,
+      ['forgotten'],
+      () =>
+        `Unlinked ${params.selector} from this machine. Its host was not contacted, so orcad may still be running there.`
     )
   },
   'environment cancel-stop': async (context) => {

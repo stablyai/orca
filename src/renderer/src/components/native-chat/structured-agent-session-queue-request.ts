@@ -1,4 +1,3 @@
-import type { StructuredAgentSessionAttachment } from '../../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 
 export type StructuredAgentSessionQueueDelivery = {
@@ -13,13 +12,9 @@ export function structuredAgentSessionNewSendsQueue(
   return queue.capability === 'supported' && queue.enabled
 }
 
-/** Whether the host holds a send as a card while the agent works: only text, which is all its
- *  queue takes. */
+/** Whether the host holds a send, images included, as a card while the agent works. */
 export function structuredAgentSessionQueueRequest(
-  queue: StructuredAgentSessionQueueDelivery,
-  attachments: readonly StructuredAgentSessionAttachment[]
+  queue: StructuredAgentSessionQueueDelivery
 ): 'queue-if-active' | undefined {
-  return structuredAgentSessionNewSendsQueue(queue) && attachments.length === 0
-    ? 'queue-if-active'
-    : undefined
+  return structuredAgentSessionNewSendsQueue(queue) ? 'queue-if-active' : undefined
 }

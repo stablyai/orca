@@ -171,8 +171,8 @@ describe('notifications:dismiss by acknowledged subject', () => {
   // Positioned alerts outlive a no-read or earlier-bounded dismiss: a view ack can run before the transcript shows the edge.
   it('pane dismissal retires older-host structured alerts but not positioned ones past the read', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-pane-boundary-'))
+    const controller = new RuntimeMobileNotificationController()
     try {
-      const controller = new RuntimeMobileNotificationController()
       controller.configureDismissalStore(directory)
       const events: MobileNotificationEvent[] = []
       controller.onDispatched((event) => events.push(event))
@@ -232,13 +232,14 @@ describe('notifications:dismiss by acknowledged subject', () => {
       expect(dismissMobileNotification).toHaveBeenCalledTimes(1)
       expect(events.filter((event) => event.type === 'dismiss')).toHaveLength(2)
     } finally {
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })
   it('the click-time read a Mark read sends closes and retires every alert it covers', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-explicit-read-'))
+    const controller = new RuntimeMobileNotificationController()
     try {
-      const controller = new RuntimeMobileNotificationController()
       controller.configureDismissalStore(directory)
       const events: MobileNotificationEvent[] = []
       controller.onDispatched((event) => events.push(event))
@@ -288,14 +289,15 @@ describe('notifications:dismiss by acknowledged subject', () => {
         events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
       ).toEqual(['agent-attention:click-A', 'agent-attention:click-B'])
     } finally {
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })
 
   it('settles only the relayed prompt alerts of a session its host reports none pending for', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-relay-settle-'))
+    const controller = new RuntimeMobileNotificationController()
     try {
-      const controller = new RuntimeMobileNotificationController()
       controller.configureDismissalStore(directory)
       const events: MobileNotificationEvent[] = []
       controller.onDispatched((event) => events.push(event))
@@ -340,6 +342,7 @@ describe('notifications:dismiss by acknowledged subject', () => {
         events.filter((event) => event.type === 'dismiss').map((event) => event.notificationId)
       ).toEqual([key('prompt:A')])
     } finally {
+      await controller.closeDismissals()
       rmSync(directory, { recursive: true, force: true })
     }
   })

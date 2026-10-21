@@ -137,6 +137,21 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
 
     const updatedHandler = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => {
       download.receivedBytes = this.getDownloadReceivedBytes(download.item)
+      if (state === 'interrupted' && this.isAwaitingManualResume(download.item)) {
+        // Why: Chromium's automatic retries run before observers hear 'interrupted', so a resumable
+        // interruption here waits for a resume Orca never offers; end it instead of showing "paused".
+        // Deferred because canceling inside a native updated callback nests observer updates.
+        setImmediate(() => {
+          if (
+            this.downloadsById.get(downloadId) === download &&
+            !download.terminalEvent &&
+            this.isAwaitingManualResume(download.item)
+          ) {
+            this.cancelDownloadInternal(downloadId, 'Download was interrupted.', 'failed')
+          }
+        })
+        return
+      }
       download.transientState = state
       this.sendDownloadProgress(download.browserTabId, {
         browserPageId: download.browserTabId ?? undefined,
@@ -174,6 +189,14 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
 
     if (browserTabId) {
       this.sendDownloadStarted(downloadId)
+    }
+  }
+
+  private isAwaitingManualResume(item: Electron.DownloadItem): boolean {
+    try {
+      return item.getState() === 'interrupted' && item.canResume()
+    } catch {
+      return false
     }
   }
 

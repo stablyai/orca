@@ -9,11 +9,13 @@ import type { ProviderProcessLaunch } from '../provider-process/provider-process
 export type AcpStructuredConnection = Pick<
   AcpAgentConnection,
   | 'initialize'
+  | 'forkSession'
   | 'start'
   | 'prompt'
   | 'cancel'
   | 'setConfigOption'
   | 'setModel'
+  | 'requestExtension'
   | 'subscribe'
   | 'closed'
   | 'spawned'
@@ -27,10 +29,10 @@ export type AcpStructuredConnection = Pick<
   | 'processTreeUnproven'
 >
 
-export type ConnectAcpAgent = (
+export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions
-) => AcpStructuredConnection
+) => Connection
 
 /** Resolves once `connection`'s process exits, `signal` aborts, or `ms` pass, whichever is first. */
 export function waitForAcpExit(

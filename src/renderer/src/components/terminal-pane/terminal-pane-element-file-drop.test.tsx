@@ -1,21 +1,20 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { createPortal } from 'react-dom'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PreparedDroppedPaths } from '../../../../shared/native-file-drop-preparation'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { collectPublicPanes, toPublicPane } from '@/lib/pane-manager/pane-public-view'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import {
   NativeChatPaneFileDropSurface,
   useNativeChatPaneFileDropClaim
 } from '@/components/native-chat/NativeChatPaneFileDropSurface'
 import { TerminalPaneSurface } from './TerminalPaneSurface'
-import { installNativeFileDropHandlers } from '../../../../preload/preload-runtime-support'
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 
 const mocks = vi.hoisted(() => ({
@@ -35,7 +34,6 @@ const mocks = vi.hoisted(() => ({
   prepare: vi.fn(),
   importPaths: vi.fn(),
   resolvePaths: vi.fn(),
-  broadcast: vi.fn(),
   chatDrop: vi.fn(),
   toastError: vi.fn(),
   legacyIpc: vi.fn(),
@@ -54,7 +52,7 @@ vi.mock('@/store', () => ({
     { getState: () => mocks.state }
   )
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
@@ -224,7 +222,7 @@ function mountSurface(
   }
 }
 
-function drop(target: Element, name = 'file.txt'): void {
+function drop(target: Element, name = 'file.txt') {
   const event = new Event('drop', { bubbles: true, cancelable: true, composed: true })
   Object.defineProperty(event, 'isTrusted', { value: true })
   Object.defineProperty(event, 'dataTransfer', {
@@ -233,13 +231,13 @@ function drop(target: Element, name = 'file.txt'): void {
   act(() => {
     target.dispatchEvent(event)
   })
+  return event
 }
 async function settle(): Promise<void> {
   await act(async () => undefined)
 }
 
 let disposeGuard: (() => void) | undefined
-beforeAll(() => installNativeFileDropHandlers())
 beforeEach(() => {
   vi.clearAllMocks()
   disposeGuard = installOsFileDropCancellationGuard()
@@ -270,8 +268,7 @@ beforeEach(() => {
       getPathForFile: (file: File) => `/client/${file.name}`,
       prepareDroppedPaths: mocks.prepare,
       resolveDroppedPathsForAgent: mocks.resolvePaths
-    },
-    ui: { onFileDrop: mocks.broadcast }
+    }
   })
 })
 afterEach(() => {
@@ -303,15 +300,11 @@ describe('terminal element file drops', () => {
       expect(fixture.panes[0].terminal.focus).not.toHaveBeenCalled()
       expect(fixture.activate).not.toHaveBeenCalled()
       expect(fixture.manager.getActivePane()).toEqual(fixture.panes[1])
-      expect(mocks.broadcast).not.toHaveBeenCalled()
       expect(mocks.legacyIpc).not.toHaveBeenCalled()
       expect(mocks.prepare).toHaveBeenCalledExactlyOnceWith({
         paths: ['/client/file.txt'],
         consumer: 'agent'
       })
-      expect(
-        fixture.view.container.querySelector('[data-native-file-drop-target="terminal"]')
-      ).toBeNull()
     }
   )
   it.each(['title', 'body'] as const)(
@@ -362,11 +355,31 @@ describe('terminal element file drops', () => {
     Object.defineProperty(hover, 'dataTransfer', { value: transfer })
     fixture.divider.dispatchEvent(hover)
     expect(transfer.dropEffect).toBe('none')
-    drop(fixture.divider)
+    const dropped = drop(fixture.divider)
+    expect(dropped.defaultPrevented).toBe(true)
+    expect(dropped).toHaveProperty('dataTransfer.dropEffect', 'none')
     await settle()
     expect(mocks.prepare).not.toHaveBeenCalled()
     expect(mocks.legacyIpc).not.toHaveBeenCalled()
     expect(mocks.editorOpen).not.toHaveBeenCalled()
+    expect(mocks.importPaths).not.toHaveBeenCalled()
+    expect(mocks.resolvePaths).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(fixture.sends[0]).not.toHaveBeenCalled()
+    expect(fixture.sends[1]).not.toHaveBeenCalled()
+  })
+  it('refuses unowned chrome without opening, uploading, or showing a toast', async () => {
+    const fixture = mountSurface()
+    const dropped = drop(fixture.view.container)
+    await settle()
+    expect(dropped.defaultPrevented).toBe(true)
+    expect(dropped).toHaveProperty('dataTransfer.dropEffect', 'none')
+    expect(mocks.prepare).not.toHaveBeenCalled()
+    expect(mocks.legacyIpc).not.toHaveBeenCalled()
+    expect(mocks.editorOpen).not.toHaveBeenCalled()
+    expect(mocks.importPaths).not.toHaveBeenCalled()
+    expect(mocks.resolvePaths).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
     expect(fixture.sends[0]).not.toHaveBeenCalled()
     expect(fixture.sends[1]).not.toHaveBeenCalled()
   })
@@ -446,13 +459,13 @@ describe('terminal element file drops', () => {
     await settle()
     expect(mocks.importPaths).toHaveBeenCalledWith(
       expect.objectContaining({
-        settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+        target: { kind: 'environment', environmentId: 'owner-runtime' },
         worktreePath: '/owner/workspace',
         expectedExecutionHostId: 'local'
       }),
       ['/client/file.txt'],
       '/owner/workspace/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(fixture.sends[0]).toHaveBeenCalledExactlyOnceWith(
       '/owner/workspace/.orca/drops/file.txt ',

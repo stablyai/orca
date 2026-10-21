@@ -31,18 +31,33 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   getMiniMaxSessionCookieProtection: getCookieProtectionMock,
   saveMiniMaxSessionCookie: saveMiniMaxSessionCookieMock,
   clearMiniMaxSessionCookie: clearMiniMaxSessionCookieMock,
-  hasMiniMaxSessionCookie: hasMiniMaxSessionCookieMock
+  hasMiniMaxSessionCookie: hasMiniMaxSessionCookieMock,
+  COOKIE_ENVELOPE_PREFIX: 'cookie:',
+  getMiniMaxCookiePath: () => 'cookie-path'
 }))
 
 vi.mock('../minimax/minimax-api-key-store', () => ({
   getMiniMaxApiKeyProtection: getApiKeyProtectionMock,
   saveMiniMaxApiKey: saveMiniMaxApiKeyMock,
   clearMiniMaxApiKey: clearMiniMaxApiKeyMock,
-  hasMiniMaxApiKey: hasMiniMaxApiKeyMock
+  hasMiniMaxApiKey: hasMiniMaxApiKeyMock,
+  miniMaxApiKeyEnvelopeFile: () => ({ path: 'key-path', envelopePrefix: 'key:' })
 }))
 
+// The files are mocked away; readability has its own coverage in the RPC test.
+vi.mock('../credentials/saved-credential-readability', () => ({
+  savedCredentialUnreadable: () => undefined,
+  refuseCredentialSealedElsewhere: () => {
+    throw new Error('unused')
+  }
+}))
 vi.mock('../rate-limits/minimax/minimax-request-context', () => ({
   clearMiniMaxSessionCookieJar: clearMiniMaxSessionCookieJarMock
+}))
+
+const httpClientState = vi.hoisted(() => ({ hasCookieJar: true }))
+vi.mock('../network/http-client', () => ({
+  getMainHttpClient: () => (httpClientState.hasCookieJar ? { partitionSession: () => ({}) } : {})
 }))
 
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
@@ -74,6 +89,7 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 describe('registerMiniMaxCredentialsHandlers', () => {
   beforeEach(() => {
     ipcState.handleHandlers.clear()
+    httpClientState.hasCookieJar = true
     saveMiniMaxSessionCookieMock.mockReset()
     clearMiniMaxSessionCookieMock.mockReset()
     clearMiniMaxSessionCookieJarMock.mockReset()
@@ -113,7 +129,10 @@ describe('registerMiniMaxCredentialsHandlers', () => {
       apiKeyConfigured: false,
       cookieProtection: 'sealed',
       // Null, not 'sealed': nothing is stored, so there is nothing to make a claim about.
-      apiKeyProtection: null
+      apiKeyProtection: null,
+      sessionCookieSupported: true,
+      cookieUnreadable: undefined,
+      apiKeyUnreadable: undefined
     })
   })
 
@@ -130,7 +149,10 @@ describe('registerMiniMaxCredentialsHandlers', () => {
       cookieConfigured: false,
       apiKeyConfigured: true,
       cookieProtection: null,
-      apiKeyProtection: 'sealed'
+      apiKeyProtection: 'sealed',
+      sessionCookieSupported: true,
+      cookieUnreadable: undefined,
+      apiKeyUnreadable: undefined
     })
   })
 
@@ -284,5 +306,19 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     registerMiniMaxCredentialsHandlers(null)
     const status = await invoke('minimaxCredentials:getStatus')
     expect(status).toMatchObject({ apiKeyConfigured: true, apiKeyProtection: 'plaintext' })
+  })
+
+  it('refuses a session cookie where no browser cookie jar exists, without storing it', async () => {
+    httpClientState.hasCookieJar = false
+    const { service, refresh } = makeRefreshMock()
+    registerMiniMaxCredentialsHandlers(service as RateLimitService)
+    await expect(invoke('minimaxCredentials:saveCookie', 'session=secret-value')).rejects.toThrow(
+      /^(?!.*secret-value).*Save an API key instead\.$/
+    )
+    expect(saveMiniMaxSessionCookieMock).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
+    await expect(invoke('minimaxCredentials:getStatus')).resolves.toMatchObject({
+      sessionCookieSupported: false
+    })
   })
 })

@@ -15,7 +15,6 @@
  * the smaller shape instead, and nothing here has to invent a `worktreePath` or a `branch`.
  */
 
-import type { TuiAgent } from '../../../shared/tui-agent'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   holdStructuredWorker,
@@ -65,7 +64,7 @@ export function listAddressableStructuredWorkers(
     .map((identity) => ({
       handle: identity.handle,
       worktreeId: identity.worktreeId,
-      agentIdentity: structuredWorkerAgent(identity) as TuiAgent
+      agentIdentity: structuredWorkerAgent(identity)
     }))
 }
 

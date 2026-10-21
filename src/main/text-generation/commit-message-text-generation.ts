@@ -2,9 +2,7 @@ import type { BranchNameWorkContext } from '../../shared/branch-name-from-work'
 import type { ConversationNameContext } from '../../shared/conversation-name-generation'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
@@ -18,7 +16,6 @@ import type { AiTextOperation } from '../../shared/source-control-ai-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import {
   discoverModelsLocal,
-  discoverModelsRemote,
   type CommitMessageModelDiscoveryLocalOptions
 } from './commit-message-model-discovery'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
@@ -65,7 +62,7 @@ export function trimGeneratedCommitMessage(message: string): string {
 }
 
 export function resolveCommitMessageSettings(
-  settings: GlobalSettings,
+  settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: AiTextOperation = 'commitMessage',
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -80,7 +77,7 @@ export function resolveCommitMessageSettings(
 }
 
 export function resolveTextGenerationParams(
-  settings: GlobalSettings,
+  settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
   discoveryHostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY,
   operation: AiTextOperation = 'commitMessage',
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -113,19 +110,6 @@ export async function discoverCommitMessageModelsLocal(
     }),
     spawnAgent: spawnSourceControlAgent
   })
-}
-
-export async function discoverCommitMessageModelsRemote(
-  agentId: TuiAgent,
-  cwd: string,
-  execute: (
-    plan: CommitMessagePlan,
-    cwd: string,
-    timeoutMs: number
-  ) => Promise<RemoteCommitMessageExecResult>,
-  agentCommandOverride?: string
-): Promise<DiscoverCommitMessageModelsResult> {
-  return discoverModelsRemote({ agentId, cwd, execute, agentCommandOverride })
 }
 
 export function cancelGenerateCommitMessageLocal(cwd: string): void {

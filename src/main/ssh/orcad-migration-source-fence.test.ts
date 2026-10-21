@@ -15,7 +15,9 @@ import {
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
+import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -35,7 +37,7 @@ afterEach(async () => {
   }
 })
 
-function setup() {
+function setup(displayName = 'App') {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-migration-fence-'))
   directories.push(userDataPath)
   const dataFile = join(userDataPath, 'orca-data.json')
@@ -44,7 +46,7 @@ function setup() {
   store.addRepo({
     id: 'repo-1',
     path: '/srv/app',
-    displayName: 'App',
+    displayName,
     badgeColor: '#737373',
     addedAt: 1,
     kind: 'git',
@@ -60,7 +62,6 @@ function setup() {
       destinationEnvironmentId: 'env-1',
       destinationName: 'Managed',
       terminalProof: exited,
-      hasDirectSshAuthority: () => false,
       ...overrides
     })
   const target = () => store.getSshTarget(TARGET.id)!
@@ -180,14 +181,6 @@ describe('migration source fence', () => {
     expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
   })
 
-  it('refuses while the host is still connected directly', async () => {
-    const harness = setup()
-    await expect(harness.fence({ hasDirectSshAuthority: () => true })).resolves.toMatchObject({
-      code: 'orcad_migration_direct_ssh_connected'
-    })
-    expect(harness.target().orcadFence).toBeUndefined()
-  })
-
   it('keeps a blocker it could not read unverifiable, never live', async () => {
     const harness = setup()
     vi.spyOn(harness.store, 'inspectOrcadMigrationUntransferredDependencies').mockImplementation(
@@ -206,16 +199,31 @@ describe('migration source fence', () => {
     const harness = setup()
     const flush = vi.spyOn(harness.claims, 'flush').mockImplementation(async () => {
       if (harness.target().orcadFence) {
-        harness.store.upsertSshRemotePtyLease({
-          targetId: TARGET.id,
-          ptyId: 'late-pty',
-          state: 'detached'
-        })
+        vi.spyOn(harness.store, 'getSshRemotePtyLeases').mockReturnValue([
+          { targetId: TARGET.id, ptyId: 'late-pty', state: 'detached', createdAt: 1, updatedAt: 1 }
+        ])
       }
     })
     await expect(harness.fence()).resolves.toMatchObject({ outcome: 'refused', verdict: 'live' })
     expect(harness.target().orcadFence).toBeUndefined()
     expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
     flush.mockRestore()
+  })
+
+  it('refuses, without a journal or fence, a manifest under the export cap that no request can carry', async () => {
+    const probe = setup()
+    const baseline = JSON.stringify(
+      createOrcadMigrationManifest(probe.store, probe.target())
+    ).length
+    // Under the export cap, over the sealed-frame request budget: stage, state and abort all refuse.
+    const harness = setup('x'.repeat(MAX_ORCAD_MIGRATION_MANIFEST_BYTES - 200 - baseline))
+    const manifestBytes = JSON.stringify(
+      createOrcadMigrationManifest(harness.store, harness.target())
+    ).length
+    expect(manifestBytes).toBeLessThanOrEqual(MAX_ORCAD_MIGRATION_MANIFEST_BYTES)
+
+    await expect(harness.fence()).rejects.toThrow(/\(orcad_migration_manifest_too_large\)$/)
+    expect(listOrcadMigrationSourceCutovers(harness.userDataPath)).toEqual([])
+    expect(harness.target().orcadFence).toBeUndefined()
   })
 })

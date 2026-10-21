@@ -10,6 +10,13 @@ import {
   getVisibleEphemeralVmRuntimes
 } from './EphemeralVmRuntimesSection'
 
+// Why: this file stubs `window`, which the Radix tooltip timers need.
+vi.mock('../ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: () => null
+}))
+
 const toastMocks = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn()
@@ -170,18 +177,17 @@ describe('EphemeralVmRuntimesSection', () => {
     await vi.waitFor(() => expect(toastMocks.success).toHaveBeenCalled())
   })
 
-  it('shows the empty state when no runtime needs cleanup', async () => {
-    window.api.ephemeralVm.listRuntimes = vi
+  it('shows only the setup header when no runtime needs cleanup', async () => {
+    const listRuntimes = vi
       .fn()
       .mockResolvedValue([makeRuntime({ status: 'cleaned', cleanupStatus: 'succeeded' })])
+    window.api.ephemeralVm.listRuntimes = listRuntimes
 
     const container = await renderSection()
 
-    await vi.waitFor(() =>
-      expect(container.textContent).toContain(
-        'No Cloud VM runtimes yet. Create one from a workspace using an environment recipe.'
-      )
-    )
+    await vi.waitFor(() => expect(listRuntimes).toHaveBeenCalled())
+    expect(container.textContent).toContain('Cloud VMs')
+    expect(container.textContent).not.toContain('Fix Login Race')
   })
 
   it('surfaces cleanup hook failures returned by the cleanup IPC', async () => {

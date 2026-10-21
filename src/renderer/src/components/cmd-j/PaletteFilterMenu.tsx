@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, ListFilter, X } from 'lucide-react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
@@ -160,22 +160,23 @@ export default function PaletteFilterMenu({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        type="button"
-        aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
-        data-active={active ? 'true' : undefined}
-        className={cn(
-          'ml-2 flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/55 px-2 text-[12px] text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          active && 'border-primary/45 bg-primary/12 text-foreground'
-        )}
-      >
-        <ListFilter className="size-3.5" aria-hidden="true" />
-        <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
-        {active ? (
-          <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
-            {selectionCount}
-          </span>
-        ) : null}
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant={active ? 'secondary' : 'outline'}
+          size="xs"
+          aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
+          data-active={active ? 'true' : undefined}
+          className="ml-2"
+        >
+          <ListFilter className="size-3.5" aria-hidden="true" />
+          <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
+          {active ? (
+            <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+              {selectionCount}
+            </span>
+          ) : null}
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"

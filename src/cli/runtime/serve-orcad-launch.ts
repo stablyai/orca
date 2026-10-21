@@ -3,7 +3,8 @@
  * app-side by `src/main/orcad/orcad-local-serve-selection.ts`; the CLI only asks and runs.
  */
 import { dirname, join } from 'node:path'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   ORCAD_LOCAL_SERVE_SELECTION_ENTRY,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS,
@@ -12,18 +13,9 @@ import {
 } from '../../shared/orcad-local-serve-selection'
 import { waitForRecipeJson } from './serve-recipe-json'
 import { superviseForegroundServe } from './serve-update-supervisor'
-
-type SupervisorArgs = Parameters<typeof superviseForegroundServe>[0]
-
-export type ServeOrcaAppArgs = {
-  json?: boolean
-  port?: string | null
-  pairingAddress?: string | null
-  noPairing?: boolean
-  mobilePairing?: boolean
-  recipeJson?: boolean
-  projectRoot?: string | null
-}
+import { isSupervisedSpawnHeld } from './serve-supervised-stop'
+import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
+import { orcadServeArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 
 /** A first run may download and verify the pinned Node; bound it well past that. */
 const SELECTION_TIMEOUT_MS = 10 * 60_000
@@ -72,17 +64,6 @@ export async function resolveLocalServeRuntime(
   }
 }
 
-/** The shared spawn chokepoint (windowsHide, no shell) in the supervisor's spawn shape. */
-const spawnThroughChokepoint: SupervisorArgs['spawnChild'] = (program, args, options) =>
-  spawnProcess({
-    program,
-    args,
-    cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
-    env: options.env,
-    stdio: options.stdio,
-    detached: options.detached
-  })
-
 /** Electron serve binds every interface (`exposeNetworkByDefault`); orcad does it on request. */
 export function serveWithOrcad(
   selection: Extract<ServeRuntimeSelection, { kind: 'orcad' }>,
@@ -90,10 +71,12 @@ export function serveWithOrcad(
   userDataPath: string,
   /** The caller's environment without `ELECTRON_RUN_AS_NODE`. */
   baseEnv: NodeJS.ProcessEnv,
-  spawnChild: SupervisorArgs['spawnChild'] = spawnThroughChokepoint
+  /** The app's browser client; the slot does not carry one, so orcad serves it from here. */
+  webClientRoot?: string
 ): Promise<number> {
-  const childArgs = [selection.entry, ...orcadServeArgs(args)]
-  const spawnOptions: SupervisorArgs['spawnOptions'] = {
+  const spec: ProcessSpec = {
+    program: selection.runtime,
+    args: [selection.entry, ...orcadServeArgs(args, webClientRoot)],
     detached: args.recipeJson === true,
     cwd: dirname(selection.entry),
     stdio: args.recipeJson === true ? ['ignore', 'pipe', 'inherit'] : 'inherit',
@@ -104,32 +87,21 @@ export function serveWithOrcad(
       ORCA_VERSION: selection.version
     }
   }
-  const child = spawnChild(selection.runtime, childArgs, spawnOptions)
+  const spawnChild = shouldRedactSupervisedStdout(args.supervise === true)
+    ? redactingSpawn(spawnProcess)
+    : spawnProcess
+  if (isSupervisedSpawnHeld()) {
+    return Promise.resolve(0)
+  }
+  const child = spawnChild(spec)
   if (args.recipeJson) {
     return waitForRecipeJson(child)
   }
   return superviseForegroundServe({
-    executable: selection.runtime,
-    childArgs,
-    spawnOptions,
+    spec,
     spawnChild,
     child,
     handoffPath: null,
     expectedHandoff: null
   })
-}
-
-export function orcadServeArgs(args: ServeOrcaAppArgs): string[] {
-  return [
-    '--bind',
-    '0.0.0.0',
-    ...(args.json ? ['--json'] : []),
-    ...(args.port ? ['--port', args.port] : []),
-    ...(args.pairingAddress ? ['--pairing-address', args.pairingAddress] : []),
-    ...(args.noPairing ? ['--no-pairing'] : []),
-    ...(args.mobilePairing ? ['--mobile-pairing'] : []),
-    ...(args.recipeJson && args.projectRoot
-      ? ['--recipe-json', '--project-root', args.projectRoot]
-      : [])
-  ]
 }

@@ -144,12 +144,24 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('refuses a git operation whose worktree no row places, instead of using the focused server', async () => {
+    const store = createEditorStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    await expect(store.getState().pushBranch('wt-unknown', '/elsewhere')).rejects.toThrow(
+      'The workspace host is unresolved'
+    )
+
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('routes git operations through the explicit runtime owner instead of ambient focus', async () => {
     const store = createEditorStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
 
     await store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
-      runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+      runtimeTarget: { kind: 'local' }
     })
 
     expect(gitPushMock).toHaveBeenCalledWith({
@@ -660,7 +672,9 @@ describe('createEditorSlice remote branch actions', () => {
     await Promise.resolve()
     expect(store.getState().isRemoteOperationActive).toBe(true)
 
-    const pushB = store.getState().pushBranch('wt-2', '/b')
+    const pushB = store.getState().pushBranch('wt-2', '/b', false, undefined, undefined, {
+      runtimeTarget: { kind: 'local' }
+    })
     await Promise.resolve()
     expect(store.getState().isRemoteOperationActive).toBe(true)
 

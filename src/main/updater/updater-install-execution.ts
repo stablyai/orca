@@ -1,5 +1,4 @@
-import { BrowserWindow } from 'electron'
-import { killAllPty } from '../ipc/pty'
+import { releaseSessionsForInstaller } from './updater-installer-session-release'
 import { withUpdaterSpan } from '../observability/instrumentation'
 import { runWithLaunchPath } from '../startup/hydrate-shell-path'
 import {
@@ -8,14 +7,17 @@ import {
   setMacInstallPreflightInProgress
 } from '../updater-mac-install'
 import { getMacUpdateRunningInstances } from '../macos-update-running-instances'
+import { commitServeSupervisorPark } from './serve-supervisor-install-park'
 import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-update-package-type'
 import { LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE } from '../linux-package-downloaded-status'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
-import { UpdaterPackageRecovery } from './updater-package-recovery'
+import { UpdaterMacInstallPreflight } from './updater-mac-install-preflight'
+import { prepareThisProcessShipItStaging } from './shipit-leftover-recovery'
+import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
 
-export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
+export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
   protected async performQuitAndInstall(): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
@@ -64,39 +66,12 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
     this.quittingForUpdate = true
 
     try {
-      if (process.platform === 'darwin') {
-        setMacInstallPreflightInProgress(true)
-        let blockers: number[]
-        try {
-          blockers = await getMacUpdateRunningInstances()
-        } catch {
-          this.resetQuitForUpdateState()
-          this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
-          this.sendInstallFailureStatus({
-            state: 'error',
-            version: pendingVersion,
-            retryAction: 'install',
-            message:
-              'Could not check for other running Orca instances. Orca remains open. Try again. If the check keeps failing, close the other Orca instances and background orca serve servers, then quit Orca to let the update install on exit. Reopen Orca afterwards.'
-          })
-          recordUpdaterLifecycle('macos_running_instances_check_failed')
-          return
-        }
-        if (blockers.length > 0) {
-          this.resetQuitForUpdateState()
-          this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
-          this.sendInstallFailureStatus({
-            state: 'error',
-            version: pendingVersion,
-            retryAction: 'install',
-            message: `Close the other Orca instances (process IDs: ${blockers.slice(0, 10).join(', ')}) before installing this update. Background orca serve instances also need to stop. Orca remains open; retry the update after closing them.`
-          })
-          recordUpdaterLifecycle('macos_install_blocked_by_running_instances', {
-            pids: blockers.slice(0, 10).join(', '),
-            count: blockers.length
-          })
-          return
-        }
+      this.sendStatus(
+        { state: 'downloaded', version: pendingVersion, installing: true },
+        { force: true }
+      )
+      if (!(await this.preflightMacInstall(pendingVersion))) {
+        return
       }
       markMacQuitAndInstallInFlight()
       await withUpdaterSpan({ stage: 'install' }, async (span) => {
@@ -136,6 +111,9 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
           return
         }
 
+        await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
+        // Why here: deferred staging starts inside the native install call below.
+        await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
         recordUpdaterLifecycle('quit_and_install_invoking_native', {
           version: pendingVersion || null
         })
@@ -164,24 +142,36 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
           return
         }
 
-        killAllPty()
-        span.addEvent('local_pty_kill_all')
-
-        for (const win of BrowserWindow.getAllWindows()) {
-          win.removeAllListeners('close')
+        // Why: this staging finishes after quitAndInstall returns; hold destructive prep until Squirrel stages so a staging failure leaves the server intact.
+        if (this.isMacStagingDeferredToInstall() && !isMacInstallerReady()) {
+          // Why: MacUpdater keeps its own completion listener that quits once Squirrel stages, so abandoning the
+          // install here would let a late staging apply with a failed handoff; report and keep the handoff live.
+          this.macDeferredStagingTimer = setTimeout(() => {
+            this.macDeferredStagingTimer = null
+            recordUpdaterLifecycle(
+              'macos_deferred_staging_slow',
+              { timeoutMs: MAC_DEFERRED_STAGING_TIMEOUT_MS },
+              { level: 'warn', message: 'Squirrel has not staged the supervised serve update' }
+            )
+            this.sendInstallFailureStatus({
+              state: 'error',
+              message:
+                'macOS has not finished preparing the update. Orca keeps serving and installs it once ready; restart the Orca service if it never does.',
+              ...(pendingVersion ? { version: pendingVersion } : {}),
+              retryable: false
+            })
+          }, MAC_DEFERRED_STAGING_TIMEOUT_MS)
+          span.addEvent('awaiting_squirrel_staging')
+          return
         }
-        span.addEvent('window_close_listeners_removed', {
-          windowCount: BrowserWindow.getAllWindows().length
-        })
+
+        const windowCount = releaseSessionsForInstaller()
+        span.addEvent('local_pty_kill_all')
+        span.addEvent('window_close_listeners_removed', { windowCount })
 
         // Why: committed installs keep quittingForUpdate so dock activate can't reopen the old process; macOS without Squirrel stays uncommitted so late native errors can still recover.
-        if (
-          !this.updateInstallCommitted &&
-          (process.platform !== 'darwin' || isMacInstallerReady())
-        ) {
-          this.updateInstallCommitted = true
-          // Why: past commit the installer waits for this process to exit; a wedged async shutdown would strand the user with no app and no update (#4438).
-          armUpdateInstallExitWatchdog()
+        if (process.platform !== 'darwin' || isMacInstallerReady()) {
+          this.commitInFlightInstall()
         }
       })
     } catch (error) {
@@ -216,6 +206,61 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
           : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
       })
     }
+  }
+
+  // Why: supervised serve keeps autoInstallOnAppQuit off, so electron-updater's MacUpdater asks Squirrel to stage only inside quitAndInstall; waiting for Squirrel first never ends.
+  protected isMacStagingDeferredToInstall(): boolean {
+    return process.platform === 'darwin' && this.updateInstallMode === 'supervised-headless-serve'
+  }
+
+  protected isAwaitingMacStaging(): boolean {
+    return (
+      this.isMacStagingDeferredToInstall() &&
+      this.quitAndInstallInProgress &&
+      this.quitAndInstallNativeInvoked &&
+      !this.updateInstallCommitted
+    )
+  }
+
+  /** Squirrel staged the bundle that quitAndInstall asked for; the installer now owns the swap. */
+  protected commitStagedMacInstall(): void {
+    if (!this.isAwaitingMacStaging()) {
+      return
+    }
+    this.clearMacDeferredStagingTimer()
+    // Why: commit first; this runs inside Squirrel's event, so a throwing cleanup would otherwise skip the watchdog and MacUpdater's quit listener.
+    this.commitInFlightInstall()
+    recordUpdaterLifecycle('macos_deferred_staging_committed', {
+      version: this.getPendingInstallVersion() || null
+    })
+    try {
+      releaseSessionsForInstaller()
+    } catch (error) {
+      recordUpdaterLifecycle(
+        'post_commit_cleanup_failed',
+        { errorType: error instanceof Error ? error.name : typeof error },
+        {
+          level: 'warn',
+          message: 'Update install cleanup failed after commit; install already applied'
+        }
+      )
+    }
+  }
+
+  // Why: only Squirrel's own error ends the staging; an unrelated updater error (e.g. a background check) must not abandon it.
+  protected failMacStaging(error: unknown): void {
+    if (this.isAwaitingMacStaging()) {
+      this.handleQuitAndInstallFailure(error)
+    }
+  }
+
+  protected commitInFlightInstall(): void {
+    if (!this.quitAndInstallInProgress || this.updateInstallCommitted) {
+      return
+    }
+    this.updateInstallCommitted = true
+    // Why: past commit the installer waits for this process to exit; a wedged async shutdown would strand the user with no app and no update (#4438).
+    armUpdateInstallExitWatchdog()
   }
 
   // Why: quitAndInstall failures arrive via 'error'; recover only after native invoke and before commit, else clearing quittingForUpdate lets dock activate reopen the old process mid-installer.

@@ -247,6 +247,27 @@ describe('NativeChatStructuredSession', () => {
     act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
   })
 
+  it('focuses the chat on a click outside its controls and sends typing there to the composer', () => {
+    const { container } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    const root = container.querySelector('[data-native-chat-root]')
+    if (!(root instanceof HTMLElement)) {
+      throw new Error('chat root missing')
+    }
+    fireEvent.pointerDown(root, { button: 0 })
+    expect(document.activeElement).toBe(root)
+
+    expect(fireEvent.keyDown(root, { key: 'h' })).toBe(false)
+  })
+
   it('wires remote structured file links through the host-aware native chat opener', () => {
     render(
       <NativeChatStructuredSession
@@ -307,6 +328,27 @@ describe('NativeChatStructuredSession', () => {
     })
     await expect(mocks.messageListProps?.session?.loadEarlier()).resolves.toBe('failed')
     expect(mocks.loadOlder).toHaveBeenCalledOnce()
+  })
+
+  // What the transcript marks as new rests on this: without it the list never counts as watched.
+  it('tells the list whether the read has caught up with the host', () => {
+    // A fresh element each time: React skips a rerender handed the very same one.
+    const pane = () => (
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-current"
+        sessionId="session-current"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const { rerender } = render(pane())
+    expect(mocks.messageListProps?.session).toMatchObject({ readCurrent: false })
+
+    mocks.readCurrent = true
+    rerender(pane())
+    expect(mocks.messageListProps?.session).toMatchObject({ readCurrent: true })
   })
 
   // Transcript image previews shipped Codex-first, and the runtime context they
@@ -519,17 +561,6 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.composerProps?.onStop).toBeUndefined()
   })
 
-  it('hands the composer Resume, on its transport, only while the queue controller offers it', () => {
-    const { rerender } = render(claudeSessionView('structured-tab-resume', 'session-resume'))
-    expect(mocks.composerProps?.structuredTransport?.queueResume).toBeUndefined()
-    mocks.queuedResumable = true
-    rerender(claudeSessionView('structured-tab-resume', 'session-resume'))
-    act(() => {
-      mocks.composerProps?.structuredTransport?.queueResume?.resume()
-    })
-    expect(mocks.queuedResume).toHaveBeenCalledOnce()
-  })
-
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
     // The strip stands for work that OUTLIVES a turn, so `show` is true while
     // `isMonitoring` is false: mounted, but not speaking as the live indicator.
@@ -552,7 +583,7 @@ describe('NativeChatStructuredSession', () => {
     expect(screen.getByText('watcher')).toBeTruthy()
   })
 
-  it('tracks concurrent task stops independently and clears each pending result', async () => {
+  it('tracks concurrent task stops independently: a confirmed one holds its row, a failed one clears', async () => {
     mocks.monitoringBackgroundTasks = true
     mocks.supportsBackgroundTaskStop = true
     mocks.backgroundTasks = [
@@ -572,7 +603,7 @@ describe('NativeChatStructuredSession', () => {
         })
     )
 
-    render(
+    const { rerender } = render(
       claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
     )
     fireEvent.click(screen.getByRole('button', { name: '2 shells — 2 working' }))
@@ -584,12 +615,30 @@ describe('NativeChatStructuredSession', () => {
     expect((firstStop as HTMLButtonElement).disabled).toBe(true)
     expect((secondStop as HTMLButtonElement).disabled).toBe(true)
 
+    // Confirmed before its row leaves: the button stays in its stopping state, never Stop again.
     await act(async () => finishFirst({ cancelled: true }))
-    await waitFor(() => expect((firstStop as HTMLButtonElement).disabled).toBe(false))
+    expect((firstStop as HTMLButtonElement).disabled).toBe(true)
     expect((secondStop as HTMLButtonElement).disabled).toBe(true)
 
     await act(async () => finishSecond(null))
     await waitFor(() => expect((secondStop as HTMLButtonElement).disabled).toBe(false))
+    expect((firstStop as HTMLButtonElement).disabled).toBe(true)
+
+    mocks.backgroundTasks = [{ id: 'task-two', kind: 'command', description: 'Second task' }]
+    rerender(
+      claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
+    )
+    expect(screen.queryByRole('button', { name: 'Stop First task' })).toBeNull()
+    // The same task listed again is one the Stop did not end.
+    mocks.backgroundTasks = [
+      { id: 'task-one', kind: 'command', description: 'First task' },
+      { id: 'task-two', kind: 'command', description: 'Second task' }
+    ]
+    rerender(
+      claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
+    )
+    const firstAgain = screen.getByRole('button', { name: 'Stop First task' })
+    expect(firstAgain.hasAttribute('disabled')).toBe(false)
   })
 
   it('keeps a stale session stop result from clearing the current session pending state', async () => {
@@ -622,7 +671,7 @@ describe('NativeChatStructuredSession', () => {
 
     await act(async () => finishOld({ cancelled: true }))
     expect((currentStop as HTMLButtonElement).disabled).toBe(true)
-    await act(async () => finishCurrent({ cancelled: true }))
+    await act(async () => finishCurrent({ cancelled: false }))
     await waitFor(() => expect((currentStop as HTMLButtonElement).disabled).toBe(false))
   })
 
@@ -663,10 +712,11 @@ describe('NativeChatStructuredSession', () => {
       await expect(dispatchCommand?.('/model')).resolves.toMatchObject({ accepted: true })
     })
 
-    expect(mocks.composerProps?.structuredTransport?.optionPickerRequest).toEqual({
-      id: 'model',
-      sequence: 1
-    })
+    const request = mocks.composerProps?.structuredTransport?.optionPickerRequest
+    expect(request).toMatchObject({ id: 'model' })
+
+    act(() => request?.consume())
+    expect(mocks.composerProps?.structuredTransport?.optionPickerRequest).toBeNull()
   })
 
   it('passes Claude grouped questions and one shared answer through the card', () => {

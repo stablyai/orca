@@ -6,6 +6,8 @@ import {
   layoutContainsLeafId
 } from '../restoring-sessions/terminal-layout-normalization'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { placedSplitRoot } from '../terminal-topology/terminal-pane-placement-graft'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 
@@ -18,15 +20,12 @@ export function applyPtyBinding(
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
   let terminalMembershipChanged = false
-  let hostAdmittedTabCreated = false
   const advanceTopologyFence = (): void => {
     const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
     const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    // Why: a split, or a host-admitted tab the renderer has never seen, is itself
-    // the authority — with no fence the renderer's pre-create tab list replays
-    // over it and the tab is lost even on the repo's first such change.
-    const establishesMembershipAuthority =
-      args.expectedSourceBinding !== undefined || hostAdmittedTabCreated
+    // Why: a split is itself the authority — with no fence the renderer's pre-split
+    // pane list replays over it and the pane is lost even on the repo's first split.
+    const establishesMembershipAuthority = args.expectedSourceBinding !== undefined
     if (
       !reconciledIncarnation &&
       (!terminalMembershipChanged || (currentRevision <= 0 && !establishesMembershipAuthority))
@@ -39,17 +38,18 @@ export function applyPtyBinding(
       [repoId]: currentRevision + 1
     }
   }
-  if (args.incarnationId) {
-    session.terminalPtyIncarnationsByPaneKey = {
-      ...session.terminalPtyIncarnationsByPaneKey,
-      [paneKey]: args.incarnationId
+  const { [paneKey]: recordedIncarnation, ...otherIncarnations } =
+    session.terminalPtyIncarnationsByPaneKey ?? {}
+  if (args.incarnationId || (args.dropsIncarnation && recordedIncarnation)) {
+    session.terminalPtyIncarnationsByPaneKey = args.incarnationId
+      ? { ...session.terminalPtyIncarnationsByPaneKey, [paneKey]: args.incarnationId }
+      : otherIncarnations
+  }
+  if (args.incarnationId && session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+    session.terminalSurfaceTombstonesByPaneKey = {
+      ...session.terminalSurfaceTombstonesByPaneKey
     }
-    if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
-      session.terminalSurfaceTombstonesByPaneKey = {
-        ...session.terminalSurfaceTombstonesByPaneKey
-      }
-      delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
-    }
+    delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
   }
   const tabs = session.tabsByWorktree?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
@@ -62,7 +62,6 @@ export function applyPtyBinding(
     )
   } else {
     terminalMembershipChanged = true
-    hostAdmittedTabCreated = args.hostAdmittedMembership === true
     // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
     const nextTabs = [
       ...(tabs ?? []),
@@ -107,14 +106,16 @@ export function applyPtyBinding(
   if (layout) {
     if (!layout.root) {
       terminalMembershipChanged = true
-      // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
+      // Why: load names every saved root, but the layout type still allows none; the binding needs a durable one.
       layout.root = { type: 'leaf', leafId: args.leafId }
       layout.activeLeafId = args.leafId
       layout.expandedLeafId = null
     } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
       terminalMembershipChanged = true
       // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
-      layout.root = {
+      // Switch point: main's tree is drawn back, so it places the leaf where the window split it.
+      layout.root = (ORCA_LAYOUT_OWNER_IS_MAIN &&
+        placedSplitRoot(layout.root, args.leafId, args.placement)) || {
         type: 'split',
         direction: 'vertical',
         first: cloneLayoutNode(layout.root),

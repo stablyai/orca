@@ -17,6 +17,7 @@ import {
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-materialize-'))
 const fixturePath = path.join(scratch, 'materialize-terminal.mjs')
@@ -49,15 +50,11 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(): string {
   const command = [process.execPath, fixturePath, processedInputPath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 async function callRuntime<TResult>(

@@ -29,6 +29,7 @@ import {
   TEST_SSH_AUTHORITY
 } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>
@@ -134,6 +135,7 @@ export function createTestStore() {
       ({
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
+        ...createWorkspaceAttentionSlice(...a),
         trustedOrcaHooks: {},
         sshConnectionStates: new Map([
           [

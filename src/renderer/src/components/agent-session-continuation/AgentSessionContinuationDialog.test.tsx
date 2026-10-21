@@ -23,8 +23,17 @@ vi.mock('@/lib/agent-catalog', () => ({
   getAgentLabel: () => 'Codex'
 }))
 vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: ({ value }: { value: string | null }) =>
-    React.createElement('div', { 'data-agent': value ?? '' })
+  default: ({
+    value,
+    allowBlankTerminal
+  }: {
+    value: string | null
+    allowBlankTerminal?: boolean
+  }) =>
+    React.createElement('div', {
+      'data-agent': value ?? '',
+      'data-allow-blank': String(allowBlankTerminal === true)
+    })
 }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
@@ -105,5 +114,7 @@ describe('AgentSessionContinuationDialog', () => {
 
     await act(async () => resolveSecond(['codex']))
     await vi.waitFor(() => expect(container.querySelector('[data-agent="codex"]')).not.toBeNull())
+    // Why: continuing a chat needs an agent to resume it into.
+    expect(container.querySelector('[data-allow-blank="false"]')).not.toBeNull()
   })
 })

@@ -3,7 +3,7 @@
 // normally but never ahead of them, a withdrawn card comes back under it, a crash keeps it, any
 // turn sent after it ends it, and no stored pause is ever written.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import Database from '../../sqlite/sync-database'
@@ -25,10 +25,17 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
+  vi.useFakeTimers()
   rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
-afterEach(() => rig.dispose())
+afterEach(async () => {
+  try {
+    await rig.dispose()
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 async function queuedDraft(text: string): Promise<string> {
   const queued = await rig.send(text, 'queue-if-active').result
@@ -48,7 +55,7 @@ function journal(sessionId = HOST_TEST_SESSION) {
 
 /** No drain step converts the cards, and the published pause names `reason` (null: none shown). */
 async function expectHeld(reason: string | null, ...draftIds: string[]): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 250))
+  await vi.advanceTimersByTimeAsync(250)
   for (const draftId of draftIds) {
     expect(await rig.handoff(draftId)).toBeUndefined()
   }
@@ -158,7 +165,7 @@ describe("Stop's event", () => {
     await withdraw(handoffId)
     await rig.settleAccepted(working, 'stopped')
     await openRigTurnFor(rig, working, 'interrupted')
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await vi.advanceTimersByTimeAsync(250)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(await rig.drafts()).toEqual([{ messageId: sentId, state: 'waiting' }])
     const sends = (await rig.host.journalSnapshot(HOST_TEST_SESSION)).submissions.filter(
@@ -242,13 +249,14 @@ describe("a /clear's carried cards", () => {
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     const cleared = await clear()
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    const replacementId = cleared.ok ? HOST_TEST_SESSION : undefined
     if (!replacementId) {
-      throw new Error(`expected a replacement session: ${JSON.stringify(cleared)}`)
+      throw new Error(`expected clear to succeed: ${JSON.stringify(cleared)}`)
     }
     // Held there, unshown: nothing runs in the fresh conversation.
     expect(await rig.queuePause(replacementId)).toBeNull()
     expect(structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)).toEqual([
+      'stopped',
       'cleared'
     ])
     // Idle there, so the person's send goes straight out rather than queueing.
@@ -276,7 +284,12 @@ describe("a /clear's carried cards", () => {
     await rig.host.settleLateDispatch({
       sessionId: replacementId,
       clientMessageId: sent.value.clientMessageId,
-      providerIdentity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-hi', ordinal: 0 }
+      providerIdentity: {
+        provider: 'codex',
+        threadId: rig.store.getRecord(replacementId)!.providerHandleChain.at(-1)!.handle.nativeId,
+        turnId: 'turn-hi',
+        ordinal: 0
+      }
     })
     expect(journal(replacementId).queuedMessages.list()[0]?.messageId).toBe(carried)
     expect(structuredQueuePauses(journal(replacementId))).toEqual([])
@@ -302,10 +315,10 @@ describe('no stored pause', () => {
       envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
       ...fields
     })
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    const replacementId = cleared.ok ? HOST_TEST_SESSION : undefined
     expect(
       replacementId && structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)
-    ).toEqual(['cleared'])
+    ).toEqual(['stopped', 'cleared'])
     expect(pauseTables()).toBe(0)
   })
 })

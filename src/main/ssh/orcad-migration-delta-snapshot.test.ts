@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
@@ -15,22 +15,26 @@ import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-jour
 import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fake'
 import { runOrcadDeltaMove } from './orcad-migration-delta-move'
 import { reconcileManagedOrcadSshTargets } from './orcad-retained-source'
-import { SshConnectionStore } from './ssh-connection-store'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
+import { SshConnectionStore } from './connection/ssh-connection-store'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
   return { state, deploy: vi.fn(), ensureTunnel: vi.fn() }
 })
-vi.mock('./ssh-target-registry', () => ({
+vi.mock('./targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({}),
-  getSshTargetRegistryStore: () => mocks.state.targetStore,
-  hasRegisteredDirectSshAuthority: () => false
+  getSshTargetRegistryStore: () => mocks.state.targetStore
 }))
-vi.mock('./orcad-runtime-deployment', () => ({ createManagedOrcadEnvironment: mocks.deploy }))
-vi.mock('./orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: mocks.ensureTunnel }))
+vi.mock('../managed-server/lifecycle/orcad-runtime-deployment', () => ({
+  createManagedOrcadEnvironment: mocks.deploy
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  ensureOrcadManagedTunnel: mocks.ensureTunnel
+}))
 
-const { convertSshTargetToManagedOrcad } = await import('./orcad-runtime-conversion')
+const { convertSshTargetToManagedOrcad } =
+  await import('../managed-server/lifecycle/orcad-runtime-conversion')
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -68,7 +72,7 @@ beforeEach(() => {
   sshStore = new SshConnectionStore(store as never)
   mocks.state.targetStore = sshStore
   destination = fakeOrcadMigrationDestination()
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.deploy.mockImplementation(async (path: string, args: { name: string }) => {
     const id = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))!
     if (!listEnvironments(path).some((entry) => entry.id === id)) {
@@ -134,10 +138,8 @@ async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string
     convertSshTargetToManagedOrcad(userDataPath, {
       sshTargetId: TARGET.id,
       name: 'Managed',
-      listRelayPtyIds: Object.assign(async () => [], { previous: async () => [] }),
       censusHost: async () => ({ verdict: 'exited', count: 0 }),
       destinationFor: () => destination,
-      releaseDirectSession: async () => {},
       now
     })
   ).resolves.toMatchObject({ outcome: 'converted' })
@@ -148,23 +150,19 @@ async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string
   return worktreeId
 }
 
-/** The relay answers only after `whileChecking` ran, as a user typing during the check would. */
+/** The census answers only after `whileChecking` ran, as a user typing during the check would. */
 function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
-  const list = async (): Promise<string[]> => {
-    whileChecking()
-    return []
-  }
   return runOrcadDeltaMove({
     userDataPath,
     store,
     claims: sshStore.getOrcadRuntimeClaims(),
     target: store.getSshTarget(TARGET.id)!,
     environment: listEnvironments(userDataPath)[0]!,
-    destination,
-    listRelayPtyIds: Object.assign(list, { previous: async () => [] }),
-    censusHost: async () => ({ verdict: 'exited', count: 0 }),
-    releaseDirectSession: async () => {},
-    ensureTunnel: async () => {},
+    connectDestination: async () => destination,
+    censusHost: async () => {
+      whileChecking()
+      return { verdict: 'exited', count: 0 }
+    },
     runTargetLifecycle,
     now
   })

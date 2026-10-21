@@ -135,12 +135,12 @@ describe('SettingsSidebar', () => {
   })
 
   it.each([false, true])('renders Chat navigation only with the opt-in enabled (%s)', (enabled) => {
-    const settings = { ...getDefaultSettings('/tmp'), experimentalStructuredNativeChat: enabled }
+    const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
       isWebClient: false,
-      experimentalStructuredNativeChat: enabled,
+      nativeChatEnabled: enabled,
       repos: []
     }).filter((section) => section.group === 'interface')
     const container = document.createElement('div')

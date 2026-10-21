@@ -1,3 +1,4 @@
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -98,13 +99,20 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
         readOptions: async () => ({ models: [], current: { model: 'opus' } })
       },
       agents,
-      store: { getRecord: () => undefined }
+      store: {
+        getRecord: () => ({
+          ...agentSessionRecordFixture(),
+          sessionId: SESSION,
+          provider: 'claude',
+          options: { model: 'opus' }
+        })
+      }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => running,
     conversation: async () => running
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, SESSION)
+  return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }
 
 function attachTail(journal: AgentSessionJournal, limit: number): StructuredAgentSessionState {

@@ -6,6 +6,7 @@
 import type {
   OrcadManagedCancelStopResult,
   OrcadManagedDeployResult,
+  OrcadManagedForgetResult,
   OrcadManagedRecoveryResult,
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
@@ -20,6 +21,8 @@ export type ManagedServerActions = {
   recover: (selector: string, acceptChangedState?: boolean) => Promise<OrcadManagedRecoveryResult>
   stop: (selector: string) => Promise<OrcadManagedStopResult>
   cancelStop: (selector: string) => Promise<OrcadManagedCancelStopResult>
+  /** Unlinks a server whose host cannot answer, without stopping it there. */
+  forget: (selector: string) => Promise<OrcadManagedForgetResult>
 }
 
 let registered: ManagedServerActions | null = null

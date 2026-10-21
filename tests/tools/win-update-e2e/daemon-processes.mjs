@@ -5,7 +5,7 @@
 // matched by executable name. The only reliable discriminators are the
 // command-line markers the fork always passes: the daemon entry script
 // (daemon-entry.js) and its --socket / --token arguments. See
-// src/main/daemon/daemon-init.ts (createOutOfProcessLauncher).
+// src/main/daemon/daemon-out-of-process-launcher.ts (createOutOfProcessLauncher).
 //
 // The daemon also writes a PID file at <userData>/daemon/daemon-v<N>.pid whose
 // JSON carries { pid, startedAtMs, entryPath, appVersion } — the appVersion

@@ -68,7 +68,11 @@ function parseEntry(entry: unknown): JournalEntry[] {
           addition: {
             text: parsed.text,
             images: parsed.images,
-            ...(addition.fromUser === true ? { fromUser: true } : {})
+            ...(addition.fromUser === true ? { fromUser: true } : {}),
+            ...(typeof addition.before === 'string' ? { before: addition.before } : {}),
+            ...(Array.isArray(addition.fills)
+              ? { fills: addition.fills.filter((id) => typeof id === 'string') }
+              : {})
           }
         }
       ]
@@ -141,11 +145,10 @@ export function replayNativeChatComposerDraftJournal(
       continue
     }
     const from = base ?? { text: '', images: [], savedAt: 0 }
-    const next = withNativeChatComposerDraftAddition(from, addition, { once: true })
+    const next = withNativeChatComposerDraftAddition(from, addition)
     drafts.set(scopeKey, {
       ...from,
       ...next,
-      ...(next.text === from.text ? {} : { document: undefined }),
       savedAt: at
     })
     changed.add(scopeKey)

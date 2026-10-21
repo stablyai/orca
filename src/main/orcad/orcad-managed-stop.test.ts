@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
 import {
   OrcadManagedStopCompletionSchema,
   type OrcadManagedStopRequest
@@ -28,8 +29,26 @@ import {
   ORCAD_STOP_COMPLETION_POLL_MS
 } from './orcad-stop-deadlines'
 
+const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
+
+vi.mock('../../shared/secure-path-windows-acl', async (importOriginal) => {
+  const acl = await importOriginal<typeof WindowsAcl>()
+  return {
+    ...acl,
+    restrictWindowsDirectory: (dirPath: string): Promise<boolean> => {
+      const restricted = acl.restrictWindowsDirectory(dirPath)
+      const pending = restricted.then(() => undefined)
+      hardening.pending.add(pending)
+      void pending.then(() => hardening.pending.delete(pending))
+      return restricted
+    }
+  }
+})
+
 const roots: string[] = []
-afterEach(() => {
+afterEach(async () => {
+  // ACL updates must finish before their temporary directories disappear.
+  await Promise.all(hardening.pending)
   vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -42,7 +61,8 @@ function running(): { lock: OrcadInstanceLock; request: OrcadManagedStopRequest 
   const lock = acquireOrcadInstanceLock(root, {
     identity: () => 'uid-1000',
     version: () => '1.0.0',
-    startedAtMs: () => 5_000
+    startedAtMs: () => 5_000,
+    incarnation: () => null
   })
   const { pid, startedAtMs, nonce } = lock.record
   return {
@@ -158,11 +178,14 @@ describe('completing a managed stop', () => {
     })
   })
 
-  it('treats a reused PID with a different start time as proof of exit', async () => {
+  it('treats a reused PID with a different stored creation time as proof of exit', async () => {
     const { request } = running()
-    expect(await completeOrcadManagedStop(request, options({ startedAtMs: () => 99_000 }))).toBe(
-      'exited'
-    )
+    expect(
+      await completeOrcadManagedStop(
+        request,
+        options({ startedAtMs: () => 99_000, platform: 'win32' })
+      )
+    ).toBe('exited')
   })
 
   it.each([
@@ -288,6 +311,20 @@ describe('managed stops that retire the daemon', () => {
 
     await prepareOrcadManagedStop(request, retire, stopAutomations)
     expect(stopAutomations).toHaveBeenCalledTimes(2)
+  })
+
+  it('records a timed-out retirement without its in-process late verdict', async () => {
+    const { request } = running()
+    const retireRequest = { ...request, retireIdleDaemon: true as const }
+    await prepareOrcadManagedStop(retireRequest, async () => ({
+      retirement: 'unverifiable' as const,
+      liveSessions: null,
+      reason: null,
+      lateRetirement: Promise.resolve(true)
+    }))
+    expect(readOrcadDaemonRetirementRecord(retireRequest)).toMatchObject({
+      retirement: 'unverifiable'
+    })
   })
 
   it('records unverifiable when the retirement attempt itself failed', async () => {

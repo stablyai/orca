@@ -1,8 +1,4 @@
 import { z } from 'zod'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import type { AcpToolTimeline } from './acp-tool-timeline'
@@ -16,9 +12,10 @@ export const pendingAcpResolution = {
   resolvedAt: null
 } as const
 
+/** `description`: the agent's own words about what answering means, shown above the choices. */
 export function acpPermissionPresentation(
   params: unknown,
-  dialect: AcpDialect
+  description?: string
 ): AcpRequestPresentation {
   // The runtime already read this request and reported any field it dropped.
   const request = readAcpPermissionRequest(params, () => {})
@@ -30,10 +27,11 @@ export function acpPermissionPresentation(
     body: {
       kind: 'approval',
       title: toolCall.title ?? 'Permission requested',
+      ...(description ? { description } : {}),
       detail: null,
       options: options.map((option) => ({
         id: option.optionId,
-        label: dialect.permissionOptionLabel?.(option) ?? option.name
+        label: option.name
       })),
       resolution: pendingAcpResolution
     },
@@ -100,7 +98,7 @@ export function translateAcpRequest(
                 body: {
                   kind: 'status',
                   presentation: 'plan-document',
-                  text: boundInlineText(plan, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+                  text: plan
                 },
                 join
               }
@@ -108,9 +106,8 @@ export function translateAcpRequest(
     }
   }
   const presentation =
-    method === 'session/request_permission'
-      ? acpPermissionPresentation(params, options.dialect)
-      : options.dialect.request?.(method, params)
+    options.dialect.request?.(method, params) ??
+    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined)
   if (!presentation) {
     // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x
     // repeats each approved edit as a file write it already made): refused, with no row.

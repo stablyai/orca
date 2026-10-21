@@ -1,68 +1,41 @@
 import { pathToFileURL } from 'node:url'
 
-export const DOCKER_SSH_E2E_SPECS = [
-  'tests/e2e/local-ssh-browser-routing.spec.ts',
-  'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts',
-  'tests/e2e/pty-input-write-queue-ssh.spec.ts',
-  'tests/e2e/ssh-ai-vault-session-history.spec.ts',
-  'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
-  'tests/e2e/ssh-cold-activation-restore.spec.ts',
-  'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts',
-  'tests/e2e/ssh-emptied-worktree-reactivation.spec.ts',
-  'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts',
-  'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts',
-  'tests/e2e/ssh-docker-half-open-link.spec.ts',
-  'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts',
-  'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
-  'tests/e2e/ssh-docker-relay-stall-credential.spec.ts',
-  'tests/e2e/ssh-docker-resource-accumulation.spec.ts',
-  'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
-  'tests/e2e/ssh-external-image-preview.spec.ts',
-  'tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts',
-  'tests/e2e/ssh-pi-compatible-agent-title.spec.ts',
-  'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
-  'tests/e2e/ssh-reattach-home-partition.spec.ts',
-  'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
-  'tests/e2e/ssh-restart-tab-accumulation.spec.ts',
-  'tests/e2e/ssh-skill-installation.spec.ts',
-  'tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts',
-  'tests/e2e/ssh-startup-local-shadow.spec.ts',
-  'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts',
-  'tests/e2e/terminal-inline-images-ssh.spec.ts',
-  'tests/e2e/ssh-docker-watcher-isolation.spec.ts',
-  'tests/e2e/ssh-terminal-parking.spec.ts',
-  'tests/e2e/terminal-retention-budget.spec.ts',
-  'tests/e2e/ssh-startup-exec-readiness.spec.ts',
-  'tests/e2e/paired-startup-exec-readiness.spec.ts'
-]
-
 export const NODE_NETWORK_E2E_SPEC =
   'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'
-export const LOCALHOST_SSH_E2E_SPEC = 'tests/e2e/ssh-localhost.spec.ts'
 export const NATIVE_IME_E2E_SPEC = 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
 // Needs the packaged orcad slot, which only its own job builds.
 export const ORCAD_SERVE_MODE_SWITCH_E2E_SPEC = 'tests/e2e/orcad-serve-mode-switch.spec.ts'
-// Needs the orcad template for its host's target, which only its own job builds.
-export const ORCAD_AUTO_CONVERT_E2E_SPEC = 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
 // Windows-only; its own job runs it on a Windows runner.
 export const WINDOWS_MISSING_APPDATA_E2E_SPEC = 'tests/e2e/windows-missing-appdata-startup.spec.ts'
-// Runs in the auto-convert job, which builds the template it needs.
-export const ORCAD_IDLE_EXIT_E2E_SPEC = 'tests/e2e/ssh-orcad-idle-exit.spec.ts'
+// Windows-only; the same Windows job runs it.
+export const WINDOWS_COPY_FILE_E2E_SPEC = 'tests/e2e/file-explorer-copy-file-windows.spec.ts'
+// Needs out/orcad, which only the mode-switch job builds; it runs there beside that spec.
+export const LAYOUT_ORACLE_HEADLESS_E2E_SPEC = 'tests/e2e/workspace-layout-oracle-headless.spec.ts'
+// Managed-SSH specs need the orcad template built by their Docker lane.
+export const MANAGED_SSH_E2E_SPEC_PREFIX = 'tests/e2e/ssh-orcad-'
 export const DEDICATED_E2E_SPECS = [
-  ...DOCKER_SSH_E2E_SPECS,
   NODE_NETWORK_E2E_SPEC,
-  LOCALHOST_SSH_E2E_SPEC,
   NATIVE_IME_E2E_SPEC,
   ORCAD_SERVE_MODE_SWITCH_E2E_SPEC,
-  ORCAD_AUTO_CONVERT_E2E_SPEC,
+  LAYOUT_ORACLE_HEADLESS_E2E_SPEC,
   WINDOWS_MISSING_APPDATA_E2E_SPEC,
-  ORCAD_IDLE_EXIT_E2E_SPEC
+  WINDOWS_COPY_FILE_E2E_SPEC
 ]
 const dedicatedSpecs = new Set(DEDICATED_E2E_SPECS)
-const dockerSpecs = new Set(DOCKER_SSH_E2E_SPECS)
+// Their jobs build their own app or none, so they never need the shared e2e build.
+const OWN_BUILD_E2E_SPECS = new Set([
+  NODE_NETWORK_E2E_SPEC,
+  NATIVE_IME_E2E_SPEC,
+  WINDOWS_MISSING_APPDATA_E2E_SPEC,
+  WINDOWS_COPY_FILE_E2E_SPEC
+])
+
+export function isDedicatedE2eSpec(spec) {
+  return dedicatedSpecs.has(spec) || spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)
+}
 
 export function selectGeneralE2eSpecs(specs) {
-  return specs.filter((spec) => !dedicatedSpecs.has(spec))
+  return specs.filter((spec) => !isDedicatedE2eSpec(spec))
 }
 
 function parseSpecs(input) {
@@ -73,7 +46,39 @@ function parseSpecs(input) {
   return specs
 }
 
-export function classifyE2eJobs(input, sshSourceChanged = 'false') {
+export function selectManagedSshE2eSpecs(input) {
+  if (input === '') {
+    return [MANAGED_SSH_E2E_SPEC_PREFIX]
+  }
+  const specs = [...new Set(parseSpecs(input))].filter((spec) =>
+    spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)
+  )
+  if (
+    specs.length === 0 ||
+    specs.some(
+      (spec) =>
+        spec !== MANAGED_SSH_E2E_SPEC_PREFIX &&
+        !/^tests\/e2e\/ssh-orcad-[\w-]+\.spec\.ts$/.test(spec)
+    )
+  ) {
+    throw new Error('Expected at least one managed SSH spec')
+  }
+  return specs.includes(MANAGED_SSH_E2E_SPEC_PREFIX) ? [MANAGED_SSH_E2E_SPEC_PREFIX] : specs
+}
+
+export function managedSshShards(input) {
+  try {
+    const specs = selectManagedSshE2eSpecs(input)
+    if (!specs.includes(MANAGED_SSH_E2E_SPEC_PREFIX) && specs.length <= 2) {
+      return ['1/1']
+    }
+  } catch {
+    // Invalid evidence keeps the full allocation; the test consumer rejects it.
+  }
+  return ['1/2', '2/2']
+}
+
+export function classifyE2eJobs(input) {
   const conservative = { e2e_run_changed: true, e2e_needs_build: true }
   let specs
   try {
@@ -85,20 +90,9 @@ export function classifyE2eJobs(input, sshSourceChanged = 'false') {
   if (specs.length === 0) {
     return conservative
   }
-  const runChanged = selectGeneralE2eSpecs(specs).length > 0
   return {
-    e2e_run_changed: runChanged,
-    e2e_needs_build:
-      runChanged ||
-      sshSourceChanged !== 'false' ||
-      specs.some(
-        (spec) =>
-          dockerSpecs.has(spec) ||
-          spec === LOCALHOST_SSH_E2E_SPEC ||
-          spec === ORCAD_SERVE_MODE_SWITCH_E2E_SPEC ||
-          spec === ORCAD_AUTO_CONVERT_E2E_SPEC ||
-          spec === ORCAD_IDLE_EXIT_E2E_SPEC
-      )
+    e2e_run_changed: selectGeneralE2eSpecs(specs).length > 0,
+    e2e_needs_build: specs.some((spec) => !OWN_BUILD_E2E_SPECS.has(spec))
   }
 }
 
@@ -109,11 +103,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     input += chunk
   }
   if (process.argv.includes('--job-outputs')) {
-    for (const [name, value] of Object.entries(
-      classifyE2eJobs(input, process.env.E2E_SSH_SOURCE_CHANGED ?? 'false')
-    )) {
+    for (const [name, value] of Object.entries(classifyE2eJobs(input))) {
       process.stdout.write(`${name}=${value}\n`)
     }
+    process.stdout.write(`e2e_ssh_shards=${JSON.stringify(managedSshShards(input))}\n`)
   } else {
     for (const spec of selectGeneralE2eSpecs(parseSpecs(input))) {
       if (/[\r\n]/.test(spec)) {

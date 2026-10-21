@@ -47,6 +47,9 @@ export const HostChallengeAckSchema = z
 // Advertised on the control upgrade rather than in host-hello: HostHelloSchema
 // is strict, so a new hello key is refused by every already-deployed cell.
 export const RELAY_HOST_CAPABILITIES_HEADER = 'x-orca-host-capabilities'
+// The director's `/v1/assign` lease, echoed on the control upgrade. Optional: cells
+// that predate it ignore unknown headers, and today a cell only shadow-checks it.
+export const RELAY_ASSIGNMENT_LEASE_HEADER = 'x-orca-relay-assignment-lease'
 // The host accepts kind/relayDeviceId on a pendingConns entry. A host that does
 // not advertise this parses those entries strictly and would drop the whole ack.
 export const RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS = 'pending-conn-details'

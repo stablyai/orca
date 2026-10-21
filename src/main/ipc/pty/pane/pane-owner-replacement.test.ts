@@ -1,13 +1,14 @@
 import { expect, it, vi } from 'vitest'
 import { fixture } from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence-session-fixtures'
-import { swapReplacedPaneBinding, type ReplacedPaneOwner } from './pane-owner-replacement'
+import { swapReplacedPaneBinding } from './pane-owner-replacement'
+import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../../ssh/ssh-config-parser', () => ({
+vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -15,8 +16,8 @@ vi.mock('../../../ssh/ssh-config-parser', () => ({
 const worktreeId = 'repo-local::/fixture/local'
 const tabId = 'restart-tab'
 
-function replaced(ptyId: string, hostId?: string): ReplacedPaneOwner {
-  return { ptyId, pane: { worktreeId, tabId, leafId: TEST_LEAF_1, hostId } }
+function replaced(ptyId: string): ReplacedPaneOwner {
+  return { ptyId, pane: { worktreeId, tabId, leafId: TEST_LEAF_1, hostId: undefined } }
 }
 
 type FixtureStore = Awaited<ReturnType<typeof fixture>>['store']
@@ -25,27 +26,23 @@ type FixtureStore = Awaited<ReturnType<typeof fixture>>['store']
 async function expectSwapAfterRendererClear(
   store: FixtureStore,
   oldId: string,
-  newId: string,
-  hostId?: string
+  newId: string
 ): Promise<void> {
   expect(
-    store.getWorkspaceSession(hostId).terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
+    store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
   ).toBeUndefined()
   const binding = { worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: newId, incarnationId: 'inc-new' }
   expect(
-    await store.persistPtyBinding(
-      { ...binding, expectedBinding: { ptyId: oldId, incarnationId: 'inc-old' } },
-      hostId
-    )
+    await store.persistPtyBinding({
+      ...binding,
+      expectedBinding: { ptyId: oldId, incarnationId: 'inc-old' }
+    })
   ).toBe(false)
   expect(
-    await store.persistPtyBinding(
-      swapReplacedPaneBinding(store, binding, replaced(oldId, hostId), hostId),
-      hostId
-    )
+    await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced(oldId)))
   ).toBe(true)
   expect(
-    store.getWorkspaceSession(hostId).terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
+    store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
   ).toBe(newId)
 }
 
@@ -69,38 +66,12 @@ it('swaps a local split pane whose renderer layout patch already dropped the sto
   ).toBe('sibling')
 })
 
-it('swaps an SSH pane whose terminated lease let the renderer clear withdraw the binding', async () => {
-  const { store } = await fixture()
-  const hostId = 'ssh:restart'
-  const oldId = 'ssh:restart@@remote-old'
-  await store.persistPtyBinding(
-    { worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: oldId, incarnationId: 'inc-old' },
-    hostId
-  )
-  store.upsertSshRemotePtyLease({
-    targetId: 'restart',
-    ptyId: 'remote-old',
-    worktreeId,
-    tabId,
-    leafId: TEST_LEAF_1,
-    state: 'attached'
-  })
-  // What the replacement stop records (finishPtyShutdown).
-  store.markSshRemotePtyLease('restart', 'remote-old', 'terminated')
-  const layouts = structuredClone(store.getWorkspaceSession(hostId).terminalLayoutsByTabId)
-  layouts[tabId].ptyIdsByLeafId = {}
-  store.patchWorkspaceSession({ terminalLayoutsByTabId: layouts }, hostId)
-  await expectSwapAfterRendererClear(store, oldId, 'ssh:restart@@remote-new', hostId)
-})
-
 it('refuses the swap when another owner holds the leaf', async () => {
   const { store } = await fixture()
   await store.persistPtyBinding({ worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: 'successor' })
   const binding = { worktreeId, tabId, leafId: TEST_LEAF_1, ptyId: 'new' }
   expect(
-    await store.persistPtyBinding(
-      swapReplacedPaneBinding(store, binding, replaced('old'), undefined)
-    )
+    await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced('old')))
   ).toBe(false)
   expect(
     store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]

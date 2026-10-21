@@ -5,19 +5,15 @@
 // working status, teardown, or the idle sweep.
 
 import type Database from '../../sqlite/sync-database'
-import type {
-  AgentJournalCursor,
-  AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../shared/agent-session-host-authority'
-import type { JournalHostDatabase } from './journal-host-database'
-import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt } from './journal-row-writer'
-import type { JournalSubmissionConsume } from './journal-store-contracts'
+import { writeReceiptIfChanged, type JournalOperationReceipt } from './journal-row-writer'
+import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import { holdQueuedMessages } from './queued-message-holds'
 import {
   deriveQueuePauses,
@@ -41,36 +37,22 @@ import { moveQueuedMessages, type QueuedMessagePositionMove } from './queued-mes
 import { pruneQueuedMessages, retainedSubmissionVerdict } from './queued-message-retention'
 import {
   queuedMessageSettlementOwed,
+  queuedMessagesAwaitReopenMark,
   settleOwedQueuedMessages,
   settleQueuedMessagesForRow
 } from './queued-message-settlement'
 import { AgentSessionJournalError, assertJournalWritable } from './journal-write-guards'
-import type { JournalAttachmentClaim } from './journal-submission-hook'
-import type { JournalWriteBody, JournalWriteResult } from './journal-write-queue'
+import type { JournalWriteResult } from './journal-write-queue'
+import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+import { QueuedMessageEditLeases } from './queued-message-edit-leases'
+import { updateQueuedMessage, type QueuedMessageUpdate } from './queued-message-update'
 
 /** Tombstones must outlive the window in which their operation id could still be admitted as new. */
 export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 
-export type JournalQueuedMessagesDeps = {
-  sessionId: string
-  now: () => number
-  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
-  database: () => JournalHostDatabase
-  readOnly: () => boolean
-  state: () => JournalReducerState
-  /** Where the reopen's pause begins when this handle could not mark it (`reopenFloor`). */
-  reopenFloor: () => AgentJournalCursor | null
-  /** The journal's own commit notification. Every standalone draft-table
-   *  transaction that changed rows fires it after COMMIT, so a draft or hold
-   *  change publishes and wakes the drain through the same path a journal row
-   *  does — no call site can forget. In-transaction consume and the returned
-   *  transition already ride their row's own commit. */
-  committed: () => void
-  claimAttachments: JournalAttachmentClaim
-}
-
 export class JournalQueuedMessages {
+  readonly editLeases = new QueuedMessageEditLeases(() => this.list())
   /** Bumped on every draft-table write, so publication memos recompute only when they must. */
   private changeRevision = 0
   private listed: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
@@ -106,25 +88,35 @@ export class JournalQueuedMessages {
     return getQueuedMessage(this.deps.database().db, this.deps.sessionId, messageId)
   }
 
+  /** An in-place edit; a changed card spends every edit lease on its old body. Only uploads the
+   *  old body did not name must still be stored, so a swept kept image never blocks a text fix. */
+  update(input: QueuedMessageUpdate): Promise<ReturnType<typeof updateQueuedMessage>> {
+    return this.transact(
+      (db) =>
+        updateQueuedMessage(db, this.deps.sessionId, input, (body, previous) =>
+          this.deps.claimAttachments(db, body, true, previous)
+        ),
+      (result) => result.status === 'updated',
+      undefined,
+      () => this.editLeases.retire(input.messageId)
+    )
+  }
+
   /** Replay receipts for one caller-scoped operation key. */
   receipts(settledByOp: string): QueuedMessageRow[] {
     return queuedMessagesSettledByOp(this.deps.database().db, this.deps.sessionId, settledByOp)
   }
 
-  /** `carriedFrom`: a /clear's carry. The card is its own 'cleared' pause, so it lands paused;
-   *  `holdReason` carries a hold of its own over with it.
-   *  `requireAttachments`: a client's own draft, refused whole when an attachment it names is no
-   *  longer stored; the host's own writes (the carry) claim best effort.
-   *  `receipt`: the send's ledger answer, committed with the draft only when this inserts it. */
+  /** Attachments and the send receipt commit with the card. */
   insert(
     input: {
       messageId: string
       body: AgentJournalMessageItem
       fingerprint: string
       hostInstance: string
-      carriedFrom?: string
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
+      options?: AgentSessionExecutionOptions
     },
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {
@@ -148,11 +140,10 @@ export class JournalQueuedMessages {
           queuedAt: { epoch, sequence: lastSequence },
           now: this.deps.now()
         })
-        receipt?.write(db)
         return row
       },
       () => inserted,
-      receipt?.committed
+      receipt
     )
   }
 
@@ -171,17 +162,9 @@ export class JournalQueuedMessages {
     return this.derivePauses(this.list())
   }
 
-  /** A card waits, or is mid-hand-off and may come back to waiting: a chat that stops running
-   *  marks it (`AgentSessionJournal.markQueueReopen`). */
+  /** `queuedMessagesAwaitReopenMark`. */
   awaitReopenMark(): boolean {
-    const { submissions } = this.deps.state()
-    return this.list().some((row) => {
-      if (row.state === 'waiting') {
-        return true
-      }
-      const handOff = row.consumedAs ? submissions.get(row.consumedAs)?.dispatchState : undefined
-      return row.state === 'dispatched' && (handOff === 'pending' || handOff === 'unknown')
-    })
+    return queuedMessagesAwaitReopenMark(this.list(), this.deps.state().submissions)
   }
 
   /** The person's Stop still pausing the queue, if any (`journalUserStopInForce`). */
@@ -222,11 +205,11 @@ export class JournalQueuedMessages {
   }
 
   /** Compare-and-transition waiting ∪ returned rows to op-stamped tombstones,
-   *  kept only so a replay of the settling operation answers "spent". */
-  withdraw(input: {
-    messageIds: readonly string[]
-    settledByOp: string
-  }): Promise<QueuedMessageRow[]> {
+   *  kept only so a replay of the settling operation answers "spent". `receipt`: with a withdrawal. */
+  withdraw(
+    input: { messageIds: readonly string[]; settledByOp: string },
+    receipt?: JournalOperationReceipt
+  ): Promise<QueuedMessageRow[]> {
     if (input.messageIds.length === 0) {
       // Delete races and empty carries land here; neither may cost a write transaction.
       return Promise.resolve([])
@@ -238,21 +221,39 @@ export class JournalQueuedMessages {
           sessionId: this.deps.sessionId,
           now: this.deps.now()
         }),
-      (withdrawn) => withdrawn.length > 0
+      (withdrawn) => withdrawn.length > 0,
+      receipt
     )
   }
 
-  /** One standalone draft-table transaction on the journal's queue; one that
-   *  changed rows bumps the revision and notifies after COMMIT, `adopted` first. */
+  /** Withdraw commands with the clear's divider and receipt on the same connection. */
+  withdrawInTransaction(
+    db: Database.Database,
+    input: { messageIds: readonly string[]; settledByOp: string }
+  ): void {
+    if (this.deps.database().db !== db) {
+      throw new AgentSessionJournalError('journal_closed', 'withdraw crossed database handles')
+    }
+    this.changeRevision += withdrawQueuedMessages(db, {
+      ...input,
+      sessionId: this.deps.sessionId,
+      now: this.deps.now()
+    }).length
+  }
+
+  /** One standalone draft-table transaction on the journal's queue; one that changed rows commits
+   *  `receipt` with them, bumps the revision and notifies after COMMIT, receipt and `adopted` first. */
   private transact<T>(
     run: (db: Database.Database) => JournalWriteResult<T>,
     changed: (result: T) => boolean,
+    receipt?: JournalOperationReceipt,
     adopted?: () => void
   ): Promise<T> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const result = this.deps.database().transaction(run)
+      const result = this.deps.database().transaction(writeReceiptIfChanged(run, changed, receipt))
       if (changed(result)) {
+        receipt?.committed()
         adopted?.()
         this.changeRevision++
         this.deps.committed()
@@ -277,7 +278,7 @@ export class JournalQueuedMessages {
    *  throws so the whole append — draft transition AND submission row — rolls back. */
   consumeInTransaction(
     db: Database.Database,
-    input: JournalSubmissionConsume & { consumedAs: string }
+    input: JournalSubmissionConsume & { consumedAs: string; fingerprint: string }
   ): void {
     const { db: own } = this.deps.database()
     if (own !== db) {
@@ -290,7 +291,8 @@ export class JournalQueuedMessages {
       // this guards any pause-relevant row written off that lane from overtaking a held card.
       const cards = listQueuedMessages(db, this.deps.sessionId)
       const pauses = this.derivePauses(cards)
-      if (nextSendableQueuedCard(pauses, cards)?.messageId !== input.messageId) {
+      const held = this.editLeases.heldIds(cards)
+      if (nextSendableQueuedCard(pauses, cards, held)?.messageId !== input.messageId) {
         throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
       }
     }
@@ -367,15 +369,5 @@ export class JournalQueuedMessages {
       },
       (changed) => changed > 0
     ).then(() => undefined)
-  }
-}
-
-export class QueuedMessageNotConsumableError extends Error {
-  constructor(
-    readonly messageId: string,
-    readonly expected: 'waiting' | 'returned'
-  ) {
-    super(`queued message ${messageId} is no longer ${expected}`)
-    this.name = 'QueuedMessageNotConsumableError'
   }
 }

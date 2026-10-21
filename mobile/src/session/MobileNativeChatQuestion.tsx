@@ -187,7 +187,8 @@ export function MobileNativeChatQuestion({
             selectionColor={colors.accentBlue}
             onSubmitEditing={submitFreeText}
             returnKeyType="send"
-            multiline={question.freeTextInput?.multiline ?? true}
+            // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
+            multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
           />
           <Pressable
             accessibilityLabel="Send reply"

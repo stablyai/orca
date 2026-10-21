@@ -1,14 +1,11 @@
-// Scrolling a transcript element to the top of the viewport, and knowing while
-// that scroll is still travelling: rows it passes resize under it, so nothing
-// short of the view reaching its target says the jump is over.
+// Instant jumps still settle as virtualized rows are measured; retain the target until arrival.
 
 import { useCallback, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
 /** How close to its target a jump counts as arrived: sub-pixel and zoom rounding. */
-const ALIGN_ARRIVED_PX = 2
+export const ALIGN_ARRIVED_PX = 2
 
 /** Distance from a container's scroll origin down to a descendant, in the
  *  container's own scroll pixels, or null when there is no chain to walk.
@@ -55,10 +52,9 @@ export function useNativeChatViewportAlign({
   isAlignPending: () => boolean
   /** Another write, or the reader, took the scroll. */
   endAlign: () => void
-  /** Whether the view is still the jump's: travelling, or resting where it landed. */
+  /** Whether the view is still the jump's: settling, or resting where it landed. */
   isAlignHeld: () => boolean
 } {
-  const alignBehavior = usePrefersReducedMotion() ? 'auto' : 'smooth'
   /** The row or offset `alignToViewportTop` scrolled to, until something else takes the scroll. */
   const alignRef = useRef<(({ index: number } | { offset: number }) & { arrived: boolean }) | null>(
     null
@@ -75,17 +71,16 @@ export function useNativeChatViewportAlign({
       // Through the virtualizer so a scroll it is still reconciling — the jump
       // that mounted this row in the first place — is replaced rather than raced.
       if (virtualizer.scrollElement && !Number.isNaN(index)) {
-        // By index for a row: rows measured on the way move the target, and the
-        // virtualizer re-aims at an index where a fixed offset would land beside it.
+        // Target the row's index so measurements can correct its landing offset.
         alignRef.current = { index, arrived: false }
-        virtualizer.scrollToIndex(index, { align: 'start', behavior: alignBehavior })
+        virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' })
         return
       }
       const top =
         nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)
       alignRef.current = { offset: top, arrived: false }
       if (virtualizer.scrollElement) {
-        virtualizer.scrollToOffset(top, { align: 'start', behavior: alignBehavior })
+        virtualizer.scrollToOffset(top, { align: 'start', behavior: 'auto' })
         return
       }
       const max = Math.max(0, container.scrollHeight - container.clientHeight)
@@ -93,9 +88,9 @@ export function useNativeChatViewportAlign({
       if (container.scrollTop !== landing) {
         programmaticScrollMarks.mark(landing)
       }
-      container.scrollTo({ top, behavior: alignBehavior })
+      container.scrollTo({ top, behavior: 'auto' })
     },
-    [alignBehavior, finishReaderTakeover, programmaticScrollMarks, scrollRef, virtualizer]
+    [finishReaderTakeover, programmaticScrollMarks, scrollRef, virtualizer]
   )
 
   // Read from where the view is, not from a landing event: a stale mark or a

@@ -96,7 +96,7 @@ export async function getBranchCompare(
 
   try {
     // Git must confirm equal raw tips are the same commit before skipping the reads.
-    if (baseOid === headOid && mergeBase === headOid) {
+    if (baseOid === headOid && summary.mergeBase === headOid) {
       options.signal?.throwIfAborted()
       summary.commitsAhead = 0
       summary.commitsBehind = 0

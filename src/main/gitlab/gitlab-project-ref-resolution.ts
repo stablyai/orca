@@ -4,7 +4,6 @@ import { shouldProbeGitRemote } from '../git/remote-name-listing'
 import { addWslEnvKeys } from '../wsl-env'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
@@ -75,13 +74,9 @@ export async function getProjectRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  // Why: a reconnect replaces the host an answer came from under the same id, so
-  // the generation is part of the signature; `knownHosts` carries the glab auth
-  // state, so logging into a self-hosted instance re-asks rather than reusing a
-  // ref resolved while that host was unknown.
-  const runtimeKey = connectionId
-    ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
-    : `local:${localGitOptions.wslDistro ?? 'host'}`
+  // Why: `knownHosts` carries the glab auth state, so logging into a self-hosted
+  // instance re-asks rather than reusing a ref resolved while that host was unknown.
+  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
   const cached = projectRefCache.get(cacheKey)
   if (cached) {

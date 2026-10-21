@@ -2,7 +2,7 @@ import {
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
   normalizeExecutionHostId,
-  parseExecutionHostId,
+  isLocalExecutionHost,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
@@ -26,7 +26,7 @@ export function getHostContextLabel(
   if (override) {
     return override
   }
-  if (parseExecutionHostId(hostId)?.kind === 'local') {
+  if (isLocalExecutionHost(hostId)) {
     // An explicit null means the paired host platform is unknown (mobile); an
     // omitted platform means use the current process (desktop).
     if (sources.hostPlatform === null) {
@@ -40,10 +40,14 @@ export function getHostContextLabel(
 }
 
 /**
- * Build labels for SSH targets and apply persisted display-name overrides.
- * Target summaries have appeared both as raw target ids and canonical `ssh:` ids
- * across protocol versions, so accept either representation.
+ * The host id an SSH target summary names. Summaries have carried both raw target ids and
+ * canonical `ssh:` ids across protocol versions, so accept either representation.
  */
+export function sshTargetSummaryHostId(targetId: string): ExecutionHostId {
+  return normalizeExecutionHostId(targetId) ?? toSshExecutionHostId(targetId)
+}
+
+/** Build labels for SSH targets and apply persisted display-name overrides. */
 export function buildHostLabelById(args: {
   sshTargets: readonly { id: string; label: string }[]
   hostSettingOverrides: unknown
@@ -54,10 +58,7 @@ export function buildHostLabelById(args: {
     if (!target.id.trim() || !label) {
       continue
     }
-    const hostId = normalizeExecutionHostId(target.id) ?? toSshExecutionHostId(target.id)
-    if (hostId) {
-      labels.set(hostId, label)
-    }
+    labels.set(sshTargetSummaryHostId(target.id), label)
   }
   const overrides =
     args.hostSettingOverrides && typeof args.hostSettingOverrides === 'object'

@@ -1,4 +1,10 @@
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
+import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
+import type {
+  IPtyProvider,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
@@ -8,9 +14,10 @@ import { createPtySpawnTiming } from '../../pty-spawn-timing'
 import { noCodexResumeLaunch, type CodexResumeLaunch } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
-import type { ReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { localProvider } from '../provider/registry'
 import type { AdoptStablePaneResult, PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
+import type { PaneAgentLaunch } from './spawn-agent-launch-end'
 
 export type PtyIpcSpawnState = {
   deps: PtySpawnIpcDeps
@@ -29,16 +36,22 @@ export type PtyIpcSpawnState = {
   replacedPaneOwner: ReplacedPaneOwner | null
   finishTerminalInstall: () => void
   result: PtySpawnResult
+  paneSpawnOperation?: PaneSpawnOperation
   stablePaneOwner: StablePaneOwner | null
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
+  pendingRegistrationClaim?: PtyRegistrationClaim
   reconciledSnapshotSeq: number | null
   snapshotKittyFlagsCoverReconciledSeq: boolean
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   provider: IPtyProvider
   preAdoptedStablePane: AdoptStablePaneResult | null
+  /** The agent launch this pane's spawn admitted, until the spawn ends it. */
+  paneAgentLaunch: PaneAgentLaunch | null
+  /** The new process exited before it registered; the pane drains it. */
+  exitedBeforeRegistration: boolean
   isClaudeLaunch: boolean
   claudeAuth: ClaudeRuntimeAuthPreparation | null
   terminalRuntimeOptions: {
@@ -49,7 +62,6 @@ export type PtyIpcSpawnState = {
   isMintedSessionId: boolean
   effectiveSessionId: string | undefined
   effectiveSessionAppId: string | undefined
-  effectiveSessionRelayId: string | undefined
   expectedWslDistro: string | null
   baseEnv: Record<string, string> | undefined
   effectiveLaunchConfig: SleepingAgentLaunchConfig | undefined
@@ -118,6 +130,8 @@ export function createPtyIpcSpawnState(
     releaseWorktreeSpawn: undefined,
     provider: localProvider,
     preAdoptedStablePane: null,
+    paneAgentLaunch: null,
+    exitedBeforeRegistration: false,
     isClaudeLaunch: false,
     claudeAuth: null,
     terminalRuntimeOptions: {},
@@ -125,7 +139,6 @@ export function createPtyIpcSpawnState(
     isMintedSessionId: false,
     effectiveSessionId: undefined,
     effectiveSessionAppId: undefined,
-    effectiveSessionRelayId: undefined,
     expectedWslDistro: null,
     baseEnv: undefined,
     effectiveLaunchConfig: undefined,

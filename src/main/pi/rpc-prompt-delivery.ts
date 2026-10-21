@@ -1,4 +1,8 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic,
+  type SubmissionRejectionFact
+} from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
@@ -11,6 +15,8 @@ type Submission = {
   bytes: number
   accepted: boolean
   retries: number
+  /** Pi's last sign-in refusal, while the prompt waits to be re-sent. */
+  signInRefusal?: string
 }
 type DeliveryDeps = {
   send: (frame: JsonlRpcRecord) => Promise<void>
@@ -24,6 +30,20 @@ type DeliveryDeps = {
 }
 
 /** Idless prompt acknowledgements are FIFO and may wait indefinitely on extension dialogs. */
+export function piRpcFailureFact(error: string) {
+  return agentSessionFailureFact(
+    error.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
+    { detail: providerDiagnostic(error, 'person') }
+  )
+}
+
+function piRejection(fact: SubmissionRejectionFact): AgentSessionDispatchOutcome {
+  return {
+    state: 'rejected',
+    ...agentSessionFailureWords(fact, { agentName: 'Pi', surface: 'rejection' })
+  }
+}
+
 export class PiRpcPromptDelivery {
   private readonly acknowledgements: Submission[] = []
   private readonly waiting: Submission[] = []
@@ -91,11 +111,10 @@ export class PiRpcPromptDelivery {
       throw new Error('Pi prompt reply has no request')
     }
     if (!reply.success) {
-      if (
-        !submission.accepted &&
-        reply.error?.startsWith('No API key found for ') &&
-        submission.retries++ < 8
-      ) {
+      const error = reply.error ?? 'Pi rejected the prompt'
+      const fact = piRpcFailureFact(error)
+      if (!submission.accepted && fact.kind === 'notSignedIn' && submission.retries++ < 8) {
+        submission.signInRefusal = error
         this.removeWaiting(submission)
         const timer = setTimeout(() => {
           this.retries.delete(timer)
@@ -107,6 +126,7 @@ export class PiRpcPromptDelivery {
             this.deps.failed(new Error('Pi retry lost its unaccepted prompt'))
             return
           }
+          submission.signInRefusal = undefined
           this.acknowledgements.push(submission)
           this.waiting.push(submission)
           void this.deps
@@ -120,16 +140,14 @@ export class PiRpcPromptDelivery {
         return
       }
       this.remove(submission)
-      const fact = agentSessionFailureFact(
-        reply.error?.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
-        { detail: providerDiagnostic(reply.error ?? 'Pi rejected the prompt', 'person') }
-      )
-      this.deps.settled(submission.id, {
-        state: 'rejected',
-        ...agentSessionFailureWords(fact, { agentName: 'Pi', surface: 'rejection' })
-      })
+      // Pi checks sign-in before it records a prompt (0.84.0 onward), so this one never reached it.
+      const settledFact =
+        fact.kind === 'notSignedIn' && !submission.accepted
+          ? { ...fact, neverReachedAgent: true as const }
+          : fact
+      this.deps.settled(submission.id, piRejection(settledFact))
       if (submission.accepted) {
-        this.deps.rejectedAfterAcceptance(reply.error ?? 'Pi rejected the prompt')
+        this.deps.rejectedAfterAcceptance(error)
       } else {
         this.deps.refused?.()
       }
@@ -150,7 +168,13 @@ export class PiRpcPromptDelivery {
     }
     this.retries.clear()
     for (const submission of this.pending) {
-      if (!submission.accepted) {
+      // Waiting out a sign-in refusal, not yet re-sent: every reply so far proved Pi never had it.
+      if (submission.signInRefusal !== undefined) {
+        this.deps.settled(
+          submission.id,
+          piRejection({ ...piRpcFailureFact(submission.signInRefusal), neverReachedAgent: true })
+        )
+      } else if (!submission.accepted) {
         this.deps.settled(submission.id, {
           state: 'unknown',
           reason: 'Pi ended before confirming delivery'

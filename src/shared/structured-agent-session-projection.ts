@@ -39,6 +39,8 @@ import { sha256 } from './sha256'
 import { readAgentMessageSource } from './agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
+import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'
+import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 
 // Re-exported so the live-turn readers' and the unanswered-send rule's existing consumers keep one
 // import site.
@@ -48,8 +50,19 @@ export {
 } from './structured-agent-session-live-turn'
 export { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
-function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
-  return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
+/** A tool's output as its result block. Only a cut the sent copy made has more behind it; a head an
+ *  older build saved has none, so only that cut names the item to fetch. */
+function toolResult(
+  item: AgentJournalRenderItem,
+  payload: { head: string; truncated: boolean; byteLength: number },
+  callId: string | undefined
+) {
+  return {
+    type: 'tool-result' as const,
+    output: payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head,
+    callId,
+    ...(item.shortened && payload.truncated ? { fullOutputItemId: item.itemId } : {})
+  }
 }
 
 /** The markers a clipped payload carries in its own text, anchored to the end
@@ -81,10 +94,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
     // The call and its output are one journal row, so the result names its call.
     const { callId } = call
     if (body.kind === 'diff') {
-      return {
-        role: 'assistant',
-        blocks: [call, { type: 'tool-result', output: boundedText(body.patch), callId }]
-      }
+      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, callId)] }
     }
     return {
       role: 'assistant',
@@ -93,11 +103,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
         ...(body.output
           ? [
               {
-                type: 'tool-result' as const,
-                output: boundedText(body.output),
+                ...toolResult(item, body.output, callId),
                 // Output a call left when it was cut short is not an error it reported.
-                isError: agentJournalToolCallLifecycle(body) === 'failed',
-                callId
+                isError: agentJournalToolCallLifecycle(body) === 'failed'
               }
             ]
           : [])
@@ -133,7 +141,10 @@ function itemBlocks(item: AgentJournalRenderItem): {
   if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
-  return { role: 'system', blocks: [structuredAgentSessionStatusBlock(body, item.turnScope)] }
+  return {
+    role: 'system',
+    blocks: [structuredAgentSessionStatusBlock(body, item.turnScope, item.itemId)]
+  }
 }
 
 function isAgentJournalMessageSendMode(value: string): value is AgentJournalMessageSendMode {
@@ -197,7 +208,8 @@ export function projectStructuredItemToNativeChat(
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
         ...lifecycle,
         ...(command ? { command } : {}),
-        ...(from && projected.role === 'user' ? { from } : {})
+        ...(from && projected.role === 'user' ? { from } : {}),
+        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
       }
     : null
   projectedItems.set(item, message)
@@ -210,22 +222,32 @@ export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
-function isPendingStructuredAgentSessionPrompt(item: AgentJournalRenderItem): boolean {
-  return (
+/** A prompt waiting on the user, unless the host's scope says an ended generation raised it:
+ *  nothing can take its answer. */
+function pendingStructuredAgentSessionPrompt(
+  scope?: StructuredAgentSessionWorkScope
+): (item: AgentJournalRenderItem) => boolean {
+  return (item) =>
     (item.body.kind === 'approval' || item.body.kind === 'question') &&
-    item.body.resolution.state === 'pending'
-  )
+    item.body.resolution.state === 'pending' &&
+    (!scope || scope.isCurrentItem(item.itemId))
 }
 
+/** `scope`: a host's (`StructuredAgentSessionWorkScope`), so work an ended generation left neither
+ *  holds nor reads as Working. */
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  currentFence?: number | null
+  currentFence?: number | null,
+  scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
-  if (items.some(isPendingStructuredAgentSessionPrompt)) {
+  ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
+  if (items.some(pendingStructuredAgentSessionPrompt(scope))) {
     return 'attention'
   }
-  return owesStructuredAgentSessionWork(items, submissions, currentFence) ? 'working' : 'idle'
+  return owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
+    ? 'working'
+    : 'idle'
 }
 
 /** The activity fields a sidebar row shows beside the prompt, named as the agent-status
@@ -264,7 +286,8 @@ export function projectStructuredAgentSessionStatusSummary(
 export function projectStructuredAgentSessionStatusState(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  currentFence?: number | null
+  currentFence?: number | null,
+  scope?: StructuredAgentSessionWorkScope
 ): {
   summary: StructuredAgentSessionStatusProjection
   latestRequest: StructuredAgentSessionLatestRequest | null
@@ -273,6 +296,7 @@ export function projectStructuredAgentSessionStatusState(
   /** Item ids of the approvals and questions waiting on the user: what makes the status `attention`. */
   pendingPromptIds: string[]
 } {
+  const latestPrompt = latestStructuredAgentSessionPrompt(items)
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
     return {
       summary: { status: null, latestPrompt: '' },
@@ -281,7 +305,8 @@ export function projectStructuredAgentSessionStatusState(
       pendingPromptIds: []
     }
   }
-  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
+  ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
+  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence, scope)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
   const toolName = statusToolCall
     ? normalizeOptionalField(statusToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
@@ -311,14 +336,15 @@ export function projectStructuredAgentSessionStatusState(
   )
   return {
     latestRequest,
-    owesWork: status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence),
+    owesWork:
+      status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
     pendingPromptIds:
       status === 'attention'
-        ? items.filter(isPendingStructuredAgentSessionPrompt).map((item) => item.itemId)
+        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
         : [],
     summary: {
       status,
-      latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
+      latestPrompt: normalizePromptField(latestPrompt),
       ...(toolName ? { toolName } : {}),
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),

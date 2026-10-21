@@ -23,17 +23,28 @@ vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/tmp/orca-user-data',
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
+const launchOrder = vi.hoisted((): string[] => [])
 vi.mock('../runtime/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
-    start = vi.fn(async () => {})
+    start = vi.fn(async () => {
+      launchOrder.push('rpc-start')
+    })
     setOnUnpairedDeviceAuthFailure = vi.fn()
+    setMobileDesktopRelayHosts = vi.fn()
   }
 }))
-vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
-vi.mock('../ipc/pty', () => ({
-  getLocalPtyProvider: vi.fn(),
-  registerHeadlessPtyRuntime: vi.fn()
+vi.mock('../runtime/headless-runtime-graph', () => ({ publishHeadlessRuntimeGraph: vi.fn() }))
+vi.mock('./headless-serve-ssh-registration', () => ({
+  registerHeadlessServeSshHandlers: vi.fn(() => {
+    launchOrder.push('ssh-registered')
+  })
 }))
+vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
+vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', () => ({
+  createRuntimeEnvironmentMobileRelayHosts: vi.fn()
+}))
+vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
+vi.mock('../ipc/pty/register-headless-runtime', () => ({ registerHeadlessPtyRuntime: vi.fn() }))
 vi.mock('../providers/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
 vi.mock('../browser/offscreen-browser-backend', () => ({ OffscreenBrowserBackend: class {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
@@ -41,7 +52,7 @@ vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
   publishDesktopRelayStatus: vi.fn()
 }))
-vi.mock('../runtime/relay/desktop-relay-service', () => ({ DesktopRelayService: class {} }))
+vi.mock('./main-process-relay-startup', () => ({ startDesktopRelayService: vi.fn() }))
 vi.mock('./main-process-serve', () => ({
   getServeOptions: vi.fn(() => null),
   getBundledWebClientRoot: vi.fn(() => null),
@@ -66,6 +77,7 @@ vi.mock('./windows-install-dir-acl-recovery', () => ({
   })
 }))
 vi.mock('./serve-signal-handlers', () => ({ registerServeSignalHandlers: vi.fn() }))
+vi.mock('./serve-native-quit-guard', () => ({ installServeNativeQuitGuard: vi.fn() }))
 vi.mock('../runtime/runtime-rpc-startup-failure', () => ({
   recordRuntimeRpcStartFailure: vi.fn(),
   showRuntimeRpcStartupFailureDialog: vi.fn()
@@ -78,6 +90,8 @@ vi.mock('../ipc/startup-notification-registration', () => ({
 }))
 vi.mock('./main-process-push-startup', () => ({ startDesktopPushService: vi.fn() }))
 vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
+const setupHeadlessServeAutoUpdater = vi.hoisted(() => vi.fn())
+vi.mock('../window/main-window-updater', () => ({ setupHeadlessServeAutoUpdater }))
 vi.mock('../server/serve-stdout-boundary', () => ({ emitServeBrowserIdentityActionLine: vi.fn() }))
 vi.mock('../browser/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn()
@@ -88,6 +102,14 @@ vi.mock('../window/foreground-activation-policy', () => ({
   isWindowlessLaunch: () => false,
   showWindowWithoutStealingFocus
 }))
+vi.mock('../tray/system-tray', () => ({
+  createSystemTray: vi.fn(),
+  setMacMenuBarIconVisible: vi.fn()
+}))
+vi.mock('../window/attach-main-window-services', () => ({ ensureAutoUpdaterConfigured: vi.fn() }))
+vi.mock('../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
+vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
+vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 
 vi.mock('./main-process-ready-foundation', () => ({
   initializeReadyFoundation: vi.fn(async () => {})
@@ -104,6 +126,11 @@ const { mainProcessState: state } = await import('./main-process-state')
 const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
 const { focusExistingMainWindow } = await import('../window/focus-existing-window')
 const { AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS } = await import('./agent-launch-record-warmup')
+const { getServeOptions } = await import('./main-process-serve')
+const { registerServeSignalHandlers } = await import('./serve-signal-handlers')
+const { installServeNativeQuitGuard } = await import('./serve-native-quit-guard')
+const { quitProcess } = await import('./process-quit-request')
+const { quitFromUserCommand } = await import('./main-window-actions')
 
 type FakeWindow = {
   id: number
@@ -255,5 +282,96 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(state.desktopActivationGate).toBeNull()
+  })
+
+  it('loads SSH targets on a windowless serve before paired clients can connect (#25886)', async () => {
+    launchOrder.length = 0
+    state.isServeMode = true
+    vi.mocked(getServeOptions).mockReturnValueOnce({
+      json: false,
+      pairingAddress: null,
+      noPairing: true,
+      mobilePairing: false,
+      grantDesktopControl: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+    Object.assign(state.runtime!, {
+      refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
+      reconcileLegacyWorkerTerminals: vi.fn(async () => {})
+    })
+
+    await initializeMainProcessReady({
+      openMainWindow: () => {
+        throw new Error('serve must not open a window')
+      },
+      handleMacAppActivation: vi.fn()
+    })
+
+    expect(windows).toHaveLength(0)
+    expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
+    // Signals mark their quit, so the macOS native-quit guard lets them through (#15537).
+    expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
+    expect(installServeNativeQuitGuard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: process.platform,
+        closeDesktopWindows: quitFromUserCommand
+      })
+    )
+  })
+  it('saves Codex auth before a headless serve update restart, like the desktop does', async () => {
+    setupHeadlessServeAutoUpdater.mockClear()
+    state.isServeMode = true
+    vi.mocked(getServeOptions).mockReturnValueOnce({
+      json: false,
+      pairingAddress: null,
+      noPairing: true,
+      mobilePairing: false,
+      grantDesktopControl: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+    Object.assign(state.runtime!, {
+      refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
+      reconcileLegacyWorkerTerminals: vi.fn(async () => {})
+    })
+    const order: string[] = []
+    const store = {
+      flushPendingOrThrowAsync: vi.fn(async (options?: { fullCheckpoint?: boolean }) => {
+        order.push(options?.fullCheckpoint ? 'store-checkpoint' : 'store-flush')
+      })
+    }
+    const codexRuntimeHome = {
+      syncForCurrentSelection: vi.fn(() => {
+        order.push('codex-auth')
+      }),
+      syncActiveWslSelectionsBeforeRestart: vi.fn(async () => {})
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update restart hook only flushes the store.
+    state.store = store as unknown as NonNullable<typeof state.store>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update restart hook only calls the two sync methods.
+    state.codexRuntimeHome = codexRuntimeHome as unknown as NonNullable<
+      typeof state.codexRuntimeHome
+    >
+    try {
+      await initializeMainProcessReady({
+        openMainWindow: () => {
+          throw new Error('serve must not open a window')
+        },
+        handleMacAppActivation: vi.fn()
+      })
+
+      expect(setupHeadlessServeAutoUpdater).toHaveBeenCalledTimes(1)
+      const hooks = setupHeadlessServeAutoUpdater.mock.calls[0][1]
+      expect(hooks.onBeforeUpdateQuitFailure).toBe('abort')
+      await hooks.onBeforeUpdateQuit()
+      expect(codexRuntimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
+      expect(codexRuntimeHome.syncActiveWslSelectionsBeforeRestart).toHaveBeenCalledTimes(1)
+      expect(order.at(0)).toBe('codex-auth')
+      expect(order.at(-1)).toBe('store-checkpoint')
+    } finally {
+      state.store = null
+      state.codexRuntimeHome = null
+    }
   })
 })

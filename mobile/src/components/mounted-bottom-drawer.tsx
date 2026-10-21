@@ -1,6 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { View, Pressable, useWindowDimensions, ScrollView, Keyboard, Modal } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
@@ -17,8 +16,12 @@ import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
-import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
+import {
+  useBottomDrawerModalHost,
+  useBottomDrawerModalHostBackClaim
+} from './bottom-drawer-modal-host-scope'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import { hostOs } from '../platform/host-os'
@@ -44,6 +47,8 @@ export type MountedBottomDrawerProps = {
   // preserved) but must not take touches, stack backdrops, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
+  /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
+  scrollResetKey?: string | null
 }
 
 export function MountedBottomDrawer({
@@ -55,12 +60,20 @@ export function MountedBottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
-  zIndex = 1000
+  zIndex = 1000,
+  scrollResetKey = null
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
+  const scrollRef = useRef<ScrollView>(null)
+  useEffect(() => {
+    if (scrollResetKey !== null) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+      scrollOffsetY.value = 0
+    }
+  }, [scrollOffsetY, scrollResetKey])
   const contentDragStartY = useSharedValue(0)
   const contentDragCanDismiss = useSharedValue(false)
   // Why: fill mode needs the keyboard inset in React layout (not only the
@@ -68,12 +81,12 @@ export function MountedBottomDrawer({
   // edge stays under the status bar.
   const [keyboardInset, setKeyboardInset] = useState(0)
   const { height: screenHeight } = useWindowDimensions()
-  const insets = useSafeAreaInsets()
+  const insets = useWindowSafeAreaInsets()
   // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
-  const insideModalHost = useInsideBottomDrawerModalHost()
+  const insideModalHost = useBottomDrawerModalHost() !== null
   const fillHeight = fillAvailable
     ? resolveBottomDrawerFillHeight({
         screenHeight,
@@ -202,6 +215,7 @@ export function MountedBottomDrawer({
         }
       : null
   )
+  useBottomDrawerModalHostBackClaim(visible && interactive ? dismiss : null)
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
@@ -332,9 +346,10 @@ export function MountedBottomDrawer({
     <>
       {handle}
       <GestureDetector gesture={contentPanGesture}>
-        <Animated.View collapsable={false}>
+        <Animated.View collapsable={false} style={styles.scrollFrame}>
           <GestureDetector gesture={scrollGesture}>
             <Animated.ScrollView
+              ref={scrollRef}
               bounces={false}
               keyboardShouldPersistTaps="handled"
               onScroll={scrollHandler}
@@ -351,6 +366,7 @@ export function MountedBottomDrawer({
     <>
       {handle}
       <ScrollView
+        ref={scrollRef}
         bounces={false}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -376,7 +392,14 @@ export function MountedBottomDrawer({
           {interactive ? <Pressable style={styles.backdropPressable} onPress={dismiss} /> : null}
         </Animated.View>
 
-        <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
+        <View
+          style={[
+            styles.anchor,
+            isWideLayout && styles.anchorWide,
+            { paddingLeft: insets.left, paddingRight: insets.right }
+          ]}
+          pointerEvents="box-none"
+        >
           <Animated.View
             // Why: remount per window hand-back — see the windowEpoch effect.
             key={windowEpoch}

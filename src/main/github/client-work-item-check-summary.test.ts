@@ -47,7 +47,9 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: vi.fn(() => true)
 }))
 
-import { getWorkItem, _resetMergeQueueCacheForTests, _resetOwnerRepoCache } from './client'
+import { getWorkItem } from './client/fetch/get-work-item'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
 // Why: only `pr view` is fixtured; the merge-metadata fan-out is best-effort and must not mask the summary.

@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -8,21 +7,25 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
+import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
-import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import {
-  committedClearOfCaller,
-  conversationCommandBlocked
-} from './structured-conversation-command-admission'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+  runAfterRewindStart,
+  type ReadyOperationSelection
+} from './structured-agent-session-ready-operation'
+import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
-import { carryQueuedMessagesToClearReplacement } from './structured-agent-session-queued-mutations'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import {
+  providerContextBoundaryForClear,
+  type AgentSessionConversationClear
+} from '../../runtime/agent-session-conversation-command-record'
 
 /** A command's `error` is the sentence its row shows. */
 export function conversationCommandFailure(
@@ -39,55 +42,33 @@ export function conversationCommandFailure(
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
+  /** /compact only: wait as a card while the agent works, as a queued send does. /clear is refused
+   *  instead for now: the queue only hands cards to the agent, and a clear is host work (stop the
+   *  agent, reset its context), so queueing it would need the drain to run host commands. */
+  delivery?: 'queue-if-active'
+  /** Host-local, set by the client-facing command RPC as for an ordinary send. */
+  userSend?: true
 }
-export type ConversationReplacement = {
-  sourceSessionId: string
-  sessionId: string
-  workspaceId: string
-  agent: StructuredAgentId
-}
-
-const clearFingerprintOf = (sessionId: string) =>
-  computeAgentSessionPayloadFingerprint({
-    method: 'agentSession.conversationCommand',
-    sessionId,
-    fields: { command: 'clear' }
-  })
-
-/** This caller's committed /clear, for a /clear it presses again on the conversation that one
- *  cleared. Answered before admission, which would refuse it as cleared. */
-async function answerFromCommittedClear(
-  context: StructuredAgentSessionMutationContext,
-  caller: StructuredAgentSessionCaller,
-  { envelope, command }: ConversationCommandParams
-): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult> | null> {
-  const { store } = context.deps
-  const record = store.getRecord(envelope.sessionId)
-  const committed =
-    command === 'clear' && envelope.payloadFingerprint === clearFingerprintOf(envelope.sessionId)
-      ? committedClearOfCaller(record, caller.callerKey, store.getSessionTabId(envelope.sessionId))
-      : null
-  const session =
-    committed && (await context.openConversation(envelope.sessionId).catch(() => null))
-  return record && committed && session
-    ? {
-        ok: true,
-        replayed: true,
-        fence: record.lease.runtimeFence,
-        cursor: session.journal.cursor(),
-        value: committed
-      }
-    : null
-}
-
-/**
- * `/clear`: one write that points this conversation at a new, at-rest one and moves its tab there.
- * The new conversation's first send starts its agent.
- */
+/** Stop the provider and record a fresh-context boundary in the same conversation. */
 export function runStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams
+): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
+  return runAfterRewindStart(
+    context,
+    caller.callerKey,
+    params.envelope,
+    { method: 'agentSession.conversationCommand', fields: { command: params.command } },
+    (selection) => clearUnderSerialize(context, caller, params, selection)
+  )
+}
+
+async function clearUnderSerialize(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: ConversationCommandParams,
+  selection: ReadyOperationSelection
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
   const { envelope, command } = params
   const { sessionId, clientOperationId } = envelope
@@ -98,86 +79,94 @@ export function runStructuredConversationCommand(
       ? record
       : null
   }
-  return context.serialize(sessionId, async () => {
-    const committed = await answerFromCommittedClear(context, caller, params)
-    if (committed) {
-      return committed
-    }
-    return admitAndRunAgentSessionMutation({
-      store,
-      adapter: context.deps.adapter,
-      agents: context.deps.agents,
-      logger: context.deps.logger,
-      callerKey: caller.callerKey,
-      envelope,
-      // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
-      prepareSession: sendPreparation(context, envelope, { refusesInRun: true }),
-      journal: () => context.sessions.get(sessionId)?.journal,
-      publish: (journal) => context.publish(sessionId, journal),
-      now: context.now,
-      plan: {
-        method: 'agentSession.conversationCommand',
-        fields: { command },
-        // Written to the conversation, not the agent, so whoever owns the agent does not matter.
-        conversationWrite: true,
-        recoverUnknownFromDurableState: true,
-        settledOutcome: (value) => ({ status: 'succeeded', sessionId, conversationCommand: value }),
-        replay: (_ctx, outcome) => {
-          if (outcome.status === 'succeeded' && outcome.conversationCommand) {
-            return outcome.conversationCommand
-          }
-          const prior = matching()
-          return prior?.phase === 'committed' ? prior : null
-        },
-        // The commit is the only write, so a clear with no committed answer changed nothing.
-        rerunWhenReplayMissing: () => true,
-        run: async (ctx) => {
-          const record = store.getRecord(sessionId)!
-          const blocked = conversationCommandBlocked(
-            ctx,
-            record,
-            context.readChildWork(sessionId),
-            context.sessions.get(sessionId)?.child ? undefined : 'at-rest'
-          )
-          if (blocked) {
-            return { ok: false, refusal: blocked }
-          }
-          // Stopped before the marker, so nothing the old agent does can land after the clear. The
-          // stop releases the lease, which moves its fence: the marker is written at the new one.
-          // A /clear replaces this chat: the user closing it.
-          await context.stopAgent(sessionId, { cause: 'user-close' })
-          const fence = store.getRecord(sessionId)!.lease.runtimeFence
-          const completed = {
-            command,
-            runtimeFence: fence,
-            operationId: clientOperationId,
-            callerKey: caller.callerKey,
-            // Only has to be new: the marker is what points at it, and a same-id resend replays it.
-            replacementSessionId: `clear-${randomBytes(20).toString('hex')}`,
-            phase: 'committed' as const,
-            state: 'completed' as const
-          }
-          await store.commitConversationClear({
-            sessionId,
-            fence,
-            command: completed,
-            claimKeyId: context.deps.claimKeyId,
-            now: context.now()
-          })
-          // Carry the source's drafts to the replacement, the same for every client version:
-          // the cards stay visible where the user now is, and no text rides the wire.
-          // Bookkeeping — a failure is reported and never fails the clear.
-          await carryQueuedMessagesToClearReplacement(ctx, {
-            replacementSessionId: completed.replacementSessionId,
-            // Opened under its own lock, as every open is.
-            openReplacementJournal: async () =>
-              (await context.conversation(completed.replacementSessionId)).journal,
-            callerKey: caller.callerKey,
-            operationId: clientOperationId
-          })
-          return { ok: true, value: completed }
+  let clear: AgentSessionConversationClear | null = null
+  const result = await admitAndRunAgentSessionMutation({
+    store,
+    adapter: context.deps.adapter,
+    agents: context.deps.agents,
+    logger: context.deps.logger,
+    callerKey: caller.callerKey,
+    envelope,
+    // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
+    prepareSession: sendPreparation(context, envelope, { refusesInRun: true }, selection),
+    journal: () => context.sessions.get(sessionId)?.journal,
+    currentWork: () =>
+      hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
+    publish: (journal) => context.publish(sessionId, journal),
+    now: context.now,
+    plan: {
+      method: 'agentSession.conversationCommand',
+      fields: { command },
+      // Written to the conversation, not the agent, so whoever owns the agent does not matter.
+      conversationWrite: true,
+      recoverUnknownFromDurableState: true,
+      settlesWithWrite: true,
+      successReceipt: () =>
+        store.conversationReceipts.clear(
+          () => {
+            if (!clear) {
+              throw new Error('agent_session_clear_not_completed')
+            }
+            return clear
+          },
+          { callerKey: caller.callerKey, operationId: clientOperationId }
+        ),
+      replay: (_ctx, outcome) => {
+        if (outcome.status === 'succeeded' && outcome.conversationCommand) {
+          return outcome.conversationCommand
         }
+        const prior = matching()
+        return prior?.phase === 'committed' ? prior : null
+      },
+      // The commit is the only write, so a clear with no committed answer changed nothing.
+      rerunWhenReplayMissing: () => true,
+      run: async (ctx) => {
+        const record = store.getRecord(sessionId)!
+        const blocked = conversationCommandBlocked(
+          ctx,
+          record,
+          { views: context.readChildWork(sessionId), open: context.childWorkOpen(sessionId) },
+          context.sessions.get(sessionId)?.child ? undefined : 'at-rest'
+        )
+        if (blocked) {
+          return { ok: false, refusal: blocked }
+        }
+        await context.stopAgent(sessionId, { cause: 'context-clear' })
+        const stopped = store.getRecord(sessionId)!
+        const fence = stopped.lease.runtimeFence
+        const rechecked = conversationCommandBlocked(
+          { ...ctx, fence },
+          stopped,
+          { views: context.readChildWork(sessionId), open: context.childWorkOpen(sessionId) },
+          'at-rest'
+        )
+        if (rechecked) {
+          return { ok: false, refusal: rechecked }
+        }
+        const completed: AgentSessionConversationClear['command'] = {
+          command: 'clear',
+          runtimeFence: fence,
+          operationId: clientOperationId,
+          callerKey: caller.callerKey,
+          phase: 'committed',
+          state: 'completed'
+        }
+        clear = { sessionId, fence, command: completed, now: context.now() }
+        if (!ctx.operationReceipt) {
+          throw new Error('agent_session_clear_receipt_missing')
+        }
+        await ctx.journal.context.clear(
+          providerContextBoundaryForClear(clear),
+          ctx.operationReceipt,
+          agentSessionOperationKey(caller.callerKey, clientOperationId)
+        )
+        return { ok: true, value: completed }
       }
-    })
+    }
   })
+  return result.ok &&
+    'runtimeFence' in result.value &&
+    typeof result.value.runtimeFence === 'number'
+    ? { ...result, fence: result.value.runtimeFence }
+    : result
 }

@@ -134,7 +134,9 @@ export function PluginConsentDialog({
       }}
     >
       <DialogContent
-        className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl"
+        surface="security"
+        scrollable
+        className="sm:max-w-xl"
         onOpenAutoFocus={(event) => {
           // Why: dismissal is the safety-preserving path, so it receives initial focus.
           event.preventDefault()

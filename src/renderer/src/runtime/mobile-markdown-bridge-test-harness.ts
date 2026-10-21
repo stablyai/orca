@@ -1,6 +1,11 @@
 import { expect, vi } from 'vitest'
+import {
+  compareDiskWritePrecondition,
+  type FileWriteDiskPrecondition
+} from '../../../shared/file-write-disk-precondition'
 import type { RuntimeMobileMarkdownRequest } from '../../../shared/mobile-markdown-document'
 import { useAppStore } from '../store'
+import type { Tab } from '../../../shared/tab-types'
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -73,6 +78,25 @@ export function resetEditorState(): void {
       }
     ]
   } as never)
+  useAppStore.setState({
+    unifiedTabsByWorktree: { 'wt-1': [markdownUnifiedTab('tab-md', '/repo/README.md', 'group-1')] }
+  })
+}
+
+/** The desktop tab strip entry a phone names a markdown tab by. */
+export function markdownUnifiedTab(id: string, fileId: string, groupId: string): Tab {
+  return {
+    id,
+    entityId: fileId,
+    groupId,
+    worktreeId: 'wt-1',
+    contentType: 'editor',
+    label: fileId,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
 }
 
 export function openMarkdownFile(): void {
@@ -113,4 +137,15 @@ export function createDeferred(): { promise: Promise<void>; resolve: () => void 
 export function cleanupMobileMarkdownBridgeHarness(): void {
   vi.unstubAllGlobals()
   mobileMarkdownHandler = null
+}
+
+/** What the real writer answers for `diskContent`: a refusal when the precondition no longer holds. */
+export function guardedWriteRefusal(
+  diskPrecondition: FileWriteDiskPrecondition | undefined,
+  diskContent: string | null
+): { ok: false; diskConflict: 'changed' | 'missing' } | null {
+  const diskConflict = diskPrecondition
+    ? compareDiskWritePrecondition(diskPrecondition, diskContent)
+    : null
+  return diskConflict ? { ok: false, diskConflict } : null
 }

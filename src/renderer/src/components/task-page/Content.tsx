@@ -20,6 +20,7 @@ export function TaskPageContent({
     dialogWorkItem,
     dialogRepoPath,
     dialogSourceContext,
+    accountBackedTaskSourceHostId,
     setDialogWorkItem,
     handleDialogReviewRequestsChange,
     closeTaskDetailPage,
@@ -59,7 +60,10 @@ export function TaskPageContent({
     )
   ) : taskSource === 'github' && githubMode === 'project' ? (
     <div className="mt-3 flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
-      <ProjectViewWrapper selectedRepoIds={repoSelection} />
+      <ProjectViewWrapper
+        selectedRepoIds={repoSelection}
+        sourceHostId={accountBackedTaskSourceHostId}
+      />
     </div>
   ) : taskSource === 'github' ? (
     // Why: bottom of the joined GitHub list card — flush under the filter

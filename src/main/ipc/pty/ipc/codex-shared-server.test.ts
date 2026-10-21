@@ -117,7 +117,11 @@ describe('Codex shared-server IPC', () => {
   const refusals: [string, string, () => void][] = [
     ['a remote runtime pane', 'remote:local-1', () => {}],
     ['an SSH pane', toAppSshPtyId('conn-1', 'local-1'), () => {}],
-    ['a pane routed to an SSH connection', 'local-1', () => ptyOwnership.set('local-1', 'conn-1')],
+    [
+      'a pane routed to an SSH connection',
+      'local-1',
+      () => ptyOwnership.set('local-1', 'ssh:conn-1')
+    ],
     [
       'a WSL pane',
       'local-1',

@@ -11,12 +11,15 @@ export function clampConversationNameFirstPrompt(firstPrompt: string): string {
   return sliceAtCodeUnitLimit(firstPrompt.trim(), MAX_FIRST_PROMPT_LENGTH)
 }
 
+/** The naming request's first line; Session History reads it to hide these one-shot runs. */
+export const CONVERSATION_NAME_PROMPT_OPENING = "Name this chat from the user's first request."
+
 export function buildConversationNamePrompt(
   context: ConversationNameContext,
   customPrompt = ''
 ): string {
   const firstPrompt = clampConversationNameFirstPrompt(context.firstPrompt)
-  const basePrompt = `Name this chat from the user's first request.
+  const basePrompt = `${CONVERSATION_NAME_PROMPT_OPENING}
 Write a short, specific title of at most ${MAX_GENERATED_NAME_LENGTH} characters.
 Output only the title, with no heading, quotes, or explanation.
 
@@ -54,14 +57,27 @@ export function sanitizeGeneratedConversationName(raw: string): string | null {
     name = unwrapped
   }
   name = normalizeAgentSessionConversationName(name) ?? ''
-  if (!name) {
+  return name ? normalizeAgentSessionConversationName(clipConversationName(name)) : null
+}
+
+/** The chat's name until a generated one replaces it, so a failed generation never leaves the
+ *  placeholder label. */
+export function conversationNameSeed(firstPrompt: string): string | null {
+  const prompt = normalizeAgentSessionConversationName(firstPrompt)
+  if (!prompt) {
     return null
   }
-  if (name.length > MAX_GENERATED_NAME_LENGTH) {
-    const clipped = sliceAtCodeUnitLimit(name, MAX_GENERATED_NAME_LENGTH)
-    const boundary = clipped.lastIndexOf(' ')
-    name =
-      boundary >= Math.floor(MAX_GENERATED_NAME_LENGTH / 2) ? clipped.slice(0, boundary) : clipped
+  const clipped = clipConversationName(prompt)
+  return normalizeAgentSessionConversationName(clipped === prompt ? prompt : `${clipped}…`)
+}
+
+function clipConversationName(name: string): string {
+  if (name.length <= MAX_GENERATED_NAME_LENGTH) {
+    return name
   }
-  return normalizeAgentSessionConversationName(name)
+  const clipped = sliceAtCodeUnitLimit(name, MAX_GENERATED_NAME_LENGTH)
+  const boundary = clipped.lastIndexOf(' ')
+  return boundary >= Math.floor(MAX_GENERATED_NAME_LENGTH / 2)
+    ? clipped.slice(0, boundary)
+    : clipped
 }

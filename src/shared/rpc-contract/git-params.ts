@@ -208,6 +208,11 @@ export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
 })
 
+// Why: optional so older hosts strip it and stage the listed `filePaths` instead.
+export const GitBulkStage = GitBulkPaths.extend({
+  scope: z.enum(['all', 'tracked']).optional()
+})
+
 export const GitPushTargetParam = z.object({
   remoteName: z.string(),
   branchName: z.string(),

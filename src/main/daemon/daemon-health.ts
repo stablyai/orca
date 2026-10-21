@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { encodeNdjson } from './ndjson'
 import { ptySpawnHealthPlatformCoverage } from './daemon-health-identity'
+import { daemonSocketDirIsTrusted } from './daemon-socket-endpoint-path'
 import {
   PROTOCOL_VERSION,
   type HelloMessage,
@@ -144,6 +145,10 @@ export function checkDaemonHealthWithCoverage(
       HEALTH_CHECK_TIMEOUT_MS
     )
 
+    if (!daemonSocketDirIsTrusted(socketPath)) {
+      settle({ verdict: 'unreachable', coverage: fallbackCoverage })
+      return
+    }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)
@@ -272,6 +277,10 @@ export function getMacDaemonSystemResolverHealth(
     }
     const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
 
+    if (!daemonSocketDirIsTrusted(socketPath)) {
+      settle('unknown')
+      return
+    }
     sock = connect({ path: socketPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)

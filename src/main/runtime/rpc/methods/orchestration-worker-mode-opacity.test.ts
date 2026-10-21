@@ -60,13 +60,11 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 
 const STRUCTURED_DEFAULT = {
   experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
 }
-const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false }
+const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }
 
 /** A coordinator that IS a structured session: registry identity plus a live durable record. */
 function installStructuredCoordinator(handle: string, sessionId: string): string {
@@ -177,7 +175,8 @@ describe('a worker cannot tell which mode it is running in', () => {
     from: string
     coordinatorPaneKey: string
   }) {
-    vi.spyOn(runtime, 'getClientSettings').mockReturnValue(args.settings as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mode selection reads only getSettings; all worker execution surfaces are stubbed below.
+    vi.spyOn(runtime, 'requireStore').mockReturnValue({ getSettings: () => args.settings } as never)
     const runId = db.createRun({
       objective: 'mode opacity',
       coordinatorHandle: args.from,

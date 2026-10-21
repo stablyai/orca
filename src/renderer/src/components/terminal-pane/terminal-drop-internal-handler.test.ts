@@ -61,7 +61,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importExternalPathsToRuntime
 }))
 
@@ -73,8 +73,26 @@ vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
-import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_DRAG_SOURCE_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/workspace-file-drag'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+
+function sameHostDragData(paths: string[]) {
+  const source = JSON.stringify({
+    version: 1,
+    workspaceId: 'wt-1',
+    executionHostId: mocks.storeState.repos[0]?.executionHostId ?? 'local'
+  })
+  return (type: string): string =>
+    type === WORKSPACE_FILE_DRAG_SOURCE_MIME
+      ? source
+      : type === WORKSPACE_FILE_PATHS_MIME
+        ? encodeWorkspaceFilePaths(paths)
+        : ''
+}
 
 function createTerminalTransport(
   sendInput: ReturnType<typeof vi.fn>,
@@ -130,8 +148,7 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(paths) : ''
+        getData: sameHostDragData(paths)
       }
     })
 
@@ -170,16 +187,15 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME
-            ? encodeWorkspaceFilePaths(['/repo/a.ts', '/repo/b.ts'])
-            : ''
+        getData: sameHostDragData(['/repo/a.ts', '/repo/b.ts'])
       }
     })
 
     expect(result).toEqual({ status: 'cancelled', reason: 'target-stale', pathCount: 1 })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
     expect(replacementSendInput).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -207,13 +223,14 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(['/repo/a.ts']) : ''
+        getData: sameHostDragData(['/repo/a.ts'])
       }
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()
@@ -241,8 +258,7 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(['/repo/a.ts']) : ''
+        getData: sameHostDragData(['/repo/a.ts'])
       }
     })
 
@@ -288,63 +304,12 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(['C:\\repo\\a&b.txt']) : ''
+        getData: sameHostDragData(['C:\\repo\\a&b.txt'])
       }
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
     expect(sendInput).toHaveBeenCalledWith('"C:\\repo\\a&b.txt" ', 'driving')
-  })
-
-  it('uses SSH remote platform metadata for Windows internal file drops', async () => {
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: 'ssh-win',
-        path: 'C:\\Remote Repo',
-        executionHostId: 'ssh:ssh-win'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: 'C:\\Remote Repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
-    mocks.storeState.sshConnectionStates = new Map([['ssh-win', { remotePlatform: 'win32' }]])
-    const sendInput = vi.fn(() => true)
-    const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
-    const manager = {
-      getActivePane: () => pane,
-      getPanes: () => [pane]
-    }
-
-    const result = await handleInternalTerminalFileDrop({
-      manager: manager as never,
-      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      paneLeafId: 'leaf-1',
-      dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME
-            ? encodeWorkspaceFilePaths(['C:\\Remote Repo\\A&B.txt'])
-            : ''
-      }
-    })
-
-    expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ', 'driving')
-    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
-    expect(focus).toHaveBeenCalled()
   })
 
   it('keeps SSH Linux internal file drops on POSIX shell escaping', async () => {
@@ -384,10 +349,7 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME
-            ? encodeWorkspaceFilePaths(["/remote/repo/it's here.txt"])
-            : ''
+        getData: sameHostDragData(["/remote/repo/it's here.txt"])
       }
     })
 
@@ -430,10 +392,7 @@ describe('handleInternalTerminalFileDrop', () => {
       tabId: 'tab-1',
       cwd: undefined,
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME
-            ? encodeWorkspaceFilePaths(['/repo/drop-target.ts'])
-            : ''
+        getData: sameHostDragData(['/repo/drop-target.ts'])
       },
       dropTarget
     })
@@ -466,8 +425,7 @@ describe('handleInternalTerminalFileDrop', () => {
       cwd: undefined,
       paneLeafId: 'leaf-1',
       dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(paths) : ''
+        getData: sameHostDragData(paths)
       }
     })
 
@@ -501,8 +459,7 @@ it('refuses an unresolvable workspace instead of using the dropped path as its r
     cwd: undefined,
     paneLeafId: 'leaf-1',
     dataTransfer: {
-      getData: (type) =>
-        type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(['/other/file.txt']) : ''
+      getData: sameHostDragData(['/other/file.txt'])
     }
   })
   expect(result).toEqual({ status: 'ignored', reason: 'worktree-unavailable' })

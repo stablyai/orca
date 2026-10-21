@@ -467,7 +467,7 @@ describe('codex turn lifecycle rows', () => {
     ])
   })
 
-  it('replays a backpressured turn boundary with its original receipt time', async () => {
+  it('replays an oversized backpressured notification with its original receipt time', async () => {
     vi.useFakeTimers()
     const connection = {
       pauseReading: vi.fn(),
@@ -483,7 +483,13 @@ describe('codex turn lifecycle rows', () => {
     })
 
     expect(
-      retries.handle(SESSION_ID, 'turn/started', { turn: { id: TURN_ID } }, 1_000, -1)
+      retries.handle(
+        SESSION_ID,
+        'turn/started',
+        { turn: { id: TURN_ID }, output: 'x'.repeat(9 * 1024 * 1024) },
+        1_000,
+        -1
+      )
     ).toEqual({ accepted: false, reason: 'backpressure' })
     await vi.advanceTimersByTimeAsync(50)
 

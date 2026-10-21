@@ -1,11 +1,10 @@
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
-import { OrcadInstanceLockError } from './orcad-instance-lock'
+import { OrcadInstanceLockError } from './orcad-data-root-privacy'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
+import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 
-export const ORCAD_EXIT_OK = 0
 export const ORCAD_EXIT_FAILED = 1
-export const ORCAD_EXIT_CONFIGURATION = 78
 
 /** Configuration faults cannot be repaired by a supervisor restart. */
 export function resolveOrcadExitCode(error: unknown): number {

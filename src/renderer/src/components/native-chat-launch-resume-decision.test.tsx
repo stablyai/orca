@@ -23,7 +23,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -54,7 +56,6 @@ function settings(autoResume: boolean | undefined): void {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
       ...(autoResume === undefined ? {} : { nativeChatResumeWorkOnRestart: autoResume })
     }
   })

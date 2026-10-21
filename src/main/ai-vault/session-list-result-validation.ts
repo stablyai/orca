@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultAgent,
   type AiVaultListResult,
   type AiVaultScanIssue,
@@ -10,7 +11,7 @@ import { normalizeExecutionHostId } from '../../shared/execution-host'
 
 const aiVaultAgentSet = new Set<string>(AI_VAULT_AGENTS)
 
-function isAiVaultAgent(agent: string): agent is AiVaultAgent {
+export function isAiVaultAgent(agent: string): agent is AiVaultAgent {
   return aiVaultAgentSet.has(agent)
 }
 
@@ -51,6 +52,12 @@ const aiVaultSessionSchema = z.object({
   sessionId: z.string(),
   title: z.string(),
   cwd: z.string().nullable(),
+  // Why catch: a malformed alias list must cost only the aliases, never the whole row.
+  cwdAliases: z
+    .array(z.string().min(1).max(4096))
+    .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+    .optional()
+    .catch(undefined),
   branch: z.string().nullable(),
   model: z.string().nullable(),
   filePath: z.string(),
@@ -97,11 +104,23 @@ const aiVaultScanIssueSchema = z.object({
   message: z.string()
 })
 
-const aiVaultListResultEnvelopeSchema = z.object({
-  sessions: z.array(z.unknown()),
-  issues: z.array(z.unknown()),
-  scannedAt: z.string()
-})
+const aiVaultListResultEnvelopeSchema = z
+  .object({
+    sessions: z.array(z.unknown()),
+    issues: z.array(z.unknown()),
+    scannedAt: z.string(),
+    fingerprint: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    unchanged: z.literal(true).optional()
+  })
+  .refine(
+    (value) =>
+      !value.unchanged ||
+      (value.fingerprint !== undefined && value.sessions.length === 0 && value.issues.length === 0),
+    'Invalid unchanged response'
+  )
 
 export function parseAiVaultListResult(value: unknown): AiVaultListResult {
   const envelope = aiVaultListResultEnvelopeSchema.safeParse(value)
@@ -151,5 +170,11 @@ export function parseAiVaultListResult(value: unknown): AiVaultListResult {
       message: `Skipped ${invalidCount} invalid Agent Session History result ${invalidCount === 1 ? 'entry' : 'entries'}.`
     })
   }
-  return { sessions, issues, scannedAt: envelope.data.scannedAt }
+  return {
+    sessions,
+    issues,
+    scannedAt: envelope.data.scannedAt,
+    ...(envelope.data.fingerprint ? { fingerprint: envelope.data.fingerprint } : {}),
+    ...(envelope.data.unchanged ? { unchanged: true as const } : {})
+  }
 }

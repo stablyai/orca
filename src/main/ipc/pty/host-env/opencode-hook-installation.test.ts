@@ -210,6 +210,7 @@ describe('OpenCode installation uses the current enabled agents', () => {
       (agent) => {
         for (const selection of [
           { launchCommand: `${agent} --session fixture` },
+          { launchCommand: `sleep 30 && ${agent} --session fixture` },
           { launchAgent: agent }
         ]) {
           const env = buildPtyHostEnv(

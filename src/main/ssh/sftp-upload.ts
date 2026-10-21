@@ -3,12 +3,28 @@ import type { ReadStream } from 'node:fs'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
 import { finished } from 'node:stream/promises'
+import { promisify } from 'node:util'
 import type { SFTPWrapper } from 'ssh2'
-import {
-  latchLateSftpSessionErrors,
-  latchLateSftpStreamErrors,
-  type SftpStreamErrorLatch
-} from './sftp-stream-late-error'
+import { latchLateSftpStreamErrors, type SftpStreamErrorLatch } from './sftp-stream-late-error'
+import { sftpSessionClosedError } from './ssh-file-transfer-abort'
+
+// Why: ssh2's WriteStream waits for each chunk's ack before writing the next, so an upload moves
+// one chunk per round trip. Buffering this much lets its _writev keep that many bytes of WRITE
+// requests in flight, as fastPut's default 64 x 32 KiB does.
+export const SFTP_UPLOAD_IN_FLIGHT_BYTES = 2 * 1024 * 1024
+
+/**
+ * Why: on a dead connection ssh2's write stream waits on a CLOSE reply that never comes; settle on
+ * the session's close so the local file handle is closed, not left to garbage collection.
+ */
+function watchSessionClose(sftp: SFTPWrapper): { closed: Promise<'closed'>; release: () => void } {
+  let onClose: () => void = () => {}
+  const closed = new Promise<'closed'>((resolve) => {
+    onClose = () => resolve('closed')
+  })
+  sftp.once('close', onClose)
+  return { closed, release: () => sftp.removeListener('close', onClose) }
+}
 
 export function mkdirSftp(
   sftp: SFTPWrapper,
@@ -30,16 +46,7 @@ export function mkdirSftp(
   })
 }
 
-export function uploadFile(
-  sftp: SFTPWrapper,
-  localPath: string,
-  remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
-): Promise<void> {
-  return uploadFileAndJoinTeardown(sftp, localPath, remotePath, options)
-}
-
-async function uploadFileAndJoinTeardown(
+export async function uploadFile(
   sftp: SFTPWrapper,
   localPath: string,
   remotePath: string,
@@ -50,6 +57,7 @@ async function uploadFileAndJoinTeardown(
   let readStream: ReadStream | undefined
   let writeStream: ReturnType<SFTPWrapper['createWriteStream']> | undefined
   let writeStreamErrors: SftpStreamErrorLatch | undefined
+  const sessionClosed = watchSessionClose(sftp)
   const closeHandle = (): Promise<void> => {
     handleClose ??= handle.close()
     return handleClose
@@ -71,7 +79,8 @@ async function uploadFileAndJoinTeardown(
     }
     // Why: rejected local sources must not leave an empty remote file.
     writeStream = sftp.createWriteStream(remotePath, {
-      flags: options?.exclusive ? 'wx' : 'w'
+      flags: options?.exclusive ? 'wx' : 'w',
+      highWaterMark: SFTP_UPLOAD_IN_FLIGHT_BYTES
     })
     // Why: the OPEN reply can land after this transfer settles; without a listener that
     // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
@@ -104,7 +113,13 @@ async function uploadFileAndJoinTeardown(
         throw error
       })
       readStream.pipe(writeStream)
-      const results = await Promise.allSettled([readDone, writeDone])
+      const results = await Promise.race([
+        Promise.allSettled([readDone, writeDone]),
+        sessionClosed.closed
+      ])
+      if (results === 'closed') {
+        throw sftpSessionClosedError()
+      }
       const failure = results.find((result) => result.status === 'rejected')
       if (failure?.status === 'rejected') {
         throw failure.reason
@@ -113,6 +128,7 @@ async function uploadFileAndJoinTeardown(
       options?.signal?.removeEventListener('abort', abortTransfer)
     }
   } finally {
+    sessionClosed.release()
     writeStreamErrors?.markTransferSettled()
     readStream?.destroy()
     writeStream?.destroy()
@@ -195,29 +211,6 @@ export function writeStringViaSftp(
   })
 }
 
-/**
- * Write several files over one SFTP session, ending it when they are all done.
- *
- * Owns the session's late-error latch, which is why a caller must not hand-roll this
- * loop: `writeStringViaSftp` drops its own session listener at each settle, so between
- * files and after the last one the emitter would carry none, and a late STATUS reply
- * throws synchronously out of ssh2's parser into main (#15479).
- */
-export async function writeStringsViaSftp(
-  conn: { sftp(): Promise<SFTPWrapper> },
-  files: readonly { path: string; contents: string }[]
-): Promise<void> {
-  const sftp = await conn.sftp()
-  latchLateSftpSessionErrors(sftp)
-  try {
-    for (const file of files) {
-      await writeStringViaSftp(sftp, file.path, file.contents)
-    }
-  } finally {
-    sftp.end()
-  }
-}
-
 export async function uploadDirectory(
   sftp: SFTPWrapper,
   localDir: string,
@@ -266,7 +259,7 @@ async function uploadDirectoryWithinRoot(
 }
 
 export async function removeDirectorySftp(sftp: SFTPWrapper, remoteDir: string): Promise<void> {
-  const entries = await readdirSftp(sftp, remoteDir)
+  const entries = (await promisify(sftp.readdir.bind(sftp))(remoteDir)) ?? []
   const normalizedRemoteDir = remoteDir.replace(/\/+$/, '')
   for (const entry of entries) {
     if (entry.filename === '.' || entry.filename === '..') {
@@ -275,52 +268,9 @@ export async function removeDirectorySftp(sftp: SFTPWrapper, remoteDir: string):
     const childPath = `${normalizedRemoteDir}/${entry.filename}`
     await (entry.attrs?.isDirectory?.()
       ? removeDirectorySftp(sftp, childPath)
-      : unlinkSftp(sftp, childPath))
+      : promisify(sftp.unlink.bind(sftp))(childPath))
   }
-  await rmdirSftp(sftp, remoteDir)
-}
-
-type SftpDirectoryEntry = {
-  filename: string
-  attrs?: {
-    isDirectory?: () => boolean
-  }
-}
-
-function readdirSftp(sftp: SFTPWrapper, remoteDir: string): Promise<SftpDirectoryEntry[]> {
-  return new Promise((resolve, reject) => {
-    sftp.readdir(remoteDir, (err, entries) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve((entries ?? []) as SftpDirectoryEntry[])
-    })
-  })
-}
-
-function unlinkSftp(sftp: SFTPWrapper, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.unlink(remotePath, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
-function rmdirSftp(sftp: SFTPWrapper, remoteDir: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.rmdir(remoteDir, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
-  })
+  await promisify(sftp.rmdir.bind(sftp))(remoteDir)
 }
 
 async function assertLocalUploadPathInsideRoot(

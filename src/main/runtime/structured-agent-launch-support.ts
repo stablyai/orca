@@ -1,18 +1,26 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
+import { observeAgentCliVersion, type AgentCliVersionObservation } from '../agent-cli-version-probe'
 import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
 } from '../native-chat/structured-agent-session-create-support'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
-import { structuredAgentRuntimeRegistration } from './structured-agent-runtime-registrations'
-import { structuredAgentBaseEnvironment } from './structured-agent-shell-environment'
+import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentCommandSettings
+} from '../native-chat/structured-agent-command-resolution'
+import { structuredAgentRuntimeMetadata } from './structured-agent-runtime-metadata'
+import {
+  refreshHostAgentBaseEnvironmentAfterMiss,
+  resolveHostAgentBaseEnvironment
+} from './structured-agent-shell-environment'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 
 type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -20,74 +28,122 @@ type LaunchEnvironmentSettings = Pick<
 > &
   Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
 
-/** The environment every agent's launch on this host starts from, for a check made before the
- *  session host is built. */
-async function resolveHostStructuredAgentBaseEnvironment(
-  settings: LaunchEnvironmentSettings
-): Promise<Record<string, string>> {
-  return structuredAgentBaseEnvironment({
-    shellEnv: await resolveLoginShellEnvironment(),
-    policy: nativeChatShellEnvironmentPolicy(settings)
-  })
-}
-
 /** What the check reads from the runtime asking it. */
-type LaunchSupportRuntime = {
-  requireStore(): { getSettings(): LaunchEnvironmentSettings }
+type LaunchSettingsRuntime = { requireStore(): { getSettings(): LaunchEnvironmentSettings } }
+type LaunchSupportRuntime = LaunchSettingsRuntime & {
   resolveRuntimeFileTarget(selector: string): Promise<{ worktree: { path: string } }>
 }
 
-/** The agent's own check of what is installed on this host, with the environment and Command
- *  setting its launch starts from, in the workspace it would launch in; true for an agent whose
- *  location alone decides. */
-export async function structuredAgentSupportsLaunch(
+/** The agent's own check of the release installed on this host, with the environment and Command
+ *  setting its launch starts from, run in `cwd`; supported for an agent whose location alone
+ *  decides. Throws the launch's pre-spawn refusal for an unrunnable Command setting. */
+export async function observeStructuredAgentLaunch(
   agent: string,
-  worktreeSelector: string,
-  runtime: LaunchSupportRuntime
-): Promise<boolean> {
-  const supportsLaunch = structuredAgentRuntimeRegistration(agent)?.supportsLaunch
-  if (!supportsLaunch) {
-    return true
+  cwd: () => Promise<string>,
+  runtime: LaunchSettingsRuntime,
+  refreshShellOnMiss: boolean
+): Promise<AgentCliVersionObservation> {
+  const check = structuredAgentRuntimeMetadata(agent)?.launchCheck
+  if (!check) {
+    return 'supported'
   }
   const settings = runtime.requireStore().getSettings()
-  const env = {
-    ...(await resolveHostStructuredAgentBaseEnvironment(settings)),
+  let directory: Promise<string> | undefined
+  const once = () => (directory ??= cwd())
+  // Resolved as a launch resolves, sharing its refresh, so an agent installed since the shell was
+  // last read counts and a found one never waits.
+  const launch = await resolveAgainAfterRefreshOnMissingProgram(
+    async () =>
+      check.resolveLaunch(
+        await resolveHostStructuredAgentLaunchEnvironment(agent, settings),
+        settings
+      ),
+    refreshShellOnMiss ? refreshHostAgentBaseEnvironmentAfterMiss : undefined,
+    { env: ({ env }) => env, cwd: once }
+  )
+  return observeAgentCliVersion(
+    { program: launch.command, cwd: await once(), env: launch.env },
+    check.supportsVersion
+  )
+}
+
+/** Admission's answer in the workspace `cwd` names: only an observed supported release launches. */
+export async function structuredAgentSupportsLaunch(
+  agent: string,
+  cwd: () => Promise<string>,
+  runtime: LaunchSettingsRuntime
+): Promise<boolean> {
+  try {
+    return (await observeStructuredAgentLaunch(agent, cwd, runtime, true)) === 'supported'
+  } catch (error) {
+    // An unrunnable Command setting is the launch's refusal to state, not a terminal.
+    if (isAgentSessionPreSpawnError(error)) {
+      return true
+    }
+    throw error
+  }
+}
+
+/** The environment a new local chat launch starts from, before its account binding. */
+export async function resolveHostStructuredAgentLaunchEnvironment(
+  agent: string,
+  settings: LaunchEnvironmentSettings
+): Promise<Record<string, string>> {
+  return {
+    ...(await resolveHostAgentBaseEnvironment(settings)),
     ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv) : {})
   }
-  const cwd = (await runtime.resolveRuntimeFileTarget(worktreeSelector)).worktree.path
-  return supportsLaunch({ cwd, env, commandSettings: settings })
+}
+
+/** What a chat start of `agent` on this host launches from, for a child that serves no chat. */
+export async function structuredAgentHostLaunchSources(
+  agent: StructuredAgentId,
+  runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
+    resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
+  }
+): Promise<{
+  accountHome: AgentSessionAccountHome
+  env: Record<string, string>
+  commandSettings: StructuredAgentCommandSettings
+  dataDirectory: string
+}> {
+  const settings = runtime.requireStore().getSettings()
+  return {
+    accountHome: await runtime.resolveStructuredAgentAccountHome(agent),
+    env: await resolveHostStructuredAgentLaunchEnvironment(agent, settings),
+    commandSettings: settings,
+    // The chat host's own state root (ensureStructuredAgentSessionHost).
+    dataDirectory: getProfileUserDataPath()
+  }
 }
 
 /** `agentSession.createSupport` on this host: every refusal it can know before spawning. The
  *  agent's location rule and installed-agent check from its registration, without installing the
- *  host, then Claude's managed-account gate. A refusal logs which check said no. */
+ *  host. A refusal logs which check said no. */
 export async function resolveHostStructuredAgentCreateSupport(input: {
   agent: StructuredAgentId
   worktreeSelector: string
   location: AgentSessionExecutionLocation
   runtime: LaunchSupportRuntime
-  getSettings: () => ClaudeManagedAccountGateSettings
 }): Promise<StructuredAgentSessionCreateSupport> {
-  const { agent, location } = input
+  const { agent, location, runtime } = input
   const supportsLocation =
-    structuredAgentRuntimeRegistration(agent)?.supportsLocation(location) ?? false
+    structuredAgentRuntimeMetadata(agent)?.supportsLocation(location) ?? false
   const supportsLaunch =
     supportsLocation &&
-    (await structuredAgentSupportsLaunch(agent, input.worktreeSelector, input.runtime))
+    (await structuredAgentSupportsLaunch(
+      agent,
+      async () => (await runtime.resolveRuntimeFileTarget(input.worktreeSelector)).worktree.path,
+      runtime
+    ))
   const support = resolveStructuredAgentSessionCreateSupport({
-    agent,
     location,
-    adapterSupportsCreate: supportsLaunch,
-    getSettings: input.getSettings
+    adapterSupportsCreate: supportsLaunch
   })
   warnStructuredAgentSessionCreateUnsupported(
     agent,
     support,
-    !supportsLocation
-      ? 'location'
-      : !supportsLaunch
-        ? 'installed-agent'
-        : 'managed-account'
+    supportsLocation ? 'installed-agent' : 'location'
   )
   return support
 }

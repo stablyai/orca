@@ -1,10 +1,17 @@
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { placeUnshownLiveTerminalsBestEffort } from '../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
-import { WebSocketTransport } from '../rpc/ws-transport'
-import { readWsFallbackPort, writeWsFallbackPort } from '../rpc/ws-fallback-port-store'
+import { PinnedPortUnavailableError, WebSocketTransport } from '../rpc/ws-transport'
+import {
+  clearWsFallbackPort,
+  readWsFallbackPort,
+  wsFallbackPortLadder,
+  writeWsFallbackPort
+} from '../rpc/ws-fallback-port-store'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
@@ -19,6 +26,8 @@ import {
   createRuntimeTransportMetadata,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import { errorMessage } from '../../../shared/error-message'
+import { loadHostDescriptor, publishHostDescriptor } from '../host-descriptor'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   async start(): Promise<void> {
@@ -51,7 +60,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           reply(JSON.stringify(response))
         })
         .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
+          const message = errorMessage(error)
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
           try {
@@ -84,24 +93,34 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
+        this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
+        publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({
             host,
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
+            requirePinnedPort: this.requirePinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
+          } else if (transport.persistedFallbackFailed) {
+            clearWsFallbackPort(this.userDataPath)
           }
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
           // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
           console.error('[runtime] Failed to start WebSocket transport:', error)
+          this.mobileSocketWiring?.dispose()
           this.mobileSocketWiring = null
+          if (error instanceof PinnedPortUnavailableError) {
+            await socketTransport.stop().catch(() => {})
+            throw error
+          }
         }
       }
     }
@@ -164,6 +183,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     host: string
     port: number
     preferPinnedPort: boolean
+    requirePinnedPort?: boolean
     fallbackPort?: number
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
@@ -176,7 +196,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       port: options.port,
       staticRoot: this.webClientRoot,
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
-      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
+      ...(options.requirePinnedPort ? { requirePinnedPort: true } : {}),
+      fallbackLadder: wsFallbackPortLadder(this.wsPort)
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
@@ -223,7 +245,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             sendBinary,
             undefined,
             socket.ws,
-            socket.device.deviceToken,
+            socket.device.deviceToken ?? null,
             socket
           )
         )
@@ -243,18 +265,30 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
         }
+        // Switch point: a client attaching sees every live terminal of this host in a tab.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          void placeUnshownLiveTerminalsBestEffort(this.runtime)
+        }
+        // Why once per socket: only phones send runtime.clientCapabilities.update.
+        if (socket.device.scope === 'runtime') {
+          this.runtime.sidebarFacts?.noteRuntimeClient(
+            socket.connectionId,
+            socket.clientCapabilities
+          )
+        }
       },
       onClose: (socket, hasOtherConnections) => {
         if (!socket) {
           return
         }
         this.abortWebSocketDispatches(socket.ws)
+        this.mobileDesktopRelay?.closePhoneConnection(socket.connectionId)
         // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
         if (!hasOtherConnections) {
-          this.runtime.onClientDisconnected(socket.device.deviceToken)
+          this.runtime.onClientDisconnected(socket.device.clientId)
         }
       },
       // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.

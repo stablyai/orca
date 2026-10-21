@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const action = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
 const mode = action.runs.steps.find((step) => step.id === 'pnpm-store-mode')
@@ -52,8 +52,8 @@ function resolveMode(request, node, manager) {
 
 describe('automatic pnpm store mode', () => {
   it.each([
-    ['auto', '24', 'pnpm@12.8.1', '', true],
-    ['auto', '25', 'pnpm@12.8.1', 'pnpm', false],
+    ['auto', '24', 'pnpm@12.14.0', '', true],
+    ['auto', '25', 'pnpm@12.14.0', 'pnpm', false],
     ['auto', '24', 'pnpm@13.0.0', 'pnpm', false],
     ['true', '25', 'pnpm@13.0.0', '', true]
   ])(
@@ -61,7 +61,9 @@ describe('automatic pnpm store mode', () => {
     (request, node, manager, cache, lookup) => {
       const context = structuredClone(defaultContext)
       context.inputs['cache-pnpm-store-lookup-only'] = request
-      const resolved = resolveMode(request, node, manager).split('=')[1].trim()
+      const output = resolveMode(request, node, manager)
+      expect(output).toBe(`lookup-only=${lookup}\n`)
+      const resolved = output.split('=')[1].trim()
       const evaluate = (value) =>
         runInNewContext(
           value
@@ -127,24 +129,18 @@ describe('automatic pnpm store mode', () => {
   })
 
   it.each([
-    ['24', 'pnpm@12.8.1', 'true'],
-    ['24', 'pnpm@12.8.1+sha512.fixture', 'true'],
-    ['25', 'pnpm@12.8.1', 'false'],
-    ['24.x', 'pnpm@12.8.1', 'false'],
+    ['24', 'pnpm@12.14.0+sha512.fixture', 'true'],
+    ['24.x', 'pnpm@12.14.0', 'false'],
     ['24', 'pnpm@12.8.2', 'false'],
-    ['24', 'pnpm@12.8.10', 'false'],
+    ['24', 'pnpm@12.14.00', 'false'],
     ['24', undefined, 'false'],
-    [undefined, 'pnpm@12.8.1', 'false'],
+    [undefined, 'pnpm@12.14.0', 'false'],
     ['24', 12, 'false']
   ])('checks manifest Node %s and manager %s before choosing lookup', (node, manager, expected) => {
     expect(resolveMode('auto', node, manager)).toBe(`lookup-only=${expected}\n`)
   })
 
   it('checks uppercase auto requests consistently with GitHub expression comparisons', () => {
-    expect(resolveMode('AUTO', '25', 'pnpm@12.8.1')).toBe('lookup-only=false\n')
-  })
-
-  it('does not constrain an explicit request to the automatic manifest profile', () => {
-    expect(resolveMode('true', '25', 'pnpm@13.0.0')).toBe('lookup-only=true\n')
+    expect(resolveMode('AUTO', '25', 'pnpm@12.14.0')).toBe('lookup-only=false\n')
   })
 })

@@ -6,7 +6,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { withManagedHookInstallLock } from '../agent-hooks/managed-hook-install-lock'
 import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { resolveCodexCommand } from '../codex-cli/command'
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn

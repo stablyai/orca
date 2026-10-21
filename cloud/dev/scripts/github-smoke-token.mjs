@@ -50,10 +50,13 @@ export async function requestGitHubSmokeTokens(
   }
 }
 
+// Staging auth mints Asia load principal sets for this many shards.
+export const RELAY_ASIA_LOAD_PRINCIPAL_SHARDS = 4
+
 function parseRelayAsiaLoadOptions(value) {
   if (
     !value || typeof value !== 'object' ||
-    !Number.isSafeInteger(value.shardIndex) || value.shardIndex < 0 || value.shardIndex > 3 ||
+    !Number.isSafeInteger(value.shardIndex) || value.shardIndex < 0 || value.shardIndex >= RELAY_ASIA_LOAD_PRINCIPAL_SHARDS ||
     !Number.isSafeInteger(value.principalCount) || value.principalCount < 1 ||
     value.principalCount > 32
   ) throw new Error('Relay Asia load principal request is invalid')

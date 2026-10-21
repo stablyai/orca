@@ -1,10 +1,15 @@
-import { readFileSync } from 'node:fs'
-import { setLocalPtyProvider } from '../ipc/pty'
+import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
-import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
-import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import type { DaemonProvider } from './daemon-provider-routing'
 import { DaemonPtyRouter } from './daemon-pty-router'
+import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
+import { readDaemonPidRecord as readDaemonPidRecordAt } from './daemon-endpoint-incarnation'
+import type { ParsedDaemonPid } from './daemon-pid-file-parse'
+import {
+  getCurrentDaemonAdapter,
+  getLegacyDaemonAdapters,
+  listEveryDaemonGeneration,
+  type DaemonProvider
+} from './daemon-provider-routing'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import type { DaemonSpawner } from './daemon-spawner'
 import {
@@ -29,7 +34,6 @@ export function getDaemonSpawner(): DaemonSpawner | null {
   return spawner
 }
 
-// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 /**
  * Whether the installed provider is a daemon that will own FRESH terminals too.
  *
@@ -73,19 +77,24 @@ export function getDaemonEndpointFacts(): DaemonEndpointFacts | null {
  * reported orcad's version for both would hide exactly that.
  */
 export function readDaemonPidRecord(): ParsedDaemonPid | null {
-  const facts = getDaemonEndpointFacts()
-  if (!facts) {
-    return null
-  }
-  try {
-    return parseDaemonPidFile(readFileSync(facts.pidPath, 'utf8'))
-  } catch {
-    return null
-  }
+  return readDaemonPidRecordAt(getDaemonEndpointFacts()?.pidPath ?? null)
 }
 
+// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
+}
+
+/** True for a terminal on a kept-alive older daemon whose protocol matches; never for an SSH pane. */
+export function isTerminalOnLegacyDaemon(
+  ptyId: string,
+  matches: (protocolVersion: number) => boolean
+): boolean {
+  return adapter
+    ? getLegacyDaemonAdapters(adapter).some(
+        (legacy) => matches(legacy.protocolVersion) && legacy.hasPty(ptyId)
+      )
+    : false
 }
 
 // Why: computed from the pid record on demand (not cached at adoption) so the Settings
@@ -122,22 +131,9 @@ export async function shutdownDaemon(): Promise<void> {
 
 /** Returns null unless every daemon generation supplied an authoritative inventory. */
 export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
-  if (!adapter) {
-    return null
-  }
-  const adapters =
-    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
-      ? adapter.getAllAdapters()
-      : [adapter]
-  const inventories = await Promise.allSettled(
-    adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
-  )
-  if (inventories.some((inventory) => inventory.status === 'rejected')) {
-    return null
-  }
-  return inventories.flatMap((inventory) =>
-    inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
-  )
+  return adapter
+    ? listEveryDaemonGeneration(adapter, async (a) => (await a.listProcesses()).map((p) => p.id))
+    : null
 }
 
 /** Returns null unless every daemon generation supplied an authoritative session inventory. */
@@ -148,27 +144,14 @@ export async function listLiveDaemonSessions(): Promise<SessionInfo[] | null> {
 
 /** Like listLiveDaemonSessions, with the protocol of the daemon generation owning each session. */
 export async function listLiveDaemonSessionsWithProtocol(): Promise<DaemonSessionInfo[] | null> {
-  if (!adapter) {
-    return null
-  }
-  const adapters =
-    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
-      ? adapter.getAllAdapters()
-      : [adapter]
-  const inventories = await Promise.allSettled(
-    adapters.map(async (daemonAdapter) =>
-      (await daemonAdapter.listSessions()).map((session) => ({
-        ...session,
-        protocolVersion: daemonAdapter.protocolVersion
-      }))
-    )
-  )
-  if (inventories.some((inventory) => inventory.status === 'rejected')) {
-    return null
-  }
-  return inventories.flatMap((inventory) =>
-    inventory.status === 'fulfilled' ? inventory.value : []
-  )
+  return adapter
+    ? listEveryDaemonGeneration(adapter, async (a) =>
+        (await a.listSessions()).map((session) => ({
+          ...session,
+          protocolVersion: a.protocolVersion
+        }))
+      )
+    : null
 }
 
 /** Terminals the degraded provider ran in-process; none outside degraded mode. */
@@ -186,10 +169,26 @@ export async function requestIdleDaemonRetirement(): Promise<DaemonIdleRetiremen
   if (adapter instanceof DegradedDaemonPtyProvider) {
     return { state: 'unverifiable' }
   }
-  if (adapter instanceof DaemonPtyRouter) {
-    return adapter.requestIdleRetirement()
-  }
   return adapter.requestIdleRetirement()
+}
+
+/** Whether an idle-retirement attempt left the daemon refusing new terminals. */
+export function isDaemonTerminalAdmissionClosed(): boolean {
+  if (!adapter || adapter instanceof DegradedDaemonPtyProvider) {
+    return false
+  }
+  // Fresh terminals go to the current generation, behind the router's own fence.
+  return (
+    (adapter instanceof DaemonPtyRouter && adapter.retirement.admissionClosed) ||
+    getCurrentDaemonAdapter(adapter).isIdleRetirementAdmissionClosed()
+  )
+}
+
+/** The pid the current daemon generation last authenticated as, if it ever did. */
+export function getCurrentDaemonPid(): number | null {
+  return adapter && !(adapter instanceof DegradedDaemonPtyProvider)
+    ? (getCurrentDaemonAdapter(adapter).getLastAuthenticatedDaemonIdentity()?.pid ?? null)
+    : null
 }
 
 /** Reopens terminal admission when an idle-retirement attempt did not retire the daemon. */

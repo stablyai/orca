@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { DerivedQueuePause } from '../agent-session-journal/queued-message-pause'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** A per-process id, minted once per host process like the runtime's own
@@ -56,11 +57,12 @@ export async function markStructuredQueueReopen(
 /** Resume: a journal row that ends every pause. Returns whether the queue was paused. */
 export async function resumeStructuredQueue(
   journal: Pick<AgentSessionJournal, 'queuedMessages' | 'appendQueueResume'>,
-  fence: number
+  fence: number,
+  receipt?: JournalOperationReceipt
 ): Promise<boolean> {
   if (structuredQueuePauses(journal).length === 0) {
     return false
   }
-  await journal.appendQueueResume(fence)
+  await journal.appendQueueResume(fence, receipt)
   return true
 }

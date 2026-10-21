@@ -16,7 +16,7 @@ import {
   getDeleteWorktreeDirtyChangePreview,
   getDeleteWorktreeDirtyChangePreviews
 } from './delete-worktree-dirty-change-counts'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 const state = vi.hoisted(() => ({
@@ -31,11 +31,8 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/runtime/runtime-git-client', () => ({ getRuntimeGitStatus: vi.fn() }))
+vi.mock('@/runtime/runtime-git-status-client', () => ({ getRuntimeGitStatus: vi.fn() }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getSettingsForWorktreeRuntimeOwner: () => null
-}))
 
 const repoMap = new Map<string, Repo>()
 

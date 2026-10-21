@@ -50,6 +50,8 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
+import { RevisionedMap } from './revisioned-map'
+import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 
 /** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
@@ -73,6 +75,19 @@ export abstract class AgentHookServerState {
     return this.canonicalStatusStoreInstance
   }
   protected readonly canonicalListingOrder = new Map<string, number>()
+  /** When this host proved a pane's agent process ended; outlives the row the exit reconciles. */
+  protected readonly agentExitedAtByPaneKey = new Map<string, AgentExitEvidence>()
+
+  /** A new agent (or a new worker attach) claimed the pane; the previous exit no longer describes it. */
+  forgetAgentExit(paneKey: string): void {
+    const forgotten = forgetAgentExit(this.agentExitedAtByPaneKey, paneKey)
+    if (
+      forgetAgentExit(this.agentExitedAtByPaneKey, this.resolvePaneKeyAlias(paneKey)) ||
+      forgotten
+    ) {
+      this.scheduleStatusPersist()
+    }
+  }
   protected readonly canonicalSubjectsByPane = new Map<string, Map<string, AgentStatusSubject>>()
   private statusListingOrder = 0
   protected nextStatusListingOrder = (): number => ++this.statusListingOrder
@@ -92,6 +107,7 @@ export abstract class AgentHookServerState {
   protected onStartupPromptClaim: ((body: unknown) => boolean | 'pending') | null = null
   protected clearStartupPromptClaims: (() => void) | null = null
   protected statusHooksEnabled = true
+  protected statusHookGeneration = 0
   protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
@@ -128,8 +144,13 @@ export abstract class AgentHookServerState {
   // Why: hydrated rows give UI continuity but aren't evidence of live agent work in this runtime.
   protected runtimeObservedStatusPaneKeys = new Set<string>()
   protected hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
-  protected hydratedLaunchTokenHashByPaneKey = new Map<string, string>()
-  protected persistedAuthorityCommitmentsByPaneKey = new Map<string, AgentHookAuthorityEvidence>()
+  // Why: revisioned so a persisted-authority change can bypass the write throttle (spool replay and
+  // restored-terminal attestation read these after a crash).
+  protected hydratedLaunchTokenHashByPaneKey = new RevisionedMap<string, string>()
+  protected persistedAuthorityCommitmentsByPaneKey = new RevisionedMap<
+    string,
+    AgentHookAuthorityEvidence
+  >()
   protected revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
   protected currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
   protected legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
@@ -140,8 +161,11 @@ export abstract class AgentHookServerState {
   protected paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
   protected lastStatusFilePath: string | null = null
-  // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
+  // Why: leading-edge throttle timer, per-instance so test servers in one process don't share state.
   protected statusPersistTimer: ReturnType<typeof setTimeout> | null = null
+  protected statusPersistDueAt = 0
+  protected lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
+  protected lastPersistedAuthorityFingerprint: string | null = null
   protected assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   protected promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   protected activeHookTurnCompletedAtByPaneKey = new Map<string, number>()
@@ -157,8 +181,6 @@ export abstract class AgentHookServerState {
   // (absence, not completion), but the *age* of the evidence a later replay restates is not a
   // claim about the pane and must not be lost with it. Bounded like its sibling maps.
   protected evidenceObservedAtByPaneKey = new Map<string, number>()
-  // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
-  protected lastWrittenJson: string | null = null
   // Why: main is the pane authority for local/WSL/SSH panes — hook HTTP, relay, and its own
   // OSC parse all converge on applyNormalizedStatus, so one sequencer covers every ingress here.
   protected readonly observations = new AgentStatusObservationSequencer(
@@ -174,7 +196,7 @@ export abstract class AgentHookServerState {
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract clearTmuxInnerSubjects(paneKey: string): void
   protected abstract clearTmuxTabSubjects(tabId: string): void
-  protected abstract ingestSpoolRecord(record: SpoolRecord): void
+  protected abstract ingestSpoolRecord(record: SpoolRecord): Promise<void> | void
   protected abstract emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void
   protected abstract buildStatusChangeNotification(): {
     statuses: AgentHookStatusChangeEntry[]
@@ -288,6 +310,7 @@ export abstract class AgentHookServerState {
       emitStatusRowMutation?: boolean
       preserveTmuxInnerSubjects?: boolean
       statusUnavailable?: true
+      forgetAgentExit?: true
     }
   ): void
   protected abstract deleteStatusEntry(
@@ -305,6 +328,7 @@ export abstract class AgentHookServerState {
   protected abstract serializeStatusFile(): string
   protected abstract scheduleStatusPersist(): void
   protected abstract runStatusPersist(): void
+  protected abstract primeStatusPersistBaseline(onDiskJson: string): void
 
   abstract _getStateForTests(): HookListenerState
   abstract _resetPromptSentDedupeForTests(): void

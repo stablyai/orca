@@ -113,6 +113,10 @@ export function structuredAgentSessionResumableSet(
     if (!record || !input.supportsRecord(record)) {
       continue
     }
+    if (record.providerContextBoundary?.operationId !== marker.contextClearOperationId) {
+      superseded.push(marker)
+      continue
+    }
     // The lease must be free and adjudicated. A contested or still-reconciling record is somebody
     // else's to resolve, and resuming into it is how a session gets two writers.
     if (input.leaseState !== 'may-be-held' && !isResumableStructuredAgentSessionRecord(record)) {

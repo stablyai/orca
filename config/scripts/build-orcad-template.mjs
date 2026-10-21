@@ -35,13 +35,14 @@ import {
   findSlotProblems,
   readManifest
 } from './orcad-prebuild-slot-contents.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
+import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
+import { assertNotDarkBuild, darkBuildMarkers } from '../dark-build-switches.cjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const outputDir = join(root, 'out', 'orcad-template')
 const buildDir = join(root, 'out', '.orcad-template-build')
-const commonArtifacts = orcadTemplateCommonFilenames()
 
 function isExecutable(filename) {
   return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
@@ -174,11 +175,23 @@ function stageCompatTarget(compat, basePackageDir) {
   return { files }
 }
 
+/**
+ * `--dark-test-template` lets a dark switch through for test servers only; the template then
+ * carries the switch's marker, which packaging refuses.
+ */
+export function assertTemplateBuildAllowed(argv = process.argv, env = process.env) {
+  if (!argv.includes('--dark-test-template')) {
+    // The template is what releases ship as the server; a dark build must never become one.
+    assertNotDarkBuild([], env)
+  }
+}
+
 function sameBytes(left, right) {
   return sha256(left) === sha256(right)
 }
 
 async function main() {
+  assertTemplateBuildAllowed()
   const templateTargets = requestedTemplateTargets()
   rmSync(buildDir, { recursive: true, force: true })
   const packages = Object.fromEntries(
@@ -187,6 +200,10 @@ async function main() {
   rmSync(outputDir, { recursive: true, force: true })
   mkdirSync(outputDir, { recursive: true })
   const [firstTarget] = templateTargets
+  // Every package carries the same page: its manifest is a common file, checked byte for byte below.
+  const commonArtifacts = orcadTemplateCommonFilenames(
+    readOrcadMobileWebAssetFilenames(packages[firstTarget])
+  )
   for (const filename of commonArtifacts) {
     const source = join(packages[firstTarget], ...filename.split('/'))
     // Why check every target: the template keeps one copy, so a per-target difference would ship wrong bytes.
@@ -217,6 +234,10 @@ async function main() {
     `${JSON.stringify({ schemaVersion: 3, commonSha256, targets }, null, 2)}\n`
   )
   verifyPackagedOrcadTemplate(join(root, 'out'), templateTargets)
+  // Outside the manifest, so deploys never copy it; it marks the whole template as test-only.
+  for (const marker of darkBuildMarkers()) {
+    writeFileSync(join(outputDir, marker.fileName), marker.text)
+  }
   rmSync(buildDir, { recursive: true, force: true })
   process.stdout.write(`[build-orcad-template] ok — ${Object.keys(targets).length} targets\n`)
 }

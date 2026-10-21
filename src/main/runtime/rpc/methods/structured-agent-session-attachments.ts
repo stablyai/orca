@@ -34,6 +34,7 @@ async function requireStore(
 export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   defineMethod({
     name: 'agentSessionAttachment.uploadStart',
+    permission: 'workspace',
     params: AttachmentUploadStartParams,
     handler: async (params, ctx) => {
       const { store, callerKey } = await requireStore(ctx)
@@ -42,6 +43,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   }),
   defineMethod({
     name: 'agentSessionAttachment.uploadAppend',
+    permission: 'workspace',
     params: AttachmentUploadAppendParams,
     handler: async (params, ctx) => {
       const { store, callerKey } = await requireStore(ctx)
@@ -50,6 +52,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   }),
   defineMethod({
     name: 'agentSessionAttachment.uploadCommit',
+    permission: 'workspace',
     params: AttachmentUploadIdParams,
     handler: async (params, ctx) => {
       const { store, callerKey } = await requireStore(ctx)
@@ -58,6 +61,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   }),
   defineMethod({
     name: 'agentSessionAttachment.uploadAbort',
+    permission: 'workspace',
     params: AttachmentUploadIdParams,
     handler: async (params, ctx) => {
       const { store, callerKey } = await requireStore(ctx)
@@ -66,6 +70,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   }),
   defineMethod({
     name: 'agentSessionAttachment.read',
+    permission: 'workspace',
     params: AttachmentReadParams,
     handler: async (params, ctx) => {
       const { store } = await requireStore(ctx)

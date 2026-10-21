@@ -81,12 +81,38 @@ describe('managed server CLI verbs', () => {
     expect(log).toHaveBeenCalledWith('Stopped build-box and unlinked it from this machine.')
   })
 
+  it('forgets a server only with --yes, over its own method (P1-E)', async () => {
+    const forgotten = {
+      outcome: 'forgotten',
+      verdict: 'unverifiable',
+      environmentId: 'env-1',
+      sshTargetId: 'ssh-1'
+    }
+    const unconfirmed = client(forgotten)
+    await expect(run('environment forget', unconfirmed, [])).rejects.toMatchObject({
+      code: 'confirmation_required'
+    })
+    expect(unconfirmed).not.toHaveBeenCalled()
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const confirmed = client(forgotten)
+    await run('environment forget', confirmed, [['yes', true]])
+    // Never managedServer.stop: an older desktop would drop a flag and decommission instead.
+    expect(confirmed).toHaveBeenCalledWith(
+      'managedServer.forget',
+      { selector: 'build-box' },
+      { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
+    )
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('may still be running there'))
+  })
+
   it('fails the command with the refusal, so scripts see a non-zero exit', async () => {
     const refusal = {
       outcome: 'refused',
       verdict: 'live',
       code: 'orcad_stop_active_environment',
-      reason: 'Choose another Active Server in Advanced before stopping this server.'
+      reason:
+        'This server is the default host for new projects. Choose another one under New projects open on before stopping it.'
     }
     await expect(run('environment stop', client(refusal), [['yes', true]])).rejects.toMatchObject({
       code: 'managed_server_refused',

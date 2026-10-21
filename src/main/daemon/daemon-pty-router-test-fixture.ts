@@ -1,7 +1,11 @@
 import { vi } from 'vitest'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  PtyBackgroundStreamEvent,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/pty-provider-contract'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
@@ -59,6 +63,12 @@ export function createAdapter(
     listSessions: vi.fn(async () => sessions.map((sessionId) => ({ sessionId, isAlive: true }))),
     requestIdleRetirement: vi.fn(async () => ({ state: 'retiring' as const })),
     releaseIdleRetirementFence: vi.fn(),
+    isIdleRetirementAdmissionClosed: vi.fn(() => false),
+    getLastAuthenticatedDaemonIdentity: vi.fn(() => ({
+      pid: 4242,
+      startedAtMs: 0,
+      launchNonce: label
+    })),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
     probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
     write: vi.fn((id: string, data: string) => {

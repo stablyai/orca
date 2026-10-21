@@ -3,7 +3,9 @@ import { GRAB_BUDGET } from '../../../../shared/browser-grab-types'
 import { createBrowserMockApi, createTestStore } from './browser-slice-test-harness'
 import { makeAnnotation } from './browser-annotation-test-fixture'
 
-vi.mock('@/runtime/web-runtime-session', () => ({ createWebRuntimeSessionBrowserTab: vi.fn() }))
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+  createWebRuntimeSessionBrowserTab: vi.fn()
+}))
 
 function createAnnotatedPage() {
   vi.stubGlobal('window', { api: createBrowserMockApi(vi.fn()) })

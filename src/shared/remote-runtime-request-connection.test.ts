@@ -1,7 +1,11 @@
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+import { encodePairingOffer, parsePairingCode } from './pairing'
 import {
   decrypt,
   deriveSharedKey,
@@ -15,7 +19,7 @@ import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabil
 
 type TestServer = {
   wss: WebSocketServer
-  pairing: PairingOffer
+  pairing: PairedRuntimeConnection
   requests: unknown[]
   auths: unknown[]
   connectionCount: () => number
@@ -171,7 +175,7 @@ async function createServer(): Promise<TestServer> {
 
   return {
     wss,
-    pairing,
+    pairing: pairedRuntimeConnectionFromOffer(pairing),
     requests,
     auths,
     connectionCount: () => connectionCount

@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 export async function shutdownDegradedFallbackSessions<T extends IPtyProvider>(
   sessionProviders: Map<string, T>,

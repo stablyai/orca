@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
 import {
   constants,
   copyFileSync,
@@ -10,6 +11,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
+import { resolveDaemonUnixSocketPath } from './daemon-socket-endpoint-path'
 import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
 
 export type DaemonConnectionInfo = {
@@ -31,10 +33,14 @@ export type DaemonPidFile = {
    *  `null` when it detected none. Absent on records no daemon wrote (adoption) or that predate
    *  durable-scope launching. */
   cgroupUnit?: string | null
+  /** Whether this daemon's terminals run under an OS process ceiling, and why not when off. */
+  processCeiling?: PtyProcessCeilingState
 }
 
 export type DaemonProcessHandle = {
   mode?: 'degraded-new-pty-fallback'
+  /** Fresh terminals stay off this daemon until a new incarnation replaces it. */
+  quarantine?: 'host-image-severed'
   /** Set when the launcher kept a daemon some earlier app launch forked, rather than forking one. */
   adopted?: true
   releaseAdoptionLease?(): void
@@ -53,6 +59,8 @@ export type DaemonSpawnerOptions = {
   launcher: DaemonLauncher
   /** Test seam; production uses the default window. */
   respawnThrottle?: DaemonRespawnThrottle
+  /** Why here: restart reuses this spawner, so the launch policy's recycle choice survives it. */
+  staleDaemonRecycleVersion?: string | null
 }
 
 export class DaemonSpawner {
@@ -63,9 +71,11 @@ export class DaemonSpawner {
   private tokenPath: string
   private pidPath: string
   private respawnThrottle: DaemonRespawnThrottle
+  readonly staleDaemonRecycleVersion: string | null
 
   constructor(opts: DaemonSpawnerOptions) {
     this.runtimeDir = opts.runtimeDir
+    this.staleDaemonRecycleVersion = opts.staleDaemonRecycleVersion ?? null
     this.launcher = opts.launcher
     this.respawnThrottle = opts.respawnThrottle ?? new DaemonRespawnThrottle()
     this.socketPath = getDaemonSocketPath(this.runtimeDir)
@@ -136,7 +146,7 @@ export function getDaemonSocketPath(
     const suffix = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
     return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${suffix}`
   }
-  return join(runtimeDir, `daemon-v${protocolVersion}.sock`)
+  return resolveDaemonUnixSocketPath(runtimeDir, `daemon-v${protocolVersion}.sock`)
 }
 
 export function getDaemonTokenPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {

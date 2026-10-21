@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { importExternalPathsToRuntime } from './runtime-file-client'
+import { importExternalPathsToRuntime } from './runtime-file-import-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
   fsImportExternalPaths,
@@ -95,7 +95,7 @@ describe('runtime file client', () => {
     await expect(
       importExternalPathsToRuntime(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -115,7 +115,8 @@ describe('runtime file client', () => {
     })
 
     expect(fsStageExternalPathsForRuntimeUpload).toHaveBeenCalledWith({
-      sourcePaths: ['/Users/me/assets']
+      sourcePaths: ['/Users/me/assets'],
+      nameExtensionlessImages: undefined
     })
     const transportCalls = runtimeEnvironmentTransportCall.mock.calls.map(([args]) => args)
     expect(transportCalls.map((args) => args.method)).toEqual([
@@ -216,7 +217,7 @@ describe('runtime file client', () => {
     await expect(
       importExternalPathsToRuntime(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -282,7 +283,7 @@ describe('runtime file client', () => {
     await expect(
       importExternalPathsToRuntime(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -328,7 +329,7 @@ describe('runtime file client', () => {
     await expect(
       importExternalPathsToRuntime(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -388,7 +389,7 @@ describe('runtime file client', () => {
     await expect(
       importExternalPathsToRuntime(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -430,7 +431,7 @@ describe('runtime file client', () => {
 
     await importExternalPathsToRuntime(
       {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1',

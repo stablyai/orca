@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldBeginWorktreeRename } from './WorktreeCard'
+import { shouldBeginWorktreeRename } from './worktree-card-model'
 
 describe('shouldBeginWorktreeRename', () => {
   it('matches unscoped legacy rename requests by worktree id', () => {

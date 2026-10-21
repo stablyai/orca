@@ -1,3 +1,4 @@
+import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
@@ -7,7 +8,6 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session-provider-handle-transition'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionAdapterDeps,
@@ -143,7 +143,7 @@ describe('Claude durable resume point at turn end', () => {
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
-      resolveAuthPolicy: () => ({ stripAuthEnv: false })
+      resolveAuthPolicy: () => ({ account: 'system' })
     })
     const launch = await resolve({
       identity: {

@@ -5,7 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
-import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
+import {
+  SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS,
+  useSetupScriptPromptRevalidation
+} from './useSetupScriptPromptRevalidation'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 
@@ -259,6 +262,35 @@ describe('useSetupScriptPromptRevalidation', () => {
     })
 
     expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-inspects each worktree once on first activation, not on every revisit', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1'),
+      requestRevalidation
+    })
+
+    // Before: every one of these 20 switches cost a hooksCheck + setupScriptImports pair.
+    for (let round = 0; round < 10; round += 1) {
+      await setActiveWorktree('worktree-2')
+      await setActiveWorktree('worktree-1')
+    }
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+
+    await setActiveWorktree('worktree-3')
+    expect(requestRevalidation).toHaveBeenCalledTimes(2)
+
+    now.mockReturnValue(1_000_000 + SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS)
+    await setActiveWorktree('worktree-1')
+    expect(requestRevalidation).toHaveBeenCalledTimes(3)
+    await setActiveWorktree('worktree-2')
+    expect(requestRevalidation).toHaveBeenCalledTimes(3)
+    now.mockRestore()
   })
 
   it('re-inspects when the repo runtime reconnects', async () => {

@@ -71,7 +71,7 @@ export function projectWorkspaceSurfaces({
     // Why: a folder-workspace id is opaque, not path-derived, so colliding hosts
     // disagree on the path; only the active workspace's resolved host breaks the tie.
     // Deriving that host from the row alone is sufficient because every stored row is
-    // stamped with an explicit `executionHostId` by `folderWorkspaceWithFetchedOwner`;
+    // stamped with an explicit `executionHostId` by `adoptFromEndpoint`;
     // an unstamped row keeps first-wins rather than guessing.
     if (
       activeWorkspaceResolvedHostId &&

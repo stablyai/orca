@@ -89,8 +89,6 @@ const UNREGISTERED_ON_MAIN = [
   'src/main/grok/windows-grok-hook-script.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.
   'src/main/ipc/preflight-windows-path-refresh.repro.test.ts',
-  // Nested `describe.skipIf(!isWindows)` real-shell block; never exercised in CI.
-  'src/main/ipc/pty-encoding.test.ts',
   // `describeWindows` ternary over the whole file; runs on no machine.
   'src/main/providers/windows-shell-preflight-runtime.windows.test.ts',
   // Whole file is `describe.runIf(platform === 'win32')`; runs on no machine.
@@ -111,9 +109,7 @@ const MANUAL_OPT_IN = [
   'src/main/git/runner-wsl-linked-gitdir-windows.test.ts',
   // `runRealWsl = … && ORCA_REAL_WSL_BANNER_TEST === '1'`; needs a real distro.
   'src/main/local-worktree-filesystem-wsl-banner.wsl.test.ts',
-  // `RUN_REAL_WINDOWS = platform === 'win32' && ORCA_REAL_WINDOWS_SKILL_TEST === '1'`.
-  'src/main/skills/skill-windows-rename-contention.integration.test.ts',
-  // Same flag; installs into a real Windows workspace.
+  // `ORCA_REAL_WINDOWS_SKILL_TEST === '1'`; installs into a real Windows workspace.
   'src/main/skills/skill-windows-workspace.integration.test.ts',
   // `RUN_REAL_WSL = … && ORCA_REAL_WSL_SKILL_TEST === '1'`; real distro filesystem.
   'src/main/skills/skill-wsl-delete.integration.test.ts',
@@ -131,7 +127,7 @@ const MANUAL_OPT_IN = [
 
 /** Caps so growing either list is two deliberate edits, not one. */
 const UNREGISTERED_MAX = 8
-const MANUAL_OPT_IN_MAX = 10
+const MANUAL_OPT_IN_MAX = 9
 
 /**
  * Floor for the Windows-gated population, so a broken walk or a regex that
@@ -352,6 +348,18 @@ function sourceOf(path) {
 }
 
 describe('Windows-gated test files are registered in the Windows CI lane', () => {
+  it('enables real Windows rename contention tests in the registered step', () => {
+    const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+    const step = workflow.jobs.package_windows.steps.find(
+      (candidate) => candidate.name === 'Test Windows-specific boundaries'
+    )
+    expect(step.env.ORCA_REAL_WINDOWS_SKILL_TEST).toBe('1')
+    expect(step.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+    expect(step.run).toContain(
+      'src/main/skills/skill-windows-rename-contention.integration.test.ts'
+    )
+  })
+
   it('scans a plausible number of test files', () => {
     // A broken root or extension filter would make every assertion below vacuous.
     expect(scannedTestFiles.length).toBeGreaterThan(5000)
@@ -385,7 +393,9 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     // Both discovery paths, proven against real files rather than fixtures: one
     // found by filename plus ternary alias, one found only by its gate
     // expression because its name says nothing about Windows gating.
-    expect(gatedFiles).toContain('src/shared/child-process/windows-command-line.win32.test.ts')
+    expect(gatedFiles).toContain(
+      'src/shared/__tests__/process-host/windows-command-line.win32.test.ts'
+    )
     expect(gatedFiles).toContain('src/main/agent-hooks/windows-hook-payload-delivery.test.ts')
     // And a compound gate, the case this guard was blind to at first.
     expect(gatedFiles).toContain('src/main/git/runner-wsl-linked-gitdir-windows.test.ts')

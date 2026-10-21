@@ -81,7 +81,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
     const normalized =
       source === 'codex'
-        ? pollCodexTranscriptStatus(this.state, original)
+        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
         : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return

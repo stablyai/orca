@@ -171,7 +171,7 @@ function alwaysOversizeRuntime(): Pick<OrcaRuntimeService, 'serializeTerminalBuf
 
 describe('the mobile snapshot the page receives', () => {
   it('reproduces the defect: the raw budget lets a screen past the frame cap', async () => {
-    const serialized = await serializeBudgetedMobileSnapshot(denseRuntime(), 'pty-1', true)
+    const serialized = await serializeBudgetedMobileSnapshot(denseRuntime(), 'pty-1')
     expect(serialized).not.toBeNull()
     const data = serialized?.data ?? ''
     // Under the budget the desktop applies, which is measured on the text.
@@ -192,7 +192,6 @@ describe('the mobile snapshot the page receives', () => {
     const serialized = await serializeBudgetedMobileSnapshot(
       denseRuntime(),
       'pty-1',
-      true,
       budget(PAGE_BUDGET)
     )
     expect(serialized).not.toBeNull()
@@ -209,8 +208,8 @@ describe('the mobile snapshot the page receives', () => {
   it('trims further when the publication carries more metadata', async () => {
     const runtime = denseRuntime()
     const [plain, withRequestId] = await Promise.all([
-      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, budget(PAGE_BUDGET)),
-      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, {
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1', budget(PAGE_BUDGET)),
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1', {
         bytes: PAGE_BUDGET,
         streamId: STREAM_ID,
         frame: { ...PUBLICATION, reason: 'a-reason-of-some-length', requestId: 999_999_999 }
@@ -224,7 +223,6 @@ describe('the mobile snapshot the page receives', () => {
     const serialized = await serializeBudgetedMobileSnapshot(
       denseRuntime(),
       'pty-1',
-      true,
       budget(PAGE_BUDGET)
     )
     expect(serialized?.truncatedByByteBudget).toBe(true)
@@ -235,8 +233,8 @@ describe('the mobile snapshot the page receives', () => {
     // exactly what it was served before: the payload size is not its transport's problem.
     const runtime = denseRuntime()
     const [withoutBudget, withBudget] = await Promise.all([
-      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true),
-      serializeBudgetedMobileSnapshot(runtime, 'pty-1', true, budget(PAGE_BUDGET))
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1'),
+      serializeBudgetedMobileSnapshot(runtime, 'pty-1', budget(PAGE_BUDGET))
     ])
     expect(withoutBudget?.scrollbackRows).toBeGreaterThan(withBudget?.scrollbackRows ?? 0)
   })
@@ -254,12 +252,7 @@ describe('the mobile snapshot the page receives', () => {
    * knows the screen it holds is not the screen the host had, and the next byte of output fixes it.
    */
   it('empties the text of a zero-row candidate it cannot fit, rather than posting it over', async () => {
-    const serialized = await serializeBudgetedMobileSnapshot(
-      denseRuntime(),
-      'pty-1',
-      true,
-      budget(4096)
-    )
+    const serialized = await serializeBudgetedMobileSnapshot(denseRuntime(), 'pty-1', budget(4096))
     expect(serialized?.scrollbackRows).toBe(0)
     expect(serialized?.data).toBe('')
     expect(serialized?.truncatedByByteBudget).toBe(true)
@@ -275,12 +268,7 @@ describe('the mobile snapshot the page receives', () => {
    * has rather than as a promise the host cannot keep.
    */
   it('cannot go below the metadata the frame carries, and keeps the text empty there', async () => {
-    const serialized = await serializeBudgetedMobileSnapshot(
-      denseRuntime(),
-      'pty-1',
-      true,
-      budget(16)
-    )
+    const serialized = await serializeBudgetedMobileSnapshot(denseRuntime(), 'pty-1', budget(16))
     expect(serialized?.scrollbackRows).toBe(0)
     expect(serialized?.data).toBe('')
     expect(serialized?.truncatedByByteBudget).toBe(true)
@@ -290,7 +278,7 @@ describe('the mobile snapshot the page receives', () => {
   it('still sends an unbudgeted subscriber the screen it has always been sent', async () => {
     // The other half of ruling 15, and the compatibility one: the raw rule keeps its fallback, so
     // an older page and every socket client get the oversize screen rather than an empty frame.
-    const serialized = await serializeBudgetedMobileSnapshot(alwaysOversizeRuntime(), 'pty-1', true)
+    const serialized = await serializeBudgetedMobileSnapshot(alwaysOversizeRuntime(), 'pty-1')
     expect(serialized?.data.length).toBeGreaterThan(MOBILE_SNAPSHOT_BYTE_BUDGET)
     expect(serialized?.truncatedByByteBudget).toBe(true)
   })
@@ -330,7 +318,6 @@ describe('a snapshot that round one accepted at exactly the budget', () => {
     const serialized = await serializeBudgetedMobileSnapshot(
       exactlyAtRoundOnesBudgetRuntime(),
       'pty-1',
-      true,
       budget(PAGE_BUDGET)
     )
     expect(serialized).not.toBeNull()
@@ -435,16 +422,11 @@ describe('the publication fields the budget has to assume', () => {
     // longer than the number that approved it, and no trimming is left to absorb them: this is the
     // margin, not a fixture with room in it.
     const data = 'x'.repeat(4096)
-    const serialized = await serializeBudgetedMobileSnapshot(
-      fixedScreenRuntime(data),
-      'pty-1',
-      true,
-      {
-        bytes: measured({ kind: 'scrollback', displayMode: 'auto' }, data),
-        streamId: STREAM_ID,
-        frame: { kind: 'scrollback', displayMode: 'auto' }
-      }
-    )
+    const serialized = await serializeBudgetedMobileSnapshot(fixedScreenRuntime(data), 'pty-1', {
+      bytes: measured({ kind: 'scrollback', displayMode: 'auto' }, data),
+      streamId: STREAM_ID,
+      frame: { kind: 'scrollback', displayMode: 'auto' }
+    })
     expect(required(serialized).data).toBe('')
   })
 })

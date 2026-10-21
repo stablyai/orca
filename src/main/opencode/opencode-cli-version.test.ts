@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { probeOpenCodeCliVersion } from './opencode-cli-version'
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 beforeEach(() => vi.mocked(runProcess).mockReset())
 
 it('shares concurrent probes and isolates executable, host and environment identities', async () => {

@@ -8,8 +8,11 @@
  * to cross the process boundary: orcad drives it, the daemon performs it, and the verdict
  * travels back over the daemon's socket.
  */
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { hashOrcadLauncher } from '../../shared/orcad-build-identity'
+import {
+  confirmPtyProcessCeiling,
+  type PtyProcessCeilingState
+} from '../../shared/pty-process-ceiling-state'
 import process from 'node:process'
 import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
 import { ptySpawnHealthPlatformCoverage } from '../daemon/daemon-health-identity'
@@ -17,7 +20,7 @@ import {
   daemonOwnsFreshPersistentPtys,
   getDaemonEndpointFacts,
   readDaemonPidRecord
-} from '../daemon/daemon-init'
+} from '../daemon/daemon-provider-state'
 import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
 import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../shared/orcad-stop-request'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
@@ -54,11 +57,14 @@ export type TerminalDaemonHealth = {
   /** The systemd scope unit the daemon self-detected landing in (see daemon-cgroup-scope.ts),
    *  or null when it ran unscoped — the case a combined-unit `systemctl restart` still reaps. */
   cgroupUnit: string | null
+  /** The OS ceiling on the terminals' processes, "on" or "off" with a reason; absent when the
+   *  daemon predates the report. Additive, so older readers ignore it. */
+  processCeiling?: PtyProcessCeilingState | null
   selfTest: PtySelfTest
 }
 
 export type OrcadHealth = {
-  /** Content hash of the running orcad bundle — the deployed build's identity. */
+  /** Launcher hash understood by older clients; split launchers embed the server digest. */
   buildHash: string
   buildVersion: string
   nodeVersion: string
@@ -83,7 +89,7 @@ export type OrcadHealth = {
 }
 
 /**
- * Identity of the exact bytes running.
+ * Launcher identity shared with clients that predate split server bundles.
  *
  * Why hash the entry and not read a version string: `ORCA_VERSION` is whatever the deploy
  * exported, so two different builds can carry one version. A rollback that did not actually
@@ -94,7 +100,7 @@ export function computeOrcadBuildHash(entryPath = process.argv[1]): string {
     return 'unknown'
   }
   try {
-    return createHash('sha256').update(readFileSync(entryPath)).digest('hex').slice(0, 16)
+    return hashOrcadLauncher(entryPath)
   } catch {
     return 'unknown'
   }
@@ -164,6 +170,7 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
     entryPath: record?.entryPath ?? null,
     protocolVersion: facts.protocolVersion,
     cgroupUnit: record?.cgroupUnit ?? null,
+    processCeiling: confirmPtyProcessCeiling(record?.processCeiling ?? null),
     selfTest
   }
 }

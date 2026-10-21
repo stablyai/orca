@@ -3,14 +3,12 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { createServer } from 'node:http'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { getManagedCommand, CODEX_EVENTS } from './codex-hook-definition'
 import { getManagedScript } from './codex-hook-script'
-import {
-  createManagedCommandMatcher,
-  wrapWindowsCmdHookCommand
-} from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 vi.mock('electron', () => ({ app: { getPath: () => process.cwd() } }))
 afterEach(() => {
@@ -31,7 +29,7 @@ describe('Codex Windows hook command', () => {
         `D:\\Windows\\System32\\cmd.exe --% /d /v:off /c @"${path.replaceAll('\\', '/')}"`
       )
       expect(createManagedCommandMatcher('codex-hook.cmd')(command)).toBe(true)
-      expect(wrapWindowsCmdHookCommand(path)).toContain('-EncodedCommand')
+      expect(wrapWindowsBatchHookCommand(path)).toContain('-EncodedCommand')
     }
   )
 

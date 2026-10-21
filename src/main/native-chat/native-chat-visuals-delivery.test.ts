@@ -1,24 +1,24 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  NATIVE_CHAT_VISUAL_FILE_MAX_LENGTH,
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
-  NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
   parseNativeChatVisualDirectiveLine
 } from '../../shared/native-chat-visual-directive'
 import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat-visual-shell'
 import { ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS } from '../../shared/orcad-artifacts'
 import {
   createNativeChatVisualsDelivery,
-  NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from './native-chat-visuals-delivery'
-import { nativeChatVisualsFolderFor } from './native-chat-visuals-folder'
+import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import { buildClaudeChildProcessEnv } from '../claude/claude-child-process-environment'
-import { codexStructuredChildEnvironment } from '../codex/codex-structured-child-environment'
+import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from './agent-session-record-test-fixture'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import {
   NATIVE_CHAT_VISUALS_SKILL_NAME,
@@ -50,6 +50,32 @@ function tempDir(): string {
 const logger = () => ({ warn: vi.fn(), error: vi.fn() })
 
 describe('preparing a chat for visuals', () => {
+  it('reads the preference for each launch and prepares nothing while it is off', async () => {
+    const state = tempDir()
+    let enabled = false
+    const resolveSkill = vi.fn(async () => SKILL)
+    const prepare = createNativeChatVisualsDelivery({
+      stateDirectory: state,
+      logger: logger(),
+      isEnabled: () => enabled,
+      resolveSkill
+    })
+    await expect(prepare('disabled-chat')).resolves.toBeNull()
+    expect(resolveSkill).not.toHaveBeenCalled()
+    expect(existsSync(nativeChatScratchRootFor(state))).toBe(false)
+    enabled = true
+    const launched = await prepare('enabled-chat')
+    expect(launched).toEqual({
+      folder: nativeChatScratchFolderFor(state, 'enabled-chat'),
+      skill: SKILL
+    })
+    enabled = false
+    await expect(prepare('next-chat')).resolves.toBeNull()
+    expect(resolveSkill).toHaveBeenCalledOnce()
+    expect(existsSync(nativeChatScratchFolderFor(state, 'next-chat'))).toBe(false)
+    expect(existsSync(launched!.folder)).toBe(true)
+  })
+
   it("creates the chat's own private folder and hands back the skill", async () => {
     const state = tempDir()
     const prepare = createNativeChatVisualsDelivery({
@@ -58,7 +84,7 @@ describe('preparing a chat for visuals', () => {
       resolveSkill: async () => SKILL
     })
     const prepared = await prepare('chat-1')
-    expect(prepared).toEqual({ folder: nativeChatVisualsFolderFor(state, 'chat-1'), skill: SKILL })
+    expect(prepared).toEqual({ folder: nativeChatScratchFolderFor(state, 'chat-1'), skill: SKILL })
     const mode = statSync(prepared!.folder).mode & 0o777
     expect(process.platform === 'win32' || mode === 0o700).toBe(true)
     // A second launch of the same chat reuses it.
@@ -75,9 +101,9 @@ describe('preparing a chat for visuals', () => {
       })('chat-1')
     ).resolves.toBeNull()
     expect(missingSkill.warn).toHaveBeenCalledOnce()
-    // A file where the visuals root should be makes every mkdir fail.
+    // A file where the scratch root should be makes every mkdir fail.
     const state = tempDir()
-    writeFileSync(join(state, 'native-chat-visuals'), 'not a folder')
+    writeFileSync(nativeChatScratchRootFor(state), 'not a folder')
     const failedFolder = logger()
     await expect(
       createNativeChatVisualsDelivery({
@@ -87,47 +113,50 @@ describe('preparing a chat for visuals', () => {
       })('chat-1')
     ).resolves.toBeNull()
     expect(failedFolder.warn).toHaveBeenCalledWith(
-      'native-chat visuals folder could not be prepared',
+      'native-chat scratch folder could not be prepared',
       expect.objectContaining({ scope: 'nativeChatVisuals.folder', sessionId: 'chat-1' })
     )
   })
 
-  it("never hands a chat another chat's folder that Orca itself inherited", () => {
-    const inherited = { PATH: '/bin', [NATIVE_CHAT_VISUALS_DIR_ENV]: '/parent-chat' }
+  it("never hands a chat another chat's folder that Orca itself inherited", async () => {
+    const inherited = { PATH: '/bin', [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/parent-chat' }
     const visuals = { folder: '/mine', skill: SKILL }
     for (const platform of ['darwin', 'win32'] as const) {
       const claude = (configured: Record<string, string>) =>
         buildClaudeChildProcessEnv(configured, { inheritedEnv: inherited, platform })
-      expect(claude({})).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
-      expect(claude(withNativeChatVisualsEnv({}, visuals))[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(
+      expect(claude({})).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
+      expect(claude(withNativeChatVisualsEnv({}, visuals))[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(
         '/mine'
       )
     }
-    const codex = (withVisuals: boolean) =>
+    const record = agentSessionRecordFixture({
+      sessionId: 'chat-1',
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' }
+    })
+    const codex = async (withVisuals: boolean) =>
       resolveProviderChildEnv(
-        codexStructuredChildEnvironment(
-          {
-            command: 'codex',
-            args: ['app-server'],
-            cwd: '/w',
-            codexHome: null,
-            resumeThreadId: null,
-            ...(withVisuals ? { visuals } : {})
-          },
-          'spawn-token',
-          'chat-1'
-        ),
+        await createCodexStructuredLaunchResolver({
+          store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+          resolveCommand: () => 'codex',
+          resolveLaunchArgs: () => [],
+          prepareVisuals: async () => (withVisuals ? visuals : null)
+        })({
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch reads only the session id of its identity here.
+          identity: { sessionId: 'chat-1' } as AgentSessionJournalIdentity,
+          spawnToken: 'spawn-token'
+        }),
         inherited
       )
-    expect(codex(false)).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
-    expect(codex(true)[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe('/mine')
+    expect(await codex(false)).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
+    expect((await codex(true))[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe('/mine')
   })
 
   it('names only this chat folder to the agent', () => {
-    const inherited = { PATH: '/bin', [NATIVE_CHAT_VISUALS_DIR_ENV]: '/other-chat' }
+    const inherited = { PATH: '/bin', [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/other-chat' }
     expect(withNativeChatVisualsEnv(inherited, { folder: '/mine', skill: SKILL })).toEqual({
       PATH: '/bin',
-      [NATIVE_CHAT_VISUALS_DIR_ENV]: '/mine'
+      [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/mine'
     })
     expect(withNativeChatVisualsEnv(inherited, null)).toEqual({ PATH: '/bin' })
   })
@@ -159,11 +188,9 @@ describe('the bundled skill', () => {
       file: 'latency-by-region-7c1e.html',
       title: 'Latency by region'
     })
-    expect(SKILL_TEXT).toContain(`At most ${NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE} visuals`)
-    expect(SKILL_TEXT).toContain(`at most ${NATIVE_CHAT_VISUAL_FILE_MAX_LENGTH} characters`)
-    expect(SKILL_TEXT).toContain(`at most ${NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH}`)
+    expect(SKILL_TEXT).toContain(`At most ${NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE} per reply`)
     expect(SKILL_TEXT).toContain(`under ${NATIVE_CHAT_VISUAL_MAX_BYTES / 1024} KB`)
-    expect(SKILL_TEXT).toContain(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(SKILL_TEXT).toContain(NATIVE_CHAT_SCRATCH_DIR_ENV)
     expect(SKILL_TEXT).toMatch(new RegExp(`^name: ${NATIVE_CHAT_VISUALS_SKILL_NAME}$`, 'm'))
   })
 

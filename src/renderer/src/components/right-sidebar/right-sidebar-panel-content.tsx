@@ -1,43 +1,26 @@
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
-import type { RightSidebarVisualState } from '@/store/slices/editor/actions/right-sidebar-state'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
 const SourceControl = lazy(() => import('./SourceControl'))
 const ChecksPanel = lazy(() => import('./ChecksPanel'))
 const PortsPanel = lazy(() => import('./PortsPanel'))
-const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
+const AiVaultSidebarPanel = lazy(() => import('./AiVaultSidebarPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
-const NativeChatVisualPanel = lazy(() => import('../native-chat/NativeChatVisualPanel'))
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
   rightSidebarOpen: boolean
-  visual: RightSidebarVisualState | null
 }
 
 export function RightSidebarPanelContent({
   effectiveTab,
-  rightSidebarOpen,
-  visual
+  rightSidebarOpen
 }: RightSidebarPanelContentProps): React.JSX.Element {
-  if (visual) {
-    // Why key: a different visual is a different frame, never a reused one.
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Suspense fallback={null}>
-          <NativeChatVisualPanel
-            key={`${visual.sessionId}:${visual.messageId}:${visual.file}`}
-            route={visual}
-          />
-        </Suspense>
-      </div>
-    )
-  }
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Suspense fallback={null}>
@@ -50,7 +33,7 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
-        {effectiveTab === 'vault' && <AiVaultPanel />}
+        {effectiveTab === 'vault' && <AiVaultSidebarPanel />}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel

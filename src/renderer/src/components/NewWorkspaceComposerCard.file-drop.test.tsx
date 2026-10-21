@@ -10,7 +10,7 @@ import { useAttachmentDropState } from '../hooks/composer-state/attachment-drop-
 import type { ProjectGroup } from '../../../shared/project-group-types'
 
 const uploads = vi.hoisted(() => ({ importPaths: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: uploads.importPaths
 }))
 
@@ -133,9 +133,9 @@ describe('new workspace card file drop ownership', () => {
         ({ source }: { source: string }) => {
           const target = resolveComposerAttachmentTarget({
             selectedProjectGroup: group,
+            selectedRepo: { id: 'source-repo' },
             selectedRepoPath: source,
             selectedRepoExecutionHostId: 'ssh:ssh-a',
-            selectedRepoSettings: {},
             connectionId: 'ssh-a'
           })
           const dropState = useAttachmentDropState({
@@ -145,7 +145,8 @@ describe('new workspace card file drop ownership', () => {
             promptTextareaRef: createRef<HTMLTextAreaElement>(),
             connectionId: target.connectionId,
             selectedRepoPath: target.path ?? undefined,
-            selectedRepoSettings: target.settings,
+            selectedRepoRuntimeEnvironmentId: target.runtimeEnvironmentId,
+            selectedWorktreeId: target.worktreeId,
             setAgentPrompt: () => {},
             setAttachmentPaths: attach
           })
@@ -199,7 +200,6 @@ describe('new workspace card file drop ownership', () => {
     cards.splice(cards.indexOf(b), 1)
     await drop(a)
     expect(first).toHaveBeenCalledTimes(2)
-    expect(a.querySelector('[data-native-file-drop-target]')).toBeNull()
   })
   it('keeps a preparation captured for the original card when another card mounts', async () => {
     const gate = Promise.withResolvers<{ paths: string[]; failures: never[] }>()

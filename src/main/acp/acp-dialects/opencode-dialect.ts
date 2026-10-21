@@ -41,9 +41,5 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
-  normalizeToolUpdate,
-  // OpenCode 1.x keeps an "always" grant in its own process, which is this chat's alone and ends
-  // whenever Orca ends it (a Stop, quitting, or stopping an idle chat's agent): not "always".
-  permissionOptionLabel: (option) =>
-    option.kind === 'allow_always' ? 'Allow until OpenCode restarts' : undefined
+  normalizeToolUpdate
 }

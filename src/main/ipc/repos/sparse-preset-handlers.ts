@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import { normalizeSparseDirectories } from '../sparse-checkout-directories'
+import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
   // ── Sparse presets ─────────────────────────────────────────────
@@ -23,6 +24,7 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
       if (!repo) {
         throw new Error(`Repo "${args.repoId}" not found`)
       }
+      assertWslMoveProjectWritable(store, { repoId: args.repoId })
       const name = normalizeSparsePresetName(args.name)
       const directories = normalizeSparsePresetDirectories(args.directories)
       const now = Date.now()
@@ -48,6 +50,7 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
     if (!repo) {
       throw new Error(`Repo "${args.repoId}" not found`)
     }
+    assertWslMoveProjectWritable(store, { repoId: args.repoId })
     store.removeSparsePreset(args.repoId, args.presetId)
     notifySparsePresetsChanged(mainWindow, args.repoId)
   })

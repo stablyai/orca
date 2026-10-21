@@ -10,7 +10,36 @@ import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus
 } from '../../../project-groups/folder-workspace-path-status'
-import { getSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
+import {
+  isWslMoveWorkspaceBlocked,
+  WslMoveProjectFencedError
+} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
+
+/**
+ * A new PTY needs a workspace no WSL move is taking, and a folder that still exists. Reattaching to
+ * a session the daemon still runs is not a new PTY: a reload mid-move must not orphan a live pane.
+ */
+export function assertWorkspaceAcceptsNewPty(
+  store: Store | undefined,
+  worktreeId: string | undefined,
+  sessionId?: string
+): Promise<void> | void {
+  if (isWslMoveWorkspaceBlocked(store, worktreeId)) {
+    return assertReattachesLiveSession(sessionId).then(() =>
+      assertFolderWorkspacePtyPathUsable(store, worktreeId)
+    )
+  }
+  return assertFolderWorkspacePtyPathUsable(store, worktreeId)
+}
+
+async function assertReattachesLiveSession(sessionId: string | undefined): Promise<void> {
+  // An unanswered census is never proof the session lives, so it refuses.
+  const live = sessionId ? await listLiveDaemonPtyIds() : null
+  if (!sessionId || !live?.includes(sessionId)) {
+    throw new WslMoveProjectFencedError()
+  }
+}
 
 export function assertFolderWorkspacePtyPathUsable(
   store: Store | undefined,
@@ -20,11 +49,10 @@ export function assertFolderWorkspacePtyPathUsable(
   if (!store || workspaceScope?.type !== 'folder') {
     return
   }
-  return getFolderWorkspacePathStatus(
-    store,
-    { scope: 'folder-workspace', folderWorkspaceId: workspaceScope.folderWorkspaceId },
-    { getSshFilesystemProvider }
-  ).then(assertFolderWorkspacePathUsable)
+  return getFolderWorkspacePathStatus(store, {
+    scope: 'folder-workspace',
+    folderWorkspaceId: workspaceScope.folderWorkspaceId
+  }).then(assertFolderWorkspacePathUsable)
 }
 
 export function resolvePtySpawnStartupCwd(

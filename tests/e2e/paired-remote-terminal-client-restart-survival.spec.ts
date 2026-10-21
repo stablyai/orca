@@ -39,6 +39,7 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 /** What a user would accept for "my terminal is back" after reopening the app. */
 const RESTORE_BUDGET_MS = 60_000
@@ -72,15 +73,11 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function readSinkLines(sinkPath: string): string[] {

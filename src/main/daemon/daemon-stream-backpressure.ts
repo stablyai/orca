@@ -50,11 +50,13 @@ export class DaemonStreamBackpressure {
     clientId: string,
     sessionId: string,
     socket: Pick<Socket, 'write'>,
-    line: string,
+    line: string | Buffer,
     onComplete?: () => void
   ): void {
     const client = this.getOrCreateClient(clientId)
-    const bytes = Buffer.byteLength(line) + STREAM_ENTRY_OVERHEAD_BYTES
+    const bytes =
+      (typeof line === 'string' ? Buffer.byteLength(line) : line.length) +
+      STREAM_ENTRY_OVERHEAD_BYTES
     client.pendingWriteBytes.set(sessionId, (client.pendingWriteBytes.get(sessionId) ?? 0) + bytes)
     this.refresh()
     socket.write(line, () => {

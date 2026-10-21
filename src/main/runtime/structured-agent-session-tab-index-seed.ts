@@ -3,6 +3,9 @@
 // the next launch and drop the rest. With an index present, every restored chat is already listed.
 
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { Tab } from '../../shared/tab-types'
+import type { ChatTabChange } from './agent-session-tab-layout'
+import { savedSessionId } from './saved-structured-agent-session-restoration'
 
 type TabIndexHost = Pick<
   StructuredAgentSessionHost,
@@ -34,4 +37,33 @@ export async function seedStructuredAgentSessionTabIndex(
       })
     )
   }
+}
+
+/**
+ * The changes, by worktree, that make a windowless host's saved chat tabs match the index once it is
+ * seeded. A restored chat with no saved tab gets one: its layout predates saved chat tabs. A saved
+ * tab the index omits outlived its close (the process died between the index commit and the layout
+ * save, or an older build closed it) and goes; that holds only while both records exist.
+ */
+export function chatTabChangesMatchingIndex(
+  savedTabsByWorktree: Record<string, readonly Tab[]>,
+  restored: readonly ({ worktreeId: string } & Extract<ChatTabChange, { open: unknown }>)[],
+  retired: (sessionId: string) => boolean
+): Map<string, ChatTabChange[]> {
+  const changes = new Map<string, ChatTabChange[]>()
+  const add = (worktreeId: string, change: ChatTabChange): void => {
+    changes.set(worktreeId, [...(changes.get(worktreeId) ?? []), change])
+  }
+  for (const { worktreeId, open } of restored) {
+    add(worktreeId, { open })
+  }
+  for (const [worktreeId, tabs] of Object.entries(savedTabsByWorktree)) {
+    for (const tab of tabs) {
+      const sessionId = savedSessionId(tab)
+      if (sessionId && retired(sessionId)) {
+        add(worktreeId, { close: sessionId })
+      }
+    }
+  }
+  return changes
 }

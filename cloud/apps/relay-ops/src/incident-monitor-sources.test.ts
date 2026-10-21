@@ -543,6 +543,92 @@ describe('incident monitor sources', () => {
     expect(waits).toEqual([])
   })
 
+  // Why: on 2026-10-19 cell-status refused reserve production-gce-c7 with a 404 on every sample.
+  it('marks a reserve cell unprobed and skips its refused migration reads', async () => {
+    const gcloud: GcloudClient = {
+      accessToken: async () => 'unused',
+      identityToken: async () => 'unused'
+    }
+    const reserveCellId = 'production-gce-c7'
+    const selector = {
+      generation: 1,
+      membership: {
+        existingOnly: [],
+        migrationOnly: ['production-gce-c2'],
+        general: productionCells.filter((cellId) => cellId !== 'production-gce-c2')
+      }
+    }
+    const waits: number[] = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const path = new URL(String(input)).pathname
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      if (path === '/v1/admin/admission-selector/status') return Response.json({ selector })
+      if (path === '/v1/admin/cell-status') {
+        if (body.cellId === reserveCellId) {
+          return Response.json({ error: 'cell_in_reserve_mode' }, { status: 404 })
+        }
+        return Response.json({
+          status: {
+            enabled: true,
+            connectionCapacity: { hardCap: 600 },
+            runtime: { lastHeartbeatAt: now - 1_000, heartbeatFresh: true }
+          }
+        })
+      }
+      expect(path).toBe('/v1/admin/evacuation-status')
+      expect(body.sourceCellId).not.toBe(reserveCellId)
+      return Response.json({
+        blocked: 0,
+        blockedExpiredUnregistered: 0,
+        registeredTargetInactive: 0
+      })
+    }
+    const result = await directorSignals('production', selector, gcloud, now, fetchImpl, async (ms) => {
+      waits.push(ms)
+    })
+    expect(waits).toEqual([])
+    expect(result.cells.find((cell) => cell.cellId === reserveCellId)).toMatchObject({
+      reserve: true
+    })
+    expect(result.cells.find((cell) => cell.cellId === 'production-gce-c1')).not.toHaveProperty(
+      'reserve'
+    )
+    const signals = result.source.signals
+    expect(signals[`cell.${reserveCellId}.admission_state`]).toMatchObject({ value: 2 })
+    // Why: 10-19 run 39225932592 froze reserve c7 at 731 connections against the 500 default.
+    const configuredCap = RELAY_OPS_ENVIRONMENTS.production.cells.find(
+      (cell) => cell.cellId === reserveCellId
+    )?.connectionHardCap
+    expect(configuredCap).toBe(1_000)
+    expect(signals[`cell.${reserveCellId}.connection_hard_cap`]).toMatchObject({
+      value: configuredCap
+    })
+    for (const suffix of ['heartbeat_fresh', 'heartbeat_age_ms', 'migration_blocked']) {
+      expect(signals[`cell.${reserveCellId}.${suffix}`]).toBeUndefined()
+    }
+    expect(signals['cell.production-gce-c1.heartbeat_age_ms']).toMatchObject({ value: 1_000 })
+  })
+
+  it('still fails a cell-status 404 that is not the reserve refusal', async () => {
+    const gcloud: GcloudClient = {
+      accessToken: async () => 'unused',
+      identityToken: async () => 'unused'
+    }
+    const selector = {
+      generation: 1,
+      membership: { existingOnly: [], migrationOnly: [], general: productionCells }
+    }
+    const collect = (error: string) =>
+      directorSignals('production', selector, gcloud, now, async (input) => {
+        const path = new URL(String(input)).pathname
+        if (path === '/v1/admin/admission-selector/status') return Response.json({ selector })
+        return Response.json({ error }, { status: 404 })
+      }, async () => {})
+    for (const error of ['cell_not_found', 'cell_in_reserve_mode_soon', '']) {
+      await expect(collect(error)).rejects.toThrow('Relay admin telemetry returned 404')
+    }
+  })
+
   // A 404 the director means (wrong role) must not be retried either.
   it('does not retry a director-only 404', async () => {
     const gcloud: GcloudClient = {

@@ -12,7 +12,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
-  await import('./orca-runtime-get-pty-record-for-pane-key')
+  await import('./orchestration/terminal-pane-mail-routing')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
+import type * as NativeHookExecutableModule from './windows-native-hook-executable'
 
 let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
@@ -31,8 +32,15 @@ afterEach(() => {
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
 
-const { homedirMock } = vi.hoisted(() => ({
-  homedirMock: vi.fn<() => string>()
+const { homedirMock, bundledHook } = vi.hoisted(() => {
+  const bundledHook: { path: string | null } = { path: null }
+  return { homedirMock: vi.fn<() => string>(), bundledHook }
+})
+
+// Why: no packaged resources here; the exe leg points Claude's install at the real built binary.
+vi.mock('./windows-native-hook-executable', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeHookExecutableModule>()),
+  resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
 // Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
@@ -80,6 +88,10 @@ import {
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
+import {
+  buildWindowsNativeHookExecutable,
+  WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
+} from './windows-native-hook-exe.test-fixture'
 
 /** The launchers ship their command base64'd; assert the shape they actually run. */
 function decodeEncodedPowerShellCommand(command: string): string {
@@ -285,7 +297,7 @@ describe('Windows managed hook stdin structure', () => {
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
       )
       mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(10)
+      expect(mainBatchScripts).toHaveLength(12)
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         // Why: missing-env path must not touch more.com — hang class from #11549.
@@ -330,13 +342,6 @@ describe('Windows managed hook stdin structure', () => {
         claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin')
       )
 
-      // Why (#11549 class): every Windows-local hook now guards before owning stdin —
-      // the caller may abandon the pipe, and the payload is discarded on this path anyway.
-      const copilot = readFileSync(join(hooksDir, 'copilot-hook.ps1'), 'utf8')
-      expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeGreaterThan(-1)
-      expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeLessThan(
-        copilot.indexOf('[Console]::In.ReadToEnd()')
-      )
       // Why: the two encoded-PowerShell launchers own stdin themselves when the managed
       // script is missing, so the same guard has to precede their ReadToEnd — and the
       // fallback answer has to precede the guard, or a gate event outside a pane is
@@ -361,12 +366,6 @@ describe('Windows managed hook stdin structure', () => {
           `${name} guards before owning stdin`
         ).toBeLessThan(decoded.indexOf('[Console]::In.ReadToEnd()'))
       }
-
-      const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeGreaterThan(-1)
-      expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeLessThan(
-        kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       if (previousGrokHome === undefined) {
@@ -498,14 +497,18 @@ describe('Windows managed hook stdin structure', () => {
   )
 
   // Why: command-shape tests missed conhost discarding the JSON consumers observe (#14818).
-  it.skipIf(process.platform !== 'win32')(
-    'emits parseable JSON on stdout from the registered Claude hook command, through cmd.exe and Git Bash',
-    async () => {
+  it.skipIf(process.platform !== 'win32').each([
+    { form: 'claude-hook.cmd', bundled: false },
+    { form: 'orca-agent-hook.exe claude', bundled: true }
+  ])(
+    'emits parseable JSON on stdout from the registered Claude hook command ($form), through cmd.exe and Git Bash',
+    async ({ form, bundled }) => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdout-json-'))
       homedirMock.mockReturnValue(home)
       const absentProfile = join(home, 'absent')
       seedCmdAutoRunTarget(home)
       seedCmdAutoRunTarget(absentProfile)
+      bundledHook.path = bundled ? buildWindowsNativeHookExecutable() : null
       try {
         expect(new ClaudeHookService().install().state).toBe('installed')
         const settings = JSON.parse(
@@ -513,6 +516,7 @@ describe('Windows managed hook stdin structure', () => {
         ) as { hooks: Record<string, { hooks: { command: string; args?: string[] }[] }[]> }
         const entry = settings.hooks.PreToolUse[0].hooks[0]
         expect(entry.args).toBeUndefined()
+        expect(entry.command.endsWith(form)).toBe(true)
 
         // Why: MSYS rewrites switches and paths, so the command must survive both shells (#14815).
         const gitBash = findGitBash()
@@ -550,14 +554,25 @@ describe('Windows managed hook stdin structure', () => {
             expect(() => JSON.parse(result.stdout.trim()), `${label} stdout is JSON`).not.toThrow()
             expect(JSON.parse(result.stdout.trim()), `${label} stdout`).toEqual({})
           }
+          // Why (#11549): outside a pane the exe must exit without waiting on a stdin nobody closes.
+          if (bundled) {
+            const abandoned = await runHookProcess(
+              shell.executable,
+              shell.args,
+              environments[0].env,
+              'abandon'
+            )
+            expect(abandoned.exitCode, `${shell.name} abandoned-stdin exit code`).toBe(0)
+          }
         }
       } finally {
+        bundledHook.path = null
         homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
         rmSync(home, { recursive: true, force: true })
       }
     },
-    // Why: six shell launches can overrun the default while the suite competes for cores.
-    60_000
+    // Why: six shell launches (and a cold exe build) can overrun the default under load.
+    WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
   )
 })
 

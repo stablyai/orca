@@ -33,10 +33,8 @@ export function consumedSubmissionWasRejected(
 export type RejectedDraftSettlement = { state: 'returned' | 'waiting' }
 
 /**
- * Where no one failed the user, the draft goes back to waiting, under whatever pauses the queue: a
- * Stop's, or, when a restart or a close cut it short, the reopen's, so it follows the chat's next
- * turn like every card the chat closed with. A returned card would block the drafts behind it on a
- * failure that never happened. A failure returns the card with its refusal for the user to act on.
+ * A withdrawal waits at its original position under the queue's pause; a failure returns the
+ * card, except a command refused in its own turn, whose row already reports it.
  */
 export function rejectedDraftSettlement(
   rejected: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }

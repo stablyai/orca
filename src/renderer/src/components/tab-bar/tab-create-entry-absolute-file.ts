@@ -1,6 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { toWorktreeRelativePath } from '@/lib/terminal-links'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   validateNewTabEntryAbsolutePath,

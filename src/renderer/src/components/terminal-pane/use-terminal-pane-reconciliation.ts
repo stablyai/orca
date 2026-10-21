@@ -13,7 +13,7 @@ import {
   selectRetiredPaneIds,
   trackRetiredLeafIds
 } from './terminal-live-layout-reconciliation'
-import { collectLeafIds } from './terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 

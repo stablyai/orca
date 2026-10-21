@@ -1,10 +1,13 @@
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
-import type { DiffSource, EditorOpenTargetOptions, OpenFile } from '../types/open-file'
+import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
+import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
   return runtimeEnvironmentId?.trim() || null
@@ -142,6 +145,14 @@ export function resolveEditorFileIdForOwner(
   if (existing) {
     return existing.id
   }
+  // Why: restore always names a server's file by its owned id; minting it on first open avoids a rename (and remount) at restart.
+  if (runtimeOwnerKey(runtimeEnvironmentId) !== null) {
+    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
+  }
+  // Why: every frame restores floating files under their owned id; minting it here keeps main's tab on the same id.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
+  }
   // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>
     isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
@@ -168,6 +179,19 @@ export function getOpenedEditFileIdAfterOpen(
   }
   return (
     state.openFiles.find(
+      (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'
+    )?.id ?? filePath
+  )
+}
+
+/** The id a conflict-review overview shows a file under: an open edit tab's, so its unsaved edits show. */
+export function conflictOverviewFileId(
+  openFiles: readonly OpenFile[],
+  worktreeId: string,
+  filePath: string
+): string {
+  return (
+    openFiles.find(
       (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'
     )?.id ?? filePath
   )

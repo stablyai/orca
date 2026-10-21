@@ -70,7 +70,7 @@ describe('pty side-effect pending census', () => {
 
   it('tracks a live output processor queue through enqueue, drain, and dispose', async () => {
     vi.useFakeTimers()
-    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const { createPtyOutputProcessor } = await import('./pty-output-processor')
     const before = ptySideEffectCounts()
     const processor = createPtyOutputProcessor({ onTitleChange: vi.fn() })
 
@@ -97,7 +97,7 @@ describe('pty side-effect pending census', () => {
 
   it('excludes cleared consumed entries from retention after a bounded drain', async () => {
     vi.useFakeTimers()
-    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const { createPtyOutputProcessor } = await import('./pty-output-processor')
     const before = ptySideEffectCounts()
     const processor = createPtyOutputProcessor({ onTitleChange: vi.fn() })
 

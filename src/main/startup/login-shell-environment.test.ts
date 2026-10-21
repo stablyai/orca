@@ -78,7 +78,7 @@ describe('resolveLoginShellEnvironment', () => {
 
       const environment = await resolveLoginShellEnvironment({
         shellOverride: shell.path,
-        force: true
+        startedAfter: Date.now()
       })
       expect(environment[SHELL_ONLY_VARIABLE]).toBe('shell-only')
     }

@@ -2,13 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   orphanInstallLockCommand,
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
-} from './ssh-relay-install-lock-commands'
-import { INSTALL_LOCK_STALE_SECONDS } from './ssh-relay-install-lock'
+} from '../managed-server/install/remote-install-lock-commands'
+import { INSTALL_LOCK_STALE_SECONDS } from '../managed-server/install/remote-install-lock'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const host = getRemoteHostPlatform(process.platform === 'darwin' ? 'darwin-arm64' : 'linux-x64')

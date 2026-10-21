@@ -4,8 +4,8 @@
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
-import type { ClaudeStructuredLaunchResolverDeps } from './claude-structured-launch-resolution'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}
@@ -17,10 +17,19 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
   return next
 }
 
-export type ClaudeEnvDeps = Pick<
-  ClaudeStructuredLaunchResolverDeps,
-  'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv'
->
+export type ClaudeEnvDeps = {
+  resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
+  /** Refreshes the inherited env after the command was not found in it; absent never retries. */
+  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
+  /** Where the program starts, for a PATH entry relative to it; Orca's own when absent. */
+  resolveWorkingDirectory?: () => Promise<string> | string
+  resolveEnv?: () =>
+    | Promise<Record<string, string> | undefined>
+    | Record<string, string>
+    | undefined
+  /** The env the child inherits before auth stripping; absent inherits Orca's own process env. */
+  resolveInheritedEnv?: () => Promise<Record<string, string>>
+}
 
 /** What a child's env is built from, before any auth policy applies to it. */
 export type ClaudeChildEnvSources = {
@@ -29,39 +38,47 @@ export type ClaudeChildEnvSources = {
   inheritedEnv: Record<string, string>
 }
 
-export async function resolveClaudeChildEnvSources(
-  deps: ClaudeEnvDeps
-): Promise<ClaudeChildEnvSources> {
-  const command = (deps.resolveCommand ?? resolveClaudeCommand)()
+export function resolveClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChildEnvSources> {
+  return resolveAgainAfterRefreshOnMissingProgram(
+    () => readClaudeChildEnvSources(deps),
+    deps.refreshEnvironmentAfterMiss,
+    {
+      env: ({ inheritedEnv, overlay }) => ({ ...inheritedEnv, ...overlay }),
+      cwd: deps.resolveWorkingDirectory
+    }
+  )
+}
+
+async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChildEnvSources> {
   const overlay = await deps.resolveEnv?.()
   const inheritedEnv = deps.resolveInheritedEnv
     ? await deps.resolveInheritedEnv()
     : cloneDefinedEnv(process.env)
+  const effectiveEnv = { ...inheritedEnv, ...overlay }
+  const command = (deps.resolveCommand ?? resolveClaudeCommand)({
+    pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,
+    homePath: effectiveEnv.HOME ?? effectiveEnv.USERPROFILE
+  })
   return { command, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
 }
 
 // Why the overlay merges onto the inherited env rather than replacing it: the child
 // still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
-// derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
-// inherited half only when a managed account owns the credential; a system-auth
-// user's own key is their sign-in and must reach the child.
+// derives PATH from what it is handed. The shell's Anthropic auth reaches the child on
+// every account, as it does in a terminal.
 export function claudeChildEnv(
   sources: ClaudeChildEnvSources,
-  stripAuthEnv: boolean,
-  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
+  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env,
+  /** False when the session's seal pairs the CLI runtime itself, after the session's identity. */
+  { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
-  return withCliRuntimeOnPath(
-    sources.command,
-    decorateEnv({
-      ...applyClaudeEnvPatch(
-        withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-        {},
-        { stripAuthEnv, platform: process.platform }
-      ),
-      ...sources.overlay
-    }),
-    { platform: process.platform }
-  )
+  const env = decorateEnv({
+    ...withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
+    ...sources.overlay
+  })
+  return runtimeOnPath
+    ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })
+    : env
 }
 
 /** The env a `--version` probe runs with: the launch's own env, PATH and shims included, minus the
@@ -69,7 +86,7 @@ export function claudeChildEnv(
  *  a version needs none of. Everything else is what this same binary receives at launch anyway. */
 export function claudeProbeEnv(sources: ClaudeChildEnvSources): Record<string, string> {
   return applyClaudeEnvPatch(
-    claudeChildEnv(sources, true),
+    claudeChildEnv(sources),
     {},
     {
       stripAuthEnv: true,

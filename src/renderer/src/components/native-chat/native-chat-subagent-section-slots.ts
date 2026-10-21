@@ -15,7 +15,7 @@ import {
   nativeChatRowContentMetrics,
   NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX
 } from './native-chat-row-height-estimate'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import { compareMessages } from './native-chat-session-assembler'
 import {
   nativeChatSubagentEntryRuns,
@@ -23,7 +23,10 @@ import {
   type NativeChatSubagentRosterState,
   type NativeChatSubagentSections
 } from './native-chat-subagent-sections'
-import { nativeChatRowRendersProse, nativeChatRowSpeaksOrActs } from './native-chat-trailing-run'
+import {
+  nativeChatRowRendersProse,
+  nativeChatRowSpeaksOrActs
+} from '../../../../shared/native-chat-trailing-run'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** The head of a section no loaded roster row holds: it names whose rows follow it. */

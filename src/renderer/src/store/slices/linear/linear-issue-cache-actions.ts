@@ -31,7 +31,7 @@ export function createLinearIssueCacheActions(
   return {
     getCachedLinearIssues: (args: LinearIssueReadArgs, options) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
-      const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+      const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       if (args.kind === 'search') {
         const cacheKey = scopedLinearCacheKey(
           scope,
@@ -51,7 +51,7 @@ export function createLinearIssueCacheActions(
     prefetchLinearIssues: (args: LinearIssueReadArgs, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
-      const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+      const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       if (args.kind === 'search') {
         const limit = args.limit ?? 20
         const cacheKey = scopedLinearCacheKey(

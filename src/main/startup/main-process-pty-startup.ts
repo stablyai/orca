@@ -1,12 +1,12 @@
 import { app } from 'electron'
+import { isLocalExecutionHost } from '../../shared/execution-host'
 import { classifyError } from '../telemetry/classify-error'
 import { track } from '../telemetry/client'
-import { getPtyIdForPaneKey } from '../ipc/pty'
-import {
-  getDaemonProvider,
-  initDaemonPtyProvider,
-  listLiveDaemonPtyIds
-} from '../daemon/daemon-init'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
+import { getDaemonProvider, listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
+import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
+import { restartLocalTerminalsAfterElevation } from '../windows/windows-administrator-restart'
+import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
 import {
   getCodexPaneAccount,
   hasAnyRecordedLegacyWslCodexPane,
@@ -25,10 +25,9 @@ import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import {
   indexPersistedPaneKeyPtyIds,
-  isLocalExecutionHost,
   resolveAgentWorkspaceExecutionHostId,
-  sweepRestoredSubagentsWithoutLiveAgent
-} from '../agent-hooks/restored-subagent-liveness-sweep'
+  retireRestoredStatusesWithDeadTerminals
+} from '../agent-hooks/restored-status-dead-terminal-sweep'
 import { startFirstWindowStartupServices } from './first-window-startup-services'
 import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
@@ -84,25 +83,19 @@ export function handlePtyExit(id: string, exitSequence: number): void {
   state.codexSessionMigration?.finishLaunch(id, exitSequence)
 }
 
-/** A PTY that dies while Orca is down never runs the teardown that clears pane
- *  state, so hydrate can rebuild a Claude subagent roster that no later hook can
- *  retire — pinning the pane 'working' and locking its agent out of hibernation
- *  for good. Once provider and hook hydration settle, targeted PTY liveness can
- *  retire only rows whose local owner is proven gone. */
-export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
+/** Runs once provider and hook hydration settle, so targeted PTY liveness can answer. */
+async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
   const store = state.store
-  if (!store) {
-    return
-  }
   const provider = getDaemonProvider()
-  if (!provider) {
+  if (!store || !provider) {
     return
   }
   const persistedPtyIdByPaneKey = indexPersistedPaneKeyPtyIds(
     store.getWorkspaceSession().terminalLayoutsByTabId ?? {}
   )
-  await sweepRestoredSubagentsWithoutLiveAgent({
-    probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
+  await retireRestoredStatusesWithDeadTerminals({
+    server: agentHookServer,
+    probePtyLiveness: (ptyId) => provider.probePtyLiveness(ptyId),
     isLocalExecutionHost: (worktreeId) =>
       isLocalExecutionHost(
         resolveAgentWorkspaceExecutionHostId(worktreeId, {
@@ -113,14 +106,10 @@ export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
         })
       ),
     getBoundPtyIdForPaneKey: getPtyIdForPaneKey,
-    getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey),
-    reap: (isLocalHost, isLocalPaneAgentLive, isLocalPaneLivenessEvidenceCurrent) =>
-      agentHookServer.reapRestoredClaudeSubagentsWithoutLiveAgent(
-        isLocalHost,
-        isLocalPaneAgentLive,
-        isLocalPaneLivenessEvidenceCurrent
-      )
+    getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey)
   })
+  state.runtime?.agentTransitions.seedRestoredRows()
+  await state.runtime?.sidebarFacts?.reconcileSortStampTiers(provider)
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
@@ -138,8 +127,11 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       // Why: only GUI-spawned macOS daemons watch for login-session death; a headless
       // serve daemon must survive its spawning session ending (SSH disconnect).
       await initDaemonPtyProvider(signal, {
-        macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode
+        macosLoginSessionWatch: process.platform === 'darwin' && !state.isServeMode,
+        // Why both: desktop and `orca serve` share one restore budget per machine (D1 Q1).
+        spawnAdmission: resolveTerminalSpawnAdmissionMode()
       })
+      await restartLocalTerminalsAfterElevation(signal)
       // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
       const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
       if (
@@ -205,8 +197,8 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
   )
   void startupServices.localPtyReady.then(() => {
     logStartupMilestone('local-pty-startup-ready')
-    void reapRestoredSubagentsWithoutLiveAgent().catch((error) =>
-      console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
+    void sweepRestoredStatusesAgainstLocalPtys().catch((error) =>
+      console.warn('[agent-hooks] restored-status dead-terminal sweep failed:', error)
     )
   })
   return startupServices

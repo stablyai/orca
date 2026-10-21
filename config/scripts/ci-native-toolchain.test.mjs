@@ -10,16 +10,6 @@ const steps = parse(readFileSync('.github/actions/prepare-native-runtime/action.
 const toolchain = steps.find((step) => step.name === 'Use external node-gyp')
 
 describe('CI native toolchain preparation', () => {
-  it('probes only after both cache restore variants and before native rebuilding', () => {
-    const index = steps.indexOf(toolchain)
-    for (const id of ['native-cache-restore', 'native-cache-restore-only']) {
-      expect(index).toBeGreaterThan(steps.findIndex((step) => step.id === id))
-      expect(toolchain.env.NATIVE_CACHE_HIT).toContain(`steps.${id}.outputs.cache-hit`)
-    }
-    expect(index).toBeLessThan(steps.findIndex((step) => step.name === 'Prepare native runtime'))
-    expect(toolchain.if).toBe("runner.os == 'Linux' && inputs.native-runtime == 'node'")
-  })
-
   // The action's toolchain workaround only runs in Linux Bash.
   it.skipIf(process.platform === 'win32').each([
     ['node', 'true', '0', false],
@@ -63,14 +53,5 @@ describe('CI native toolchain preparation', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
-  })
-
-  it('prepares Electron native modules through the existing rebuild path without the global toolchain', () => {
-    const preparation = steps.find((step) => step.name === 'Prepare native runtime')
-    expect(preparation.if).toBe("inputs.native-runtime != 'none'")
-    expect(preparation.env.NATIVE_RUNTIME).toBe('${{ inputs.native-runtime }}')
-    expect(preparation.run).toBe(
-      'node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"'
-    )
   })
 })

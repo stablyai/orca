@@ -1,18 +1,17 @@
 import { isDeepStrictEqual } from 'node:util'
+import { abortSignalReason } from '../../../shared/abort-signal-reason'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
-  isAgentSessionPreSpawnError,
-  type StructuredAgentSessionProviderChildPhase
+  isAgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
-import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
-import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
+import { mintStructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt'
 
 /** The same process, whatever Orca runtime the store stamped on its record (`runtime`): that stamp
  *  is about who holds the process, not which process it is. */
@@ -32,8 +31,7 @@ export async function acquireOwner(
   record: AgentSessionRecord
 ): Promise<{
   record: AgentSessionRecord
-  acquisitionGeneration: string | null
-  providerChildPhase: StructuredAgentSessionProviderChildPhase
+  acquisitionGeneration: string
 }> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
@@ -43,21 +41,31 @@ export async function acquireOwner(
   try {
     try {
       await input.onAcquiring?.()
-      // A close or Stop that landed while the attach was still reconciling launches nothing.
-      input.acquireSignal?.throwIfAborted()
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
-    const acquired = await input.adapter.acquire({
+    const permissionMode = await input.launchPermissionMode?.(record)
+    // Right before the spawn: a close, Stop or quit that landed during any wait above launches nothing.
+    if (input.acquireSignal?.aborted) {
+      throw new AgentSessionPreSpawnError(abortSignalReason(input.acquireSignal))
+    }
+    const attempt = mintStructuredAgentSessionStartupAttempt({
+      record,
       identity: journalIdentityFor(record, input.params),
-      fence,
       // Retries must recover the original reservation, not mint a second child.
       spawnToken,
-      ...(record.options ? { options: record.options } : {}),
+      ...(permissionMode ? { permissionMode } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
-      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
       ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
+      ...(input.startupOptions ? { startupOptions: input.startupOptions } : {}),
+      ...(input.startupAttemptId ? { attemptId: input.startupAttemptId } : {})
+    })
+    const progress = input.onStartupAttempt?.(attempt)
+    const acquired = await input.adapter.acquire({
+      ...attempt,
+      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
       onSpawned: async (process) => {
+        progress?.spawned()
         record = await input.store.commitProcessIdentity({
           sessionId: record.sessionId,
           fence,
@@ -66,26 +74,6 @@ export async function acquireOwner(
         })
       }
     })
-    const providerChildPhase = acquired.providerChildPhase ?? 'ready'
-    // A starting child has proven nothing: the record keeps the reservation's saved options as
-    // intent, never a catalog guess, and the `started` event persists what the child reports.
-    const options =
-      providerChildPhase === 'starting'
-        ? undefined
-        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, async () =>
-            input.adapter.readAcquisitionOptions
-              ? input.adapter.readAcquisitionOptions({
-                  sessionId: record.sessionId,
-                  fence,
-                  ...(record.options ? { priorOptions: record.options } : {})
-                })
-              : readNativeSessionOptions({
-                  adapter: input.adapter,
-                  sessionId: record.sessionId,
-                  fence,
-                  ...(record.options ? { priorOptions: record.options } : {})
-                })
-          )
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,
@@ -96,18 +84,14 @@ export async function acquireOwner(
     } else if (!sameOwnerProcess(record.lease.ownerProcess, acquired.process)) {
       throw new Error('agent_session_ownership_unknown')
     }
+    // The process owns the lease now; a handle the provider answers with is returned by `open`.
     const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,
-      link: acquired.link,
-      now: input.now(),
-      ...(options ? { options } : {})
+      ...(acquired.link ? { link: acquired.link } : {}),
+      now: input.now()
     })
-    return {
-      record: proved,
-      acquisitionGeneration: acquired.acquisitionGeneration ?? null,
-      providerChildPhase
-    }
+    return { record: proved, acquisitionGeneration: acquired.acquisitionGeneration }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {
       throw error

@@ -4,13 +4,16 @@ import { Suspense } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
+import type { StoreApi } from 'zustand'
+import type { AppState } from '@/store'
 import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 
+const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ pendingEditorReveal: null, pendingEditorFocusRequest: null }) }
+  useAppStore: { getState: () => storeRef.current?.getState() }
 }))
 vi.mock('./monaco-markdown-doc-link-decorations', () => ({
   createMarkdownDocLinkDecorationController: vi.fn()
@@ -27,6 +30,7 @@ afterEach(cleanup)
 
 it('keeps a retained cursor listener on the current file ID after same-path owner migration', () => {
   const store = createEditorTabsStore()
+  storeRef.current = store
   const filePath = '/repo/file.ts'
   const oldId = 'restored-file'
   store.setState({

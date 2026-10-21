@@ -35,6 +35,7 @@ function scope() {
       },
       platform: process.platform,
       isRemote: false,
+      shell: undefined,
       sessionOptions: { model: preferred }
     }),
     cwd: '/private/project',

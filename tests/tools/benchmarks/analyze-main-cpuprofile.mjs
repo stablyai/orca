@@ -124,7 +124,7 @@ const NAME_RULES = [
 ]
 
 const URL_RULES = [
-  [/child_process|spawn-resolution|run-process\.ts/, 'spawn-init'],
+  [/child_process|spawn-resolution|run-process\.(?:ts|js)/, 'spawn-init'],
   [
     /string_decoder|node:internal\/streams|node:stream|node:net|bounded-output-sink/,
     'stdout-drain'

@@ -30,7 +30,7 @@ it('refuses installation when the host omits the saved Arguments source', async 
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       logger: createStructuredAgentSessionLogger()
     })
   ).rejects.toThrow(STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED)

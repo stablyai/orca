@@ -14,6 +14,6 @@ export function deriveMostConstrainedWindow(buckets: RateLimitBucket[]): RateLim
   const mostConstrained = buckets.reduce((worst, bucket) =>
     bucket.usedPercent > worst.usedPercent ? bucket : worst
   )
-  const { name: _name, ...window } = mostConstrained
-  return window
+  const { usedPercent, windowMinutes, resetsAt, resetDescription } = mostConstrained
+  return { usedPercent, windowMinutes, resetsAt, resetDescription }
 }

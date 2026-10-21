@@ -3,8 +3,7 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   OrcaRuntimeService,
   electronMocks,
-  registerSshGitProvider,
-  unregisterSshGitProvider
+  scanLocalRepoWorktreesForResolutionMock
 } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -16,6 +15,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 
 describe('OrcaRuntimeService', () => {
   it('starts unavailable with no authoritative window', () => {
@@ -158,8 +158,10 @@ describe('OrcaRuntimeService', () => {
       id: 'repo-ssh',
       connectionId: 'ssh-target'
     }
-    runtimeStore.getRepos = () => [remoteRepo]
-    runtimeStore.getRepo = (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
+    const localRepo = store.getRepos()[0]
+    const repos = [remoteRepo, localRepo]
+    runtimeStore.getRepos = () => repos
+    runtimeStore.getRepo = (id: string) => repos.find((repo) => repo.id === id)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const listProcesses = vi.fn(async () => [
       {
@@ -177,28 +179,24 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const listWorktrees = vi.fn(() => new Promise<never>(() => {}))
-    registerSshGitProvider('ssh-target', { listWorktrees } as never)
+    const scan = Promise.withResolvers<RuntimeWorktreeScanResult>()
+    scanLocalRepoWorktreesForResolutionMock.mockImplementation(() => scan.promise)
 
     vi.useFakeTimers()
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const resultPromise = runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
     try {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined
       const timeout = new Promise<null>((resolve) => {
         timeoutId = setTimeout(() => resolve(null), 1_000)
       })
-      const resultPromise = runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(1_000)
       const result = await Promise.race([resultPromise, timeout])
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId)
-      }
-
       expect(result).not.toBeNull()
-      expect(listWorktrees).not.toHaveBeenCalled()
+      expect(scanLocalRepoWorktreesForResolutionMock).not.toHaveBeenCalled()
       expect(listProcesses).toHaveBeenCalledOnce()
       expect(listProcesses).toHaveBeenCalledWith(
-        'ssh-target',
+        'ssh:ssh-target',
         expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
       expect(result).toMatchObject({
@@ -206,8 +204,15 @@ describe('OrcaRuntimeService', () => {
         tabs: [expect.objectContaining({ type: 'terminal', parentTabId: 'remote-tab' })]
       })
     } finally {
-      vi.useRealTimers()
-      unregisterSshGitProvider('ssh-target')
+      scan.resolve({ ok: false, worktrees: [] })
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
+      try {
+        await resultPromise
+      } finally {
+        vi.useRealTimers()
+      }
     }
   })
 

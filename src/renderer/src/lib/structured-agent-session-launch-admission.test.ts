@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   createSupport: vi.fn(),
   toastInfo: vi.fn(),
   toastError: vi.fn(),
-  launchAgentInNewTab: vi.fn()
+  launchAgentInNewTab: vi.fn(),
+  hostPermission: vi.fn()
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
@@ -23,12 +24,14 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   })
 }))
 
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: mocks.hostPermission
+}))
+
 import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import { resumeAiVaultSessionInNewChat } from '@/components/right-sidebar/ai-vault-session-resume-in-chat-launch'
 import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
@@ -68,6 +71,7 @@ function expectNoChatCommitted(): void {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.hostPermission.mockResolvedValue({ kind: 'allowed' })
   localStorage.clear()
   useAppStore.setState({
     activeWorktreeId: WORKTREE,
@@ -101,7 +105,9 @@ describe('a structured chat launch on a paired server', () => {
       failureNotified: false
     })
     expect(onHostDeclined).toHaveBeenCalledOnce()
-    expect(mocks.toastInfo).toHaveBeenCalledOnce()
+    expect(mocks.toastInfo).toHaveBeenCalledWith(expect.any(String), {
+      description: expect.stringContaining("can't run")
+    })
     expect(useAppStore.getState().activeWorktreeId).toBe(WORKTREE)
     expectNoChatCommitted()
   })
@@ -152,36 +158,16 @@ describe('a structured chat launch on a paired server', () => {
     expectNoChatCommitted()
   })
 
-  it('says once that the server cannot be reached when a vault resume needs it', async () => {
-    mocks.createSupport.mockRejectedValue(new Error('connection lost'))
-    // The vault names no host; the workspace's owner, the paired server, is resolved for it.
-    useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:server-1' })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resume reads only the id fields the preparation mock ignores.
-    const session = { id: 'vault-1', sessionId: 'provider-1' } as AiVaultSession
-
-    await resumeAiVaultSessionInNewChat(session, 'claude', WORKTREE, 'resume-click')
-
-    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.toastError).toHaveBeenCalledOnce()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      expect.stringContaining('Could not reach'),
-      expect.anything()
-    )
-    expectNoChatCommitted()
-  })
-
-  it('fails a resume the server declines, since a resume has no terminal equivalent', async () => {
+  it('leaves no destination when the server declines a resume', async () => {
     mocks.createSupport.mockResolvedValue({ supported: false })
     const onHostDeclined = vi.fn()
-
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan: pairedPlan({ resumeFrom: { providerSessionId: 'provider-1' } }),
       hooks: {},
       onHostDeclined
     })
-
     await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
+    expect(mocks.createSupport).toHaveBeenCalledOnce()
     expect(onHostDeclined).not.toHaveBeenCalled()
     expectNoChatCommitted()
   })
@@ -209,6 +195,37 @@ describe('a structured chat launch on a paired server', () => {
     expect(getStructuredAgentSessionLaunchSelection(sessionId)?.seed).toEqual({ model: 'opus' })
     launch?.cancel()
   })
+
+  // An older server ignores the chat's mode and would run Claude with its own bypass flag.
+  it.each(['refused', 'unverified'] as const)(
+    'starts nothing on a server whose permission verdict is %s, and says so once',
+    async (kind) => {
+      mocks.createSupport.mockResolvedValue({ supported: true })
+      mocks.hostPermission.mockResolvedValue(
+        kind === 'refused' ? { kind, hostMode: 'full-access' } : { kind }
+      )
+
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: pairedPlan(),
+        hooks: {},
+        onHostDeclined: vi.fn()
+      })
+      const settlement = await launch?.settlement
+
+      expect(mocks.hostPermission).toHaveBeenCalledWith(
+        { kind: 'environment', environmentId: 'server-1' },
+        'claude'
+      )
+      expect(settlement).toEqual(expect.objectContaining({ kind: 'failed', notified: true }))
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Claude'), {
+        description: expect.stringMatching(
+          kind === 'unverified' ? /confirm the host's permissions for Claude/ : /older Orca/
+        )
+      })
+      expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+      expectNoChatCommitted()
+    }
+  )
 
   it('opens the chat on the server that admitted it', async () => {
     mocks.createSupport.mockResolvedValue({ supported: true })
@@ -254,7 +271,7 @@ describe('a structured chat launch on this machine', () => {
       delivered: true,
       failureNotified: false
     })
-    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' })
+    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' }, undefined)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
     expectNoChatCommitted()
@@ -305,6 +322,20 @@ describe('a structured chat launch on this machine', () => {
     })
     expect(onHostDeclined).not.toHaveBeenCalled()
     expectNoChatCommitted()
+  })
+
+  it('never asks this machine for a permission verdict: it applies every chat mode', async () => {
+    mocks.createSupport.mockResolvedValue({ supported: true })
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan: localPlan(),
+      hooks: {},
+      onHostDeclined: vi.fn()
+    })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toHaveLength(1)
+    )
+    expect(mocks.hostPermission).not.toHaveBeenCalled()
+    launch?.cancel()
   })
 
   it('opens the chat once this machine admits it', async () => {
@@ -403,4 +434,28 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
     await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
     expect(onHostDeclined).toHaveBeenCalledOnce()
   })
+})
+
+it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+  for (const supported of [false, true]) {
+    mocks.toastError.mockClear()
+    mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })
+    const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
+    if (supported) {
+      mocks.createSupport
+        .mockResolvedValueOnce({ supported: true })
+        .mockResolvedValueOnce({ supported: false })
+    }
+    const onHostDeclined = vi.fn()
+    const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {}, onHostDeclined })
+    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
+    expect(onHostDeclined).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledTimes(supported ? 0 : 1)
+    if (!supported) {
+      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
+        delivered: false,
+        failureNotified: true
+      })
+    }
+  }
 })

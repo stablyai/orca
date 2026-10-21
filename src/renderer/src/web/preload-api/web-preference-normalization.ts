@@ -1,3 +1,7 @@
+import {
+  isAgentChatPermissionMode,
+  normalizeAgentNativeChatPermissionModes
+} from '../../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
@@ -84,7 +88,12 @@ export function mergeHostWebUIState(
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
     manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  return {
+    ...mergeWebUIState(local, incoming),
+    ...pinned,
+    // Old hosts omit this field; a cached arm must not make their strict ui.set reject mode changes.
+    statusBarCompactChangeNoticeDismissed: incoming.statusBarCompactChangeNoticeDismissed !== false
+  }
 }
 
 export function mergeFeatureInteractionState(
@@ -182,5 +191,24 @@ export function mergeSettings(
     ...normalizeAutoRenameBranchFromWorkDefaultOn(merged, {
       preserveExplicitValue: options.preserveAutoRenameBranchFromWorkUpdate
     })
+  }
+}
+
+/** The host's new-chat permission default (the host seeds from it), kept only when a known mode. */
+export function runtimeChatPermissionSetting(
+  settings: Partial<GlobalSettings>,
+  includeAgentOverrides = true
+): Pick<GlobalSettings, 'nativeChatPermissionMode' | 'agentNativeChatPermissionModes'> {
+  return {
+    ...(isAgentChatPermissionMode(settings.nativeChatPermissionMode)
+      ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
+      : {}),
+    ...(includeAgentOverrides
+      ? {
+          agentNativeChatPermissionModes: normalizeAgentNativeChatPermissionModes(
+            settings.agentNativeChatPermissionModes
+          )
+        }
+      : {})
   }
 }

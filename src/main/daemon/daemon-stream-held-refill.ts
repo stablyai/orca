@@ -1,4 +1,4 @@
-import { encodeStreamDataEvent } from './daemon-stream-data-split'
+import type { StreamWriteChunk } from './daemon-stream-data-split'
 
 export class DaemonStreamHeldRefill {
   private readonly armed = new Map<string, symbol>()
@@ -7,8 +7,8 @@ export class DaemonStreamHeldRefill {
 
   arm(
     clientId: string,
-    sessionId: string,
-    write: (line: string, complete: () => void) => void
+    noopFrame: StreamWriteChunk,
+    write: (line: StreamWriteChunk, complete: () => void) => void
   ): void {
     if (this.armed.has(clientId)) {
       return
@@ -16,7 +16,7 @@ export class DaemonStreamHeldRefill {
     const refill = Symbol()
     this.armed.set(clientId, refill)
     // A real no-op frame waits for preceding writes; an empty write can complete immediately.
-    write(encodeStreamDataEvent(sessionId, ''), () => {
+    write(noopFrame, () => {
       if (this.armed.get(clientId) !== refill) {
         return
       }

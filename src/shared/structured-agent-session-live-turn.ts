@@ -26,6 +26,7 @@ import {
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from './agent-session-wire'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { isAgentSessionContextClear } from './agent-session-context-clear'
 import type { NativeChatToolCallBlock } from './native-chat-types'
 import {
   isRunningStructuredAgentSessionToolAction,
@@ -34,13 +35,20 @@ import {
   type StructuredAgentSessionToolAction
 } from './structured-agent-session-tool-call-block'
 
+/** `current`: a host's answer to whether the running turn's item is current work
+ *  (`StructuredAgentSessionWorkScope`); one an ended generation opened is none. */
 export function activeStructuredAgentSessionTurnId(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  current?: (item: AgentJournalRenderItem) => boolean
 ): string | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const turn = readAgentJournalTurn(items[index]?.body)
+    const item = items[index]
+    if (isAgentSessionContextClear(item?.body)) {
+      return null
+    }
+    const turn = readAgentJournalTurn(item?.body)
     if (turn) {
-      return turn.state === 'running' ? turn.turnId : null
+      return turn.state === 'running' && (!current || (item && current(item))) ? turn.turnId : null
     }
   }
   return null
@@ -58,6 +66,11 @@ export function newestStructuredAgentSessionTurnBySequence(
     if (item.sequence < newestSequence) {
       continue
     }
+    if (isAgentSessionContextClear(item.body)) {
+      newestSequence = item.sequence
+      newest = null
+      continue
+    }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
       newestSequence = item.sequence
@@ -72,23 +85,25 @@ export function newestStructuredAgentSessionTurnBySequence(
 export function liveStructuredAgentSessionTurnScope(
   items: Iterable<AgentJournalRenderItem>
 ): AgentJournalTurnScope {
+  const running = runningStructuredAgentSessionTurnItemBySequence(items)
+  return running ? { kind: 'turn', turnItemId: running.item.itemId } : AGENT_JOURNAL_THREAD_SCOPE
+}
+
+/** The newest turn record's item when that turn is running, by sequence. */
+export function runningStructuredAgentSessionTurnItemBySequence(
+  items: Iterable<AgentJournalRenderItem>
+): { item: AgentJournalRenderItem; turnId: string } | null {
   let newest: AgentJournalRenderItem | null = null
   for (const item of items) {
-    if ((newest === null || item.sequence >= newest.sequence) && readAgentJournalTurn(item.body)) {
+    if (
+      (newest === null || item.sequence >= newest.sequence) &&
+      (readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body))
+    ) {
       newest = item
     }
   }
-  return newest && readAgentJournalTurn(newest.body)?.state === 'running'
-    ? { kind: 'turn', turnItemId: newest.itemId }
-    : AGENT_JOURNAL_THREAD_SCOPE
-}
-
-/** Whether that newest turn is still running, which is all most callers want. */
-export function activeStructuredAgentSessionTurnIdBySequence(
-  items: Iterable<AgentJournalRenderItem>
-): string | null {
-  const newest = newestStructuredAgentSessionTurnBySequence(items)
-  return newest?.state === 'running' ? newest.turnId : null
+  const turn = newest ? readAgentJournalTurn(newest.body) : null
+  return newest && turn?.state === 'running' ? { item: newest, turnId: turn.turnId } : null
 }
 
 /** The newest turn record whatever state it ended in, STATE INCLUDED. Restart resume compares both
@@ -111,6 +126,9 @@ export function latestStructuredAgentSessionTurn(
 ): AgentSessionLatestTurn | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
+    if (isAgentSessionContextClear(item?.body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(item?.body)
     if (item && turn) {
       return { itemId: item.itemId, observedAt: item.observedAt, turn }
@@ -157,6 +175,70 @@ export function latestTurnAfterStructuredAgentSessionBatch(
   return carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
 }
 
+/** The host's actionable prompts once `event` applies, under `latestTurn`'s rule: a batch carrying
+ *  rows restates them, so one without them came from an older host and drops the claim. */
+export function actionablePromptIdsAfterStructuredAgentSessionBatch(
+  previous: string[] | undefined,
+  event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
+): string[] | undefined {
+  const { items, removedItemIds, submissions } = event.batch
+  const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
+  return carriesRows || event.actionablePromptIds !== undefined
+    ? event.actionablePromptIds
+    : previous
+}
+
+/** The host's working answer once `event` applies, under `latestTurn`'s rule. */
+export function hostWorkingAfterStructuredAgentSessionBatch(
+  previous: boolean | undefined,
+  event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
+): boolean | undefined {
+  const { items, removedItemIds, submissions } = event.batch
+  const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
+  return carriesRows || event.working !== undefined ? event.working : previous
+}
+
+/** Whether a frame's turn, prompts and working answer, when it names them, are what the state
+ *  already holds: a generation's end can change them with no row, so a frame that does is never a
+ *  no-op. */
+export function restatesStructuredAgentSessionHostWork(
+  event: Pick<
+    Extract<AgentSessionSubscribeEvent, { type: 'batch' }>,
+    'latestTurn' | 'actionablePromptIds' | 'working'
+  >,
+  state: {
+    latestTurn?: AgentSessionLatestTurn | null
+    actionablePromptIds?: string[]
+    working?: boolean
+  }
+): boolean {
+  return (
+    (event.latestTurn === undefined ||
+      JSON.stringify(event.latestTurn) === JSON.stringify(state.latestTurn)) &&
+    (event.actionablePromptIds === undefined ||
+      event.actionablePromptIds.join('\n') === state.actionablePromptIds?.join('\n')) &&
+    (event.working === undefined || event.working === state.working)
+  )
+}
+
+/** Whether the session's own agent is working: the host's answer when it gave one, else what the
+ *  client derives from its rows (an older host). */
+export function structuredAgentSessionHostSaysWorking(
+  hostWorking: boolean | undefined,
+  derived: () => boolean
+): boolean {
+  return hostWorking ?? derived()
+}
+
+/** Whether a pending prompt waits on the person: the host names the ones that do, and a prompt an
+ *  agent that has ended raised is not among them. An older host names none: every pending one. */
+export function isActionableStructuredAgentSessionPrompt(
+  itemId: string,
+  actionablePromptIds: readonly string[] | undefined
+): boolean {
+  return actionablePromptIds === undefined || actionablePromptIds.includes(itemId)
+}
+
 /**
  * Whether the newest thing the active turn produced is the model's own reasoning.
  *
@@ -172,6 +254,9 @@ export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurn
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
+    if (isAgentSessionContextClear(body)) {
+      return false
+    }
     const turn = readAgentJournalTurn(body)
     if (turn) {
       return (hostRunning ?? turn.state === 'running') && newestContentIsReasoning === true
@@ -212,6 +297,9 @@ export function statusStructuredAgentSessionToolCall(
       continue
     }
     const body = item.body
+    if (isAgentSessionContextClear(body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(body)
     if (turn) {
       const named = turn.state === 'running' ? (running ?? newest) : null

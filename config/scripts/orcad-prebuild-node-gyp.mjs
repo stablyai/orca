@@ -2,7 +2,6 @@
 import { cpSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import process from 'node:process'
 import { prebuildCompileGypi } from './orcad-prebuild-slot-contents.mjs'
 
 const require = createRequire(import.meta.url)
@@ -19,11 +18,26 @@ export function stageNodeAddonApi(sourceDir, stagedDir) {
   })
 }
 
-export async function nodeGypRebuild({ stagedDir, workDir, nodeDir, staticCxxRuntime }) {
+export async function nodeGypRebuild({
+  stagedDir,
+  workDir,
+  nodeDir,
+  staticCxxRuntime,
+  runProcess
+}) {
   const compileGypi = join(workDir, 'prebuild-compile.gypi')
   writeFileSync(compileGypi, prebuildCompileGypi({ staticCxxRuntime }))
-  const { runProcessSync } = await import('./script-child-process.mjs')
-  const result = runProcessSync({
+  const execute = runProcess ?? (await import('@orca/process-host')).runProcessSync
+  let environment = process.env
+  if (process.platform === 'win32') {
+    const { initializeWindowsNativeToolchain, mergeWindowsCompilerEnvironment } =
+      await import('./initialize-windows-native-toolchain.mjs')
+    const compilerEnvironment = initializeWindowsNativeToolchain()
+    if (compilerEnvironment) {
+      environment = mergeWindowsCompilerEnvironment(environment, compilerEnvironment)
+    }
+  }
+  const result = execute({
     program: process.execPath,
     args: [
       join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'),
@@ -34,6 +48,7 @@ export async function nodeGypRebuild({ stagedDir, workDir, nodeDir, staticCxxRun
       compileGypi
     ],
     cwd: stagedDir,
+    env: environment,
     stdio: 'inherit',
     timeoutMs: null
   })

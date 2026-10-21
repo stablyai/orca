@@ -19,11 +19,12 @@ import {
 } from './native-chat-visual-owner'
 import { clearNativeChatVisualCacheForTests } from './native-chat-visual-read-client'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const owner: NativeChatVisualOwner = {
   target: { kind: 'local' },
   sessionId: 'session-alpha',
-  tabId: 'tab-1',
   worktreeId: 'wt-1'
 }
 const LINE = '::orca-visual{file="usage.html" title="Usage"}'
@@ -52,7 +53,7 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', InViewObserver)
   clearNativeChatVisualCacheForTests()
   callRuntimeRpc.mockReset()
-  callRuntimeRpc.mockResolvedValue({ ok: true, revision: 'r1', sizeBytes: 9, html: '<p>v</p>' })
+  callRuntimeRpc.mockResolvedValue({ ok: true, revision: 'r1', html: '<p>v</p>', path: '/v' })
 })
 
 afterEach(() => {
@@ -61,6 +62,22 @@ afterEach(() => {
 })
 
 describe('NativeChatMarkdown visuals', () => {
+  it('still renders an existing reply after inline visuals are turned off', async () => {
+    const settings = useAppStore.getState().settings
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), nativeChatInlineVisuals: false }
+    })
+    try {
+      const { container } = render(
+        withOwner(<NativeChatMarkdown content={LINE} visualMessageId="m1" />)
+      )
+      await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
+      expect(container).not.toHaveTextContent('::orca-visual')
+    } finally {
+      useAppStore.setState({ settings })
+    }
+  })
+
   it('holds back an unfinished directive at the end of a streaming reply', () => {
     const { container } = render(
       withOwner(

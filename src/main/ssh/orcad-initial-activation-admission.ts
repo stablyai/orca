@@ -7,10 +7,10 @@
  */
 import { ORCAD_LOCK_FILE_NAME } from '../orcad/orcad-instance-lock'
 import { PRIMARY_RUNTIME_METADATA_FILE } from '../../shared/runtime-bootstrap'
-import { shellEscape } from './ssh-connection-utils'
-import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { selectOrcadSlotRuntimeCommand } from '../managed-server/install/orcad-remote-runtime'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
-import { orcadWindowsBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadWindowsSlotOpCommand } from '../managed-server/install/orcad-remote-windows-node'
 
 const OWNER_RECORD_MAX_BYTES = 64 * 1024
 
@@ -27,12 +27,7 @@ export function initialOrcadActivationAdmissionCommand(
 ): string {
   if (isWindowsRemoteHost(host)) {
     // Windows has no O_NOFOLLOW; the host script refuses links by lstat instead.
-    return orcadWindowsHostOpCommand(
-      host,
-      orcadWindowsBaseDir(host, remoteInstallDir),
-      'owner-admission',
-      [userDataDir]
-    )
+    return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'owner-admission', [userDataDir])
   }
   const owners = [ORCAD_LOCK_FILE_NAME, PRIMARY_RUNTIME_METADATA_FILE].map((name) => ({
     name,
@@ -70,7 +65,7 @@ export function initialOrcadActivationAdmissionCommand(
   // The subshell turns the selector's `exit 78` into silence, which parses as unverifiable.
   return (
     `(${selectOrcadSlotRuntimeCommand(host, remoteInstallDir, legacyNodePath)}; ` +
-    `"$orcad_runtime" -e ${shellEscape(script)} ${shellEscape(JSON.stringify(owners))})`
+    `"$orcad_runtime" -e ${quotePosixShell(script)} ${quotePosixShell(JSON.stringify(owners))})`
   )
 }
 
@@ -88,7 +83,7 @@ export function parseInitialOrcadActivationAdmission(
       code: 'orcad_initial_runtime_live',
       reason:
         `An unmanaged runtime owner is still live according to ${live[1]} (pid ${live[2]}). ` +
-        'Stop that Orca runtime before converting this data root to managed orcad.'
+        'Stop that Orca runtime before converting this data root to Orca’s server on the host.'
     }
   }
   const record = /^UNVERIFIABLE ([^ ]+)$/u.exec(result)?.[1] ?? 'owner record'

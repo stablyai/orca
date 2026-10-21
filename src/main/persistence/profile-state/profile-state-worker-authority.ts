@@ -25,6 +25,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       workerPath?: string
       backupWorkerPath?: string
       onFailure?: (error: Error) => void
+      onSaveDelayChanged?: (delayed: boolean) => void
     } = {}
   ) {
     this.writer = new ProfileStateWriteWorkerClient(initialization, options)

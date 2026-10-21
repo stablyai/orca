@@ -17,6 +17,7 @@ export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
   experimentalPtySourceCreditV1?: unknown
+  allowRemoteCliControlReset?: unknown
 }
 
 // Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
@@ -38,6 +39,8 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteRuntime
   delete target.remoteRuntimeResolution
   delete target.experimentalPtySourceCreditV1
+  // Why: the one-time remote CLI control reset is retired; its notice flag means nothing now.
+  delete target.allowRemoteCliControlReset
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
@@ -66,13 +69,15 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (remoteRuntimeResolution) {
     normalized.remoteRuntimeResolution = remoteRuntimeResolution
   }
-  return normalizeManagedServerMoveOffered(
-    normalizeAppVersionNote(
+  return normalizeManagedServerLeaveBehind(
+    normalizeManagedServerMoveOffered(
       normalizeAppVersionNote(
-        migrateLegacyManagedOrcadOwner(normalized),
-        'managedServerUnavailable'
-      ),
-      'managedServerUpdateFailure'
+        normalizeAppVersionNote(
+          migrateLegacyManagedOrcadOwner(normalized),
+          'managedServerUnavailable'
+        ),
+        'managedServerUpdateFailure'
+      )
     )
   )
 }
@@ -124,6 +129,18 @@ function normalizeManagedServerMoveOffered(target: SshTarget): SshTarget {
   return rest
 }
 
+function normalizeManagedServerLeaveBehind(target: SshTarget): SshTarget {
+  if (target.managedServerLeaveBehind === undefined) {
+    return target
+  }
+  const note = noteFields(target.managedServerLeaveBehind)
+  if (typeof note?.confirmedAt === 'string') {
+    return { ...target, managedServerLeaveBehind: { ...note, confirmedAt: note.confirmedAt } }
+  }
+  const { managedServerLeaveBehind: _malformed, ...rest } = target
+  return rest
+}
+
 function normalizeOrcadFence(target: SshTarget): SshTarget {
   if (target.orcadFence === undefined) {
     return target
@@ -150,6 +167,7 @@ const SshRemoteRuntimeResolutionSchema = z
   .object({
     rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
     pinnedRefusal: z.string().max(64).optional(),
+    refusedAt: z.number().int().nonnegative().optional(),
     glibc: z
       .string()
       .regex(/^\d+\.\d+$/)

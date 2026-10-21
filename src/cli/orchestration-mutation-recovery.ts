@@ -1,9 +1,10 @@
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable
 } from './runtime/orchestration-recovery-command'
-import { quoteWindowsCmdArgument } from '../shared/child-process/windows-command-line'
+import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { quotePowerShellNativeArgument } from '../shared/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
@@ -208,7 +209,7 @@ function shellQuote(value: string): string {
   if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) {
     return value
   }
-  return `'${value.replaceAll("'", `'"'"'`)}'`
+  return quotePosixShellDoubleQuotedApostrophe(value)
 }
 
 function stripUnsafeRetryAdvice(message: string, requestId: string): string {

@@ -59,8 +59,6 @@ const structuredFeasibleFor = (appStore: AgentLaunchRouteStore, args: AgentLaunc
 
 const STRUCTURED_SETTINGS = {
   experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
@@ -103,8 +101,7 @@ describe('buildAgentLaunchRouteInput', () => {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
       prompt: 'fix the flaky test',
-      promptDelivery: 'auto-submit',
-      initialSessionOptions: { model: 'gpt-5.4' }
+      promptDelivery: 'auto-submit'
     })
     expect(input).toEqual({
       agent: 'codex',
@@ -116,8 +113,7 @@ describe('buildAgentLaunchRouteInput', () => {
       promptDelivery: 'auto-submit',
       launchText: 'fix the flaky test',
       nativeChatTranscriptIsLocalReadable: true,
-      startsOutsideWorkspaceRoot: false,
-      initialSessionOptions: { model: 'gpt-5.4' }
+      startsOutsideWorkspaceRoot: false
     })
     expect(mocks.getExecutionHostIdForWorktree).toHaveBeenCalledWith(appStore, 'wt-1')
     expect(mocks.getLocalProjectExecutionRuntimeContext).toHaveBeenCalledWith(appStore, 'wt-1')
@@ -127,7 +123,7 @@ describe('buildAgentLaunchRouteInput', () => {
         agent: 'codex',
         workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
       })
-    ).toBe('legacy-native-chat')
+    ).toBe('terminal-tui')
   })
 
   it('never consults the local project runtime for a worktree on an SSH connection', () => {
@@ -174,7 +170,7 @@ describe('buildAgentLaunchRouteInput', () => {
         prompt: 'issue body',
         promptDelivery: 'draft'
       })
-    ).toBe('legacy-native-chat')
+    ).toBe('terminal-tui')
   })
 
   it.each([
@@ -301,7 +297,7 @@ describe('buildAgentLaunchRouteInput', () => {
   })
 
   // Grok reads its transcript off local disk, so it is the agent the readability answer routes on.
-  const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+  const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true }
   const UNLANDED_WORKSPACE = {
     kind: 'git-worktree',
     worktreeId: 'repo-1::/repo/wt-1',
@@ -322,7 +318,7 @@ describe('buildAgentLaunchRouteInput', () => {
         .nativeChatTranscriptIsLocalReadable
     ).toBe(true)
     expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
-      'legacy-native-chat'
+      'terminal-tui'
     )
   })
 
@@ -346,7 +342,7 @@ describe('buildAgentLaunchRouteInput', () => {
       worktreesByRepo: {}
     } as unknown as AgentLaunchRouteStore
     expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
-      'legacy-native-chat'
+      'terminal-tui'
     )
   })
 
@@ -393,14 +389,14 @@ describe('buildAgentLaunchRouteInput', () => {
 
     it('treats a server that has not reported its status as unknown', () => {
       expect(buildAgentLaunchRouteInput(store(), args).hostCapabilities).toBeNull()
-      expect(routeFor(store(), args)).toBe('legacy-native-chat')
+      expect(routeFor(store(), args)).toBe('terminal-tui')
     })
 
     // A released server advertises structured sessions but admits them only with its own chat
     // setting on; a chat opened there could never start.
     it('keeps the terminal on a server that predates client-chosen launch modes', () => {
       expect(routeFor(pairedStore([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]), args)).toBe(
-        'legacy-native-chat'
+        'terminal-tui'
       )
     })
 
@@ -409,7 +405,7 @@ describe('buildAgentLaunchRouteInput', () => {
     it('keeps the host terminal for a browser client', () => {
       mocks.isWebClientLocation.mockReturnValue(true)
       try {
-        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('legacy-native-chat')
+        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('terminal-tui')
       } finally {
         mocks.isWebClientLocation.mockReturnValue(false)
       }
@@ -448,7 +444,7 @@ describe('buildAgentLaunchRouteInput', () => {
         agent: 'claude',
         workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
       })
-    ).toBe('legacy-native-chat')
+    ).toBe('terminal-tui')
   })
 })
 
@@ -463,7 +459,7 @@ describe('workspaceKindForWorktreeId', () => {
 })
 
 describe('a cwd that names the workspace root', () => {
-  // "Continue in New Session…" always names a cwd; at the root it must not force a terminal.
+  // "Hand Off to Another Agent" always names a cwd; at the root it must not force a terminal.
   beforeEach(stageLocalStructuredHost)
 
   const withRoot = (): AgentLaunchRouteStore =>

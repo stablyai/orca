@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import {
-  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_ID_LENGTH,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
@@ -32,7 +31,6 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'gitlab'],
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
-      experimentalStructuredNativeChat: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
@@ -71,7 +69,7 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('settings.update', { experimentalStructuredNativeChat: true })
+      makeRequest('settings.update', { experimentalNativeChat: true })
     )
 
     expect(response).toMatchObject({
@@ -317,16 +315,6 @@ describe('client UI RPC methods', () => {
           command: 'true',
           appendEnter: true,
           scope: { type: 'repo', repoId: 'x'.repeat(MAX_QUICK_COMMAND_REPO_ID_LENGTH + 1) }
-        }
-      },
-      {
-        type: 'upsert',
-        command: {
-          id: 'oversized-prompt',
-          label: 'Oversized prompt',
-          action: 'agent-prompt',
-          agent: 'codex',
-          prompt: 'x'.repeat(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1)
         }
       },
       { type: 'upsert', command: { id: 'default-pwd', label: 'Removed', command: 'pwd' } }

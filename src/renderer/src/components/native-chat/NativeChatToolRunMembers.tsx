@@ -116,7 +116,7 @@ export function NativeChatToolRunMembers({
       ref={scrollerRef}
       onScroll={readPosition}
       className={cn(
-        'scrollbar-sleek ml-[7px] mt-0.5 overflow-y-auto border-l border-chat-code-border pl-[13px]',
+        'scrollbar-sleek ml-1.75 mt-0.5 overflow-y-auto border-l border-chat-code-border pl-3.25',
         // Contains the members' absolute sr-only labels, which otherwise lengthen the page.
         'relative',
         // Room for the list plus what the reader has opened in it, up to half the window.

@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   GitBranchChangeEntry,
@@ -82,7 +82,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn().mockResolvedValue(true)
 }))
 
-vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
+vi.mock('@/runtime/runtime-git-working-tree-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -151,6 +151,9 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     groupsByWorktree: { [mocks.activeWorktree.id]: [{ id: 'group-1', activeTabId: null }] },
     repos: [mocks.activeRepo],
     worktreesByRepo: { [mocks.activeRepo.id]: [mocks.activeWorktree] },
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     rightSidebarOpen: false,
     rightSidebarTab: 'source-control',
     gitStatusByWorktree: { [mocks.activeWorktree.id]: [] },
@@ -386,12 +389,17 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('scopes discard autosave quiesce and reload notifications to the active runtime', async () => {
+  it('scopes discard autosave quiesce and reload notifications to the repo owner runtime', async () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
     })
+    // Why: the owner stamp routes the discard; a different focused server must not.
+    Object.assign(mocks.activeRepo, { executionHostId: 'runtime:runtime-remote' })
+    onTestFinished(() => {
+      Reflect.deleteProperty(mocks.activeRepo, 'executionHostId')
+    })
     renderSourceControl()
-    mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-remote' }
+    mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-other' }
 
     const row = container.querySelector<HTMLDivElement>('[data-source-control-path="src/file.ts"]')
     const discardButton = row?.querySelector<HTMLButtonElement>(

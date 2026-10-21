@@ -8,6 +8,18 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../speech/speech-model-deletion'
 import type { RuntimeStore } from './runtime-store-contract'
+import {
+  clearOpenAiSpeechApiKey,
+  getOpenAiSpeechApiKeyProtection,
+  hasOpenAiSpeechApiKey,
+  saveOpenAiSpeechApiKey
+} from '../speech/openai-api-key-store'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+
+export type OpenAiSpeechKeyStatus = {
+  configured: boolean
+  protection: SecretAtRestProtection | null
+}
 
 export class RuntimeMobileSpeechCatalog {
   constructor(private readonly getStore: () => RuntimeStore | null) {}
@@ -87,6 +99,24 @@ export class RuntimeMobileSpeechCatalog {
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
     return this.list()
+  }
+
+  /**
+   * The cloud models' key, set on the host that transcribes. Why over RPC: desktop Settings is the
+   * only other way in, and a headless host has no desktop. Sealed by this host's own secret store.
+   */
+  openAiKeyStatus(): OpenAiSpeechKeyStatus {
+    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+  }
+
+  setOpenAiKey(apiKey: string): OpenAiSpeechKeyStatus {
+    saveOpenAiSpeechApiKey(apiKey)
+    return this.openAiKeyStatus()
+  }
+
+  clearOpenAiKey(): OpenAiSpeechKeyStatus {
+    clearOpenAiSpeechApiKey()
+    return this.openAiKeyStatus()
   }
 
   private requireStore(): RuntimeStore {

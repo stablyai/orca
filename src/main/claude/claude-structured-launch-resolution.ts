@@ -1,33 +1,17 @@
+import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
 } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import {
-  agentSessionProviderHandleChainHead,
+  agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot
 } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
-import {
-  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
-  hasClaudeAuthEnvConflict
-} from '../claude-accounts/environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import {
-  CLAUDE_AUTH_SWITCH_SETTLE_TIMEOUT_MS,
-  whenClaudeAuthSwitchSettles
-} from '../claude-accounts/live-pty-gate'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import {
-  hasWslBoundClaudeAccount,
-  structuredClaudeMatchesActiveManagedAccount,
-  type ClaudeManagedAccountGateSettings
-} from '../native-chat/claude-structured-managed-account-support'
 import {
   claudeChildEnv,
   claudeProbeEnv,
@@ -38,18 +22,17 @@ import {
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 import type { ClaudeCliFlagSupport } from './claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
-import {
-  withNativeChatVisualsEnv,
-  type PrepareNativeChatVisuals
-} from '../native-chat/native-chat-visuals-delivery'
+import { withNativeChatVisualsEnv } from '../native-chat/native-chat-visuals-delivery'
 import {
   claudeLaunchResumesTranscript,
   resolveClaudeStructuredLaunchHome
 } from './claude-structured-launch-home'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
-import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from './claude-structured-session-id'
+import {
+  pendingAgentSessionRewindFork,
+  type AgentSessionRewindFork
+} from '../../shared/agent-session-rewind'
 
 export { claudeSessionIdForOrcaSession }
 
@@ -72,6 +55,8 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'settings'
   | 'sessionId'
   | 'resume'
+  | 'resumeSessionAt'
+  | 'forkSession'
 >
 
 /**
@@ -91,24 +76,31 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   extraArgs: { 'replay-user-messages': null }
 }
 
-/**
- * Agent Permissions as query-start options.
- *
- * The owned CLI flag preserves the user-installed binary contract. The SDK's typed bypass option
- * emits a newer allow flag that older Claude binaries reject before a structured session starts.
- */
+const CLAUDE_PERMISSION_MODES = {
+  // Explicit, so a `defaultMode` in the user's Claude settings never runs other than the button says.
+  ask: 'default',
+  'accept-edits': 'acceptEdits',
+  auto: 'auto'
+} as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
+
+/** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
 export function claudeStructuredPermissionOptions(
-  mode: PermissionMode
-): Pick<ClaudeStructuredSdkOptions, 'extraArgs'> {
-  return mode === 'bypassPermissions' ? { extraArgs: { 'dangerously-skip-permissions': null } } : {}
+  mode: AgentChatPermissionMode
+): Pick<ClaudeStructuredSdkOptions, 'permissionMode' | 'extraArgs'> {
+  return mode === 'full-access'
+    ? { extraArgs: { 'dangerously-skip-permissions': null } }
+    : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
 }
 
 export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
+  account?: ClaudeStructuredInvocation['account']
   options: ClaudeStructuredSdkOptions
   cwd: string
+  /** The child's sealed environment, and the inherited keys it must not keep. */
   env?: Record<string, string>
+  envToDelete?: readonly string[]
   claudeConfigDir: string
   providerSessionId: string
   /** The previous head leaf, carried into the publication link; never a resume argument. */
@@ -118,39 +110,21 @@ export type ClaudeStructuredLaunch = {
   /** Lineage: the record's chain already heads this provider session, so the child continues it
    *  even when no transcript exists to `--resume`. Never derived from the launch mode. */
   continuesChain: boolean
+  /** The head a rewind's fork leaves behind: this launch starts the session that replaces it. */
+  forkedFromKey?: string
 }
 
-export type ClaudeStructuredLaunchResolverDeps = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
+export type ClaudeStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
-  resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  resolveCommand?: () => string
-  resolveEnv?: () =>
-    | Promise<Record<string, string> | undefined>
-    | Record<string, string>
-    | undefined
-  /** The env the child inherits before auth stripping; absent inherits Orca's own process env. */
-  resolveInheritedEnv?: () => Promise<Record<string, string>>
-  /**
-   * Required, and deliberately not defaulted. `stripAuthEnv` used to be a literal
-   * `true` here, so a missing dependency could not under-strip. Now it can, and the
-   * failure is silent — so every caller states the account's policy rather than
-   * inherit a guess. Build it with claudeStructuredAuthPolicyForSettings.
-   */
+  resolveCommand?: ClaudeEnvDeps['resolveCommand']
+  /** Required, so every caller states which login a failed sign-in names rather than inherit a
+   *  guess. Build it with claudeStructuredAuthPolicyForSettings. */
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
-  /** The user's Agent Permissions setting, re-read per acquisition. Absent means prompting. */
-  resolvePermissionMode?: () => Promise<PermissionMode> | PermissionMode
-  /** How long an in-flight account switch may hold a launch before it is refused. */
-  authSwitchSettleTimeoutMs?: number
-  /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
-  readManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   /** The host's chat attachment store: files a client attached live there, outside the workspace,
    *  and the agent reads them without asking. */
   attachmentDirectory?: string
   /** Which version-gated flags this CLI takes. Absent ⇒ none is ever passed. */
   cliFlags?: Pick<ClaudeCliFlagSupport, 'supports'>
-  /** This chat's visuals folder and skill; absent or null ⇒ the chat gets neither. */
-  prepareVisuals?: PrepareNativeChatVisuals
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
   hasTranscript?: (input: {
     providerSessionId: string
@@ -158,7 +132,11 @@ export type ClaudeStructuredLaunchResolverDeps = {
   }) => Promise<boolean>
 }
 
-export type ClaudeStructuredInvocation = { command: string; env: Record<string, string> }
+export type ClaudeStructuredInvocation = {
+  command: string
+  env: Record<string, string>
+  account: 'managed' | 'system'
+}
 
 /**
  * The one place a structured Claude child's binary and environment are
@@ -168,89 +146,34 @@ export type ClaudeStructuredInvocation = { command: string; env: Record<string, 
  * drift there heals on the next refresh.
  */
 export async function resolveClaudeStructuredInvocation(
-  deps: ClaudeEnvDeps &
-    Pick<ClaudeStructuredLaunchResolverDeps, 'resolveAuthPolicy'> & {
-      authSwitchSettleTimeoutMs?: number
-    },
+  deps: ClaudeEnvDeps & Pick<ClaudeStructuredLaunchPartDeps, 'resolveAuthPolicy'>,
   decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env,
   /** Already resolved by a caller that needed them earlier; read again otherwise. */
-  resolvedSources?: ClaudeChildEnvSources
+  resolvedSources?: ClaudeChildEnvSources,
+  options?: Parameters<typeof claudeChildEnv>[2]
 ): Promise<ClaudeStructuredInvocation> {
   const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
   const auth = await deps.resolveAuthPolicy()
-  // A switch can begin while the policy and overlay resolve, exactly as it can
-  // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
-  await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
-  // Under a managed account the pinned credential is the only auth this launch may
-  // use, so an explicit override is refused rather than silently beating the pin.
-  if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(sources.overlay)) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE), {
-      reason: 'managedAccountEnvOverride'
-    })
-  }
+  // Why never strip: a shell proxy's key must travel with its ANTHROPIC_BASE_URL, on every account.
   return {
     command: sources.command,
-    env: claudeChildEnv(sources, auth.stripAuthEnv, decorateEnv)
+    env: claudeChildEnv(sources, decorateEnv, options),
+    account: auth.account
   }
 }
 
-/**
- * Wait a running account switch out, and refuse only if it never settles.
- *
- * Launch resolution is reached from `acquireClaudeSession` *after* the old child has
- * been closed and proved, so a plain refusal here would leave the user with a dead
- * chat and no replacement — the very harm the acquire-entry guard exists to prevent.
- * The entry guard still refuses outright, because nothing has been torn down yet.
- */
-export async function assertClaudeAuthSwitchSettled(
-  timeoutMs = CLAUDE_AUTH_SWITCH_SETTLE_TIMEOUT_MS
-): Promise<void> {
-  if (!(await whenClaudeAuthSwitchSettles(timeoutMs))) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
-      reason: 'accountSwitchInProgress'
-    })
-  }
-}
-
-export function createClaudeStructuredLaunchResolver(
-  deps: ClaudeStructuredLaunchResolverDeps
-): (input: { identity: AgentSessionJournalIdentity }) => Promise<ClaudeStructuredLaunch> {
-  return async ({ identity }) => {
-    await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
-    const record = deps.store.getRecord(identity.sessionId)
-    if (!record) {
-      throw new Error(`no durable agent-session record for ${identity.sessionId}`)
-    }
-    if (record.provider !== 'claude') {
-      throw new Error(`session ${identity.sessionId} is a ${record.provider} session`)
-    }
-    if (
-      record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-      record.location.wslDistro !== null
-    ) {
-      throw new Error(
-        `claude structured sessions run on the local host, not ${record.location.executionHostId}`
-      )
-    }
+/** Claude's part of a launch: its resume decision, flags, permission posture, account home and
+ *  auth, with the account-switch recheck last. */
+export function claudeStructuredLaunchPart(
+  deps: ClaudeStructuredLaunchPartDeps
+): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
+  return async (basis, identity) => {
+    const { record } = basis
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
-    const pinned = CLAUDE_STRUCTURED_AGENT.accountHomeVariable
-    if (accountHome.variable !== pinned) {
-      throw new Error(`claude sessions pin ${pinned}, not ${accountHome.variable}`)
-    }
-    // Every acquisition, not just the first: the account state can change under a live session, and
-    // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
-    // Codex has no gate here — it resolves its account on a different path.
     const router = getClaudeProfileRouter()
-    const gate = router ? undefined : deps.readManagedAccountGate?.()
-    if (gate !== undefined && !structuredClaudeMatchesActiveManagedAccount(gate)) {
-      // Unreadable account state names no situation a person can act on, so only the log reads it.
-      throw new AgentSessionPreSpawnError(
-        'structured Claude is not offered under the active managed Claude account',
-        gate && hasWslBoundClaudeAccount(gate) ? { reason: 'managedAccountUnsupported' } : {}
-      )
-    }
-    // A Claude record's chain holds only Claude handles; the attach admission refuses anything else.
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null
+    // A Claude record's chain holds only Claude handles; the launch admission refuses anything else.
+    const active = activeProviderContext(record)
+    const head = active.head?.handle ?? null
     if (
       head &&
       (!identity.providerHandle ||
@@ -259,15 +182,33 @@ export function createClaudeStructuredLaunchResolver(
     ) {
       throw new Error('claude durable resume identity changed before spawn')
     }
-    const providerSessionId = head
-      ? head.nativeId
-      : claudeSessionIdForOrcaSession(identity.sessionId)
-    const continuesChain = head !== null
-    const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
-    const sources = await resolveClaudeChildEnvSources(deps)
+    const fork = pendingAgentSessionRewindFork(record.rewind, head?.nativeId)
+    const providerSessionId = fork
+      ? fork.sessionId
+      : head
+        ? head.nativeId
+        : claudeSessionIdForOrcaSession(
+            identity.sessionId,
+            active.pendingClear ? record.providerContextBoundary?.operationId : undefined
+          )
+    const continuesChain = head?.nativeId === providerSessionId
+    const cwd = await basis.launchDirectory()
+    const envDeps: ClaudeEnvDeps & Pick<ClaudeStructuredLaunchPartDeps, 'resolveAuthPolicy'> = {
+      ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+      resolveEnv: () => basis.launchEnv(),
+      resolveInheritedEnv: basis.baseEnvironment,
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: () => cwd,
+      resolveAuthPolicy: deps.resolveAuthPolicy
+    }
+    const sources = await resolveClaudeChildEnvSources(envDeps)
     // Asked as soon as the spawn's cwd and PATH are known, so it overlaps what is left to resolve.
     const probeLaunch = { command: sources.command, cwd, env: claudeProbeEnv(sources) }
-    const launchFlags = resolveClaudeLaunchFlags(deps, record.sessionId, probeLaunch)
+    const launchFlags = resolveClaudeLaunchFlags(
+      { ...(deps.cliFlags ? { cliFlags: deps.cliFlags } : {}), prepareVisuals: basis.visuals },
+      record.sessionId,
+      probeLaunch
+    )
     const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const { thinkingDisplayArgs, visuals } = await launchFlags
     const additionalDirectories = [
@@ -275,14 +216,12 @@ export function createClaudeStructuredLaunchResolver(
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
       ...(visuals ? [visuals.visuals.folder] : [])
     ]
-    const permission = claudeStructuredPermissionOptions(
-      (await deps.resolvePermissionMode?.()) ?? 'default'
-    )
+    const permission = claudeStructuredPermissionOptions(basis.permissionMode ?? 'ask')
     // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
     // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
-    const leafUuid = head ? claudeProviderHandleLeafUuid(head) : null
+    const leafUuid = head && continuesChain ? claudeProviderHandleLeafUuid(head) : null
     const resumes = async (claudeConfigDir: string): Promise<boolean> =>
-      head !== null &&
+      (head !== null || active.pendingClear) &&
       (await claudeLaunchResumesTranscript({
         router,
         leafUuid,
@@ -293,48 +232,75 @@ export function createClaudeStructuredLaunchResolver(
     // Why: without a router the home is fixed, so check it before the recheck that must stay last.
     const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
     // Last: it rechecks the account switch, which may have begun during any await above.
-    const { command, env } = await resolveClaudeStructuredInvocation(
-      deps,
+    const { command, env, account } = await resolveClaudeStructuredInvocation(
+      envDeps,
       (base) =>
-        // Every structured session speaks orchestration as itself: its injected id and the Orca CLI.
-        structuredSessionChildIdentityEnv(
-          record.sessionId,
-          withNativeChatVisualsEnv(
-            {
-              ...base,
-              // The turn translator relies on Claude's authoritative idle frame when no result arrives.
-              [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
-            },
-            visuals?.visuals ?? null
-          )
+        withNativeChatVisualsEnv(
+          {
+            ...base,
+            // The turn translator relies on Claude's authoritative idle frame when no result arrives.
+            [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
+          },
+          visuals?.visuals ?? null
         ),
-      sources
+      sources,
+      { runtimeOnPath: false }
     )
     const launchHome = await resolveClaudeStructuredLaunchHome(router, env, accountHome.path)
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
+    if (fork?.throughEntryId && !resumesTranscript) {
+      // The fork reads its source, so a source only another account holds is refused as a resume is.
+      await claudeLaunchResumesTranscript({
+        router,
+        leafUuid: fork.throughEntryId,
+        providerSessionId: fork.sourceSessionId,
+        claudeConfigDir: launchHome,
+        hasTranscript: deps.hasTranscript
+      })
+    }
     return {
-      pathToClaudeCodeExecutable: command,
-      options: {
-        ...CLAUDE_STRUCTURED_BASE_OPTIONS,
-        ...permission,
-        ...(additionalDirectories.length ? { additionalDirectories } : {}),
-        ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
-        extraArgs: {
-          ...configured.extraArgs,
-          ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
-          ...permission.extraArgs,
-          ...thinkingDisplayArgs
+      launch: {
+        pathToClaudeCodeExecutable: command,
+        account,
+        options: {
+          ...CLAUDE_STRUCTURED_BASE_OPTIONS,
+          ...permission,
+          ...(additionalDirectories.length ? { additionalDirectories } : {}),
+          ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
+          extraArgs: {
+            ...configured.extraArgs,
+            ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
+            ...permission.extraArgs,
+            ...thinkingDisplayArgs
+          },
+          // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
+          ...(resumesTranscript
+            ? { resume: providerSessionId }
+            : { sessionId: providerSessionId, ...(fork ? claudeRewindForkOptions(fork) : {}) })
         },
-        // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
-        ...(resumesTranscript ? { resume: providerSessionId } : { sessionId: providerSessionId })
+        claudeConfigDir: launchHome,
+        providerSessionId,
+        resumeLeafUuid: resumesTranscript ? leafUuid : null,
+        resumesTranscript,
+        continuesChain,
+        ...(fork && head && !continuesChain
+          ? { forkedFromKey: agentSessionProviderHandleKey(head) }
+          : {})
       },
-      cwd,
       env,
-      claudeConfigDir: launchHome,
-      providerSessionId,
-      resumeLeafUuid: resumesTranscript ? leafUuid : null,
-      resumesTranscript,
-      continuesChain
+      // Every structured session speaks orchestration as itself; Claude strips no inherited key.
+      inheritedEnvToDelete: [],
+      // Its own runtime's directory goes ahead of this app's CLI directory on PATH.
+      cliRuntimeCommand: command
     }
   }
+}
+
+/** Until Claude writes the rewind's session, each launch forks it from the kept conversation. */
+function claudeRewindForkOptions(
+  fork: AgentSessionRewindFork
+): Pick<ClaudeStructuredSdkOptions, 'resume' | 'resumeSessionAt' | 'forkSession'> {
+  return fork.throughEntryId
+    ? { resume: fork.sourceSessionId, resumeSessionAt: fork.throughEntryId, forkSession: true }
+    : {}
 }

@@ -1,7 +1,6 @@
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
+import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 
 /**
  * Counts each terminal that was not counted live but whose host only lost contact.
@@ -9,19 +8,11 @@ import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary
  * the row read as no terminals at all (docs/reference/ssh-execution-boundary.md).
  */
 export function applyRuntimeWorktreePsUnverifiableTerminals(args: {
-  summaries: Map<string, RuntimeWorktreePsSummary>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingIds: Set<string>
   countedPtyIds: ReadonlySet<string>
   leaves: Iterable<RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   getLivenessVerdict: (ptyId: string) => PtyLivenessVerdict | null
-  getSummary: (
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    pathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingIds: Set<string>,
-    worktreeId: string
-  ) => RuntimeWorktreePsSummary | null
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): void {
   // Like the live pass, the host's PTY record owns the worktree; a pane only fills in a PTY with no record.
   const ownerByPtyId = new Map<string, string>()
@@ -40,7 +31,7 @@ export function applyRuntimeWorktreePsUnverifiableTerminals(args: {
     ) {
       continue
     }
-    const summary = args.getSummary(args.summaries, args.pathIndex, args.missingIds, worktreeId)
+    const summary = args.getSummary(worktreeId)
     if (summary) {
       summary.unverifiableTerminalCount = (summary.unverifiableTerminalCount ?? 0) + 1
       summary.hasHostSidebarActivity = true

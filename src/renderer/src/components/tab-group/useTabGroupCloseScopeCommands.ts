@@ -1,24 +1,62 @@
 import { useCallback } from 'react'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { toVisibleTabType } from '../../../../shared/tab-types'
+import { track } from '@/lib/telemetry'
 import { useAppStore } from '../../store'
 import { captureWorkspaceEmptiedReaction } from './workspace-emptied-reaction'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import {
+  useBulkTabCloseConfirmation,
+  type BulkTabCloseScope
+} from '../use-bulk-tab-close-confirmation'
 
 export function useTabGroupCloseScopeCommands({
   groupId,
   worktreeId,
-  group,
-  groupTabs,
   closeItem,
   closeMany
 }: {
   groupId: string
   worktreeId: string
-  group: TabGroup | null
-  groupTabs: Tab[]
   closeItem: (itemId: string, opts?: { skipEmptyCheck?: boolean }) => void
   closeMany: (itemIds: string[]) => void
 }) {
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
+  const confirmBulkClose = useBulkTabCloseConfirmation()
+  const selectTabIds = useCallback(
+    (scope: BulkTabCloseScope, itemId?: string): string[] => {
+      const state = useAppStore.getState()
+      const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+        (candidate) => candidate.id === groupId
+      )
+      if (!group) {
+        return []
+      }
+      const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+        (tab) => tab.groupId === groupId
+      )
+      if (scope === 'editors') {
+        return tabs
+          .filter((tab) => isEditorTabContentType(tab.contentType) && !tab.isPinned)
+          .map((tab) => tab.id)
+      }
+      if (itemId === undefined || !tabs.some((tab) => tab.id === itemId)) {
+        return []
+      }
+      if (scope === 'others') {
+        return tabs.filter((tab) => tab.id !== itemId && !tab.isPinned).map((tab) => tab.id)
+      }
+      const index = group.tabOrder.indexOf(itemId)
+      if (index === -1) {
+        return []
+      }
+      const order =
+        scope === 'right' ? group.tabOrder.slice(index + 1) : group.tabOrder.slice(0, index)
+      const closableIds = new Set(tabs.filter((tab) => !tab.isPinned).map((tab) => tab.id))
+      return order.filter((id) => closableIds.has(id))
+    },
+    [groupId, worktreeId]
+  )
 
   const closeGroup = useCallback(() => {
     const whenEmptied = captureWorkspaceEmptiedReaction(worktreeId)
@@ -34,70 +72,57 @@ export function useTabGroupCloseScopeCommands({
   }, [closeEmptyGroup, closeItem, groupId, worktreeId])
 
   const closeAllEditorTabsInGroup = useCallback(() => {
-    for (const item of groupTabs) {
-      if (
-        item.contentType === 'editor' ||
-        item.contentType === 'diff' ||
-        item.contentType === 'conflict-review' ||
-        item.contentType === 'check-details'
-      ) {
-        if (!item.isPinned) {
-          closeItem(item.id)
+    confirmBulkClose(
+      'editors',
+      () => selectTabIds('editors'),
+      (ids) => {
+        for (const id of ids) {
+          closeItem(id)
         }
       }
-    }
-  }, [closeItem, groupTabs])
+    )
+  }, [closeItem, confirmBulkClose, selectTabIds])
 
   const closeOthers = useCallback(
     (itemId: string) => {
-      const item = groupTabs.find((candidate) => candidate.id === itemId)
-      if (!item) {
+      // Why: store closeOtherTabs strands dirty files if the save dialog is cancelled; route via closeMany to stay dirty-aware.
+      confirmBulkClose('others', () => selectTabIds('others', itemId), closeMany)
+    },
+    [closeMany, confirmBulkClose, selectTabIds]
+  )
+
+  const closeInDirection = useCallback(
+    (itemId: string, direction: 'left' | 'right') => {
+      const state = useAppStore.getState()
+      const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+        (candidate) => candidate.id === groupId
+      )
+      if (!group?.tabOrder.includes(itemId)) {
         return
       }
-      // Why: store closeOtherTabs strands dirty files if the save dialog is cancelled; route via closeMany to stay dirty-aware.
-      const siblingIds = groupTabs
-        .filter((candidate) => candidate.id !== itemId && !candidate.isPinned)
-        .map((candidate) => candidate.id)
-      closeMany(siblingIds)
+      const item = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+        (candidate) => candidate.groupId === groupId && candidate.id === itemId
+      )
+      if (item) {
+        track('tabs_directional_close_requested', {
+          direction,
+          tab_type: toVisibleTabType(item.contentType),
+          surface: worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? 'floating' : 'workspace',
+          eligible_tab_count: selectTabIds(direction, itemId).length
+        })
+      }
+      confirmBulkClose(direction, () => selectTabIds(direction, itemId), closeMany)
     },
-    [closeMany, groupTabs]
+    [closeMany, confirmBulkClose, groupId, selectTabIds, worktreeId]
   )
 
   const closeToRight = useCallback(
-    (itemId: string) => {
-      // Why: store closeTabsToRight pre-closes dirty tabs; walk tabOrder (canonical L-to-R) via closeMany to stay dirty-aware.
-      const order = group?.tabOrder ?? []
-      const index = order.indexOf(itemId)
-      if (index === -1) {
-        return
-      }
-      const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
-      const rightIds = order.slice(index + 1).filter((id) => {
-        const candidate = tabById.get(id)
-        return candidate ? !candidate.isPinned : false
-      })
-      closeMany(rightIds)
-    },
-    [closeMany, group, groupTabs]
+    (itemId: string) => closeInDirection(itemId, 'right'),
+    [closeInDirection]
   )
-
   const closeToLeft = useCallback(
-    (itemId: string) => {
-      // Why: see closeToRight — walk tabOrder locally and route through the
-      // dirty-aware closeMany path instead of the store helper.
-      const order = group?.tabOrder ?? []
-      const index = order.indexOf(itemId)
-      if (index === -1) {
-        return
-      }
-      const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
-      const leftIds = order.slice(0, index).filter((id) => {
-        const candidate = tabById.get(id)
-        return candidate ? !candidate.isPinned : false
-      })
-      closeMany(leftIds)
-    },
-    [closeMany, group, groupTabs]
+    (itemId: string) => closeInDirection(itemId, 'left'),
+    [closeInDirection]
   )
 
   return { closeGroup, closeAllEditorTabsInGroup, closeOthers, closeToRight, closeToLeft }

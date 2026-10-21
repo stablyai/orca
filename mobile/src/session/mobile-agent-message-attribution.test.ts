@@ -49,8 +49,7 @@ describe('who another agent’s message is from, on mobile', () => {
         },
         { messageId: 'person', position: 2, state: 'waiting', body }
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(cards.map((card) => card.attribution)).toEqual(['From Coder', null])
   })

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
 import {
   MobileFilePreviewSourceText,
@@ -66,6 +67,12 @@ export function MobileFileMarkdownPreview({
             strokeWidth={2.2}
           />
         </Pressable>
+        <MobileSourceCopyButton
+          key={relativePath}
+          text={content}
+          partial={truncated}
+          accessibilityLabel={truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'}
+        />
       </View>
       {mode === 'preview' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>

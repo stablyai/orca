@@ -22,7 +22,7 @@ function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable'
       optionMutationSequence: 0,
       reportedModelMutation: 0,
       confirmedOptions: new Set<string>(),
-      restoreSkippedOptions: new Set<string>(),
+      reusableOptions: new Map(),
       connection: {
         supportedModels: async () => {
           calls.push('list_models')

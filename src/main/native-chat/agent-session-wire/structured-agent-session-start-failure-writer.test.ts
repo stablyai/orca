@@ -57,8 +57,7 @@ function exitBeforeProof(): Promise<void> {
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
-    cause: 'unexpected-exit',
-    startupUnproven: true
+    cause: 'unexpected-exit'
   })
 }
 
@@ -118,6 +117,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: () => new Promise(() => {}),
       acquire: vi.fn(async ({ fence, spawnToken }) => {
         const child = {
           process: {
@@ -133,8 +133,7 @@ beforeEach(async () => {
             mintedAtFence: fence,
             observedAt: NOW
           },
-          acquisitionGeneration: `generation-${++generation}`,
-          providerChildPhase: 'starting' as const
+          acquisitionGeneration: `generation-${++generation}`
         }
         if (exitOnStart) {
           // Asked for on the lane while the start step runs, so it lands before the handover.
@@ -144,8 +143,7 @@ beforeEach(async () => {
             fence,
             acquisitionGeneration: child.acquisitionGeneration,
             reason: EXIT_REASON,
-            cause: 'unexpected-exit',
-            startupUnproven: true
+            cause: 'unexpected-exit'
           })
         }
         return child
@@ -175,10 +173,11 @@ afterEach(async () => {
 })
 
 describe('a start that fails before it proves itself', () => {
-  it("writes one row in the exit's words for a message the child was handed", async () => {
+  it("writes one row in the exit's words for a message held for the starting child", async () => {
     const sent = await send('hello')
-    // A starting child takes the message at once.
-    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
+    await eventually(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+    )
 
     await exitBeforeProof()
     await eventually(async () =>
@@ -188,6 +187,7 @@ describe('a start that fails before it proves itself', () => {
 
     expect(await startRows()).toEqual([EXIT_TEXT])
     expect(publishedStartRows()).toEqual([EXIT_TEXT])
+    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('leaves the row to the loop when the exit lands while the message still waits', async () => {

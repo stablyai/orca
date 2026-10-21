@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
+import { prepareDockerSshHostImage } from './helpers/docker-ssh-host-image'
 
 export const E2E_TEST_REPO_PATH_FILE_ENV = 'ORCA_E2E_TEST_REPO_PATH_FILE'
 const RUN_TEST_REPO_PATH_FILE =
@@ -48,7 +48,6 @@ export default function globalSetup(): void {
   const outMain = path.join(root, 'out', 'main', 'index.js')
   const outCli = path.join(root, 'out', 'cli', 'index.js')
   const outWeb = path.join(root, 'out', 'web', 'web-index.html')
-  const outLinuxRelay = path.join(root, 'out', 'relay', 'linux-x64', 'relay.js')
 
   // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
@@ -99,27 +98,9 @@ export default function globalSetup(): void {
       console.error('[e2e] Web client build complete.')
     }
   }
-  if (
-    process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
-    process.env.ORCA_E2E_SSH_DOCKER === '1' ||
-    process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1' ||
-    (process.env.ORCA_E2E_SKILL_STAGING === '1' && Boolean(process.env.ORCA_E2E_SKILL_SSH_HOST))
-  ) {
-    if (process.env.SKIP_BUILD && existsSync(outLinuxRelay)) {
-      console.error('[e2e] SKIP_BUILD set and SSH relay bundle exists — skipping relay build')
-    } else {
-      // Why: explicit SSH specs need deployable Relay outputs in source-tree runs.
-      console.error('[e2e] Building SSH relay bundle for SSH E2E...')
-      execSync('pnpm run build:relay', {
-        cwd: root,
-        stdio: 'inherit',
-        timeout: 120_000
-      })
-    }
-  }
-  if (process.env.ORCA_E2E_SSH_DOCKER === '1' || process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') {
+  if (process.env.ORCA_E2E_SSH_DOCKER === '1') {
     console.error('[e2e] Preparing Docker OpenSSH fixture image...')
-    prepareDockerSshRelayImage(root)
+    prepareDockerSshHostImage(root)
   }
 
   // ── 2. Create a seeded test git repo ───────────────────────────────

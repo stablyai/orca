@@ -49,7 +49,7 @@ describe('verified renderer writes reuse provider settlement', () => {
   it.each(['local', 'daemon', 'WSL', 'SSH'])(
     'waits for %s acceptance without a raw duplicate',
     async (host) => {
-      ptyOwnership.set(id, host === 'SSH' ? 'connection-1' : null)
+      ptyOwnership.set(id, host === 'SSH' ? 'ssh:connection-1' : 'local')
       let finish: (settlement: WriteSettlement) => void = () => {}
       provider.writeWithSettlement.mockReturnValueOnce(
         new Promise((resolve) => {
@@ -71,7 +71,7 @@ describe('verified renderer writes reuse provider settlement', () => {
   )
 
   it('reports proven refusal and unknown acknowledgment separately', async () => {
-    ptyOwnership.set(id, 'connection-1')
+    ptyOwnership.set(id, 'ssh:connection-1')
     provider.writeWithSettlement.mockReturnValueOnce(writeRefused('endpoint_disconnected'))
     expect(write('1')).toBe(false)
     provider.writeWithSettlement.mockResolvedValueOnce(
@@ -83,14 +83,14 @@ describe('verified renderer writes reuse provider settlement', () => {
 
   it('never sends an unowned or absent PTY', () => {
     expect(write('1')).toBe(false)
-    ptyOwnership.set(id, null)
+    ptyOwnership.set(id, 'local')
     provider.hasPty.mockReturnValue(false)
     expect(write('1')).toBe(false)
     expect(provider.writeWithSettlement).not.toHaveBeenCalled()
   })
 
   it('waits for each chunk and stops a paste after refusal', async () => {
-    ptyOwnership.set(id, 'connection-1')
+    ptyOwnership.set(id, 'ssh:connection-1')
     const paste = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2 + 1)
     provider.writeWithSettlement.mockReturnValueOnce(writeRefused('transport_queue_full'))
     await expect(write(paste)).resolves.toBe(false)
@@ -106,16 +106,16 @@ describe('verified renderer writes reuse provider settlement', () => {
 
 describe('pane Escape/Ctrl+C keep the plain accepted write', () => {
   it('writes local input without waiting for settlement and refuses SSH', () => {
-    ptyOwnership.set(id, null)
+    ptyOwnership.set(id, 'local')
     expect(paneWrite('\x1b')).toBe(true)
     expect(provider.write).toHaveBeenCalledExactlyOnceWith(id, '\x1b')
-    ptyOwnership.set(id, 'connection-1')
+    ptyOwnership.set(id, 'ssh:connection-1')
     expect(paneWrite('\x03')).toBe(false)
     expect(provider.writeWithSettlement).not.toHaveBeenCalled()
   })
 
   it('asks a pane awaiting daemon recovery to remount on either route', () => {
-    ptyOwnership.set(id, null)
+    ptyOwnership.set(id, 'local')
     provider.write.mockImplementationOnce(() => {
       throw new PtyWriteUnavailableError('awaiting recovery')
     })

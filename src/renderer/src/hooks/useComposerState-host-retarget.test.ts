@@ -16,6 +16,7 @@ describe('useComposerState host retarget', () => {
       repoId: 'repo-local'
     }
     const selection = {
+      kind: 'github-pr' as const,
       repoId: 'repo-local',
       item,
       resolved: {
@@ -25,6 +26,7 @@ describe('useComposerState host retarget', () => {
     }
 
     expect(retargetGitHubPrStartPointSelection(selection, 'repo-ssh')).toEqual({
+      kind: 'github-pr',
       repoId: 'repo-ssh',
       item
     })

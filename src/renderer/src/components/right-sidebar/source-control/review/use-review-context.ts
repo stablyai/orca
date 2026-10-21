@@ -20,8 +20,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     activeRepoConnectionId,
     activeRepoExecutionHostId,
     activeRepoId,
-    activeRepoRuntimeEnvironmentId,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     branchName,
@@ -58,7 +57,6 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     activeRepoConnectionId,
     activeRepoExecutionHostId,
     activeRepoId,
-    activeRepoRuntimeEnvironmentId,
     activeRepoWorktreeBaseRef: activeRepo?.worktreeBaseRef,
     activeWorktreeBaseRef: activeWorktree?.baseRef,
     hostedReview,
@@ -69,7 +67,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
   })
   const { compareBaseRef, effectiveBaseRef } = baseRefs
   const branchCompare = useSourceControlBranchCompare({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     worktreePath,
     compareBaseRef,
@@ -81,7 +79,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
   })
   const createPrIntentTarget = useSourceControlCreatePrIntentTarget({
     activeRepoId,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     branchName,
     createPrIntentCurrentTargetRef,

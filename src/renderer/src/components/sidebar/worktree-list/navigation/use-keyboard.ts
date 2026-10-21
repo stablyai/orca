@@ -1,16 +1,16 @@
-import { fileSearchClaimsTextKey } from '@/lib/file-search-shortcut-policy'
+import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
 import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
+import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
-import type { HostSectionRow } from '../../host-section-rows'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {
   getCyclableRowIdentity,
@@ -95,18 +95,14 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.defaultPrevented ||
-        e.isComposing ||
-        activeModal !== 'none' ||
-        fileSearchClaimsTextKey(e)
-      ) {
+      if (e.defaultPrevented || e.isComposing || activeModal !== 'none') {
         return
       }
 
       const platform = getShortcutPlatform()
       if (
         keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
+        !textFieldClaimsActionKey(e, 'sidebar.focusWorktreeList') &&
         !hasVisibleOverlay()
       ) {
         scrollRef.current?.focus()
@@ -119,11 +115,14 @@ export function useWorktreeListKeyboardNavigation(args: {
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
           ? 'down'
           : null
-      if (direction && !hasVisibleOverlay()) {
+      const directionAction = direction === 'up' ? 'worktree.navigateUp' : 'worktree.navigateDown'
+      if (direction && !textFieldClaimsActionKey(e, directionAction) && !hasVisibleOverlay()) {
         endListNavigation()
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
+        // Why: a user-bound chord fired from a field must not also reach the field's own handler.
+        e.stopPropagation()
       }
     }
 

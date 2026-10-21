@@ -31,7 +31,12 @@ it('drops old provider candidates before another host with identical project IDs
   fireEvent.click(screen.getByRole('button', { name: 'Assignee' }))
   await screen.findByRole('button', { name: 'Local user' })
   expect(screen.getByRole('button', { name: 'Assign to me (Local me)' })).toBeTruthy()
-  expect(search).toHaveBeenCalledWith(null, 'PRJ', '', 'same-site')
+  expect(search).toHaveBeenCalledWith(
+    { kind: 'default-scope', settings: null },
+    'PRJ',
+    '',
+    'same-site'
+  )
 
   search.mockReturnValueOnce(new Promise(() => {}))
   rerender(

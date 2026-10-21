@@ -1,5 +1,7 @@
 import type { StructuredAgentId } from './agent-session-provider-handle'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { z } from 'zod'
+import type { SendBody } from './rpc-contract/structured-agent-session-message-params'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
@@ -16,6 +18,8 @@ import {
 export type StructuredAgentSessionResumeSource = {
   /** claude: the session id. codex: the thread id. */
   providerSessionId: string
+  /** Host-owned pane evidence; send only with the CLI-source create capability. */
+  cliSource?: { workspaceId: string; paneKey: string }
 }
 
 export type StructuredAgentSessionCreateParams = {
@@ -25,6 +29,14 @@ export type StructuredAgentSessionCreateParams = {
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
+}
+
+export type StructuredAgentSessionFirstMessage = {
+  clientMessageId: string
+  body: z.infer<typeof SendBody>
 }
 
 /** Provider-prefixed so a session id names its lane on sight, and underscore-only
@@ -55,6 +67,8 @@ export function structuredAgentSessionCreateParams(args: {
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
@@ -62,7 +76,9 @@ export function structuredAgentSessionCreateParams(args: {
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-    ...(args.tabId ? { tabId: args.tabId } : {})
+    ...(args.tabId ? { tabId: args.tabId } : {}),
+    ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+    ...(args.options ? { options: args.options } : {})
   }
   return {
     envelope: {

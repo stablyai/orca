@@ -9,6 +9,7 @@ import { structuredAgentSessionDeliveryNotices } from './structured-agent-sessio
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
@@ -18,6 +19,7 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   submissions: readonly AgentJournalSubmission[]
   journalItems: readonly AgentJournalRenderItem[]
   agentName: string
+  startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
   // Only a chat with a message shown as not sent reads the journal's rows and loaded items, so in a
@@ -26,7 +28,11 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
     (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
   )
   const journalRows = hasRejected ? submissions : NO_SUBMISSIONS
-  const startFailures = useStructuredAgentSessionStartFailureFacts(args.journalItems, hasRejected)
+  const loadedFailures = useStructuredAgentSessionStartFailureFacts(
+    args.journalItems,
+    hasRejected && args.startFailures === undefined
+  )
+  const startFailures = args.startFailures ?? loadedFailures
   const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)
   const notices = useMemo(
     () =>

@@ -16,7 +16,7 @@ import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
 > &
-  Pick<StructuredAgentSessionEventSink, 'setActivity'>
+  Pick<StructuredAgentSessionEventSink, 'setActivity' | 'written'>
 
 type ItemStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'item' }>
 type SettlementStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'settlement' }>
@@ -43,12 +43,16 @@ export class ProviderTimelinePlan {
     this.admitted.push(change)
   }
 
-  submit(sink: ProviderTimelineSink): StructuredAgentSessionSinkAdmission {
+  submit(
+    sink: ProviderTimelineSink,
+    onPublished?: () => void
+  ): StructuredAgentSessionSinkAdmission {
     if (this.steps.length > 0) {
       const admission = sink.tryAppendTransition({
         steps: this.steps,
         lifecycle: this.lifecycle,
-        publish: true
+        publish: true,
+        ...(onPublished ? { onPublished } : {})
       })
       if (!admission.accepted) {
         return admission
@@ -65,13 +69,14 @@ export class ProviderTimelinePlan {
 export function providerTimelineSink(
   sink: StructuredAgentSessionEventSink
 ): ProviderTimelineSink | null {
-  const { tryAppendTransition, journalItems, setActivity } = sink
+  const { tryAppendTransition, journalItems, setActivity, written } = sink
   if (!tryAppendTransition || !journalItems) {
     return null
   }
   return {
     tryAppendTransition: (transition) => tryAppendTransition.call(sink, transition),
     journalItems: () => journalItems.call(sink),
+    ...(written ? { written: () => written.call(sink) } : {}),
     ...(setActivity
       ? {
           setActivity: (activity: AgentSessionTurnActivity | null) =>

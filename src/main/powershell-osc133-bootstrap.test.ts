@@ -8,6 +8,20 @@ import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures'
 
 describe('PowerShell OSC 133 bootstrap', () => {
+  // Why: the bootstrap shares the -EncodedCommand budget with the startup command riding along.
+  it('leaves room for a long startup command to ride in the shell args', () => {
+    const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
+    const result = resolveWindowsShellLaunchArgs(
+      'pwsh.exe',
+      cwd,
+      cwd,
+      undefined,
+      `orca ${'x'.repeat(1000)}`
+    )
+
+    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
   it('wraps prompt/readline without bypassing profiles or execution policy', () => {
     const script = getPowerShellOsc133Bootstrap()
 
@@ -50,7 +64,7 @@ describe('PowerShell OSC 133 bootstrap', () => {
 
   // Why pinned: the MDE review (see powershell-osc133-bootstrap.ts) declined a
   // switch to -Command. Any future delivery shape must still hand PowerShell this
-  // payload byte for byte -- comments, quotes, `$` and newlines included.
+  // payload byte for byte -- quotes, `$` and newlines included.
   describe.each([
     [
       'daemon shell-ready',

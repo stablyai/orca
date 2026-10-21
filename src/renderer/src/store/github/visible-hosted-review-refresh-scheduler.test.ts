@@ -40,6 +40,45 @@ describe('visible hosted review scheduler', () => {
     vi.useRealTimers()
   })
 
+  it.each(['remove', 'hide', 'dispose'])(
+    'aborts abandoned demand on %s without releasing native work early',
+    async (action) => {
+      const signals: (AbortSignal | undefined)[] = []
+      const finish: ((value: boolean) => void)[] = []
+      const row = target({
+        fetchedAt: null,
+        refresh: vi.fn((_force, signal) => {
+          signals.push(signal)
+          return new Promise<boolean>((resolve) => finish.push(resolve))
+        })
+      })
+      const scheduler = setup([row])
+      expect(signals[0]?.aborted).toBe(false)
+      if (action === 'remove') {
+        scheduler.update([])
+      } else if (action === 'hide') {
+        scheduler.setVisible(false)
+      } else {
+        scheduler.dispose()
+      }
+      expect(signals[0]?.aborted).toBe(true)
+      if (action !== 'dispose') {
+        scheduler.update([row])
+        scheduler.setVisible(true)
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(row.refresh).toHaveBeenCalledTimes(1)
+      }
+      finish[0](false)
+      await vi.advanceTimersByTimeAsync(0)
+      if (action !== 'dispose') {
+        expect(row.refresh).toHaveBeenCalledTimes(2)
+        expect(signals[1]?.aborted).toBe(false)
+        finish[1](true)
+        await vi.advanceTimersByTimeAsync(0)
+      }
+    }
+  )
+
   it('paces selected and other branches independently with one timer', async () => {
     const selected = target({ key: 'selected', intervalMs: 60_000, selected: true })
     const other = target()
@@ -51,8 +90,8 @@ describe('visible hosted review scheduler', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(selected.refresh).toHaveBeenCalledTimes(2)
     expect(other.refresh).toHaveBeenCalledTimes(1)
-    expect(selected.refresh).toHaveBeenCalledWith(false)
-    expect(other.refresh).toHaveBeenCalledWith(false)
+    expect(selected.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal))
+    expect(other.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal))
   })
 
   it('starts no hidden or offscreen requests and removes timers on disposal', async () => {
@@ -65,7 +104,7 @@ describe('visible hosted review scheduler', () => {
     scheduler.setVisible(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(row.refresh).toHaveBeenCalledTimes(1)
-    expect(row.refresh).toHaveBeenCalledWith(true)
+    expect(row.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal))
     scheduler.setVisible(false)
     expect(vi.getTimerCount()).toBe(0)
     scheduler.update([])
@@ -149,7 +188,7 @@ describe('visible hosted review scheduler', () => {
       expect(row.refresh).toHaveBeenCalledTimes(calls)
       await vi.advanceTimersByTimeAsync(1)
       expect(row.refresh).toHaveBeenCalledTimes(calls + 1)
-      expect(row.refresh).toHaveBeenLastCalledWith(true)
+      expect(row.refresh).toHaveBeenLastCalledWith(true, expect.any(AbortSignal))
     }
   })
 

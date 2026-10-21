@@ -1,8 +1,10 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -26,7 +28,7 @@ describe('agentSession.modelCatalog', () => {
     record = null
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => record } }
+        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
       })
     )
   })
@@ -97,6 +99,11 @@ describe('agentSession.modelCatalog', () => {
     )
     expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION, waitForListing: true })
   })
+
+  it('passes a saved-only read through to the catalog', async () => {
+    await call('agentSession.modelCatalog', { agent: 'grok', savedOnly: true }, STRUCTURED_CLIENT)
+    expect(read).toHaveBeenCalledWith({ agent: 'grok', savedOnly: true })
+  })
 })
 
 describe('agentSession.modelCatalog before anything built the host', () => {
@@ -108,7 +115,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   const installHost = vi.fn(async () => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => null } }
+        deps: { modelCatalog: { read }, store: { getRecord: () => null }, adapter: {} }
       })
     )
   })
@@ -153,5 +160,45 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     )
     expect(installHost).not.toHaveBeenCalled()
     expect(reply).toMatchObject({ ok: false })
+  })
+})
+
+describe('agentSession.modelCatalog for a chat on a model its CLI stopped listing', () => {
+  const opus = { id: 'opus', label: 'Opus', isDefault: true, efforts: [] }
+  const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [opus]
+  }))
+  const record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    provider: 'claude',
+    options: { model: 'opus[1m]', effort: 'max' }
+  }
+
+  beforeEach(() => {
+    setStructuredAgentSessionHost(
+      Object.assign(hostStub(), {
+        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
+      })
+    )
+  })
+
+  it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
+    const own = { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
+    const forChat = { agent: 'claude', sessionId: record.sessionId }
+    expect(await call('agentSession.modelCatalog', forChat, STRUCTURED_CLIENT)).toMatchObject({
+      ok: true,
+      result: { models: [opus, own] }
+    })
+    // A new chat's read, which seeds the next new chat's list, and the account's name only the CLI's.
+    const newChat = { ...forChat, worktree: 'id:wt-1' }
+    const runtime = { resolveStructuredAgentSessionLocalWorkspacePath: async () => '/repo' }
+    for (const reply of [
+      await call('agentSession.modelCatalog', newChat, STRUCTURED_CLIENT, runtime),
+      await call('agentSession.modelCatalog', { agent: 'claude' }, STRUCTURED_CLIENT)
+    ]) {
+      expect(reply).toMatchObject({ ok: true, result: { models: [opus] } })
+    }
   })
 })

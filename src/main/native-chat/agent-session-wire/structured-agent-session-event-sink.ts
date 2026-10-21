@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
@@ -51,6 +51,9 @@ export type StructuredAgentSessionPublishOptions = Pick<
 /** An item write states which turn its row belongs to; the write that creates the row decides. */
 export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
   turnScope: AgentJournalTurnScope
+  /** A reusable child's row a later run can resume: this child now executes it
+   *  (`JournalItemRow.executionOwner`). */
+  executes?: true
 }
 
 export type StructuredAgentSessionLifecycleJournal = Pick<
@@ -65,13 +68,13 @@ export type StructuredAgentSessionIdentityResolver = (
 /** What a revision reads: a keyed read for a row it can name, and the scan for one it cannot. */
 export type StructuredAgentSessionRevisionJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody'
+  'epoch' | 'visitItems' | 'itemBody' | 'item'
 >
 
 /** Rows already journaled and who produced each, read by a producer that has to agree with them. */
 export type StructuredAgentSessionLinkageJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItemsWithLinkage'
+  'epoch' | 'visitItemsWithLinkage' | 'threadGoal' | 'threadGoalSource'
 >
 
 /** The row a revision rewrites and its whole new body, read from the journal at execution. */
@@ -80,9 +83,6 @@ export type StructuredAgentSessionRevisionResolver = (
 ) => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null
 
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
-
-/** Compatibility alias for lifecycle callers that already use this resolver. */
-export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   appendItem(
@@ -150,12 +150,12 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
   appendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission | void
   tryAppendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
@@ -235,7 +235,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
 
   const appendLifecycleBatch = (
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options: StructuredAgentSessionAppendOptions = {}
   ): StructuredAgentSessionSinkAdmission =>
     queue.submit(
@@ -246,7 +246,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
             settlementId,
             mutations,
             // No row-level linkage: each mutation names its own (see the batch row builder).
-            fence: bound.fence
+            fence: bound.fence,
+            // The provider's own observation: its child's generation produced every item it creates.
+            ownerFence: bound.fence
           })
       },
       { ...options, lifecycle: true }

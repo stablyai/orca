@@ -35,7 +35,6 @@ const {
   noteRepositoryRateLimitSpendMock,
   ghRepoExecOptionsMock,
   githubRepoContextMock,
-  getSshGitProviderMock,
   readLocalGitConfigSignatureMock,
   acquireMock,
   releaseMock
@@ -67,7 +66,6 @@ const {
     connectionId: connectionId ?? null,
     ...localGitOptions
   })),
-  getSshGitProviderMock: vi.fn(),
   readLocalGitConfigSignatureMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -107,10 +105,6 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
@@ -122,13 +116,11 @@ vi.mock('./rate-limit', () => ({
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock
 }))
 
-import {
-  getPRForBranch,
-  getPRForBranchOutcome,
-  _resetOwnerRepoCache,
-  _resetMergeQueueCacheForTests,
-  __resetTrackedUpstreamBranchCacheForTests
-} from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
+import { _resetOwnerRepoCache } from './gh-utils'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { __resetTrackedUpstreamBranchCacheForTests } from './client/lookup/tracked-upstream-cache'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
@@ -223,7 +215,6 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     noteRateLimitSpendMock.mockReset()
     ghRepoExecOptionsMock.mockClear()
     githubRepoContextMock.mockClear()
-    getSshGitProviderMock.mockReset()
     readLocalGitConfigSignatureMock.mockReset()
     readLocalGitConfigSignatureMock.mockResolvedValue(undefined)
     acquireMock.mockReset()

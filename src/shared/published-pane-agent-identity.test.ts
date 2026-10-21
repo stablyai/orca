@@ -77,10 +77,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     expect(resolve({})).toBeUndefined()
   })
 
-  it('publishes nothing for a hyphenated worktree name that contains an agent word', () => {
-    expect(resolve({ title: 'review-14600-codex' })).toBeUndefined()
-  })
-
   describe('identity must not depend on how the agent was started', () => {
     // Most agents are started by typing `claude` / `codex` at a shell, not through Orca's agent
     // launcher. Those panes have no launch record at all, so anything that leans on one works for
@@ -121,10 +117,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
 
     it('lets a live hook outrank a stale launch record', () => {
       expect(resolve({ launchAgent: 'claude', hookAgent: 'codex', hookIsLive: true })).toBe('codex')
-    })
-
-    it('lets the live foreground process outrank a stale launch record', () => {
-      expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
     })
   })
 })

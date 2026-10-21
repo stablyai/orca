@@ -187,12 +187,7 @@ function createDeps(): Record<string, unknown> {
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn(),
-    markWorktreeUnread: vi.fn(),
-    markTerminalTabUnread: vi.fn(),
-    markTerminalPaneUnread: vi.fn(),
-    clearWorktreeUnread: vi.fn(),
-    clearTerminalTabUnread: vi.fn(),
-    clearTerminalPaneUnread: vi.fn(),
+    markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
@@ -403,7 +398,6 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       clearSleepingAgentSession: vi.fn(),
       registerAgentLaunchConfig: vi.fn(),
       clearAgentLaunchConfig: vi.fn(),
-      markWorktreeUnread: vi.fn(),
       observeTerminalGitHubPullRequestLink: vi.fn(),
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
@@ -412,9 +406,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn(),
       clearPaneForegroundAgent: vi.fn(),
-      markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn(),
-      markAgentCompletionPaneUnread: vi.fn()
+      markTerminalBell: vi.fn(),
+      markAgentAttentionUnread: vi.fn()
     }
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {

@@ -1,4 +1,4 @@
-import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
 
 /**
  * Whether one cadence process inspection for this pane is expensive enough that
@@ -17,7 +17,7 @@ import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
  * and stop scheduling idle host reads altogether.
  */
 export function isAgentProcessInspectionCostly(userAgent: string, ptyId: string | null): boolean {
-  if (ptyId !== null && isRemoteExecutionHostPtyId(ptyId)) {
+  if (isRemoteExecutionHostPtyId(ptyId)) {
     return true
   }
   if (!userAgent.includes('Windows')) {

@@ -28,6 +28,7 @@ export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
     case 'user-stop':
     case 'user-close':
       return true
+    case 'context-clear':
     case 'host-stop':
     case 'evict':
       return false

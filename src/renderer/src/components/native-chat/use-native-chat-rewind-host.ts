@@ -1,5 +1,5 @@
 import { useCallback, type RefObject } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionRewindBlockedReason } from './StructuredAgentSessionStatusBridge'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import type { NativeChatRewindHost } from './use-native-chat-rewind'

@@ -20,7 +20,11 @@ import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
-import { mergeSettings, mergeWebUIState } from './web-preference-normalization'
+import {
+  mergeSettings,
+  mergeWebUIState,
+  runtimeChatPermissionSetting
+} from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
@@ -160,6 +164,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         result.settings.prBotAuthorOverrides
       )
     }
+    Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
     // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
     // sends it back, so web shows what the host enforces instead of a local value it ignores.
     if (typeof result.settings.artifactSharingEnabled === 'boolean') {
@@ -229,6 +234,7 @@ export async function syncRuntimeBackedSettings(
       updates.prBotAuthorOverrides
     )
   }
+  Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates, false))
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }

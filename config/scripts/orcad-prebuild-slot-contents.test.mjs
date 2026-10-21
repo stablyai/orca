@@ -57,7 +57,7 @@ const next = (slot, overrides = {}) => ({
 })
 
 describe('N-API pinning', () => {
-  it('pins N-API 8 so a host Node 18 (rung C) can load every slot', () => {
+  it('keeps the N-API 8 addon ABI stable across runtime upgrades', () => {
     expect(SLOT_NAPI_VERSION).toBe(8)
     // The client's rung C host-Node gate must ask for exactly what the slots are built against.
     expect(ORCAD_ADDON_NAPI_VERSION).toBe(SLOT_NAPI_VERSION)
@@ -150,8 +150,16 @@ describe('slotSourceFiles', () => {
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
-      'conpty/OpenConsole.exe'
+      'conpty/OpenConsole.exe',
+      'pty.node',
+      'winpty.dll',
+      'winpty-agent.exe'
     ])
+    // Upstream's winpty prebuilds: Orca's patch removes winpty from the source build.
+    const sources = Object.fromEntries(files)
+    for (const file of ['pty.node', 'winpty.dll', 'winpty-agent.exe']) {
+      expect(sources[file]).toBe(join(nodePtyDir, 'prebuilds', 'win32-arm64', file))
+    }
     expect(files[2][1]).toBe(
       join(nodePtyDir, 'third_party', 'conpty', '1.23.251008001', 'win10-arm64', 'conpty.dll')
     )

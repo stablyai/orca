@@ -1,3 +1,4 @@
+import { getSessionTabsInventoryPublication } from '../../session-tabs/session-tabs-inventory-test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
@@ -442,17 +443,16 @@ describe('session tabs inventory RPC methods', () => {
         clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
       }
     )
-    const waiters = (runtime as unknown as { sessionTabsInventoryWaiters: Set<() => void> })
-      .sessionTabsInventoryWaiters
-    for (let index = 0; index < 20 && waiters.size === 0; index += 1) {
+    const waiters = getSessionTabsInventoryPublication(runtime)
+    for (let index = 0; index < 20 && waiters.pendingWaiterCount === 0; index += 1) {
       await Promise.resolve()
     }
-    expect(waiters.size).toBe(1)
+    expect(waiters.pendingWaiterCount).toBe(1)
 
     runtime.cleanupSubscription('session.tabs:conn-cancel:*:req-1')
     await pending
 
-    expect(waiters.size).toBe(0)
+    expect(waiters.pendingWaiterCount).toBe(0)
     expect(messages.map((message) => JSON.parse(message))).toEqual([
       expect.objectContaining({
         ok: false,

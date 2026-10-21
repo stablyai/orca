@@ -314,7 +314,13 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
 
     const signalledAt = Date.now()
     supervisor.kill('SIGTERM')
-    const exited = await Promise.race([exit, new Promise((resolve) => setTimeout(resolve, 5_000))])
+    let exitTimeout: ReturnType<typeof setTimeout> | undefined
+    const exited = await Promise.race([
+      exit,
+      new Promise((resolve) => {
+        exitTimeout = setTimeout(resolve, 5_000)
+      })
+    ]).finally(() => clearTimeout(exitTimeout))
 
     expect(exited).toEqual({ code: null, signal: 'SIGTERM' })
     expect(Date.now() - signalledAt).toBeGreaterThanOrEqual(graceMs)
@@ -342,15 +348,28 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
   })
 
   it('never spawns the provider when its owner is not its parent at start', async () => {
-    const marker = join(tempDir(), 'provider-started')
+    const dir = tempDir()
+    const marker = join(dir, 'provider-spawned')
+    const preload = join(dir, 'record-spawn.js')
+    writeFileSync(
+      preload,
+      String.raw`
+        const childProcess = require('node:child_process')
+        const spawn = childProcess.spawn
+        childProcess.spawn = (...args) => {
+          require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_PID_FILE, 'spawned')
+          return spawn(...args)
+        }
+      `
+    )
     const { exit } = launchSupervisor(
       { ownerPid: process.pid === 1 ? 2 : 1 },
-      {},
-      { command: 'touch', args: [marker] }
+      { ORCA_TEST_PROVIDER_PID_FILE: marker },
+      { command: 'touch', args: [join(dir, 'provider-started')] },
+      ['--require', preload]
     )
 
     await expect(exit).resolves.toEqual({ code: 1, signal: null })
-    await new Promise((resolve) => setTimeout(resolve, 200))
     expect(existsSync(marker)).toBe(false)
   })
 
@@ -391,10 +410,12 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     expect(alive(provider)).toBe(false)
   })
 
-  it('gives a provider 1 s after stdin end, then 3 s after SIGTERM before SIGKILL', async () => {
+  it('gives a provider its stdin-end grace, then its SIGTERM grace before SIGKILL', async () => {
     const signalFile = join(tempDir(), 'provider-sigterm-at')
+    const stdinEndGraceMs = 200
+    const sigtermGraceMs = 300
     const { supervisor, exit } = launchSupervisor(
-      {},
+      { stdinEndGraceMs, sigtermGraceMs },
       { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
       { command: process.execPath, args: ['-e', RECORDS_SIGTERM_PROVIDER] }
     )
@@ -408,9 +429,9 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
 
     expect(exited).toEqual({ code: 137, signal: null })
     // Timers may fire a tick early against another process's clock.
-    expect(signalledAt - endedAt).toBeGreaterThanOrEqual(1_000 - 20)
-    expect(exitedAt - signalledAt).toBeGreaterThanOrEqual(3_000 - 20)
-    expect(exitedAt - endedAt).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
+    expect(signalledAt - endedAt).toBeGreaterThanOrEqual(stdinEndGraceMs - 20)
+    expect(exitedAt - signalledAt).toBeGreaterThanOrEqual(sigtermGraceMs - 20)
+    expect(exitedAt - endedAt).toBeLessThan(stdinEndGraceMs + sigtermGraceMs + 1_000)
     expect(alive(provider)).toBe(false)
   })
 
@@ -507,10 +528,10 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     it('lets a one-shot answer after its stdin ends and relays its exit code', async () => {
       const signalFile = join(tempDir(), 'provider-signal')
       const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot' },
+        { lifetime: 'one-shot', stdinEndGraceMs: 100 },
         {
           ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile,
-          ORCA_TEST_PROVIDER_ANSWER_DELAY_MS: String(PROVIDER_STDIN_END_GRACE_MS * 1.5)
+          ORCA_TEST_PROVIDER_ANSWER_DELAY_MS: '250'
         },
         { command: process.execPath, args: ['-e', ONE_SHOT_PROVIDER] }
       )
@@ -530,12 +551,13 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     ] as const)(
       'reaps a one-shot that ignores its stdin end when its owner %s',
       async (_, signal, env) => {
+        const stdinEndGraceMs = 100
         const { owner, pids } = await launchUnderOwner(
-          { lifetime: 'one-shot', sigtermGraceMs: 300 },
+          { lifetime: 'one-shot', stdinEndGraceMs, sigtermGraceMs: 300 },
           { ORCA_TEST_OWNER_ENDS_STDIN: '1', ...env }
         )
         // Past the session grace: a stdin end alone must not have stopped it.
-        await new Promise((resolve) => setTimeout(resolve, PROVIDER_STDIN_END_GRACE_MS + 300))
+        await new Promise((resolve) => setTimeout(resolve, stdinEndGraceMs + 150))
         expect(alive(-pids.provider)).toBe(true)
 
         owner.kill(signal)

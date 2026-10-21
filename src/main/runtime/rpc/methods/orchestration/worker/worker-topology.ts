@@ -3,7 +3,6 @@ import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/nati
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
 
 export type WorkerEffect = {
@@ -102,12 +101,6 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  if (args.agent !== 'claude' && args.agent !== 'codex') {
-    throw new OrchestrationError(
-      'agent_unconfigured',
-      `Structured workers support claude and codex; ${args.agent} has no structured session.`
-    )
-  }
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,

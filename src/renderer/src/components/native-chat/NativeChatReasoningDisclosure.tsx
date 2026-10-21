@@ -9,11 +9,17 @@ import { NativeChatMarkdown } from './NativeChatMarkdown'
 export function NativeChatReasoningBody({
   markdown,
   onLinkClick,
-  allowFileUriLinks
+  allowFileUriLinks,
+  rowKey,
+  streaming = false
 }: {
   markdown: string
+  /** The reasoning block's disclosure key, shared by its live line and finished row. */
+  rowKey?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  /** The block is still arriving under the live activity line. */
+  streaming?: boolean
 }): React.JSX.Element {
   return (
     <div
@@ -21,13 +27,15 @@ export function NativeChatReasoningBody({
       className="scrollbar-sleek mt-1 max-h-80 overflow-y-auto pl-5.5 text-chat-foreground-faint"
     >
       <NativeChatMarkdown
+        rowKey={rowKey}
         content={markdown}
         variant="document"
-        className="text-sm native-chat-message-text"
+        className="text-sm"
         renderCodeBlock={NativeChatCodeBlock}
         onLinkClick={onLinkClick}
         allowFileUriLinks={allowFileUriLinks}
         linkifyFilePaths={onLinkClick !== undefined}
+        streaming={streaming}
       />
     </div>
   )

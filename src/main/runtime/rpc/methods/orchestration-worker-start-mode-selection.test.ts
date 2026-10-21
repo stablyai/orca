@@ -40,8 +40,6 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 
 const STRUCTURED_DEFAULT = {
   experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
@@ -106,11 +104,12 @@ describe('worker-start honours the settings default', () => {
     settings: Record<string, unknown> | null,
     overrides: Record<string, unknown> = {}
   ) {
-    vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => {
+    vi.spyOn(runtime, 'requireStore').mockImplementation(() => {
       if (!settings) {
         throw new Error('runtime_unavailable')
       }
-      return settings as never
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this worker fixture reaches only the private store getSettings reader.
+      return { getSettings: () => settings } as never
     })
     const task = db.createTask({ spec: 'settings-driven task', runId })
     const method = ORCHESTRATION_METHODS.find(
@@ -171,10 +170,7 @@ describe('worker-start honours the settings default', () => {
   })
 
   it('starts a terminal agent worker when it is not', async () => {
-    const result = await startWorker({
-      ...STRUCTURED_DEFAULT,
-      experimentalStructuredNativeChat: false
-    })
+    const result = await startWorker({ experimentalNativeChat: false })
 
     expect(result).toMatchObject({
       state: 'ready',
@@ -253,7 +249,7 @@ describe('worker-start honours the settings default', () => {
     const created = mockWorktreeCreation()
 
     const result = await startWorker(
-      { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false },
+      { ...STRUCTURED_DEFAULT, experimentalNativeChat: false },
       { worktree: 'new-child', name: 'worker-child' }
     )
 

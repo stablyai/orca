@@ -1,9 +1,9 @@
 // Route A web entry: mounts the phone's h/[hostId] route tree on react-native-web.
-// Built by `build:mobile-web` into the packaged bundle dir; mounted only by a build with
-// `EXPO_PUBLIC_MOBILE_SHELL=ota`.
+// Built by `build:mobile-web` into the packaged bundle dir; mounted by the app's shell.
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ExpoRoot } from 'expo-router'
+import { colors } from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/bridge-rpc-client'
 import {
   bootstrapShellPage,
@@ -11,6 +11,7 @@ import {
   stampPageMountState,
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
+import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
 import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
   RouteScreenPaintProvider,
@@ -94,6 +95,8 @@ if (!container) {
   throw new Error('[orca-mobile-web-app] #root missing')
 }
 const target = document.documentElement
+target.style.setProperty('--muted-foreground', colors.textMuted)
+target.style.setProperty('--foreground', colors.textPrimary)
 stampPageMountState(target, 'started')
 
 bootstrapShellPage({
@@ -124,7 +127,13 @@ bootstrapShellPage({
       (key, value) => client.notifyStorageWrite(key, value),
       session.host?.id ?? '',
       session.route?.pathname ?? '',
-      session.storageOversize
+      session.storageOversize,
+      session.ownsHostArea
+        ? async (key) =>
+            storageReadResultSchema.parse(
+              (await client.callNativeVerb('native.storage.read', { key })).result
+            ).value
+        : null
     )
     createRoot(container).render(
       // Above `ExpoRoot`, not inside its wrapper: a route this bundle cannot resolve or import

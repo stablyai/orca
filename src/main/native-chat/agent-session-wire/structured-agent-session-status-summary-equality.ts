@@ -20,6 +20,7 @@ export function structuredStatusSummariesEqual(
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
     a.hostExecutionPhase === b.hostExecutionPhase &&
+    a.restartResume?.phase === b.restartResume?.phase &&
     a.rewindBlockedReason === b.rewindBlockedReason &&
     // A moved state clock changes ranking; row activity alone, including a subagent's, does not.
     // An idle state the journal cannot date still republishes, since readers date it by `updatedAt`,
@@ -30,11 +31,14 @@ export function structuredStatusSummariesEqual(
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.permissionMode === b.permissionMode &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
     a.conversationName === b.conversationName &&
+    a.namingError?.message === b.namingError?.message &&
+    a.namingError?.failedAt === b.namingError?.failedAt &&
     a.turnOutcome === b.turnOutcome &&
     a.stopping === b.stopping &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&

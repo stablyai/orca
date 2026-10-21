@@ -22,6 +22,7 @@ export type ReadTranscriptResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      sourceEmpty?: boolean
     }
   // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
   // #8401) as opposed to a real parse/IO error callers surface immediately.
@@ -45,7 +46,12 @@ export async function readNativeChatTranscript(
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
   if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
-    return readOpenCodeNativeChatTranscriptFull(sessionId)
+    return readOpenCodeNativeChatTranscriptFull(
+      sessionId,
+      {},
+      undefined,
+      agent === 'zcode' ? 'zcode' : undefined
+    )
   }
   let filePath: string | null
   try {

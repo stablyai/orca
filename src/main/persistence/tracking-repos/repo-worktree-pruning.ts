@@ -3,7 +3,10 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/e
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
+import {
+  removeWorkspaceSessionOwners,
+  withoutWslMoveFrozenOwners
+} from '../restoring-sessions/session-owner-removal'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
@@ -105,7 +108,10 @@ export function pruneWorktreeStateForRepo(
   const pruneLegacyLocalSession = hostId === null || hostId === LOCAL_EXECUTION_HOST_ID
   const pruneAllHostPartitions = hostId === null
   if (pruneLegacyLocalSession) {
-    state.workspaceSession = removeWorkspaceSessionOwners(state.workspaceSession, ownerKeysToPrune)!
+    state.workspaceSession = removeWorkspaceSessionOwners(
+      state.workspaceSession,
+      withoutWslMoveFrozenOwners(ownerKeysToPrune)
+    )!
   }
   if (state.workspaceSessionsByHostId) {
     for (const [partitionHostId, session] of Object.entries(state.workspaceSessionsByHostId)) {

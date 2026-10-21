@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useFileExplorerImport } from './useFileExplorerImport'
 
 const mocks = vi.hoisted(() => ({ importPaths: vi.fn(), prepare: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
@@ -31,7 +31,6 @@ function dropOn(target: Element): { dropEffect: string } {
 
 it('keeps native drops on committed scope when a new scope render suspends', async () => {
   vi.stubGlobal('api', {
-    ui: { onFileDrop: () => () => undefined },
     fs: {
       getPathForFile: () => '/source/file.ts',
       prepareDroppedPaths: mocks.prepare.mockImplementation(async ({ paths }) => ({

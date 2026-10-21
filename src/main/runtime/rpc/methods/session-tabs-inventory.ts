@@ -6,6 +6,7 @@ import { projectSessionTabAgentStatus } from './session-tab-agent-status-project
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -109,6 +110,7 @@ export async function subscribeSessionTabsInventory(
   let censusChangeSequence: number | undefined
   let censusInvalidated = false
   const withProofDelta = createSessionTabsRetirementProofDelta(context.clientCapabilities)
+  const tabDelta = createSessionTabsTabDeltaEncoder(context.clientCapabilities)
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection rewrites only tabs and groups; the change fields it was handed pass through.
     projectSessionTabsForClient(
@@ -185,7 +187,7 @@ export async function subscribeSessionTabsInventory(
     }
     emit({
       type: 'updated',
-      ...withProofDelta(projected)
+      ...tabDelta.update(withProofDelta(projected))
     })
     if (projected.removed === true) {
       publishedSnapshotsByWorktree.delete(snapshot.worktree)
@@ -265,7 +267,11 @@ export async function subscribeSessionTabsInventory(
   }
   const { inventory, changeSequence } = collected
   censusChangeSequence = changeSequence
-  emit({ type: 'snapshots', ...inventory, snapshots: inventory.snapshots.map(withProofDelta) })
+  emit({
+    type: 'snapshots',
+    ...inventory,
+    snapshots: inventory.snapshots.map((snapshot) => tabDelta.full(withProofDelta(snapshot)))
+  })
   for (const snapshot of inventory.snapshots) {
     publishedSnapshotsByWorktree.set(snapshot.worktree, withoutNavigationIntent(snapshot))
   }

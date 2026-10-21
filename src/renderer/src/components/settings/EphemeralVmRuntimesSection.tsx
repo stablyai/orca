@@ -7,8 +7,10 @@ import { EPHEMERAL_VM_CLEANUP_STOPPED_ERROR } from '../../../../shared/ephemeral
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { EphemeralVmCleanupStopDialog } from './EphemeralVmCleanupStopDialog'
 import { EphemeralVmRuntimeRow } from './EphemeralVmRuntimeRow'
+import { CloudVmSetupGuide } from './CloudVmSetupGuide'
 
 function hasCleanupFailed(runtime: EphemeralVmRuntimeRecord): boolean {
   return (
@@ -71,11 +73,7 @@ export function getEphemeralVmRuntimeStatusLabel(runtime: EphemeralVmRuntimeReco
   return runtime.status
 }
 
-export function EphemeralVmRuntimesSection({
-  active = true
-}: {
-  active?: boolean
-}): React.JSX.Element {
+export function EphemeralVmRuntimesSection(): React.JSX.Element {
   const [runtimes, setRuntimes] = useState<EphemeralVmRuntimeRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [cleaningId, setCleaningId] = useState<string | null>(null)
@@ -114,14 +112,12 @@ export function EphemeralVmRuntimesSection({
   )
 
   useEffect(() => {
-    if (active) {
-      void refresh()
-    }
-  }, [active, refresh])
+    void refresh()
+  }, [refresh])
 
   const hasRunningCleanup = runtimes.some(isCleanupRunning) || cleaningId !== null
   useEffect(() => {
-    if (!active || !hasRunningCleanup) {
+    if (!hasRunningCleanup) {
       return
     }
     let cancelled = false
@@ -139,7 +135,7 @@ export function EphemeralVmRuntimesSection({
         clearTimeout(timer)
       }
     }
-  }, [active, hasRunningCleanup, refresh])
+  }, [hasRunningCleanup, refresh])
 
   const cleanupRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setCleaningId(runtime.id)
@@ -254,77 +250,61 @@ export function EphemeralVmRuntimesSection({
 
   const hasRuntimes = runtimes.length > 0
   return (
-    <div className="space-y-3 pt-2" data-settings-section="temporary-vm-runtimes">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <div className="text-sm font-medium">
-            {translate(
-              'auto.components.settings.EphemeralVmRuntimesSection.cloudVmTitle',
-              'Cloud VM runtimes'
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.EphemeralVmRuntimesSection.description',
-              'Recipe-created runtimes are workspace-owned. Clean up stale entries after crashes, failed creates, or manual recovery.'
-            )}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label={translate(
-            'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefresh',
-            'Refresh Cloud VM runtimes'
-          )}
-          title={translate(
-            'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefresh',
-            'Refresh Cloud VM runtimes'
-          )}
-          onClick={() => void refresh()}
-          disabled={isLoading || cleaningId !== null}
-        >
-          {isLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-        </Button>
-      </div>
-
-      <div className="rounded-lg border border-border/50 bg-card/30">
-        {!hasRuntimes ? (
-          <div className="px-3 py-4 text-sm text-muted-foreground">
-            {isLoading
-              ? translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmLoading',
-                  'Checking Cloud VM runtimes…'
-                )
-              : translate(
-                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmEmptyWithSetup',
-                  'No Cloud VM runtimes yet. Create one from a workspace using an environment recipe.'
+    <section
+      className="scroll-mt-8 rounded-lg border border-border bg-card"
+      data-settings-section="temporary-vm-runtimes"
+    >
+      <CloudVmSetupGuide
+        refreshAction={
+          hasRuntimes ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefresh',
+                    'Refresh Cloud VM runtimes'
+                  )}
+                  onClick={() => void refresh()}
+                  disabled={isLoading || cleaningId !== null}
+                >
+                  {isLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate(
+                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefreshLabel',
+                  'Refresh Cloud VMs'
                 )}
-          </div>
-        ) : (
-          <div className="divide-y divide-border/50">
-            {runtimes.map((runtime) => (
-              <EphemeralVmRuntimeRow
-                key={runtime.id}
-                runtime={runtime}
-                statusLabel={getEphemeralVmRuntimeStatusLabel(runtime)}
-                cleanupFailed={hasCleanupFailed(runtime)}
-                cleanupRunning={isCleanupRunning(runtime) || cleaningId === runtime.id}
-                isStopping={stoppingId === runtime.id}
-                disabled={
-                  isLoading ||
-                  (cleaningId !== null && cleaningId !== runtime.id) ||
-                  (stoppingId !== null && stoppingId !== runtime.id)
-                }
-                onCleanup={() => void cleanupRuntime(runtime)}
-                onStopCleanup={() => setPendingStop(runtime)}
-                onCopyCleanupCommand={() => void copyCleanupCommand(runtime)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : null
+        }
+      />
+      {hasRuntimes ? (
+        <div className="divide-y divide-border border-t border-border">
+          {runtimes.map((runtime) => (
+            <EphemeralVmRuntimeRow
+              key={runtime.id}
+              runtime={runtime}
+              statusLabel={getEphemeralVmRuntimeStatusLabel(runtime)}
+              cleanupFailed={hasCleanupFailed(runtime)}
+              cleanupRunning={isCleanupRunning(runtime) || cleaningId === runtime.id}
+              isStopping={stoppingId === runtime.id}
+              disabled={
+                isLoading ||
+                (cleaningId !== null && cleaningId !== runtime.id) ||
+                (stoppingId !== null && stoppingId !== runtime.id)
+              }
+              onCleanup={() => void cleanupRuntime(runtime)}
+              onStopCleanup={() => setPendingStop(runtime)}
+              onCopyCleanupCommand={() => void copyCleanupCommand(runtime)}
+            />
+          ))}
+        </div>
+      ) : null}
       <EphemeralVmCleanupStopDialog
         runtime={pendingStop}
         isStopping={stoppingId !== null}
@@ -335,6 +315,6 @@ export function EphemeralVmRuntimesSection({
           }
         }}
       />
-    </div>
+    </section>
   )
 }

@@ -1,13 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy,
+  nativeChatImageRow,
   nativeChatPendingAttachmentSnapshot,
-  revealNativeChatPendingAttachment,
   settleNativeChatPendingAttachment,
-  subscribeToNativeChatPendingAttachments,
+  settleNativeChatPendingAttachmentReferences,
   takeNativeChatPendingAttachment
 } from './native-chat-pending-attachment-cache'
 import {
@@ -58,22 +58,6 @@ describe('the pane pending attachment cache', () => {
     expect(takeNativeChatPendingAttachment('pane-b', 'b1')).toBeUndefined()
   })
 
-  it('shows a hidden chip and tells every subscriber, with a new snapshot only on change', () => {
-    const listener = vi.fn()
-    const unsubscribe = subscribeToNativeChatPendingAttachments('pane-c', listener)
-    addNativeChatPendingAttachment('pane-c', { id: 'c1', path: '', pending: true, hidden: true })
-    const hidden = nativeChatPendingAttachmentSnapshot('pane-c')
-
-    expect(nativeChatPendingAttachmentSnapshot('pane-c')).toBe(hidden)
-    revealNativeChatPendingAttachment('pane-c', 'c1')
-
-    expect(nativeChatPendingAttachmentSnapshot('pane-c')).toEqual([
-      { id: 'c1', path: '', pending: true }
-    ])
-    expect(listener).toHaveBeenCalledTimes(2)
-    unsubscribe()
-  })
-
   it('settles into a draft owned by the workspace it began in, after its chat stopped naming one', () => {
     const conversation = structuredAgentSessionDraftScopeKey('session-1')
     let open = true
@@ -87,6 +71,51 @@ describe('the pane pending attachment cache', () => {
     expect(readNativeChatComposerDraft(conversation).images).toHaveLength(1)
     deleteNativeChatComposerDraftsOwnedBy(OWNER)
     expect(readNativeChatComposerDraft(conversation).images).toEqual([])
+  })
+
+  it('settles images into the draft in the order they were attached, whichever finished first', () => {
+    addPending('tab-1:leaf', 'first')
+    addPending('tab-1:leaf', 'second')
+    addPending('tab-1:leaf', 'third')
+
+    settleNativeChatPendingAttachment('tab-1:leaf', 'second', '/store/b.png')
+    // Saved at once, so a reload keeps it; the row still shows it behind the one before it.
+    expect(readNativeChatComposerDraft('tab-1:leaf').images).toEqual([
+      { id: 'second', path: '/store/b.png' }
+    ])
+    expect(
+      nativeChatImageRow(
+        readNativeChatComposerDraft('tab-1:leaf').images,
+        nativeChatPendingAttachmentSnapshot('tab-1:leaf')
+      ).map(({ id }) => id)
+    ).toEqual(['first', 'second', 'third'])
+    settleNativeChatPendingAttachment('tab-1:leaf', 'first', '/store/a.png')
+    takeNativeChatPendingAttachment('tab-1:leaf', 'third')
+
+    expect(readNativeChatComposerDraft('tab-1:leaf').images.map(({ path }) => path)).toEqual([
+      '/store/a.png',
+      '/store/b.png'
+    ])
+    expect(nativeChatPendingAttachmentSnapshot('tab-1:leaf')).toEqual([])
+  })
+
+  it('keeps reference settlement owned by the workspace after its chat closes', () => {
+    const conversation = structuredAgentSessionDraftScopeKey('session-1')
+    let open = true
+    setNativeChatComposerDraftOwnerResolver((scopeKey) =>
+      open && scopeKey === conversation ? OWNER : undefined
+    )
+    addPending(conversation, 'file')
+    open = false
+
+    settleNativeChatPendingAttachmentReferences(conversation, [
+      { id: 'file', path: '/store/a.pdf' }
+    ])
+
+    expect(readNativeChatComposerDraft(conversation).text).toBe('@/store/a.pdf')
+    expect(nativeChatPendingAttachmentSnapshot(conversation)).toEqual([])
+    deleteNativeChatComposerDraftsOwnedBy(OWNER)
+    expect(readNativeChatComposerDraft(conversation).text).toBe('')
   })
 
   it('drops the chips begun in a removed workspace on that host only', () => {

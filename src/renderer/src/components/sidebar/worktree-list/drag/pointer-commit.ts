@@ -70,6 +70,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   } else if (boardDropTarget.status) {
     args.onDropWorktreesOnWorkspaceBoard({
       worktreeIds: drag.reorderDraggedIds,
+      draggedCopies: drag.draggedCopies,
       status: boardDropTarget.status,
       // Why: the target counts rendered cards, but the groups are the full
       // lane. Board search can make those two differ.

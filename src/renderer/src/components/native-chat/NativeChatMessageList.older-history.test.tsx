@@ -4,8 +4,29 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NATIVE_CHAT_OLDER_HISTORY_PREFETCH_PX } from './use-native-chat-older-history-autoload'
@@ -112,11 +133,7 @@ const COLUMN_GAP_PX = 20
 const IN_FLOW_CHROME_PX = 32
 
 function flowAboveSpacer(spacer: HTMLElement): number {
-  let above = TOP_GUTTER_PX
-  for (let node = spacer.previousElementSibling; node; node = node.previousElementSibling) {
-    above += IN_FLOW_CHROME_PX + COLUMN_GAP_PX
-  }
-  return above
+  return transcriptWindowTop(spacer, TOP_GUTTER_PX, IN_FLOW_CHROME_PX + COLUMN_GAP_PX)
 }
 
 type LoadEarlier = () => Promise<NativeChatOlderPageResult>
@@ -505,7 +522,7 @@ describe('older history auto-load', () => {
     if (!row || !spacer) {
       throw new Error(`${text} is not a windowed row`)
     }
-    return spacer.offsetTop + Number.parseFloat(row.style.top)
+    return spacer.offsetTop + row.offsetTop
   }
 
   async function readerAtMarker140(loadEarlier: LoadEarlier) {

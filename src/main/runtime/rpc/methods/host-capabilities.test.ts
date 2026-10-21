@@ -7,7 +7,6 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 const {
   isPwshAvailable,
   isPwshAvailableAsync,
-  isWslAvailable,
   isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync,
@@ -15,7 +14,6 @@ const {
 } = vi.hoisted(() => ({
   isPwshAvailable: vi.fn(),
   isPwshAvailableAsync: vi.fn(),
-  isWslAvailable: vi.fn(),
   isWslAvailableAsync: vi.fn(),
   listWslDistros: vi.fn(),
   listWslDistrosAsync: vi.fn(),
@@ -24,7 +22,6 @@ const {
 
 vi.mock('../../../pwsh', () => ({ isPwshAvailable, isPwshAvailableAsync }))
 vi.mock('../../../wsl', () => ({
-  isWslAvailable,
   isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync
@@ -41,7 +38,6 @@ describe('host capability RPC methods', () => {
   beforeEach(() => {
     isPwshAvailable.mockReset()
     isPwshAvailableAsync.mockReset()
-    isWslAvailable.mockReset()
     isWslAvailableAsync.mockReset()
     listWslDistros.mockReset()
     listWslDistrosAsync.mockReset()
@@ -92,7 +88,6 @@ describe('host capability RPC methods', () => {
     expect(isWslAvailableAsync).toHaveBeenCalledTimes(1)
     expect(listWslDistrosAsync).toHaveBeenCalledTimes(1)
     expect(isPwshAvailableAsync).toHaveBeenCalledTimes(1)
-    expect(isWslAvailable).not.toHaveBeenCalled()
     expect(listWslDistros).not.toHaveBeenCalled()
     expect(isPwshAvailable).not.toHaveBeenCalled()
   })

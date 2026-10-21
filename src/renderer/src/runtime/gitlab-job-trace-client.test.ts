@@ -3,7 +3,10 @@ import type { PRCheckDetail } from '../../../shared/github/check-types'
 import { loadGitLabJobLogDetails } from './gitlab-job-trace-client'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn())
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('./runtime-rpc-client', () => ({
+  callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability: vi.fn()
+}))
 
 const jobTrace = vi.fn()
 
@@ -32,7 +35,7 @@ describe('loadGitLabJobLogDetails', () => {
     }
 
     await expect(
-      loadGitLabJobLogDetails({ repoPath: '/repo', settings: null, check: githubCheck })
+      loadGitLabJobLogDetails({ repoPath: '/repo', check: githubCheck })
     ).resolves.toBeNull()
     expect(jobTrace).not.toHaveBeenCalled()
     expect(callRuntimeRpc).not.toHaveBeenCalled()
@@ -44,7 +47,6 @@ describe('loadGitLabJobLogDetails', () => {
     const details = await loadGitLabJobLogDetails({
       repoPath: '/repo',
       repoId: 'repo-1',
-      settings: { activeRuntimeEnvironmentId: null },
       check: gitLabCheck
     })
 
@@ -64,7 +66,6 @@ describe('loadGitLabJobLogDetails', () => {
     await loadGitLabJobLogDetails({
       repoPath: '/repo',
       repoId: 'repo-1',
-      settings: { activeRuntimeEnvironmentId: null },
       check: gitLabCheck,
       projectRef: { host: 'gitlab.example.test', path: 'contributor/orca' }
     })
@@ -87,7 +88,6 @@ describe('loadGitLabJobLogDetails', () => {
 
     const details = await loadGitLabJobLogDetails({
       repoPath: '/repo',
-      settings: { activeRuntimeEnvironmentId: null },
       check: manualCheck
     })
 
@@ -112,7 +112,6 @@ describe('loadGitLabJobLogDetails', () => {
 
     const details = await loadGitLabJobLogDetails({
       repoPath: '/repo',
-      settings: { activeRuntimeEnvironmentId: null },
       check: canceledCheck
     })
 
@@ -126,7 +125,7 @@ describe('loadGitLabJobLogDetails', () => {
     await loadGitLabJobLogDetails({
       repoPath: '/repo',
       repoId: 'repo-1',
-      settings: { activeRuntimeEnvironmentId: 'env-9' },
+      repoOwnerExecutionHostId: 'runtime:env-9',
       check: gitLabCheck
     })
 
@@ -135,7 +134,7 @@ describe('loadGitLabJobLogDetails', () => {
       { kind: 'environment', environmentId: 'env-9' },
       'gitlab.jobTrace',
       // Why: bounding in main keeps the response under the 1 MB transport frame cap.
-      { repo: 'repo-1', jobId: 42, projectRef: undefined, logExcerpt: true },
+      expect.objectContaining({ repo: 'id:repo-1', jobId: 42, projectRef: null, logExcerpt: true }),
       { timeoutMs: 65_000 }
     )
   })
@@ -146,7 +145,6 @@ describe('loadGitLabJobLogDetails', () => {
     await expect(
       loadGitLabJobLogDetails({
         repoPath: '/repo',
-        settings: { activeRuntimeEnvironmentId: null },
         check: gitLabCheck
       })
     ).rejects.toThrow('403 Forbidden')
@@ -159,7 +157,6 @@ describe('loadGitLabJobLogDetails', () => {
 
       const pending = loadGitLabJobLogDetails({
         repoPath: '/repo',
-        settings: { activeRuntimeEnvironmentId: null },
         check: gitLabCheck
       })
       const assertion = expect(pending).rejects.toThrow('Timed out loading the GitLab job log.')
@@ -176,7 +173,6 @@ describe('loadGitLabJobLogDetails', () => {
     await expect(
       loadGitLabJobLogDetails({
         repoPath: '/repo',
-        settings: { activeRuntimeEnvironmentId: null },
         check: gitLabCheck
       })
     ).rejects.toThrow('Failed to load the GitLab job log.')

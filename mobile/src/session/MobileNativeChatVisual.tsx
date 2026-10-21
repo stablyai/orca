@@ -1,8 +1,8 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Maximize2, X } from 'lucide-react-native'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import { MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT } from './mobile-native-chat-visual-host-document'
@@ -113,10 +113,20 @@ function MobileNativeChatVisualFullscreen({
   onClose: () => void
   onFailed: () => void
 }) {
-  const insets = useSafeAreaInsets()
+  const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={[styles.sheet, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            paddingTop: insets.top,
+            paddingRight: insets.right,
+            paddingBottom: insets.bottom,
+            paddingLeft: insets.left
+          }
+        ]}
+      >
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle} numberOfLines={1}>
             {title}

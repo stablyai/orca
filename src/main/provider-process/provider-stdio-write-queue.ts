@@ -65,6 +65,7 @@ export class ProviderStdioWriteQueue {
     }
     this.terminalError = error
     this.detachDrain?.()
+    this.detachDrain = undefined
     this.active?.detachAbort?.()
     this.active?.reject(error)
     this.active = undefined
@@ -96,6 +97,7 @@ export class ProviderStdioWriteQueue {
         return
       }
       this.detachDrain?.()
+      this.detachDrain = undefined
       write.detachAbort?.()
       this.active = undefined
       this.bytes -= Buffer.byteLength(write.line)

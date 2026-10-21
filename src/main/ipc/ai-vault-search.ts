@@ -22,20 +22,18 @@ import type {
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId,
+  parseRoutableExecutionHostId,
   type ParsedExecutionHost
 } from '../../shared/execution-host'
 import { redactStatusForTransport } from '../../shared/ai-vault-search-transport'
-import { requestActiveSshSessionSearch } from './ssh'
 import { clearSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
-import {
-  getActiveRuntimeAiVaultHostInfosResult,
-  getActiveSshAiVaultHostInfosResult
-} from './ai-vault'
+import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
-import { searchWithStructuredOwners } from '../ai-vault/structured-session-ownership'
+import {
+  OPENS_EVERY_STRUCTURED_CHAT,
+  searchWithStructuredOwners
+} from '../ai-vault/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -127,7 +125,7 @@ function requestedSearchScope(raw: unknown): ParsedExecutionHost {
   if (value === undefined) {
     return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
   }
-  const parsed = parseExecutionHostId(value)
+  const parsed = parseRoutableExecutionHostId(value)
   if (!parsed) {
     throw new Error(UNROUTABLE_HOST_MESSAGE)
   }
@@ -153,10 +151,10 @@ async function searchByExecutionHostScope(
 }
 
 async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVaultSearchResponse> {
-  return searchWithStructuredOwners(
-    searchSessionService(request, 'ipc'),
-    handlerOptions.ensureStructuredSessionOwnership
-  )
+  return searchWithStructuredOwners(searchSessionService(request, 'ipc'), {
+    ensureHost: handlerOptions.ensureStructuredSessionOwnership,
+    opensChat: OPENS_EVERY_STRUCTURED_CHAT
+  })
 }
 
 /**
@@ -169,9 +167,6 @@ function allExecutionHostLegs(): SessionSearchHostLeg[] {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     search: searchLocalSessions
   }
-  const sshLegs = getActiveSshAiVaultHostInfosResult().hostInfos.map(({ targetId }) =>
-    remoteHostLeg({ kind: 'ssh', id: toSshExecutionHostId(targetId), targetId })
-  )
   const runtimeLegs = getActiveRuntimeAiVaultHostInfosResult().hostInfos.map((hostInfo) =>
     remoteHostLeg({
       kind: 'runtime',
@@ -179,7 +174,7 @@ function allExecutionHostLegs(): SessionSearchHostLeg[] {
       environmentId: hostInfo.environmentId
     })
   )
-  return [localLeg, ...sshLegs, ...runtimeLegs]
+  return [localLeg, ...runtimeLegs]
 }
 
 function remoteHostLeg(host: ParsedExecutionHost): SessionSearchHostLeg {
@@ -232,13 +227,6 @@ function remoteSearchClient(
   host: ParsedExecutionHost,
   call: RuntimeSessionSearchCall | undefined
 ): ReturnType<typeof createSessionSearchClient> | null {
-  if (host.kind === 'ssh') {
-    const { targetId } = host
-    return createSessionSearchClient(
-      (method, params) => requestActiveSshSessionSearch(targetId, method, params),
-      'relay'
-    )
-  }
   if (host.kind === 'runtime' && call) {
     const { environmentId } = host
     return createSessionSearchClient(

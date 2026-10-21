@@ -2,9 +2,9 @@
 
 import { act, renderHook } from '@testing-library/react'
 import * as rowContent from '../../../../shared/native-chat-row-content'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
@@ -53,6 +53,10 @@ const CONVERSATION = [
 ]
 
 describe('message rail hook', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('reuses previews and rail state during long-history streamed renders', () => {
     const conversation = Array.from({ length: 2000 }, (_, index) =>
       message(`history-${index}`, index % 2 === 0 ? 'user' : 'assistant')
@@ -150,8 +154,102 @@ describe('message rail hook', () => {
     expect(scrollSubscriptions).toHaveLength(1)
   })
 
+  // A jump that cannot bring its row to the top lands clamped at the bottom, where
+  // the position report would light the last tick instead of the clicked one.
+  describe('a clicked tick', () => {
+    /** Five 100px rows; `u2` (row 2) clamped 50px below the top at max scroll. */
+    function clampedJump() {
+      vi.useFakeTimers()
+      const view = { scrollTop: 150, clientHeight: 300, scrollHeight: 450, shift: 0 }
+      const element = document.createElement('div')
+      Object.defineProperties(element, {
+        scrollTop: { get: () => view.scrollTop },
+        clientHeight: { get: () => view.clientHeight },
+        scrollHeight: { get: () => view.scrollHeight }
+      })
+      const scrollRef = { current: element }
+      const hook = renderHook(
+        ({ slots }) =>
+          useNativeChatMessageRail({
+            scrollRef,
+            slots,
+            turnRows: NO_ROWS,
+            virtualItems: slots.map((_slot, index) => ({
+              key: index,
+              index,
+              start: view.shift + index * 100,
+              end: view.shift + index * 100 + 100,
+              size: 100,
+              lane: 0
+            }))
+          }),
+        { initialProps: { slots: slotsOf(CONVERSATION) } }
+      )
+      const settle = (): void =>
+        act(() => {
+          element.dispatchEvent(new Event('scroll'))
+          vi.runAllTimers()
+        })
+      settle()
+      expect(hook.result.current.activeId).toBe('u3')
+      act(() => hook.result.current.onActivate('u2'))
+      return { ...hook, view, settle }
+    }
+
+    it('stays lit while its row stays where the jump settled it', () => {
+      const { result, rerender, view, settle, unmount } = clampedJump()
+      settle()
+      settle()
+      expect(result.current.activeId).toBe('u2')
+      // A row above measuring late moves the content and the offset together.
+      view.shift = 30
+      view.scrollTop = 180
+      rerender({ slots: slotsOf(CONVERSATION) })
+      settle()
+      expect(result.current.activeId).toBe('u2')
+      // A long session trims its oldest rows as new ones arrive.
+      view.shift = 0
+      view.scrollTop = 50
+      rerender({ slots: slotsOf(CONVERSATION.slice(1)) })
+      expect(result.current.items.map((item) => item.id)).toEqual(['u2', 'u3'])
+      settle()
+      expect(result.current.activeId).toBe('u2')
+      unmount()
+    })
+
+    it('is let go once its row moves, whatever moved it', () => {
+      const { result, view, settle, unmount } = clampedJump()
+      // No scroll: a jump that did not move the view still settles.
+      act(() => vi.runAllTimers())
+      view.scrollTop = 100
+      settle()
+      expect(result.current.activeId).toBe('u1')
+      unmount()
+    })
+
+    it('is let go once its row leaves a shrinking viewport', () => {
+      const { result, view, settle, unmount } = clampedJump()
+      settle()
+      view.clientHeight = 40
+      settle()
+      expect(result.current.activeId).toBe('u1')
+      unmount()
+    })
+
+    // The reader kept scrolling past the jump before it settled: the row is off screen.
+    it('is not held when the reader carried its row off screen before it settled', () => {
+      const { result, view, settle, unmount } = clampedJump()
+      view.scrollTop = 0
+      view.clientHeight = 150
+      settle()
+      expect(result.current.activeId).toBe('u1')
+      unmount()
+    })
+  })
+
   it('ticks every user message and shows from the first one', () => {
     const element = document.createElement('div')
+    Object.defineProperty(element, 'clientWidth', { value: 800 })
     const scrollRef = { current: element }
 
     const { result } = renderHook(() =>
@@ -183,6 +281,7 @@ describe('message rail hook', () => {
 
   it('maps user messages above the loaded window from the outline, before the loaded ones', () => {
     const scrollRef = { current: document.createElement('div') }
+    Object.defineProperty(scrollRef.current, 'clientWidth', { value: 800 })
     const outline = Array.from({ length: 30 }, (_, index) => ({
       id: `older-${index}`,
       text: `older prompt ${index}`,

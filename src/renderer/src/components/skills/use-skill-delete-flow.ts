@@ -14,7 +14,7 @@ import {
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
 } from '../../runtime/runtime-skills-client'
-import type { RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   skillDeleteActionLabel,
   skillDeleteBlockedLines,

@@ -1,7 +1,7 @@
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../shared/runtime-pane-title-leaf-id'
 import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
 import type {

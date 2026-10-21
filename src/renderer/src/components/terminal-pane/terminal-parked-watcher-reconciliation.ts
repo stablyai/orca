@@ -1,9 +1,7 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { useAppStore } from '@/store'
-import {
-  collectLeafIdsInOrder,
-  resolveRootlessTerminalLayoutLeafId
-} from './terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import {
   capturedPanesByTabId,
   type ParkedTerminalPaneCapture

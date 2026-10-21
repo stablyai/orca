@@ -7,9 +7,9 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
-  buildWslLoginShellCommand,
-  quotePosixShell
+  buildWslLoginShellCommand
 } from './wsl-login-shell-command'
+import { quotePosixShell } from './shell-argument-quoting'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
 let wslShAvailable: boolean | null = null
@@ -177,7 +177,7 @@ describe('wsl login shell command helpers', () => {
     ['awk field reference', ['sh', '-c', `echo 'a b' | awk '{print $2}'`], 'b\n'],
     ['literal escaped dollar', ['sh', '-c', `printf '[%s]' "\\$HOME"`], '[$HOME]'],
     ['single-quoted dollar', ['sh', '-c', `printf '[%s]' '$PATH'`], '[$PATH]'],
-    // The shape wslUncDirectoryExists uses: `--` blanked $1, so every existing
+    // The shape wslUncDirectoryExistsAsync uses: `--` blanked $1, so every existing
     // directory probed as missing.
     ['positional argument', ['sh', '-c', 'printf "[%s]" "$1"', 'sh', 'ARG'], '[ARG]'],
     ['shell local', ['sh', '-c', 'x=hi; printf "[%s]" "$x"'], '[hi]']

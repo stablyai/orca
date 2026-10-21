@@ -35,6 +35,26 @@ describe('native-chat settings RPC', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  it.each(['opencode', 'pi', 'grok'])('saves picks for %s like any other agent', async (agent) => {
+    const updateClientNativeChatSessionOptions = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this method's handler reads only the two runtime members stubbed here.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientNativeChatSessionOptions
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+    const mutation = {
+      type: 'apply-picks' as const,
+      agent,
+      picks: [{ modelId: 'model-a', optionId: 'model' as const, value: 'model-a' }]
+    }
+
+    const response = await dispatcher.dispatch(request(mutation))
+
+    expect(updateClientNativeChatSessionOptions).toHaveBeenCalledExactlyOnceWith(mutation)
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
   it('rejects malformed option deltas', async () => {
     const updateClientNativeChatSessionOptions = vi.fn()
     const runtime = {
@@ -47,7 +67,7 @@ describe('native-chat settings RPC', () => {
       { type: 'apply-picks', agent: 'codex', picks: [] },
       {
         type: 'apply-picks',
-        agent: 'opencode',
+        agent: 'not-an-agent',
         picks: [{ modelId: 'model', optionId: 'model', value: 'model' }]
       },
       {

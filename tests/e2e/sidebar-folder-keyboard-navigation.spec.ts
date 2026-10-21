@@ -23,28 +23,26 @@ test('cycles visible folder workspaces with shortcuts and focused list arrows', 
       parentPath,
       createdFrom: 'folder-scan'
     })
-    await store.getState().fetchProjectGroups()
-    const folder = await store.getState().createFolderWorkspace({
-      projectGroupId: group.id,
-      name: 'Folder workspace',
-      folderPath: parentPath
-    })
+    await store.getState().fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+    const folder = await store.getState().createFolderWorkspace(
+      {
+        projectGroupId: group.id,
+        name: 'Folder workspace',
+        folderPath: parentPath
+      },
+      { runtimeEnvironmentId: null }
+    )
     const repo = store.getState().repos[0]
     const [first, last] = repo ? (store.getState().worktreesByRepo[repo.id] ?? []) : []
     if (!folder || !repo || !first || !last) {
       throw new Error('Expected two git worktrees and one folder workspace')
     }
     await store.getState().updateFolderWorkspace(folder.id, { workspaceStatus: 'in-progress' })
+    // Through the metadata writes, so main's copy of the catalog agrees with the window's.
+    await store.getState().updateWorktreeMeta(first.id, { workspaceStatus: 'todo' })
+    await store.getState().updateWorktreeMeta(last.id, { workspaceStatus: 'completed' })
     store.getState().setGroupBy('workspace-status')
-    store.setState({
-      collapsedGroups: new Set(),
-      worktreesByRepo: {
-        [repo.id]: [
-          { ...first, hostId: 'local', displayName: 'Git workspace A', workspaceStatus: 'todo' },
-          { ...last, hostId: 'local', displayName: 'Git workspace B', workspaceStatus: 'completed' }
-        ]
-      }
-    })
+    store.setState({ collapsedGroups: new Set() })
     return [first.id, `folder:${folder.id}`, last.id]
   }, folderPath)
 

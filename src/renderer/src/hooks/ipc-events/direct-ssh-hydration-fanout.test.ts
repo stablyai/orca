@@ -1,30 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import type { DirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 
 function connectingState(targetId: string): SshConnectionState {
   return { targetId, status: 'connecting', error: null, reconnectAttempt: 0 }
-}
-
-function bridgeRuntime(): DirectSshBridgeRuntime {
-  return {
-    reconnectAuthorityByTarget: new Map(),
-    reconnectCoordinator: {
-      requestReconnect: vi.fn(async () => ({ status: 'complete' })),
-      replaceAuthority: vi.fn(),
-      correctUnboundTerminals: vi.fn(() => 0),
-      invalidate: vi.fn()
-    },
-    currentAuthority: () => null,
-    terminalActions: () => ({}),
-    prepareAndSync: vi.fn(async () => {}),
-    isStopped: () => false,
-    addDeadline: vi.fn(),
-    removeDeadline: vi.fn(),
-    stop: vi.fn()
-  } as unknown as DirectSshBridgeRuntime
 }
 
 async function settle(): Promise<void> {
@@ -84,7 +64,7 @@ describe('direct SSH hydration fanout', () => {
       }
     })
 
-    registerDirectSshStateIpcBridge(unsubs, bridgeRuntime())
+    unsubs.push(registerDirectSshStateIpcBridge(unsubs))
     await settle()
 
     const states = useAppStore.getState().sshConnectionStates

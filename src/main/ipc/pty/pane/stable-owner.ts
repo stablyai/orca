@@ -1,21 +1,19 @@
+import { persistFreshPaneBinding } from '../runtime/spawn-commit'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-cause'
 import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import {
-  isDaemonEndpointGoneError,
-  TerminalHostGoneError,
-  TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
-import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { isHostReportedPtyAbsenceError, isObservedPtyExitEvidence } from '../provider/liveness'
-import { clearProviderPtyState } from '../provider/state-cleanup'
+import type {
+  IPtyProvider,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../../../providers/pty-provider-contract'
+import { getPtySshConnectionId } from '../provider/registry'
+import { ptyIncarnationById } from '../provider/ownership-state'
+import type { ReplacedPaneOwner } from './replaced-pane-owner'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 
 export type StablePaneOwner = {
@@ -98,9 +96,7 @@ export function resolveStablePaneOwner(
   if (!ptyId) {
     return null
   }
-  const registeredConnectionId = ptyOwnership.get(ptyId)
-  const parsedSshId = registeredConnectionId === undefined ? parseAppSshPtyId(ptyId) : null
-  if ((registeredConnectionId ?? parsedSshId?.connectionId ?? null) !== (connectionId ?? null)) {
+  if (getPtySshConnectionId(ptyId) !== (connectionId ?? null)) {
     throw new Error('terminal_pane_owner_host_mismatch')
   }
   const runtimeIncarnationId = ptyIncarnationById.get(ptyId)
@@ -178,6 +174,10 @@ export type StablePaneSpawnContext = {
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
   onFreshSpawn?: (result: PtySpawnResult) => void
+  /** Called before attaching an owner that took the pane during the first attach. */
+  onOwnerReresolved?: (owner: StablePaneOwner) => void
+  /** Only a spawn holding the pane's reservation: it binds next, so its bind swaps the dead id. */
+  keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
 }
 
 export function stablePanePersistenceFence(
@@ -197,120 +197,32 @@ export async function persistAdmittedStablePaneBinding(args: {
   result: PtySpawnResult
   worktreeId: string | undefined
   startupCwd: string | undefined
-  connectionId: string | null | undefined
+  connectionId?: string | null
 }): Promise<boolean> {
   const expectedBinding = stablePanePersistenceFence(args.owner)
-  if (!args.store || !args.owner || !args.worktreeId || !expectedBinding) {
+  if (!args.store || !args.owner || !args.worktreeId) {
     return false
   }
-  const persisted = await args.store.persistPtyBinding(
-    {
-      worktreeId: args.worktreeId,
-      tabId: args.owner.tabId,
-      leafId: args.owner.leafId,
-      ptyId: args.result.id,
-      ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
-      ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
-      expectedBinding,
-      origin: spawnCommitBindingOrigin(args.result)
-    },
-    args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
-  )
+  const binding = {
+    worktreeId: args.worktreeId,
+    tabId: args.owner.tabId,
+    leafId: args.owner.leafId,
+    ptyId: args.result.id,
+    ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
+    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+    expectedBinding,
+    mayCreate: false,
+    mayReviveRetiredSurface: false,
+    origin: spawnCommitBindingOrigin(args.result)
+  }
+  const persisted = expectedBinding
+    ? await args.store.persistPtyBinding(
+        binding,
+        args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+      )
+    : await persistFreshPaneBinding(args.store, binding, args.connectionId)
   if (persisted === false) {
     throw new Error('terminal_pane_owner_changed')
   }
   return true
-}
-
-export async function attachStablePaneOwner(
-  args: StablePaneSpawnContext & { owner: StablePaneOwner }
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
-  const { owner, provider, runtime, spawnOptions } = args
-  let result: PtySpawnResult
-  try {
-    result = await provider.spawn({
-      ...spawnOptions,
-      sessionId: owner.ptyId,
-      attachOnly: true,
-      expectedIncarnationId: owner.runtimeIncarnationId ?? owner.persistedIncarnationId,
-      expectedIncarnationIsAuthoritative: owner.runtimeIncarnationId !== undefined,
-      isNewSession: undefined,
-      command: undefined,
-      commandDelivery: undefined,
-      startupCommandDelivery: undefined,
-      launchAgent: undefined,
-      startupIngress: undefined,
-      agentSessionEnsure: undefined,
-      agentSessionCreateOperationId: undefined,
-      onPtySpawnCommitted: undefined
-    })
-  } catch (error) {
-    if (error instanceof TerminalSessionOwnerUnverifiedError) {
-      throw new Error('terminal_pane_owner_unverified')
-    }
-    // Why: translate before paired-runtime RPC strips the socket error's code and syscall.
-    if (isDaemonEndpointGoneError(error)) {
-      throw new TerminalHostGoneError()
-    }
-    if (!isHostReportedPtyAbsenceError(error)) {
-      throw error
-    }
-    const ownerBeforeRetire = args.resolveOwner?.()
-    if (
-      ownerBeforeRetire &&
-      (ownerBeforeRetire.ptyId !== owner.ptyId ||
-        ownerBeforeRetire.runtimeIncarnationId !== owner.runtimeIncarnationId ||
-        ownerBeforeRetire.hasPersistedBinding !== owner.hasPersistedBinding ||
-        ownerBeforeRetire.persistedIncarnationId !== owner.persistedIncarnationId)
-    ) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    // `pty.attach` answers absent both for a pid the relay probed and found gone and for an id its
-    // session map never had — every id minted before a relay restart, checked against nothing. Only
-    // the marked half observed the process, so only it may certify a death; the rest publishes the
-    // stop sentinel its sibling handlePtyReattachFailure publishes, which every reader resolves to
-    // `stop_unverified` (docs/reference/ssh-execution-boundary.md).
-    runtime?.onPtyExit(
-      owner.ptyId,
-      UNVERIFIED_PROCESS_EXIT_CODE,
-      owner.incarnationId,
-      isObservedPtyExitEvidence(error) ? { hostExitConfirmed: true } : {}
-    )
-    clearProviderPtyState(owner.ptyId)
-    ptyOwnership.delete(owner.ptyId)
-    if (
-      args.worktreeId &&
-      !(await retirePersistedStablePaneOwner(args.store, owner, args.worktreeId, args.connectionId))
-    ) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    if (args.resolveOwner?.()) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    return null
-  }
-  if (
-    result.id !== owner.ptyId ||
-    result.isReattach !== true ||
-    (owner.runtimeIncarnationId !== undefined &&
-      result.incarnationId !== owner.runtimeIncarnationId) ||
-    (result.incarnationId === undefined && owner.incarnationId !== undefined)
-  ) {
-    throw new Error('terminal_pane_owner_changed')
-  }
-  return { result, owner }
-}
-
-export async function spawnForStablePane(
-  args: StablePaneSpawnContext
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
-  if (args.owner) {
-    const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
-    if (attached) {
-      return attached
-    }
-  }
-  const result = await args.provider.spawn(args.spawnOptions)
-  args.onFreshSpawn?.(result)
-  return { result, owner: null }
 }

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
@@ -10,10 +9,6 @@ import {
 } from './codex-child-work-translation'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
-import {
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-  journalTruncationMarker
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 
 describe('Codex child message preview ownership', () => {
   it('owns only the preview after journaling a large completed child message, through its ending', () => {
@@ -96,23 +91,16 @@ describe('Codex child message preview ownership', () => {
             state: 'working',
             description: 'report',
             lastMessage: preview,
-            stoppable: false,
+            stoppable: true,
             operation: null
           }
         }
       ])
-      const digest = createHash('sha256').update(text, 'utf8').digest('hex')
+      // The translator hands the journal the whole message; the sink applies the storage ceiling.
       expect(rows).toContainEqual({
         kind: 'message',
         role: 'assistant',
-        blocks: [
-          {
-            type: 'text',
-            text:
-              'a'.repeat(DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes) +
-              journalTruncationMarker(text.length, digest)
-          }
-        ]
+        blocks: [{ type: 'text', text }]
       })
       evidence.length = 0
       send('turn/completed', 'child', {

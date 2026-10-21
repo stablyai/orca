@@ -24,6 +24,7 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 const SESSION_ID = 'notice-card-session'
 
@@ -45,7 +46,7 @@ function renderPane(): void {
   )
 }
 
-function composerOnError(): (text: string | null, errorText?: string) => void {
+function composerOnError(): NativeChatStructuredComposerTransport['onError'] {
   const onError = mocks.composerProps?.structuredTransport?.onError
   if (!onError) {
     throw new Error('composer transport has no onError')
@@ -72,7 +73,9 @@ it("shows the chat's own error and a composer error together, where one used to 
 it('keeps a send failure’s raw error apart and lets the user dismiss it', () => {
   renderPane()
   act(() => {
-    composerOnError()('Your message was not sent.', 'connect ECONNREFUSED /tmp/agent-host.sock')
+    composerOnError()('Your message was not sent.', {
+      errorText: 'connect ECONNREFUSED /tmp/agent-host.sock'
+    })
   })
   expect(screen.getByText('connect ECONNREFUSED /tmp/agent-host.sock').tagName).toBe('PRE')
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))

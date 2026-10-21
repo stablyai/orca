@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
@@ -70,7 +71,9 @@ export default function MediaViewer({
             size="sm"
             onClick={async () => {
               try {
-                setOpenFailed(!(await window.api.shell.openFilePath(filePath)))
+                setOpenFailed(
+                  !(await window.api.shell.openFilePath(filePath, LOCAL_EXECUTION_HOST_ID))
+                )
               } catch {
                 setOpenFailed(true)
               }

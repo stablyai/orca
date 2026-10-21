@@ -7,9 +7,7 @@ import {
   collectElectronImporters,
   collectStructuredChatEntryPoints,
   defaultEntryPoints,
-  diffAgainstBaseline,
-  main,
-  readBaseline
+  main
 } from './check-runtime-electron-ratchet.mjs'
 
 describe('structured chat coverage', () => {
@@ -41,7 +39,8 @@ describe('structured chat coverage', () => {
     'src/main/acp/acp-structured-session-adapter.ts': 'export {}',
     'src/main/jsonl-rpc/peer.ts': 'export {}',
     'src/main/pi/rpc-launch.ts': 'export {}',
-    'src/shared/agent-session-record.ts': 'export {}'
+    'src/shared/agent-session-record.ts': 'export {}',
+    'src/packages/process-host/src/run-process.ts': 'export {}'
   }
 
   it('covers whole lane directories, structured runtime files at any depth, and no test code', () => {
@@ -53,6 +52,7 @@ describe('structured chat coverage', () => {
       'src/main/codex/codex-provider-timeline-identity.ts',
       'src/shared/nested/agent-session-account-home.ts',
       'src/shared/relay-runtime-self-test-report.ts',
+      'src/packages/process-host/src/nested/process-state.ts',
       'src/main/runtime/agent-session-record.ts',
       'src/main/runtime/structured-agent-runtime-registrations.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-agents.ts',
@@ -75,6 +75,8 @@ describe('structured chat coverage', () => {
       'src/main/native-chat/test-support/reader.ts',
       'src/main/runtime/orca-runtime-tests/structured-agent-session-host.ts',
       'src/shared/types.d.ts',
+      'src/packages/process-host/src/run-process.test.ts',
+      'src/packages/process-host/src/__fixtures__/spawned-child.ts',
       'src/main/runtime/other.ts',
       'src/main/runtime/rpc/methods/browser.ts',
       'src/main/jsonl-rpc/peer.test.ts',
@@ -142,6 +144,24 @@ describe('structured chat coverage', () => {
     }
   )
 
+  it('checks public workspace imports against source without requiring a built package', async () => {
+    const root = fixture({ 'entry.ts': "import '@orca/process-host'" })
+    const target = path.join(process.cwd(), 'src/packages/process-host/src/run-process.ts')
+    const current = await collectElectronImporters([path.join(root, 'entry.ts')], {
+      plugins: [
+        {
+          name: 'inject-process-host-electron-import',
+          setup(pluginBuild) {
+            pluginBuild.onLoad({ filter: /run-process\.ts$/ }, (args) =>
+              args.path === target ? { contents: "import 'electron'", loader: 'ts' } : undefined
+            )
+          }
+        }
+      ]
+    })
+    expect(current).toEqual(['src/packages/process-host/src/run-process.ts'])
+  })
+
   it('bounds shared dependency output without dropping any entry point', async () => {
     const entries = Array.from({ length: 40 }, (_, index) => `entry-${index}.ts`)
     const root = fixture({
@@ -177,16 +197,17 @@ describe('structured chat coverage', () => {
 describe('the default entry points', () => {
   const lanes = ['native-chat', 'claude', 'codex', 'runtime'].map((lane) => `src/main/${lane}/`)
 
-  it('are the runtime entries plus a file from every lane that exists', () => {
+  it('are the runtime and CLI entries plus a file from every lane that exists', () => {
     const entries = defaultEntryPoints().map((file) =>
       path.relative(process.cwd(), file).split(path.sep).join('/')
     )
-    expect(entries.slice(0, 3)).toEqual([
+    expect(entries.slice(0, 4)).toEqual([
       'src/main/runtime/orca-runtime.ts',
       'src/main/runtime/runtime-rpc.ts',
-      'src/main/orcad/main.ts'
+      'src/main/orcad/main.ts',
+      'src/cli/index.ts'
     ])
-    for (const lane of [...lanes, 'src/shared/']) {
+    for (const lane of [...lanes, 'src/shared/', 'src/packages/process-host/src/']) {
       expect(entries.some((file) => file.startsWith(lane))).toBe(true)
     }
   })
@@ -218,53 +239,7 @@ describe('the command-line check', () => {
       }
     }
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(await main([], { plugins: [addElectron] })).toBe(1)
+    expect(await main({ plugins: [addElectron] })).toBe(1)
     expect(error.mock.calls.join('\n')).toContain('+ src/main/native-chat/transcript-read-cache.ts')
   }, 120_000)
-
-  // Why real: the value of this gate is the transitive edges, which a fixture cannot model.
-  it('passes on the tree as it is, matching the checked-in baseline', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    expect(await main([])).toBe(0)
-  }, 120_000)
-})
-
-describe('readBaseline', () => {
-  it('drops comments and blank lines and sorts, so baseline formatting cannot cause a false diff', () => {
-    expect(readBaseline('# header\n\n  b/second.ts \na/first.ts\n')).toEqual([
-      'a/first.ts',
-      'b/second.ts'
-    ])
-  })
-})
-
-describe('diffAgainstBaseline', () => {
-  it('reports a module that started importing electron', () => {
-    expect(diffAgainstBaseline(['a.ts', 'b.ts'], ['a.ts'])).toEqual({
-      added: ['b.ts'],
-      removed: []
-    })
-  })
-
-  it('reports a module that stopped, so the baseline is forced to tighten rather than drift', () => {
-    expect(diffAgainstBaseline(['a.ts'], ['a.ts', 'b.ts'])).toEqual({
-      added: [],
-      removed: ['b.ts']
-    })
-  })
-
-  it('is quiet when the set is unchanged', () => {
-    expect(diffAgainstBaseline(['a.ts'], ['a.ts'])).toEqual({ added: [], removed: [] })
-  })
-})
-
-describe('the checked-in baseline', () => {
-  // Why an exact-empty assertion now: the reachable set reached zero, so "may only
-  // shrink" has no room left and any entry at all is a regression. This is strictly
-  // stronger than the old under-src/ check, which only stopped a node_modules path from
-  // padding a non-empty count.
-  it('stays empty, so nothing reachable from the runtime imports electron', () => {
-    const baseline = readBaseline(readFileSync('config/runtime-electron-baseline.txt', 'utf8'))
-    expect(baseline).toEqual([])
-  })
 })

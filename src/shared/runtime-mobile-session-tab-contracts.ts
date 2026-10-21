@@ -10,6 +10,9 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** The tab's manual name on the host, null when it has none. Absent from older hosts, so a
+   *  client keeps its own record then rather than reading absence as a cleared name. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

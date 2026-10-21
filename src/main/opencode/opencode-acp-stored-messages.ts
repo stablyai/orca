@@ -7,7 +7,7 @@ import type { readOpenCodeTranscriptPageViaWorker } from '../ai-vault/session-sc
 export type OpenCodeTranscriptPageReader = typeof readOpenCodeTranscriptPageViaWorker
 
 /** The latest user messages of an OpenCode session, read from the database its pinned account
- *  selects, through the existing bounded reader. */
+ *  selects, through the existing bounded reader: 2.x's `session_v2` rows first, else 1.x's. */
 export function openCodeStoredUserMessagesReader(
   readPage?: OpenCodeTranscriptPageReader
 ): AcpStoredUserMessagesReader {

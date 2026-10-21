@@ -36,6 +36,8 @@ export type BridgeShellSession = {
   /** The allowlisted keys `storage` could not carry because the app's value is over the page's cap
    *  (ruling 33.6). Empty for a shell too old to name them, which is what it was before. */
   storageOversize: readonly string[]
+  /** Whether the shell gave this page the whole host area; false for every shell before it. */
+  ownsHostArea: boolean
 }
 
 /**
@@ -58,6 +60,7 @@ export function readShellSession(
     keyboardInset: message.keyboardInset ?? 0,
     host: message.host ?? null,
     storage: message.storage ?? {},
-    storageOversize: message.storageOversize ?? []
+    storageOversize: message.storageOversize ?? [],
+    ownsHostArea: message.ownsHostArea === true
   }
 }

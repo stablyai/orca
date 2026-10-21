@@ -9,7 +9,8 @@ import {
   shouldExcludeQuickOpenRelPath
 } from '../../../shared/quick-open-filter'
 import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
-import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'

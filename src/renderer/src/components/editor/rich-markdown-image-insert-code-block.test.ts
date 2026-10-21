@@ -9,7 +9,7 @@ import { useLocalImagePick } from './useLocalImagePick'
 import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 import { runSlashCommand, slashCommands } from './rich-markdown-slash-commands'
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: vi.fn().mockResolvedValue({
     results: [{ status: 'imported', destPath: '/repo/shot.png' }]
   })
@@ -28,10 +28,6 @@ vi.mock('@/store', () => ({
       worktreesByRepo: { repo1: [{ id: 'wt-1', path: '/repo' }] }
     }))
   }
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: vi.fn((settings) => settings)
 }))
 
 vi.mock('sonner', () => ({

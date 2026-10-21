@@ -33,7 +33,8 @@ import {
 export type ProviderTimelineTurnEnd =
   | {
       state: 'completed' | 'interrupted'
-      completedAt: number
+      /** Absent when the end is proven but its time is not. */
+      completedAt?: number
       outcome?: AgentJournalTurnLifecycle['outcome']
       durationMs?: number
     }
@@ -59,7 +60,7 @@ export function endedProviderTimelineTurn(
     state: end.state,
     ...(end.outcome !== undefined ? { outcome: end.outcome } : {}),
     ...opened,
-    completedAt: end.completedAt,
+    ...(end.completedAt !== undefined ? { completedAt: end.completedAt } : {}),
     ...(end.durationMs !== undefined ? { durationMs: end.durationMs } : {})
   }
 }
@@ -72,6 +73,8 @@ export type ProviderTimelineSettlementScope = { turnItemId: string } | 'session'
 export type ProviderTimelineSettlementEnding = {
   turns: readonly { identity: AgentJournalItemIdentity; itemId: string }[]
   end: ProviderTimelineTurnEnd
+  /** When the session's end was seen, which is when its live subagents lost contact. */
+  lostAt?: number
 }
 
 /** The settled rows of `scope`, then each ended turn's row while the journal holds it running. */
@@ -94,7 +97,7 @@ export function providerTimelineSettlement(
     const settled = !covered
       ? null
       : (terminalAgentJournalBody(body, end) ??
-        (scope === 'session' ? lostLiveWorkJournalBody(body) : null))
+        (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null))
     const identity = settled ? parseAgentJournalItemKey(itemId) : null
     if (settled && identity) {
       // No linkage: a revision keeps the row's own producer.

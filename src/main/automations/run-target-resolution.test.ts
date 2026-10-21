@@ -95,9 +95,11 @@ function makeStore(
       return repo ? repo.connectionId?.trim() || null : undefined
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: run-target resolution reads only these Store members.
   return {
     getProjectHostSetups: () => setups,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
+    getRepos: () => repos,
     automationOwnerPrecondition: () =>
       projectedAutomation
         ? toAutomationOwnerPrecondition(

@@ -9,6 +9,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 import {
   newestSteerableQueuedMessageCard,
   pendingSendsOutsideQueuedCards,
+  pendingQueueSendsOnTheirWay,
   projectQueuedMessageCards,
   queuedMessageCardSteers,
   queuedMessagesQueuePause
@@ -55,7 +56,7 @@ function handOff(
   return submission(id, dispatchState, draftId)
 }
 
-const IDLE = { hasPendingPrompt: false }
+const IDLE = {}
 
 describe('queued message cards', () => {
   it('orders by host position whatever order the list arrives in', () => {
@@ -64,11 +65,8 @@ describe('queued message cards', () => {
     expect(cards[0]?.text).toBe('text of a')
   })
 
-  it('holds: waiting defaults to the turn, a pending prompt changes the caption', () => {
+  it('holds: a waiting card waits its turn', () => {
     expect(projectQueuedMessageCards([draft('a', 1)], [], IDLE)[0]?.hold).toBe('turn')
-    expect(
-      projectQueuedMessageCards([draft('a', 1)], [], { hasPendingPrompt: true })[0]?.hold
-    ).toBe('awaiting-answer')
   })
 
   it('a returned card carries its stored reason and blocks the label of drafts behind it', () => {
@@ -138,7 +136,7 @@ describe('queued message cards', () => {
     expect(cards.map((card) => card.messageId)).toEqual(['kept', 'refused'])
   })
 
-  it('a paused queue outranks a pending prompt: an answer does not drain it', () => {
+  it("a paused queue holds its waiting cards; a card's own hold or return still shows", () => {
     const cards = projectQueuedMessageCards(
       [
         draft('waiting', 1),
@@ -147,7 +145,7 @@ describe('queued message cards', () => {
         draft('behind', 4)
       ],
       [],
-      { hasPendingPrompt: true, queuePaused: true }
+      { queuePaused: true }
     )
     expect(cards.map((card) => card.hold)).toEqual([
       'queue-paused',
@@ -155,14 +153,10 @@ describe('queued message cards', () => {
       'returned',
       'behind-returned'
     ])
-    expect(
-      projectQueuedMessageCards([draft('waiting', 1)], [], { hasPendingPrompt: true })[0]?.hold
-    ).toBe('awaiting-answer')
   })
 
-  it('a paused queue holds every waiting card, in order: an answer does not drain it', () => {
+  it('a paused queue holds every waiting card, in order', () => {
     const cards = projectQueuedMessageCards([draft('held', 1), draft('typed-after', 2)], [], {
-      hasPendingPrompt: true,
       queuePaused: true
     })
     expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'queue-paused'])
@@ -173,7 +167,7 @@ describe('queued message cards', () => {
   it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
     const stopped = { reason: 'stopped' } as const
     const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
-      projectQueuedMessageCards(messages, [], { hasPendingPrompt: false, queuePaused })
+      projectQueuedMessageCards(messages, [], { queuePaused })
     expect(queuedMessagesQueuePause(project([draft('held', 1)]), stopped)).toEqual(stopped)
     const unsendable = [
       draft('returned', 1, { state: 'returned', returnedReason: null }),
@@ -206,6 +200,31 @@ describe('queued message cards', () => {
     const cards = projectQueuedMessageCards([draft('a', 1), draft('b', 2)], [], IDLE)
     expect(newestSteerableQueuedMessageCard(cards)?.messageId).toBe('b')
     expect(newestSteerableQueuedMessageCard([])).toBeNull()
+  })
+
+  it('marks a command card, which the chord never steers', () => {
+    const compact: AgentSessionQueuedMessage = {
+      ...draft('c', 2),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    }
+    const cards = projectQueuedMessageCards([draft('a', 1), compact], [], IDLE)
+    expect(cards.map((card) => [card.text, card.command ?? false])).toEqual([
+      ['text of a', false],
+      ['/compact', true]
+    ])
+    expect(newestSteerableQueuedMessageCard(cards)).toBeNull()
+    // While the agent works it offers no send; a message card is unaffected.
+    const working = projectQueuedMessageCards([draft('a', 1), compact], [], {
+      ...IDLE,
+      agentWorking: true
+    })
+    expect(working.map((card) => card.waitsForAgent ?? false)).toEqual([false, true])
+    expect(cards[1]).not.toHaveProperty('waitsForAgent')
   })
 
   it('a mid-turn queue send on its way is no bubble; a plain or recorded one is, until its row', () => {
@@ -243,6 +262,28 @@ describe('queued message cards', () => {
       'recorded'
     ])
   })
+  it('a sending card ends once the host records the send or hands its card off', () => {
+    const entry: StructuredAgentSessionPendingSend = {
+      clientMessageId: 'a',
+      sessionId: 'session-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'a' }] },
+      previewUris: [],
+      queuedAt: 1,
+      phase: 'sending',
+      issued: true,
+      delivery: 'queue-if-active'
+    }
+    const onItsWay = (submissions: AgentJournalSubmission[]) =>
+      pendingQueueSendsOnTheirWay([entry], [], true, submissions).map(
+        (candidate) => candidate.clientMessageId
+      )
+    expect(onItsWay([])).toEqual(['a'])
+    expect(onItsWay([submission('a')])).toEqual([])
+    expect(onItsWay([handOff('a')])).toEqual([])
+    expect(pendingQueueSendsOnTheirWay([entry], ['a'], true, [])).toEqual([])
+    expect(pendingQueueSendsOnTheirWay([entry], [], false, [])).toEqual([])
+    expect(pendingQueueSendsOnTheirWay([{ ...entry, phase: 'recorded' }], [], true, [])).toEqual([])
+  })
 })
 
 describe("another agent's card", () => {
@@ -261,7 +302,7 @@ describe("another agent's card", () => {
     const cards = projectQueuedMessageCards(
       [{ ...agentDraft, body: { ...agentDraft.body, from } }, draft('b', 2)],
       [],
-      { hasPendingPrompt: false }
+      IDLE
     )
     expect(cards.map((card) => card.from)).toEqual([from, undefined])
   })

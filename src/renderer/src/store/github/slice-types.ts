@@ -26,6 +26,8 @@ import type {
 } from '../../../../shared/github/project-result-types'
 import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   CacheEntry,
   FetchOptions,
@@ -248,12 +250,16 @@ export type GitHubSlice = {
   setIssueSourcePreference: (
     repoId: string,
     repoPath: string,
-    preference: IssueSourcePreference
+    preference: IssueSourcePreference,
+    /** Required: a twin's rows share the id, so only the caller's row host names which one changed. */
+    hostId: ExecutionHostId
   ) => Promise<void>
   evictGitHubRepoCaches: (repoId: string, repoPath?: string) => void
   // ── ProjectV2 view cache ─────────────────────────────────────────────
   projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
+  /** `sourceTarget` names the board's row-less source host; the focused server is never read. */
   fetchProjectViewTable: (
+    sourceTarget: RuntimeClientTarget,
     args: GetProjectViewTableArgs,
     options?: FetchOptions
   ) => Promise<GetProjectViewTableResult>

@@ -2,10 +2,10 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { translate } from '@/i18n/i18n'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/hooks/useGlobalFileDrop'
+import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import {
   captureFileExplorerOperationGuard,
@@ -102,7 +102,7 @@ export function useFileExplorerImport({
         guard.assertCurrent()
         const { results } = await importExternalPathsToRuntime(
           {
-            settings: guard.route.settings,
+            target: guard.route.target,
             worktreeId: destination.worktreeId,
             worktreePath: destination.worktreePath,
             connectionId: guard.route.connectionId,

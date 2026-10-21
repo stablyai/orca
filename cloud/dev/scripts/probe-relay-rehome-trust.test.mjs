@@ -116,7 +116,8 @@ test('fails when both trust-probe attempts return a transient 503', async () => 
 test('approves the asia-east2 and US 3,000 rehome sources and still rejects unlisted cells', () => {
   for (const cellId of [
     'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-    'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34'
+    'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34',
+    'production-gce-c35'
   ]) {
     const parsed = parseRehomeTrustProbeArguments(
       argv.map((value) => (value === 'production-gce-c7' ? cellId : value)),
@@ -124,7 +125,7 @@ test('approves the asia-east2 and US 3,000 rehome sources and still rejects unli
     )
     assert.equal(parsed.cellId, cellId)
   }
-  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c35']) {
+  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c36']) {
     assert.throws(
       () =>
         parseRehomeTrustProbeArguments(
@@ -164,13 +165,27 @@ test('reports safe trust reasons, keeps rejection final, and redacts arbitrary e
   }
 })
 
-test('stops after the second wrapped transient failure', async () => {
+test('outlasts a load-balancer warm-up of consecutive wrapped source 503s', async () => {
+  let calls = 0
+  const waits = []
+  const result = await probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
+    wait: async (ms) => { waits.push(ms) },
+    fetch: async () => ++calls <= 6
+      ? Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 })
+      : Response.json(provenProbe)
+  })
+  assert.equal(calls, 7)
+  assert.deepEqual(waits, Array(6).fill(10_000))
+  assert.equal(result.proven, true)
+})
+
+test('stops after two minutes of wrapped transient failures', async () => {
   let calls = 0
   await assert.rejects(probeRehomeTrust(parseRehomeTrustProbeArguments(argv, environment), {
     wait: async () => {},
     fetch: async () => { calls++; return Response.json({ error: 'regional_rehome_trust_probe_source_503' }, { status: 409 }) }
   }), /returned 409.*source_503/)
-  assert.equal(calls, 2)
+  assert.equal(calls, 13)
 })
 
 // The probe allowlist is the committed rehome source list, so a declared source can always probe.
@@ -183,7 +198,7 @@ test('approves exactly the committed production rehome source cells', () => {
   const sources = new Set(
     [...tfvars.slice(start, tfvars.indexOf(']', start)).matchAll(/"([^"]+)"/g)].map(([, cell]) => cell)
   )
-  assert.ok(sources.has('production-gce-c34'))
+  assert.ok(sources.has('production-gce-c35'))
   for (let ordinal = 1; ordinal <= 40; ordinal++) {
     const cellId = `production-gce-c${ordinal}`
     const approved = (() => {

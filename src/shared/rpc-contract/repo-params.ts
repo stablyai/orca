@@ -62,10 +62,12 @@ export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
 })
 
+// Why `connectionId` is optional: older clients omit it, and older hosts strip it (bare selector).
 export const ProjectGroupMoveProject = z.object({
   repo: requiredString('Missing repo selector'),
   groupId: OptionalString.nullable(),
-  order: OptionalFiniteNumber
+  order: OptionalFiniteNumber,
+  connectionId: z.string().nullable().optional()
 })
 
 export const ProjectGroupScanNested = z.object({

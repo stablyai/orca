@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DurableFileWrite from '../durable-file-write'
+import { JIRA_IMAGE_SCHEME } from '../../shared/jira-attachment-image'
 
 const ORCA_PROFILE_ID = 'local-default'
 const RETIRED_PROFILE_ID = '11111111-1111-4111-8111-111111111111'
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     store: null
   },
   openMainWindow: vi.fn(),
+  handleProtocol: vi.fn(),
   runtimeRpcStart: vi.fn(async () => {}),
   // The identity record's only writer. Watching this is what makes the pin real: asserting on
   // writeFileAtomically watched a function the identity store never calls.
@@ -42,6 +44,7 @@ vi.mock('../durable-file-write', async (importOriginal) => {
 })
 
 vi.mock('electron', () => ({
+  protocol: { handle: mocks.handleProtocol },
   app: {
     on: vi.fn(),
     setName: vi.fn(),
@@ -73,9 +76,6 @@ vi.mock('../persistence', () => ({
       return {}
     }
     onSettingsChanged() {}
-    getClaudeLivePtySessionIds() {
-      return []
-    }
     getSshTargets() {
       return []
     }
@@ -87,7 +87,6 @@ vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
     store: {
       getSettings: () => ({}),
       onSettingsChanged: () => {},
-      getClaudeLivePtySessionIds: () => [],
       getSshTargets: () => []
     }
   })
@@ -137,7 +136,10 @@ vi.mock('../host/deferred-secret-protection-report', () => ({
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
 vi.mock('../pty/legacy-terminal-shim-dir', () => ({ neutralizeLegacyTerminalShimDir: vi.fn() }))
 vi.mock('./windows-shell-path-hydration', () => ({
-  createWindowsShellPathHydration: () => ({ whenReady: Promise.resolve() })
+  createWindowsShellPathHydration: () => ({
+    configure: vi.fn(),
+    whenReady: Promise.resolve()
+  })
 }))
 vi.mock('../git/runner', () => ({
   configureWindowsHostGitEnvironmentReadiness: vi.fn(),
@@ -145,11 +147,6 @@ vi.mock('../git/runner', () => ({
 }))
 vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
-}))
-vi.mock('../claude-accounts/live-pty-gate', () => ({
-  attachClaudeLivePtyPersistence: vi.fn(),
-  onLiveClaudePtysDrained: vi.fn(),
-  seedLiveClaudePtysFromPersistence: vi.fn()
 }))
 vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('./dev-education-suppression', () => ({
@@ -289,6 +286,10 @@ async function runReady(): Promise<void> {
     openMainWindow: mocks.openMainWindow,
     handleMacAppActivation: vi.fn()
   })
+  expect(mocks.handleProtocol).toHaveBeenCalledExactlyOnceWith(
+    JIRA_IMAGE_SCHEME,
+    expect.any(Function)
+  )
 }
 
 function identityRecordWrites(): unknown[] {
@@ -306,6 +307,7 @@ describe('ready-phase browser identity authority', () => {
   beforeEach(() => {
     vi.resetModules()
     mocks.openMainWindow.mockClear()
+    mocks.handleProtocol.mockClear()
     mocks.runtimeRpcStart.mockClear()
     mocks.writeFileDurableSync.mockClear()
     mocks.state.isServeMode = false

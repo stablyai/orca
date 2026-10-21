@@ -28,7 +28,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -79,7 +80,9 @@ describe('remote filesystem watcher re-arm', () => {
     expect(retryWatchMock).toHaveBeenCalledTimes(1)
     expect(senderOne.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      resync: true,
+      connectionId: 'conn-1'
     })
 
     warnSpy.mockRestore()

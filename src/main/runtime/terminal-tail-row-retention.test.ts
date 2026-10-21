@@ -61,6 +61,45 @@ describe('retained terminal tail row storage', () => {
     expect(lines.at(-1)).toBe(`step ${chunkCount - 1} done`)
   })
 
+  it('does not pin a padded redraw row behind its trimmed text', () => {
+    let tail = appendNormalizedToTailBuffer([], '', 'warm\n')
+    const before = collectHeap()
+    for (let index = 0; index < 250; index += 1) {
+      const text = `\x1b[0Arow-${String(index).padStart(5, '0')}-completed${' '.repeat(64_000)}\n`
+      tail = appendNormalizedToTailBuffer(tail.lines, tail.partialLine, text, tail.redrawCursor)
+    }
+    const retained = collectHeap() - before
+
+    expect(tail.lines.at(-1)).toBe('row-00249-completed')
+    // Sliced from the padded row, 250 short lines pinned about 16 MB.
+    expect(retained).toBeLessThan(4 * 1024 * 1024)
+  })
+
+  it.each([
+    ['half', 0.5],
+    ['quarter', 0.75]
+  ])('does not pin a 64 KiB row that chained erases shrink by a %s at a time', (_, ratio) => {
+    const shrinkChunk = (index: number): string => {
+      const char = String.fromCharCode(65 + (index % 26))
+      let chunk = `\x1b[0A${char.repeat(65_536)}`
+      // Each \r + identical prefix + CSI K keeps at least half of the current row.
+      for (let keep = Math.floor(65_536 * ratio); keep >= 16; keep = Math.floor(keep * ratio)) {
+        chunk += `\r${char.repeat(keep)}\x1b[K`
+      }
+      return `${chunk}\n`
+    }
+    let lines = appendNormalizedToTailBuffer([], '', shrinkChunk(0)).lines
+    const before = collectHeap()
+    for (let index = 1; index <= 200; index += 1) {
+      lines = appendNormalizedToTailBuffer(lines, '', shrinkChunk(index)).lines
+    }
+    const retained = collectHeap() - before
+
+    expect(lines.at(-1)).toMatch(/^[A-Z]{1,20}$/)
+    // Nested slices pinned each completed row's 64 KiB original: about 13 MB.
+    expect(retained).toBeLessThan(4 * 1024 * 1024)
+  })
+
   it('routes every retained row and partial line through ownRetainedString', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
     try {
@@ -79,6 +118,21 @@ describe('retained terminal tail row storage', () => {
     }
   })
 
+  it('does not pin overwritten multiline redraw chunks through completed rows', () => {
+    let lines: string[] = []
+    const before = collectHeap()
+    for (let index = 0; index < 200; index += 1) {
+      const chunk = `\x1b[0A${'x'.repeat(64 * 1024)}\rstep ${index} done\x1b[K\n`
+      const next = appendNormalizedToTailBuffer(lines, '', chunk)
+      lines = next.lines
+    }
+    const retained = collectHeap() - before
+
+    expect(lines).toHaveLength(200)
+    expect(lines.at(-1)).toBe('step 199 done')
+    expect(retained).toBeLessThan(4 * 1024 * 1024)
+  })
+
   it('owns the redraw partial line without re-owning carried rows', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
     try {
@@ -93,9 +147,8 @@ describe('retained terminal tail row storage', () => {
 
       expect(redrawn.lines).toEqual(['row one'])
       expect(redrawn.partialLine).toBe('rewritten two')
-      // One call for the partial only: redraw rows are built character by character.
-      expect(own).toHaveBeenCalledTimes(1)
-      expect(own).toHaveBeenLastCalledWith('rewritten two')
+      // Only the written run and the partial are owned; carried rows are never re-copied.
+      expect(own.mock.calls).toEqual([['rewritten two'], ['rewritten two']])
     } finally {
       own.mockRestore()
     }

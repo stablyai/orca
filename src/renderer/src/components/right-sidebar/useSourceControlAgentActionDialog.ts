@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
@@ -57,8 +58,6 @@ export function useSourceControlAgentActionDialog({
   // place instead of writing a global default the override would still shadow.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
-  const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
-  const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
@@ -85,16 +84,19 @@ export function useSourceControlAgentActionDialog({
     }
     setDetecting(true)
     try {
-      const nextAgents =
-        typeof connectionId === 'string'
-          ? await ensureRemoteDetectedAgents(connectionId)
-          : await ensureDetectedAgents()
+      const state = useAppStore.getState()
+      // Why: the workspace's own host answers, including a paired server's SSH workspace.
+      const nextAgents = await (worktreeId
+        ? ensureDetectedAgentsForWorktree(state, worktreeId)
+        : typeof connectionId === 'string'
+          ? state.ensureRemoteDetectedAgents(connectionId)
+          : state.ensureDetectedAgents())
       setDetectedAgents(nextAgents)
       return nextAgents
     } finally {
       setDetecting(false)
     }
-  }, [connectionId, connectionUnavailable, ensureDetectedAgents, ensureRemoteDetectedAgents])
+  }, [connectionId, connectionUnavailable, worktreeId])
 
   useEffect(() => {
     if (!open) {

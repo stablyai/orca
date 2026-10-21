@@ -5,13 +5,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 
-const { authorize, provider } = vi.hoisted(() => ({
-  authorize: vi.fn(async (filePath: string) => filePath),
-  provider: vi.fn()
+const { authorize } = vi.hoisted(() => ({
+  authorize: vi.fn(async (filePath: string) => filePath)
 }))
-vi.mock('electron', () => ({ protocol: { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() } }))
-vi.mock('../ipc/local-file-access-resolution', () => ({ resolveLocalFileRequestPath: authorize }))
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({ requireSshFilesystemProvider: provider }))
+vi.mock('electron', () => ({
+  protocol: { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() }
+}))
+vi.mock('../ipc/local-file-access-resolution', () => ({
+  resolveLocalFileRequestPath: authorize
+}))
 
 import { handleMediaPreviewRequest, readMediaPreview } from './media-preview-protocol'
 
@@ -33,7 +35,6 @@ describe('media preview protocol', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-video-protocol-'))
     authorize.mockReset().mockImplementation(async (path) => path)
-    provider.mockReset()
   })
   afterEach(async () => {
     emitter.emit('destroyed')
@@ -88,30 +89,7 @@ describe('media preview protocol', () => {
     expect(readMediaPreview(event, { filePath: join(directory, 'secret.txt') }, store)).toBeNull()
   })
 
-  it('serves SSH ranges on the execution host without reading a local path', async () => {
-    const readFileRange = vi.fn(async () => ({ bytes: Buffer.from([7, 8, 9]), bytesRead: 3 }))
-    provider.mockReturnValue({ stat: async () => ({ type: 'file', size: 10 }), readFileRange })
-    const result = readMediaPreview(
-      event,
-      { filePath: '/remote/clip.mp4', connectionId: 'ssh-owner' },
-      store
-    )
-    if (!result) {
-      throw new Error('Missing preview')
-    }
-    const response = await handleMediaPreviewRequest(
-      new Request(result.mediaUrl, { headers: { range: 'bytes=7-' } })
-    )
-    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([7, 8, 9])
-    expect(readFileRange).toHaveBeenCalledWith('/remote/clip.mp4', 7, 3)
-    expect(authorize).not.toHaveBeenCalled()
-    expect(provider).toHaveBeenCalledWith('ssh-owner')
-  })
-
-  it('does not try a local read when an SSH host is disconnected', async () => {
-    provider.mockImplementation(() => {
-      throw new Error('SSH disconnected')
-    })
+  it('does not try a local read for an SSH host', async () => {
     const result = readMediaPreview(
       event,
       { filePath: '/remote/clip.mp4', connectionId: 'ssh-owner' },

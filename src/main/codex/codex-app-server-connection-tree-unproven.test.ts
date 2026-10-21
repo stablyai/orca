@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { spawnProcess } from '@orca/process-host'
 import type { ProviderProcessTeardownVerdict } from '../provider-process/provider-process-teardown'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 

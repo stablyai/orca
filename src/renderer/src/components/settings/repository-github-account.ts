@@ -5,9 +5,8 @@ import type {
   GhAccountBindingValidationResult
 } from '../../../../shared/github/auth-types'
 import { ghAccountBindingsEqual } from '../../../../shared/github/account-binding'
-import { callRuntimeRpc, type getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-
-type RuntimeTarget = ReturnType<typeof getActiveRuntimeTarget>
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const LOCAL_GH_ACCOUNT_IPC_TIMEOUT_MS = 30_000
 
@@ -31,8 +30,8 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 
 /** Routes through RPC for remote environments and IPC locally; both read the repo's execution host. */
 export function listRepositoryGhBindableAccounts(
-  runtimeTarget: RuntimeTarget,
-  repo: Repo,
+  runtimeTarget: RuntimeClientTarget,
+  repo: Pick<Repo, 'id' | 'path'>,
   options: { refreshCapability?: boolean } = {}
 ): Promise<GhAccountBindingInventory> {
   if (runtimeTarget.kind === 'environment') {
@@ -55,7 +54,7 @@ export function listRepositoryGhBindableAccounts(
 }
 
 export function validateRepositoryGhAccountBinding(
-  runtimeTarget: RuntimeTarget,
+  runtimeTarget: RuntimeClientTarget,
   repo: Repo,
   binding: GhAccountBinding
 ): Promise<GhAccountBindingValidationResult> {

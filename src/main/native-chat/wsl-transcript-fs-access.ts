@@ -158,7 +158,7 @@ export function readTranscriptFile(
   signal?: AbortSignal
 ): Promise<{ bytesRead: number; buffer: Buffer }> {
   if (isSshTranscriptHandle(handle)) {
-    return readSshTranscript(handle, buffer, offset, length, position)
+    return readSshTranscript(handle)
   }
   // Handle kind decides before path spelling: a process-owned handle must never
   // hit the FileHandle branch even if a caller re-derives the path off-UNC.

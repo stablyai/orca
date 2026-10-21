@@ -8,6 +8,7 @@ import {
   confirmRootShellAloneFromProcessTable,
   inspectionShowsShellAlone
 } from './run-terminal-shell-alone'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 /**
  * Whether a client drove or is viewing a PTY's current process, for closing finished run
@@ -47,7 +48,7 @@ export async function confirmRunTerminalShellAlone(
         (await controller?.inspectProcess?.(ptyId, { scanChildProcesses: true })) ?? null
       )
     }
-    const processes = (await controller?.listProcesses?.(null)) ?? []
+    const processes = (await controller?.listProcesses?.(LOCAL_EXECUTION_HOST_ID)) ?? []
     const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
     return rootPid ? await confirmRootShellAloneFromProcessTable(rootPid) : false
   } catch {

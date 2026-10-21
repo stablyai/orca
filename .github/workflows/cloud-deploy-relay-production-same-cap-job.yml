@@ -54,8 +54,7 @@ jobs:
       # /v1/assign at hosts / window and is re-placed through the director's drain-return
       # lane. The wave validator admits only its closed set, and anything below the 300000
       # default only on US general cells: Asia drains are bound by their targets' accept
-      # rate. The transition wait below is the 15-min migration lease plus this window, plus
-      # its excess over 300000, since restart-safe waits a window of quiet after the drain. A
+      # rate. The transition wait below is the 15-min migration lease plus this window. A
       # cell on an older image drains at once, or refuses a window above 300000.
       DRAIN_PACE_WINDOW_MS: ${{ inputs.drain-pace-window-ms }}
     steps:
@@ -92,8 +91,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with: { package_json_file: cloud/package.json }
+      - uses: pnpm/setup@v2
+        with: { package-json-file: cloud/package.json, install: false }
 
       - uses: actions/setup-node@v4
         with:
@@ -135,6 +134,8 @@ jobs:
           id_token_include_email: true
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:
@@ -197,7 +198,7 @@ jobs:
               EXPECTED_REGION=us-central1
               EXPECTED_DATABASE_POOL_MAX=
               ;;
-            c27|c28|c29|c30|c31|c34)
+            c27|c28|c29|c30|c31|c34|c35)
               EXPECTED_HARD_CAP=3000
               EXPECTED_REGION=asia-east2
               EXPECTED_DATABASE_POOL_MAX=16
@@ -440,9 +441,15 @@ jobs:
             if .regionalRehomeProtocol == null then "regionalRehomeProtocol" else empty end
           ] | if length > 0 then "runtime predecessor normalized legacy fields=" + join(",") else empty end' \
             <<< "${CURRENT_RUNTIME}"
-          CURRENT_DIRECTOR_STATUS="$(admin_post current-cell-status \
+          if ! CURRENT_DIRECTOR_STATUS="$(admin_post current-cell-status \
             "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
-            "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+            "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"; then
+            if jq -e '.error == "cell_in_reserve_mode"' \
+              "${RUNNER_TEMP}/current-cell-status.json" >/dev/null 2>&1; then
+              echo "${TARGET_CELL_ID} is in reserve mode: flip it to admitMode=db with the cell-flags workflow and wait for it to record db before rolling it, then flip it back to reserve" >&2
+            fi
+            exit 1
+          fi
           SOURCE_INCARNATION="$(jq -er '.status.runtime.cellIncarnation' \
             <<< "${CURRENT_DIRECTOR_STATUS}")"
           if test "${ROLLBACK_RESUME}" = true && ! jq -e \
@@ -502,7 +509,7 @@ jobs:
         run: echo 'Exact same-cap rollback point verified.'
 
       # The sample can age the first one-hour token by up to 20 min; the drain's restart-safe
-      # wait (20 min at the default pace, 50 at the slowest) gets a fresh one.
+      # wait (20 min at the default pace, 35 at the slowest) gets a fresh one.
       - id: drain-auth
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
         uses: google-github-actions/auth@v2
@@ -553,7 +560,7 @@ jobs:
           # What the cell accepted, which is 0 when an older image fell back to an unpaced drain.
           echo "drain-applied-pace-window-ms=$(jq -er '.paceWindowMs' <<< "${DRAIN_RESULT}")" \
             >> "${GITHUB_OUTPUT}"
-          # Restart-safe means an empty runtime for a whole pace window after the drain; leases
+          # Restart-safe means an empty runtime that lasts past the drain's pace window; leases
           # held by unplaceable hosts are reported, not waited on (c28, 2026-10-01).
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
@@ -562,7 +569,7 @@ jobs:
             --heartbeat either --admission migration-only --draining required \
             --activity restart-safe --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}" \
             --pace-window-ms "${DRAIN_PACE_WINDOW_MS}" \
-            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS + (DRAIN_PACE_WINDOW_MS > 300000 ? DRAIN_PACE_WINDOW_MS - 300000 : 0)))"
+            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS))"
           echo "drain-settled-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: capacity-auth

@@ -14,7 +14,7 @@ import type {
   AgentSessionProcessIdentityField
 } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   isWindowsProcessStartTimeAvailable,
   readWindowsProcessIdentityTableFresh
