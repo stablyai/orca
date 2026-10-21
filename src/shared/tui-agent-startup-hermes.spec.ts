@@ -272,4 +272,16 @@ describe('hermes startup plans', () => {
 
     expect(plan?.launchCommand).toBe("'hermes' 'chat' '--tui' '--resume' 's1'")
   })
+
+  it('refuses to resume through a wrapper whose Hermes executable it cannot find', () => {
+    expect(
+      buildAgentResumeStartupPlan({
+        agent: 'hermes',
+        providerSession: { key: 'session_id', id: 's1' },
+        cmdOverrides: {},
+        platform: 'linux',
+        agentCommand: "sh -c 'hermes --tui'"
+      })
+    ).toBeNull()
+  })
 })
