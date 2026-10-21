@@ -1,4 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
+import { isWindowGlassAvailable } from '@/lib/window-glass'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
@@ -55,8 +56,12 @@ export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
   settings: Pick<
     GlobalSettings,
-    'terminalColorOverrides' | 'terminalBackgroundOpacity' | 'terminalCursorOpacity'
-  >
+    | 'terminalColorOverrides'
+    | 'terminalBackgroundOpacity'
+    | 'terminalCursorOpacity'
+    | 'windowBackgroundBlur'
+  >,
+  windowGlassAvailable = true
 ): ITheme | null {
   if (!baseTheme) {
     return null
@@ -75,10 +80,12 @@ export function composeActiveTerminalTheme(
     theme = { ...theme, ...settings.terminalColorOverrides }
   }
   // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
-  if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
+  const backgroundOpacity =
+    settings.windowBackgroundBlur && !windowGlassAvailable ? 1 : settings.terminalBackgroundOpacity
+  if (backgroundOpacity !== undefined && theme.background && isHexColor(theme.background)) {
     theme = {
       ...theme,
-      background: hexToRgba(theme.background, settings.terminalBackgroundOpacity)
+      background: hexToRgba(theme.background, backgroundOpacity)
     }
   }
   // Why hex-only: hexToRgba expects a hex input, so named CSS cursor colors are left untouched.
@@ -103,7 +110,7 @@ export function publishTerminalViewAttributesAtAppStart(
   }
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  const theme = composeActiveTerminalTheme(baseTheme, settings, isWindowGlassAvailable())
   return send !== undefined
     ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
     : publishTerminalViewAttributes(theme, appearance.mode, settings)
@@ -147,7 +154,8 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
+  const windowGlassAvailable = isWindowGlassAvailable()
+  const theme = composeActiveTerminalTheme(baseTheme, settings, windowGlassAvailable)
   // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
@@ -162,6 +170,11 @@ export function applyTerminalAppearance(
   )
 
   for (const pane of manager.getPanes()) {
+    // Set alpha support before the palette write so the first repaint uses the matching renderer mode.
+    pane.terminal.options.allowTransparency =
+      (!settings.windowBackgroundBlur || windowGlassAvailable) &&
+      settings.terminalBackgroundOpacity !== undefined &&
+      settings.terminalBackgroundOpacity < 1
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
     if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
       pane.terminal.options.theme = theme
@@ -177,9 +190,6 @@ export function applyTerminalAppearance(
     if (pane.terminal.options.minimumContrastRatio !== minimumContrastRatio) {
       pane.terminal.options.minimumContrastRatio = minimumContrastRatio
     }
-    // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
-    pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)

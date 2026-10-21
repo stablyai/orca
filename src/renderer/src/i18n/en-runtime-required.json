@@ -1684,6 +1684,12 @@
           "f012172e21": "Choose the theme used for terminal panes in dark mode.",
           "target_label": "Theme Mode"
         },
+        "TerminalWindowSection": {
+          "03acb60aa0": "Controls the transparency of the terminal background.",
+          "2b82242f43": "Window Blur",
+          "809f37738d": "Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.",
+          "97950bb087": "Apply background blur to the terminal window. Requires restart."
+        },
         "VoicePane": {
           "901985625d": "toggle",
           "b6536a1d12": "extracting"
@@ -1981,6 +1987,7 @@
             "4529806908": "setup",
             "5be2d67678": "Setup Script Location",
             "6b659fff2a": "script",
+            "72d0482137": "Window Blur",
             "7a48c7715b": "workspace",
             "b872de3926": "location",
             "c047f398cc": "launch",

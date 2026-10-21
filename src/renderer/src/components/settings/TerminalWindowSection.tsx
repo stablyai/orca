@@ -9,6 +9,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { WindowGlassStyleSetting } from './WindowGlassStyleSetting'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -67,8 +68,8 @@ export function TerminalWindowSection({
             'Background Opacity'
           )}
           description={translate(
-            'auto.components.settings.TerminalWindowSection.03acb60aa0',
-            'Controls the transparency of the terminal background.'
+            'settings.windowGlass.opacitySummary',
+            'Controls terminal backgrounds and, with Window Glass, the app surfaces.'
           )}
           keywords={['opacity', 'transparency', 'background', 'alpha']}
         >
@@ -78,8 +79,8 @@ export function TerminalWindowSection({
               'Background Opacity'
             )}
             description={translate(
-              'auto.components.settings.TerminalWindowSection.809f37738d',
-              'Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.'
+              'settings.windowGlass.opacityDescription',
+              '1 is fully opaque, 0 is fully transparent. Window Glass also applies this to app surfaces; text stays opaque.'
             )}
             value={settings.terminalBackgroundOpacity ?? 1}
             defaultValue={1}
@@ -93,40 +94,38 @@ export function TerminalWindowSection({
           />
         </SearchableSetting>
 
+        <WindowGlassStyleSetting settings={settings} updateSettings={updateSettings} />
+
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalWindowSection.2b82242f43',
-            'Window Blur'
-          )}
+          title={translate('settings.windowGlass.title', 'Window Glass')}
           description={translate(
-            'auto.components.settings.TerminalWindowSection.97950bb087',
-            'Apply background blur to the terminal window. Requires restart.'
+            'settings.windowGlass.description',
+            'Blur the desktop behind Orca on macOS and supported Windows 11 systems. Requires restart; may increase GPU use. Accessibility settings override glass.'
           )}
           keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
           className="space-y-3 py-2"
         >
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
-              <Label>
-                {translate(
-                  'auto.components.settings.TerminalWindowSection.2b82242f43',
-                  'Window Blur'
-                )}
-              </Label>
+              <Label>{translate('settings.windowGlass.title', 'Window Glass')}</Label>
               <p className="text-xs text-muted-foreground">
                 {translate(
-                  'auto.components.settings.TerminalWindowSection.97950bb087',
-                  'Apply background blur to the terminal window. Requires restart.'
+                  'settings.windowGlass.description',
+                  'Blur the desktop behind Orca on macOS and supported Windows 11 systems. Requires restart; may increase GPU use. Accessibility settings override glass.'
                 )}
               </p>
             </div>
             <Switch
-              aria-label={translate(
-                'auto.components.settings.TerminalWindowSection.2b82242f43',
-                'Window Blur'
-              )}
+              aria-label={translate('settings.windowGlass.title', 'Window Glass')}
               checked={settings.windowBackgroundBlur ?? false}
-              onCheckedChange={(checked) => updateSettings({ windowBackgroundBlur: checked })}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  windowBackgroundBlur: checked,
+                  ...(checked && (settings.terminalBackgroundOpacity ?? 1) === 1
+                    ? { terminalBackgroundOpacity: 0.8 }
+                    : {})
+                })
+              }
             />
           </div>
 

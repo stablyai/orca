@@ -16,6 +16,7 @@ import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
+import { isWindowGlassAvailable, windowGlassAccessibilityQueries } from '@/lib/window-glass'
 
 // Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
 const PREVIEW_COLS = 36
@@ -63,6 +64,26 @@ export function TerminalSettingsPreview({
   const ligaturesAddonRef = useRef<LigaturesAddon | null>(null)
   const skipInitialOptionMutationRef = useRef(false)
   const skipInitialThemeRewriteRef = useRef(false)
+  const [windowGlassAvailable, setWindowGlassAvailable] = useState(isWindowGlassAvailable)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+    const update = (): void => setWindowGlassAvailable(isWindowGlassAvailable())
+    const unsubscribe = window.api?.app?.onWindowGlassChanged?.(update)
+    const queries = windowGlassAccessibilityQueries.map((query) => window.matchMedia(query))
+    for (const query of queries) {
+      query.addEventListener('change', update)
+    }
+    update()
+    return () => {
+      unsubscribe?.()
+      for (const query of queries) {
+        query.removeEventListener('change', update)
+      }
+    }
+  }, [])
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
@@ -98,13 +119,15 @@ export function TerminalSettingsPreview({
 
   // Why: list composeActiveTerminalTheme inputs explicitly so font/cursor changes don't trigger a buffer rewrite.
   const composedTheme = useMemo(
-    () => composeActiveTerminalTheme(appearance.theme, settings),
+    () => composeActiveTerminalTheme(appearance.theme, settings, windowGlassAvailable),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [
       appearance,
       settings.terminalColorOverrides,
       settings.terminalBackgroundOpacity,
-      settings.terminalCursorOpacity
+      settings.terminalCursorOpacity,
+      settings.windowBackgroundBlur,
+      windowGlassAvailable
     ]
   )
 
@@ -139,7 +162,9 @@ export function TerminalSettingsPreview({
       lineHeight: terminalLineHeight,
       theme: composedTheme ?? undefined,
       allowTransparency:
-        settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
+        (!settings.windowBackgroundBlur || windowGlassAvailable) &&
+        settings.terminalBackgroundOpacity !== undefined &&
+        settings.terminalBackgroundOpacity < 1,
       cols: PREVIEW_COLS,
       rows: PREVIEW_ROWS
     })
@@ -202,6 +227,10 @@ export function TerminalSettingsPreview({
     if (!terminal || !composedTheme) {
       return
     }
+    terminal.options.allowTransparency =
+      (!settings.windowBackgroundBlur || windowGlassAvailable) &&
+      settings.terminalBackgroundOpacity !== undefined &&
+      settings.terminalBackgroundOpacity < 1
     terminal.options.theme = composedTheme
     // Why: share applyTerminalAppearance's gating helper (#7934) so the preview can't drift from live panes.
     terminal.options.minimumContrastRatio = resolveTerminalMinimumContrastRatio(
@@ -209,9 +238,6 @@ export function TerminalSettingsPreview({
       effectiveMode,
       settings.terminalMinimumContrastRatio
     )
-    // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
-    terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     if (skipInitialThemeRewriteRef.current) {
       skipInitialThemeRewriteRef.current = false
       return
@@ -223,7 +249,9 @@ export function TerminalSettingsPreview({
     composedTheme,
     effectiveMode,
     settings.terminalBackgroundOpacity,
-    settings.terminalMinimumContrastRatio
+    settings.terminalMinimumContrastRatio,
+    settings.windowBackgroundBlur,
+    windowGlassAvailable
   ])
 
   useEffect(() => {

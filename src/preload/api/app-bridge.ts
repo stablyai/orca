@@ -11,8 +11,10 @@ import {
 import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
 import { awaitBeforeUnloadCheckpoint, startupDiagnosticsEnabled } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
+import { windowGlassApi } from './window-glass-bridge'
 
 export const appApi = {
+  ...windowGlassApi,
   isProfileStateSaveDelayed: (): Promise<boolean> =>
     ipcRenderer.invoke('app:isProfileStateSaveDelayed'),
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void): (() => void) => {

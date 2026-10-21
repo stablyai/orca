@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { windowGlassAccessibilityQueries } from '@/lib/window-glass'
 import type { IDisposable } from '@xterm/xterm'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { applyTerminalAppearance } from './terminal-appearance'
@@ -91,21 +92,38 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
   }, [deps.isActive, deps.isVisible, deps.managerRef, deps.panePtyBindingsRef])
 
   useEffect(() => {
-    const manager = deps.managerRef.current
-    const currentSettings = deps.settingsRef.current
-    if (!manager || !deps.settings || !currentSettings) {
+    const applyAppearance = (): void => {
+      const manager = deps.managerRef.current
+      const currentSettings = deps.settingsRef.current
+      if (!manager || !deps.settings || !currentSettings) {
+        return
+      }
+      applyTerminalAppearance(
+        manager,
+        currentSettings,
+        systemPrefersDarkRef.current,
+        deps.paneFontSizesRef.current,
+        deps.paneTransportsRef.current,
+        deps.effectiveMacOptionAsAltRef.current,
+        deps.paneMode2031Ref.current,
+        deps.paneLastThemeModeRef.current
+      )
+    }
+    applyAppearance()
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return
     }
-    applyTerminalAppearance(
-      manager,
-      currentSettings,
-      systemPrefersDarkRef.current,
-      deps.paneFontSizesRef.current,
-      deps.paneTransportsRef.current,
-      deps.effectiveMacOptionAsAltRef.current,
-      deps.paneMode2031Ref.current,
-      deps.paneLastThemeModeRef.current
-    )
+    const unsubscribe = window.api?.app?.onWindowGlassChanged?.(applyAppearance)
+    const queries = windowGlassAccessibilityQueries.map((query) => window.matchMedia(query))
+    for (const query of queries) {
+      query.addEventListener('change', applyAppearance)
+    }
+    return () => {
+      unsubscribe?.()
+      for (const query of queries) {
+        query.removeEventListener('change', applyAppearance)
+      }
+    }
   }, [
     deps.settings,
     deps.systemPrefersDark,

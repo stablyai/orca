@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { observeDocumentWindowGlass } from '@/lib/window-glass'
 import { applyDocumentTheme } from '../lib/document-theme'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
@@ -8,6 +9,22 @@ import { useAppStore } from '../store'
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  const windowBackgroundBlur = useAppStore((s) => s.settings?.windowBackgroundBlur)
+  const windowGlassStyle = useAppStore((s) => s.settings?.windowGlassStyle)
+  const terminalBackgroundOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity)
+
+  useEffect(
+    () =>
+      observeDocumentWindowGlass(
+        {
+          enabled: windowBackgroundBlur === true,
+          style: windowGlassStyle,
+          opacity: terminalBackgroundOpacity
+        },
+        window.api?.app
+      ),
+    [windowBackgroundBlur, windowGlassStyle, terminalBackgroundOpacity]
+  )
 
   useEffect(() => {
     if (!theme) {

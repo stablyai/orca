@@ -190,6 +190,24 @@
     "refreshingDetails": "Refreshing check details…"
   },
   "settings": {
+    "windowGlass": {
+      "title": "Window Glass",
+      "description": "Blur the desktop behind Orca on macOS and supported Windows 11 systems. Requires restart; may increase GPU use. Accessibility settings override glass.",
+      "style": "Glass Style",
+      "styleDescription": "Choose a quiet frosted surface or glass with subtle edge highlights. Requires Window Glass.",
+      "frosted": "Frosted",
+      "liquid": "Liquid Glass style",
+      "keywords": {
+        "glass": "glass",
+        "liquid": "liquid",
+        "frosted": "frosted",
+        "vibrancy": "vibrancy",
+        "acrylic": "acrylic",
+        "material": "material"
+      },
+      "opacitySummary": "Controls terminal backgrounds and, with Window Glass, the app surfaces.",
+      "opacityDescription": "1 is fully opaque, 0 is fully transparent. Window Glass also applies this to app surfaces; text stays opaque."
+    },
     "chat": {
       "permissionsTitle": "Permissions for new chats",
       "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents.",

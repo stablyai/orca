@@ -81,4 +81,31 @@ describe('composeActiveTerminalTheme', () => {
   it('returns null when given a null base theme', () => {
     expect(composeActiveTerminalTheme(null, settingsWith({}))).toBeNull()
   })
+
+  it('makes a requested glass terminal opaque when native material is unavailable', () => {
+    const base = { background: '#112233', foreground: '#fafafa' }
+    const settings = settingsWith({ windowBackgroundBlur: true, terminalBackgroundOpacity: 0.4 })
+    expect(composeActiveTerminalTheme(base, settings, false)?.background).toBe(
+      'rgba(17, 34, 51, 1)'
+    )
+    expect(composeActiveTerminalTheme(base, settings, false)?.foreground).toBe('#fafafa')
+    expect(composeActiveTerminalTheme(base, settings, true)?.background).toBe(
+      'rgba(17, 34, 51, 0.4)'
+    )
+  })
+
+  it('preserves the configured opacity with glass off and honors opaque glass terminals', () => {
+    const base = { background: '#112233' }
+    expect(
+      composeActiveTerminalTheme(base, settingsWith({ terminalBackgroundOpacity: 0 }), false)
+        ?.background
+    ).toBe('rgba(17, 34, 51, 0)')
+    expect(
+      composeActiveTerminalTheme(
+        base,
+        settingsWith({ windowBackgroundBlur: true, terminalBackgroundOpacity: 1 }),
+        true
+      )?.background
+    ).toBe('rgba(17, 34, 51, 1)')
+  })
 })

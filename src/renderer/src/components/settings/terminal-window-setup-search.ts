@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getWindowGlassStyleSearchEntry } from './window-glass-search'
 
 export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
   {
@@ -32,6 +33,7 @@ export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
 ])
 
 export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
+  getWindowGlassStyleSearchEntry(),
   {
     title: translate('auto.components.settings.terminal.search.b36fd2416d', 'Background Opacity'),
     description: translate(
@@ -52,7 +54,7 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.72d0482137', 'Window Blur'),
+    title: translate('settings.windowGlass.title', 'Window Glass'),
     description: translate(
       'auto.components.settings.terminal.search.bc2054657a',
       'Apply background blur to the terminal window. Requires restart.'

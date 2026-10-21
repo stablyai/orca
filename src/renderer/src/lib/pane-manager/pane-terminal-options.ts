@@ -1,6 +1,7 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
+import { isWindowGlassAvailable } from '@/lib/window-glass'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -47,7 +48,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     // terminal, so a small multiplier keeps row-per-wheel movement familiar.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
-    allowTransparency: false,
+    // Native glass is fixed at launch; configure the alpha-capable context before open().
+    allowTransparency: isWindowGlassAvailable(),
     // Initial value only; applyTerminalAppearance re-gates by background luminance (#7934) before any content paints.
     minimumContrastRatio: LIGHT_BG_MIN_CONTRAST,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.

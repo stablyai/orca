@@ -36,6 +36,12 @@ const mockLigaturesAddon = vi.hoisted(() => ({
   instances: [] as MockLigaturesAddonInstance[]
 }))
 
+const mockWindowGlass = vi.hoisted(() => ({ available: false }))
+vi.mock('@/lib/window-glass', () => ({
+  isWindowGlassAvailable: () => mockWindowGlass.available,
+  windowGlassAccessibilityQueries: []
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
@@ -193,6 +199,18 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     mockXterm.nextOpenError = null
     mockLigaturesAddon.enabled = false
     mockLigaturesAddon.instances.length = 0
+    mockWindowGlass.available = false
+  })
+
+  it('opens glass previews with alpha support only when native glass is available', () => {
+    renderPreview(makeSettings({ windowBackgroundBlur: true, terminalBackgroundOpacity: 0.4 }))
+    expect(mockXterm.instances[0]?.options.allowTransparency).toBe(false)
+    runCleanups()
+    mockReactRuntime.refCallIndex = 0
+    mockWindowGlass.available = true
+    renderPreview(makeSettings({ windowBackgroundBlur: true, terminalBackgroundOpacity: 0.4 }))
+    expect(mockXterm.instances[1]?.options.allowTransparency).toBe(true)
+    runCleanups()
   })
 
   it('initializes once, writes once on mount, and disposes on unmount', () => {

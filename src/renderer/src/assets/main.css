@@ -194,7 +194,11 @@
   --orca-security-border: #e5e5e5;
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
-  --background: #fff;
+  --window-solid-background: #fff;
+  --window-solid-card: #fff;
+  --window-solid-sidebar: #fafafa;
+  --window-solid-worktree-sidebar: #f5f5f5;
+  --background: var(--window-solid-background);
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
   --chat-canvas-mix: 0%;
@@ -212,7 +216,7 @@
   --chat-composer-base: var(--chat-canvas);
   --chat-composer-border-mix: 11%;
   --chat-content-max-width: 46rem;
-  --card: #fff;
+  --card: var(--window-solid-card);
   --card-foreground: #0a0a0a;
   --popover: #fff;
   --popover-foreground: #0a0a0a;
@@ -247,13 +251,13 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
-  --worktree-sidebar: #f5f5f5;
+  --worktree-sidebar: var(--window-solid-worktree-sidebar);
   --worktree-sidebar-foreground: #0a0a0a;
   --worktree-sidebar-accent: #eaeaea;
   --worktree-sidebar-accent-foreground: #171717;
   --worktree-sidebar-border: #e5e5e5;
   --worktree-sidebar-ring: #a1a1a1;
-  --sidebar: #fafafa;
+  --sidebar: var(--window-solid-sidebar);
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #171717;
   --sidebar-primary-foreground: #fafafa;
@@ -313,7 +317,11 @@
   --orca-security-border: rgb(255 255 255 / 0.07);
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
-  --background: #0a0a0a;
+  --window-solid-background: #0a0a0a;
+  --window-solid-card: #171717;
+  --window-solid-sidebar: #171717;
+  --window-solid-worktree-sidebar: #2a2a2a;
+  --background: var(--window-solid-background);
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
   --chat-canvas-mix: 5%;
@@ -331,7 +339,7 @@
   --chat-composer-base: transparent;
   --chat-composer-border-mix: 9%;
   --chat-content-max-width: 46rem;
-  --card: #171717;
+  --card: var(--window-solid-card);
   --card-foreground: #fafafa;
   --popover: #171717;
   --popover-foreground: #fafafa;
@@ -360,7 +368,7 @@
   --chart-5: var(--color-blue-800);
   /* Why: light mode sets worktree-sidebar to secondary (#f5f5f5); mirror that
      lift in dark mode so the panel reads clearly above #0a0a0a canvas. */
-  --worktree-sidebar: #2a2a2a;
+  --worktree-sidebar: var(--window-solid-worktree-sidebar);
   --worktree-sidebar-foreground: #fafafa;
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #fafafa;
@@ -368,7 +376,7 @@
      aren't brighter than the rest of the UI in dark mode (#5906). */
   --worktree-sidebar-border: rgb(255 255 255 / 0.07);
   --worktree-sidebar-ring: #737373;
-  --sidebar: #171717;
+  --sidebar: var(--window-solid-sidebar);
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #1447e6;
   --sidebar-primary-foreground: #fafafa;
@@ -463,6 +471,95 @@
   --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
   --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
   --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
+}
+
+/* Native composition supplies blur once per window; avoid per-pane backdrop filters. */
+:root[data-window-glass] {
+  --background: color-mix(
+    in srgb,
+    var(--window-solid-background) calc(var(--window-glass-opacity) * 100%),
+    transparent
+  );
+  --card: color-mix(
+    in srgb,
+    var(--window-solid-card) calc(var(--window-glass-opacity) * 100%),
+    transparent
+  );
+  --sidebar: color-mix(
+    in srgb,
+    var(--window-solid-sidebar) calc(var(--window-glass-opacity) * 100%),
+    transparent
+  );
+  --worktree-sidebar: color-mix(
+    in srgb,
+    var(--window-solid-worktree-sidebar) calc(var(--window-glass-opacity) * 100%),
+    transparent
+  );
+}
+
+html[data-window-glass],
+html[data-window-glass] body {
+  background: transparent;
+}
+
+/* Chat derives text colors from its canvas, so keep both opaque like editor panes. */
+:root[data-window-glass],
+:root[data-window-glass] .native-chat-appearance {
+  --chat-source-background: var(--window-solid-background);
+}
+
+/* The chat surface paints from its canvas. Text colors still derive from the opaque canvas above,
+   so only painted backgrounds go translucent. bg-chat-canvas reads --chat-canvas directly, and the
+   producer's inline --background needs !important to be overridden. */
+html[data-window-glass] .native-chat-appearance {
+  --background: color-mix(
+    in srgb,
+    var(--chat-canvas) calc(var(--window-glass-opacity) * 100%),
+    transparent
+  ) !important;
+}
+
+html[data-window-glass] .native-chat-appearance.bg-chat-canvas,
+html[data-window-glass] .native-chat-appearance .bg-chat-canvas {
+  background-color: color-mix(
+    in srgb,
+    var(--chat-canvas) calc(var(--window-glass-opacity) * 100%),
+    transparent
+  );
+}
+
+/* Floating surfaces keep solid color inheritance for readable nested controls. */
+html[data-window-glass]
+  :is(
+    [data-radix-popper-content-wrapper],
+    [data-slot='dialog-content'],
+    [data-slot='sheet-content'],
+    [data-sonner-toast]
+  ) {
+  --background: var(--window-solid-background);
+  --card: var(--window-solid-card);
+  --sidebar: var(--window-solid-sidebar);
+  --worktree-sidebar: var(--window-solid-worktree-sidebar);
+}
+
+html[data-window-glass='liquid'] :is(.titlebar, .titlebar-left) {
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--foreground) 5%, transparent),
+    transparent
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 9%, transparent),
+    inset 0 -1px 0 var(--border);
+}
+
+html[data-window-glass='liquid'] .bg-worktree-sidebar.scrollbar-sleek-parent {
+  background-image: linear-gradient(
+    to bottom right,
+    color-mix(in srgb, var(--foreground) 3%, transparent),
+    transparent 45%
+  );
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .plugin-security-chrome {

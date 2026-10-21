@@ -1,4 +1,5 @@
-import { BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
+import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
+import { release } from 'node:os'
 import { is } from '@electron-toolkit/utils'
 import { join } from 'node:path'
 import { getAppIconPath } from '../app-icon'
@@ -34,6 +35,8 @@ import { installMainWindowWebviewSecurity } from './main-window-webview-security
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { resolveWindowGlassPolicy, type WindowGlassEnvironment } from './window-glass-policy'
+import { installWindowGlassLifecycle } from './window-glass-lifecycle'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
@@ -94,10 +97,18 @@ export function createMainWindow(
     return false
   })
   const blur = settings?.windowBackgroundBlur ?? false
-  // Why: only Windows acrylic is ever visible; macOS vibrancy+transparent sat behind our opaque background yet
-  // forced per-frame WindowServer alpha compositing (#8482). Applies at creation only, so it needs a restart.
-  const platformBlurOptions =
-    blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
+  const glassEnvironment = (): WindowGlassEnvironment => ({
+    platform: process.platform,
+    release: release(),
+    requested: blur,
+    dark: nativeTheme.shouldUseDarkColors,
+    reducedTransparency: nativeTheme.prefersReducedTransparency,
+    highContrast: nativeTheme.shouldUseHighContrastColors,
+    softwareRendering:
+      app.commandLine.hasSwitch('disable-gpu') ||
+      /disabled|unavailable/.test(app.getGPUFeatureStatus().gpu_compositing ?? '')
+  })
+  const glass = resolveWindowGlassPolicy(glassEnvironment())
 
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
@@ -111,7 +122,6 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
     titleBarStyle:
       process.platform === 'darwin'
@@ -131,7 +141,7 @@ export function createMainWindow(
         }
       : {}),
     icon: getAppIconPath(settings?.appIcon),
-    ...platformBlurOptions,
+    ...glass.options,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -139,9 +149,13 @@ export function createMainWindow(
       // Why an argument and not an IPC read: this is the window whose webviews host browser guests,
       // and it has to know that before it interprets its first session snapshot — earlier than any
       // handler registration it could wait on.
-      additionalArguments: [formatBrowserClientHostIdArgument(getBrowserClientHostId())]
+      additionalArguments: [
+        formatBrowserClientHostIdArgument(getBrowserClientHostId()),
+        ...(glass.available ? ['--orca-window-glass=available'] : [])
+      ]
     }
   })
+  installWindowGlassLifecycle(mainWindow, nativeTheme, glassEnvironment)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.

@@ -14,6 +14,9 @@ import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapsh
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 
 export type AppApi = {
+  /** Local desktop material, unavailable on older hosts and browser clients. */
+  getWindowGlassAvailable?: () => boolean
+  onWindowGlassChanged?: (callback: (available: boolean) => void) => () => void
   /** A local profile storage operation is delayed and holds up subsequent saves. */
   isProfileStateSaveDelayed: () => Promise<boolean>
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void

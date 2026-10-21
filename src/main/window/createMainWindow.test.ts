@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as Os from 'node:os'
+
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof Os>()),
+  release: () => '10.0.22621'
+}))
 
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
@@ -394,7 +400,7 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
+  it('uses platform blur options without transparent: true when opted in (#8482)', () => {
     for (const [platform, expected] of [
       ['darwin', { backgroundMaterial: undefined }],
       ['win32', { backgroundMaterial: 'acrylic' }],
@@ -440,10 +446,12 @@ describe('createMainWindow', () => {
       )
 
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-      expect(browserWindowOptions.vibrancy).toBeUndefined()
+      expect(browserWindowOptions.vibrancy).toBe(platform === 'darwin' ? 'under-window' : undefined)
       expect(browserWindowOptions.transparent).toBeUndefined()
       expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
-      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+      expect(browserWindowOptions.backgroundColor).toBe(
+        platform === 'darwin' ? undefined : platform === 'win32' ? '#00000000' : '#ffffff'
+      )
     }
   })
 
@@ -528,6 +536,7 @@ describe('createMainWindow', () => {
     let windowSize: [number, number] = [1200, 800]
     const webContents = {
       on: vi.fn(),
+      removeListener: vi.fn(),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
@@ -596,7 +605,9 @@ describe('createMainWindow', () => {
     vi.advanceTimersByTime(32)
     expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(3)
 
-    windowHandlers.get('closed')?.[0]?.()
+    for (const handler of windowHandlers.get('closed') ?? []) {
+      handler()
+    }
     expect(ipcMain.removeListener).toHaveBeenCalledWith('ui:window-revealed', revealHandler)
   })
 

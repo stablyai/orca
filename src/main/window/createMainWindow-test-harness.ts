@@ -45,12 +45,23 @@ const ipcMainMock: IpcMainMock = {
 }
 
 export type ElectronModuleMock = {
-  app: { on: MainWindowSpy; removeListener: MainWindowSpy }
+  app: {
+    on: MainWindowSpy
+    removeListener: MainWindowSpy
+    commandLine: { hasSwitch: MainWindowSpy }
+    getGPUFeatureStatus: MainWindowSpy
+  }
   BrowserWindow: typeof browserWindowMock
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
   Notification: typeof notificationMock
-  nativeTheme: { shouldUseDarkColors: boolean }
+  nativeTheme: {
+    shouldUseDarkColors: boolean
+    prefersReducedTransparency: boolean
+    shouldUseHighContrastColors: boolean
+    on: MainWindowSpy
+    removeListener: MainWindowSpy
+  }
   powerMonitor: { on: MainWindowSpy; removeListener: MainWindowSpy }
   screen: {
     getPrimaryDisplay: () => { workAreaSize: { width: number; height: number } }
@@ -70,12 +81,23 @@ export type BrowserManagerModuleMock = {
 // re-declaring the shared electron surface.
 export function electronModuleMock(): ElectronModuleMock {
   return {
-    app: { on: vi.fn(), removeListener: vi.fn() },
+    app: {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      commandLine: { hasSwitch: vi.fn(() => false) },
+      getGPUFeatureStatus: vi.fn(() => ({ gpu_compositing: 'enabled' }))
+    },
     BrowserWindow: browserWindowMock,
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },
     Notification: notificationMock,
-    nativeTheme: { shouldUseDarkColors: false },
+    nativeTheme: {
+      shouldUseDarkColors: false,
+      prefersReducedTransparency: false,
+      shouldUseHighContrastColors: false,
+      on: vi.fn(),
+      removeListener: vi.fn()
+    },
     powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
     screen: {
       getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
