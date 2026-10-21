@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useChromeAppearanceStyle } from '@/hooks/use-chrome-appearance-style'
 
 // Why: Windows and Linux both remove the native title bar, so we render our own min/max/close buttons (Fluent/Win11-style SVGs).
 export function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
+  // Why: the controls overlay themed chrome, so their icon/hover tokens must follow the same appearance.
+  const chromeAppearanceStyle = useChromeAppearanceStyle()
   useEffect(() => {
     // Why: maximize-changed only fires on transitions; seed from main on mount so a startup-maximized window shows the right icon.
     let cancelled = false
@@ -19,7 +22,7 @@ export function WindowControls(): React.JSX.Element {
     }
   }, [])
   return (
-    <div className="window-controls">
+    <div className="window-controls" style={chromeAppearanceStyle}>
       <button
         className="window-controls-btn"
         aria-label={translate('auto.App.bbb7f90669', 'Minimize')}
