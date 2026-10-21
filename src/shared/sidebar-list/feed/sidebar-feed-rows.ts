@@ -7,8 +7,6 @@ import {
 } from '../../execution-host/execution-host'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
-import type { ProjectSectionModel } from '../sections/project-section-grouping'
-import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import {
   filterFolderWorkspacesFromOtherDevices,
@@ -46,6 +44,7 @@ import {
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../row-types'
 import type { SidebarFeedWindowExtras } from '../sidebar-feed-extras'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
+import type { SidebarFeedCatalog } from '../catalog/sidebar-feed-catalog'
 import { planSidebarRows } from '../sidebar-row-plan'
 import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
 import type { WorkspaceSortBy as SortBy } from '../../workspace-view/workspace-row-sort'
@@ -57,6 +56,8 @@ import {
 import { isIdleWorkspaceActivity } from '../feed-facts/workspace-activity-facts'
 import { prGroupOfReviewFact } from '../feed-facts/workspace-review-facts'
 import type { TagSectionOrder } from '../sections/tag-section-order'
+
+export type { SidebarFeedCatalog } from '../catalog/sidebar-feed-catalog'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
 export type SidebarFeedView = {
@@ -78,13 +79,6 @@ export type SidebarFeedView = {
   localHostLabel: string
   /** The desktop window's own saved host order, which it writes; a phone reads the host's. */
   workspaceHostOrder?: readonly ExecutionHostId[]
-}
-
-/** The catalog the feed does not carry: every host's repos (repo.list), groups and projects. */
-export type SidebarFeedCatalog = {
-  repos: readonly Repo[]
-  projectGroups: readonly ProjectGroup[]
-  projectGrouping: ProjectSectionModel
 }
 
 export type SidebarFeedRows = {
