@@ -4,6 +4,10 @@ import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoptio
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
+import {
+  consumeQuitAndStopAllSessionsRequest,
+  quitAfterRendererStoppedAllSessions
+} from './main-window-actions'
 import { resolveOsOpenedDocuments } from './os-opened-documents'
 import {
   onStructuredAgentSessionsHeldChanged,
@@ -73,6 +77,12 @@ export function registerMainProcessIpcHandlers(): void {
   // Why: the renderer pulls this once its ui:openSettings listener attaches, so a Settings request queued before mount isn't lost.
   ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
     state.pendingOpenSettings.matches(event.sender.id, { consume: true })
+  )
+  ipcMain.handle('ui:consumePendingQuitAndStopAllSessions', (event) =>
+    consumeQuitAndStopAllSessionsRequest(event.sender.id)
+  )
+  ipcMain.on('ui:quitAfterStoppingAllSessions', (event) =>
+    quitAfterRendererStoppedAllSessions(event.sender.id)
   )
   ipcMain.handle('ui:consumePendingSkillShare', () => state.skillShareDeepLinks.consume())
   // Why: the renderer pulls this once its ui:openMarkdownFiles listener attaches, so a

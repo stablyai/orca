@@ -8,7 +8,7 @@ import {
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
-import { createAppMenuQuitItem } from './app-menu-quit-item'
+import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppWindowMenu } from './app-menu-window'
 
 export type AppearanceMenuState = {
@@ -25,7 +25,7 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
   return !(current !== false)
 }
 
-type RegisterAppMenuOptions = {
+type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenSettings: () => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
@@ -43,7 +43,6 @@ type RegisterAppMenuOptions = {
   // Why: the macOS app-menu title. Passed the per-branch dev label since
   // app.name is now pinned to a stable value for Keychain-key stability.
   appMenuLabel?: string
-  onQuit?: () => void
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -162,7 +161,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { role: 'hideOthers' },
       { role: 'unhide' },
       { type: 'separator' },
-      createAppMenuQuitItem(options.onQuit, options.appMenuLabel ?? app.name)
+      ...createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
     ]
   }
 
@@ -171,7 +170,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     // Why: on Windows/Linux there is no app-named menu, so Settings and
     // Quit live under File — matching the common platform convention and
     // keeping all user-facing actions reachable from the in-window menu bar.
-    submenu: [settingsItem, { type: 'separator' }, createAppMenuQuitItem(options.onQuit)]
+    submenu: [settingsItem, { type: 'separator' }, ...createAppMenuQuitItems(options)]
   }
 
   // Why: keep native menu hints while letting non-macOS Ctrl+Z/Ctrl+Y reach the focused terminal or DOM control.

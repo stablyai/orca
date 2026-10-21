@@ -24,6 +24,7 @@ import {
   type RendererRecoveryPromptFailure
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
+import { confirmQuitAndStopAllSessions } from './quit-and-stop-all-sessions-prompt'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -95,6 +96,76 @@ export function quitFromSystemTray(): void {
   quitFromUserCommand()
 }
 
+// Why bounded: a renderer that never pulls the request must not stop sessions on a later reload.
+const QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS = 30_000
+let quitAndStopAllSessionsConfirming = false
+// The renderer that consumed the request; only it may then ask main to quit.
+let stoppingAllSessionsWebContentsId: number | null = null
+
+/**
+ * Quit and Stop All Sessions (app menu, tray): after confirmation the renderer runs Settings'
+ * Kill all sessions (closes every terminal tab and stops every daemon session), then asks main to quit.
+ */
+export function quitAndStopAllSessionsFromUserCommand(): void {
+  // Why: a serve host's daemon holds its paired clients' terminals, and its user Quit never exits.
+  if (state.isServeMode || quitAndStopAllSessionsConfirming) {
+    return
+  }
+  quitAndStopAllSessionsConfirming = true
+  // Why reveal first: the dialog is a sheet on this window, invisible while it is minimized or hidden.
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    showMainWindowFromTray()
+  }
+  const window = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
+  void confirmQuitAndStopAllSessions((options) =>
+    window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
+  )
+    .then((confirmed) => {
+      if (confirmed) {
+        requestRendererStopAllSessionsThenQuit()
+      }
+    })
+    .catch((error) => console.error('[quit] Quit and Stop All Sessions failed:', error))
+    .finally(() => {
+      quitAndStopAllSessionsConfirming = false
+    })
+}
+
+function requestRendererStopAllSessionsThenQuit(): void {
+  // Why the renderer: Kill all retires the tabs too, so nothing reopens or resumes them on next launch.
+  showMainWindowFromTray()
+  const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
+  if (!targetWindow) {
+    return
+  }
+  // Why mark and push: a window opened for this request pulls it once its listener attaches.
+  state.pendingQuitAndStopAllSessions.mark(
+    targetWindow.webContents.id,
+    QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS
+  )
+  targetWindow.webContents.send('ui:quitAndStopAllSessions')
+}
+
+/** One-shot: true only for the renderer the confirmed request was sent to, before it expires. */
+export function consumeQuitAndStopAllSessionsRequest(senderWebContentsId: number): boolean {
+  const requested = state.pendingQuitAndStopAllSessions.matches(senderWebContentsId, {
+    consume: true
+  })
+  if (requested) {
+    stoppingAllSessionsWebContentsId = senderWebContentsId
+  }
+  return requested
+}
+
+/** The renderer that consumed the request stopped every session; finish with a user Quit. */
+export function quitAfterRendererStoppedAllSessions(senderWebContentsId: number): void {
+  if (stoppingAllSessionsWebContentsId !== senderWebContentsId) {
+    return
+  }
+  stoppingAllSessionsWebContentsId = null
+  quitFromUserCommand()
+}
+
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
   ensureAutoUpdaterConfigured()
   checkForUpdatesFromMenu(options)
@@ -115,7 +186,10 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
       showMainWindowFromTray()
       runUserInitiatedUpdateCheck()
     },
-    onQuit: quitFromSystemTray
+    onQuit: quitFromSystemTray,
+    ...(state.isServeMode
+      ? {}
+      : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand })
   }
 }
 
