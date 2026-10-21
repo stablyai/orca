@@ -8,14 +8,14 @@ Async publication also uses the existing coalescer's `ownsKey()` and checks the 
 
 The runner bundles the actual cache, coalescer and parser. Only command-result and SSH-generation ports are controlled; it opens no SSH connection and runs no GitLab command. It reverses `fix.patch` in memory, verifies the original source hash, and compares that baseline against the unmodified current product source. Reports include product, dependency, regression-test and fixture hashes.
 
-| Control                                                 | Original                            | Fixed                              |
-| ------------------------------------------------------- | ----------------------------------- | ---------------------------------- |
-| Successful result arrays retained after 128 generations | 128                                 | 1 current array                    |
-| Remembered result arrays retained after 16 generations  | 16                                  | 1 current array                    |
-| Delayed old-generation result after a successor answers | Still retained                      | Collectable; successor preserved   |
-| Explicit reset followed by old completion               | Old result repopulates cache        | Next lookup executes a fresh probe |
-| Abandoned probe finishes after its replacement          | Old host added to replacement cache | Replacement remains unchanged      |
-| Explicit reset after retention exercise                 | 0 original arrays retained          | 0 original arrays retained         |
+| Control | Original | Fixed |
+| --- | --- | --- |
+| Successful result arrays retained after 128 generations | 128 | 1 current array |
+| Remembered result arrays retained after 16 generations | 16 | 1 current array |
+| Delayed old-generation result after a successor answers | Still retained | Collectable; successor preserved |
+| Explicit reset followed by old completion | Old result repopulates cache | Next lookup executes a fresh probe |
+| Abandoned probe finishes after its replacement | Old host added to replacement cache | Replacement remains unchanged |
+| Explicit reset after retention exercise | 0 original arrays retained | 0 original arrays retained |
 
 Both phases preserve remembered-host updates while probes succeed or fail and isolate native, Ubuntu WSL, Debian WSL and two connection IDs. `results.json` records Node26.6; `electron-results.json` records installed Electron43.7 / Node24.21 running without an app window. Both runs pass all controls. This is compatibility evidence, not a historical packaged-binary reproduction.
 
