@@ -5,7 +5,7 @@ import type {
   GitStatusResult
 } from '../../../shared/git-status-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export async function getRuntimeGitStatus(
@@ -20,7 +20,7 @@ export async function getRuntimeGitStatus(
     signal?: AbortSignal
   }
 ): Promise<GitStatusResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   const admissionTierArgs = options?.admissionTier ? { admissionTier: options.admissionTier } : {}
   const includeLineStatsArgs =
@@ -71,7 +71,7 @@ export async function setRuntimeGitStatusUpstreamRefWatch(
   context: RuntimeGitContext,
   args: { executionHostId: string; branch?: string; upstreamName?: string }
 ): Promise<void> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'local' || !context.worktreeId) {
     return
   }
@@ -125,7 +125,7 @@ export async function getRuntimeGitSubmoduleStatus(
   submodulePath: string,
   area: GitStagingArea = 'unstaged'
 ): Promise<GitStatusResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.submoduleStatus({
       worktreePath: resolveLocalWorktreePath(context),
@@ -146,7 +146,7 @@ export async function getRuntimeGitIgnoredPaths(
   context: RuntimeGitContext,
   paths: string[]
 ): Promise<string[]> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (paths.length === 0) {
     return []
   }
@@ -169,7 +169,7 @@ export async function getRuntimeGitHistory(
   context: RuntimeGitContext,
   options: GitHistoryOptions = {}
 ): Promise<GitHistoryResult> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.history({
       worktreePath: resolveLocalWorktreePath(context),
@@ -188,7 +188,7 @@ export async function getRuntimeGitHistory(
 export async function getRuntimeGitConflictOperation(
   context: RuntimeGitContext
 ): Promise<GitConflictOperation> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.conflictOperation({
       worktreePath: resolveLocalWorktreePath(context),

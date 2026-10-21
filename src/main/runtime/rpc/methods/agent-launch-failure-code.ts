@@ -13,9 +13,14 @@ import {
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
 } from '../../../../shared/agent-launch-session-already-exists'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
+import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
+import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */
 const LAUNCH_FAILURE_CODE_MAX_LENGTH = 128
+/** Refusal text that may name a path as long as Linux's PATH_MAX, after its code. */
+const REFUSAL_TEXT_MAX_LENGTH = 4096 + LAUNCH_FAILURE_CODE_MAX_LENGTH
 
 /**
  * This path raises its refusals as the thrown code, the way the method's own guards do — and the
@@ -33,10 +38,31 @@ export function agentLaunchFailureCode(error: unknown): string {
   return code.length > 0 ? code.slice(0, LAUNCH_FAILURE_CODE_MAX_LENGTH) : 'agent_launch_failed'
 }
 
+/** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
+export function agentLaunchFailureMessage(error: unknown): string | undefined {
+  return error instanceof OrchestrationError
+    ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
+    : undefined
+}
+
+/**
+ * A refused folder create names its folder, and the user is shown that path, so a replay carries all
+ * of it or none: a path cut short names a different folder. Any path a filesystem stat accepts
+ * fits; past that, only the code before the path is kept.
+ */
+function folderCreateRefusalCode(error: FolderWorkspaceCreateRefusedError): string {
+  const { message } = error
+  const pathStart = message.indexOf(':')
+  return message.length <= REFUSAL_TEXT_MAX_LENGTH || pathStart === -1
+    ? message
+    : message.slice(0, pathStart)
+}
+
 /**
  * Only a typed refusal raised before anything was created proves the claimed launch had no effects.
- * A live reserved pane or an existing reserved session proves it only for an existing workspace; on
- * create-worktree the workspace already exists by the time the surface is refused.
+ * A refused create proves it for any target, since the create is the launch's first effect. A live
+ * reserved pane or an existing reserved session proves it only for an existing workspace; on a
+ * create target the workspace already exists by the time the surface is refused.
  */
 export function launchFailureWithoutEffectsCode(
   error: unknown,
@@ -45,6 +71,16 @@ export function launchFailureWithoutEffectsCode(
 ): string | null {
   if (error instanceof WorktreeCreateCollisionError) {
     return WORKTREE_CREATE_COLLISION_CODE
+  }
+  if (error instanceof FolderWorkspaceCreateRefusedError) {
+    return folderCreateRefusalCode(error)
+  }
+  // Raised only before launch effects, including definitive existing-workspace refusals.
+  if (error instanceof AgentLaunchSurfaceUnavailableError) {
+    return agentLaunchFailureCode(error)
+  }
+  if (error instanceof WorktreeCreateSetupChoiceRefusedError && targetKind === 'create-worktree') {
+    return agentLaunchFailureCode(error)
   }
   if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
     return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE

@@ -31,7 +31,8 @@ function createWriteInput(
   const runtime = {
     getDriver: () => ({ kind: 'desktop' }),
     terminalRunFacts: facts,
-    observeClaudeTerminalEvidence
+    observeClaudeTerminalEvidence,
+    noteRemoteDesktopHostInput: vi.fn()
   }
   const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubs implement every runtime and window member this writer reads.
@@ -39,7 +40,7 @@ function createWriteInput(
 }
 
 beforeEach(() => {
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   provider.write.mockReset()
   provider.writeWithSettlement.mockReset()
 })
@@ -49,7 +50,7 @@ afterEach(() => {
 })
 
 describe('renderer PTY writes: input kind', () => {
-  it.each([null, 'ssh-connection'])(
+  it.each(['local', 'ssh:ssh-connection'] as const)(
     'observes a settled write only after acceptance on the execution host (%s)',
     async (owner) => {
       ptyOwnership.set(PTY_ID, owner)
@@ -71,7 +72,7 @@ describe('renderer PTY writes: input kind', () => {
       expect(observe).not.toHaveBeenCalled()
       finish(WRITE_ACCEPTED)
       expect(await pending).toBe(true)
-      expect(observe).toHaveBeenCalledTimes(owner === null ? 1 : 0)
+      expect(observe).toHaveBeenCalledTimes(owner === 'local' ? 1 : 0)
       observe.mockClear()
       provider.writeWithSettlement.mockReturnValueOnce(writeRefused('endpoint_disconnected'))
       expect(await input.writePtyInputAccepted(args)).toBe(false)
@@ -108,7 +109,7 @@ describe('renderer PTY writes: input kind', () => {
   )
 
   it('does not turn a client-side SSH handoff into host evidence', async () => {
-    ptyOwnership.set(PTY_ID, 'ssh-connection')
+    ptyOwnership.set(PTY_ID, 'ssh:ssh-connection')
     const observe = vi.fn()
     const input = createWriteInput(new TerminalRunFactsRegister(), observe)
     expect(await input.writePtyInput({ id: PTY_ID, data: '\x1b', inputKind: 'driving' })).toBe(true)

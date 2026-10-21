@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -11,14 +12,18 @@ export type {
 } from '../../shared/shell-open-types'
 
 export type ShellApi = {
-  openPath: (path: string) => Promise<void>
-  openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+  /** Every OS open names the path's owner; main refuses anything not owned by this computer. */
+  openPath: (path: string, ownerHostId: ExecutionHostId) => Promise<void>
+  openInFileManager: (
+    path: string,
+    ownerHostId: ExecutionHostId
+  ) => Promise<ShellOpenLocalPathResult>
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>
   openUrl: (url: string) => Promise<void>
-  openFilePath: (path: string) => Promise<boolean>
-  openFileUri: (uri: string) => Promise<void>
+  openFilePath: (path: string, ownerHostId: ExecutionHostId) => Promise<boolean>
+  openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<void>
   pathsExist?: (paths: string[]) => Promise<boolean[]>
   pathExists: (path: string) => Promise<boolean>
   pickAttachment: () => Promise<string | null>

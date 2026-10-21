@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab, TabGroupLayoutNode } from '../../../shared/tab-types'
 import {
@@ -7,13 +8,13 @@ import {
   recordWebSessionBrowserPlacement,
   takeWebSessionBrowserPlacementGroup
 } from './web-session-browser-placement'
+import { acceptReplayedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-lifecycle'
 import {
-  acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  resolveHostSessionTabIdForWebSessionTab,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -351,7 +352,9 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('replays a pre-response browser snapshot after canonical placement and focus are known', () => {
     const editorGroupId = 'client-editor-group'
     const previewGroupId = 'client-preview-group'
-    const editorFileId = '/srv/repo/example.html'
+    const editorFilePath = '/srv/repo/example.html'
+    // A server's file is named by its owned id from the first open.
+    const editorFileId = buildOwnedEditorFileId(editorFilePath, WT, ENV)
     const editorTab: Tab = {
       id: 'host-editor',
       worktreeId: WT,
@@ -405,7 +408,7 @@ describe('applyWebSessionTabsSnapshot', () => {
           type: 'file',
           id: 'host-editor',
           title: 'example.html',
-          filePath: editorFileId,
+          filePath: editorFilePath,
           relativePath: 'example.html',
           language: 'html',
           isDirty: false,

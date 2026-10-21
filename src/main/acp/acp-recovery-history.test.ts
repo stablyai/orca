@@ -77,7 +77,7 @@ async function windowFor(load: JournalLoad | null, messages: AcpStoredUserMessag
   const window = await readAcpRecoveryHistory(
     {
       spec: { readStoredUserMessages },
-      resolveLaunch: async () => launch,
+      readLaunch: async () => launch,
       readJournal: () => load
     },
     identity
@@ -175,7 +175,7 @@ describe('ACP restart recovery from the agent store', () => {
       readAcpRecoveryHistory(
         {
           spec: { readStoredUserMessages },
-          resolveLaunch: async () => ({ ...launch, resume: null }),
+          readLaunch: async () => ({ ...launch, resume: null }),
           readJournal: () => journal(submission('held', 'x', 'unknown', 1))
         },
         identity
@@ -189,7 +189,7 @@ describe('ACP restart recovery from the agent store', () => {
       readAcpRecoveryHistory(
         {
           spec: {},
-          resolveLaunch: async () => launch,
+          readLaunch: async () => launch,
           readJournal: () => journal(submission('held', 'x', 'unknown', 1))
         },
         identity
@@ -207,7 +207,7 @@ describe('ACP restart recovery from the agent store', () => {
               throw new Error('database is locked')
             }
           },
-          resolveLaunch: async () => launch,
+          readLaunch: async () => launch,
           readJournal: () => journal(submission('held', 'x', 'unknown', 1)),
           logger: { warn, error: vi.fn() }
         },

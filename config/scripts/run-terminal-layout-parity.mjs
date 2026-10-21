@@ -16,11 +16,12 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 const repoRoot = resolve(import.meta.dirname, '../..')
 const BUILD_STAMP = join('out', '.terminal-layout-parity-build')
 
-// Bundled like script-child-process.mjs: importing the .ts directly makes Node warn MODULE_TYPELESS_PACKAGE_JSON.
+// Bundle TypeScript parity modules so plain Node does not need a loader.
 async function importParityModules() {
   const temporary = mkdtempSync(join(tmpdir(), 'orca-layout-parity-'))
   try {

@@ -21,13 +21,17 @@ export type AppMenuPasteRequestResult =
 export type AppMenuPasteRequestDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
-  dispatchOwnedPasteEvent?: () => boolean
+  dispatchOwnedPasteEvent?: (mode: 'paste' | 'paste-and-match-style') => boolean
   getActiveElement?: () => Element | null
   nativePasteMode?: 'paste' | 'paste-and-match-style'
 }
 
-export function dispatchAppMenuPasteEvent(target: Window = window): boolean {
+export function dispatchAppMenuPasteEvent(
+  target: Window = window,
+  mode: 'paste' | 'paste-and-match-style' = 'paste'
+): boolean {
   const event = new CustomEvent(APP_MENU_PASTE_EVENT, {
+    detail: mode,
     bubbles: false,
     cancelable: true
   })
@@ -63,12 +67,12 @@ function getNowMs(): number {
 export async function handleAppMenuPasteRequest({
   readClipboardText,
   performNativePaste,
-  dispatchOwnedPasteEvent = dispatchAppMenuPasteEvent,
+  dispatchOwnedPasteEvent = (mode) => dispatchAppMenuPasteEvent(window, mode),
   getActiveElement = () => document.activeElement,
   nativePasteMode = 'paste'
 }: AppMenuPasteRequestDeps): Promise<AppMenuPasteRequestResult> {
   const startedAtMs = getNowMs()
-  if (dispatchOwnedPasteEvent()) {
+  if (dispatchOwnedPasteEvent(nativePasteMode)) {
     return { status: 'handled', target: 'terminal' }
   }
 

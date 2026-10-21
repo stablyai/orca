@@ -8,13 +8,6 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 export type HostModelListingJoiner = (catalog: AgentSessionModelCatalogResult | null) => void
 
 const waits = new Map<string, Set<HostModelListingJoiner>>()
-const listeners = new Set<() => void>()
-
-function notify(): void {
-  for (const listener of listeners) {
-    listener()
-  }
-}
 
 /** Joins the chat's waiting read, started by `read` only when none is in flight. Returns `leave`. */
 export function joinHostModelListingWait(
@@ -29,19 +22,16 @@ export function joinHostModelListingWait(
     waits.set(key, started)
     const settle = (catalog: AgentSessionModelCatalogResult | null): void => {
       try {
-        // Every joiner applies before the hold lifts, so the answer and the release commit together.
         for (const joiner of started) {
           joiner(catalog)
         }
       } finally {
         waits.delete(key)
-        notify()
       }
     }
     new Promise<AgentSessionModelCatalogResult>((resolve) => resolve(read())).then(settle, () =>
       settle(null)
     )
-    notify()
   }
   joiners.add(onSettled)
   const joined = joiners
@@ -52,11 +42,4 @@ export function joinHostModelListingWait(
 
 export function isHostModelListingWaitInFlight(key: string): boolean {
   return waits.has(key)
-}
-
-export function subscribeHostModelListingWaits(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
 }

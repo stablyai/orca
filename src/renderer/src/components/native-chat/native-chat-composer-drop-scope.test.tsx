@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { useRef, useState } from 'react'
@@ -13,12 +12,12 @@ import { useNewWorkspaceComposerFileDrop } from '../new-workspace/use-new-worksp
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import { toast } from 'sonner'
 import { resetLocalImageSrcStateForTests } from '../editor/useLocalImageSrc'
-import type { NativeFileDropPayload } from '../../../../shared/native-file-drop'
 import {
   clearNativeChatAttachmentCacheForTests,
   readNativeChatAttachmentCache,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -27,20 +26,25 @@ const electron = vi.hoisted(() => ({
   getPathForFile: vi.fn((file: File) => `/repro/${file.name}`)
 }))
 
-const intake = vi.hoisted(() => ({
-  owner: { kind: 'local' } as { kind: string; connectionId?: string },
-  stat: vi.fn(),
-  readFile: vi.fn(),
-  upload: vi.fn(),
-  prepare: vi.fn(async ({ paths }: { paths: string[] }) => ({ paths, failures: [] })),
-  pick: vi.fn()
+const intake = vi.hoisted(() => {
+  const owner: { kind: string } = { kind: 'local' }
+  return {
+    owner,
+    stat: vi.fn(),
+    readFile: vi.fn(),
+    prepare: vi.fn(async ({ paths }: { paths: string[] }) => ({ paths, failures: [] })),
+    pick: vi.fn()
+  }
+})
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((select: () => unknown) => select(), {
+    getState: () => ({ tabsByWorktree: {} })
+  })
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ tabsByWorktree: {} }) } }))
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
-  resolveNativeChatAttachmentOwner: () => intake.owner,
-  uploadNativeChatAttachmentPaths: intake.upload
+  resolveNativeChatAttachmentOwner: () => intake.owner
 }))
 
 vi.mock('electron', () => ({
@@ -48,13 +52,16 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: electron.getPathForFile }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
+}))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
 
-import {
-  installNativeFileDropHandlers,
-  subscribeNativeFileDrop
-} from '../../../../preload/preload-runtime-support'
+import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 
 // Exercises real element delivery, path authorization and the draft attachment cache.
 function ComposerBody({
@@ -74,6 +81,7 @@ function ComposerBody({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: draft,
     allowWithoutTarget: true,
+    imageReferences: true,
     caret: 0,
     disabled,
     isComposing: () => false,
@@ -98,6 +106,7 @@ function ComposerBody({
       <div>
         <NativeChatPromptEditor
           scopeKey={draft}
+          imageRow={attachments.imageAttachments.map(({ id }) => id)}
           inputRef={textareaRef}
           initialValue="untouched draft"
           disabled={false}
@@ -106,10 +115,11 @@ function ComposerBody({
           onSelect={() => {}}
         />
       </div>
-      {attachments.imageAttachments.map((attachment) => (
+      {attachments.imageAttachments.map((attachment, index) => (
         <NativeChatImageAttachmentPreview
           key={attachment.id}
           attachment={attachment}
+          number={index + 1}
           onRemove={() => {}}
         />
       ))}
@@ -167,21 +177,9 @@ function WorkspaceComposerProbe({
 
 describe('native chat composer drop scoping', () => {
   beforeAll(() => {
-    const ipc = new EventEmitter()
-    electron.on.mockImplementation((channel, listener) => ipc.on(channel, listener))
-    electron.removeListener.mockImplementation((channel, listener) =>
-      ipc.removeListener(channel, listener)
-    )
-    // Mirror registerFileDropRelay: one window-wide notification per valid drop.
-    electron.send.mockImplementation((channel: string, payload: NativeFileDropPayload) => {
-      if (channel === 'terminal:file-dropped-from-preload') {
-        ipc.emit('terminal:file-drop', {}, payload)
-      }
-    })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
-        ui: { onFileDrop: subscribeNativeFileDrop },
         shell: { pickAttachments: intake.pick },
         fs: {
           ...intake,
@@ -190,23 +188,22 @@ describe('native chat composer drop scoping', () => {
         }
       }
     })
-    installNativeFileDropHandlers()
-    // Repeated preload setup must stay singleton or every OS drop is processed once per install.
-    installNativeFileDropHandlers()
   })
 
+  let disposeGuard: (() => void) | undefined
   beforeEach(() => {
+    disposeGuard = installOsFileDropCancellationGuard()
     intake.owner = { kind: 'local' }
     electron.getPathForFile.mockReset().mockImplementation((file: File) => `/repro/${file.name}`)
     intake.stat.mockReset().mockResolvedValue(undefined)
     intake.readFile.mockReset().mockResolvedValue({ content: '', isBinary: false })
-    intake.upload.mockReset()
     intake.prepare.mockReset().mockImplementation(async ({ paths }) => ({ paths, failures: [] }))
     intake.pick.mockReset()
     vi.stubGlobal('IntersectionObserver', undefined)
   })
 
   afterEach(() => {
+    disposeGuard?.()
     cleanup()
     resetLocalImageSrcStateForTests()
     vi.unstubAllGlobals()
@@ -249,10 +246,9 @@ describe('native chat composer drop scoping', () => {
     intake.prepare.mockImplementationOnce(() => gate.promise)
     const view = render(<ComposerProbe pane="chat-a" />)
     await dropTwoImages(view.container.querySelector('.ProseMirror')!)
-    intake.owner = { kind: 'ssh', connectionId: 'other-host' }
+    intake.owner = { kind: 'remote' }
     await act(async () => gate.resolve({ paths: ['/prepared/a.png'], failures: [] }))
     expect(intake.stat).not.toHaveBeenCalled()
-    expect(intake.upload).not.toHaveBeenCalled()
     expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
   })
   it('refuses preparation captured for a draft that changed in the same pane', async () => {
@@ -298,7 +294,7 @@ describe('native chat composer drop scoping', () => {
 
   it('notices an OS drop whose owner changes while checking the files', async () => {
     intake.stat.mockImplementation(async () => {
-      intake.owner = { kind: 'ssh', connectionId: 'conn-1' }
+      intake.owner = { kind: 'remote' }
     })
     const view = render(<ComposerProbe pane="chat-a" />)
 
@@ -331,7 +327,8 @@ describe('native chat composer drop scoping', () => {
       '/repro/second.png'
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(target.textContent).toBe('untouched draft')
+    // Each image gets a chip at the caret, numbered by its thumbnail.
+    expect(target.textContent).toBe('Image #1 Image #2 untouched draft')
 
     view.unmount()
     const returned = render(<ComposerProbe pane="chat-b" />)
@@ -365,19 +362,16 @@ describe('native chat composer drop scoping', () => {
     ])
   })
 
-  it('keeps a drop into an unscoped composer out of every chat pane', async () => {
+  it('keeps a drop into an unowned composer out of every chat pane', async () => {
     const view = render(
       <>
         <ComposerProbe pane="chat-a" />
         <ComposerProbe pane="chat-b" hidden />
-        <div data-native-file-drop-target="composer" data-unscoped-composer="true" />
+        <div data-unscoped-composer="true" />
       </>
     )
     await dropTwoImages(view.container.querySelector('[data-unscoped-composer="true"]')!)
-    expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
-      target: 'composer',
-      paths: ['/repro/first.png', '/repro/second.png']
-    })
+    expect(electron.send).not.toHaveBeenCalled()
     expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
   })
@@ -435,50 +429,10 @@ describe('native chat composer drop scoping', () => {
       [{ filePath: '/repro/second.png', access: { kind: 'user-file' } }]
     ])
     expect(intake.readFile).toHaveBeenCalledTimes(2)
-    expect(intake.upload).not.toHaveBeenCalled()
     expect(readNativeChatAttachmentCache('chat-a')).toHaveLength(2)
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
     await expect(intake.readFile({ filePath: '/repro/sibling.png' })).rejects.toThrow(
       'Access denied'
     )
-  })
-
-  it('uploads once for the SSH drop owner without checking remote paths locally', async () => {
-    intake.owner = { kind: 'ssh', connectionId: 'conn-1' }
-    intake.upload.mockResolvedValue(['/remote/first.png', '/remote/second.png'])
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" hidden />
-      </>
-    )
-    await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
-    expect(intake.upload).toHaveBeenCalledExactlyOnceWith(
-      ['/repro/first.png', '/repro/second.png'],
-      intake.owner
-    )
-    expect(intake.stat).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
-      '/remote/first.png',
-      '/remote/second.png'
-    ])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-  })
-
-  it('control: an editor-targeted drop does not attach images to either chat', async () => {
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" hidden />
-        <div data-native-file-drop-target="editor" />
-      </>
-    )
-    await dropTwoImages(view.container.querySelector('[data-native-file-drop-target="editor"]')!)
-    expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
-      target: 'editor',
-      paths: ['/repro/first.png', '/repro/second.png']
-    })
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
   })
 })

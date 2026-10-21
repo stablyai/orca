@@ -228,7 +228,7 @@ describe('terminal side-effect fact channel', () => {
       { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' },
       { kind: 'agent-working' },
       { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' },
-      { kind: 'agent-idle', title: 'Codex done' },
+      { kind: 'agent-idle', title: 'Codex done', status: 'idle' },
       { kind: 'bell' }
     ])
   })
@@ -283,7 +283,7 @@ describe('terminal side-effect fact channel', () => {
           rawTitle: 'Codex',
           staleWorkingTitleClear: true
         },
-        { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        { kind: 'agent-idle', title: 'Codex', status: 'idle', staleWorkingTitleClear: true }
       ])
     } finally {
       vi.useRealTimers()

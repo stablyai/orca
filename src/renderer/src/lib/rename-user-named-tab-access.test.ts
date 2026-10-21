@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
+import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn(), writeRuntimeFile: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeFileClient>()
+vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return {
     ...actual,
     renameRuntimePath: mocks.renameRuntimePath,
@@ -28,6 +28,7 @@ import {
 import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
 import { editorTabDocumentFolderAccess, editorTabFileAccess } from './local-file-access'
 import { renameFileOnDisk } from './rename-file'
+import { withLoadedBaselines } from '@/components/editor/editor-autosave-controller-test-fixture'
 
 const PROJECT = '/Users/me/project'
 const WT = `repo-local::${PROJECT}`
@@ -98,10 +99,14 @@ async function expectUserNamedAt(filePath: string): Promise<void> {
   expect(editorTabFileAccess(state, restored)).toEqual({ kind: 'user-file' })
 
   mocks.writeRuntimeFile.mockClear()
-  await createEditorSaveQueue(useAppStore).queueSave(tab, 'edited', 'user')
-  expect(mocks.writeRuntimeFile).toHaveBeenCalledWith(expect.anything(), filePath, 'edited', {
-    kind: 'user-file'
-  })
+  await createEditorSaveQueue(withLoadedBaselines(useAppStore)).queueSave(tab, 'edited', 'user')
+  expect(mocks.writeRuntimeFile).toHaveBeenCalledWith(
+    expect.anything(),
+    filePath,
+    'edited',
+    { kind: 'user-file' },
+    expect.anything()
+  )
 }
 
 async function renameTab(newName: string, worktreePath: string): Promise<void> {
@@ -125,7 +130,7 @@ beforeEach(() => {
   useAppStore.setState({ repos: [repo], worktreesByRepo: { 'repo-local': [worktree] } })
   clearFileExplorerUndoHistory()
   mocks.renameRuntimePath.mockReset().mockResolvedValue(undefined)
-  mocks.writeRuntimeFile.mockReset().mockResolvedValue(undefined)
+  mocks.writeRuntimeFile.mockReset().mockResolvedValue({ ok: true })
   vi.stubGlobal('window', {
     setTimeout,
     clearTimeout,

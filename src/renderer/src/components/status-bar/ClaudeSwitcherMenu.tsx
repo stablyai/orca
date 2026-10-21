@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -8,7 +8,9 @@ import {
 import { useAppStore } from '../../store'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
   fetchProviderAccountsSnapshot,
   selectClaudeProviderAccount
@@ -30,9 +32,11 @@ import {
 } from './status-bar-runtime-targets'
 import {
   buildClaudeStatusSwitchGroups,
+  getClaudeStatusActiveId,
   normalizeClaudeStatusRuntimeTarget,
   resolveClaudeStatusAccountState
 } from './status-bar-claude-accounts'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -80,22 +84,27 @@ export function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  // Why: no host picker; the focused workspace's owner, else the default scope host.
+  const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
+  const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
+  const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
-    ? (runtimeEnvironments.find(
-        (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
-      )?.name ??
+    ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
+        ?.name ??
       translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
-    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
+    getWindowsTerminalCapabilityOwnerKey(activeRuntimeEnvironmentId),
     runtimeTarget
   )
   const claudeAccountSyncKey = useAppStore((s) => getClaudeAccountSyncKey(s.settings))
-  const accountState = resolveClaudeStatusAccountState(settings, accounts)
+  const accountState = resolveClaudeStatusAccountState(
+    settings,
+    accounts,
+    activeRuntimeEnvironmentId
+  )
 
   useEffect(() => {
     mountedRef.current = true
@@ -104,10 +113,9 @@ export function ClaudeSwitcherMenu({
     }
   }, [])
 
-  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
   // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    const snapshot = await fetchProviderAccountsSnapshot(runtimeTarget)
     // Why: a failed Claude half is a substituted empty roster; keep prior state.
     if (snapshot.failedProviders?.includes('claude')) {
       console.error('Claude account list failed; keeping previous status bar state.')
@@ -116,7 +124,7 @@ export function ClaudeSwitcherMenu({
     if (mountedRef.current) {
       setAccounts(snapshot.claude)
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [runtimeTarget])
 
   useEffect(() => {
     void loadAccounts().catch((error) => {
@@ -162,9 +170,10 @@ export function ClaudeSwitcherMenu({
     if (isSwitching) {
       return
     }
+    const previousActiveAccountId = getClaudeStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await selectClaudeProviderAccount(settings, {
+      const next = await selectClaudeProviderAccount(runtimeTarget, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -179,6 +188,15 @@ export function ClaudeSwitcherMenu({
       }
       if (mountedRef.current) {
         setAccountsExpanded(false)
+      }
+      const nextActiveAccountId = getClaudeStatusActiveId(next, target)
+      if (previousActiveAccountId !== nextActiveAccountId) {
+        void handleRunningClaudeSessionsAfterSwitch({
+          owner: runtimeTarget,
+          target,
+          before: { state: accountState, accountId: previousActiveAccountId },
+          after: { state: next, accountId: nextActiveAccountId }
+        })
       }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
@@ -233,16 +251,18 @@ export function ClaudeSwitcherMenu({
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
   )
-  const fallbackWslDistro = getStatusBarPreferredWslDistro(
-    settings,
-    windowsTerminalCapabilities.wslDistros
-  )
+  // A focused WSL host's accounts are this desktop's for its distro, so that group always shows.
+  const fallbackWslDistro =
+    wslHostDistro ??
+    getStatusBarPreferredWslDistro(settings, windowsTerminalCapabilities.wslDistros)
   const switchGroups = buildClaudeStatusSwitchGroups(
     accountState,
     toCodexStatusRuntimeTarget(claudeTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      includeFallbackWsl:
+        wslHostDistro !== null ||
+        (!hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings)),
       hostLabel: providerAccountHostLabel
     }
   )
@@ -365,12 +385,6 @@ export function ClaudeSwitcherMenu({
                 </DropdownMenuItem>
               )
             })}
-          </div>
-          <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            {translate(
-              'accounts.claude.profileSwitching',
-              'Switching applies to the next Claude you start in any tab. Running sessions keep their account.'
-            )}
           </div>
         </div>
       ) : null}

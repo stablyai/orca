@@ -7,6 +7,7 @@ import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
+import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../agent-awake-service'
@@ -17,7 +18,7 @@ import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetr
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
+import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
@@ -28,7 +29,7 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
@@ -154,13 +155,7 @@ export function registerSettingsHandlers(
         args.floatingTerminalCwd
       )
     }
-    if ('httpProxyUrl' in args) {
-      const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
-      sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
-    }
-    if ('httpProxyBypassRules' in args) {
-      sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)
-    }
+    sanitizeNetworkSettings(args, sanitizedArgs)
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
     }
@@ -199,10 +194,15 @@ export function registerSettingsHandlers(
     // (e.g. blur after a no-op edit), and a `settings_changed` event for a
     // no-op flip would inflate the experimental-feature-adoption signal.
     const before = store.getSettings()
-    const result = store.updateSettings(sanitizedArgs, {
+    const updateOptions = {
       notifyListeners: true,
       originWebContentsId: event.sender.id
-    })
+    }
+    const result =
+      'alwaysForceDeleteWorktrees' in sanitizedArgs ||
+      'alwaysForceDeletePreservedBranches' in sanitizedArgs
+        ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
+        : store.updateSettings(sanitizedArgs, updateOptions)
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&
@@ -253,6 +253,7 @@ export function registerSettingsHandlers(
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
       await setMainUiLanguage(result.uiLanguage)
       rebuildAppMenu()
+      rebuildSystemTrayMenu()
     }
     if (
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
@@ -298,7 +299,7 @@ export function registerSettingsHandlers(
       })
     }
 
-    return result
+    return store.getSettings()
   })
 
   ipcMain.handle(
@@ -306,7 +307,7 @@ export function registerSettingsHandlers(
     (event, args: { environmentId?: unknown }): GlobalSettings => {
       const requestedEnvironmentId = args?.environmentId
       if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
-        throw new Error('Invalid Active Server preference')
+        throw new Error('Invalid default host for new projects')
       }
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =

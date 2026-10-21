@@ -1,7 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 // A chat worker's coordinator mail lands in its Dispatch's mailbox. When the pointer to it was held
 // (the provider died before taking it), the chat's next idle edge points it again, after a restart
-// or in the session a /clear continued the chat in, as it does for a chat's own mail.
+// or in the same chat after /clear, as it does for a chat's own mail.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
@@ -17,6 +17,8 @@ import {
   connectionFor,
   coordinatorRunAndTask,
   db,
+  host,
+  observationClock,
   openChat,
   restartRuntime,
   runtime,
@@ -31,7 +33,8 @@ const POINTER = /orchestration message/
 async function idleEdges(sessionId: string): Promise<void> {
   runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
   runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  await observationClock.observe(400)
+  await host.flushStreamedEvents(sessionId)
 }
 
 /** Coordinator mail to the peer chat's Dispatch, its pointer lost with the provider. */
@@ -70,6 +73,7 @@ async function nextTurn(sessionId: string): Promise<{ turns: { text: string }[] 
 describe("a chat worker's held Dispatch mail is pointed again", () => {
   // Also covered by the restored-mail repoint a restart schedules; this pins the end result.
   it('after a restart', async () => {
+    observationClock.start()
     await heldDispatchMail()
     restartRuntime()
 
@@ -79,11 +83,13 @@ describe("a chat worker's held Dispatch mail is pointed again", () => {
     expect(turnText(revived.turns[1]!)).toMatch(POINTER)
   })
 
-  it('in the session a /clear continued the chat in', async () => {
+  it('in the same chat after /clear', async () => {
+    observationClock.start()
     await heldDispatchMail()
-    const successor = await clearChat(PEER_CHAT)
+    const cleared = await clearChat(PEER_CHAT)
+    expect(cleared).toBe(PEER_CHAT)
 
-    const revived = await nextTurn(successor)
+    const revived = await nextTurn(cleared)
 
     await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
     expect(turnText(revived.turns[1]!)).toMatch(POINTER)

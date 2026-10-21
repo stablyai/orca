@@ -1,27 +1,16 @@
 /**
- * Boot hydration and the remote-workspace round trip for a worktree whose session the
- * main-process runtime wrote into `ssh:<targetId>`.
+ * Boot hydration for a worktree whose session the main-process runtime wrote into `ssh:<targetId>`.
  *
- * The renderer used to read only the local + `runtime:*` partitions, so those tabs were invisible;
- * the export then published an explicit empty list, `replace-session` made it authoritative, and
- * the next pull applied it as a deletion that re-poisoned the snapshot on every launch
+ * The renderer used to read only the local + `runtime:*` partitions, so those tabs were invisible
  * (#12721, #18173).
- *
- * Runs the real projection and the real pull-side merge — the failure only exists where the read,
- * the publish and the merge meet, and each of them is individually self-consistent.
  */
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import {
-  exportRemoteWorkspaceSession,
-  importRemoteWorkspaceSession
-} from '../../../shared/remote-workspace-session-projection'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { mergeDirectSshRemoteWorkspaceSession } from '../hooks/remote-workspace-session-merge'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
@@ -346,8 +335,7 @@ describe('ssh host partition workspaces with no terminal tabs', () => {
   })
 
   it('restores an unsaved hot-exit draft, which no other channel can recover', async () => {
-    // RemoteWorkspaceSession carries terminal fields only, so the SSH host snapshot cannot
-    // round-trip editor state. Losing it here loses user-authored content outright.
+    // No other channel carries editor state, so losing it here loses user-authored content outright.
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(editorOnlyPartitions()),
       repos
@@ -436,8 +424,8 @@ describe('ssh host partition rows the host has nothing for', () => {
 
   it('does not let an empty host row destroy an unsaved draft the base alone holds', async () => {
     // The host having no open files is not evidence the base's are gone. Losing this is worse than
-    // the bug the adoption exists to fix: RemoteWorkspaceSession carries terminal fields only, so
-    // nothing can recover a `dirtyDraftContent` once the read has dropped it.
+    // the bug the adoption exists to fix: nothing can recover a `dirtyDraftContent` once the read
+    // has dropped it.
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(emptyHostRowsOverBaseDraft(true)),
       repos
@@ -784,93 +772,5 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
         Object.hasOwn(secondBoot.tabsByWorktree, WORKTREE_ID)
       )
     ).toBe(false)
-  })
-
-  it('publishes the tombstone rather than a row the host can read as unknown', async () => {
-    // Rule 3, client-publishes -> other-client-reads. An emptied workspace must publish its empty
-    // list so a paired client sees the same state; the merge's `hostUnknown` defence covers tabs
-    // this client holds, and an empty row is exactly what it holds here.
-    const { restored } = await roundTripSession(session({ tabsByWorktree: { [WORKTREE_ID]: [] } }))
-    const published = exportRemoteWorkspaceSession(restored, {
-      isTargetWorktree: (worktreeId) => worktreeId === WORKTREE_ID
-    })
-
-    expect(published.tabsByWorktreePath[WORKTREE_PATH]).toEqual([])
-  })
-})
-
-describe('ssh host partition remote-workspace round trip', () => {
-  it('does not delete the worktree tabs across a publish and the next pull', async () => {
-    const partitions = strandedPartitions([tab('tab-runtime')])
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
-    // Publish exactly what the renderer now holds, then apply it back as `replace-session` does.
-    const published = exportRemoteWorkspaceSession(read.session, {
-      isTargetWorktree: (worktreeId) => worktreeId === WORKTREE_ID
-    })
-    const pulled = importRemoteWorkspaceSession(published, {
-      resolveWorktreeId: (worktreePath) => (worktreePath === WORKTREE_PATH ? WORKTREE_ID : null),
-      executionHostId: SSH_HOST_ID
-    })
-
-    const merged = mergeDirectSshRemoteWorkspaceSession(
-      read.session,
-      pulled,
-      new Set([WORKTREE_ID]),
-      read.session.tabsByWorktree,
-      new Set(),
-      SSH_HOST_ID
-    )
-
-    expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])
-  })
-
-  it('keeps the tabs when an older client publishes an empty list for them', async () => {
-    // Rule 3 skew, the dangerous direction: a client that predates this fix still reads only the
-    // local partition, so its own `replace-session` names this workspace's path with NO tabs. The
-    // merge already refuses to delete what the host has never been told about — but only for tabs
-    // this client actually holds, which before the fix it did not. Hydrating them is what arms
-    // that defence, and this client then republishes the real list and repairs the snapshot.
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
-      partitionedApi(strandedPartitions([tab('tab-runtime')])),
-      repos
-    )
-    const publishedByOldClient = importRemoteWorkspaceSession(
-      {
-        activeWorktreePath: null,
-        activeTabId: null,
-        tabsByWorktreePath: { [WORKTREE_PATH]: [] },
-        terminalLayoutsByTabId: {}
-      },
-      {
-        resolveWorktreeId: (worktreePath) => (worktreePath === WORKTREE_PATH ? WORKTREE_ID : null),
-        executionHostId: SSH_HOST_ID
-      }
-    )
-
-    const merged = mergeDirectSshRemoteWorkspaceSession(
-      read.session,
-      publishedByOldClient,
-      new Set([WORKTREE_ID]),
-      read.session.tabsByWorktree,
-      new Set(),
-      SSH_HOST_ID
-    )
-
-    expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])
-  })
-
-  it('publishes the stranded tabs rather than an empty list', async () => {
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
-      partitionedApi(strandedPartitions([tab('tab-runtime')])),
-      repos
-    )
-
-    const published = exportRemoteWorkspaceSession(read.session, {
-      isTargetWorktree: (worktreeId) => worktreeId === WORKTREE_ID
-    })
-
-    expect(published.tabsByWorktreePath[WORKTREE_PATH]?.map((entry) => entry.id)).toEqual([
-      'tab-runtime'
-    ])
   })
 })

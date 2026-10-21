@@ -1,14 +1,22 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 import { buildWorkspaceSessionPayload } from './workspace-session'
+import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 
 const initialAppStoreState = useAppStore.getState()
 
+beforeEach(() => {
+  // Track the original global before the shared fixture installs the renderer API.
+  vi.stubGlobal('window', undefined)
+  createStoreSessionMockApi()
+})
+
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
+  vi.unstubAllGlobals()
 })
 
 function makeRecord(

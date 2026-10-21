@@ -1,7 +1,8 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch } from './window/foreground-activation-policy'
+import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
+import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
@@ -26,6 +27,7 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -37,6 +39,10 @@ function focusExistingWindow(): void {
   focusExistingWindowAction()
 }
 
+const requestDesktopHandoff = createDesktopHandoff({
+  drainArguments: () => desktopHandoffArguments(state)
+})
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
@@ -44,6 +50,11 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
+    return
+  }
+  // Why: the sidecar's throwaway profile must never become the user's window.
+  if (isOrcadSidecarLaunch()) {
+    requestDesktopHandoff()
     return
   }
   state.desktopActivationGate?.requestActivation()
@@ -94,6 +105,7 @@ const preflightReady = runMainProcessPreflight({
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (preflightReady) {
+  void leaseAppImageGenerationForCurrentProcess()
   app.on('open-url', (event, url) => {
     if (!parseSkillShareId(url)) {
       return
@@ -109,8 +121,8 @@ if (preflightReady) {
     }
     event.preventDefault()
     // Why gated on isReady: pre-ready the cold-start window is already on its way, and
-    // activating the gate here would try to open one before Electron can.
-    if (app.isReady()) {
+    // activating the gate here would try to open one before Electron can. The sidecar has none.
+    if (app.isReady() || isOrcadSidecarLaunch()) {
       requestDesktopActivation()
     }
   })

@@ -88,7 +88,6 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           : null
       if (
         !canToggleNativeChat({
-          experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
           launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,

@@ -11,6 +11,11 @@ const mockStoreState = vi.hoisted(() => ({
   createEmptySplitGroup: vi.fn(),
   createUnifiedTab: vi.fn(),
   createUnifiedTabInSplit: vi.fn(),
+  getTab: vi.fn((tabId: string) =>
+    Object.values(mockStoreState.unifiedTabsByWorktree)
+      .flat()
+      .find((tab) => tab.id === tabId)
+  ),
   dropUnifiedTab: vi.fn(),
   folderWorkspaces: [] as {
     id: string
@@ -37,6 +42,21 @@ const mockStoreState = vi.hoisted(() => ({
     }[]
   >
 }))
+
+function stubCreatedSimulatorTab(groupId: string): void {
+  mockStoreState.createUnifiedTab.mockImplementation(
+    (worktreeId: string, contentType: string, init: { id: string }) => {
+      mockStoreState.unifiedTabsByWorktree[worktreeId] = [
+        ...(mockStoreState.unifiedTabsByWorktree[worktreeId] ?? []),
+        { id: init.id, groupId, contentType }
+      ]
+    }
+  )
+}
+
+function createdSimulatorTabId(): string {
+  return mockStoreState.createUnifiedTab.mock.calls[0][2].id
+}
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -100,14 +120,10 @@ describe('ensureSimulatorTab', () => {
         }
       ]
     }
-    mockStoreState.createUnifiedTab.mockReturnValue({
-      id: 'sim-remote',
-      groupId: 'group-1',
-      contentType: 'simulator'
-    })
+    stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
-    expect(ensureSimulatorTab('wt-1')).toBe('sim-remote')
+    expect(ensureSimulatorTab('wt-1')).toBe(createdSimulatorTabId())
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalled()
   })
 
@@ -249,22 +265,19 @@ describe('ensureSimulatorTab', () => {
       }
     }
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
-    mockStoreState.createUnifiedTab.mockReturnValue({
-      id: 'sim-2',
-      groupId: 'group-2',
-      contentType: 'simulator'
-    })
+    stubCreatedSimulatorTab('group-2')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
-    expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe('sim-2')
+    expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe(createdSimulatorTabId())
 
     expect(mockStoreState.createUnifiedTabInSplit).not.toHaveBeenCalled()
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalledWith('wt-1', 'simulator', {
+      id: expect.any(String),
       label: 'Mobile Emulator',
       targetGroupId: 'group-2',
       activate: true
     })
-    expect(mockStoreState.activateTab).toHaveBeenCalledWith('sim-2')
+    expect(mockStoreState.activateTab).toHaveBeenCalledWith(createdSimulatorTabId())
     expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
     expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator', 'wt-1')
   })
@@ -272,14 +285,10 @@ describe('ensureSimulatorTab', () => {
   it('falls back to the source group when atomic right split creation fails', async () => {
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
     mockStoreState.createUnifiedTabInSplit.mockReturnValue(null)
-    mockStoreState.createUnifiedTab.mockReturnValue({
-      id: 'sim-3',
-      groupId: 'group-1',
-      contentType: 'simulator'
-    })
+    stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
-    expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe('sim-3')
+    expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe(createdSimulatorTabId())
 
     expect(mockStoreState.createUnifiedTabInSplit).toHaveBeenCalledWith(
       'wt-1',
@@ -294,6 +303,7 @@ describe('ensureSimulatorTab', () => {
       }
     )
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalledWith('wt-1', 'simulator', {
+      id: expect.any(String),
       label: 'Mobile Emulator',
       targetGroupId: 'group-1',
       activate: true
@@ -304,20 +314,17 @@ describe('ensureSimulatorTab', () => {
 
   it('does not create a split for background auto-attach', async () => {
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
-    mockStoreState.createUnifiedTab.mockReturnValue({
-      id: 'sim-4',
-      groupId: 'group-1',
-      contentType: 'simulator'
-    })
+    stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
     expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit', surfacePane: false })).toBe(
-      'sim-4'
+      createdSimulatorTabId()
     )
 
     expect(mockStoreState.dropUnifiedTab).not.toHaveBeenCalled()
     expect(mockStoreState.createUnifiedTabInSplit).not.toHaveBeenCalled()
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalledWith('wt-1', 'simulator', {
+      id: expect.any(String),
       label: 'Mobile Emulator',
       targetGroupId: 'group-1',
       activate: false
@@ -335,17 +342,14 @@ describe('ensureSimulatorTab', () => {
       { id: 'wt-1', hostId: 'runtime:host-b' }
     ])
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
-    mockStoreState.createUnifiedTab.mockReturnValue({
-      id: 'sim-local',
-      groupId: 'group-1',
-      contentType: 'simulator'
-    })
+    stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
     expect(ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })).toBe(
-      'sim-local'
+      createdSimulatorTabId()
     )
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalledWith('wt-1', 'simulator', {
+      id: expect.any(String),
       label: 'Mobile Emulator',
       targetGroupId: 'group-1',
       activate: false,
@@ -367,17 +371,14 @@ describe('ensureSimulatorTab', () => {
         }
       ]
     }
-    mockStoreState.createUnifiedTab.mockReturnValue({
-      id: 'sim-local',
-      groupId: 'group-1',
-      contentType: 'simulator'
-    })
+    stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
     expect(ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })).toBe(
-      'sim-local'
+      createdSimulatorTabId()
     )
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalledWith('wt-1', 'simulator', {
+      id: expect.any(String),
       label: 'Mobile Emulator',
       targetGroupId: 'group-1',
       activate: false,

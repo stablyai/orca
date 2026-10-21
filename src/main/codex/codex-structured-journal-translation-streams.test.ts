@@ -455,7 +455,7 @@ describe('codex journal translation', () => {
         notification('future/notification', { message: 'Provider note', value: index })
       )
     }
-    translator.handle(notification('future/failure', { error: 'provider exploded' }))
+    translator.handle(notification('warning', { message: 'provider exploded' }))
     window.fire()
 
     const generic = tap.rows.filter(
@@ -463,7 +463,7 @@ describe('codex journal translation', () => {
     )
     expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN + 1)
     expect(generic.at(-1)?.body).toMatchObject({
-      providerFrame: { kind: 'notification:future/failure' }
+      providerFrame: { kind: 'notification:warning' }
     })
     // Only the 3 capped noise frames reduce to a summary; the error is not counted there.
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
@@ -632,11 +632,9 @@ describe('codex journal translation', () => {
 
   it('a failed turn journals its error, not the thread status Codex reports beside it', () => {
     const tap = recorder()
-    const stopped: string[] = []
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
-      primaryThreadId: () => THREAD_ID,
-      onPrimaryThreadStoppedRunning: () => stopped.push(THREAD_ID)
+      primaryThreadId: () => THREAD_ID
     })
 
     translator.handle(TURN_STARTED)
@@ -666,7 +664,6 @@ describe('codex journal translation', () => {
       state: 'completed',
       outcome: 'failure'
     })
-    expect(stopped).toEqual([THREAD_ID])
   })
 
   it('writes nothing more after dispose', () => {
@@ -746,6 +743,80 @@ describe('notice journal pipeline', () => {
     expect(tap.rows.at(-1)?.body).toMatchObject({
       text: '# Plan\n\nComplete',
       presentation: 'plan-document'
+    })
+    translator.dispose()
+  })
+})
+
+describe('Codex streamed checkpoint admission', () => {
+  it('skips joining a below-threshold prefix and still writes its final text', () => {
+    const { translator, tap, window } = translatorWith()
+    const prefix = 'checkpoint '.repeat(12)
+    translator.handle(notification('item/agentMessage/delta', { itemId: 'reply', delta: prefix }))
+    window.fire()
+    const rows = tap.rows.length
+    const publications = tap.publishes()
+    const join = vi.spyOn(Array.prototype, 'join')
+    const prefixJoins = () =>
+      join.mock.contexts.filter(
+        (chunks) =>
+          Array.isArray(chunks) && chunks.length === 2 && chunks[0] === prefix && chunks[1] === 'x'
+      )
+    try {
+      translator.handle(notification('item/agentMessage/delta', { itemId: 'reply', delta: 'x' }))
+      window.fire()
+      expect(prefixJoins()).toHaveLength(0)
+      expect(tap.rows).toHaveLength(rows)
+      expect(tap.publishes()).toBe(publications)
+      expect(window.idle()).toBe(true)
+
+      translator.flush()
+      expect(prefixJoins()).toHaveLength(1)
+      expect(tap.rows.at(-1)?.body).toMatchObject({
+        kind: 'message',
+        blocks: [{ type: 'text', text: `${prefix}x` }]
+      })
+      expect(tap.publishes()).toBe(publications + 1)
+    } finally {
+      join.mockRestore()
+      translator.dispose()
+    }
+  })
+
+  it('retries a refused checkpoint before forcing a smaller final increment', () => {
+    const { translator, tap, window } = translatorWith()
+    let reject = false
+    tap.sink.tryAppendItem = (identity, body, options) => {
+      if (reject) {
+        return { accepted: false, reason: 'backpressure' }
+      }
+      tap.sink.appendItem(identity, body, options)
+      return { accepted: true }
+    }
+    const delta = (text: string) =>
+      translator.handle(notification('item/agentMessage/delta', { itemId: 'reply', delta: text }))
+    delta('a'.repeat(128))
+    window.fire()
+    const rows = tap.rows.length
+    reject = true
+    delta('b'.repeat(32))
+    window.fire()
+    window.fire()
+    expect(tap.rows).toHaveLength(rows)
+    expect(window.idle()).toBe(false)
+
+    reject = false
+    window.fire()
+    expect(window.idle()).toBe(true)
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}` }]
+    })
+    delta('x')
+    window.fire()
+    expect(tap.rows).toHaveLength(rows + 1)
+    translator.flush()
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
     })
     translator.dispose()
   })

@@ -1,4 +1,4 @@
-import { ArrowUp, CircleAlert, Mic, Play, Plus, Square } from 'lucide-react'
+import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -7,18 +7,16 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
-import type { NativeChatComposerPrimaryAction } from './native-chat-composer-primary-action'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
   dictationDisabled: boolean
   sendDisabled: boolean
-  /** What the primary button does (`nativeChatComposerPrimaryAction`). */
-  primaryAction: NativeChatComposerPrimaryAction
   /** Shown on the disabled send button: what the user can do to send. */
   sendBlockedReason?: string | null
   /** Storage refused this draft; it is held in memory only. */
@@ -34,22 +32,22 @@ export type NativeChatComposerActionsProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
-  /** Releases the held queue when the primary action is Resume. */
-  onResume?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  focusComposer?: () => void
   /** Present while the composer is in goal mode; the chip calls it to leave. */
   onExitGoalMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
   contextUsage?: NativeChatContextUsageSummary | null
+  /** The chat's agent, whose permission modes the picker describes. */
+  agent?: string
 }
 
 export function NativeChatComposerActions({
   attachDisabled,
   dictationDisabled,
   sendDisabled,
-  primaryAction,
   sendBlockedReason,
   draftNotSaved,
   isWorking,
@@ -62,15 +60,15 @@ export function NativeChatComposerActions({
   onDictationHoldEnd,
   onSend,
   onStop,
-  onResume,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
-  contextUsage
+  contextUsage,
+  focusComposer,
+  agent
 }: NativeChatComposerActionsProps): React.JSX.Element {
-  const stops = primaryAction === 'stop'
-  const resumes = primaryAction === 'resume'
+  const stops = isWorking
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
     // changed to Stop; ignore the second click instead of cancelling the new turn.
@@ -79,8 +77,6 @@ export function NativeChatComposerActions({
     }
     if (stops) {
       onStop?.()
-    } else if (resumes) {
-      onResume?.()
     } else {
       onSend()
     }
@@ -88,7 +84,7 @@ export function NativeChatComposerActions({
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
-  const sendReason = stops || resumes ? null : (sendBlockedReason ?? null)
+  const sendReason = stops ? null : (sendBlockedReason ?? null)
   const sendButton = (
     <Button
       type="button"
@@ -98,23 +94,17 @@ export function NativeChatComposerActions({
           ? isStopping
             ? translate('components.native-chat.status.stopping', 'Stopping…')
             : translate('components.native-chat.stop', 'Stop the agent')
-          : resumes
-            ? translate('components.native-chat.queuedMessages.resume', 'Resume')
-            : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
+          : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
       }
       disabled={sendDisabled || (isWorking && isStopping)}
+      // A press keeps focus where it was; a focused button drops it to <body> when it disables.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
       variant={stops ? 'secondary' : 'default'}
       size="icon"
       className="size-8 rounded-full pointer-coarse:size-10"
     >
-      {stops ? (
-        <Square className="size-3.5 fill-current" />
-      ) : resumes ? (
-        <Play className="size-3.5 fill-current" />
-      ) : (
-        <ArrowUp className="size-4" />
-      )}
+      {stops ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
     </Button>
   )
 
@@ -139,16 +129,22 @@ export function NativeChatComposerActions({
             {translate('components.native-chat.composer.attach', 'Attach file')}
           </TooltipContent>
         </Tooltip>
+        <NativeChatComposerPermissionPicker
+          surface={sessionOptionsSurface}
+          snapshot={sessionOptionsSnapshot}
+          {...(agent ? { agent } : {})}
+        />
         {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Why: keep session controls beside the actions they affect; the
-        model trigger is ordered last so only the context ring separates it from dictation. */}
+        {/* Why: keep the session picker beside the actions it affects; only the
+        context ring separates it from dictation. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
+          focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
         <Tooltip>

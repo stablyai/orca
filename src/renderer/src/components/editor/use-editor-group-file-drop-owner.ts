@@ -5,7 +5,7 @@ import {
   useOsFileDropOwner,
   type OsFileDropSequence
 } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/hooks/useGlobalFileDrop'
+import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
   captureEditorFileDropOpen,
   editorGroupStillExists,

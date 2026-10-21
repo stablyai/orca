@@ -80,13 +80,18 @@ function KanbanColumn({
   now: number
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
+  const label = bucketLabel(bucket)
+
   return (
     // Why: attention no longer tints the whole column — the cards inside carry
     // their own state color, so a column border would double-signal it.
-    <section className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30">
+    <section
+      aria-label={label}
+      className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30"
+    >
       <header className="flex items-center gap-2 px-3 py-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {bucketLabel(bucket)}
+          {label}
         </span>
         <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
           {cards.length}

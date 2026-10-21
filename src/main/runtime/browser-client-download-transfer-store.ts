@@ -36,9 +36,10 @@ const stores = new WeakMap<DownloadTransferRuntime, BrowserClientDownloadTransfe
  */
 export function releaseBrowserClientDownloadTransfersForPage(
   runtime: DownloadTransferRuntime,
-  browserPageId: string
+  browserPageId: string,
+  pageHostGeneration?: number
 ): Promise<void> {
-  return stores.get(runtime)?.releasePage(browserPageId) ?? Promise.resolve()
+  return stores.get(runtime)?.releasePage(browserPageId, pageHostGeneration) ?? Promise.resolve()
 }
 
 export function getBrowserClientDownloadTransferStore(

@@ -1,8 +1,4 @@
-import { createProfileStateWriterDeadline } from './profile-state-writer-deadline'
-import {
-  recordProfileStateWriterGrace,
-  recordProfileStateWriterTimeout
-} from './profile-state-writer-diagnostics'
+import { startProfileStateWriterSlowWarning } from './profile-state-writer-slow-warning'
 import type {
   ProfileStateWriterCommand,
   ProfileStateWriterResponse
@@ -15,7 +11,7 @@ export type PendingProfileStateWriterRequest = {
   promise: Promise<SuccessfulProfileStateWriterResponse>
   resolve: (response: SuccessfulProfileStateWriterResponse) => void
   reject: (error: Error) => void
-  clearDeadline: () => void
+  clearSlowWarning: () => void
 }
 
 export function isExpectedProfileStateWriterSuccess(
@@ -49,30 +45,28 @@ export function isExpectedProfileStateWriterSuccess(
   return response.exportedRevision === undefined
 }
 
-/** Each request owns its deadline; timeouts and grace leave a durable breadcrumb. */
+/** A request stays pending until its matching reply or a real fault; slowness only warns. */
 export function createProfileStateWriterRequest(
   id: number,
   command: PendingProfileStateWriterRequest['command'],
-  timeoutMs: number,
-  handlers: { onTimeout: () => void; acknowledgedRevision: () => number; now?: () => number }
+  slowWarningMs: number,
+  diagnostics: { acknowledgedRevision: number; now?: () => number; onSlow?: () => void }
 ): PendingProfileStateWriterRequest {
-  const describe = () => ({
-    command,
-    requestId: id,
-    acknowledgedRevision: handlers.acknowledgedRevision()
+  const clearSlowWarning = startProfileStateWriterSlowWarning({
+    warningMs: slowWarningMs,
+    phase: 'awaiting-reply',
+    now: diagnostics.now,
+    onSlow: diagnostics.onSlow,
+    request: {
+      command,
+      requestId: id,
+      acknowledgedRevision: diagnostics.acknowledgedRevision
+    }
   })
-  const deadline = createProfileStateWriterDeadline(
-    timeoutMs,
-    (expiry) => {
-      recordProfileStateWriterTimeout(describe(), expiry)
-      handlers.onTimeout()
-    },
-    { now: handlers.now, onGrace: (expiry) => recordProfileStateWriterGrace(describe(), expiry) }
-  )
   return {
     id,
     command,
     ...Promise.withResolvers<SuccessfulProfileStateWriterResponse>(),
-    clearDeadline: deadline.clear
+    clearSlowWarning
   }
 }

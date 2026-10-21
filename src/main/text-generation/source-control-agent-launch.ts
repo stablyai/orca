@@ -1,9 +1,10 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
+import { SOURCE_CONTROL_KILL_SITE } from './source-control-local-process'
 import { wslAwareSpawn } from '../git/runner'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -77,10 +78,11 @@ function spawnWindowsAgent(
   const resolvedBinary = resolveCliCommand(input.binary, {
     pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
   })
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, input.args)
+  // Why no cmd.exe wrapping here: process-host runs an npm/pnpm `.cmd` shim as
+  // node + script, which keeps a multi-line argv prompt intact (#28768).
   return spawnProcess({
-    program: spawnCmd,
-    args: spawnArgs,
+    program: resolvedBinary,
+    args: input.args,
     env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
     ...(input.useCwdForNative ? { cwd: input.cwd } : {})
   })
@@ -107,7 +109,11 @@ function spawnSupervisedAgent(
     env: spec.env,
     cwd: spec.cwd,
     detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
+  })
+  guardSupervisedProviderGroup(child, {
+    site: SOURCE_CONTROL_KILL_SITE,
+    supervised: spec.supervised
   })
   return Object.assign(child, { supervised: spec.supervised })
 }

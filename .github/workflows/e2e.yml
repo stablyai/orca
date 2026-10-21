@@ -27,10 +27,23 @@ on:
         required: false
         type: boolean
         default: true
-      ssh_source_changed:
-        description: '"true" when the PR touches SSH execution source; gates the Docker-SSH lane'
+      managed_ssh_shards:
+        description: JSON shard assignments for the selected managed SSH specs
         required: false
         type: string
+        default: '["1/2","2/2"]'
+      # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
+      artifact_suffix:
+        description: Appended to the build and trace artifact names so two calls in one run do not collide
+        required: false
+        type: string
+        default: ''
+      # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
+      layout_owner:
+        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       ref:
@@ -41,6 +54,12 @@ on:
         description: JSON array of specs to run; empty runs the full suite
         required: false
         type: string
+      managed_ssh_shards:
+        description: Managed SSH shard assignments (use one for small selections)
+        required: false
+        type: choice
+        default: '["1/2","2/2"]'
+        options: ['["1/2","2/2"]', '["1/1"]']
   schedule:
     # One complete daily reference run; targeted PR coverage remains unchanged.
     - cron: '0 17 * * *'
@@ -50,7 +69,9 @@ jobs:
     name: build e2e app
     if: inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
 
     steps:
       - name: Checkout
@@ -58,23 +79,57 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
+      - name: Install native build tools
+        env:
+          ORCA_E2E_APT_PACKAGES: build-essential python3
+        run: &install_e2e_tools |
+          if [ "$ORCA_E2E_APT_PACKAGES" = 'build-essential python3' ] &&
+            command -v make >/dev/null && command -v g++ >/dev/null && command -v python3 >/dev/null; then
+            exit 0
+          fi
+          read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
+          # Why apt-mirrors.txt: runner images resolve mirror+file: sources through it, so editing the lists alone leaves Azure in use.
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
+          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          timeout 120 sudo apt-get update
+          timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
+
       # Why: the build's plain-Node daemon smoke load resolves node-pty.
       - uses: ./.github/actions/install-node-dependencies
+        id: deps
         with:
           native-runtime: node
+          persist-native-cache: 'false'
+          cache-electron-package: 'true'
+
+      # Save Node's ABI before the Electron preparation replaces the same build paths.
+      - name: Save compiled Node native modules
+        if: steps.deps.outputs.native-cache-key != '' && steps.deps.outputs.native-cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.deps.outputs.native-cache-path }}
+          key: ${{ steps.deps.outputs.native-cache-key }}
 
       # Why: building here avoids parallel builds inside Playwright globalSetup;
       # paired-browser specs also need the standalone web bundle.
       - name: Build E2E outputs
         env:
           VITE_EXPOSE_STORE: 'true'
+          ORCA_CI_MAIN_SOURCEMAPS: '0'
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
-          status=0
-          pnpm run build:relay &
-          relay_pid=$!
-          pnpm run build:electron-vite:parallel --mode e2e || status=1
-          wait "$relay_pid" || status=1
-          exit "$status"
+          if [ -n "$LAYOUT_OWNER" ]; then
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+          fi
+          pnpm run build:electron-vite:parallel --mode e2e
 
       # The CLI emits into out/main too; start only after Electron finishes clearing that tree.
       - name: Build shared E2E CLI
@@ -92,58 +147,51 @@ jobs:
 
       - wait: e2e-cli
 
+      # The switch-on specs skip, rather than fail, when the build left no marker.
+      - name: Check layout-owner build marker
+        if: inputs.layout_owner == 'main'
+        run: test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+
+      - name: Check shared native runtime action
+        id: native-runtime-action
+        run: |
+          if [ -f .github/actions/prepare-native-runtime/action.yml ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      # The orcad builds downstream refuse to run without the page; older refs predate the action.
+      - uses: ./.github/actions/build-mobile-web-bundle
+        if: hashFiles('.github/actions/build-mobile-web-bundle/action.yml') != ''
+
+      # Foreground: a background JavaScript action reads the event payload while later steps rewrite it.
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
-          # Why: build-relay.mjs writes each relay's marker as `out/relay/<platform>/.version`,
-          # and upload-artifact drops dotfiles by default — consumers then fail SSH specs with
-          # "local relay build is missing its version marker".
           include-hidden-files: true
           retention-days: 1
           if-no-files-found: error
 
-  # Build Electron-native dependencies once per workflow. Consumer shards restore
-  # this immutable cache instead of compiling the same ABI concurrently.
-  prepare-native-cache:
-    name: prepare Electron native cache
-    if: inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Prepare shared Electron native runtime
+        id: electron-native-runtime
+        if: steps.native-runtime-action.outputs.available == 'true' && steps.deps.outputs.node-version != ''
+        uses: ./.github/actions/prepare-native-runtime
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          native-runtime: electron
+          node-version: ${{ steps.deps.outputs.node-version }}
 
-      - name: Install native build tools
-        env:
-          ORCA_E2E_APT_PACKAGES: build-essential python3
-        run: &install_e2e_tools |
-          read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
-          # Why apt-mirrors.txt: runner images resolve mirror+file: sources through it, so editing the lists alone leaves Azure in use.
-          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            if [ -f "$source" ]; then
-              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
-            fi
-          done
-          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          Acquire::Retries "1";
-          APTCONF
-          timeout 120 sudo apt-get update
-          timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
-
-      - uses: ./.github/actions/install-node-dependencies
+      - name: Prepare Electron natives for older refs
+        if: steps.native-runtime-action.outputs.available != 'true' || steps.deps.outputs.node-version == ''
+        uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
 
   e2e:
     name: e2e ${{ matrix.shard_name }}
-    needs: [build, prepare-native-cache]
+    needs: [build]
     if: inputs.test_files == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -195,7 +243,7 @@ jobs:
         # The Azure archive took 16 minutes for one font package; bound setup
         # separately so a slow mirror cannot consume the shard's test budget.
         env: &e2e_tool_packages
-          ORCA_E2E_APT_PACKAGES: build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+          ORCA_E2E_APT_PACKAGES: build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils xdotool
         run: *install_e2e_tools
 
       - uses: ./.github/actions/install-node-dependencies
@@ -205,7 +253,7 @@ jobs:
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
       # Why: the Electron suite is wall-clock constrained on OSS runners, but
@@ -222,7 +270,6 @@ jobs:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           ORCA_E2E_WEB_CLIENT: '1'
-          ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
         run: |
           mkdir -p ci-shards
           pnpm exec playwright test --config tests/playwright.config.ts --project=electron-headless --list --reporter=json > ci-shards/discovery.json
@@ -234,7 +281,7 @@ jobs:
       - name: Run E2E tests (${{ matrix.shard_name }})
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ci-shards/results.json
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --test-list=ci-shards/selected.txt --reporter=list,json
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 pnpm run test:e2e --test-list=ci-shards/selected.txt --reporter=list,json
 
       - name: Summarize E2E failures
         if: always()
@@ -271,7 +318,7 @@ jobs:
 
   changed-e2e:
     name: changed e2e specs
-    needs: [build, prepare-native-cache]
+    needs: [build]
     if: inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -285,8 +332,6 @@ jobs:
       - name: Install native build and headless UI tools
         # Why ripgrep: Quick Open's bounded host-side search requires rg instead of an
         # unbounded inventory fallback; the paired fixture exercises that real boundary.
-        # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
-        # lane now receives those specs from pr.yml's SSH source mapping.
         env: *e2e_tool_packages
         run: *install_e2e_tools
 
@@ -297,58 +342,26 @@ jobs:
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
       - name: Run changed E2E specs
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
             printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
           else
             # Dispatching an older ref retains its existing dedicated-owner exclusions.
             jq -r '.[] | select(
-              . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
-              . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
-              . != "tests/e2e/pty-input-write-queue-ssh.spec.ts" and
-              . != "tests/e2e/ssh-ai-vault-session-history.spec.ts" and
-              . != "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts" and
-              . != "tests/e2e/ssh-cold-activation-restore.spec.ts" and
-              . != "tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts" and
-              . != "tests/e2e/ssh-emptied-worktree-reactivation.spec.ts" and
-              . != "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts" and
-              . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
-              . != "tests/e2e/ssh-docker-half-open-link.spec.ts" and
-              . != "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts" and
-              . != "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts" and
-              . != "tests/e2e/ssh-docker-relay-stall-credential.spec.ts" and
-              . != "tests/e2e/ssh-docker-resource-accumulation.spec.ts" and
-              . != "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts" and
-              . != "tests/e2e/ssh-external-image-preview.spec.ts" and
-              . != "tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts" and
-              . != "tests/e2e/ssh-pi-compatible-agent-title.spec.ts" and
-              . != "tests/e2e/ssh-port-forward-lifecycle.spec.ts" and
-              . != "tests/e2e/ssh-reattach-home-partition.spec.ts" and
-              . != "tests/e2e/ssh-reconnect-tab-destruction.spec.ts" and
-              . != "tests/e2e/ssh-restart-tab-accumulation.spec.ts" and
-              . != "tests/e2e/ssh-skill-installation.spec.ts" and
-              . != "tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts" and
-              . != "tests/e2e/ssh-startup-local-shadow.spec.ts" and
-              . != "tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts" and
-              . != "tests/e2e/terminal-inline-images-ssh.spec.ts" and
-              . != "tests/e2e/ssh-docker-watcher-isolation.spec.ts" and
-              . != "tests/e2e/ssh-terminal-parking.spec.ts" and
-              . != "tests/e2e/terminal-retention-budget.spec.ts" and
-              . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
-              . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
               . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
-              . != "tests/e2e/ssh-localhost.spec.ts" and
               . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
               . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
-              . != "tests/e2e/ssh-orcad-auto-convert.spec.ts" and
+              . != "tests/e2e/workspace-layout-oracle-headless.spec.ts" and
               . != "tests/e2e/windows-missing-appdata-startup.spec.ts" and
-              . != "tests/e2e/ssh-orcad-idle-exit.spec.ts"
+              . != "tests/e2e/file-explorer-copy-file-windows.spec.ts" and
+              (startswith("tests/e2e/ssh-orcad-") | not)
             )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
           mapfile -t TEST_FILES < "$RUNNER_TEMP/general-e2e-specs"
@@ -356,144 +369,51 @@ jobs:
             echo "Changed specs are all owned by dedicated lanes."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
-          # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
-          # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
-          # The first clause stays because that spec needs Docker without referencing the variable.
-          if printf '%s\n' "${TEST_FILES[@]}" | grep -qx 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' \
-            || grep -l 'ORCA_E2E_SSH_DOCKER' "${TEST_FILES[@]}" >/dev/null 2>&1; then
-            E2E_ENV+=(ORCA_E2E_SSH_DOCKER=1)
-          fi
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
           E2E_PROJECT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            E2E_ENV+=(ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/window-specs.jsonl")
+            E2E_ENV+=(PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/window-specs-results.json")
+            E2E_PROJECT_ARGS+=('--reporter=list,json')
+          fi
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: &summarize_layout_divergence |
+          # Either file names a run: a log with no report is unattributed, a report with no log is zero.
+          shopt -s nullglob
+          runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
+          for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
+            node config/scripts/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            if [ -f "$run-results.json" ]; then
+              node config/scripts/ci-e2e-failure-summary.mjs "$run-results.json"
+            fi
+          done
+
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-changed${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Upload Playwright traces
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces-changed
+          name: playwright-traces-changed${{ inputs.artifact_suffix }}
           path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  ssh-docker-watcher-isolation:
-    name: ssh docker watcher isolation (${{ matrix.shard }}/4)
-    needs: [build, prepare-native-cache]
-    # Each excluded changed spec must trigger its dedicated owner.
-    if: >-
-      inputs.test_files == '' ||
-      inputs.ssh_source_changed == 'true' ||
-      contains(inputs.test_files, 'tests/e2e/local-ssh-browser-routing.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/pty-input-write-queue-ssh.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-ai-vault-session-history.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-cold-activation-restore.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-emptied-worktree-reactivation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-half-open-link.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-relay-stall-credential.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-resource-accumulation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-external-image-preview.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-pi-compatible-agent-title.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-port-forward-lifecycle.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-reconnect-tab-destruction.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-restart-tab-accumulation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-skill-installation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/terminal-inline-images-ssh.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-watcher-isolation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-terminal-parking.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/terminal-retention-budget.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    timeout-minutes: 60
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-
-      - name: Install native build and headless UI tools
-        env: *e2e_tool_packages
-        run: *install_e2e_tools
-
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: electron
-
-      - name: Download E2E build output
-        uses: actions/download-artifact@v8
-        with:
-          name: e2e-build-out
-          path: out/
-
-      # Why: this is the release-path proof that the deployed Linux relay keeps
-      # its PTY and explorer live across a real watcher SIGSEGV.
-      - name: Run Docker SSH watcher isolation E2E
-        if: matrix.shard == 1
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
-
-      # Why: Playwright empties test-results/ when it starts, so each step here used to
-      # destroy the previous step's traces. Only the last lane's failure was ever
-      # diagnosable from the artifact; set each lane aside before the next one runs.
-      - name: Keep watcher-isolation traces
-        if: always() && matrix.shard == 1
-        run: |
-          if [ -d test-results ]; then
-            mkdir -p e2e-traces
-            mv test-results "e2e-traces/watcher-isolation"
-          fi
-
-      # Keep every SSH journey after a test failure; stop work on superseded commits.
-      - name: Run Docker SSH terminal parking + startup readiness E2E
-        if: '!cancelled() && matrix.shard == 1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
-
-      - name: Keep terminal-parking traces
-        if: always() && matrix.shard == 1
-        run: |
-          if [ -d test-results ]; then
-            mkdir -p e2e-traces
-            mv test-results "e2e-traces/terminal-parking"
-          fi
-
-      # Separate VMs isolate destructive SSH fixtures while keeping one worker per shard.
-      - name: Run remaining Docker SSH E2E
-        if: '!cancelled()'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker --shard=${{ matrix.shard }}/4
-
-      - name: Keep remaining-ssh-docker traces
-        if: always()
-        run: |
-          if [ -d test-results ]; then
-            mkdir -p e2e-traces
-            mv test-results "e2e-traces/remaining-ssh-docker"
-          fi
-
-      - name: Upload watcher isolation traces
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-traces-ssh-docker-watcher-isolation-${{ matrix.shard }}
-          path: e2e-traces/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -519,56 +439,11 @@ jobs:
 
   orcad-serve-mode-switch:
     name: orca serve Electron/orcad mode switch (D7)
-    needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      ORCA_BACKGROUND_LAUNCH: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-          persist-credentials: false
-      - name: Install headless tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: electron
-      - uses: actions/download-artifact@v8
-        with:
-          name: e2e-build-out
-          path: out/
-      # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
-      # The template is what `orca serve`'s default selection materializes that slot from.
-      - name: Build this runner's orcad slot and template
-        run: |
-          slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
-          pnpm build:orcad-prebuilds
-          pnpm build:orcad-prebuilds --require-slots "$slot"
-          pnpm build:orcad
-          node config/scripts/build-orcad-template.mjs --targets "$slot"
-      - name: Switch serve hosts on one profile
-        env:
-          SKIP_BUILD: '1'
-          ORCA_E2E_ORCAD_SERVE: '1'
-          ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: orcad-serve-mode-switch-traces
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # #24979 on a real host: a relay-era Docker host converts to managed orcad on connect, and a managed
-  # orcad idles out and restarts on the next connect. Needs the
-  # orcad template for the fixture's target (Debian, linux-x64-glibc), which only this job builds.
-  orcad-auto-convert-docker:
-    name: ssh host auto-converts to managed orcad (Docker)
-    needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-auto-convert.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-idle-exit.spec.ts')
+    needs: [build]
+    if: >-
+      inputs.test_files == '' ||
+      contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -585,40 +460,193 @@ jobs:
           native-runtime: electron
       - uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
-      # Built to a path the app does not look at by default, so the relay phase has no template.
+      # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
+      # The template is what `orca serve`'s default selection materializes that slot from.
+      - name: Build this runner's orcad slot and template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds
+          pnpm build:orcad-prebuilds --require-slots "$slot"
+          # The headless oracle's orcad host must hold the same layout owner as the Electron host,
+          # and so must the template `orca serve` materializes its server from.
+          if [ -n "$LAYOUT_OWNER" ]; then
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+            pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot" --dark-test-template
+            test -f out/orcad/ORCA_LAYOUT_OWNER_MAIN
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
+          else
+            pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot"
+          fi
+      - name: Switch serve hosts on one profile
+        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_ORCAD_SERVE: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      # Only this job builds out/orcad, so the spec's orcad case runs here; the e2e shards run its Electron case.
+      - name: Phone Markdown on headless orcad serve
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/headless-serve-mobile-markdown.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
+      # The layout oracle's headless scenarios run on both serve hosts, so they need this job's orcad.
+      - name: Layout oracle on headless serve (orcad and Electron)
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          REPORT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/headless-oracle.jsonl"
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/headless-oracle-results.json"
+            REPORT_ARGS=('--reporter=list,json')
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1 "${REPORT_ARGS[@]}"
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: *summarize_layout_divergence
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-headless${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: orcad-serve-mode-switch-traces${{ inputs.artifact_suffix }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Selected managed-orcad SSH specs on a Docker host; daily runs keep the full suite. Needs the
+  # orcad template for the fixture's target (Debian, linux-x64-glibc), which only this job builds.
+  orcad-ssh-docker:
+    name: ssh on managed orcad (Docker ${{ matrix.shard }})
+    needs: [build]
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      # COMPAT(legacy-relay-bridge): the bridge spec builds 1.4.224's relay from its tagged sources.
+      - name: Fetch the 1.4.224 relay sources
+        run: git fetch --no-tags --depth=1 origin +refs/tags/v1.4.224:refs/tags/v1.4.224
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out${{ inputs.artifact_suffix }}
+          path: out/
+      # Built to a path the app does not look at by default, so the relay-era phase has no template.
+      # The switch-on leg deploys a switch-on server, so both sides of the host run one layout owner.
       - name: Build the linux-x64-glibc orcad template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          pnpm build:orcad
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          if [ -n "$LAYOUT_OWNER" ]; then
+            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc --dark-test-template
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
+          else
+            node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          fi
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
-      - name: Convert a relay-era Docker host
+      # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
+      - name: Run managed SSH specs on a Docker host
         env:
+          TEST_FILES_JSON: ${{ inputs.test_files }}
           SKIP_BUILD: '1'
           ORCA_E2E_SSH_DOCKER: '1'
           ORCA_E2E_ORCAD_CONVERT_HOST: docker
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-          ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
+          SHARD: ${{ matrix.shard }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+          SHARD_INDEX: ${{ strategy.job-index }}
         run: |
+          node --input-type=module <<'NODE' > "$RUNNER_TEMP/managed-ssh-specs"
+          import { existsSync } from 'node:fs'
+          const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
+          const selection = existsSync(modulePath) ? await import(modulePath) : {}
+          // Older checkout refs retain their full-suite behavior.
+          const specs = selection.selectManagedSshE2eSpecs
+            ? selection.selectManagedSshE2eSpecs(process.env.TEST_FILES_JSON)
+            : ['tests/e2e/ssh-orcad-']
+          for (const spec of specs) {
+            console.log(spec.endsWith('.spec.ts') ? spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' : spec)
+          }
+          NODE
+          mapfile -t TEST_FILES < "$RUNNER_TEMP/managed-ssh-specs"
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts --project=electron-headless --workers=1
+          REPORT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX.jsonl"
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX-results.json"
+            REPORT_ARGS=('--reporter=list,json')
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts "${TEST_FILES[@]}" --project=electron-headless --workers=1 --shard="$SHARD" "${REPORT_ARGS[@]}"
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: *summarize_layout_divergence
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-managed-ssh-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: orcad-auto-convert-docker-traces
+          name: orcad-ssh-docker-traces-${{ strategy.job-index }}${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
 
   # D7 on Windows: both hosts share <userData>\daemon and so one daemon pipe. Built here rather than
   # from the Linux e2e build because the slot, template and addons are Windows-native. Also runs the
-  # missing-AppData startup check, which needs the same Windows e2e build.
+  # missing-AppData startup check and the explorer file-copy check, which need the same Windows e2e build.
   orcad-serve-mode-switch-windows:
     name: orca serve on Windows (D7 mode switch, missing AppData)
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts') || contains(inputs.test_files, 'tests/e2e/file-explorer-copy-file-windows.spec.ts')
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -636,14 +664,20 @@ jobs:
         with:
           resolve-windows-cache: 'true'
           restore-windows-cache: 'true'
+      - uses: ./.github/actions/prepare-windows-cli-launcher
+        with:
+          arches: x64
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the e2e app, CLI, orcad slot and template
         shell: bash
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: 'true'
         run: |
-          pnpm run build:relay
+          pnpm run build:wsl-guest
           pnpm exec electron-vite build --mode e2e
           pnpm run build:cli
           pnpm build:orcad
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
           node config/scripts/build-orcad-template.mjs --targets win32-x64
       # A profile-less Windows session has no roaming AppData; Electron 43 used to crash natively there.
       - name: Start serve with no AppData folder
@@ -652,6 +686,13 @@ jobs:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/windows-missing-appdata-startup.spec.ts --project=electron-headless --workers=1
+      # Explorer pastes only a real CF_HDROP, which needs the Windows clipboard and shell.
+      - name: Copy a file from the explorer
+        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/file-explorer-copy-file-windows.spec.ts')) }}
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/file-explorer-copy-file-windows.spec.ts --project=electron-headless --workers=1
       - name: Switch serve hosts on one profile
         if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')) }}
         env:
@@ -663,71 +704,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: orcad-serve-mode-switch-windows-traces
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  ssh-localhost:
-    name: localhost SSH terminal and hooks
-    needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-localhost.spec.ts')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - name: Install SSH server and headless tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client openssh-server python3 ripgrep xvfb zsh openbox x11-utils
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: electron
-      - uses: actions/download-artifact@v8
-        with:
-          name: e2e-build-out
-          path: out/
-      - name: Start isolated localhost SSH server
-        shell: bash
-        run: |
-          # Bare shells install Pi extensions only for an existing agent home.
-          mkdir -p "$HOME/.pi/agent"
-          fixture="$RUNNER_TEMP/orca-localhost-sshd"
-          mkdir -p "$fixture"
-          ssh-keygen -q -t ed25519 -N '' -f "$fixture/host_key"
-          ssh-keygen -q -t ed25519 -N '' -f "$fixture/client_key"
-          cat > "$fixture/sshd_config" <<EOF
-          Port 22222
-          ListenAddress 127.0.0.1
-          HostKey $fixture/host_key
-          PidFile $fixture/sshd.pid
-          AuthorizedKeysFile $fixture/client_key.pub
-          StrictModes no
-          PasswordAuthentication no
-          KbdInteractiveAuthentication no
-          UsePAM yes
-          AllowUsers $(id -un)
-          Subsystem sftp internal-sftp
-          EOF
-          sudo mkdir -p /run/sshd
-          sudo /usr/sbin/sshd -f "$fixture/sshd_config" -E "$fixture/sshd.log"
-          ssh -i "$fixture/client_key" -p 22222 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 127.0.0.1 true || { sudo cat "$fixture/sshd.log"; exit 1; }
-          {
-            echo "ORCA_E2E_SSH_PORT=22222"
-            echo "ORCA_E2E_SSH_USER=$(id -un)"
-            echo "ORCA_E2E_SSH_IDENTITY_FILE=$fixture/client_key"
-          } >> "$GITHUB_ENV"
-      - name: Run localhost SSH terminal and hook journey
-        env:
-          SKIP_BUILD: '1'
-          ORCA_E2E_SSH_LOCALHOST: '1'
-          ORCA_FEATURE_REMOTE_AGENT_HOOKS: '1'
-          ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1
-      - uses: actions/upload-artifact@v7
-        if: failure() || cancelled()
-        with:
-          name: localhost-ssh-traces
+          name: orcad-serve-mode-switch-windows-traces${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

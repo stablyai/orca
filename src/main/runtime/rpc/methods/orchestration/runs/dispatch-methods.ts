@@ -25,6 +25,7 @@ import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-sour
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
     name: 'orchestration.dispatch',
+    permission: 'workspace',
     params: DispatchParams,
     handler: async (
       params,
@@ -223,6 +224,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
   defineMethod({
     name: 'orchestration.dispatchShow',
+    permission: 'workspace',
     params: DispatchShowParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

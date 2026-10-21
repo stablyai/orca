@@ -1,6 +1,5 @@
-import { agentTabsDefaultToNativeChat } from '../../../shared/structured-native-chat-launch-route'
+import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -9,6 +8,10 @@ import {
   parseAgentDetectionTargetKey
 } from '@/hooks/useAgentDetectionTarget'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import {
+  ensureDetectedAgentsForTarget,
+  readDetectedAgentsForTarget
+} from '@/lib/agent-detection-target-inventory'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -26,34 +29,18 @@ function defaultChatDetectionTarget(
   worktreeId: string
 ): AgentDetectionTarget | undefined {
   // Why: a 'blank' default means the user wants workspaces to open without an agent.
-  if (
-    !agentTabsDefaultToNativeChat(state.settings) ||
-    state.settings?.defaultTuiAgent === 'blank'
-  ) {
+  if (!isNativeChatEnabled(state.settings) || state.settings?.defaultTuiAgent === 'blank') {
     return undefined
   }
   // Why: an unresolved owner is an unknown host, not the local machine.
   return parseAgentDetectionTargetKey(getAgentDetectionTargetKeyForWorktree(state, worktreeId))
 }
 
-/** Same host lists the tab bar reads; null means that host's detection has not loaded. */
-function readDetectedAgents(state: AppState, target: AgentDetectionTarget): TuiAgent[] | null {
-  if (target.kind === 'ssh') {
-    return state.remoteDetectedAgentIds[target.connectionId] ?? null
-  }
-  if (target.kind === 'runtime') {
-    return state.runtimeDetectedAgentIds[target.environmentId] ?? null
-  }
-  return target.contextKey
-    ? (state.localDetectedAgentIdsByContext[target.contextKey] ?? null)
-    : state.detectedAgentIds
-}
-
 /** True when the default chat could open here but the workspace host's agent list has not loaded. */
 export function emptyWorkspaceDefaultChatAwaitsDetection(worktreeId: string): boolean {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
-  return target !== undefined && readDetectedAgents(state, target) === null
+  return target !== undefined && readDetectedAgentsForTarget(state, target) === null
 }
 
 /** Loads the workspace host's agent list; resolves on success, failure, or timeout. */
@@ -63,13 +50,11 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
   if (!target) {
     return
   }
-  const detection =
-    target.kind === 'ssh'
-      ? state.ensureRemoteDetectedAgents(target.connectionId)
-      : target.kind === 'runtime'
-        ? state.ensureRuntimeDetectedAgents(target.environmentId)
-        : state.ensureDetectedAgents(target.worktreeId)
-  await withTimeout(detection, DEFAULT_CHAT_DETECTION_TIMEOUT_MS, [])
+  await withTimeout(
+    ensureDetectedAgentsForTarget(state, target),
+    DEFAULT_CHAT_DETECTION_TIMEOUT_MS,
+    []
+  )
 }
 
 /**
@@ -88,7 +73,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
   }
   const agent = pickTuiAgent(
     state.settings?.defaultTuiAgent,
-    readDetectedAgents(state, target) ?? [],
+    readDetectedAgentsForTarget(state, target) ?? [],
     state.settings?.disabledTuiAgents
   )
   if (!agent) {

@@ -1,6 +1,6 @@
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
 import { discoverUnitFiles } from './ci-unit-files.mjs'
 import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'
@@ -15,7 +15,8 @@ export function prepareUnitPlan(env = process.env) {
   const files = discoverUnitFiles()
   let plan
   try {
-    const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
+    // From the workflow, not the payload file: background steps can read it mid-rewrite.
+    const event = { pull_request: { draft: env.ORCA_PULL_REQUEST_DRAFT === 'true' } }
     if (env.GITHUB_EVENT_NAME !== 'pull_request') {
       throw new Error('Full reference run')
     }

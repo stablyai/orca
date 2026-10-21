@@ -15,7 +15,7 @@ import { readStructuredWorkerOutput } from '../../orchestration-structured-worke
 import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
-import { exposeWorkerTerminalResource } from './worker-release-completion'
+import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
 import { showFederatedWorker } from '../federation/federated-worker-show'
 import {
@@ -26,6 +26,7 @@ import {
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerShow',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -79,6 +80,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerRead',
+    permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -199,6 +201,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerAbandon',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller }) => {
       const db = runtime.getOrchestrationDb()

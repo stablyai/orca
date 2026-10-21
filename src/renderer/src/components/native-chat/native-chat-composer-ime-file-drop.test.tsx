@@ -15,21 +15,16 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 const testState: {
   executionHostId: ExecutionHostId
-  ownerConnectionId: string
-  ownerKind: 'local' | 'not-ready' | 'runtime' | 'ssh'
-  ownerSshGeneration: number
-  ownerWorktreePath: string
+  ownerKind: 'local' | 'not-ready' | 'remote'
   targetIsRemoteRuntime: boolean
   store: { tabsByWorktree: Record<string, { id: string }[]> }
 } = vi.hoisted(() => ({
   executionHostId: 'local',
-  ownerConnectionId: 'ssh-1',
   ownerKind: 'local',
-  ownerSshGeneration: 4,
-  ownerWorktreePath: '/remote/repo',
   targetIsRemoteRuntime: false,
   store: {
     tabsByWorktree: {
@@ -52,22 +47,13 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
   resolveNativeChatAttachmentHost: () => testState.executionHostId,
-  resolveNativeChatAttachmentOwnerForWorktree: () =>
-    testState.ownerKind === 'ssh'
-      ? {
-          kind: 'ssh',
-          connectionId: testState.ownerConnectionId,
-          worktreePath: testState.ownerWorktreePath,
-          expectedExecutionHostId: `ssh:${testState.ownerConnectionId}`,
-          expectedSshTargetId: testState.ownerConnectionId,
-          expectedSshConnectionGeneration: testState.ownerSshGeneration
-        }
-      : { kind: testState.ownerKind }
+  resolveNativeChatAttachmentOwnerForWorktree: () => ({ kind: testState.ownerKind })
 }))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => testState.targetIsRemoteRuntime
 }))
 vi.mock('./NativeChatComposerActions', () => ({
@@ -118,6 +104,7 @@ function ComposerProbe({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: `pane:${workspaceId}`,
     allowWithoutTarget: structured,
+    imageReferences: structured,
     caret,
     disabled,
     isComposing: imeEnterGesture.isComposing,
@@ -128,7 +115,7 @@ function ComposerProbe({
     setDraft,
     setNotice
   })
-  useNativeChatFileDrops({
+  const { pickAttachments } = useNativeChatFileDrops({
     paneKey: `pane:${workspaceId}`,
     draftScopeKey: `pane:${workspaceId}`,
     targetPtyId: 'pty-1',
@@ -188,6 +175,7 @@ function ComposerProbe({
           sessionOptionsSnapshot={[]}
         />
       </div>
+      <button onClick={pickAttachments}>Attach</button>
       <output data-testid="draft">{draft}</output>
     </div>
   )
@@ -202,7 +190,8 @@ beforeEach(() => {
       getPathForFile: (file: File) => `/drop/${file.name}`,
       prepareDroppedPaths: prepare,
       stat: vi.fn(async () => ({ isDirectory: false }))
-    }
+    },
+    shell: { pickAttachments: vi.fn(async () => ['/picked/browser issues.md']) }
   })
 })
 afterEach(() => {
@@ -258,4 +247,23 @@ describe('OS file drops through the real composing chat field', () => {
       expect(promptValue(editor).match(/@\/drop\/notes.txt/g)).toHaveLength(1)
     }
   )
+
+  it('shows a dropped file and a file picked with the attach button as the same filename pill', async () => {
+    render(
+      <NativeChatPaneFileDropSurface className="chat">
+        <ComposerProbe />
+      </NativeChatPaneFileDropSurface>
+    )
+    const editor = screen.getByRole('textbox')
+    await osDrop(editor)
+    await act(async () => fireEvent.click(screen.getByText('Attach')))
+    expect(
+      [...editor.querySelectorAll('[data-native-chat-file-reference]')].map(
+        (pill) => pill.textContent
+      )
+    ).toEqual(['notes.txt', 'browser issues.md'])
+    expect(screen.getByTestId('draft').textContent).toBe(
+      '@/drop/notes.txt @"/picked/browser issues.md" '
+    )
+  })
 })

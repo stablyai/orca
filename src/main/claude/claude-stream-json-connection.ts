@@ -1,7 +1,8 @@
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
@@ -19,6 +20,7 @@ import {
 } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
 import { providerStderrForDisplay } from '../provider-process/provider-spawn-failure-report'
+import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 
 export { ClaudeControlRequestError }
 
@@ -37,7 +39,7 @@ export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
 
 let claudeAgentSdk: Promise<typeof ClaudeAgentSdk> | null = null
 
-function loadClaudeAgentSdk(): Promise<typeof ClaudeAgentSdk> {
+export function loadClaudeAgentSdk(): Promise<typeof ClaudeAgentSdk> {
   claudeAgentSdk ??= import('@anthropic-ai/claude-agent-sdk')
   return claudeAgentSdk
 }
@@ -52,6 +54,15 @@ export type ClaudeStreamJsonLaunch = {
   options: ClaudeStructuredSdkOptions
   cwd: string
   env?: Record<string, string>
+  /** Removed after the child's env is built over Orca's own, as every provider child's are. */
+  envToDelete?: readonly string[]
+}
+
+function withoutKeys(env: Record<string, string>, keys: readonly string[]): Record<string, string> {
+  for (const key of keys) {
+    delete env[key]
+  }
+  return env
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
@@ -89,6 +100,8 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   readonly closed: boolean
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
+  /** The CLI's executable was not found; a start that failed for it says so. */
+  readonly executableMissing?: boolean
   pauseReading?: () => void
   resumeReading?: () => void
   send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
@@ -120,11 +133,11 @@ function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error)
 export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
-  spawnImpl: typeof spawnProcess = spawnProcess,
+  spawnImpl: PipedProcessSpawner = spawnProcess,
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl)
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform)
   const inbox = createClaudeUserMessageQueue()
   const session = (queryImpl ?? query)({
     prompt: inbox.messages,
@@ -135,10 +148,13 @@ export async function openClaudeStreamJsonConnection(
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
       // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
       // shell's: the record's pin in `launch.env` must be the only home the child sees.
-      env: buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-        scrubConfiguredChildSessionStamps: true
-      }),
+      env: withoutKeys(
+        buildClaudeChildProcessEnv(launch.env, {
+          inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+          scrubConfiguredChildSessionStamps: true
+        }),
+        launch.envToDelete ?? []
+      ),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
@@ -198,7 +214,10 @@ export async function openClaudeStreamJsonConnection(
 
   const handleUnexpectedEnd = (cause?: Error): void => {
     resumeReading()
-    terminalError ??= exitError(managed.stderrTail(), exitStatus, cause)
+    if (!terminalError) {
+      const error = exitError(managed.stderrTail(), exitStatus, cause)
+      terminalError = managed.executableMissing ? withMissingProviderExecutable(error) : error
+    }
     inbox.fail(terminalError)
     if (!closing && !faultReported) {
       faultReported = true
@@ -325,6 +344,9 @@ export async function openClaudeStreamJsonConnection(
     },
     get closed() {
       return closing || managed.rootVerdict === 'exited' || terminalError !== null
+    },
+    get executableMissing() {
+      return managed.executableMissing
     },
     get exitVerdict() {
       return {

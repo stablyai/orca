@@ -1,11 +1,12 @@
 import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/visible-worktree-host-scope'
-import { getPairedDeviceIdsByEnvironment } from '@/components/sidebar/workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../../shared/workspace-creator-visibility'
 import { getRepoMapFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { sameBucketRecords } from './bucket-record-equality'
-import { getUnreadBadgeCount, hasUnreadFolderTab } from './unread-badge-count'
+import { getUnreadBadgeCount } from './unread-badge-count'
+import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 type UnreadBadgeCountState = Pick<
@@ -58,7 +59,7 @@ function sameFolderAttention(
       continue
     }
     const key = folderWorkspaceKey(folder.id)
-    if (hasUnreadFolderTab(previous, key) !== hasUnreadFolderTab(next, key)) {
+    if (hasLiveTabMarker(previous, key) !== hasLiveTabMarker(next, key)) {
       return false
     }
   }

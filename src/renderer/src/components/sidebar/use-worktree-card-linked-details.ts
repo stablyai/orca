@@ -1,7 +1,5 @@
-import React from 'react'
-
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
@@ -47,46 +45,16 @@ export function useWorktreeCardLinkedDetails({
           title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
         }
       : null)
-  const linearStatus = useAppStore((s) => s.linearStatus)
   const linearIssue: LinearIssue | null | undefined = worktree.linkedLinearIssue
     ? (linearIssueEntry?.data ?? linearIssueFallbackEntry?.data)
     : null
 
-  // Why: build a fallback Linear URL from org key + identifier while full issue data is still loading, so the link stays navigable.
-  const linearOrgUrlKey = linearStatus?.viewer?.organizationUrlKey
-  const linearWorkspaceUrlKeys = linearStatus?.workspaces?.map((ws) => ({
-    id: ws.id,
-    organizationUrlKey: ws.organizationUrlKey
-  }))
-  const linearIssueUrlFallback = React.useMemo(() => {
-    if (!worktree.linkedLinearIssue || linearIssue?.url) {
-      return undefined
-    }
-
-    // Try to get the orgUrlKey from the issue's workspace if we have workspaceId
-    let orgUrlKey: string | undefined
-    if (linearIssue?.workspaceId && linearWorkspaceUrlKeys) {
-      const issueWorkspace = linearWorkspaceUrlKeys.find((ws) => ws.id === linearIssue.workspaceId)
-      orgUrlKey = issueWorkspace?.organizationUrlKey
-    }
-
-    // Fall back to current viewer's org if no workspace match
-    if (!orgUrlKey) {
-      orgUrlKey = linearOrgUrlKey
-    }
-
-    if (!orgUrlKey) {
-      return undefined
-    }
-
-    return `https://linear.app/${encodeURIComponent(orgUrlKey)}/issue/${encodeURIComponent(worktree.linkedLinearIssue)}`
-  }, [
-    worktree.linkedLinearIssue,
-    linearIssue?.url,
-    linearIssue?.workspaceId,
-    linearOrgUrlKey,
-    linearWorkspaceUrlKeys
-  ])
+  const linearReferences = getWorkspaceAttachments(worktree).filter(
+    (item) =>
+      item.provider === 'linear' &&
+      (item.identifier ?? item.linearIdentifier) === worktree.linkedLinearIssue
+  )
+  const linearIssueUrlFallback = linearReferences.length === 1 ? linearReferences[0].url : undefined
 
   const linearIssueDisplay = worktree.linkedLinearIssue
     ? linearIssue
@@ -95,6 +63,7 @@ export function useWorktreeCardLinkedDetails({
           title: linearIssue.title,
           url: linearIssue.url,
           stateName: linearIssue.state?.name,
+          stateType: linearIssue.state?.type,
           labels: linearIssue.labels
         }
       : {

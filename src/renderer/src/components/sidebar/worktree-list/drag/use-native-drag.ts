@@ -1,3 +1,4 @@
+import { uniqueDraggedIds, type DraggedWorktreeCopies } from './dragged-worktree-copies'
 import { useCallback } from 'react'
 import type React from 'react'
 import { getWorkspaceKanbanSidebarDropTarget } from '../../workspace-kanban-sidebar-drop'
@@ -41,13 +42,19 @@ export function useWorktreeNativeDrag(args: {
   })
 
   const handleWorktreeCardDragStart = useCallback(
-    (event: React.DragEvent<HTMLDivElement>, worktreeId: string, draggedIds: readonly string[]) => {
+    (
+      event: React.DragEvent<HTMLDivElement>,
+      worktreeId: string,
+      draggedCopies: DraggedWorktreeCopies
+    ) => {
+      const draggedIds = draggedCopies.map((copy) => copy.id)
       const sourceGroupKey =
         ctx.worktreeDragGroups.find((group) => group.worktreeIds.includes(worktreeId))?.key ?? null
       if (!sourceGroupKey) {
         return
       }
-      const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)
+      const reorderDraggedCopies = session.getReorderDraggedCopies(draggedCopies)
+      const reorderDraggedIds = uniqueDraggedIds(reorderDraggedCopies)
       const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
         sourceGroupKey,
         reorderDraggedIds
@@ -60,6 +67,7 @@ export function useWorktreeNativeDrag(args: {
         draggingWorktreeId: worktreeId,
         sourceGroupKey,
         draggedIds,
+        draggedCopies: reorderDraggedCopies,
         reorderDraggedIds,
         reorderUnitDraggedIds,
         rects,

@@ -28,7 +28,10 @@ import {
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
+import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
+import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
+import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
 /** Who a failed acquisition's sentence names, and whether it was the session's first start. */
 export type FailedAcquisitionWording = {
@@ -48,6 +51,7 @@ function failedAcquisitionWireRefusal(
   const { reason } = structuredAgentSessionStartFailure(
     {
       refusal,
+      diagnostic: providerDiagnosticOf(error),
       argumentProblem: argumentProblemOf(error),
       ...(wording.newSession ? { newSession: true as const } : {})
     },
@@ -110,15 +114,22 @@ function isExitProvenAcquisitionFailure(error: unknown): error is Error {
 function failedAcquisitionDetails(
   error: unknown
 ): AgentSessionRefusalDetailsByCode['agent_session_operation_invalid'] | undefined {
+  const codexInstallation = codexInstallationProblemOf(error)
+  if (codexInstallation) {
+    return { reason: 'attachFailed', codexInstallation }
+  }
   const argumentProblem = argumentProblemOf(error)
   if (argumentProblem) {
     return { reason: 'attachFailed', argumentProblem }
   }
   if (error instanceof AgentSessionAcquisitionRefusal) {
-    return { reason: error.reason }
+    return { reason: error.reason, ...(error.account ? { account: error.account } : {}) }
   }
   if (isAgentSessionPreSpawnError(error) && error.reason) {
     return { reason: error.reason }
+  }
+  if (isExitProvenAcquisitionFailure(error) && providerExecutableMissing(error)) {
+    return { reason: 'cliMissing' }
   }
   if (isExitProvenAcquisitionFailure(error) && providerExitObserved(error)) {
     return { reason: 'providerStartFailed' }
@@ -136,7 +147,8 @@ export function failedAcquisitionRefusal(
   if (
     error instanceof AgentSessionAcquisitionRefusal ||
     isExitProvenAcquisitionFailure(error) ||
-    (isAgentSessionPreSpawnError(error) && argumentProblemOf(error))
+    (isAgentSessionPreSpawnError(error) &&
+      (argumentProblemOf(error) || codexInstallationProblemOf(error)))
   ) {
     return {
       ok: false,

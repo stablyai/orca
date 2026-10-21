@@ -2,7 +2,7 @@ import WorktreeCard from '@/components/sidebar/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
   getLineageChildrenInlineStyle,
-  getLineageNestedRowGeometry
+  LINEAGE_CHILDREN_INLINE_OFFSET
 } from '@/components/sidebar/worktree-list/rows/indentation'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -13,8 +13,6 @@ import { useState } from 'react'
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
-  const experimentalNewWorktreeCardStyle =
-    useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle) === true
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -56,11 +54,6 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
     const nextAncestorIds = new Set([...ancestorIds, worktree.id])
     const safeLineageChildren = lineageChildren.filter((child) => !nextAncestorIds.has(child.id))
     const hasSafeLineageChildren = safeLineageChildren.length > 0
-    const lineageGeometry = getLineageNestedRowGeometry({
-      experimentalNewWorktreeCardStyle,
-      inheritedCardContentIndent: 0,
-      lineageDepth: ancestorIds.size
-    })
     return (
       <WorktreeCard
         key={worktree.id}
@@ -71,7 +64,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
         hideRepoBadge={false}
         nativeDragEnabled={false}
         flushSurface
-        contentIndent={lineageGeometry.cardContentIndent}
+        contentIndent={0}
         affiliateListMode
         lineageChildCount={safeLineageChildren.length}
         lineageCollapsed={lineageCollapsed}
@@ -83,11 +76,6 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
                   onClick={stopNestedWorktreeCardBubble}
                   onDoubleClick={stopNestedWorktreeCardBubble}
                   onDragStart={stopNestedWorktreeCardBubble}
-                  style={
-                    lineageGeometry.surfaceInset > 0
-                      ? { paddingLeft: lineageGeometry.surfaceInset }
-                      : undefined
-                  }
                 >
                   {renderChildWorktree(child, nextAncestorIds)}
                 </div>
@@ -96,7 +84,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
         }
         lineageChildrenStyle={
           hasSafeLineageChildren
-            ? getLineageChildrenInlineStyle(lineageGeometry.lineageChildrenInlineOffset)
+            ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
             : undefined
         }
         onLineageToggle={

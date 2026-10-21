@@ -1,10 +1,9 @@
-import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
+import { createDetailsMatcher, isEditableDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { isReservedRichMarkdownTransportBody } from './rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
-import { getMarkdownFenceRanges } from './markdown-fence-scanner'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
 
@@ -46,7 +45,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
   { htmlSuperscriptLinks = false }: { htmlSuperscriptLinks?: boolean } = {}
 ): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
-  const fenceRanges = getMarkdownFenceRanges(normalizedContent)
+  const matchDetails = createDetailsMatcher(normalizedContent)
   const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
@@ -123,7 +122,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
     }
 
     if (isLineStart) {
-      const detailsHtml = matchDetailsHtmlBlock(normalizedContent, index, fenceRanges)
+      const detailsHtml = matchDetails(index)
       if (detailsHtml && isEditableDetailsHtmlBlock(detailsHtml)) {
         // Why: <details>/<summary> is an editable rich-mode node; raw passthrough
         // would make toggle blocks reopen as inert HTML instead.

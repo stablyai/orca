@@ -10,6 +10,7 @@ import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-lo
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Repo } from '../shared/repo-types'
 import { parseWslPath } from './wsl'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 export const WORKTREE_TRASH_DIR_NAME = '.orca-worktree-trash'
 
@@ -86,7 +87,7 @@ export function collectWorktreeTrashSweepRoots(
 ): string[] {
   const roots = new Set<string>()
   for (const repo of repos) {
-    if (repo.connectionId || isFolderRepo(repo) || parseWslPath(repo.path)) {
+    if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo) || parseWslPath(repo.path)) {
       continue
     }
     try {

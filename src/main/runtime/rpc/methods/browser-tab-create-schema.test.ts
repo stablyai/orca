@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
-import { BrowserTabCreateParams } from './browser-tab-create-schema'
+import { BrowserTabCreateParams } from '../../../../shared/rpc-contract/browser-tab-create-params'
 
 describe('browser.tabCreate placement schema', () => {
   it('keeps placement optional for older clients', () => {

@@ -8,7 +8,8 @@ import {
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, setLocalPtyProvider, getLocalPtyProvider } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { setLocalPtyProvider, getLocalPtyProvider } from './pty/provider/registry'
 import { join } from 'node:path'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'

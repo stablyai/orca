@@ -5,6 +5,26 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useCallback, useMemo, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -12,6 +32,7 @@ import type {
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { transcriptRowOffset, transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import {
@@ -23,7 +44,6 @@ import {
   layout,
   marker,
   overrideLayoutProperty,
-  scrollTranscript,
   session,
   stubLayout,
   stubResizeObserver
@@ -38,8 +58,6 @@ const TOP_GUTTER_PX = 40
 /** The "load earlier" row plus the column gap under it, present only while older
  *  history remains — so the page that exhausts history takes it away. */
 const OLDER_HISTORY_ROW_PX = 52
-/** A ~500ms smooth scroll at 60fps. */
-const SMOOTH_SCROLL_FRAMES = 30
 
 function message(index: number): NativeChatMessage {
   return index % 5 === 0
@@ -103,59 +121,27 @@ function PagedTranscript({
   )
 }
 
-/** Chromium's two scroll kinds: an instant write lands at once; a smooth scroll
- *  eases in and out over frames, and any instant write cancels it. Only the
- *  smooth scroll's landing is ever marked as the application's own, so its first
- *  frames — a pixel or two off where it started — reach the list as unmarked. */
-function installScrollModel(): { frame: () => void } {
-  let animation: { from: number; to: number; step: number } | null = null
-  vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(function scrollTo(
-    this: HTMLElement,
-    options?: ScrollToOptions | number
-  ): void {
-    const top = typeof options === 'object' ? options.top : undefined
-    if (top === undefined) {
-      return
-    }
-    if (typeof options === 'object' && options.behavior === 'smooth') {
-      animation = { from: this.scrollTop, to: top, step: 0 }
-      return
-    }
-    animation = null
-    this.scrollTop = top
-  })
-  return {
-    frame: () => {
-      const scroller = document.querySelector<HTMLElement>('[data-native-chat-scroll]')
-      if (!scroller || !animation) {
-        return
-      }
-      animation.step += 1
-      const t = animation.step / SMOOTH_SCROLL_FRAMES
-      const eased = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
-      scroller.scrollTop = animation.from + (animation.to - animation.from) * eased
-      if (animation.step >= SMOOTH_SCROLL_FRAMES) {
-        animation = null
-      }
-    }
-  }
-}
-
 /** The row's own prose, without the timestamp line the row also carries. */
 function rowText(row: HTMLElement): string {
   return /(?:prompt|marker)-\d+/.exec(row.querySelector('p')?.textContent ?? '')?.[0] ?? ''
 }
 
-// A rail jump scrolls smoothly. Started by a reader following the end — which is
-// exactly where paging older history in leaves them — its first frames used to
-// re-arm follow and the next one rebased the view, cancelling the jump a few
-// pixels from the bottom.
+// A jump must detach end-follow and retain its landing as older history arrives.
 describe('jumping from the rail while following the end', () => {
   let restore: (() => void)[] = []
-  let scrollModel: ReturnType<typeof installScrollModel>
   let lastEventScrollTop = 0
 
   beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        'Date',
+        'performance',
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame'
+      ]
+    })
     const undoLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
     const stubbedHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
     restore = [
@@ -177,7 +163,7 @@ describe('jumping from the rail while following the end', () => {
           if (this.hasAttribute('data-native-chat-window')) {
             return layout.aboveTranscriptPx
           }
-          return this.dataset.index === undefined ? 0 : Number.parseFloat(this.style.top) || 0
+          return this.dataset.index === undefined ? 0 : transcriptRowOffset(this)
         }
       }),
       overrideLayoutProperty('offsetParent', {
@@ -193,18 +179,25 @@ describe('jumping from the rail while following the end', () => {
     Object.defineProperty(layout, 'aboveTranscriptPx', {
       configurable: true,
       get: () =>
-        TOP_GUTTER_PX +
-        (screen
-          .queryByRole('button', { name: /load earlier messages/i })
-          ?.closest('[data-native-chat-transcript-column]')
-          ? OLDER_HISTORY_ROW_PX
-          : 0)
+        transcriptWindowTop(
+          document.querySelector('[data-native-chat-window]'),
+          TOP_GUTTER_PX,
+          OLDER_HISTORY_ROW_PX
+        )
     })
-    scrollModel = installScrollModel()
+    vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(function scrollTo(
+      this: HTMLElement,
+      options?: ScrollToOptions | number
+    ): void {
+      if (typeof options === 'object' && options.top !== undefined) {
+        this.scrollTop = options.top
+      }
+    })
     lastEventScrollTop = 0
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     Object.defineProperty(layout, 'aboveTranscriptPx', {
       configurable: true,
@@ -224,9 +217,7 @@ describe('jumping from the rail while following the end', () => {
     return element
   }
 
-  /** One painted frame: layout clamps the offset to the new document, observers
-   *  deliver, a smooth scroll advances, any offset change dispatches one scroll
-   *  event — whoever made it — and queued callbacks and animation frames run. */
+  /** Deliver layout changes and scroll events before the virtualizer's next frame. */
   async function frame(): Promise<void> {
     const element = scroller()
     act(() => {
@@ -234,15 +225,13 @@ describe('jumping from the rail while following the end', () => {
       const offset = element.scrollTop
       element.scrollTop = offset
       deliverResizes()
-      scrollModel.frame()
     })
     if (element.scrollTop !== lastEventScrollTop) {
       lastEventScrollTop = element.scrollTop
       fireEvent.scroll(element)
     }
     await act(async () => {
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      vi.advanceTimersByTime(16)
     })
   }
 
@@ -263,14 +252,14 @@ describe('jumping from the rail while following the end', () => {
     if (!row) {
       throw new Error(`${prompt} has no mounted row`)
     }
-    return layout.aboveTranscriptPx + Number.parseFloat(row.style.top) - scroller().scrollTop
+    return layout.aboveTranscriptPx + row.offsetTop - scroller().scrollTop
   }
 
   it.each([
     ['in the page that exhausts older history', 'prompt-5', false],
     ['in a page with older history still behind it', 'prompt-25', false],
     ['that is already loaded', 'prompt-45', true]
-  ])('lands on a message %s', async (_case, prompt, loaded) => {
+  ])('jumps without animation to a message %s', async (_case, prompt, loaded) => {
     render(<PagedTranscript />)
     await settle(10)
     // Anti-vacuous: the reader starts pinned to the very end.
@@ -278,9 +267,17 @@ describe('jumping from the rail while following the end', () => {
     expect(screen.queryByText(prompt) !== null).toBe(loaded)
 
     fireEvent.click(screen.getByRole('button', { name: prompt }))
-    await settle(60)
+    if (loaded) {
+      expect(Math.abs(rowOffsetFromViewportTop(prompt))).toBeLessThanOrEqual(2)
+      await frame()
+      expect(Math.abs(rowOffsetFromViewportTop(prompt))).toBeLessThanOrEqual(2)
+    }
+    await settle(loaded ? 59 : 60)
 
-    // The failure mode: the jump cancelled itself a few pixels above the end.
+    expect(HTMLElement.prototype.scrollTo).toHaveBeenCalled()
+    expect(HTMLElement.prototype.scrollTo).not.toHaveBeenCalledWith(
+      expect.objectContaining({ behavior: 'smooth' })
+    )
     expect(distanceFromBottom()).toBeGreaterThan(100)
     expect(Math.abs(rowOffsetFromViewportTop(prompt))).toBeLessThanOrEqual(2)
   })
@@ -428,125 +425,109 @@ describe('jumping from the rail while following the end', () => {
     expect(distanceFromBottom()).toBe(0)
   })
 
-  it('jumps to a message without animating when the reader asks for reduced motion', async () => {
-    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
-      matches: query === '(prefers-reduced-motion: reduce)',
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false
-    }))
-    render(<PagedTranscript />)
-    await settle(10)
-
-    fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
-    await frame()
-
-    // A smooth scroll would still be easing in here, a few pixels from where it started.
-    expect(Math.abs(rowOffsetFromViewportTop('prompt-45'))).toBeLessThanOrEqual(2)
-  })
-})
-
-describe('revealing a diff while a rail jump pages', () => {
-  let restoreLayout = (): void => {}
-  beforeEach(() => {
-    restoreLayout = stubLayout()
-  })
-  afterEach(() => {
-    restoreLayout()
-    vi.restoreAllMocks()
-  })
-
-  function journalItem(itemId: string, body: AgentJournalItemBody, sequence: number) {
-    return { itemId, body, sequence, observedAt: sequence * 1000, revision: 1 }
-  }
-  function prompt(itemId: string, text: string, sequence: number) {
-    return journalItem(
-      itemId,
-      { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
-      sequence
-    )
-  }
-
-  const patch = '@@ -1 +1 @@\n-before\n+after'
-  const OLDER = prompt('older', 'Oldest prompt', 1)
-  const LOADED: AgentJournalRenderItem[] = [
-    prompt('user', 'Edit it', 2),
-    journalItem(
-      'diff',
-      {
-        kind: 'diff',
-        path: 'src/a.ts',
-        patch: { head: patch, truncated: false, digest: 'fixture', byteLength: patch.length }
-      },
-      3
-    ),
-    prompt('user-2', 'Second prompt', 4),
-    prompt('user-3', 'Third prompt', 5),
-    ...Array.from({ length: 200 }, (_, index) =>
-      journalItem(
-        `tail-${index}`,
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `marker-${index}` }] },
-        index + 6
+  describe('revealing a diff while a rail jump pages', () => {
+    function journalItem(itemId: string, body: AgentJournalItemBody, sequence: number) {
+      return { itemId, body, sequence, observedAt: sequence * 1000, revision: 1 }
+    }
+    function prompt(itemId: string, text: string, sequence: number) {
+      return journalItem(
+        itemId,
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
+        sequence
       )
-    )
-  ]
+    }
 
-  function DiffTranscript({ holdPage }: { holdPage: () => Promise<void> }): React.JSX.Element {
-    const [loadedOlder, setLoadedOlder] = useState(false)
-    const items = useMemo(() => (loadedOlder ? [OLDER, ...LOADED] : LOADED), [loadedOlder])
-    const loadEarlier = useCallback(async (): Promise<NativeChatOlderPageResult> => {
-      await holdPage()
-      setLoadedOlder(true)
-      return 'applied'
-    }, [holdPage])
-    return (
-      <NativeChatMessageList
-        session={{
-          ...session(projectStructuredItemsToNativeChat(items)),
-          hasMore: !loadedOlder,
-          loadEarlier
-        }}
-        journalItems={items}
-        railOutline={loadedOlder ? [] : [{ id: 'older', text: 'Oldest prompt', hasImages: false }]}
-        isWorking={false}
-        expandSignal={false}
-      />
-    )
-  }
+    const patch = '@@ -1 +1 @@\n-before\n+after'
+    const OLDER = prompt('older', 'Oldest prompt', 1)
+    const LOADED: AgentJournalRenderItem[] = [
+      prompt('user', 'Edit it', 2),
+      journalItem(
+        'diff',
+        {
+          kind: 'diff',
+          path: 'src/a.ts',
+          patch: { head: patch, truncated: false, digest: 'fixture', byteLength: patch.length }
+        },
+        3
+      ),
+      ...Array.from({ length: 200 }, (_, index) =>
+        journalItem(
+          `tail-${index}`,
+          {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: `marker-${index}` }]
+          },
+          index + 4
+        )
+      )
+    ]
 
-  it('keeps the diff in view when its page lands', async () => {
-    let release = (): void => {}
-    const holdPage = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve
-        })
-    )
-    const scrollTo = vi.fn()
-    vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
-    const { container } = render(<DiffTranscript holdPage={holdPage} />)
+    function DiffTranscript({ holdPage }: { holdPage: () => Promise<void> }): React.JSX.Element {
+      const [loadedOlder, setLoadedOlder] = useState(false)
+      const items = useMemo(() => (loadedOlder ? [OLDER, ...LOADED] : LOADED), [loadedOlder])
+      const loadEarlier = useCallback(async (): Promise<NativeChatOlderPageResult> => {
+        await holdPage()
+        setLoadedOlder(true)
+        return 'applied'
+      }, [holdPage])
+      return (
+        <NativeChatMessageList
+          session={{
+            ...session(projectStructuredItemsToNativeChat(items)),
+            hasMore: !loadedOlder,
+            loadEarlier
+          }}
+          journalItems={items}
+          railOutline={
+            loadedOlder ? [] : [{ id: 'older', text: 'Oldest prompt', hasImages: false }]
+          }
+          isWorking={false}
+          expandSignal={false}
+        />
+      )
+    }
 
-    fireEvent.click(screen.getByRole('button', { name: 'Oldest prompt' }))
-    // Anti-vacuous: the older page is in flight.
-    expect(holdPage).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
-    fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-    scrollTranscript(container, 6000)
-    expect(screen.getByText('Edited')).toBeInTheDocument()
-    scrollTo.mockClear()
+    function expectDiffInView(): void {
+      expect(
+        screen.getByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/, expanded: true })
+      ).toBeInTheDocument()
+      const row = screen.getByText('Edited').closest<HTMLElement>('[data-index]')
+      if (!row) {
+        throw new Error('revealed diff has no mounted row')
+      }
+      const top = layout.aboveTranscriptPx + row.offsetTop - scroller().scrollTop
+      expect(row.offsetHeight).toBeGreaterThan(0)
+      expect(top).toBeGreaterThanOrEqual(-2)
+      expect(top).toBeLessThan(scroller().clientHeight - 2)
+    }
 
-    await act(async () => {
-      release()
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    it('keeps the diff in view when its page lands', async () => {
+      const pages = holdFirstPage()
+      render(<DiffTranscript holdPage={pages.holdPage} />)
+      await settle(10)
+      expect(distanceFromBottom()).toBe(0)
+      expect(screen.queryByText('Edited')).toBeNull()
+
+      await pickUnloadedWhilePaging('Oldest prompt')
+      expect(pages.asked()).toBe(1)
+      expect(screen.getByRole('button', { name: 'Oldest prompt' })).toHaveAttribute(
+        'aria-busy',
+        'true'
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
+      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
+      expect(screen.getByRole('button', { name: 'Oldest prompt' })).not.toHaveAttribute('aria-busy')
+      await settle(40)
+      expectDiffInView()
+
+      pages.release()
+      await settle(60)
+
+      expect(pages.asked()).toBe(1)
+      expect(screen.getByRole('button', { name: 'Oldest prompt' })).not.toHaveAttribute('aria-busy')
+      expectDiffInView()
     })
-
-    // The abandoned jump would have taken the pin and smooth-scrolled up to the oldest
-    // prompt; the prepend's own anchoring is an instant write.
-    expect(scrollTo.mock.calls.filter(([options]) => options?.behavior === 'smooth')).toEqual([])
-    expect(screen.getByText('Edited')).toBeInTheDocument()
   })
 })

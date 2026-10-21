@@ -1,8 +1,9 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
-  settingsForWorktreeOperationRoute,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
 } from '@/lib/worktree-operation-route'
@@ -35,7 +36,6 @@ type OwnerState = Pick<
   | 'activeWorktreeId'
   | 'activeWorkspaceExecutionHostId'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-  | 'getKnownWorktreeById'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
 >
@@ -60,7 +60,6 @@ export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
     activeWorktreeId: state.activeWorktreeId,
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    getKnownWorktreeById: state.getKnownWorktreeById,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree
   }
@@ -72,38 +71,21 @@ const FLOATING_WORKSPACE_ROUTE: WorktreeOperationRouteResolution = {
   route: { executionHostId: 'local', runtimeEnvironmentId: null }
 }
 
-// Route settings are cloned for the runtime operation contract. Reuse that
-// clone while the store's source settings and selected runtime are unchanged so
-// consumers do not treat an unrelated store update as a new image owner.
-const settingsBySource = new WeakMap<object, Map<string, AppState['settings']>>()
+// Why stable: consumers compare by identity, so an unrelated store update must not read as a
+// new image owner.
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
+const environmentTargets = new Map<string, RuntimeClientTarget>()
 
-function stableSettingsForRoute(
-  settings: AppState['settings'],
-  runtimeEnvironmentId: string | null
-): AppState['settings'] {
-  if (!settings) {
-    return settingsForWorktreeOperationRoute(settings, {
-      executionHostId: null,
-      runtimeEnvironmentId
-    })
+function stableTargetForRoute(runtimeEnvironmentId: string | null): RuntimeClientTarget {
+  if (!runtimeEnvironmentId) {
+    return LOCAL_TARGET
   }
-  const source = settings as object
-  let byRuntime = settingsBySource.get(source)
-  if (!byRuntime) {
-    byRuntime = new Map()
-    settingsBySource.set(source, byRuntime)
+  let target = environmentTargets.get(runtimeEnvironmentId)
+  if (!target) {
+    target = runtimeTargetForOwnerEnvironment(runtimeEnvironmentId)
+    environmentTargets.set(runtimeEnvironmentId, target)
   }
-  const cacheKey = runtimeEnvironmentId ?? ''
-  const cached = byRuntime.get(cacheKey)
-  if (cached) {
-    return cached
-  }
-  const resolved = settingsForWorktreeOperationRoute(settings, {
-    executionHostId: null,
-    runtimeEnvironmentId
-  })
-  byRuntime.set(cacheKey, resolved)
-  return resolved
+  return target
 }
 
 export function resolveNativeChatImageRuntimeContext(
@@ -137,11 +119,12 @@ export function resolveNativeChatImageRuntimeContext(
     return null
   }
   const host = parseExecutionHostId(executionHostId)
-  if (!host) {
+  // Why: an `ssh:` host is served only through its paired server; without one there is no route.
+  if (!host || (host.kind === 'ssh' && !route.runtimeEnvironmentId)) {
     return null
   }
   const context: RuntimeFileOperationArgs = {
-    settings: stableSettingsForRoute(state.settings, route.runtimeEnvironmentId),
+    target: stableTargetForRoute(route.runtimeEnvironmentId),
     worktreeId: linkContext.worktreeId,
     worktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local'
@@ -155,10 +138,6 @@ export function resolveNativeChatImageRuntimeContext(
       )
       context.expectedSshTargetId = expectation.expectedSshTargetId
       context.expectedSshConnectionGeneration = expectation.expectedSshConnectionGeneration
-      if (!route.runtimeEnvironmentId) {
-        context.connectionId = host.targetId
-        context.expectedExternalSshTargetId = host.targetId
-      }
     } catch {
       return null
     }

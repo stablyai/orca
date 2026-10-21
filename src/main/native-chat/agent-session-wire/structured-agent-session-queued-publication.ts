@@ -15,10 +15,14 @@ import {
   resumableQueuePause
 } from '../agent-session-journal/queued-message-pause'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-import { nextStructuredQueuedMessage } from './structured-agent-session-queued-messages'
-import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import {
+  nextStructuredQueuedMessage,
+  type StructuredQueueGateInput
+} from './structured-agent-session-queued-messages'
+import {
+  heldStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkHost
+} from './structured-agent-session-host-current-work'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -29,15 +33,20 @@ export type QueuePublication = {
 }
 
 /** What the drain's gate reads beyond the journal; resolved per read. */
-export type QueueSendGate = () => { record: AgentSessionRecord | null; fence: number }
+export type QueueSendGate = (journal: AgentSessionJournal) => StructuredQueueGateInput
 
 export function structuredQueueSendGate(
-  store: Pick<AgentSessionRecordStore, 'getRecord'>,
+  host: StructuredAgentSessionCurrentWorkHost,
   sessionId: string
 ): QueueSendGate {
-  return () => ({
-    record: store.getRecord(sessionId),
-    fence: structuredAgentSessionConversationFence(store, sessionId)
+  return (journal) => ({
+    record: host.store.getRecord(sessionId),
+    work: heldStructuredAgentSessionCurrentWork(
+      host.store,
+      sessionId,
+      journal,
+      host.sessions.get(sessionId)
+    )
   })
 }
 
@@ -135,7 +144,8 @@ export function readQueuePublication(
     resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
   // The test narrows the type.
   const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
-  const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...gate() })?.messageId ?? null
+  const nextQueuedMessageId =
+    nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&

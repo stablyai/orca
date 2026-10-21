@@ -1,10 +1,11 @@
+import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
 import type {
   StagedStructuredLaunchPrompt,
   StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
@@ -12,6 +13,8 @@ import type { AgentLaunchRequestId } from './agent-launch-request-id'
 export type StructuredAgentLaunchOptions = {
   /** The user action this start serves; only a re-delivery of it joins its chat. */
   requestId: AgentLaunchRequestId
+  /** Background launches never ask host publication to select their tab. */
+  activate?: boolean
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
@@ -24,8 +27,9 @@ export type StructuredAgentLaunchOptions = {
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
-  /** The tab group the chat opens in; a request with no text reuses an empty chat only there. */
-  targetGroupId?: string
+  /** Final admission of a source-bound action, immediately before its first create is sent. */
+  beforeCreate?: () => boolean
+  surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 
 export type StructuredLaunchCaller = {

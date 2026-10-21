@@ -28,12 +28,10 @@ export type NodePtyLoadCause = {
  * miss — `Cannot find module` — even when the real failure was the dynamic loader
  * refusing `build/Release/pty.node`. Anything acting on that tail sends the operator to
  * install a module that is already installed.
+ *
+ * Returns the real cause a flattened message still carries, when the last attempt was the
+ * telling one.
  */
-export function isFlattenedNodePtyLoaderMessage(message: string): boolean {
-  return /Failed to load native module: (?:conpty|pty)\.node(?:,|:|$)/.test(message)
-}
-
-/** The real cause a flattened message still carries, when the last attempt was the telling one. */
 export function classifyNodePtyLoaderMessage(message: string): NodePtyLoadCause {
   const abiMismatch = parseNodeAbiMismatch(message)
   if (abiMismatch) {

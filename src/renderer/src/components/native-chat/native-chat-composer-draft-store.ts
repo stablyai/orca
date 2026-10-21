@@ -9,6 +9,7 @@ import {
   sameNativeChatComposerDraftImages
 } from './native-chat-composer-draft-comparison'
 import {
+  placeNativeChatComposerDraftAddition,
   withNativeChatComposerDraftAddition,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
@@ -23,7 +24,7 @@ import {
   records,
   refusedScopes,
   scopeListeners,
-  unverifiedScopes,
+  reconcileRestoredImageChecks,
   type DraftAppend,
   type DraftRecord
 } from './native-chat-composer-draft-memory'
@@ -53,7 +54,6 @@ export {
 } from './native-chat-composer-draft-persistence'
 export {
   hydrateNativeChatComposerDrafts,
-  isNativeChatComposerDraftLoadPending,
   waitForNativeChatComposerDrafts
 } from './native-chat-composer-draft-load'
 
@@ -107,17 +107,6 @@ export function subscribeToNativeChatComposerDraft(
   }
 }
 
-/** A draft read back from storage this run whose image files have not been checked yet. */
-export function isNativeChatComposerDraftUnverified(scopeKey: string): boolean {
-  return unverifiedScopes.has(scopeKey)
-}
-
-export function markNativeChatComposerDraftVerified(scopeKey: string): void {
-  if (unverifiedScopes.delete(scopeKey)) {
-    notifyScope(scopeKey)
-  }
-}
-
 /** A draft storage refused to save: it is kept in memory only until a later write lands. */
 export function isNativeChatComposerDraftUnsaved(scopeKey: string): boolean {
   return refusedScopes.has(scopeKey) && records.has(scopeKey)
@@ -127,7 +116,9 @@ function isEmptyDraft(draft: NativeChatComposerDraft): boolean {
   return draft.text === '' && draft.images.length === 0
 }
 
-export function readNativeChatComposerDraft(scopeKey: string): NativeChatComposerDraft {
+export function readNativeChatComposerDraft(
+  scopeKey: string
+): NativeChatComposerDraft & Pick<StoredNativeChatComposerDraft, 'owner'> {
   return records.get(scopeKey) ?? EMPTY_DRAFT
 }
 
@@ -160,6 +151,7 @@ export function updateNativeChatComposerDraft(
   }
   if (isEmptyDraft({ text, images })) {
     records.delete(scopeKey)
+    reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
     persistNativeChatComposerDraft(scopeKey, 'immediate', append)
     return
@@ -175,6 +167,7 @@ export function updateNativeChatComposerDraft(
     ...(unsavedText === undefined ? {} : { unsavedText })
   }
   records.set(scopeKey, record)
+  reconcileRestoredImageChecks(scopeKey, record.images)
   notifyScope(scopeKey)
   persistNativeChatComposerDraft(scopeKey, persist, append)
   if (!load.hydrated) {
@@ -185,11 +178,9 @@ export function updateNativeChatComposerDraft(
 
 function withAddition<T extends NativeChatComposerDraft>(
   draft: T,
-  addition: NativeChatComposerDraftAddition,
-  options: { once?: boolean } = {}
+  addition: NativeChatComposerDraftAddition
 ): T {
-  const next = withNativeChatComposerDraftAddition(draft, addition, options)
-  return { ...draft, ...next, ...(next.text === draft.text ? {} : { document: undefined }) }
+  return { ...draft, ...withNativeChatComposerDraftAddition(draft, addition) }
 }
 
 /**
@@ -206,17 +197,18 @@ export function appendToNativeChatComposerDraft(
 ): boolean {
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
-  const { text, images } = withAddition(current, addition)
+  const placed = placeNativeChatComposerDraftAddition(current, addition)
+  const { text, images, document } = withAddition(current, placed)
   updateNativeChatComposerDraft(
     scopeKey,
     {
       text,
       images,
-      ...(text === current.text ? {} : { document: undefined }),
+      document,
       ...(owner ? { owner } : {})
     },
     'immediate',
-    (loaded) => withAddition(loaded, addition, { once: true })
+    (loaded) => withAddition(loaded, placed)
   )
   const after = records.get(scopeKey)
   if (!after) {
@@ -226,7 +218,7 @@ export function appendToNativeChatComposerDraft(
   if (after === before && !hasLocalChange(scopeKey) && !refusedScopes.has(scopeKey)) {
     return true
   }
-  return journalNativeChatComposerDraftAddition(scopeKey, addition, after.savedAt)
+  return journalNativeChatComposerDraftAddition(scopeKey, placed, after.savedAt)
 }
 
 /**
@@ -263,6 +255,7 @@ function deleteDraftsWhere(
     const draft = records.get(scopeKey)
     if (matches(scopeKey, draft)) {
       records.delete(scopeKey)
+      reconcileRestoredImageChecks(scopeKey, [])
       notifyScope(scopeKey)
       if (draft) {
         persistNativeChatComposerDraft(scopeKey, 'immediate')

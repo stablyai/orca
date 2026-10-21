@@ -162,46 +162,20 @@ describe('fresh spawn leaves a local pane unbound', () => {
     )
   })
 
-  // The direct-SSH ledger runs its own retry; a second remount would race it.
-  it('leaves recovery to the direct SSH retry ledger', async () => {
+  // #21195: connect() resolves empty while the remote transport still holds an armed retry.
+  it('leaves recovery to a transport that owns its own retry', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transport.connect.mockResolvedValueOnce(null)
+    const transport = Object.assign(createMockTransport(), { ownsRecovery: vi.fn(() => true) })
+    transport.connect.mockImplementation(async () => undefined)
     transportFactoryQueue.push(transport)
-    const settleDirectSshPaneRetry = vi.fn()
-    const pendingRetry = {
-      attemptId: 'attempt-1',
-      authority: { targetId: 'target-a', providerEpoch: 'epoch-1', connectionGeneration: 3 },
-      tabGeneration: 7,
-      startedAt: 1
-    }
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
-      ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
-      sshConnectionStates: new Map([
-        [
-          'target-a',
-          {
-            targetId: 'target-a',
-            status: 'connected',
-            providerEpoch: 'epoch-1',
-            connectionGeneration: 3
-          }
-        ]
-      ]),
-      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
-      settleDirectSshPaneRetry
-    } as StoreState
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    const deps = createDeps({ tabId: 'tab-transport-retry' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocks cover every pane, manager, and deps member the connect path reads.
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(40)
 
-    // The lease settled, so the unbound branch ran and deliberately skipped recovery.
-    expect(settleDirectSshPaneRetry).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'failed', attemptId: 'attempt-1' })
-    )
+    expect(transport.connect).toHaveBeenCalled()
+    expect(transport.ownsRecovery).toHaveBeenCalled()
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
     )

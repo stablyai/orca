@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import { createSkillInstallAuthority } from './runtime-skill-install-authority'
 
@@ -14,7 +14,6 @@ function createHost(overrides: Partial<RuntimeSkillCommandHost> = {}): RuntimeSk
     listFolderWorkspaces: () => [],
     listResolvedWorktrees: async () => [],
     showManagedWorktree: async () => ({ id: WORKTREE_ID, path: '/workspace/app' }),
-    getSshProvider: () => ({ requestHostRpc: vi.fn() }) as never,
     skillTransactionRecovery: Promise.resolve(),
     ...overrides
   } as RuntimeSkillCommandHost

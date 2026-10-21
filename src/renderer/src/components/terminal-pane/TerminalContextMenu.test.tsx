@@ -165,7 +165,7 @@ describe('TerminalContextMenu', () => {
     })
 
     const handoffItem = items.list.find(
-      (item) => childrenText(item.children) === 'Continue in New Session…'
+      (item) => childrenText(item.children) === 'Hand Off to Another Agent'
     )
     expect(handoffItem).toBeDefined()
 

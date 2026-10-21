@@ -6,9 +6,9 @@ import type {
 } from '@/lib/project-host-setup-options'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
-import type SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
@@ -38,7 +38,11 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
+  /** Cleared picker: skip the agent and the extra shell when setup runs. */
+  quickSetupOnly?: boolean
+  onQuickSetupOnlySelect?: () => void
   eligibleRepos: readonly RepoOption[]
+  selectedRepo?: RepoOption | null
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
   selectedProjectId?: string | null

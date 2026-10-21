@@ -46,7 +46,7 @@ export type ClaudeAccountRuntime = Pick<
 > & {
   router: Pick<
     ClaudeRuntimeAuthService['router'],
-    'accountHome' | 'userConfigDir' | 'copiedLoginIntoSystemDefault'
+    'accountHome' | 'userConfigDir' | 'copiedLoginIntoSystemDefault' | 'coveredBySystemDefault'
   >
 }
 
@@ -68,7 +68,14 @@ export class ClaudeAccountSelection {
     const settings = this.store.getSettings()
     const selection = normalizeClaudeRuntimeSelection(settings)
     const accounts = settings.claudeManagedAccounts
-      .map((account) => this.summarize(account))
+      .map((account): ClaudeManagedAccountSummary => {
+        try {
+          return this.summarize(account)
+        } catch (error) {
+          console.warn('[claude-accounts] Could not read account folder:', error)
+          return { ...this.savedSummary(account), needsSignIn: true }
+        }
+      })
       .sort((a, b) => b.updatedAt - a.updatedAt)
     const userConfigDir = this.runtimeAuth.router.userConfigDir()
     // Why only with accounts, and at most every 5 s: the personal state file is large and every
@@ -87,7 +94,31 @@ export class ClaudeAccountSelection {
   }
 
   private summarize(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
-    const summary: ClaudeManagedAccountSummary = {
+    const summary = this.savedSummary(account)
+    if (account.managedAuthRuntime === 'wsl') {
+      // Why no read: listing must not start a stopped distro. Only an older Orca's folder layout
+      // is known to hold no login; a launch refuses a missing folder with its own reason.
+      return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
+    }
+    const login = readClaudeFolderLogin(
+      claudeStateFile(this.runtimeAuth.router.accountHome(account.id))
+    )
+    if (login) {
+      return {
+        ...summary,
+        email: login.email,
+        organizationUuid: login.organizationUuid,
+        organizationName: login.organizationName
+      }
+    }
+    // Why: an account System default is signed in to runs there until it signs in on its own.
+    return this.runtimeAuth.router.coveredBySystemDefault(account.id)
+      ? { ...summary, runsOnSystemDefault: true }
+      : { ...summary, needsSignIn: true }
+  }
+
+  private savedSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
+    return {
       id: account.id,
       email: account.email,
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
@@ -99,22 +130,6 @@ export class ClaudeAccountSelection {
       updatedAt: account.updatedAt,
       lastAuthenticatedAt: account.lastAuthenticatedAt
     }
-    if (account.managedAuthRuntime === 'wsl') {
-      // Why no read: listing must not start a stopped distro. Only an older Orca's folder layout
-      // is known to hold no login; a launch refuses a missing folder with its own reason.
-      return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
-    }
-    const login = readClaudeFolderLogin(
-      claudeStateFile(this.runtimeAuth.router.accountHome(account.id))
-    )
-    return login
-      ? {
-          ...summary,
-          email: login.email,
-          organizationUuid: login.organizationUuid,
-          organizationName: login.organizationName
-        }
-      : { ...summary, needsSignIn: true }
   }
 
   async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {

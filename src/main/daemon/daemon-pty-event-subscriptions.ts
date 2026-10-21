@@ -9,7 +9,7 @@ import {
   type ShutdownIfIdleResult
 } from './types'
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
-import type { PtyBackgroundStreamEvent } from '../providers/types'
+import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
@@ -150,6 +150,16 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       this.idleRetirementState = 'unverifiable'
       return { state: 'unverifiable' }
     }
+  }
+
+  /** True once this daemon accepted idle retirement: it is leaving and never serves again. */
+  hasRetiredForIdle(): boolean {
+    return this.idleRetirementState === 'retiring'
+  }
+
+  /** Whether an idle-retirement attempt still refuses new terminals here. */
+  isIdleRetirementAdmissionClosed(): boolean {
+    return this.idleRetirementAdmissionClosed
   }
 
   /** Reopens admission an idle-retirement attempt fenced without retiring the daemon. */

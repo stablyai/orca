@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -41,7 +42,56 @@ function makeSnapshot(sessionBoundary: boolean): RuntimeMobileSessionTabsSnapsho
   }
 }
 
+function makeRestoredSnapshot(): RuntimeMobileSessionTabsSnapshot {
+  const snapshot = makeSnapshot(false)
+  const tab = snapshot.tabs[0]!
+  return {
+    ...snapshot,
+    tabs: [
+      tab.type === 'terminal'
+        ? {
+            ...tab,
+            agentStatus: {
+              ...tab.agentStatus!,
+              state: 'working',
+              prompt: 'refactor the parser',
+              restoredUnconfirmed: true
+            }
+          }
+        : tab
+    ]
+  }
+}
+
 describe('projectSessionTabAgentStatus', () => {
+  // A client that cannot read `restoredUnconfirmed` would take the last known state as live.
+  it.each(['mobile', 'runtime'] as const)(
+    'keeps the legacy done projection for a %s client without the restored capability',
+    (clientKind) => {
+      const projected = projectSessionTabAgentStatus(makeRestoredSnapshot(), clientKind, [])
+      const tab = projected.tabs[0]
+
+      expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+        expect.objectContaining({ state: 'done', prompt: '' })
+      )
+      expect(tab?.type === 'terminal' ? tab.agentStatus : null).not.toHaveProperty(
+        'restoredUnconfirmed'
+      )
+    }
+  )
+
+  it('publishes a restored turn as unverifiable to a client that reads it', () => {
+    const projected = projectSessionTabAgentStatus(makeRestoredSnapshot(), 'runtime', [
+      AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+      AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY
+    ])
+    const tab = projected.tabs[0]
+
+    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+      expect.objectContaining({ state: 'working', restoredUnconfirmed: true })
+    )
+  })
+
   it('projects structured tabs and dangling group focus out of old clients', () => {
     const snapshot: RuntimeMobileSessionTabsSnapshot = {
       ...makeSnapshot(false),

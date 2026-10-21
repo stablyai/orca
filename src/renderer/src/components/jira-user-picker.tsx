@@ -3,11 +3,9 @@ import { LoaderCircle } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { jiraSearchUsers } from '@/runtime/runtime-jira-client'
+import { jiraSearchUsers, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { JiraUser } from '../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
@@ -60,7 +58,7 @@ export function JiraUserPicker({
   fixedOptions,
   searchUsers
 }: {
-  providerSettings: TaskSourceContext | GlobalSettings | null
+  providerSettings: RuntimeJiraSettings
   siteId?: string | null
   value: string
   selectedUser: JiraUser | null

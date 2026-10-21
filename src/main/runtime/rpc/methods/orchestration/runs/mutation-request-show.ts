@@ -8,6 +8,7 @@ import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchest
 export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   defineMethod({
     name: 'orchestration.requestShow',
+    permission: 'workspace',
     params: RequestShowParams,
     // Why: recovery needs a way to ask whether a mutation landed without mutating
     // again; this reads the durable receipt and never writes one, so it must stay

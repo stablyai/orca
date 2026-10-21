@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,

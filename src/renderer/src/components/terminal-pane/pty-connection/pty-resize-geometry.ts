@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
@@ -6,10 +7,6 @@ import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames } from '../pty-size-reconcile'
 import { shouldClaimRemoteDesktopViewport } from '../remote-desktop-viewport-claim'
 import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
-import { waitForStableStartupGrid } from '../terminal-startup-grid-settle'
-
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
-import { isSetupSplitGeometryReady } from './setup-split-geometry'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -197,55 +194,6 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
         cancelAnimationFrame(session.connectFrame)
       }
       session.connectFrame = null
-    }
-  }
-  session.measureStartupGrid = (): { cols: number; rows: number } | null => {
-    if (!safeFit(session.pane)) {
-      return null
-    }
-    const cols = session.pane.terminal.cols
-    const rows = session.pane.terminal.rows
-    return cols > 0 && rows > 0 ? { cols, rows } : null
-  }
-  session.shouldSettleStartupGridBeforeConnect = (): boolean =>
-    Boolean(session.paneStartup?.command) &&
-    session.deps.isVisibleRef.current &&
-    !session.connectionId &&
-    session.runtimeEnvironmentId === null
-  session.isStartupGridReadyForConnect = (): boolean => {
-    const setupSplitDirection = session.paneStartup?.waitForSetupSplitDirection
-    if (!setupSplitDirection) {
-      return true
-    }
-    // Why: the setup split reparents the main pane before its xterm grid
-    // necessarily reflects the new flex geometry; wait for both to agree.
-    return isSetupSplitGeometryReady(session.pane, session.manager, setupSplitDirection)
-  }
-  session.settleStartupGridBeforeConnect = (connect: () => void): void => {
-    session.startupGridSettleHandle?.cancel()
-    let settledSynchronously = false
-    // Why: local startup commands can launch a TUI before the split-pane grid
-    // has settled; spawn from a briefly stable grid so the TUI paints cleanly.
-    const handle = waitForStableStartupGrid({
-      isAlive: () => !session.disposed,
-      isReadyToSettle: session.paneStartup?.waitForSetupSplitDirection
-        ? session.isStartupGridReadyForConnect
-        : undefined,
-      measure: session.measureStartupGrid,
-      onSettled: () => {
-        settledSynchronously = true
-        session.startupGridSettleHandle = null
-        connect()
-      },
-      requestFrame: (callback) => requestAnimationFrame(callback),
-      cancelFrame: (handle) => {
-        if (typeof cancelAnimationFrame === 'function') {
-          cancelAnimationFrame(handle)
-        }
-      }
-    })
-    if (!settledSynchronously) {
-      session.startupGridSettleHandle = handle
     }
   }
 }

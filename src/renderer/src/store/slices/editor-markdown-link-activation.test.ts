@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harness'
 import type { AppState } from '../types'
+import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -376,8 +377,21 @@ describe('createEditorSlice activateMarkdownLink', () => {
   it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store under test reads only these fields of the partial state.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      // The server's rows are stamped as they land; focus alone never names a file's owner.
+      worktreesByRepo: {
+        'wt-1': [
+          makeWorktree({
+            id: 'wt-1',
+            repoId: 'wt-1',
+            path: '/repo',
+            hostId: 'runtime:env-active',
+            runtimeOwnerEnvironmentId: 'env-active'
+          })
+        ]
+      },
       openFiles: [
         {
           id: '/repo/docs/guide.md',

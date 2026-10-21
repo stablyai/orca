@@ -3,7 +3,7 @@ import { Paperclip } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/hooks/useGlobalFileDrop'
+import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
   makeNativeChatPaneFileDropHandlers,
   type NativeChatPaneDropClaim
@@ -51,7 +51,7 @@ export function NativeChatPaneFileDropSurface({
   const ownerRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
   const attachOwner = useOsFileDropOwner(ownerRef, {
-    consumer: 'agent',
+    consumer: (destination) => destination?.preparationConsumer ?? 'agent',
     sequence,
     canAccept: () => Boolean(registration && !registration.getClaim().disabled),
     captureDestination: () => registration?.getClaim().captureExternalDrop(),
@@ -106,7 +106,11 @@ export function NativeChatPaneFileDropSurface({
   )
 }
 
-function NativeChatPaneFileDropOverlay(): React.JSX.Element {
+export function NativeChatPaneFileDropOverlay({
+  queuedMessage = false
+}: {
+  queuedMessage?: boolean
+}): React.JSX.Element {
   return (
     <div
       data-native-chat-drop-overlay="true"
@@ -117,7 +121,12 @@ function NativeChatPaneFileDropOverlay(): React.JSX.Element {
           <Paperclip className="size-4.5" />
         </span>
         <span className="text-sm font-medium">
-          {translate('components.native-chat.drop.title', 'Drop to attach to this chat')}
+          {queuedMessage
+            ? translate(
+                'components.native-chat.drop.messageTitle',
+                'Drop to attach to this message'
+              )
+            : translate('components.native-chat.drop.title', 'Drop to attach to this chat')}
         </span>
         <span className="text-xs text-muted-foreground">
           {translate(

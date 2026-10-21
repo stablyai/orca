@@ -7,8 +7,8 @@ import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { RelayDispatcher } from '../../relay/dispatcher'
-import { registerWslHookFsHandlers } from '../../relay/wsl-hook-fs-bridge'
+import { RelayDispatcher } from '../../wsl-guest/dispatcher'
+import { registerWslHookFsHandlers } from '../../wsl-guest/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
 import {

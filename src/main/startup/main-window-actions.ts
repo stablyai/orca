@@ -1,4 +1,5 @@
-import { app, clipboard, dialog, type BrowserWindow, type Tray } from 'electron'
+import { app, clipboard, dialog, type BrowserWindow, type Tray, type WebContents } from 'electron'
+import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
@@ -11,6 +12,8 @@ import {
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
+import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
+import { markUserQuitWindowClose } from '../window/user-quit-window-close'
 import { loadMainWindow } from '../window/createMainWindow'
 import {
   describeInstallDirAclPoison,
@@ -35,7 +38,7 @@ export function focusExistingWindow(): void {
     app,
     getWindow: () => state.mainWindow,
     openWindow,
-    // Why: a 20s blank launch invites a second double-click, and icacls is rewriting
+    // Why: a 20s blank launch invites a second double-click, and the repair is rewriting
     // the per-file DACLs a fresh renderer would read. The gated launch opens the window.
     canOpenWindow: () => !isBlockingInstallDirAclRepairInFlight(),
     warn: console.warn
@@ -63,12 +66,33 @@ export function openSettingsFromSystemMenu(): void {
   state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
 }
 
+/**
+ * A user Quit (menu, tray, renderer-recovery prompt). Under `orca serve` the process is the
+ * server its paired clients use, so a user Quit only closes the desktop windows (#15537);
+ * signals, supervisor stops and update installs still quit through app.quit().
+ */
+export function quitFromUserCommand(): void {
+  if (state.isServeMode) {
+    // Why not getAllWindows(): offscreen browser-automation windows belong to the runtime.
+    for (const window of [state.mainWindow, getDashboardPopoutWindow()]) {
+      if (window && !window.isDestroyed()) {
+        if (window === state.mainWindow) {
+          markUserQuitWindowClose(window)
+        }
+        window.close()
+      }
+    }
+    return
+  }
+  state.isQuitting = true
+  app.quit()
+}
+
 export function quitFromSystemTray(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
-  state.isQuitting = true
-  app.quit()
+  quitFromUserCommand()
 }
 
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
@@ -126,28 +150,23 @@ export function createSystemTrayDeferred(
   }
 }
 
+function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebContents | undefined {
+  // Why: a native browser popup is a BrowserWindow hosting a web page, not Orca's renderer.
+  return targetWindow && !targetWindow.isDestroyed() && !isNativeBrowserPopupWindow(targetWindow)
+    ? targetWindow.webContents
+    : state.mainWindow?.webContents
+}
+
 export function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openFeatureTour')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openFeatureTour')
 }
 
 export function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openSetupGuide')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openSetupGuide')
 }
 
 export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openCrashReport')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openCrashReport')
 }
 
 // Why: once auto-recovery gives up the window stays blank, so a main-process dialog is the only retry/quit surface.
@@ -184,9 +203,6 @@ export async function showRendererRecoveryPrompt(
       }
       loadMainWindow(state.mainWindow)
     },
-    quit: () => {
-      state.isQuitting = true
-      app.quit()
-    }
+    quit: quitFromUserCommand
   })
 }

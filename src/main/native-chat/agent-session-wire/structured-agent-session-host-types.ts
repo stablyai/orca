@@ -4,6 +4,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
+  AgentSessionNamingError,
   AgentSessionStatusSummary,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
@@ -25,6 +26,8 @@ import type { AgentModelCatalogService } from '../agent-model-catalog/agent-mode
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
+import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
+import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -55,6 +58,7 @@ export type StructuredAgentSessionChildClose = {
   /** Asked for by quit, whose leftovers the next open settles as a crash's. */
   readonly quit?: true
   readonly reason: string | null
+  readonly failure?: SubmissionRejectionFact
   /** The Stop event that stop wrote, folded before the work it ends is settled, with the settle a
    *  person's close that named no turn opens; a repeated ask reopens it. */
   recorded: Promise<JournalStopSettle | null>
@@ -66,12 +70,16 @@ export type StructuredAgentSessionChildClose = {
 /** The provider process behind a conversation. Written only in
  *  `structured-agent-session-provider-child`. */
 export type StructuredAgentSessionProviderChild = StructuredAgentSessionProviderChildIdentity & {
-  /** A publish-first acquire is `starting` until the adapter's `started` event; only then are its
-   *  reported options fact. */
+  /** Every acquired child is `starting` until the host settles its open result; only then is
+   *  it handed input and are its reported options fact. */
   phase: StructuredAgentSessionProviderChildPhase
   /** The queued message whose delivery started this child, fixed when the start is made; absent
    *  for any other start. In memory only: it tells a restart offer its own start from another. */
   readonly startedFor?: string
+  /** The permission mode it was launched with, in memory only; absent for an agent with none. */
+  readonly permissionMode?: AgentChatPermissionMode
+  /** The adapter's `heldSends` for this conversation, read at each decision. */
+  readonly heldSends?: () => ReadonlySet<string> | undefined
   close?: StructuredAgentSessionChildClose
 }
 
@@ -109,6 +117,11 @@ export type StructuredAgentSessionHostSession = {
    *  observed exit. */
   child: StructuredAgentSessionProviderChild | null
   lastEndedChild?: StructuredAgentSessionEndedChild
+  /** Bumped by every signal that a generation ended, which can change what is current with no
+   *  journal row or lease write: readers key what they cache of current work on it. */
+  operationalRevision?: number
+  /** Owned by one live restart action, so another caller cannot replace its progress. */
+  restartResume?: NonNullable<AgentSessionStatusSummary['restartResume']> & { operationId: string }
 }
 
 export type StructuredAgentSessionHostDeps = {
@@ -141,6 +154,9 @@ export type StructuredAgentSessionHostDeps = {
   now?: () => number
   /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
   idleSweep?: { intervalMs?: number; idleMs?: number }
+  /** How long a start may stay silent, and its ceiling. Tests drive these; production takes the
+   *  host constants. */
+  startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
   /** A chat tab left the screen: closed, or its workspace removed. Advisory; a throw is logged. */
@@ -160,4 +176,18 @@ export type StructuredAgentSessionHostDeps = {
   statusSink?: StructuredAgentSessionStatusSink
   /** Host model catalog surface; absent means every catalog read answers `unknown`. */
   modelCatalog?: AgentModelCatalogService
+  /** The chat-naming job: its last failure per chat, and the user's request to run it again. */
+  conversationNaming?: StructuredAgentSessionConversationNaming
+}
+
+/** A failed naming run, published only while the chat is still named `forName`. */
+export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
+
+export type StructuredAgentSessionConversationNaming = {
+  activeSessionIds: () => string[]
+  failure: (sessionId: string) => StructuredChatNamingFailure | undefined
+  /** The failed run's full agent output, for the local user only; never published. */
+  failureOutput: (sessionId: string) => string | null
+  /** Starts (or joins) one naming run for the chat; false when the host has no such chat. */
+  regenerate: (sessionId: string) => boolean
 }

@@ -7,11 +7,15 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileRelayStatusDetail } from '../../../../shared/mobile-relay-status'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type {
+  OrcaCloudSignInProgress,
+  OrcaProfileAuthStatus
+} from '../../../../shared/orca-profiles'
 import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions'
 
 type MobileRelayStoreState = {
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
+  orcaProfileSignInProgress?: OrcaCloudSignInProgress | null
   connectCurrentOrcaProfile: () => Promise<null>
   fetchOrcaProfileAuthStatus: () => Promise<OrcaProfileAuthStatus | null>
 }
@@ -89,7 +93,9 @@ describe('MobilePairingConnectionOptions', () => {
     const signInPanel = screen.getByTestId('anywhere-sign-in-panel')
     const signIn = screen.getByRole('button', { name: 'Sign in for Relay' })
     expect(signInPanel).toBeVisible()
-    expect(screen.getByText('Relay only — LAN does not need an account.')).toBeVisible()
+    expect(
+      screen.getByText(/Signs this desktop in to Orca and routes the phone through Orca’s servers/)
+    ).toBeVisible()
     // Why: CTA must sit between Relay and LAN so it is not buried under LAN.
     expect(
       relay.compareDocumentPosition(signInPanel) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -106,8 +112,27 @@ describe('MobilePairingConnectionOptions', () => {
     expect(screen.queryByText(/not configured for this build/i)).toBeNull()
 
     await user.click(signIn)
-    expect(onChange).toHaveBeenCalledWith('automatic')
     expect(connect).toHaveBeenCalledOnce()
+  })
+
+  it('greys out Sign in and offers Copy and Cancel while the browser wait is open', async () => {
+    const user = userEvent.setup()
+    const link = 'https://login.example/authorize?state=abc'
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    const cancelSignIn = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window.api, { ui: { writeClipboardText }, orcaProfiles: { cancelSignIn } })
+    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+
+    publishStoreState({ ...mocks.state, orcaProfileSignInProgress: { link } })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Waiting for sign-in in your browser'
+    )
+    expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Copy sign-in link' }))
+    expect(writeClipboardText).toHaveBeenCalledWith(link)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(cancelSignIn).toHaveBeenCalledOnce()
   })
 
   it('hides Sign in when LAN is selected', () => {

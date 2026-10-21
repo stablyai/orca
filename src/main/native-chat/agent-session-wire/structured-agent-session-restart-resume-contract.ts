@@ -33,6 +33,8 @@ export type StructuredAgentSessionRestartResume = {
   ) => Promise<{
     resumed: StructuredAgentSessionResumeOutcome[]
     continued: StructuredAgentSessionContinuationOutcome[]
+    /** Requested chats excluded from this action. */
+    skipped?: string[]
     sessions?: StructuredAgentSessionResumeCandidate[]
     failed?: StructuredAgentSessionResumeFailure[]
   }>

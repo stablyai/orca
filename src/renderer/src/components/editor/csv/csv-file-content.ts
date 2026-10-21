@@ -1,5 +1,5 @@
 import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import {
   statRuntimeReadTarget,
   type RuntimeFileSnapshot
@@ -15,7 +15,8 @@ export async function readEditorCsvFileContent(
   args: RuntimeFileReadArgs,
   allowPagedPreview = true
 ): Promise<FileContent> {
-  if (allowPagedPreview && /\.(csv|tsv)$/i.test(args.filePath)) {
+  // Why: a granted host file has no stat route; it reads whole through its grant.
+  if (allowPagedPreview && !args.terminalArtifactGrantId && /\.(csv|tsv)$/i.test(args.filePath)) {
     const snapshot = await statRuntimeReadTarget(args)
     if (!snapshot.isDirectory && snapshot.size >= CSV_PAGED_PREVIEW_BYTES) {
       return { content: '', isBinary: false, csvPreview: { readArgs: args, snapshot } }

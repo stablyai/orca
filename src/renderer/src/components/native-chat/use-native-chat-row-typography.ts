@@ -19,6 +19,10 @@ export function useNativeChatRowTypography(contentRef: RefObject<HTMLDivElement 
   const style = useNativeChatStoreAppearanceStyle(columnWidthPx)
   const lineHeightPx = style['--chat-estimated-line-height']
   const charsPerLine = style['--chat-estimated-chars-per-line']
-  const typography = useMemo(() => ({ lineHeightPx, charsPerLine }), [lineHeightPx, charsPerLine])
+  const spacingScale = style['--chat-estimated-spacing-scale']
+  const typography = useMemo(
+    () => ({ lineHeightPx, charsPerLine, spacingScale }),
+    [lineHeightPx, charsPerLine, spacingScale]
+  )
   return { measureContent, typography }
 }

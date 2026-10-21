@@ -18,7 +18,12 @@ import {
   type AgentJournalDispatchRejection
 } from '../../shared/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import { AcpAgentError, AcpConnectionClosedError } from './acp-errors'
+import type {
+  AgentSessionCommandAdmission,
+  StructuredAgentSessionCommandRun
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { ACP_COMPACT_PROMPT } from './acp-compaction-turn'
+import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
 import type { ContentBlock } from './generated/acp-protocol.generated'
@@ -109,6 +114,35 @@ export class AcpStructuredTurns {
     this.start(send)
   }
 
+  /** A `/compact` in the command turn the host opened. The host settles its message, so nothing
+   *  here does; the answer ends the turn, or the child's end does. The prompt's write is the
+   *  receipt. */
+  async compact(command: StructuredAgentSessionCommandRun): Promise<AgentSessionCommandAdmission> {
+    if (this.active || this.ended) {
+      throw new Error(`${this.deps.agentName} is still working`)
+    }
+    const { lane } = this.deps
+    const send: Send = {
+      clientMessageId: command.clientMessageId,
+      prompt: [...ACP_COMPACT_PROMPT],
+      requestedAt: this.deps.now()
+    }
+    lane.beginCommand(command)
+    try {
+      const opened = lane.translator.openPrompt(
+        send.clientMessageId,
+        send.requestedAt,
+        command.turnId
+      )
+      this.active = send
+      this.run(send, opened.promptId)
+    } catch (error) {
+      lane.forgetCommand(command.turnId)
+      throw error
+    }
+    return { state: 'accepted', providerIdentity: null }
+  }
+
   /** The agent took the send: its turn's first event, or its answer, arrived. */
   accept(clientMessageId: string): void {
     if (this.unsettled.delete(clientMessageId)) {
@@ -122,19 +156,25 @@ export class AcpStructuredTurns {
   private withdrawSteers(): boolean {
     const withdrawn = this.steers.splice(0)
     for (const send of withdrawn) {
-      this.reject(send.clientMessageId, agentSessionFailureFact('cancelled'))
+      this.reject(
+        send.clientMessageId,
+        agentSessionFailureFact('cancelled', { neverReachedAgent: true })
+      )
     }
     return withdrawn.length > 0
   }
 
   /** The child is gone: held sends never left Orca, and the running one's fate is unknown. */
-  end(reason: string): void {
+  end(reason: string, cause?: Error): void {
     this.ended = true
     for (const send of this.steers.splice(0)) {
       this.reject(send.clientMessageId, agentSessionFailureFact('providerExited'))
     }
     const active = this.active
-    if (active && this.unsettled.delete(active.clientMessageId)) {
+    if (active && cause instanceof AcpAuthRequiredError) {
+      // The connection ended to ask for sign-in: the turn fails as the agent's sign-in answer does.
+      this.agentFailed(active, cause)
+    } else if (active && this.unsettled.delete(active.clientMessageId)) {
       this.deps.settle({ clientMessageId: active.clientMessageId, state: 'unknown', reason })
     }
     this.active = null
@@ -147,10 +187,15 @@ export class AcpStructuredTurns {
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)
+    this.run(send, opened.promptId)
+  }
+
+  private run(send: Send, promptId: string): void {
+    const { lane } = this.deps
     // An agent whose dialect echoes this id on every event of the turn gets it, so its rows join the
     // turn Orca opened; no other agent is sent the extension.
     const meta = lane.translator.injectsPromptIdentity
-      ? { promptId: opened.promptId, requestId: opened.promptId }
+      ? { promptId, requestId: promptId }
       : undefined
     const answered = this.deps.connection.prompt(send.prompt, meta)
     if (this.steers.length > 0) {
@@ -183,20 +228,28 @@ export class AcpStructuredTurns {
           this.finish(send)
           return
         }
-        const refusal = lane.translator.promptRefused(send.clientMessageId, error)
-        if (refusal !== null) {
-          // The agent answered the prompt with an error before starting it: its own refusal.
-          const detail = providerDiagnostic(refusal, 'person')
-          this.reject(
-            send.clientMessageId,
-            agentSessionFailureFact('providerRejected', detail ? { detail } : {})
-          )
-        } else {
-          lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
-        }
-        this.finish(send)
+        this.agentFailed(send, error)
       }
     )
+  }
+
+  private agentFailed(send: Send, error: AcpAgentError): void {
+    const { lane } = this.deps
+    const refusal = lane.translator.promptRefused(send.clientMessageId, error)
+    if (refusal !== null) {
+      // The agent answered the prompt with an error before starting it: its own refusal.
+      const detail = providerDiagnostic(refusal, 'person')
+      this.reject(
+        send.clientMessageId,
+        agentSessionFailureFact(
+          lane.translator.authenticationRequired(error) ? 'notSignedIn' : 'providerRejected',
+          detail ? { detail } : {}
+        )
+      )
+    } else {
+      lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
+    }
+    this.finish(send)
   }
 
   private finish(send: Send): void {

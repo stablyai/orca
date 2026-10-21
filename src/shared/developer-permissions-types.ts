@@ -24,6 +24,7 @@ export type DeveloperPermissionStatus =
 export type DeveloperPermissionState = {
   id: DeveloperPermissionId
   status: DeveloperPermissionStatus
+  terminalHostStatus?: DeveloperPermissionStatus
 }
 
 export type DeveloperPermissionRequestResult = {

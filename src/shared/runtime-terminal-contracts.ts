@@ -5,6 +5,7 @@ import type {
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
@@ -34,6 +35,8 @@ export type RuntimeTerminalSummary = {
   tabId: string
   leafId: string
   title: string | null
+  /** A user's name for this pane from the host's saved layout; absent when unset or the host predates it. */
+  paneTitle?: string
   connected: boolean
   writable: boolean
   lastOutputAt: number | null
@@ -44,6 +47,11 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /**
+   * The execution host's word on the pane's terminal. Read this, not `connected`: `connected`
+   * keeps its old meaning, so an unreachable host reads connected. Absent from older hosts.
+   */
+  verdict?: PtyLivenessVerdict['status']
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -194,10 +202,17 @@ export type RuntimeTerminalShow = RuntimeTerminalSummary & {
 
 export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 
+export type RuntimeTerminalRowMetadata = {
+  wrapped: boolean
+  trailingSpaces: number
+}
+
 export type RuntimeTerminalRead = {
   handle: string
   status: RuntimeTerminalState
   tail: string[]
+  /** Execution-host wrap evidence, aligned with tail; absent on older peers. */
+  tailRows?: RuntimeTerminalRowMetadata[]
   truncated: boolean
   limited?: boolean
   oldestCursor?: string
@@ -212,6 +227,13 @@ export type RuntimeTerminalRead = {
 export type RuntimeTerminalRename = {
   handle: string
   tabId: string
+  title: string | null
+}
+
+export type RuntimeTerminalSetPaneTitle = {
+  handle: string
+  tabId: string
+  leafId: string
   title: string | null
 }
 

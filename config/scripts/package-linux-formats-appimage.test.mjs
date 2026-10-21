@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { preparePrAppImageTools } from './package-linux-formats-appimage.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const require = createRequire(import.meta.url)
 const configuration = { toolsets: { appimage: '1.0.3' } }

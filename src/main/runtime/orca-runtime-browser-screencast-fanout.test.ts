@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
 import { BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT } from './browser-screencast-ghost-subscriber-eviction'
-import type { RuntimeBrowserCommands } from './orca-runtime-browser'
-import { createSinglePageBrowserCommandsHost } from './single-page-browser-commands-host-test-double'
+import type { RuntimeBrowserCommands } from './browser/browser-commands'
+import {
+  createSinglePageBrowserCommandsHost,
+  createStreamedGuest
+} from './single-page-browser-commands-host-test-double'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
   webContentsFromId: vi.fn(),
@@ -26,12 +29,12 @@ function deferred() {
 describe('RuntimeBrowserCommands screencast fanout', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()
-    webContentsFromId.mockReturnValue({ isDestroyed: () => false })
+    webContentsFromId.mockReturnValue(createStreamedGuest())
     startBrowserScreencast.mockReset()
   })
 
   it('restores the surviving subscriber viewport without stopping its shared stream', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
@@ -63,8 +66,8 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     const frame = new Uint8Array([1, 2, 3])
     expect(startBrowserScreencast).toHaveBeenCalledOnce()
     expect(startBrowserScreencast.mock.calls[0][1].onFrame(frame)).toBe(true)
-    expect(firstSend).toHaveBeenCalledWith(frame)
-    expect(secondSend).toHaveBeenCalledWith(frame)
+    expect(firstSend).toHaveBeenCalledWith(frame, { dropWhenBacklogged: true })
+    expect(secondSend).toHaveBeenCalledWith(frame, { dropWhenBacklogged: true })
     expect(updateViewport).toHaveBeenLastCalledWith(
       expect.objectContaining({ viewportWidth: 800, viewportHeight: 600 })
     )
@@ -80,7 +83,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('keeps viewport authority with sized subscribers when a sizeless viewer joins', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
@@ -115,7 +118,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('replays the joiner snapshot that its pre-ready gate refused', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const snapshot = new Uint8Array([9, 9, 9])
     let onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void = () => true
@@ -158,12 +161,12 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       { sendBinary: joinerSend }
     )
 
-    expect(creatorSend).toHaveBeenCalledWith(snapshot)
-    expect(joinerSend).toHaveBeenCalledWith(snapshot)
+    expect(creatorSend).toHaveBeenCalledWith(snapshot, { dropWhenBacklogged: true })
+    expect(joinerSend).toHaveBeenCalledWith(snapshot, { dropWhenBacklogged: true })
     joinerSend.mockClear()
     gateOpen = true
     joiner.flushPendingFrame()
-    expect(joinerSend).toHaveBeenCalledExactlyOnceWith(snapshot)
+    expect(joinerSend).toHaveBeenCalledExactlyOnceWith(snapshot, { dropWhenBacklogged: true })
 
     // The accepted replay is not retained, so a second flush cannot duplicate it.
     joinerSend.mockClear()
@@ -174,7 +177,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('drives the shared stream at the most constrained subscriber and releases it on leave', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const updateFrameBudget = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({
@@ -236,7 +239,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
   })
 
   it('admits shared frames through the paired-runtime size guard', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     startBrowserScreencast.mockResolvedValue({
       stop: vi.fn(() => done.resolve()),
@@ -263,7 +266,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
 describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()
-    webContentsFromId.mockReturnValue({ isDestroyed: () => false })
+    webContentsFromId.mockReturnValue(createStreamedGuest())
     startBrowserScreencast.mockReset()
   })
 
@@ -284,7 +287,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   }
 
   it('evicts a departed subscriber and hands its viewport to the survivor', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
@@ -339,7 +342,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('stops the shared stream when the evicted subscriber was the last one', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -359,7 +362,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('keeps a subscriber whose refusals are broken by a delivery', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -387,7 +390,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('never evicts on the refusals a joiner pre-ready gate produced', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({
@@ -419,7 +422,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('replaces the older subscription when the same paired device reattaches', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     const updateViewport = vi.fn(async () => {})
@@ -469,7 +472,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   })
 
   it('leaves other devices and unidentified callers attached', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const done = deferred()
     const stop = vi.fn(() => done.resolve())
     startBrowserScreencast.mockResolvedValue({

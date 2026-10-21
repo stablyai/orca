@@ -2,18 +2,31 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { observeAgentCliVersion } from '../agent-cli-version-probe'
+import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { PI_RPC_RUNTIME_REGISTRATION } from './rpc-runtime-registration'
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
-type LaunchInput = Parameters<NonNullable<typeof PI_RPC_RUNTIME_REGISTRATION.supportsLaunch>>[0]
-function supportsLaunch(launch: LaunchInput): Promise<boolean> {
-  const check = PI_RPC_RUNTIME_REGISTRATION.supportsLaunch
+type LaunchInput = {
+  cwd: string
+  env: Record<string, string>
+  commandSettings: StructuredAgentCommandSettings
+}
+/** The registration's check as create runs it, without the host's shell refresh. */
+async function supportsLaunch({ cwd, env, commandSettings }: LaunchInput): Promise<boolean> {
+  const check = PI_RPC_RUNTIME_REGISTRATION.launchCheck
   if (!check) {
     throw new Error('Pi registers a launch check')
   }
-  return check(launch)
+  const { command, env: launchEnv } = check.resolveLaunch(env, commandSettings)
+  const seen = await observeAgentCliVersion(
+    { program: command, cwd, env: launchEnv },
+    check.supportsVersion
+  )
+  return seen === 'supported'
 }
 let root: string
 let stockPi: string
@@ -98,10 +111,10 @@ describe('Pi launch support before session creation', () => {
     expect(runProcess).toHaveBeenCalledWith(expect.objectContaining({ program: process.execPath }))
   })
 
-  it('leaves an unrunnable Command setting to the launch to refuse', async () => {
-    await expect(supportsLaunch(input({ agentCmdOverrides: { pi: '/missing/pi' } }))).resolves.toBe(
-      true
-    )
+  it('refuses an unrunnable Command setting the way its launch does', async () => {
+    await expect(
+      supportsLaunch(input({ agentCmdOverrides: { pi: '/missing/pi' } }))
+    ).rejects.toSatisfy(isAgentSessionPreSpawnError)
     expect(runProcess).not.toHaveBeenCalled()
   })
 })

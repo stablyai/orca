@@ -1,16 +1,11 @@
 import { z } from 'zod'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import {
+  MobileWebBundleManifestReadSchema,
+  type MobileWebBundleManifestRead
+} from '../transport/mobile-web-bundle-reply-schemas'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
-import {
-  MANIFEST_FILE_NAME,
-  NEXT_MANIFEST_FILE_NAME,
-  parseGenerationManifest,
-  settleManifestSwap,
-  swapInFreshManifest
-} from './generation-manifest-swap'
-import { refuseManifestPersist, type ManifestPersistOutcome } from './manifest-persist-refusal'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -22,6 +17,8 @@ import {
 const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
 const HOST_INDEX_FILE_NAME = 'hosts.json'
+/** The activation's manifest: a generation directory is an activation only once this is in it. */
+const MANIFEST_FILE_NAME = 'manifest.json'
 
 /** Least recently used host evicted past this. */
 export const MAX_CACHED_HOSTS = 6
@@ -47,18 +44,6 @@ export type GenerationStore = {
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
-  /**
-   * Rewrites the manifest stored beside a host's active generation, and nothing else.
-   *
-   * For the one edit that changes a manifest without changing a byte of the bundle: route grants
-   * are published under the build id of the assets they describe, so a same-build cache hit holds
-   * the right bytes under a manifest an edit behind. The stored manifest is what an unreachable
-   * host is judged by, so until it is rewritten every offline verdict lags.
-   */
-  persistActiveManifest(
-    hostKey: string,
-    manifest: MobileWebBundleManifestRead
-  ): Promise<ManifestPersistOutcome>
   /** Why an update read failed, kept for Troubleshoot. Never rejects: it is only evidence. */
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
   /** Oldest first; empty when nothing was recorded or the log cannot be read. */
@@ -162,12 +147,7 @@ export function createGenerationStore(options: {
     const only = directories.length === 1 ? directories[0] : null
     if (only !== null) {
       const directory = joinUri(generations, only.name)
-      // A persist interrupted anywhere leaves a pending manifest; finishing or discarding it here
-      // is what makes the swap crash-safe. Unsettleable is not a bad generation — the pending file
-      // may be the only manifest left — so nothing is deleted and the next read tries again.
-      if ((await settleManifestSwap(fs, directory, only.name)) === 'unsettled') {
-        return null
-      }
+      // Older builds' manifest-next.json is never read; alone it reads as no manifest.
       let text: string | null
       try {
         text = await fs.readText(joinUri(directory, MANIFEST_FILE_NAME))
@@ -176,7 +156,7 @@ export function createGenerationStore(options: {
         // redownloads, and a transient I/O blip must not cost a cache that verified.
         return null
       }
-      const manifest = parseGenerationManifest(text)
+      const manifest = text === null ? null : parseManifest(text)
       if (manifest !== null && manifest.buildId === only.name) {
         return { buildId: manifest.buildId, directory, manifest }
       }
@@ -280,22 +260,6 @@ export function createGenerationStore(options: {
     return active
   }
 
-  async function persistManifest(
-    hostKey: string,
-    manifest: MobileWebBundleManifestRead
-  ): Promise<ManifestPersistOutcome> {
-    const active = await readActive(hostKey)
-    if (active === null) {
-      return 'refused-no-active-generation'
-    }
-    const refusal = refuseManifestPersist(active.manifest, manifest)
-    if (refusal !== null) {
-      return refusal
-    }
-    await swapInFreshManifest(fs, active.directory, manifest)
-    return 'persisted'
-  }
-
   async function sweep(): Promise<void> {
     // Every host's `tmp`, not just the one being opened: an interrupted download must not survive a
     // restart, and it may belong to a host this launch never selects.
@@ -331,8 +295,6 @@ export function createGenerationStore(options: {
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
     sweepStagedGenerations: () => serialize(sweep),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
-    persistActiveManifest: (hostKey, manifest) =>
-      serialize(() => persistManifest(hostKey, manifest)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
     readUpdateFailures: () => serialize(() => readUpdateFailureLog(fs)),
@@ -343,6 +305,13 @@ export function createGenerationStore(options: {
 
 function withHostLast(order: readonly string[], hostKey: string): string[] {
   return [...order.filter((key) => key !== hostKey), hostKey]
+}
+
+/** Read back as loosely as it was accepted: reading a cached manifest strictly would make a field a
+ *  newer desktop added a forced redownload on every launch. */
+function parseManifest(text: string): MobileWebBundleManifestRead | null {
+  const parsed = MobileWebBundleManifestReadSchema.safeParse(parseJson(text))
+  return parsed.success ? parsed.data : null
 }
 
 function parseJson(text: string): unknown {
@@ -370,7 +339,6 @@ function requireStorablePath(path: string): string {
   const storable =
     path.length > 0 &&
     folded !== MANIFEST_FILE_NAME &&
-    folded !== NEXT_MANIFEST_FILE_NAME &&
     !path.includes('\\') &&
     segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
   if (!storable) {

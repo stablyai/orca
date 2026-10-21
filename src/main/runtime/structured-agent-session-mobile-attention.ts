@@ -22,6 +22,7 @@ import type {
   NotificationSettings
 } from '../../shared/notification-settings-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -30,9 +31,11 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 
 export type StructuredAttentionMobileDeliveryDeps = {
-  readNotificationSettings: () => NotificationSettings
+  readNotificationSettings: () => NotificationSettings | undefined
   /** In-memory metadata only: a lookup that could wait would let the alert outlive its prompt. */
   readWorkspaceLabels: (scope: AgentSessionExecutionLocation) => StructuredAttentionWorkspaceLabels
+  /** In-memory only, like the labels: "Notify About Hidden Workspaces" is off and the Filters hide it. */
+  isWorkspaceMuted: (scope: AgentSessionExecutionLocation) => boolean
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
@@ -49,8 +52,11 @@ export function readStructuredAttentionWorkspaceLabels(
   store: Pick<RuntimeStore, 'getRepo' | 'getWorktreeMeta' | 'getFolderWorkspaces'>,
   scope: AgentSessionExecutionLocation
 ): StructuredAttentionWorkspaceLabels {
-  if (scope.workspaceKind === 'folder') {
-    const folder = store.getFolderWorkspaces?.().find((item) => item.id === scope.workspaceId)
+  const folderScope = parseWorkspaceKey(scope.workspaceId)
+  if (folderScope?.type === 'folder') {
+    const folder = store
+      .getFolderWorkspaces?.()
+      .find((item) => item.id === folderScope.folderWorkspaceId)
     return folder ? { worktreeLabel: folder.name } : {}
   }
   const repo = store.getRepo(getRepoIdFromWorktreeId(scope.workspaceId))
@@ -83,6 +89,10 @@ export function createStructuredAttentionMobileDelivery(
         return
       }
       const scope = edge.type === 'prompt' ? edge.prompt.scope : edge.completion.scope
+      if (deps.isWorkspaceMuted(scope)) {
+        return
+      }
+      const settings = deps.readNotificationSettings()!
       const attentionKey = agentSessionAttentionKey(edge)
       const request: NotificationDispatchRequest = {
         source: 'agent-task-complete',
@@ -101,7 +111,6 @@ export function createStructuredAttentionMobileDelivery(
         request,
         getRuntimeDesktopSurface().translateNotification
       )
-      const settings = deps.readNotificationSettings()
       // The same eligibility the desktop's own fan-out applies: these preferences gate the phone too.
       const desktopAllowed = settings.enabled && settings.agentTaskComplete
       deps.dispatch({

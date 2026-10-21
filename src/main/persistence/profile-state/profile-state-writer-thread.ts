@@ -1,5 +1,4 @@
 import { Worker } from 'node:worker_threads'
-import { createProfileStateWriterDeadline } from './profile-state-writer-deadline'
 
 /** Owns one writer thread's lifetime so recovery can prove it exited before replacing it. */
 export class ProfileStateWriterThread {
@@ -14,8 +13,7 @@ export class ProfileStateWriterThread {
       message: (value: unknown) => void
       error: (cause: Error) => void
       exit: (code: number) => void
-    },
-    private readonly deadline: { timeoutMs: number; now?: () => number }
+    }
   ) {
     this.worker = new Worker(workerPath, { workerData, execArgv: [] })
     this.worker.on('message', handlers.message)
@@ -43,21 +41,5 @@ export class ProfileStateWriterThread {
     if (!this.exitedFlag) {
       void this.worker.terminate().catch(() => {})
     }
-  }
-
-  /** Resolve false when the thread has not exited within one awake deadline. */
-  waitForExit(): Promise<boolean> {
-    if (this.exitedFlag) {
-      return Promise.resolve(true)
-    }
-    const timedOut = Promise.withResolvers<boolean>()
-    const deadline = createProfileStateWriterDeadline(
-      this.deadline.timeoutMs,
-      () => timedOut.resolve(false),
-      { now: this.deadline.now }
-    )
-    return Promise.race([this.exit.promise.then(() => true), timedOut.promise]).finally(
-      deadline.clear
-    )
   }
 }

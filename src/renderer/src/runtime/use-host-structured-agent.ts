@@ -8,15 +8,19 @@ import {
   readHostStructuredAgentsForRuntime,
   subscribeHostStructuredAgents
 } from './host-structured-agents'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
-/** Whether a chat may carry images: what its host registered for the agent, else what every build
- *  has always sent the agents it ships. An unlisted agent claims nothing. */
+/** Whether a chat may carry images: what its session's options report said, else what its host
+ *  registered for the agent, else what every build has always sent the agents it ships. An unlisted
+ *  agent claims nothing. */
 export function structuredAgentAcceptsImages(
   record: AgentSessionRegisteredAgent | undefined,
-  agent: string
+  agent: string,
+  reported?: boolean
 ): boolean {
-  return record ? record.capabilities.imagePrompts : isAgentSessionHandleProvider(agent)
+  return (
+    reported ?? (record ? record.capabilities.imagePrompts : isAgentSessionHandleProvider(agent))
+  )
 }
 
 /** The agent's record as the chat's host listed it; undefined until (or unless) it has. */
@@ -42,9 +46,11 @@ export function useHostStructuredAgent(
   return useSyncExternalStore(subscribeHostStructuredAgents, read, read)
 }
 
+/** `reported` is the session's options answer: absent before it lands and from an older host. */
 export function useStructuredAgentAcceptsImages(
   target: RuntimeClientTarget,
-  agent: string
+  agent: string,
+  reported: boolean | undefined
 ): boolean {
-  return structuredAgentAcceptsImages(useHostStructuredAgent(target, agent), agent)
+  return structuredAgentAcceptsImages(useHostStructuredAgent(target, agent), agent, reported)
 }

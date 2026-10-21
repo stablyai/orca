@@ -1,5 +1,6 @@
 import { extname } from 'node:path'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
 import {
   fileTooLargeError,
   openLocalRegularFile,
@@ -9,7 +10,6 @@ import {
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-export const BINARY_PROBE_BYTES = 8192
 // Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
@@ -88,26 +88,4 @@ export async function readLocalLogSnapshot(filePath: string): Promise<LocalFileC
   } finally {
     await handle.close()
   }
-}
-
-/** Check if a buffer appears to be binary (contains null bytes in first 8KB). */
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, BINARY_PROBE_BYTES)
-  for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
-}
-
-export function isDirectoryEntry(entry: {
-  isDirectory(): boolean
-  isSymbolicLink(): boolean
-}): boolean {
-  // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
-  if (entry.isSymbolicLink()) {
-    return false
-  }
-  return entry.isDirectory()
 }

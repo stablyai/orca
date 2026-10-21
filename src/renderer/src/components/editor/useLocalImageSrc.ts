@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
 import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import {
@@ -17,6 +17,7 @@ import {
   subscribeToLocalImageCacheInvalidation,
   unpinLocalImageCache
 } from './local-image-src-cache'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -26,8 +27,9 @@ export function getLocalImageCacheKey(
   },
   access?: LocalFileAccess
 ): string {
-  const runtimeEnvironmentId =
-    runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client'
+  const runtimeEnvironmentId = runtimeContext
+    ? (runtimeTargetEnvironmentId(runtimeContext.target) ?? 'client')
+    : 'client'
   return [
     runtimeEnvironmentId,
     runtimeContext?.connectionId ?? connectionId ?? 'local',

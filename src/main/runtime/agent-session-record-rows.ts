@@ -14,6 +14,7 @@ import type Database from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
@@ -26,12 +27,12 @@ import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-ses
  *  no row count can say which. */
 const SESSION_TABS_RECORDED = 'session_tabs_recorded'
 
-/** Latch fields older builds wrote. Nothing reads them, and dropping them keeps a lease this build
- *  writes back from carrying a stale latch to an older build after a downgrade. */
+/** Lease fields older builds wrote and nothing reads, dropped at load so no write carries them on. */
 type RetiredAgentSessionLeaseFields = {
   processlessAt?: unknown
   settlementRetryRequired?: unknown
   settlementRetryId?: unknown
+  journalCheckpoint?: unknown
 }
 
 export function withoutRetiredLeaseLatches(lease: AgentSessionLease): AgentSessionLease {
@@ -39,6 +40,7 @@ export function withoutRetiredLeaseLatches(lease: AgentSessionLease): AgentSessi
     processlessAt: _processlessAt,
     settlementRetryRequired: _settlementRetryRequired,
     settlementRetryId: _settlementRetryId,
+    journalCheckpoint: _journalCheckpoint,
     ...current
   }: AgentSessionLease & RetiredAgentSessionLeaseFields = lease
   return current
@@ -175,6 +177,23 @@ function writeTabIndex(
     )
   } else {
     db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(SESSION_TABS_RECORDED)
+  }
+}
+
+// TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
+export function insertAgentSessionOperationRowsIfAbsent(
+  db: Database.Database,
+  rows: AgentSessionStoreRowWrites['operations']['upsert']
+): void {
+  const insert = db.prepare(
+    'INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO NOTHING'
+  )
+  for (const [key, json] of rows) {
+    if (insert.run(key, json).changes === 0) {
+      throw agentSessionRefusalError('agent_session_operation_unknown', {
+        reason: 'outcomeUnknown'
+      })
+    }
   }
 }
 

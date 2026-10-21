@@ -274,7 +274,6 @@ describe('resolveLocalClaudeTrustConfig', () => {
     wslDistro: 'Ubuntu',
     wslLinuxConfigDir: '/home/u/.claude',
     envPatch: {},
-    stripAuthEnv: true,
     provenance: 'wsl:Ubuntu:system'
   }
 

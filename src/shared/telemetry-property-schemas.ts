@@ -204,14 +204,12 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalMobile',
   'experimentalPet',
   'experimentalNativeChat',
-  'experimentalStructuredNativeChat',
   'experimentalActivity',
   'experimentalAgentDashboardPopout',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',
-  'geminiCliOAuthEnabled',
-  'openAgentTabsInChatByDefault'
+  'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>

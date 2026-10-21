@@ -9,7 +9,7 @@ import {
   BrowserClientHostCommandResultParams
 } from '../../../../shared/browser-client-host-protocol'
 import { BrowserError } from '../../../browser/browser-error'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { adoptRuntimeBrowserClientPagesFromInventory } from '../../runtime-browser-client-page-adoption'
 import { recoverUnavailableRuntimeBrowserClientPages } from '../../runtime-browser-client-page-recovery'
@@ -19,6 +19,7 @@ import { defineMethod, defineStreamingMethod } from '../core'
 export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
     name: 'browser.clientHost.attach',
+    permission: 'workspace',
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
@@ -164,6 +165,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   }),
   defineMethod({
     name: 'browser.clientHost.commandResult',
+    permission: 'workspace',
     params: BrowserClientHostCommandResultParams,
     handler: (
       params,
@@ -196,6 +198,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   }),
   defineMethod({
     name: 'browser.clientHost.pageMetadata',
+    permission: 'workspace',
     params: BrowserClientPageMetadataParams,
     handler: (
       params,

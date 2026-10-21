@@ -13,11 +13,12 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
+import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { structuredAgentSessionHostRefusal } from '../../structured-agent-session-host-refusal'
 import {
   createSupportFollowsHostSetting,
   clientReadsStructuredSessionAgent,
-  isStructuredNativeChatEnabled,
+  isStructuredNativeChatDefaultFor,
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
 
@@ -52,7 +53,10 @@ export function requireStructuredAgentAudience(ctx: RpcContext, agent: string): 
  */
 export function requireStructuredCreateSupportAdmission(ctx: RpcContext, agent?: string): void {
   requireStructuredAgentAudience(ctx, agent ?? '')
-  if (createSupportFollowsHostSetting(ctx) && !isStructuredNativeChatEnabled(ctx.runtime)) {
+  if (
+    createSupportFollowsHostSetting(ctx) &&
+    !isStructuredNativeChatDefaultFor(ctx.runtime, agent ?? '')
+  ) {
     throw agentSessionRefusalError('structured_agent_session_unsupported', {
       reason: 'clientCapabilityMissing'
     })
@@ -130,10 +134,13 @@ export async function requireInstalledStructuredHost(
   return sessionId ? requireStructuredSessionHost(ctx, sessionId) : requireStructuredHost(ctx)
 }
 
-/** Mirrors the existing agent-session host-authority derivation so one client
- *  gets one operation namespace across both surfaces. */
+/** A paired device's `clientId` is its bearer credential, and this key is stored and shown to other
+ *  clients (who answered a prompt), so a paired device is named by its proven device id instead. */
 export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCaller {
   return {
-    callerKey: ctx.clientId?.trim() || `trusted-local:${ctx.clientKind ?? 'runtime'}`
+    callerKey:
+      ctx.caller?.kind === 'paired-device'
+        ? rpcCallerOperationKey(ctx.caller)
+        : ctx.clientId?.trim() || `trusted-local:${ctx.clientKind ?? 'runtime'}`
   }
 }

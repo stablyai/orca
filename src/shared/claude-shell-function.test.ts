@@ -40,7 +40,10 @@ function fixture() {
   )
   chmodSync(fake, 0o700)
   const pointer = join(root, 'selected')
-  const run = (shell: string, env: string[] = []) => {
+  const run = (shell: string, env: string[] = [], fakeKind: 'summary' | 'printenv' = 'summary') => {
+    if (fakeKind === 'printenv') {
+      writeFileSync(fake, '#!/bin/sh\nenv\n')
+    }
     const fish = shell.endsWith('fish')
     const fn = fish ? getFishClaudeShellFunction() : getPosixClaudeShellFunction()
     // Why: a shell that reads system config can put a real claude ahead of the fake; abort first.
@@ -76,14 +79,29 @@ const injected = (home: string) => [
 ]
 
 describe.each(SHELLS)('the claude function in %s', (shell) => {
-  it('re-reads the selection on every launch and strips ambient auth for an account', () => {
+  it("re-reads the selection on every launch and keeps the shell's auth for an account", () => {
     const f = fixture()
     writeFileSync(f.pointer, f.a)
-    expect(f.run(shell, injected(f.b)).stdout).toBe(`HOME=${f.a} KEY=none TWIN=${f.a}\n`)
+    expect(f.run(shell, injected(f.b)).stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
     writeFileSync(f.pointer, f.b)
     const next = f.run(shell, injected(f.a))
-    expect(next.stdout).toBe(`HOME=${f.b} KEY=none TWIN=${f.b}\n`)
+    expect(next.stdout).toBe(`HOME=${f.b} KEY=fake TWIN=${f.b}\n`)
     expect(next.status).toBe(23)
+  })
+
+  it("passes a shell proxy's key and address through to an account", () => {
+    const f = fixture()
+    writeFileSync(f.pointer, f.a)
+    const env = [
+      'ANTHROPIC_API_KEY=proxy-key',
+      'ANTHROPIC_AUTH_TOKEN=proxy-token',
+      'ANTHROPIC_BASE_URL=https://proxy.example.test',
+      'ANTHROPIC_CUSTOM_HEADERS=Authorization: Bearer x'
+    ]
+    const printed = f.run(shell, env, 'printenv').stdout
+    for (const line of [...env, `CLAUDE_CONFIG_DIR=${f.a}`]) {
+      expect(printed).toContain(`${line}\n`)
+    }
   })
 
   it('runs System default for an empty or missing selection, dropping only Orca’s own value', () => {
@@ -99,7 +117,7 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     const own = ['ORCA_CLAUDE_USER_CONFIG_DIR=/user/own']
     writeFileSync(f.pointer, f.a)
     const account = f.run(shell, [...injected(f.a), ...own])
-    expect(account.stdout).toBe(`HOME=${f.a} KEY=none TWIN=${f.a}\n`)
+    expect(account.stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
     writeFileSync(f.pointer, '')
     const restored = f.run(shell, [...injected(f.a), ...own])
     expect(restored.stdout).toBe('HOME=/user/own KEY=fake TWIN=none\n')
@@ -114,7 +132,7 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     const f = fixture()
     writeFileSync(f.pointer, f.a)
     const relative = f.run(shell, ['ORCA_CLAUDE_PROFILE_POINTER=~/selected'])
-    expect(relative.stdout).toBe(`HOME=${f.a} KEY=none TWIN=${f.a}\n`)
+    expect(relative.stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
   })
 
   it('creates a missing account folder and runs Claude in it, printing nothing', () => {
@@ -123,7 +141,7 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     const fresh = join(f.a, 'claude-profiles', 'id', 'home')
     writeFileSync(f.pointer, fresh)
     const result = f.run(shell)
-    expect(result.stdout).toBe(`HOME=${fresh} KEY=none TWIN=${fresh}\n`)
+    expect(result.stdout).toBe(`HOME=${fresh} KEY=fake TWIN=${fresh}\n`)
     expect(result.status).toBe(23)
     expect(existsSync(fresh)).toBe(true)
     // Same mode as Orca's own setup: the folder will hold a login.
@@ -135,7 +153,7 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     const blocked = join(f.a, 'file', 'home')
     writeFileSync(join(f.a, 'file'), '')
     writeFileSync(f.pointer, blocked)
-    expect(f.run(shell).stdout).toBe(`HOME=${blocked} KEY=none TWIN=${blocked}\n`)
+    expect(f.run(shell).stdout).toBe(`HOME=${blocked} KEY=fake TWIN=${blocked}\n`)
   })
 
   it('runs nothing for a pointer that names no absolute folder', () => {
@@ -147,7 +165,31 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     expect(existsSync(join(f.a, '..', 'not-a-folder'))).toBe(false)
   })
 
-  it('lets the user’s own CLAUDE_CONFIG_DIR win silently when an account is selected', () => {
+  it('follows the selection over the user’s own CLAUDE_CONFIG_DIR, inherited or exported by an rc', () => {
+    const f = fixture()
+    // Why the slash: Claude keys its login by the exact string, so System default keeps the spelling.
+    const own = ['CLAUDE_CONFIG_DIR=/user/own/', 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own/']
+    writeFileSync(f.pointer, f.a)
+    expect(f.run(shell, own).stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    // The rc re-exported it after Orca injected another account.
+    const rc = [...own, `ORCA_CLAUDE_INJECTED_CONFIG_DIR=${f.b}`]
+    expect(f.run(shell, rc).stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    writeFileSync(f.pointer, '')
+    expect(f.run(shell, own).stdout).toBe('HOME=/user/own/ KEY=fake TWIN=none\n')
+    // An rc may spell it without the slash; it still follows the selection.
+    writeFileSync(f.pointer, f.a)
+    expect(
+      f.run(shell, ['CLAUDE_CONFIG_DIR=/user/own', 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own/']).stdout
+    ).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    const deliberate = [
+      'CLAUDE_CONFIG_DIR=/somewhere/else',
+      'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own'
+    ]
+    writeFileSync(f.pointer, f.a)
+    expect(f.run(shell, deliberate).stdout).toBe('HOME=/somewhere/else KEY=fake TWIN=none\n')
+  })
+
+  it('lets a CLAUDE_CONFIG_DIR win silently when Orca knows no user value', () => {
     const f = fixture()
     const own = f.run(shell, ['CLAUDE_CONFIG_DIR=/user/own'])
     expect(own.stdout).toBe('HOME=/user/own KEY=fake TWIN=none\n')
@@ -159,9 +201,15 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
   })
 })
 
+it("leaves the shell's Anthropic auth alone in the PowerShell function", () => {
+  const script = getPowerShellClaudeShellFunction()
+  expect(script).toContain("$names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR')")
+  expect(script).not.toMatch(/ANTHROPIC|CLAUDE_CODE_OAUTH_TOKEN|AWS_BEARER_TOKEN_BEDROCK/)
+})
+
 it('restores PowerShell process env without creating empty variables', () => {
   const script = getPowerShellClaudeShellFunction()
-  expect(script.startsWith('\n$orcaClaudeCommand = Get-Command claude')).toBe(true)
+  expect(script.startsWith('$orcaClaudeCommand = Get-Command claude')).toBe(true)
   expect(script).toContain('finally {')
   // .NET 9+ turns a $null/'' SetEnvironmentVariable into an empty variable, not a removal.
   expect(script).not.toMatch(/SetEnvironmentVariable\([^)]*,\s*(\$null|''|"")\s*,/)
@@ -181,6 +229,12 @@ it('prints no Orca text from the PowerShell function and creates a missing accou
   expect(script).toContain('-not [IO.Path]::IsPathRooted($orcaClaudeHome)')
 })
 
+it('escapes its arguments for the resolved PowerShell binary before splatting them', () => {
+  expect(getPowerShellClaudeShellFunction()).toContain(
+    '$claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)'
+  )
+})
+
 it('trims the PowerShell pointer read as POSIX command substitution does', () => {
   expect(getPowerShellClaudeShellFunction()).toContain(
     '[IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()'
@@ -194,5 +248,15 @@ it('restores the user’s own value on PowerShell System default rather than rem
   )
   expect(script).not.toContain(
     'Remove-Item Env:CLAUDE_CONFIG_DIR, Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+  )
+})
+
+it('follows the PowerShell selection over the user’s own value, whatever its separators', () => {
+  const script = getPowerShellClaudeShellFunction()
+  expect(script).toContain(
+    `$own = ("$env:ORCA_CLAUDE_USER_CONFIG_DIR" -replace '/', '\\').TrimEnd('\\')`
+  )
+  expect(script).toContain(
+    `(-not $own -or ("$env:CLAUDE_CONFIG_DIR" -replace '/', '\\').TrimEnd('\\') -ne $own)) {`
   )
 })

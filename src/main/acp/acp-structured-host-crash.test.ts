@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-row-builders'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../shared/agent-session-stop-row-identity'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLifecycleBatchInput } from '../native-chat/agent-session-journal/journal-store-contracts'
@@ -38,6 +38,21 @@ async function midReply() {
     batches.push(batch)
     return append(batch)
   })
+  // A settlement plans its batch at its own turn in the write queue: recorded as it is planned, and
+  // only when it writes something (an empty plan writes no row).
+  const appendPlanned = journal.appendPlannedLifecycleBatch
+  vi.spyOn(journal, 'appendPlannedLifecycleBatch').mockImplementation((input) =>
+    appendPlanned({
+      ...input,
+      plan: () => {
+        const planned = input.plan()
+        if (planned.mutations.length > 0 || planned.dispatches.length > 0) {
+          batches.push({ ...input, mutations: planned.mutations })
+        }
+        return planned
+      }
+    })
+  )
   child.stderr = LAST_WORDS
   return { ...rig, child, batches }
 }
@@ -110,7 +125,7 @@ describe('a Grok crash whose pipes close before its exit is seen', () => {
     const turnKey = settled.turn!.itemId
     expect(
       settled.batch.mutations.flatMap((mutation) =>
-        mutation.kind === 'item' ? [agentJournalItemKey(mutation.identity)] : []
+        mutation.kind === 'item' ? [journalLifecycleMutationItemId(mutation)] : []
       )
     ).toEqual(expect.arrayContaining([settled.statuses[0]!.itemId, turnKey]))
     // No later stale-session pass rewrites it: nothing is left for one.

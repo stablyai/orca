@@ -38,12 +38,17 @@ import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
+  agentLaunchRefusalError,
   agentLaunchTabClosedAnswer,
   settleLaunchWhoseTabWasClosed,
   settleQuietly,
   withEarlyTab
 } from './agent-launch-execution-outcome'
-import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
+import {
+  AgentLaunch,
+  AgentLaunchReplay,
+  type AgentLaunchParams
+} from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import {
   agentLaunchFailureCode,
@@ -54,6 +59,7 @@ import {
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
+import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
 import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import {
@@ -123,7 +129,7 @@ async function runAgentLaunch(
       replaySafe?.callerKey,
       callerNavigationId !== null,
       replaySafe?.terminalSpawn,
-      view.early
+      view
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     ...(callerRendersLaunchedChat(context, intent.agent) ? {} : { callerRendersStructured: false }),
@@ -153,15 +159,16 @@ function runLegacyAgentLaunch(
   params: AgentLaunchParams,
   context: RpcContext
 ): Promise<AgentLaunchResult> {
-  // No early tab: without a launch record its pane could not learn how the launch ended.
+  // No early tab, as before: only a replay-safe launch shows its tab before its agent exists.
   const execute = async () =>
     runAgentLaunch(await resolveUnlaunchedIntent(params, context.runtime, null), context, {
       early: null,
       presentation: params.presentation
     })
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
+    const { repo, repoHostId } = params.target.create
     return context.runtime.dedupeWorktreeCreate(
-      params.target.create.repo,
+      repoHostId ? { repo, repoHostId } : repo,
       `agent.launch:${params.target.create.clientMutationId}`,
       execute
     )
@@ -180,12 +187,11 @@ const activeAgentLaunchesByRuntime = new WeakMap<
 >()
 
 function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  const existing = activeAgentLaunchesByRuntime.get(runtime)
-  if (existing) {
-    return existing
+  let active = activeAgentLaunchesByRuntime.get(runtime)
+  if (!active) {
+    active = new Map()
+    activeAgentLaunchesByRuntime.set(runtime, active)
   }
-  const active = new Map<string, ActiveAgentLaunch>()
-  activeAgentLaunchesByRuntime.set(runtime, active)
   return active
 }
 
@@ -198,13 +204,7 @@ async function executeReplaySafeAgentLaunch(
   const early = await publishEarlyTab(params, context)
   let admission: Awaited<ReturnType<typeof admitAgentLaunchOperation>>
   try {
-    admission = await admitAgentLaunchOperation(
-      context,
-      params,
-      fingerprint,
-      Date.now(),
-      early?.ownedPane
-    )
+    admission = await admitAgentLaunchOperation(context, params, fingerprint, Date.now())
   } catch (error) {
     early?.finish()
     throw error
@@ -212,9 +212,14 @@ async function executeReplaySafeAgentLaunch(
   if (admission.decision !== 'execute') {
     // Nothing runs under this request. A tab it made goes, unless an agent still runs in its pane
     // (a replay can remake the tab of an agent that survived).
-    early?.finish()
+    early?.finish(
+      admission.decision === 'refuse' &&
+        admission.refusal.code !== 'agent_session_operation_unknown'
+        ? admission.refusal.code
+        : undefined
+    )
     if (admission.decision === 'refuse') {
-      throw Object.assign(new Error(admission.refusal.code), { code: admission.refusal.code })
+      throw agentLaunchRefusalError(admission.refusal)
     }
     return admission.result
   }
@@ -262,9 +267,9 @@ async function executeAdmittedAgentLaunch(
       terminalSpawn
     )
     if (failedWithoutEffects) {
-      await settleQuietly(admission.fail(failedWithoutEffects))
+      await settleQuietly(admission.fail(failedWithoutEffects, error))
     }
-    throw new AgentLaunchExecutionError(error, failedWithoutEffects !== null)
+    throw new AgentLaunchExecutionError(error, failedWithoutEffects)
   }
   if (view.early?.closedByUser()) {
     // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
@@ -305,11 +310,13 @@ function runReplaySafeAgentLaunch(
 export const AGENT_LAUNCH_METHODS = [
   defineMethod({
     name: 'agent.launchReplay',
+    permission: 'workspace',
     params: AgentLaunchReplay,
     handler: async (params, context): Promise<AgentLaunchResult> => {
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_replay_unsupported')
       }
+      assertAgentLaunchTargetAuthorized(params.target, context)
       try {
         return await runReplaySafeAgentLaunch(params, context)
       } catch (error) {
@@ -334,11 +341,13 @@ export const AGENT_LAUNCH_METHODS = [
   }),
   defineMethod({
     name: 'agent.launch',
+    permission: 'workspace',
     params: AgentLaunch,
     handler: async (params, context): Promise<AgentLaunchResult> => {
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_unsupported')
       }
+      assertAgentLaunchTargetAuthorized(params.target, context)
       if (!params.operationId) {
         return runLegacyAgentLaunch(params, context)
       }

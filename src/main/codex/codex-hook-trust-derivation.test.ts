@@ -13,7 +13,7 @@ vi.mock('./codex-app-server-session', async (importOriginal) => ({
   ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: mocks.runCodexAppServerSession
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.runProcess }))
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 
 import {
   CodexAppServerTimeoutError,

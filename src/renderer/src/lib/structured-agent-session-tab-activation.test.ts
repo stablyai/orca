@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(async () => ({ ok: true })),
   focusGroup: vi.fn(),
   setActiveTabType: vi.fn(),
+  requestNativeChatComposerFocus: vi.fn(),
   state: { unifiedTabsByWorktree: {} } as Record<string, unknown>
 }))
 
@@ -13,18 +14,15 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
 
-vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => 'env-1'
+vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+  requestNativeChatComposerFocus: mocks.requestNativeChatComposerFocus
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
-  getActiveRuntimeTarget: ({
-    activeRuntimeEnvironmentId
-  }: {
-    activeRuntimeEnvironmentId: string
-  }) => ({ kind: 'environment', environmentId: activeRuntimeEnvironmentId })
+vi.mock('./worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => 'env-1'
 }))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (worktreeId: string) => `id:${worktreeId}`
@@ -106,7 +104,7 @@ describe('activateStructuredAgentSessionTab', () => {
     }
   })
 
-  it('selects the unified tab and synchronizes host focus', () => {
+  it('selects the unified tab, focuses its composer, and synchronizes host focus', () => {
     expect(
       activateStructuredAgentSessionTab({ worktreeId: 'wt-1', tabId: 'structured-tab-1' })
     ).toBe(true)
@@ -114,6 +112,7 @@ describe('activateStructuredAgentSessionTab', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('structured-tab-1', { worktreeId: 'wt-1' })
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('agent-session', 'wt-1')
+    expect(mocks.requestNativeChatComposerFocus).toHaveBeenCalledWith('structured-tab-1')
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'session.tabs.activate',

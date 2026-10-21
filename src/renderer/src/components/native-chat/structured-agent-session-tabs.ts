@@ -1,12 +1,7 @@
-import { isStructuredAgentId } from '../../../../shared/agent-session-provider-handle'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import type { Tab } from '../../../../shared/tab-types'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
-
-/** A chat tab of any agent its host registered; the host publishes tabs of no other agent. */
-export function isStructuredTab(tab: Tab): tab is StructuredTab {
-  return tab.contentType === 'agent-session' && isStructuredAgentId(tab.agentSessionAgent)
-}
 
 const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
   Record<string, Tab[]>,

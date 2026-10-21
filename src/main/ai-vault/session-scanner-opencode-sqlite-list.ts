@@ -9,6 +9,7 @@ import {
 } from './session-scanner-opencode-sqlite-open'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type SyncDatabase from '../sqlite/sync-database'
+import { scopedSessionRows } from './session-scanner-sqlite-scope-rows'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
 // Why: the SQLite session-list query + reader lives in its own electron-free
@@ -19,6 +20,7 @@ type SessionRow = {
   id: string
   time_created: number
   time_updated: number
+  directory?: unknown
 }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
@@ -29,7 +31,7 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
+function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
@@ -38,20 +40,33 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
   // Why (#8864): discovery needs only identity and recency. Reading message
   // blobs or unused session metadata here repeats expensive work on every
   // refresh; the parse path loads metadata only for candidates it actually uses.
-  return `SELECT id, time_created, time_updated
+  const directory = scoped && columnExists(db, 'session', 'directory') ? ', directory' : ''
+  return `SELECT id, time_created, time_updated${directory}
           FROM session
           WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           ${limited ? 'LIMIT ?' : ''}`
 }
 
-function readSessionRows(db: SyncDatabase, limit: number): SessionRow[] {
+function readSessionRows(
+  db: SyncDatabase,
+  limit: number,
+  scopePaths: readonly string[] | undefined,
+  dbPath: string
+): SessionRow[] {
   if (!canReadOpenCodeSessions(db)) {
     return []
   }
-  const limited = Number.isFinite(limit)
-  const statement = db.prepare(buildSessionListQuery(db, limited))
-  return (limited ? statement.all(limit) : statement.all()) as SessionRow[]
+  const scoped = scopePaths !== undefined && scopePaths.length > 0
+  const limited = Number.isFinite(limit) && !scoped
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these columns.
+  const rows = (
+    limited ? statement.all(limit) : scoped ? statement.iterate() : statement.all()
+  ) as Iterable<SessionRow>
+  return scoped && scopePaths
+    ? scopedSessionRows(rows, scopePaths, limit, dbPath)
+    : Array.from(rows)
 }
 
 function rowToCandidate(
@@ -110,6 +125,8 @@ export async function listOpenCodeSqliteSessions(args: {
   limit: number
   issues: AiVaultScanIssue[]
   agent?: 'opencode' | 'zcode'
+  /** Lists only sessions whose directory is in scope, newest `limit` of them. */
+  scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
   const agent = args.agent ?? 'opencode'
@@ -117,7 +134,7 @@ export async function listOpenCodeSqliteSessions(args: {
     try {
       const rows = readOpenCodeDatabase({
         dbPath,
-        read: (db) => readSessionRows(db, args.limit)
+        read: (db) => readSessionRows(db, args.limit, args.scopePaths, dbPath)
       })
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath, agent))

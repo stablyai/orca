@@ -1,4 +1,5 @@
 import type {
+  AgentJournalSubmission,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
@@ -8,14 +9,12 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import {
-  agentJournalLinkageFields,
-  namesAgentJournalProducer
-} from '../../../shared/agent-session-journal-producer'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { journalItemOwnerFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
@@ -29,39 +28,65 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
-import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
 import { turnEndAfterStop } from './journal-stop-turn-end'
+import { nextJournalItemRevision } from './journal-item-revision'
 import type { ResolveDispatchInput } from './journal-store-contracts'
+import {
+  journalLifecycleMutationItemId,
+  journalLifecycleMutationRow,
+  type JournalItemAddress,
+  type JournalLifecycleMutationInput
+} from './journal-lifecycle-mutation'
+export {
+  journalLifecycleItemMutation,
+  journalLifecycleMutationItemId,
+  journalLifecycleMutationRow,
+  type JournalLifecycleMutationInput,
+  type JournalLifecycleIdentityMutationInput
+} from './journal-lifecycle-mutation'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
 
 export function journalItemRowBuilder(
   state: () => JournalReducerState,
-  identity: AgentJournalItemIdentity,
+  address: AgentJournalItemIdentity | string,
   body: AgentJournalItemBody,
-  options: AgentJournalRowAttribution & { fence: number; observedAt?: number; recovered?: true }
+  options: AgentJournalRowAttribution & {
+    fence: number
+    ownerFence?: number
+    executionOwner?: number
+    observedAt?: number
+    recovered?: true
+  },
+  revisions?: Map<string, number>
 ): RowBuilder<JournalItemRow> {
   return (seq, ts) =>
     buildJournalItemRow({
       state: state(),
-      identity,
+      ...(typeof address === 'string' ? { itemId: address } : { identity: address }),
       body,
       seq,
       fence: options.fence,
+      ownerFence: options.ownerFence,
+      executionOwner: options.executionOwner,
       ts: options.observedAt ?? ts,
       recovered: options.recovered,
       linkage: options,
-      turnScope: options.turnScope
+      turnScope: options.turnScope,
+      revisions
     })
 }
 
 export function journalTombstoneRowBuilder(
   state: () => JournalReducerState,
   itemId: string,
-  fence: number
+  fence: number,
+  revisions?: Map<string, number>
 ): RowBuilder<JournalTombstoneRow> {
-  return (seq, ts) => buildJournalTombstoneRow({ state: state(), itemId, seq, fence, ts })
+  return (seq, ts) =>
+    buildJournalTombstoneRow({ state: state(), itemId, seq, fence, ts, revisions })
 }
 
 export function journalSubmissionRowBuilder(
@@ -75,6 +100,7 @@ export function journalSubmissionRowBuilder(
     handoverRecorded?: true
     queuedMessageId?: string
     origin?: 'client' | 'host'
+    options?: AgentSessionExecutionOptions
   },
   /** Present when the append hands off a queued draft: the row names that draft, stamped here
    *  from the consume itself so no hand-off path can leave the link off. */
@@ -129,7 +155,8 @@ export function journalDispatchRowBuilder(
       : {}),
     ...journalRowBase(state().epoch, seq, input.fence, ts),
     ...(input.recovered ? { recovered: input.recovered } : {}),
-    ...(input.state === 'pending' ? { turnScope: input.turnScope } : {})
+    ...(input.state === 'pending' ? { turnScope: input.turnScope } : {}),
+    ...(input.state === 'pending' && input.carries?.length ? { carries: [...input.carries] } : {})
   })
 }
 
@@ -141,54 +168,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
     return null
   }
-  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-}
-
-export type JournalLifecycleMutationInput =
-  | {
-      kind: 'item'
-      identity: AgentJournalItemIdentity
-      body: AgentJournalItemBody
-      /** Who wrote the row. Absent ⇒ the session's own agent on a first write,
-       *  and the row's existing producer on a revision. */
-      linkage?: AgentJournalProducerLinkage
-      /** Which turn the row belongs to. Kept from the write that creates the row. */
-      turnScope: AgentJournalTurnScope
-    }
-  | { kind: 'tombstone'; identity: AgentJournalItemIdentity }
-
-/** An item mutation from a writer that knows who produced the row. Needed
- *  because a batch can CREATE a row — a Codex child's prompt, or its item
- *  settled before any checkpoint landed — and one batch can mix producers.
- *  The session's own rows carry no key at all: absence is the claim. */
-export function journalLifecycleItemMutation(
-  attribution: AgentJournalRowAttribution,
-  identity: AgentJournalItemIdentity,
-  body: AgentJournalItemBody
-): JournalLifecycleMutationInput {
-  const { turnScope } = attribution
-  return namesAgentJournalProducer(attribution)
-    ? { kind: 'item', identity, body, turnScope, linkage: agentJournalLinkageFields(attribution) }
-    : { kind: 'item', identity, body, turnScope }
-}
-
-/** The persisted form of one mutation, shared with the partitioner's size probe
- *  so a chunk is measured with the linkage it will actually carry. */
-export function journalLifecycleMutationRow(
-  mutation: JournalLifecycleMutationInput,
-  itemId: string,
-  revision: number
-): JournalLifecycleMutation {
-  return mutation.kind === 'item'
-    ? {
-        kind: 'item',
-        itemId,
-        revision,
-        body: mutation.body,
-        turnScope: mutation.turnScope,
-        ...agentJournalLinkageFields(mutation.linkage)
-      }
-    : { kind: 'tombstone', itemId, revision }
+  return boundInlineText(input.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
 }
 
 export function journalLifecycleBatchRowBuilder(
@@ -200,30 +180,29 @@ export function journalLifecycleBatchRowBuilder(
    *  An item mutation names its own, or none to keep the row's existing one.
    *  The reducer still reads row-level linkage as the fallback for a mutation
    *  that names none, because a row may come from a host that wrote one. */
-  options: { fence: number; recovered?: true }
+  options: { fence: number; recovered?: true },
+  revisions?: Map<string, number>
 ): RowBuilder<JournalLifecycleBatchRow> {
   return (seq, ts) => {
     if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
       throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
     }
     const current = state()
-    const revisions = new Map<string, number>()
+    const runningRevisions = revisions ?? new Map<string, number>()
     const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
-      const itemId = agentJournalItemKey(mutation.identity)
+      const itemId = journalLifecycleMutationItemId(mutation)
       const resolved = current.aliases.get(itemId) ?? itemId
-      const revision =
-        (revisions.get(resolved) ??
-          Math.max(
-            current.items.get(resolved)?.revision ?? 0,
-            current.tombstones.get(resolved) ?? 0
-          )) + 1
-      revisions.set(resolved, revision)
+      const revision = nextJournalItemRevision(current, itemId, runningRevisions)
       return journalLifecycleMutationRow(
         mutation.kind === 'item'
           ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
           : mutation,
         itemId,
-        revision
+        revision,
+        journalItemOwnerFence(current, resolved, {
+          fence: options.fence,
+          ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
+        })
       )
     })
     const row: JournalLifecycleBatchRow = {
@@ -256,26 +235,27 @@ export function journalRowBase(
   return { v: journalRowSchemaVersion(bodies), epoch, seq, fence, ts }
 }
 
-export function buildJournalItemRow(input: {
-  state: JournalReducerState
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-  seq: number
-  fence: number
-  ts: number
-  recovered?: true
-  linkage?: AgentJournalProducerLinkage
-  turnScope: AgentJournalTurnScope
-}): JournalItemRow {
-  const itemId = agentJournalItemKey(input.identity)
+export function buildJournalItemRow(
+  input: JournalItemAddress & {
+    state: JournalReducerState
+    body: AgentJournalItemBody
+    seq: number
+    fence: number
+    /** The writer's provenance claim (`journalItemOwnerFence`); absent for host bookkeeping. */
+    ownerFence?: number
+    executionOwner?: number
+    ts: number
+    recovered?: true
+    linkage?: AgentJournalProducerLinkage
+    turnScope: AgentJournalTurnScope
+    revisions?: Map<string, number>
+  }
+): JournalItemRow {
+  const itemId = journalLifecycleMutationItemId(input)
   const resolved = input.state.aliases.get(itemId) ?? itemId
   // A tombstoned row keeps its revision in `tombstones`, and the reducer drops
   // any item at or below it — so a re-add has to outrank the tombstone too.
-  const revision =
-    Math.max(
-      input.state.items.get(resolved)?.revision ?? 0,
-      input.state.tombstones.get(resolved) ?? 0
-    ) + 1
+  const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
   const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
     kind: 'item',
@@ -283,6 +263,8 @@ export function buildJournalItemRow(input: {
     revision,
     body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
+    ownerFence: journalItemOwnerFence(input.state, resolved, input),
+    ...(input.executionOwner === undefined ? {} : { executionOwner: input.executionOwner }),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     turnScope: input.turnScope,
     ...agentJournalLinkageFields(input.linkage)
@@ -295,8 +277,8 @@ export function buildJournalTombstoneRow(input: {
   seq: number
   fence: number
   ts: number
+  revisions?: Map<string, number>
 }): JournalTombstoneRow {
-  const resolved = input.state.aliases.get(input.itemId) ?? input.itemId
   return {
     kind: 'tombstone',
     itemId: input.itemId,
@@ -304,11 +286,7 @@ export function buildJournalTombstoneRow(input: {
     // re-add is what keeps the two maps disjoint, and that invariant lives in the
     // reducer. Outranking both here means a repeat removal cannot be dropped as a
     // stale revision if it ever stops holding.
-    revision:
-      Math.max(
-        input.state.items.get(resolved)?.revision ?? 0,
-        input.state.tombstones.get(resolved) ?? 0
-      ) + 1,
+    revision: nextJournalItemRevision(input.state, input.itemId, input.revisions),
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
 }
@@ -325,7 +303,8 @@ export function buildJournalSubmissionRow(input: {
   handoverRecorded?: true
   queuedMessageId?: string
   origin?: 'client' | 'host'
-  source?: Pick<AgentSessionMessageSource, 'kind'>
+  source?: AgentJournalSubmission['source']
+  options?: AgentSessionExecutionOptions
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -338,6 +317,7 @@ export function buildJournalSubmissionRow(input: {
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
     // The kind only; who the senders are is on the message body.
-    ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {})
+    ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {}),
+    ...(input.options ? { options: input.options } : {})
   }
 }

@@ -49,6 +49,7 @@ import {
 } from './helpers/paired-host-terminal'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000
@@ -81,15 +82,11 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(): string {
   const command = [process.execPath, fixturePath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 type ParkKind = 'ordinary' | 'force'

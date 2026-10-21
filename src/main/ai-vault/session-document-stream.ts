@@ -103,17 +103,24 @@ export async function readStreamedSessionDocument<T>(args: {
       discard
     ]
   })
-  const parser = createJsonTokenReader((token) => {
-    if (
-      token.name === 'keyValue' &&
-      assembler.depth === 1 &&
-      !assembler.isArray &&
-      objectFields.has(token.value)
-    ) {
-      record[token.value] = Object.create(null)
+  const parser = createJsonTokenReader(
+    (token) => {
+      if (
+        token.name === 'keyValue' &&
+        assembler.depth === 1 &&
+        !assembler.isArray &&
+        objectFields.has(token.value)
+      ) {
+        record[token.value] = Object.create(null)
+      }
+      assembler.consume(token)
+    },
+    64 * 1024,
+    () => {
+      const key = assembler.isArray ? assembler.arrayIndex + 1 : assembler.key
+      return key !== null && retain([...assembler.path, key])
     }
-    assembler.consume(token)
-  })
+  )
   const decoder = new StringDecoder('utf8')
   for await (const chunk of args.bytes) {
     throwIfAiVaultScanCancelled(args.signal)

@@ -149,9 +149,9 @@ describe('a message in doubt', () => {
 
     expect(placed(state, 'steer')).toEqual({ sequence: 12, observedAt: 1_012, scope: IN_TURN })
     const { items, submissions } = renderJournalState(state)
-    const drawn = projectStructuredAgentSessionMessages(items, [], submissions, {
-      rejectedInPlace: true
-    }).find((message) => message.id === agentJournalSubmissionKey('steer'))
+    const drawn = projectStructuredAgentSessionMessages(items, [], submissions).find(
+      (message) => message.id === agentJournalSubmissionKey('steer')
+    )
     expect(drawn).toBeDefined()
     expect(drawn?.unsent).toBeUndefined()
   })

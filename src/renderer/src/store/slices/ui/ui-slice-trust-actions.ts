@@ -130,6 +130,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
           .catch(console.error)
         return { usagePercentageDisplayChangeNoticeDismissed: true }
       }),
+    statusBarCompactChangeNoticeDismissed: true,
+    dismissStatusBarCompactChangeNotice: () =>
+      set((s) => {
+        if (s.statusBarCompactChangeNoticeDismissed) {
+          return s
+        }
+        window.api.ui.set({ statusBarCompactChangeNoticeDismissed: true }).catch(console.error)
+        return { statusBarCompactChangeNoticeDismissed: true }
+      }),
     usageEmptyStateDismissed: false,
     dismissUsageEmptyState: () =>
       set((s) => {
@@ -158,14 +167,14 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
       }),
-    claudeAccountSignInNoticeSeen: true,
-    markClaudeAccountSignInNoticeSeen: () =>
+    claudeDiffPanelNoticeSeen: true,
+    markClaudeDiffPanelNoticeSeen: () =>
       set((s) => {
-        if (s.claudeAccountSignInNoticeSeen) {
+        if (s.claudeDiffPanelNoticeSeen) {
           return s
         }
-        window.api.ui.set({ claudeAccountSignInNoticeSeen: true }).catch(console.error)
-        return { claudeAccountSignInNoticeSeen: true }
+        window.api.ui.set({ claudeDiffPanelNoticeSeen: true }).catch(console.error)
+        return { claudeDiffPanelNoticeSeen: true }
       })
   }
 }

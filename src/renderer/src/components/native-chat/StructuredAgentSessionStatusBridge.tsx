@@ -32,7 +32,7 @@ import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdi
 import { useStructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch-registry'
 import { useStructuredAgentSessionLaunchFailedAt } from '@/lib/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
@@ -63,6 +63,23 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
+/** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
+export function useStructuredAgentSessionOptionStamp(
+  sessionId: string,
+  target: RuntimeClientTarget
+): string {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => {
+      const summary = feed.getSnapshot().get(sessionId)
+      return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
+    },
+    () => ''
+  )
+}
+
 /** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
 export function useStructuredAgentSessionHostExecutionPhase(
   sessionId: string,
@@ -91,14 +108,19 @@ export function useStructuredAgentSessionHostStopping(
   )
 }
 
-/** The host's startup phase and its word on a Stop, each re-rendering the chat only on a change. */
+/** Startup phase, Stop and option stamp, each re-rendering the chat only on a change. */
 export function useStructuredAgentSessionHostExecution(
   sessionId: string,
   target: RuntimeClientTarget
-): { phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>; stopping: boolean } {
+): {
+  phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>
+  stopping: boolean
+  optionStamp: string
+} {
   return {
     phase: useStructuredAgentSessionHostExecutionPhase(sessionId, target),
-    stopping: useStructuredAgentSessionHostStopping(sessionId, target)
+    stopping: useStructuredAgentSessionHostStopping(sessionId, target),
+    optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target)
   }
 }
 

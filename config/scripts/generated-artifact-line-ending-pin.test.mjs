@@ -12,16 +12,18 @@ it('keeps byte-compared artifacts and source LF in an autocrlf checkout', () => 
   const crlf = 'first\r\nsecond\r\n'
   const paths = new Map([
     ['resources/skills/current-manifest.json', lf],
-    ['resources/skills/snapshot-registry.json', lf],
-    ['resources/skills/release-mapping.json', lf],
     ['src/main/__snapshots__/example.test.ts.snap', lf],
     ['src/renderer/src/example.tsx', lf],
     ['src/main/example.ts', lf],
     ['config/scripts/example.mjs', lf],
+    ['config/scripts/nested/deeper/example.mjs', lf],
     ...['cmd', 'bat', 'ps1', 'nsh'].map((extension) => [`config/example.${extension}`, crlf]),
     ['resources/skills-extra/example.json', crlf],
     ['vendor/resources/skills/example.json', crlf],
     ['scripts/example.mjs', crlf],
+    ['config/scripts-extra/example.mjs', crlf],
+    ['vendor/config/scripts/example.mjs', crlf],
+    ['config/scripts/example.mjsx', crlf],
     ['src/main/runtime/__fixtures__/example.txt', crlf],
     ['src/main/daemon/__fixtures__/pty-transcripts/example.txt', crlf]
   ])

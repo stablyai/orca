@@ -4,7 +4,7 @@ import type {
   PtyProcessInfo,
   PtySpawnOptions,
   PtySpawnResult
-} from '../providers/types'
+} from '../providers/pty-provider-contract'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
@@ -348,11 +348,32 @@ describe('DaemonSessionOwnerResolver', () => {
     })
   })
 
-  it('does not trust persisted incarnation proof from an incomplete inventory', async () => {
+  // #30486: one unanswering older daemon stranded every restored pane the current daemon still ran.
+  it('accepts the exact persisted incarnation while another inventory fails', async () => {
+    const exactOwner = provider(async () => [
+      { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
+    ])
+    const resolver = new DaemonSessionOwnerResolver(
+      [
+        exactOwner,
+        provider(async () => {
+          throw new Error('offline')
+        })
+      ],
+      new Map()
+    )
+
+    await expect(resolver.resolve('session', 'persisted')).resolves.toMatchObject({
+      kind: 'owner',
+      provider: exactOwner
+    })
+  })
+
+  it('does not trust another incarnation of the id from an incomplete inventory', async () => {
     const resolver = new DaemonSessionOwnerResolver(
       [
         provider(async () => [
-          { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
+          { id: 'session', incarnationId: 'other', cwd: '', title: 'candidate' }
         ]),
         provider(async () => {
           throw new Error('offline')
@@ -362,6 +383,47 @@ describe('DaemonSessionOwnerResolver', () => {
     )
 
     await expect(resolver.resolve('session', 'persisted')).resolves.toEqual({ kind: 'unknown' })
+    await expect(resolver.resolve('session')).resolves.toEqual({ kind: 'unknown' })
+  })
+
+  it('proves absence once a failed provider is proven gone, and stops asking it', async () => {
+    const reachable = provider(
+      async () => [],
+      async () => {
+        throw new SessionNotFoundError('missing')
+      }
+    )
+    const gone = provider(async () => {
+      throw new Error('connect ENOENT')
+    })
+    const isProvenGone = vi.fn((candidate: IPtyProvider) => candidate === gone)
+    const resolver = new DaemonSessionOwnerResolver([reachable, gone], new Map(), isProvenGone)
+    const attach = { sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 }
+
+    await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(reachable.spawn).not.toHaveBeenCalled()
+    // The sole remaining provider now answers directly.
+    await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(reachable.spawn).toHaveBeenCalledOnce()
+    expect(gone.listProcesses).toHaveBeenCalledOnce()
+    expect(isProvenGone).toHaveBeenCalledOnce()
+  })
+
+  it('keeps absence unverified when a failed provider is not proven gone', async () => {
+    const resolver = new DaemonSessionOwnerResolver(
+      [
+        provider(async () => []),
+        provider(async () => {
+          throw new Error('wedged')
+        })
+      ],
+      new Map(),
+      () => false
+    )
+
+    await expect(
+      resolver.spawnAttachOnly({ sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 })
+    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
   })
 
   it('accepts positive liveness proof from an incomplete inventory', async () => {

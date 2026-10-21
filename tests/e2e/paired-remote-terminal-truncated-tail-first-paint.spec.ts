@@ -11,6 +11,7 @@ import {
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const RETENTION_PARK_DELAY_MS = 100
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-truncated-tail-'))
@@ -46,15 +47,11 @@ test.use({
   }
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(marker: string): string {
   const command = [process.execPath, fixturePath, marker]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 async function callRuntime<TResult>(page: Page, method: string, params: unknown): Promise<TResult> {

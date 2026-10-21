@@ -1,5 +1,4 @@
 import { useId } from 'react'
-import { Loader2 } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
@@ -14,6 +13,7 @@ import {
   NativeChatReasoningChevron
 } from './NativeChatReasoningDisclosure'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
 function statusLabel(key: Extract<NativeChatActiveTurnLabel, { source: 'status' }>['key']): string {
@@ -45,10 +45,10 @@ export function NativeChatTurnActivityLine({
   const label = resolved.source === 'activity' ? resolved.text : statusLabel(resolved.key)
   const { reasoning } = line
   // The finished row reads this key too, so a block opened here lands open once it ends.
-  const disclosure = useNativeChatDisclosure(
-    reasoning ? nativeChatReasoningDisclosureKey(reasoning.message.id) : undefined,
-    false
-  )
+  const disclosureKey = reasoning
+    ? nativeChatReasoningDisclosureKey(reasoning.message.id)
+    : undefined
+  const disclosure = useNativeChatDisclosure(disclosureKey, false)
   const open = reasoning !== null && disclosure.open
   const labelId = useId()
 
@@ -57,14 +57,14 @@ export function NativeChatTurnActivityLine({
       {/* One element for every state of the line, so a screen reader hears each new label. The
           trigger overlays it, rather than wrapping it, and the body sits outside it. */}
       <div
-        className="group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm native-chat-message-text leading-relaxed text-muted-foreground"
+        className="group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-chat-foreground-faint"
         data-native-chat-turn-activity="true"
         data-state={open ? 'open' : 'closed'}
         aria-live="polite"
         aria-atomic="true"
       >
-        <Loader2 aria-hidden className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
-        <span id={labelId} className="min-w-0 truncate text-foreground/85">
+        <LoadingSpinner className="size-4 shrink-0" />
+        <span id={labelId} className="min-w-0 truncate text-chat-foreground">
           {label}
         </span>
         {reasoning ? (
@@ -74,7 +74,7 @@ export function NativeChatTurnActivityLine({
               <button
                 type="button"
                 aria-labelledby={labelId}
-                className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+                className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               />
             </CollapsibleTrigger>
           </>
@@ -83,9 +83,11 @@ export function NativeChatTurnActivityLine({
       {reasoning ? (
         <CollapsibleContent>
           <NativeChatReasoningBody
+            rowKey={disclosureKey}
             markdown={reasoning.markdown}
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}
+            streaming
           />
         </CollapsibleContent>
       ) : null}

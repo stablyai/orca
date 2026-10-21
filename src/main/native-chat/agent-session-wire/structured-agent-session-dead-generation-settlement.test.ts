@@ -4,20 +4,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import {
   agentSessionFailureFact,
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   providerDiagnostic
 } from '../../../shared/agent-session-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import {
   captureUnfinishedStructuredAgentSessionWork,
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-unfinished-work'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../agent-session-journal/journal-row-schema'
 
 const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
   'The agent stopped while this response was in progress. You can continue in this conversation.'
@@ -92,7 +92,7 @@ describe('dead structured-session generation settlement', () => {
     await seedUnfinishedWork()
 
     await expect(
-      settleStructuredAgentSessionDeadGeneration({
+      settleObservedExitForTest({
         journal,
         sessionId: SESSION,
         fence: 8,
@@ -101,7 +101,7 @@ describe('dead structured-session generation settlement', () => {
         verdict: { state: 'unverifiable' },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
 
     const snapshot = journal.snapshot()
     expect(snapshot.submissions).toEqual([
@@ -140,9 +140,9 @@ describe('dead structured-session generation settlement', () => {
       showUnexpectedExitOutcome: true
     }
 
-    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toEqual({ ok: true })
+    await expect(settleObservedExitForTest(input)).resolves.toMatchObject({ ok: true })
     const settledCursor = journal.cursor()
-    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toEqual({ ok: true })
+    await expect(settleObservedExitForTest(input)).resolves.toMatchObject({ ok: true })
 
     expect(journal.cursor()).toEqual(settledCursor)
     expect(
@@ -157,7 +157,7 @@ describe('dead structured-session generation settlement', () => {
 
   it('cuts short a call the proven death interrupted', async () => {
     await seedUnfinishedWork()
-    await settleStructuredAgentSessionDeadGeneration({
+    await settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 7,
@@ -170,11 +170,47 @@ describe('dead structured-session generation settlement', () => {
     expect(tool?.body).toMatchObject({ state: 'failed', endedAs: 'interrupted' })
   })
 
+  it('settles a >1.5 MB running call intact and preserves an already terminal call', async () => {
+    await seedUnfinishedWork()
+    const content = 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
+    for (const state of ['running', 'completed'] as const) {
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: `large-${state}` },
+        { kind: 'tool-call', name: 'Write', input: { content }, state },
+        { fence: 7, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    const terminal = journal
+      .snapshot()
+      .items.find((item) => item.body.kind === 'tool-call' && item.body.state === 'completed')
+    const input = {
+      journal,
+      sessionId: SESSION,
+      fence: 7,
+      settlementId: `exit:${SESSION}:7:oversized`,
+      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+      verdict: { state: 'interrupted' as const, completedAt: 1_000 },
+      showUnexpectedExitOutcome: true
+    }
+    expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
+    const settled = journal.snapshot()
+    expect(settled.items).toContainEqual(terminal)
+    expect(settled.items.map((item) => item.body)).toContainEqual({
+      kind: 'tool-call',
+      name: 'Write',
+      input: { content },
+      state: 'failed',
+      endedAs: 'interrupted'
+    })
+    expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
+    expect(journal.snapshot()).toEqual(settled)
+  })
+
   it('keeps a stderr wall out of the sentence, as a bounded detail for a log', async () => {
     await seedUnfinishedWork()
 
     await expect(
-      settleStructuredAgentSessionDeadGeneration({
+      settleObservedExitForTest({
         journal,
         sessionId: SESSION,
         fence: 7,
@@ -186,7 +222,7 @@ describe('dead structured-session generation settlement', () => {
           detail: providerDiagnostic('stack frame '.repeat(4_000), 'log')
         })
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
 
     const statuses = journal
       .snapshot()
@@ -201,7 +237,7 @@ describe('dead structured-session generation settlement', () => {
   it("words Orca's own fault as Orca's, never as the provider stopping", async () => {
     await seedUnfinishedWork()
 
-    await settleStructuredAgentSessionDeadGeneration({
+    await settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 7,
@@ -226,63 +262,6 @@ describe('dead structured-session generation settlement', () => {
     ])
   })
 
-  it('retries an already settled expected close without writing through a closed journal gate', async () => {
-    const settledItem: AgentJournalRenderItem = {
-      itemId: 'codex:thread-1:turn-1:0',
-      revision: 2,
-      sequence: 2,
-      observedAt: 1_000,
-      body: {
-        kind: 'turn',
-        turnId: 'turn-1',
-        state: 'interrupted',
-        completedAt: 1_000
-      }
-    }
-    const settledSnapshot = journal.snapshot()
-    const closedJournal: Pick<
-      AgentSessionJournal,
-      | 'snapshot'
-      | 'submissions'
-      | 'markPendingSubmissionsUnknown'
-      | 'rejectPendingSubmissions'
-      | 'rejectQueuedSubmissions'
-      | 'appendLifecycleBatch'
-      | 'itemFence'
-    > = {
-      itemFence: () => undefined,
-      snapshot: () => ({
-        ...settledSnapshot,
-        items: [settledItem]
-      }),
-      submissions: () => [],
-      markPendingSubmissionsUnknown: async () => {
-        throw new Error('journal_closed')
-      },
-      rejectPendingSubmissions: async () => {
-        throw new Error('journal_closed')
-      },
-      rejectQueuedSubmissions: async () => {
-        throw new Error('journal_closed')
-      },
-      appendLifecycleBatch: async () => {
-        throw new Error('journal_closed')
-      }
-    }
-
-    await expect(
-      settleStructuredAgentSessionDeadGeneration({
-        journal: closedJournal,
-        sessionId: SESSION,
-        fence: 7,
-        settlementId: `expected-close:${SESSION}:7:generation-1`,
-        pendingSubmissionReason: 'provider_closed_before_acknowledgement',
-        verdict: { state: 'interrupted', completedAt: 1_000 },
-        showUnexpectedExitOutcome: false
-      })
-    ).resolves.toEqual({ ok: true })
-  })
-
   it('settles a live unknown submission even when no unfinished item remains', async () => {
     await journal.appendSubmission({
       clientMessageId: 'client-unknown',
@@ -298,7 +277,7 @@ describe('dead structured-session generation settlement', () => {
     })
 
     await expect(
-      settleStructuredAgentSessionDeadGeneration({
+      settleObservedExitForTest({
         journal,
         sessionId: SESSION,
         fence: 7,
@@ -307,7 +286,7 @@ describe('dead structured-session generation settlement', () => {
         verdict: { state: 'interrupted', completedAt: 1_000 },
         showUnexpectedExitOutcome: false
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
 
     expect(journal.submissions()).toEqual([
       expect.objectContaining({
@@ -327,7 +306,7 @@ describe('dead structured-session generation settlement', () => {
       fence: 7
     })
 
-    await settleStructuredAgentSessionDeadGeneration({
+    await settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 7,
@@ -388,7 +367,7 @@ describe('dead structured-session generation settlement', () => {
       { fence: 7, ...child, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    await settleStructuredAgentSessionDeadGeneration({
+    await settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 8,
@@ -472,7 +451,7 @@ describe('whether a dead generation interrupted anything', () => {
     await seedIdlePendingApproval()
 
     await expect(
-      settleStructuredAgentSessionDeadGeneration({
+      settleObservedExitForTest({
         journal,
         sessionId: SESSION,
         fence: 7,
@@ -485,7 +464,7 @@ describe('whether a dead generation interrupted anything', () => {
           1_000
         )
       })
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
 
     const snapshot = journal.snapshot()
     expect(snapshot.items.some((item) => item.body.kind === 'status')).toBe(false)

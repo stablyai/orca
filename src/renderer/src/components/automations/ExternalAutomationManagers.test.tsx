@@ -41,7 +41,7 @@ function makeJob(overrides: Partial<ExternalAutomationJob> = {}): ExternalAutoma
   return {
     id: 'job-1',
     managerId: 'manager-1',
-    provider: 'hermes',
+    provider: 'openclaw',
     name: 'Nightly backup',
     schedule: '0 0 * * *',
     rawSchedule: null,
@@ -63,11 +63,11 @@ function makeJob(overrides: Partial<ExternalAutomationJob> = {}): ExternalAutoma
 function makeManager(
   overrides: Partial<ExternalAutomationManager> = {}
 ): ExternalAutomationManager {
-  const provider: ExternalAutomationProvider = overrides.provider ?? 'hermes'
+  const provider: ExternalAutomationProvider = overrides.provider ?? 'openclaw'
   return {
     id: 'manager-1',
     provider,
-    label: 'Local Hermes',
+    label: 'Local OpenClaw',
     targetLabel: 'Local',
     target: { type: 'local' },
     status: 'available',
@@ -88,7 +88,7 @@ function makeScope(environmentId: string | null = null): ExternalAutomationScope
           : { kind: 'runtime', environmentId, pairingRevision: 1 },
       selector: { kind: 'self' }
     },
-    provider: 'hermes'
+    provider: 'openclaw'
   }
 }
 
@@ -109,28 +109,16 @@ type OnActionMock = ReturnType<
     ) => void
   >
 >
-type OnEditMock = ReturnType<
-  typeof vi.fn<
-    (
-      manager: ExternalAutomationManager,
-      job: ExternalAutomationJob,
-      scope: ExternalAutomationScope
-    ) => void
-  >
->
-
 type RenderOptions = {
   runningActionKey?: string | null
   onAction?: OnActionMock
-  onEdit?: OnEditMock
 }
 
 function renderManagers(
   managers: ScopedExternalAutomationManager[],
   options: RenderOptions = {}
-): { onAction: OnActionMock; onEdit: OnEditMock } {
+): { onAction: OnActionMock } {
   const onAction = options.onAction ?? vi.fn()
-  const onEdit = options.onEdit ?? vi.fn()
   act(() => {
     root.render(
       <ExternalAutomationManagers
@@ -138,11 +126,10 @@ function renderManagers(
         now={0}
         runningActionKey={options.runningActionKey ?? null}
         onAction={onAction}
-        onEdit={onEdit}
       />
     )
   })
-  return { onAction, onEdit }
+  return { onAction }
 }
 
 function getSwitch(index = 0): HTMLButtonElement {
@@ -228,12 +215,12 @@ describe('ExternalAutomationManagers toggle', () => {
   })
 
   it('spins only the host whose action is in flight when two authorities share a manager ID', () => {
-    // Both hosts report `hermes:local` with the same job ID, because that ID
+    // Both hosts report `openclaw:local` with the same job ID, because that ID
     // names a provider and a target kind but no authority. The page keys the
     // in-flight action by scope, so the component must too — matching on
     // manager and job alone would spin the wrong host's row, and a user would
     // watch a machine they never touched appear to run their automation.
-    const local = { id: 'hermes:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
+    const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
     const desktop = scoped(local, makeScope())
     const runtime = scoped(local, makeScope('env-7'))
 
@@ -250,7 +237,7 @@ describe('ExternalAutomationManagers toggle', () => {
   })
 
   it('labels the two rows apart when two authorities share a manager and job ID', () => {
-    const local = { id: 'hermes:local', jobs: [makeJob({ id: 'job-1' })] }
+    const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1' })] }
     renderManagers([scoped(local, makeScope()), scoped(local, makeScope('env-7'))])
 
     // A name element ID built from manager and job alone would repeat, and the
@@ -261,7 +248,7 @@ describe('ExternalAutomationManagers toggle', () => {
   })
 
   it('dispatches each row against its own authority when two share a manager ID', () => {
-    const local = { id: 'hermes:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
+    const local = { id: 'openclaw:local', jobs: [makeJob({ id: 'job-1', enabled: true })] }
     const desktop = scoped(local, makeScope())
     const runtime = scoped(local, makeScope('env-7'))
     const { onAction } = renderManagers([desktop, runtime])
@@ -274,16 +261,6 @@ describe('ExternalAutomationManagers toggle', () => {
     // row can never be replayed against the desktop's identically named cron job.
     expect(onAction).toHaveBeenCalledTimes(1)
     expect(onAction.mock.calls[0]?.[3]).toEqual(runtime.scope)
-  })
-
-  it('keeps the Run/Edit/Delete actions and removes the pause/resume button on hermes', () => {
-    renderManagers([scoped({ provider: 'hermes' })])
-    const labels = actionButtonLabels()
-    expect(labels).toContain('Run external automation')
-    expect(labels).toContain('Edit external automation')
-    expect(labels).toContain('Delete external automation')
-    expect(labels).not.toContain('Pause external automation')
-    expect(labels).not.toContain('Resume external automation')
   })
 
   it('keeps Run/Delete (no Edit) for openclaw and removes the pause/resume button', () => {

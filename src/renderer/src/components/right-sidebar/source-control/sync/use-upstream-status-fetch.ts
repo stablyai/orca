@@ -5,7 +5,7 @@ import type { SourceControlWorktreeContext } from '../listing/use-worktree-conte
 
 /** Keeps the upstream ahead/behind status for the visible branch fresh. */
 export function useSourceControlUpstreamStatusFetch({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktree,
   activeWorktreeId,
   fetchUpstreamStatus,
@@ -13,7 +13,7 @@ export function useSourceControlUpstreamStatusFetch({
   isFolder,
   worktreePath
 }: {
-  activeRepoSettings: SourceControlWorktreeContext['activeRepoSettings']
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktree: SourceControlWorktreeContext['activeWorktree']
   activeWorktreeId: string | null
   fetchUpstreamStatus: SourceControlStoreActions['fetchUpstreamStatus']
@@ -32,10 +32,10 @@ export function useSourceControlUpstreamStatusFetch({
       worktreePath,
       connectionId,
       activeWorktree?.pushTarget,
-      { runtimeTargetSettings: activeRepoSettings }
+      { runtimeTarget: activeRepoTarget }
     )
   }, [
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree?.pushTarget,
     activeWorktreeId,
     fetchUpstreamStatus,

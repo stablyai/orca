@@ -1,7 +1,7 @@
+import type { PairedRuntimeConnection } from './paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import { runtimeEnvironmentSshAccessBinding } from './runtime-environment-authority-binding'
 export { runtimeEnvironmentSshAccessBinding } from './runtime-environment-authority-binding'
-import type { PairingOffer } from './pairing'
 import {
   getPreferredPairingOffer,
   RuntimeSshAccessOperationSchema,
@@ -66,7 +66,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
     expectedEnvironment: KnownRuntimeEnvironment
     requestId: string
     verifiedRuntimeId: string
-    verifiedPairing: PairingOffer
+    verifiedConnection: PairedRuntimeConnection
     tunnel: RuntimeSshTunnelLink
     now?: number
   }
@@ -93,9 +93,9 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
   if (
     !args.verifiedRuntimeId.trim() ||
     (existing.runtimeId !== null && existing.runtimeId !== args.verifiedRuntimeId) ||
-    args.verifiedPairing.publicKeyB64 !== offer.publicKeyB64 ||
-    args.verifiedPairing.deviceToken !== offer.deviceToken ||
-    args.verifiedPairing.pairedDeviceId !== offer.pairedDeviceId
+    args.verifiedConnection.hostPublicKeyB64 !== offer.publicKeyB64 ||
+    args.verifiedConnection.credential.deviceToken !== offer.deviceToken ||
+    args.verifiedConnection.pairedDeviceId !== offer.pairedDeviceId
   ) {
     throw invalid('The SSH endpoint did not verify as this paired server.')
   }
@@ -122,7 +122,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
         id: endpointId,
         kind: 'websocket',
         label: 'SSH tunnel',
-        endpoint: args.verifiedPairing.endpoint,
+        endpoint: args.verifiedConnection.endpoint,
         publicKeyB64: offer.publicKeyB64,
         deviceToken: offer.deviceToken
       }
@@ -218,10 +218,10 @@ function requireMatchingCompletedLink(
   const offer = getPreferredPairingOffer(completed)
   if (
     completed.runtimeId !== args.verifiedRuntimeId ||
-    offer.endpoint !== args.verifiedPairing.endpoint ||
-    offer.deviceToken !== args.verifiedPairing.deviceToken ||
-    offer.publicKeyB64 !== args.verifiedPairing.publicKeyB64 ||
-    offer.pairedDeviceId !== args.verifiedPairing.pairedDeviceId ||
+    offer.endpoint !== args.verifiedConnection.endpoint ||
+    offer.deviceToken !== args.verifiedConnection.credential.deviceToken ||
+    offer.publicKeyB64 !== args.verifiedConnection.hostPublicKeyB64 ||
+    offer.pairedDeviceId !== args.verifiedConnection.pairedDeviceId ||
     access.sshTargetId !== args.tunnel.sshTargetId ||
     access.sshTargetGeneration !== args.tunnel.sshTargetGeneration ||
     access.localPort !== args.tunnel.localPort ||

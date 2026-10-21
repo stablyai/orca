@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import {
@@ -11,6 +13,7 @@ import {
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../src/shared/agent-launch-runtime-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'
 
 /** Mirrors the host's `parseRuntimeClientCapabilities`, which returns an EMPTY list — silently
@@ -29,6 +32,23 @@ describe('mobile runtime client capabilities', () => {
         AGENT_SESSION_TURN_ITEM_CAPABILITY,
         SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
       ])
+    )
+  })
+
+  it('reads every agent the host registers, Pi dialogs included', () => {
+    // Why: without these the host retitles Grok, OpenCode, OMP and Pi chat tabs "Update to view".
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
+      expect.arrayContaining([
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+        PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
+      ])
+    )
+  })
+
+  it('reads an options report with no model', () => {
+    // Why: without it the host refuses `agentSession.options` for OMP and model-less chats at rest.
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY
     )
   })
 

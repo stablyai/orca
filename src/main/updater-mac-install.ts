@@ -10,6 +10,8 @@ export function registerMacUpdaterEvents({
   getPendingInstallVersion,
   getKnownReleaseUrl,
   performQuitAndInstall,
+  commitStagedMacInstall,
+  failMacStaging,
   shouldDeferMacQuitForInstall,
   sendStatus
 }: {
@@ -18,11 +20,16 @@ export function registerMacUpdaterEvents({
   getPendingInstallVersion: () => string
   getKnownReleaseUrl: () => string | undefined
   performQuitAndInstall: () => void | Promise<void>
+  commitStagedMacInstall: () => void
+  failMacStaging: (error: unknown) => void
   shouldDeferMacQuitForInstall: () => boolean
   sendStatus: (status: UpdateStatus) => void
 }): void {
   if (process.platform === 'darwin') {
+    nativeUpdater.on('error', failMacStaging)
     nativeUpdater.on('update-downloaded', () => {
+      // Why: registered before MacUpdater's quitAndInstall listener, so this commits before its app.quit().
+      commitStagedMacInstall()
       const hasInstallableVersion = hasInstallableDownloadedVersion()
       handleMacInstallerReady(hasInstallableVersion, performQuitAndInstall, () => {
         sendStatus({

@@ -48,6 +48,8 @@ export function listedModels(value: unknown): ListedModel[] {
     const description = text(row.description)
     const supportsFastMode =
       typeof row.supportsFastMode === 'boolean' ? row.supportsFastMode : undefined
+    const supportsAutoMode =
+      typeof row.supportsAutoMode === 'boolean' ? row.supportsAutoMode : undefined
     return [
       {
         id,
@@ -56,6 +58,7 @@ export function listedModels(value: unknown): ListedModel[] {
         isDefault: resolvedModel !== null && resolvedModel === defaultResolvedModel,
         efforts: listedEfforts(row),
         ...(supportsFastMode !== undefined ? { supportsFastMode } : {}),
+        ...(supportsAutoMode !== undefined ? { supportsAutoMode } : {}),
         resolvedModel
       }
     ]
@@ -92,6 +95,11 @@ export function seedModels(): ListedModel[] {
     efforts: seedEfforts(model),
     resolvedModel: null
   }))
+}
+
+/** Whether `currentModelId` falls back to the list's default, which the chat never chose. */
+export function currentModelIsDefaulted(reportedModel: string | undefined): boolean {
+  return !reportedModel || reportedModel === 'default'
 }
 
 export function currentModelId(models: ListedModel[], reportedModel: string | undefined): string {

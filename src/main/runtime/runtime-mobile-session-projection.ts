@@ -179,11 +179,11 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
-    const title = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
-      ownerAgent,
-      ownerOptions
-    )
+    const liveTitle = trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title
+    // Why: agents repaint their title constantly, so a user's rename must outrank it.
+    const title =
+      tab.customTitle?.trim() ||
+      normalizeCompatibleAgentTitleForOwner(liveTitle, ownerAgent, ownerOptions)
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =
@@ -295,6 +295,7 @@ export function projectRuntimeMobileSessionTabs(
       parentTabId: tab.parentTabId,
       leafId: tab.leafId,
       title,
+      ...(tab.customTitle !== undefined ? { customTitle: tab.customTitle } : {}),
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),

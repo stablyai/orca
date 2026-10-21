@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type {
   AgentSessionCommandsResult,
   AgentSessionOptionsResult
@@ -33,6 +34,10 @@ const commandsSchema = z.object({
 })
 
 const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+/** The levels a reasoning model offers unless its thinking map removes one; the rest need a map entry. */
+export const PI_UNMAPPED_THINKING_LEVELS = THINKING_LEVELS.filter(
+  (level) => level !== 'xhigh' && level !== 'max'
+)
 
 export function piModelOptionId(provider: string, modelId: string): string {
   if (!provider || !modelId || provider.includes('/')) {
@@ -84,25 +89,49 @@ export async function readPiRpcSessionOptions(
   }
 }
 
+export type PiRpcOptionProof = { current: Map<string, string>; writes: Map<string, symbol> }
+
 export async function applyPiRpcSessionOption(
   rpc: PiRpcRequester,
   selected: Map<string, string>,
   key: string,
-  value: string
+  value: string,
+  options: { timeoutMs?: number | null; signal?: AbortSignal } = {},
+  proof?: PiRpcOptionProof
 ): Promise<Readonly<Record<string, string>>> {
+  let command: string
+  let params: Record<string, unknown>
   if (key === 'model') {
     const model = parsePiModelOptionId(value)
     modelSchema.parse({ provider: model.provider, id: model.modelId })
-    await rpc.request('set_model', model)
+    command = 'set_model'
+    params = model
   } else if (key === 'effort') {
     if (!THINKING_LEVELS.some((level) => level === value)) {
       throw new Error(`Unsupported Pi thinking level: ${value}`)
     }
-    await rpc.request('set_thinking_level', { level: value })
+    command = 'set_thinking_level'
+    params = { level: value }
   } else {
     throw new Error(`Unsupported Pi option: ${key}`)
   }
+  options.signal?.throwIfAborted()
+  const token = Symbol(key)
+  proof?.writes.set(key, token)
+  proof?.current.delete(key)
+  if (key === 'model') {
+    proof?.writes.set('effort', token)
+    proof?.current.delete('effort')
+  }
+  await waitForPromiseWithSignal(
+    rpc.request(command, params, { timeoutMs: options.timeoutMs }),
+    options.signal
+  )
+  if (proof && proof.writes.get(key) !== token) {
+    throw new Error('Pi option write was superseded')
+  }
   selected.set(key, value)
+  proof?.current.set(key, value)
   return Object.fromEntries(selected)
 }
 

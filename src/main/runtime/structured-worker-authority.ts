@@ -31,10 +31,11 @@ import {
   structuredSessionTabRetired,
   structuredWorkerAddressable
 } from './structured-worker-custody'
-import { AGENT_SESSION_FOUNDING_FENCE } from './agent-session-record-founding'
-import { isAgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
+import { structuredSessionNeverStarted } from './agent-session-record-founding'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import type { TuiAgent } from '../../shared/tui-agent'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import {
-  isStructuredWorkerHandle,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
@@ -218,17 +219,17 @@ export function resolveStructuredWorkerAuthority(
  * The registry carries it only for a session THIS process started; a rehydrated entry has null,
  * because the durable worker-terminal row does not record a provider. The durable agent-session
  * record does, and it is the only source that survives a restart — defaulting instead would
- * relabel every restarted Codex worker as Claude, permanently, because the startup release
+ * relabel every restarted non-Claude worker as Claude, permanently, because the startup release
  * reconciler stamps the frozen journal archive with whatever it is told here.
  */
-export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'claude' | 'codex' {
+export function structuredWorkerAgent(identity: StructuredWorkerIdentity): TuiAgent {
   if (identity.agent) {
     return identity.agent
   }
-  // Workers are Claude or Codex sessions only: dispatch refuses any other agent.
   const running = structuredWorkerSession(identity)
   const provider = running.kind === 'unverifiable' ? undefined : running.record.provider
-  return isAgentSessionHandleProvider(provider) ? provider : 'claude'
+  // An unreadable record or a provider this build doesn't know falls back to Claude.
+  return isTuiAgent(provider) ? provider : 'claude'
 }
 
 export type StructuredWorkerObservation = {
@@ -283,20 +284,6 @@ export function observeStructuredWorker(
  * owner, spawn, handoff or provider handle. A released reservation whose exit was never proven has
  * moved the fence, so it stays unverifiable.
  */
-function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
-  const { lease } = record
-  return (
-    lease.claimStatus === 'released' &&
-    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
-    // A fence floor marks a copy restored from backup, which may hide a reservation it lost.
-    lease.minimumNextFence === undefined &&
-    lease.ownerProcess === null &&
-    lease.reservedSpawnToken === null &&
-    lease.handoffStage === null &&
-    record.providerHandleChain.length === 0
-  )
-}
-
 /** One session's own liveness, for callers that act on that session rather than on a worker. */
 export function observeStructuredSession(sessionId: string): StructuredWorkerObservation {
   const host = getStructuredAgentSessionHost()

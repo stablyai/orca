@@ -35,18 +35,6 @@ describe('web file preload API', () => {
     ).rejects.toThrow('Remote folder download is unavailable in paired web clients.')
   })
 
-  it('rejects SSH clone requests in paired web clients', async () => {
-    const { api } = await installApi('Linux')
-
-    await expect(
-      api.repos.cloneRemote({
-        connectionId: 'ssh-1',
-        url: 'https://github.com/stablyai/orca.git',
-        destination: '/workspace'
-      })
-    ).rejects.toThrow('SSH clone is unavailable in paired web clients.')
-  })
-
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {

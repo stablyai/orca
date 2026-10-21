@@ -1,7 +1,5 @@
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
-import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 /**
@@ -86,10 +84,7 @@ export function createRemoteRefProbeCache<Ref>(
         },
         remoteName
       )
-      // Why: null is the SSH runtime being disconnected, not an answer about the
-      // remote — and it costs no `git`, so there is nothing here to spare. It is
-      // deliberately the one negative with no TTL floor: flooring it would make a
-      // reconnected host wait the interval out for a probe it could serve now.
+      // Why: null is an SSH repo this process cannot read, not an answer about the remote.
       if (stdout === null) {
         return null
       }
@@ -97,14 +92,8 @@ export function createRemoteRefProbeCache<Ref>(
       publish(result)
       return result
     } catch (error) {
-      // Why: a probe killed on its deadline says nothing about the remote, and an
-      // SSH failure is usually a reconnect or tunnel state rather than an answer.
-      // Only "no such remote" is the repo itself saying it is not this provider's
-      // — anything else cached would poison it, on SSH for the generation's life.
+      // Why: a probe killed on its deadline says nothing about the remote.
       if (isTransientGitProbeError(error)) {
-        return null
-      }
-      if (connectionId && !isStableMissingGitRemoteError(error)) {
         return null
       }
       publish(null)
@@ -114,12 +103,7 @@ export function createRemoteRefProbeCache<Ref>(
 
   return {
     async get(repoPath, remoteName, connectionId, localGitOptions = {}) {
-      // Why: a reconnect retires the connection an answer came from, and with it
-      // the probe still running on it — stamping the generation stops a caller on
-      // the new connection from adopting either.
-      const runtimeKey = connectionId
-        ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
-        : `local:${localGitOptions.wslDistro ?? 'host'}`
+      const runtimeKey = connectionId || `local:${localGitOptions.wslDistro ?? 'host'}`
       const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
       const cached = repoRefCache.get(cacheKey)
       if (cached) {

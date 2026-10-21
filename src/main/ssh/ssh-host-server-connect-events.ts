@@ -8,7 +8,7 @@ import type {
 } from '../../shared/orcad-managed-runtime'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
-import { classifyOrcadHostUnavailable } from './orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../orcad/orcad-host-unavailable'
 
 export type HostServerConnectEvent =
   | {
@@ -99,7 +99,7 @@ export function decidedEvent(
 }
 
 /** A classified code for a thrown setup failure; null when it carries none. */
-export function hostServerFailureCode(error: unknown): string | null {
+function hostServerFailureCode(error: unknown): string | null {
   const unavailable = classifyOrcadHostUnavailable(error)
   if (unavailable) {
     return unavailable

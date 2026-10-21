@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
+import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'

@@ -67,7 +67,7 @@ function commitFor(
     options: {},
     requestedSession: current,
     ownerMatches: () => true,
-    hostId: () => HOST_ID,
+    hostIds: () => [HOST_ID],
     getSession: () => current,
     setSession: (next) => {
       current = next

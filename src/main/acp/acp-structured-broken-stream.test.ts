@@ -40,6 +40,14 @@ const agentScript = (onPrompt: string): string => String.raw`
         send({ id: frame.id, result: { protocolVersion: 1, agentCapabilities: {} } })
       } else if (frame.method === 'session/new') {
         send({ id: frame.id, result: JSON.parse(process.env.ORCA_TEST_SESSION) })
+      } else if (frame.method === '_x.ai/subagent/cancel') {
+        send({ id: frame.id, error: {
+          code: -32602, message: 'Invalid params', data: 'invalid params: missing field \`subagentId\`'
+        } })
+      } else if (frame.method === '_x.ai/task/kill') {
+        send({ id: frame.id, error: {
+          code: -32602, message: 'Invalid params', data: 'invalid params: missing field \`sessionId\`'
+        } })
       } else if (frame.method === 'session/prompt') {
         const update = { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'partial' } }
         send({
@@ -80,6 +88,7 @@ describe('ACP agent that closes its stdout but keeps running', () => {
     const pidFile = join(mkdtempSync(join(tmpdir(), 'orca-acp-broken-stream-')), 'pid')
     const rig = await openAcpAdapterRig({
       deps: {
+        stopGraceMs: 20,
         connect: (_launch, options) =>
           createAcpAgentConnection(
             {
@@ -113,11 +122,11 @@ describe('ACP agent that closes its stdout but keeps running', () => {
     // Long enough for a closed stream to have reached the adapter.
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect((await turns()).at(-1)).toMatchObject({ state: 'running' })
-    expect(rig.lifecycle).toEqual([])
+    expect(rig.ended).toEqual([])
     expect(alive(pid)).toBe(true)
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
     expect(alive(pid)).toBe(false)
-    expect(rig.lifecycle).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
+    expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
   }, 30_000)
 })
 
@@ -153,8 +162,8 @@ describe('ACP agent that exits while a process it started holds its stdout open'
     })
     await rig.acquire()
     await sendHello(rig, 'held')
-    await vi.waitFor(() => expect(rig.lifecycle).toHaveLength(1), { timeout: 10_000, interval: 20 })
-    expect(rig.lifecycle[0]).toMatchObject({ type: 'ended', cause: 'unexpected-exit' })
+    await vi.waitFor(() => expect(rig.ended).toHaveLength(1), { timeout: 10_000, interval: 20 })
+    expect(rig.ended[0]).toMatchObject({ type: 'ended', cause: 'unexpected-exit' })
     expect(alive(Number(readFileSync(pidFile, 'utf8')))).toBe(false)
     const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
     expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })

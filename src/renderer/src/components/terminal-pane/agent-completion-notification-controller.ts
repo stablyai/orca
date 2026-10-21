@@ -8,11 +8,12 @@ import type {
   LastCompletionIdentity
 } from './agent-completion-identity-store'
 import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
+import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-transitions'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 
 const COMPLETION_REPLAY_GUARD_MS = 1_000
-const HOOK_DONE_QUIET_MS = 1_500
+const HOOK_DONE_QUIET_MS = AGENT_DONE_QUIET_MS
 
 export type CompletionState = {
   currentTurn: number

@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type * as RunProcess from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { POSIX_PROVIDER_SUPERVISOR_SCRIPT } from '../provider-process/provider-process-supervisor'
 import { generateCommitMessageFromContext } from './commit-message-text-generation'
 import { withPlatform } from './commit-message-text-generation-test-harness'
@@ -12,14 +12,18 @@ import { spawnSourceControlAgent } from './source-control-agent-launch'
 
 const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
 
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   spawnProcessMock.mockImplementation(actual.spawnProcess)
   return { ...actual, spawnProcess: spawnProcessMock }
 })
 
-function fakeChild(): EventEmitter & { stdin: { on: () => void; end: () => void } } {
-  return Object.assign(new EventEmitter(), { stdin: { on: vi.fn(), end: vi.fn() } })
+function fakeChild(): EventEmitter & {
+  stdin: { on: () => void; end: () => void }
+} {
+  return Object.assign(new EventEmitter(), {
+    stdin: { on: vi.fn(), end: vi.fn() }
+  })
 }
 
 function lastSpawnSpec(): ProcessSpec {
@@ -61,10 +65,13 @@ describe('spawnSourceControlAgent', () => {
       args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT, '--', '/opt/agent/claude', '-p', '--verbose'],
       cwd,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc']
     })
     expect(spec.env).toMatchObject({ PATH: '/usr/bin', AGENT_TOKEN: 'kept' })
-    expect(decodedSupervisorSpec(spec)).toMatchObject({ cwd, lifetime: 'one-shot' })
+    expect(decodedSupervisorSpec(spec)).toMatchObject({
+      cwd,
+      lifetime: 'one-shot'
+    })
   })
 
   it('spawns a Windows agent directly, without a supervisor', () => {
@@ -80,8 +87,33 @@ describe('spawnSourceControlAgent', () => {
     )
 
     expect(child.supervised).toBeUndefined()
-    expect(lastSpawnSpec()).toMatchObject({ program: 'C:/tools/agent.exe', args: ['--print'] })
+    expect(lastSpawnSpec()).toMatchObject({
+      program: 'C:/tools/agent.exe',
+      args: ['--print']
+    })
     expect(lastSpawnSpec().env).not.toHaveProperty('ORCA_PROVIDER_SUPERVISOR_SPEC')
+  })
+
+  it('hands an npm .cmd shim to process-host unwrapped, multi-line prompt included', () => {
+    // Why: wrapping the shim in cmd.exe here refused every argv prompt, which always has
+    // line breaks, before process-host could run the shim as node + script (#28768).
+    const shim = join(folder, 'copilot.cmd')
+    writeFileSync(shim, '')
+    spawnProcessMock.mockReturnValueOnce(fakeChild())
+    withPlatform('win32', () =>
+      spawnSourceControlAgent({
+        binary: 'copilot',
+        args: ['--prompt', 'Summarize:\n- staged change'],
+        env: { PATH: folder },
+        stdinMode: 'pipe',
+        useCwdForNative: false
+      })
+    )
+
+    expect(lastSpawnSpec()).toMatchObject({
+      program: shim,
+      args: ['--prompt', 'Summarize:\n- staged change']
+    })
   })
 })
 
@@ -91,7 +123,11 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
         { agentId: 'custom', model: '', customAgentCommand: `"${missing}"` },
         { kind: 'local', cwd: folder }
       )
@@ -107,7 +143,11 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
         { agentId: 'custom', model: '', customAgentCommand: `"${agent}"` },
         { kind: 'local', cwd: folder }
       )
@@ -130,8 +170,16 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
-        { agentId: 'custom', model: '', customAgentCommand: `"${command}"` },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: `"${command}"`
+        },
         { kind: 'local', cwd: folder }
       )
     ).resolves.toEqual({
@@ -146,7 +194,11 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
         { agentId: 'custom', model: '', customAgentCommand: `"${missing}"` },
         {
           kind: 'local',
@@ -172,12 +224,22 @@ process.stdin.on('end', () => setTimeout(() => console.log(prompt.includes('READ
 
     await expect(
       generateCommitMessageFromContext(
-        { branch: 'main', stagedSummary: 'M README.md', stagedPatch: '+test' },
-        { agentId: 'custom', model: '', customAgentCommand: `"${process.execPath}" "${agent}"` },
+        {
+          branch: 'main',
+          stagedSummary: 'M README.md',
+          stagedPatch: '+test'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: `"${process.execPath}" "${agent}"`
+        },
         { kind: 'local', cwd: folder }
       )
     ).resolves.toMatchObject({ success: true, message: 'Update README' })
     expect(lastSpawnSpec().program).toBe(process.execPath)
-    expect(decodedSupervisorSpec(lastSpawnSpec())).toMatchObject({ lifetime: 'one-shot' })
+    expect(decodedSupervisorSpec(lastSpawnSpec())).toMatchObject({
+      lifetime: 'one-shot'
+    })
   })
 })

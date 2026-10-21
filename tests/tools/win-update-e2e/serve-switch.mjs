@@ -147,7 +147,7 @@ async function run(ctx) {
   ctx.daemonPid = before.pid
   check(
     'desktop daemon runs from the relocated daemon-host',
-    /\\Orca\\daemon-host\\/i.test(before.commandLine),
+    /\\Orca\\daemon-host(?:-profiles)?\\/i.test(before.commandLine),
     before.commandLine.slice(0, 160)
   )
   await closeApp(ctx.session.app, 45_000, { allowForceKill: false })

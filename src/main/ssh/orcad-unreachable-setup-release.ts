@@ -9,19 +9,20 @@ import { listEnvironments } from '../../shared/runtime-environment-store'
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
 import { releaseUndeployedMigrationFence } from './orcad-migration-source-fence'
-import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import { withOrcadActivationLock } from './orcad-activation-lock'
-import { withDeactivatedVersion } from './orcad-activation-record'
+import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
+import { withOrcadActivationLock } from '../managed-server/activation/orcad-activation-lock'
+import { withDeactivatedVersionCommitted } from '../managed-server/activation/orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
-} from './orcad-activation-record-store'
-import { managedOrcadSlot } from './orcad-managed-runtime-context'
-import { resolveOrcadRemoteContext } from './orcad-remote-context'
-import { orcadStopFreedTheHost } from './orcad-remote-process-control'
+} from '../managed-server/activation/orcad-activation-record-store'
+import { managedOrcadSlot } from '../managed-server/lifecycle/orcad-managed-runtime-context'
+import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
+import { orcadStopFreedTheHost } from '../managed-server/install/orcad-remote-process-control'
 import { orcadSlotDir, stopOrcadSlot } from './orcad-recovery-slot'
-import { getSshConnectionManager, getSshTargetRegistryStore } from './ssh-target-registry'
+import { sshOrcadHostTransport } from './orcad-ssh-host-transport'
+import { getSshConnectionManager, getSshTargetRegistryStore } from './targets/ssh-target-registry'
 import { errorMessage } from '../../shared/error-message'
 
 export async function releaseUnreachableOrcadSetup(args: {
@@ -64,7 +65,7 @@ async function stopStrandedOrcad(targetId: string, signal?: AbortSignal): Promis
   }
   const context = await resolveOrcadRemoteContext(
     target,
-    await connectionManager.connect(target),
+    sshOrcadHostTransport(await connectionManager.connect(target)),
     signal
   )
   if (!context.activationRecord.active) {
@@ -81,7 +82,7 @@ async function stopStrandedOrcad(targetId: string, signal?: AbortSignal): Promis
       }
       const stopped = await stopOrcadSlot(slot, orcadSlotDir(slot, record.active), false)
       if (orcadStopFreedTheHost(stopped)) {
-        await writeOrcadActivationRecord(slot, withDeactivatedVersion(record))
+        await writeOrcadActivationRecord(slot, withDeactivatedVersionCommitted(record))
       }
     },
     () => undefined

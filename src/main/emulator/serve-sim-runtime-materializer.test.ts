@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
 const DYLIB_CONTENT = Buffer.from('signed-simcam-dylib-mach-o-bytes')

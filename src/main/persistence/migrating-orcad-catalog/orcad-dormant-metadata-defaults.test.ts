@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
 import { prepareOrcadMigrationDormantState } from './orcad-dormant-state-records'
 

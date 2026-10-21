@@ -6,8 +6,9 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
-import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
+import { runProcess } from '@orca/process-host'
 import type { Store } from '../persistence'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
@@ -25,7 +26,6 @@ import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
-  clipboardFormatsIncludeImage,
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 import {
@@ -33,19 +33,23 @@ import {
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   cleanupExpiredRemoteClipboardFiles,
-  scheduleLegacyRemoteClipboardFileCleanup,
-  writeRemoteFileToClipboard
+  scheduleLegacyRemoteClipboardFileCleanup
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { uploadPastedImageToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
-import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
+import { readClipboardNativeImage } from './clipboard-native-image'
+import { publishClipboardText } from './clipboard-text-publisher'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
-import { restoreNativeChatPastes, sweepExpiredNativeChatPastes } from './native-chat-paste-files'
+import { restoreNativeChatPastes } from './native-chat-paste-files'
+import { agentSessionPastedImageName } from '../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
@@ -54,9 +58,15 @@ type ClipboardWriteFileRequest = {
   connectionId?: string
 }
 
+export type ClipboardHandlerOptions = {
+  /** This machine's chat attachment store, after starting its chat host; null when it can't. */
+  localChatAttachmentStore?: () => Promise<AgentSessionAttachmentStore | null>
+}
+
 async function saveClipboardImageBufferForTarget(
   buffer: Buffer,
-  args?: SaveClipboardImageAsTempFileArgs
+  args: SaveClipboardImageAsTempFileArgs | undefined,
+  options: ClipboardHandlerOptions
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
@@ -80,6 +90,14 @@ async function saveClipboardImageBufferForTarget(
       args?.connectionId ?? null
     )
   }
+  // A local structured chat's paste goes in this machine's chat store: a send claims it for its
+  // chat, and only an unclaimed one is ever swept. Any other composer paste keeps the paste folder.
+  if (args?.forNativeChatDraft === true && args.forStructuredChat === true && !args.connectionId) {
+    const store = await options.localChatAttachmentStore?.().catch(() => null)
+    if (store) {
+      return store.storeFile(agentSessionPastedImageName(Date.now(), randomUUID()), buffer)
+    }
+  }
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
@@ -87,20 +105,10 @@ export function setTrustedClipboardRendererWebContentsId(webContentsId: number |
   trustedClipboardRendererWebContentsId = webContentsId
 }
 
-// Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
-// it stdin when provided; resolves only on a clean exit.
-function runCommand(command: string, args: string[], stdin?: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'ignore', 'ignore'] })
-    child.on('error', reject)
-    child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))
-    )
-    child.stdin?.end(stdin ?? '')
-  })
-}
-
-export function registerClipboardHandlers(store: Store): void {
+export function registerClipboardHandlers(
+  store: Store,
+  handlerOptions: ClipboardHandlerOptions = {}
+): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
   ipcMain.removeHandler('clipboard:writeText')
@@ -115,7 +123,6 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:restoreNativeChatPastes')
 
   void cleanupExpiredRemoteClipboardFiles()
-  void sweepExpiredNativeChatPastes()
   scheduleLegacyRemoteClipboardFileCleanup()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
@@ -137,11 +144,16 @@ export function registerClipboardHandlers(store: Store): void {
   // the clipboard in memory before the (slower) save lands.
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
     assertTrustedClipboardSender(event)
-    return buildClipboardImageThumbnail(clipboard.readImage())
+    try {
+      return buildClipboardImageThumbnail(readClipboardNativeImage())
+    } catch {
+      // The save call reports rejected source data; the preview is best effort.
+      return null
+    }
   })
   ipcMain.handle('clipboard:hasImage', (event): boolean => {
     assertTrustedClipboardSender(event)
-    return clipboardFormatsIncludeImage(clipboard.availableFormats())
+    return readClipboardImageSource(clipboard) !== null
   })
   // Why: a file-manager copy also carries the files' names as text, which a paste must not type.
   ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
@@ -155,25 +167,25 @@ export function registerClipboardHandlers(store: Store): void {
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const image = clipboard.readImage()
+      const source = readClipboardImageSource(clipboard)
+      if (!source) {
+        return null
+      }
+      const image = readClipboardNativeImage()
       if (image.isEmpty()) {
-        if (process.platform !== 'win32') {
+        if (!source.windowsFileFormats) {
           return null
         }
-        const copiedFilePng = await readWindowsClipboardImageFileAsPng(
-          {
-            fileNameW: clipboard.readBuffer('FileNameW'),
-            shellIdListArray: clipboard.readBuffer('Shell IDList Array')
-          },
-          {
-            createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-            openFile: (filePath) => open(filePath, 'r')
-          }
-        )
-        return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
+        const copiedFilePng = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
+          createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+          openFile: (filePath) => open(filePath, 'r')
+        })
+        return copiedFilePng
+          ? saveClipboardImageBufferForTarget(copiedFilePng, args, handlerOptions)
+          : null
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
-      return saveClipboardImageBufferForTarget(image.toPNG(), args)
+      return saveClipboardImageBufferForTarget(image.toPNG(), args, handlerOptions)
     }
   )
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
@@ -185,6 +197,9 @@ export function registerClipboardHandlers(store: Store): void {
       const request = normalizeClipboardWriteFileRequest(args)
       if (!request) {
         return { ok: false, reason: 'invalid-path' }
+      }
+      if (request.connectionId) {
+        throw new SshHostNotServedError(request.connectionId)
       }
       const deps = makeClipboardFileDeps(async (path) => {
         try {
@@ -198,21 +213,13 @@ export function registerClipboardHandlers(store: Store): void {
           return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
         }
       })
-      if (request.connectionId) {
-        return writeRemoteFileToClipboard({
-          remotePath: request.filePath,
-          connectionId: request.connectionId,
-          deps
-        })
-      }
       return writeFileToClipboard(request.filePath, deps)
     }
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
-    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
     try {
-      clipboard.writeText(safeText)
+      await publishClipboardText(text, 'ordinary')
     } catch (error) {
       // Native failures can name paths or platform state, so they stay here; the renderer
       // only renders a vetted reason (describeClipboardWriteFailure).
@@ -222,7 +229,7 @@ export function registerClipboardHandlers(store: Store): void {
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
-    return writeClipboardTextAndVerify(await assertClipboardTextWriteWithinLimitWithYield(text))
+    return publishClipboardText(text)
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
@@ -295,7 +302,7 @@ function makeClipboardFileDeps(
     desktop: process.env.XDG_CURRENT_DESKTOP,
     resolveFilePath,
     writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
-    runCommand
+    runProcess
   }
 }
 

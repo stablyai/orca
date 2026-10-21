@@ -253,7 +253,7 @@ export function SshTargetForm({
             <Button type="submit" size="sm" disabled={saving}>
               {isEditing
                 ? translate('auto.components.settings.SshTargetForm.a62b4cb39a', 'Save Changes')
-                : translate('auto.components.settings.SshTargetForm.9518545cb6', 'Add Target')}
+                : translate('auto.components.settings.SshTargetForm.addHost', 'Add host')}
             </Button>
           </DialogFooter>
         </form>

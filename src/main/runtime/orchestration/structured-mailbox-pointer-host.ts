@@ -17,16 +17,16 @@ import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
-import { sendAgentTurn } from './send-agent-turn'
+import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
 
-/** Per-dispatch so one worker's nudges cannot exhaust the shared runtime operation-ledger budget. */
+/** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
   return `trusted-local:orchestration:${dispatchId}`
 }
 
 /**
- * The same budget for direct peer mail, which is addressed to the worker's own handle and has no
- * dispatch to scope to.
+ * The caller key for direct peer mail, which is addressed to the worker's own handle and has no
+ * dispatch to name.
  *
  * A separate key rather than a reshaped one: the ledger is keyed on (callerKey, operationId), so
  * changing the dispatch key's shape would orphan every nudge already in flight under the old one.
@@ -47,7 +47,12 @@ export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? structuredSessionGateFacts(snapshot.items) : null
+  if (!snapshot) {
+    return null
+  }
+  // The host's projection of current work: an agent that ended is idle, whatever its rows say.
+  const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
+  return structuredSessionGateFacts(snapshot.items, work?.scope)
 }
 
 /** What each recorded send settled as. */
@@ -55,7 +60,16 @@ async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? { submissions: snapshot.submissions } : null
+  if (!snapshot) {
+    return null
+  }
+  const host = getStructuredAgentSessionHost()
+  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  return {
+    submissions: boundary
+      ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
+      : snapshot.submissions
+  }
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -81,10 +95,19 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return readPointerSessionFacts(sessionId)
     },
 
+    hasActionablePromptNow(sessionId) {
+      return getStructuredAgentSessionHost()?.currentWork(sessionId)?.hasActionablePrompt() ?? null
+    },
+
     currentFence(sessionId) {
       return (
         getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
       )
+    },
+
+    currentContextClearOperationId(sessionId) {
+      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+        ?.providerContextBoundary?.operationId
     },
 
     async send(input) {
@@ -92,21 +115,37 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       if (!host) {
         return { kind: 'unattached' }
       }
-      const outcome = await sendAgentTurn({
-        kind: 'structured-session',
-        host,
-        sessionId: input.sessionId,
-        callerKey: input.dispatchId
-          ? structuredPointerCallerKey(input.dispatchId)
-          : structuredSessionPointerCallerKey(input.sessionId),
-        turn: {
-          body: input.body,
-          // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
-          delivery: 'queue',
-          operationId: input.operationId,
-          expectedRuntimeFence: input.expectedRuntimeFence
+      let outcome: StructuredSessionTurnOutcome
+      try {
+        outcome = await sendAgentTurn({
+          kind: 'structured-session',
+          host,
+          sessionId: input.sessionId,
+          callerKey: input.dispatchId
+            ? structuredPointerCallerKey(input.dispatchId)
+            : structuredSessionPointerCallerKey(input.sessionId),
+          turn: {
+            body: input.body,
+            // A person's plain send: every agent takes it the way it takes their own mid-turn message.
+            delivery: 'now',
+            operationId: input.operationId,
+            expectedRuntimeFence: input.expectedRuntimeFence,
+            beforeRun: () => {
+              if (
+                input.body.from?.orchestration?.message === 'mail-notice' &&
+                host.currentWork(input.sessionId)?.hasActionablePrompt()
+              ) {
+                throw new StructuredMailHeldError()
+              }
+            }
+          }
+        })
+      } catch (error) {
+        if (error instanceof StructuredMailHeldError) {
+          return { kind: 'held' }
         }
-      })
+        throw error
+      }
       switch (outcome.kind) {
         case 'refused':
           return outcome.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
@@ -127,3 +166,5 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     }
   }
 }
+
+class StructuredMailHeldError extends Error {}

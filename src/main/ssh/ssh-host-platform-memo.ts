@@ -13,11 +13,11 @@ export type SshHostPlatformFacts = {
 
 const known = new Map<string, SshHostPlatformFacts>()
 
-function libcOf(
-  host: RemoteHostPlatform,
+export function sshHostLibc(
+  os: RemoteHostPlatform['os'],
   target: NodeRuntimeTarget | null
 ): SshHostPlatformFacts['libc'] {
-  if (host.os !== 'linux') {
+  if (os !== 'linux') {
     return 'none'
   }
   if (!target) {
@@ -31,7 +31,7 @@ export function rememberSshHostPlatform(
   host: RemoteHostPlatform,
   target: NodeRuntimeTarget | null
 ): void {
-  const libc = libcOf(host, target)
+  const libc = sshHostLibc(host.os, target)
   const previous = known.get(targetId)
   // A libc probe that did not run must not erase one that did.
   known.set(targetId, {

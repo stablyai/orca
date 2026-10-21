@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult } from '../shared/child-process/run-process'
+
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   ensureMacPressAndHoldDefault,
   interpretDefaultsRead,

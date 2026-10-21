@@ -10,6 +10,7 @@ import { createAgentStatusLaunchActions } from './agent-status-launch-actions'
 import { createAgentStatusLiveActions } from './agent-status-live-actions'
 import { createAgentStatusOrchestrationActions } from './agent-status-orchestration-actions'
 import { createAgentStatusProviderSessionActions } from './agent-status-provider-session-actions'
+import { createAgentStatusProgramStatusActions } from './agent-status-program-status-actions'
 import { createAgentStatusRecoveryActions } from './agent-status-recovery-actions'
 import { createAgentStatusRetentionActions } from './agent-status-retention-actions'
 
@@ -28,6 +29,7 @@ export type {
   AgentStatusTiming,
   AgentStatusUpdate,
   AgentProviderSessionUpdate,
+  AgentProgramStatusUpdate,
   AgentStatusWorktreeShutdownReason,
   AllAgentSessionCaptureMode,
   DropAgentStatusByTabPrefixOptions,
@@ -66,7 +68,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
   storeGet
 ) => {
   let composedActions:
-    | Pick<AgentStatusSlice, 'setAgentStatus' | 'recordAgentProviderSession'>
+    | Pick<
+        AgentStatusSlice,
+        'setAgentStatus' | 'recordAgentProviderSession' | 'setAgentProgramStatus'
+      >
     | undefined
   const runtime = createAgentStatusRuntime(storeSet, storeGet, () => {
     if (!composedActions) {
@@ -74,6 +79,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     }
     return composedActions
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spread creators together supply every AgentStatusSlice action; state fields are added below.
   const actions = {
     ...createAgentStatusAuthorityActions(runtime),
     ...createAgentStatusCleanupActions(runtime),
@@ -83,12 +89,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     ...createAgentStatusLiveActions(runtime),
     ...createAgentStatusOrchestrationActions(runtime),
     ...createAgentStatusProviderSessionActions(runtime),
+    ...createAgentStatusProgramStatusActions(runtime),
     ...createAgentStatusRecoveryActions(runtime),
     ...createAgentStatusRetentionActions(runtime)
   } as AgentStatusSlice
   composedActions = {
     setAgentStatus: actions.setAgentStatus,
-    recordAgentProviderSession: actions.recordAgentProviderSession
+    recordAgentProviderSession: actions.recordAgentProviderSession,
+    setAgentProgramStatus: actions.setAgentProgramStatus
   }
   return {
     ...actions,

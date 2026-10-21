@@ -13,6 +13,7 @@ import {
   supportsMobileExistingAgentLaunch,
   AGENT_LAUNCH_TAB_CLOSED_MESSAGE
 } from './mobile-existing-agent-launch'
+import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // A connected client whose only behaviour is the scripted `sendRequest`.
 function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
@@ -113,6 +114,10 @@ describe('reserveMobileAgentLaunch', () => {
     expect(params).toMatchObject({
       paneKey: `${reservation.pane.tabId}:${reservation.pane.leafId}`,
       sessionId: reservation.sessionId
+    })
+    // The chat it reserved is one this phone created, so its picker names the listed default.
+    expect(mobileCreatedStructuredSession(reservation.sessionId!)).toMatchObject({
+      worktree: expect.stringMatching(/^id:/)
     })
   })
 

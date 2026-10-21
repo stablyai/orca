@@ -358,8 +358,8 @@ function createWorktreeRemovalRuntime(
   }
   return new OrcaRuntimeService(runtimeStore as never, undefined, {
     ...deps,
-    getLocalProvider: () => emptyPtyProvider as never,
-    getSshProvider: () => emptyPtyProvider as never
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal sweeps call only listProcesses and shutdown.
+    getLocalProvider: () => emptyPtyProvider as never
   })
 }
 

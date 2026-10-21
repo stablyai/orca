@@ -1,9 +1,369 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RpcContext } from '../../../core'
+import type { OrchestrationDb, RunRow } from '../../../../orchestration/db'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { DispatchContextRow } from '../../../../orchestration/types'
 import {
   createRootDispatch,
   reattachDispatchConsumer
 } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+
+describe('Run delivery history', () => {
+  const h = createOrchestrationRpcHarness()
+  afterEach(() => h.cleanup())
+
+  it('does not label filtered history as an acknowledgeable delivery', async () => {
+    const { db, ctx, activeRunId } = h.setup()
+    const params = { terminal: 'term_coord', run: activeRunId, all: true }
+    db.insertMessage({
+      from: 'worker',
+      to: `run:${activeRunId}`,
+      runId: activeRunId,
+      subject: 'waiting'
+    })
+    expect(await h.call('orchestration.check', params, ctx)).toMatchObject({
+      count: 1
+    })
+    expect(db.hasOutstandingRunDelivery(activeRunId!)).toBe(false)
+    const delivery = db.getOrCreateRunDelivery({
+      runId: activeRunId!,
+      consumerGeneration: db.getRun(activeRunId!)!.consumer_generation
+    })!
+    db.insertMessage({
+      from: 'worker',
+      to: `run:${activeRunId}`,
+      runId: activeRunId,
+      subject: 'later completion',
+      type: 'worker_done'
+    })
+    const history = await h.call(
+      'orchestration.check',
+      {
+        ...params,
+        format: true,
+        types: 'worker_done'
+      },
+      ctx
+    )
+    expect(history).toMatchObject({ count: 1, messages: [{ subject: 'later completion' }] })
+    expect(history).not.toHaveProperty('deliveryId')
+    expect(db.hasOutstandingRunDelivery(activeRunId!)).toBe(true)
+    expect(db.getMessageById(delivery.messages[0].id)?.read).toBe(0)
+  })
+})
+
+const PANE_OLD = 'tab_old:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const PANE_NEW = 'tab_new:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
+type CheckResult = { messages: { subject: string }[]; count: number }
+
+/**
+ * worker-abandon + worker-start --retry-of moves the Task to another terminal, but the old worker
+ * keeps polling. Its check used to fall through to the direct mailbox and answer `count: 0`, which
+ * the worker contract reads as "checkpoint, not a failure" — so it kept editing the new owner's files.
+ */
+describe('orchestration.check from a terminal whose Attempt was superseded', () => {
+  const h = createOrchestrationRpcHarness()
+  let db: OrchestrationDb
+  let ctx: RpcContext
+
+  afterEach(() => {
+    h.cleanup()
+  })
+
+  function check(handle: string, paneKey: string, params: Record<string, unknown> = {}) {
+    return h.call(
+      'orchestration.check',
+      { terminal: handle, terminalPaneKey: paneKey, ...params },
+      ctx
+    ) as Promise<CheckResult>
+  }
+
+  function startWorker(taskId: string, handle: string, paneKey: string, retryOf?: string): string {
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId,
+      retryOf,
+      startOptions: {}
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle,
+      paneKey,
+      processIncarnation: `runtime:${handle}:1`,
+      worktreeId: 'repo::local',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    return started.dispatch.id
+  }
+
+  function retriedOntoAnotherTerminal(): string {
+    ;({ db, ctx } = h.setup())
+    const task = db.createTask({ spec: 'work that moves terminals' })
+    const abandoned = startWorker(task.id, 'term_old', PANE_OLD)
+    db.abandonWorkerDispatch(abandoned, 'epoch_test')
+    startWorker(task.id, 'term_new', PANE_NEW, abandoned)
+    return abandoned
+  }
+
+  it('tells the old worker it lost the Dispatch instead of answering "no mail"', async () => {
+    retriedOntoAnotherTerminal()
+
+    await expect(check('term_old', PANE_OLD)).rejects.toMatchObject({
+      code: 'consumer_fenced',
+      message: expect.stringContaining('no longer owns its Dispatch')
+    })
+  })
+
+  // The direct mailbox is the old terminal's own, so inspection stays open; only the consuming
+  // read that a worker treats as a checkpoint is refused.
+  it('still lets the old worker inspect its direct mailbox with --peek and --all', async () => {
+    retriedOntoAnotherTerminal()
+    db.insertMessage({ from: 'term_coord', to: 'term_old', subject: 'stand down' })
+
+    const peeked = await check('term_old', PANE_OLD, { peek: true })
+    const history = await check('term_old', PANE_OLD, { all: true })
+
+    expect(peeked.count).toBe(1)
+    expect(history.count).toBe(1)
+    expect(db.getUnreadMessages('term_old')).toHaveLength(1)
+  })
+
+  it('fences a terminal whose Attempt failed with no successor', async () => {
+    ;({ db, ctx } = h.setup())
+    const task = db.createTask({ spec: 'work that failed outright' })
+    const dispatch = createRootDispatch(db, task.id, 'term_old', PANE_OLD)
+    db.failDispatch(dispatch.id, 'worker terminal closed')
+
+    await expect(check('term_old', PANE_OLD)).rejects.toMatchObject({ code: 'consumer_fenced' })
+  })
+
+  // A superseded worker whose pane is gone cannot run-use either; the stop signal outranks the
+  // rebind advice, and a caller with no settled Attempt still gets the rebind advice.
+  it('fences a paneless caller whose Attempt was superseded, and only that caller', async () => {
+    retriedOntoAnotherTerminal()
+
+    await expect(
+      h.call('orchestration.check', { terminal: 'term_old' }, ctx)
+    ).rejects.toMatchObject({ code: 'consumer_fenced' })
+    await expect(
+      h.call('orchestration.check', { terminal: 'term_never_dispatched' }, ctx)
+    ).rejects.toMatchObject({ code: 'stable_pane_required' })
+  })
+
+  it('keeps serving direct mail to a terminal whose Attempt completed normally', async () => {
+    ;({ db, ctx } = h.setup())
+    const task = db.createTask({ spec: 'work that finished' })
+    const dispatch = createRootDispatch(db, task.id, 'term_old', PANE_OLD)
+    db.completeDispatch(dispatch.id)
+    db.insertMessage({ from: 'term_coord', to: 'term_old', subject: 'one more thing' })
+
+    const result = await check('term_old', PANE_OLD)
+
+    expect(result.messages.map((message) => message.subject)).toEqual(['one more thing'])
+    expect(db.getUnreadMessages('term_old')).toEqual([])
+  })
+
+  it('serves the new owner its Dispatch mailbox as usual', async () => {
+    const abandoned = retriedOntoAnotherTerminal()
+    const current = db.getDispatchContext(db.getDispatchContextById(abandoned)!.task_id)!
+    db.insertMessage({
+      from: 'term_coord',
+      to: `dispatch:${current.id}`,
+      subject: 'carry on',
+      runId: current.run_id
+    })
+
+    const result = await check('term_new', PANE_NEW)
+
+    expect(result.messages.map((message) => message.subject)).toEqual(['carry on'])
+  })
+})
+
+// A lead is dispatched by a root coordinator and then coordinates its own Run from the same pane.
+// That pane's `check` reads its own Run mailbox, so mail meant for it must land there.
+describe('mail for a lead whose pane coordinates its own Run', () => {
+  const h = createOrchestrationRpcHarness()
+  const coordPane = 'tab_coord:11111111-1111-4111-8111-111111111111'
+  const leadPane = 'tab_lead:22222222-2222-4222-9222-222222222222'
+  let db: OrchestrationDb
+  let runtime: OrcaRuntimeService
+  let ctx: RpcContext
+  let rootRun: RunRow
+  let dispatch: DispatchContextRow
+
+  afterEach(() => {
+    h.cleanup()
+  })
+
+  function setup(): void {
+    ;({ db, runtime, ctx } = h.setup(false))
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_coord' ? coordPane : handle === 'term_lead' ? leadPane : null
+    )
+    rootRun = db.createRun({
+      objective: 'root',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: coordPane
+    })
+    const task = db.createTask({ spec: 'lead the sub-project', runId: rootRun.id })
+    dispatch = createRootDispatch(db, task.id, 'term_lead', leadPane)
+  }
+
+  function bindLeadRun(): RunRow {
+    return db.createRun({
+      objective: 'lead',
+      coordinatorHandle: 'term_lead',
+      coordinatorPaneKey: leadPane
+    })
+  }
+
+  async function call(name: string, params: Record<string, unknown>) {
+    return h.call(name, params, ctx)
+  }
+
+  async function leadInbox(params: Record<string, unknown> = {}): Promise<unknown> {
+    return call('orchestration.check', { terminal: 'term_lead', ...params })
+  }
+
+  function deliveryIdOf(result: unknown): string {
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      'deliveryId' in result &&
+      typeof result.deliveryId === 'string'
+    ) {
+      return result.deliveryId
+    }
+    throw new Error('check returned no delivery')
+  }
+
+  it('routes dispatch:<id> mail to the Run the assignee pane now coordinates', async () => {
+    setup()
+    const leadRun = bindLeadRun()
+
+    const result = await call('orchestration.send', {
+      from: 'term_coord',
+      to: `dispatch:${dispatch.id}`,
+      subject: 'Follow-up for the lead'
+    })
+
+    expect(result).toMatchObject({
+      message: { to_handle: `run:${leadRun.id}`, run_id: leadRun.id },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
+    expect(await leadInbox()).toMatchObject({ messages: [{ subject: 'Follow-up for the lead' }] })
+  })
+
+  it('still reads dispatch mail that arrived before the pane bound its own Run', async () => {
+    setup()
+    db.insertMessage({
+      from: 'term_coord',
+      to: `dispatch:${dispatch.id}`,
+      subject: 'Sent before the lead bound a Run',
+      runId: rootRun.id
+    })
+    const leadRun = bindLeadRun()
+    db.insertMessage({
+      from: 'term_worker',
+      to: `run:${leadRun.id}`,
+      subject: 'Sub-worker report',
+      runId: leadRun.id
+    })
+
+    const first = await leadInbox()
+    expect(first).toMatchObject({ messages: [{ subject: 'Sent before the lead bound a Run' }] })
+
+    const second = await leadInbox({ ack: deliveryIdOf(first) })
+    expect(second).toMatchObject({ messages: [{ subject: 'Sub-worker report' }] })
+  })
+
+  it('keeps the --types wake condition when older Dispatch mail does not match it', async () => {
+    setup()
+    db.insertMessage({
+      from: 'term_coord',
+      to: `dispatch:${dispatch.id}`,
+      subject: 'Older status note',
+      type: 'status',
+      runId: rootRun.id
+    })
+    const leadRun = bindLeadRun()
+    db.insertMessage({
+      from: 'term_worker',
+      to: `run:${leadRun.id}`,
+      subject: 'Sub-worker finished',
+      type: 'worker_done',
+      runId: leadRun.id
+    })
+
+    const woke = await leadInbox({ wait: true, types: 'worker_done', timeoutMs: 500 })
+
+    expect(woke).toMatchObject({
+      runId: leadRun.id,
+      messages: [{ subject: 'Sub-worker finished' }]
+    })
+  })
+
+  it('delivers a reply to a Run-bound sender and wakes its waiting check', async () => {
+    setup()
+    const leadRun = bindLeadRun()
+    const report = db.insertMessage({
+      from: 'term_lead',
+      to: `run:${rootRun.id}`,
+      subject: 'Lead report',
+      runId: rootRun.id
+    })
+
+    const waiting = leadInbox({ wait: true, timeoutMs: 2_000 })
+    const reply = await call('orchestration.reply', {
+      id: report.id,
+      from: 'term_coord',
+      body: 'Decision'
+    })
+
+    expect(reply).toMatchObject({
+      message: { to_handle: `run:${leadRun.id}`, run_id: leadRun.id }
+    })
+    expect(await waiting).toMatchObject({
+      timedOut: false,
+      messages: [{ subject: 'Re: Lead report' }]
+    })
+  })
+
+  it('keeps dispatch:<id> mail on the Dispatch mailbox while the assignee has no Run', async () => {
+    setup()
+
+    const result = await call('orchestration.send', {
+      from: 'term_coord',
+      to: `dispatch:${dispatch.id}`,
+      subject: 'Plain worker follow-up'
+    })
+
+    expect(result).toMatchObject({ message: { to_handle: `dispatch:${dispatch.id}` } })
+    expect(result).not.toHaveProperty('warnings')
+  })
+
+  it('keeps a reply on the raw handle when the sender has no Run or live pane', async () => {
+    setup()
+    const note = db.insertMessage({
+      from: 'term_offline',
+      to: `run:${rootRun.id}`,
+      subject: 'Offline note',
+      runId: rootRun.id
+    })
+
+    const reply = await call('orchestration.reply', {
+      id: note.id,
+      from: 'term_coord',
+      body: 'Ack'
+    })
+
+    expect(reply).toMatchObject({ message: { to_handle: 'term_offline', run_id: rootRun.id } })
+  })
+})
 
 const LEAD = 'tab_lead:22222222-2222-4222-9222-222222222222'
 const OTHER = 'tab_other:33333333-3333-4333-8333-333333333333'

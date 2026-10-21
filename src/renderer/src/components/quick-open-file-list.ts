@@ -23,7 +23,7 @@ import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
-} from '@/runtime/runtime-file-client'
+} from '@/runtime/runtime-file-search-client'
 import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
 import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
 import {
@@ -31,13 +31,14 @@ import {
   type CappedLocalListing
 } from '@/components/quick-open-capped-local-listing'
 import { useAppStore } from '@/store'
-import { useWorktreesForRepo } from '@/store/selectors'
+import { useKnownWorktreeById, useWorktreesForRepo } from '@/store/selectors'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
 import {
   getFileExplorerOperationOwnerFromState,
   getFileExplorerOwnerUnresolvedMessage,
   getFileExplorerOperationRoute
 } from '@/components/right-sidebar/file-explorer-operation-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export type RuntimeFileListState = {
   files: string[]
@@ -77,10 +78,8 @@ export function useRuntimeFileListForWorktree({
   /** When a local listing hits its cap, re-list with `query` applied as the Explorer name filter on the host. */
   hostFilterWhenCapped?: boolean
 }): RuntimeFileListState {
-  const worktree = useAppStore((state) =>
-    // Why: folder workspaces live behind getKnownWorktreeById, not worktreesByRepo.
-    worktreeId ? (state.getKnownWorktreeById(worktreeId) ?? null) : null
-  )
+  // Why: folder workspaces live in the known-worktree catalog, not worktreesByRepo.
+  const worktree = useKnownWorktreeById(worktreeId)
   const worktreePath = worktree?.path ?? null
   const repoWorktrees = useWorktreesForRepo(worktree?.repoId ?? null)
   const [listing, setListing] = useState(NO_LISTING)
@@ -118,7 +117,8 @@ export function useRuntimeFileListForWorktree({
   const operationRoute = getFileExplorerOperationRoute(operationOwner)
   const operationRouteAvailable = operationRoute !== null
   const connectionId = operationRoute?.connectionId
-  const runtimeEnvironmentId = operationRoute?.settings.activeRuntimeEnvironmentId ?? null
+  const runtimeEnvironmentId =
+    operationOwner.kind === 'runtime' ? operationOwner.environmentId : null
   const activeTargetStatus = useAppStore((state) =>
     connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
   )
@@ -191,7 +191,7 @@ export function useRuntimeFileListForWorktree({
     const requestAbortController = new AbortController()
     const requestOperationOwner = operationOwnerRef.current
     const requestContext = {
-      settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
+      target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
       worktreeId,
       worktreePath,
       connectionId

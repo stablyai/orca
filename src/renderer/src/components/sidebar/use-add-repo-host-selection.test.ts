@@ -119,15 +119,16 @@ describe('useAddRepoHostSelection', () => {
     })
   })
 
-  it('exposes the selected SSH target id', async () => {
+  it('never selects a connected SSH row; it holds the actions until the server row stands for it', async () => {
+    // Why: before the catalog hydrates, a connected SSH host is still its own row.
     mocks.stateValues = ['ssh:ssh-1', false]
     const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
 
-    expect(result.selectedHostId).toBe('ssh:ssh-1')
-    expect(result.selectedParsedHost).toMatchObject({ kind: 'ssh', targetId: 'ssh-1' })
-    expect(result.selectedSshTargetId).toBe('ssh-1')
+    expect(result.selectedHostId).toBeNull()
+    expect(result.selectedParsedHost).toBeNull()
+    expect(result.displayedHostId).toBe('ssh:ssh-1')
   })
 
   it('selects a runtime host without changing the durable active server', async () => {
@@ -193,7 +194,7 @@ describe('useAddRepoHostSelection', () => {
     }
   )
 
-  it('selects a local or SSH host without changing the durable active server', async () => {
+  it('selects local without changing the durable active server, but not an SSH row', async () => {
     mocks.stateValues = ['runtime:env-1', false]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
     const setStep = vi.fn()
@@ -201,13 +202,16 @@ describe('useAddRepoHostSelection', () => {
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep })
     await result.handleSelectAddProjectHost('ssh:ssh-1')
+    expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('ssh:ssh-1')
+    expect(setStep).not.toHaveBeenCalled()
 
+    await result.handleSelectAddProjectHost('local')
     expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
-    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
     expect(setStep).toHaveBeenCalledWith('add')
   })
 
-  it('falls back from a disconnected selected SSH host to Local Mac', async () => {
+  it('keeps a disconnected SSH host it was asked for instead of falling back to Local Mac', async () => {
     mocks.stateValues = ['ssh:ssh-1', false]
     mocks.hostOptions[1] = {
       ...mocks.hostOptions[1],
@@ -217,8 +221,8 @@ describe('useAddRepoHostSelection', () => {
 
     const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
 
-    expect(result.selectedHostId).toBe('local')
-    expect(result.selectedSshTargetId).toBeNull()
+    expect(result.selectedHostId).toBeNull()
+    expect(result.displayedHostId).toBe('ssh:ssh-1')
   })
 
   it('does not select a disconnected SSH host', async () => {

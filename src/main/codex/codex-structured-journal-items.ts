@@ -54,7 +54,7 @@ export class CodexJournalItems {
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
       'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'now'
-    > & { maxMetadataBytes?: number; attributionFor: CodexRowAttribution },
+    > & { attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void,
     private readonly helperName?: CodexHelperName
@@ -64,7 +64,6 @@ export class CodexJournalItems {
       coalesceMs: deps.coalesceMs,
       maxRetainedBytes: deps.maxRetainedBytes,
       schedule: deps.schedule,
-      maxMetadataBytes: deps.maxMetadataBytes,
       turnIdFor: (threadId, params) => readCodexTurnId(params) ?? this.activeTurn(threadId),
       identityFor: (threadId, turnId, item) => this.identityFor(threadId, turnId, item),
       attributionFor: deps.attributionFor
@@ -100,12 +99,6 @@ export class CodexJournalItems {
     }
     if (item.type === 'contextCompaction' && event.method === 'item/started') {
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
-    }
-    if (
-      event.method !== 'item/completed' &&
-      !this.streams.canTrack(event.threadId, item, identity)
-    ) {
-      return { handled: true, admission: { accepted: false, reason: 'failed' } }
     }
     const itemKey = codexStructuredItemKey(event.threadId, item.id)
     const active = event.method === 'item/completed' ? this.activeItems.get(itemKey) : undefined

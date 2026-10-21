@@ -2,6 +2,7 @@
 // beside it. The latest goal transition in journal order is the whole answer.
 
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import { isAgentSessionContextClear } from './agent-session-context-clear'
 import {
   AGENT_JOURNAL_THREAD_GOAL_STATUSES,
   type AgentJournalItemBody,
@@ -48,7 +49,10 @@ function goalFromRow(body: AgentJournalItemBody): AgentJournalThreadGoal | null 
 }
 
 function isGoalTransition(item: GoalCandidate): boolean {
-  return isRootAgentJournalItem(item) && isAgentJournalThreadGoalRow(item.body)
+  return (
+    isAgentSessionContextClear(item.body) ||
+    (isRootAgentJournalItem(item) && isAgentJournalThreadGoalRow(item.body))
+  )
 }
 
 /**
@@ -59,28 +63,29 @@ function isGoalTransition(item: GoalCandidate): boolean {
  * row's sequence, so the last goal row is the answer.
  */
 export function currentAgentSessionThreadGoal(
-  items: readonly GoalCandidate[]
+  items: readonly GoalCandidate[],
+  minimumSequence = 0
 ): AgentJournalThreadGoal | null | undefined {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    if (item && isGoalTransition(item)) {
+    if (item && item.sequence > minimumSequence && isGoalTransition(item)) {
       return goalFromRow(item.body)
     }
   }
   return undefined
 }
 
-/** The same answer for items a caller holds unordered, such as the host's own map. */
-export function currentAgentSessionThreadGoalBySequence(
-  items: Iterable<GoalCandidate>
-): AgentJournalThreadGoal | null | undefined {
-  let latest: GoalCandidate | null = null
+/** The same answer and its source for items a caller holds unordered, such as the host's map. */
+export function currentAgentSessionThreadGoalSourceBySequence<T extends GoalCandidate>(
+  items: Iterable<T>
+): { item: T; goal: AgentJournalThreadGoal | null } | undefined {
+  let latest: T | null = null
   for (const item of items) {
     if (isGoalTransition(item) && (latest === null || item.sequence > latest.sequence)) {
       latest = item
     }
   }
-  return latest === null ? undefined : goalFromRow(latest.body)
+  return latest === null ? undefined : { item: latest, goal: goalFromRow(latest.body) }
 }
 
 /** Goal statuses that still describe work in progress, so readers keep them in view. */

@@ -267,9 +267,7 @@ describe('a replay answers from the record', () => {
     // now say the user prefers a terminal; the recorded one still says what actually ran.
     const movedSettings = runtimeStub({
       settings: {
-        experimentalNativeChat: false,
-        experimentalStructuredNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        experimentalNativeChat: false
       }
     })
     const replayed = await launch(params, movedSettings, PAIRED_CLIENT)

@@ -3,6 +3,7 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
@@ -27,8 +28,7 @@ export async function settleStructuredAgentSessionLateDispatch(
     return
   }
   const fence = structuredAgentSessionConversationFence(context.deps.store, input.sessionId)
-  // The journal queue drains before close; the host queue would defer this past teardown.
-  await session.journal.resolveDispatch(
+  const settlement: ResolveDispatchInput =
     'providerIdentity' in input
       ? {
           clientMessageId: input.clientMessageId,
@@ -52,5 +52,8 @@ export async function settleStructuredAgentSessionLateDispatch(
             ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
             fence
           }
-  )
+  // The journal queue drains before close; the host queue would defer this past teardown.
+  await (settlement.state === 'accepted'
+    ? session.journal.acceptLate(settlement)
+    : session.journal.resolveDispatch(settlement))
 }

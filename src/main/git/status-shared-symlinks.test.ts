@@ -57,6 +57,15 @@ describe('getStatus shared symlink exclusion', () => {
     expect(status.entries).toEqual([])
   })
 
+  it.each(['./node_modules', 'node_modules/'])(
+    'drops the shared symlink when the setting spells it %s',
+    async (sharedPath) => {
+      const status = await getStatus(worktree, { sharedLinkPaths: [sharedPath] })
+
+      expect(status.entries).toEqual([])
+    }
+  )
+
   // The negative control that matters: real work must never be hidden.
   it('still reports a genuine untracked file alongside a shared symlink', async () => {
     writeFileSync(join(worktree, 'scratch.txt'), 'unsaved work\n')

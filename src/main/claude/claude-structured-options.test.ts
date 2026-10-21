@@ -5,7 +5,8 @@ import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-req
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
+import { createClaudeInitProof } from './claude-structured-init-proof'
+import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import {
   observeClaudeFastModeFacts,
   readClaudeStructuredSessionOptions
@@ -37,13 +38,25 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     reportedOptions: {},
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
-    restoreSkippedOptions: new Set(),
+    appliedInputOptions: new Map(),
     launchedModel: null,
     fastModeAtStart: false,
     capabilities: [],
     events: undefined,
     translator: null,
-    startup: { ...createClaudeSessionStartup(), state: 'proven' }
+    link: claudeProviderHandleLink({
+      sessionId: 'provider-session',
+      leafUuid: null,
+      resumed: false,
+      fence: 1,
+      observedAt: 1
+    }),
+    initialization: {
+      proof: createClaudeInitProof(),
+      account: undefined,
+      resumesTranscript: false,
+      onLateRefusal: () => {}
+    }
   }
 }
 
@@ -283,6 +296,7 @@ describe('Claude structured Fast mode', () => {
       setClaudeStructuredOption(session, { key: 'model', value: 'haiku' }, undefined)
     ).resolves.toMatchObject({ model: 'haiku', fastMode: 'false' })
     expect(applyFlagSettings).toHaveBeenCalledWith({ fastMode: false }, { timeoutMs: undefined })
+    expect(session.appliedInputOptions.get('fastMode')).toBe('false')
   })
 
   it('keeps Fast on across a model switch while support discovery is transient', async () => {
@@ -333,6 +347,8 @@ describe('Claude structured Fast mode', () => {
     ).resolves.toMatchObject({ model: 'haiku', fastMode: 'false' })
     expect(session.reportedOptions.fastMode).toBe(true)
     expect(session.confirmedOptions.has('fastMode')).toBe(false)
+    expect(session.appliedInputOptions.get('model')).toBe('haiku')
+    expect(session.appliedInputOptions.has('fastMode')).toBe(false)
   })
 
   it('treats an unrecognized provider disabled reason as unavailable', async () => {
@@ -419,6 +435,19 @@ describe('Claude Fast mode reported by the session frame alone', () => {
     const result = await readClaudeStructuredSessionOptions(session, undefined)
 
     expect(result.current.fastMode).toBeUndefined()
+  })
+})
+
+describe("Claude's model the chat never chose", () => {
+  it('marks the listed default it falls back to, never a model the chat runs', async () => {
+    const { session } = fastModeSession(true)
+    const current = async () =>
+      (await readClaudeStructuredSessionOptions(session, undefined)).current
+    expect((await current()).defaulted).toBeUndefined()
+    session.options.delete('model')
+    expect(await current()).toMatchObject({ defaulted: ['model'] })
+    session.options.set('model', 'default')
+    expect(await current()).toMatchObject({ defaulted: ['model'] })
   })
 })
 

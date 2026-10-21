@@ -9,7 +9,7 @@
  */
 import { closeSync, openSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { quoteWindowsArgument } from './child-process/windows-command-line'
+import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   formatWindowsBreakawayLaunchReport,
   WINDOWS_BREAKAWAY_ENV_FLAG,
@@ -22,10 +22,10 @@ import {
   type WindowsBreakawayLaunchContract,
   type WindowsBreakawayLaunchReport
 } from './windows-breakaway-launch'
-import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from './relay-artifacts'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from './orcad-artifacts'
 
 /** Both bundles stage the addon under this name beside their entry script. */
-const WINDOWS_PROCESS_TREE_ADDON = `./${RELAY_WINDOWS_PROCESS_TREE_FILENAME}`
+const WINDOWS_PROCESS_TREE_ADDON = `./${ORCAD_WINDOWS_PROCESS_TREE_FILENAME}`
 /** The kept previous log is its tail, so a crash loop cannot grow it without bound. */
 export const PREVIOUS_STDERR_LOG_MAX_BYTES = 1024 * 1024
 

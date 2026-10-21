@@ -1,14 +1,9 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { IFilesystemProvider } from '../../../providers/types'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from '../../../providers/ssh-filesystem-dispatch'
 import { eraseRpcMethods, type RpcContext } from '../core'
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
@@ -30,36 +25,6 @@ function claudeLines(...texts: string[]): string {
     )
     .map((line) => `${line}\n`)
     .join('')
-}
-
-/** An SSH host's filesystem as the relay serves it: stat plus positional reads. */
-function sshHost(files: Map<string, string>): IFilesystemProvider {
-  const bytes = (path: string): Buffer => {
-    const body = files.get(path)
-    if (body === undefined) {
-      // As the relay delivers it: the multiplexer swaps Node's 'ENOENT' code for its transport code.
-      const error = new Error(`ENOENT: no such file or directory, lstat '${path}'`)
-      Object.defineProperty(error, 'code', { value: -32000 })
-      throw error
-    }
-    return Buffer.from(body)
-  }
-  const provider: Pick<IFilesystemProvider, 'stat' | 'readFileRange'> = {
-    stat: async (path) => ({
-      size: bytes(path).length,
-      type: 'file',
-      mtime: 0,
-      mtimeMs: bytes(path).length,
-      dev: 1,
-      ino: 1
-    }),
-    readFileRange: async (path, position, length) => {
-      const slice = bytes(path).subarray(position, position + length)
-      return { bytes: slice, bytesRead: slice.length }
-    }
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transcript reads use only stat and readFileRange.
-  return provider as IFilesystemProvider
 }
 
 function sshHookRow(transcriptPath: string): Partial<AgentStatusIpcPayload> {
@@ -136,72 +101,10 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
   })
 
   afterEach(() => {
-    unregisterSshFilesystemProvider(CONNECTION_ID)
     rmSync(localDir, { recursive: true, force: true })
   })
 
-  it('reads the history from the SSH host the hook store attests the session to', async () => {
-    registerSshFilesystemProvider(
-      CONNECTION_ID,
-      sshHost(new Map([[transcriptPath, claudeLines('first remote turn', 'second remote turn')]]))
-    )
-
-    const page = await readSession(transcriptPath)
-
-    expect(page.error).toBeUndefined()
-    expect(page.texts).toEqual(['first remote turn', 'second remote turn'])
-  })
-
-  it('streams the SSH host history and its later turns to a subscribed phone', async () => {
-    const files = new Map([[transcriptPath, claudeLines('remote history')]])
-    registerSshFilesystemProvider(CONNECTION_ID, sshHost(files))
-    const frames: unknown[] = []
-    let cleanup = (): void => {}
-    const subscribe = method('nativeChat.subscribe')
-    if (!('stream' in subscribe)) {
-      throw new Error('nativeChat.subscribe is not a stream')
-    }
-
-    await subscribe.handler(
-      { agent: 'claude', sessionId: SESSION_ID, transcriptPath, subscriptionId: 'sub-1' },
-      phoneContext({
-        registerSubscriptionCleanup: (_id, fn) => {
-          cleanup = fn
-        },
-        cleanupSubscription: () => cleanup()
-      }),
-      (frame) => frames.push(frame)
-    )
-    try {
-      await vi.waitFor(() => expect(texts(frames[0])).toEqual(['remote history']))
-      files.set(transcriptPath, claudeLines('remote history', 'remote follow-up'))
-      await vi.waitFor(
-        () =>
-          expect(
-            frames
-              .filter(
-                (frame) =>
-                  frame && typeof frame === 'object' && 'type' in frame && frame.type === 'appended'
-              )
-              .flatMap((frame) => texts(frame))
-          ).toEqual(['remote follow-up']),
-        { timeout: 5_000 }
-      )
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('reads a transcript the SSH host has not written yet as not found, so the chat keeps waiting', async () => {
-    registerSshFilesystemProvider(CONNECTION_ID, sshHost(new Map()))
-
-    const page = await readSession(transcriptPath)
-
-    expect(page.texts).toEqual([])
-    expect(page.notFound).toBe(true)
-  })
-
-  it('never answers from this machine while the SSH host is disconnected', async () => {
+  it('never answers from this machine for an SSH-hosted transcript', async () => {
     const page = await readSession(transcriptPath)
 
     expect(page.texts).toEqual([])

@@ -6,11 +6,8 @@ import { acquireWatcherRemovalGate, type WatcherRemovalGate } from './ipc/watche
 import { runWorktreeChangeInvalidators } from './ipc/worktree-change-invalidators'
 import { parseWslPath } from './wsl'
 import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
-import {
-  differentCheckoutAtPathError,
-  isCheckoutRegistered,
-  isUnregisteredRemovalLeftover
-} from './worktree-removal-leftover'
+import { failureLeftByGit } from './worktree-removal-failure'
+import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
 import {
   failedWorktreeRemovals,
   finishedWorktreeRemovals,
@@ -25,6 +22,8 @@ export type BackgroundWorktreeRemovalJob = {
   run: (stopSignal: AbortSignal) => Promise<RemoveWorktreeResult>
   /** Fires when the row starts showing as removing, and again after it has left the table. */
   publish: () => void
+  /** The push-target remote cleanup a finished delete runs; also run when Git fails partway. */
+  cleanupPushTargetRemote?: () => Promise<void>
 }
 
 type RemovalSettlement = {
@@ -160,9 +159,9 @@ export function startBackgroundWorktreeRemoval(
 }
 
 /**
- * Delete on a failed delete's leftover that Git's current listing still does not register: runs the
- * recorded removal again, with the choices the user made the first time, or joins the one another
- * request started while this one listed Git. Undefined when neither.
+ * Delete on a failed delete whose folder is gone and that Git's current listing still does not
+ * register: finishes the recorded removal with the choices the user made the first time, or joins
+ * the one another request started while this one listed Git. Undefined when neither.
  */
 export function retryFailedWorktreeRemoval(
   worktreeId: string,
@@ -261,12 +260,7 @@ async function settleBackgroundWorktreeRemoval(
     settle = (settlement) => settlement.reject(error)
     // Why: Git drops the registration even when it fails to delete the checkout, and Orca lists
     // workspaces from Git, so without the record the leftover would vanish with no way to retry.
-    if (await isCheckoutLeftUnregistered(record)) {
-      failure = {
-        message: error instanceof Error ? error.message : String(error),
-        failedAt: Date.now()
-      }
-    }
+    failure = await failureLeftByGit(record, error, job.cleanupPushTargetRemote)
   } finally {
     // A resumed job that ended before taking its own gate still holds the fence loading gave it.
     releaseStartupRemovalFence(record.worktreeId)
@@ -293,22 +287,6 @@ async function settleBackgroundWorktreeRemoval(
   publishSafely(job.publish)
   if (cleared) {
     await persistWorktreeRemovalRecords()
-  }
-}
-
-async function isCheckoutLeftUnregistered(record: WorktreeRemovalRecord): Promise<boolean> {
-  if (!(await worktreeCheckoutExists(record.worktreePath))) {
-    return false
-  }
-  try {
-    return (
-      !(await isCheckoutRegistered(record)) &&
-      (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
-    )
-  } catch (error) {
-    // Unknowable: the row stays however Git lists it, as before this record existed.
-    console.warn(`[worktrees] could not list worktrees of ${record.repoPath}`, error)
-    return false
   }
 }
 

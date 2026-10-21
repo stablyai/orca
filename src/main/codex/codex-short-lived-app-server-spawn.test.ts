@@ -56,7 +56,7 @@ describe('short-lived Codex app-server invocations on Windows', () => {
         })
       }
     })
-    await probe('C:\\homes\\a')
+    await probe({ variable: 'CODEX_HOME', path: 'C:\\homes\\a' })
     expect(invocations[0]?.command).toBe(NPM_CODEX_SHIM)
     expect(invocations[0]?.args).toEqual([...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS])
   })

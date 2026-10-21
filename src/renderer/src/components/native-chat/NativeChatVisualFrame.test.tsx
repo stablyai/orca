@@ -8,6 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX,
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
+  NATIVE_CHAT_VISUAL_PING_TYPE,
+  NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,
+  NATIVE_CHAT_VISUAL_PONG_TYPE,
+  NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE
 } from '../../../../shared/native-chat-visual-shell'
@@ -18,19 +22,24 @@ vi.mock('@/lib/http-link-routing', () => ({
 }))
 
 import { NativeChatVisualFrame } from './NativeChatVisualFrame'
+import type { ReaderGesture } from './native-chat-autoscroll'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
-const visual = { revision: 'r1', html: '<p>chart</p>' }
+const visual = { revision: 'r1', html: '<p>chart</p>', path: '/v' }
 
-function Harness(props: { layout?: 'inline' | 'panel'; onRetired?: () => void }) {
+function Harness(props: {
+  onRetired?: () => void
+  onReaderGesture?: (gesture: ReaderGesture) => void
+}) {
   const scope = useRef<HTMLDivElement | null>(null)
   return (
     <div ref={scope}>
       <NativeChatVisualFrame
         document={visual}
         title="Chart"
-        layout={props.layout ?? 'inline'}
         themeScope={scope}
         onRetired={props.onRetired ?? (() => {})}
+        onReaderGesture={props.onReaderGesture}
       />
     </div>
   )
@@ -54,6 +63,48 @@ function post(data: unknown, source: MessageEventSource | null): void {
   })
 }
 
+function load(frame: HTMLIFrameElement): void {
+  act(() => {
+    frame.dispatchEvent(new Event('load'))
+  })
+}
+
+function answer(frame: HTMLIFrameElement, id: number): void {
+  post({ type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: channelOf(frame), id }, frame.contentWindow)
+}
+
+/** Records what the host posts into the frame, so only the test answers its pings. */
+function captureFramePosts(frame: HTMLIFrameElement): ReturnType<typeof vi.fn> {
+  const contentWindow = frame.contentWindow
+  if (!contentWindow) {
+    throw new Error('no content window')
+  }
+  const posted = vi.fn()
+  vi.spyOn(contentWindow, 'postMessage').mockImplementation(posted)
+  return posted
+}
+
+/** Renders the frame and lets its own first load land, then hands the clock to the test. */
+async function renderLoaded(onRetired: () => void) {
+  const view = render(<Harness onRetired={onRetired} />)
+  const frame = frameOf(view.container)
+  const posted = captureFramePosts(frame)
+  await vi.waitFor(() => {
+    expect(posted).toHaveBeenCalledWith(
+      expect.objectContaining({ type: NATIVE_CHAT_VISUAL_THEME_TYPE }),
+      '*'
+    )
+  })
+  vi.useFakeTimers()
+  return { ...view, frame, posted }
+}
+
+function waitOutTheAnswer(): void {
+  act(() => {
+    vi.advanceTimersByTime(NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS)
+  })
+}
+
 function setUserActivation(isActive: boolean): void {
   Object.defineProperty(navigator, 'userActivation', {
     configurable: true,
@@ -66,11 +117,27 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   document.documentElement.classList.remove('dark')
 })
 
 describe('NativeChatVisualFrame', () => {
+  it('lets a dragged tab pass over the frame while a tab drag holds pointer passthrough', () => {
+    const { container } = render(<Harness />)
+    const frame = frameOf(container)
+    expect(frame.style.pointerEvents).toBe('')
+
+    let release = (): void => {}
+    act(() => {
+      release = acquireWebviewsDragPassthrough()
+    })
+    expect(frame.style.pointerEvents).toBe('none')
+
+    act(() => release())
+    expect(frame.style.pointerEvents).toBe('')
+  })
+
   it('runs the visual in a scripts-only sandbox, named for host registration, with its CSP first', () => {
     const { container } = render(<Harness />)
     const frame = frameOf(container)
@@ -91,6 +158,21 @@ describe('NativeChatVisualFrame', () => {
     post({ type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel, height: 900 }, window)
     post({ type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: 'other', height: 900 }, frame.contentWindow)
     expect(box).toHaveStyle({ height: '420px' })
+  })
+
+  it('hands a wheel or touch its page could not take to the transcript as a reader gesture', () => {
+    const onReaderGesture = vi.fn()
+    const { container } = render(<Harness onReaderGesture={onReaderGesture} />)
+    const frame = frameOf(container)
+    const channel = channelOf(frame)
+    const scroll = { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel }
+    post({ ...scroll, input: 'wheel', deltaY: -30 }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenLastCalledWith({ kind: 'wheel', deltaY: -30, zoom: false })
+    post({ ...scroll, input: 'touch' }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenLastCalledWith({ kind: 'touch-drag' })
+    post({ ...scroll, input: 'wheel', deltaY: -30 }, window)
+    post({ ...scroll, channel: 'other', input: 'wheel', deltaY: -30 }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenCalledTimes(2)
   })
 
   it('restyles in place on a theme change instead of reloading the visual', () => {
@@ -150,27 +232,54 @@ describe('NativeChatVisualFrame', () => {
     expect(openHttpLink).toHaveBeenCalledTimes(1)
   })
 
-  it('retires itself if the frame loads a second document', () => {
+  it('keeps the visual through a later load it answers, as for an in-page link in WebKit', async () => {
     const onRetired = vi.fn()
-    const { container } = render(<Harness onRetired={onRetired} />)
-    const frame = frameOf(container)
+    const { frame, posted } = await renderLoaded(onRetired)
+    const ping = expect.objectContaining({ type: NATIVE_CHAT_VISUAL_PING_TYPE })
+    expect(posted).not.toHaveBeenCalledWith(ping, '*')
+    load(frame)
+    expect(posted).toHaveBeenCalledWith(
+      { type: NATIVE_CHAT_VISUAL_PING_TYPE, channel: channelOf(frame), id: 2 },
+      '*'
+    )
+    answer(frame, 2)
+    waitOutTheAnswer()
+    expect(onRetired).not.toHaveBeenCalled()
+  })
+
+  it('retires itself when a later load goes unanswered: the frame went blank or left', async () => {
+    const onRetired = vi.fn()
+    const { frame } = await renderLoaded(onRetired)
+    load(frame)
     act(() => {
-      frame.dispatchEvent(new Event('load'))
+      vi.advanceTimersByTime(NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS - 1)
     })
     expect(onRetired).not.toHaveBeenCalled()
     act(() => {
-      frame.dispatchEvent(new Event('load'))
+      vi.advanceTimersByTime(1)
     })
     expect(onRetired).toHaveBeenCalledTimes(1)
   })
 
-  it('fills a panel instead of fitting its height', () => {
-    const { container } = render(<Harness layout="panel" />)
-    const frame = frameOf(container)
-    post(
-      { type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: channelOf(frame), height: 420 },
-      frame.contentWindow
-    )
-    expect(frame.parentElement?.style.height).toBe('')
+  it('ignores answers from another window, another channel, or an earlier load', async () => {
+    const onRetired = vi.fn()
+    const { frame } = await renderLoaded(onRetired)
+    load(frame)
+    load(frame)
+    answer(frame, 2)
+    const pong = { type: NATIVE_CHAT_VISUAL_PONG_TYPE, id: 3 }
+    post({ ...pong, channel: channelOf(frame) }, window)
+    post({ ...pong, channel: 'other' }, frame.contentWindow)
+    waitOutTheAnswer()
+    expect(onRetired).toHaveBeenCalledTimes(1)
+  })
+
+  it('owes no answer once it unmounts', async () => {
+    const onRetired = vi.fn()
+    const { frame, unmount } = await renderLoaded(onRetired)
+    load(frame)
+    unmount()
+    waitOutTheAnswer()
+    expect(onRetired).not.toHaveBeenCalled()
   })
 })

@@ -72,7 +72,9 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
             wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
             wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
             wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
-            updateProject={model.updateProject}
+            updateProject={(projectId, updates) =>
+              model.updateProject(projectId, updates, getRepoExecutionHostId(repo))
+            }
           />
         ) : null}
       </SettingsSection>

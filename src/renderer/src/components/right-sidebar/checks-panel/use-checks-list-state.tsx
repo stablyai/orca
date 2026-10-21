@@ -18,6 +18,8 @@ import {
 
 export type ChecksListProps = {
   checks: PRCheckDetail[]
+  /** Set when the last read failed; replaces the empty-list copy. */
+  checksError?: string | null
   checksLoading: boolean
   checkDetailsContextKey: string
   onLoadCheckDetails?: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>

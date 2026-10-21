@@ -2,10 +2,11 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import { getDiskBaselineSignature } from './diff-content-signature'
-import { getRuntimeFileReadScope } from '@/runtime/runtime-file-client'
+import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
-import { RuntimeRpcCallError, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
 import {
@@ -22,7 +23,11 @@ import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalCont
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { editorTabFileAccess } from '@/lib/local-file-access'
+import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { applyEditorFileLoadFailure } from './editor-deleted-file-reload'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -41,25 +46,6 @@ type UseEditorPanelFileContentLoaderParams = {
   openFilesRef: MutableRefObject<OpenFile[]>
   outstandingFileReadsRef: MutableRefObject<Record<string, number>>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
-}
-
-// Why: a clean load re-baselines what this tab's future edits are based on; a
-// dirty tab keeps its baseline (its draft still derives from the older content
-// the signature was taken over). Best-effort metadata — a failure here must
-// not convert an already-delivered load into an error view, hence the guard.
-function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
-  if (result.isBinary || result.loadError || result.csvPreview) {
-    return
-  }
-  try {
-    const state = useAppStore.getState()
-    const loadedFile = state.openFiles.find((file) => file.id === id)
-    if (loadedFile && !loadedFile.isDirty) {
-      state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
-    }
-  } catch (err) {
-    console.warn('[editor] failed to stamp disk baseline', err)
-  }
 }
 
 function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
@@ -91,15 +77,23 @@ export function useEditorPanelFileContentLoader({
         const resolvedConnectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
         const connectionId = resolvedConnectionId ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
-        const activeSettings = useAppStore.getState().settings
-        const readSettings = settingsForRuntimeOwner(
-          activeSettings,
-          restoredOpenFile?.runtimeEnvironmentId
-        )
-        // Why: liveTail tabs are AI Vault logs discovered on this client, so the
-        // worktree's SSH owner must never be inferred for them (a stamp still routes).
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
+        // Why: these tabs name a file on this client, so the worktree's SSH or runtime owner must
+        // never be inferred for them (a stamp still routes).
+        const isClientLocalTab = restoredOpenFile
+          ? isClientLocalReadOnlyTab(restoredOpenFile)
+          : false
+        const readTarget: RuntimeClientTarget =
+          isClientLocalTab && restoredOpenFile?.runtimeEnvironmentId === undefined
+            ? { kind: 'local' }
+            : requireRuntimeTargetForFileOwner(
+                useAppStore.getState(),
+                worktreeId,
+                restoredOpenFile?.runtimeEnvironmentId
+              )
+        const readOwnerEnvironmentId =
+          readTarget.kind === 'environment' ? readTarget.environmentId : undefined
         readConnectionId = connectionId
         let readWorktreeId = worktreeId
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
@@ -124,7 +118,7 @@ export function useEditorPanelFileContentLoader({
           })
         }
         const workspaceRuntimeOwner =
-          restoredOpenFile && !isLiveTailLogTab
+          restoredOpenFile && !isClientLocalTab
             ? findRestoredEditorWorkspaceRuntimeOwner(
                 useAppStore.getState(),
                 restoredOpenFile,
@@ -139,8 +133,9 @@ export function useEditorPanelFileContentLoader({
           return
         }
         if (
+          !isClientLocalTab &&
           resolvedConnectionId === undefined &&
-          !readSettings?.activeRuntimeEnvironmentId?.trim() &&
+          !readOwnerEnvironmentId &&
           !isWorktreeConnectionResolved(worktreeId ?? null)
         ) {
           // Why: the backing repo hasn't hydrated yet (SSH still connecting), so
@@ -154,11 +149,9 @@ export function useEditorPanelFileContentLoader({
           // (or was opened outside) the terminal-link path that stamps the target id.
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
-            (isLiveTailLogTab ? undefined : connectionId)
-          const runtimeEnvironmentId = isLiveTailLogTab
-            ? undefined
-            : readSettings?.activeRuntimeEnvironmentId?.trim()
-          if (isLiveTailLogTab) {
+            (isClientLocalTab ? undefined : connectionId)
+          const runtimeEnvironmentId = isClientLocalTab ? undefined : readOwnerEnvironmentId
+          if (isClientLocalTab) {
             readConnectionId = undefined
           } else {
             const currentState = useAppStore.getState()
@@ -167,12 +160,20 @@ export function useEditorPanelFileContentLoader({
               : runtimeEnvironmentId
                 ? toRuntimeExecutionHostId(runtimeEnvironmentId)
                 : LOCAL_EXECUTION_HOST_ID
-            const route = findWorkspaceFileRoute(currentState, executionHostId, filePath)
+            // Floating files stay in their panel even when a project also contains the path.
+            const route = isFloatingWorkspaceId(worktreeId)
+              ? null
+              : findWorkspaceFileRoute(currentState, executionHostId, filePath)
             if (route && route.worktreeId !== worktreeId) {
               await reownRestoredFile(route, runtimeEnvironmentId ?? null)
               return
             }
-            if (runtimeEnvironmentId && !route) {
+            if (
+              runtimeEnvironmentId &&
+              !route &&
+              !restoredOpenFile.terminalArtifactGrantId &&
+              !chatScratchFileAddress(filePath)
+            ) {
               throw new Error('External local files are not available for remote workspaces.')
             }
             if (!externalSshOwnerId) {
@@ -182,7 +183,7 @@ export function useEditorPanelFileContentLoader({
             }
           }
         }
-        const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
+        const readScope = getRuntimeFileReadScope(readTarget, readConnectionId)
         const access = restoredOpenFile
           ? editorTabFileAccess(useAppStore.getState(), restoredOpenFile)
           : undefined
@@ -205,14 +206,16 @@ export function useEditorPanelFileContentLoader({
         if (!pending) {
           const promise = readEditorCsvFileContent(
             {
-              settings: readSettings,
+              target: readTarget,
               filePath,
               relativePath: readRelativePath,
               worktreeId: readWorktreeId,
               connectionId: readConnectionId,
               expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
               includeLocalLogMetadata: isLiveTailLogTab,
-              access
+              access,
+              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId,
+              pageOversizedBinary: true
             },
             allowPagedPreview
           )
@@ -262,15 +265,20 @@ export function useEditorPanelFileContentLoader({
         // classifiers downstream must see the token, not only its rendering (#21041).
         const loadErrorCode =
           !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
-        setFileContents((prev) => ({
-          ...prev,
-          [id]: {
-            content: '',
-            isBinary: false,
-            loadError: message,
-            ...(loadErrorCode ? { loadErrorCode } : {})
-          }
-        }))
+        const failure: FileContent = {
+          content: '',
+          isBinary: false,
+          loadError: message,
+          ...(loadErrorCode ? { loadErrorCode } : {})
+        }
+        applyEditorFileLoadFailure({
+          error: err,
+          fileId: id,
+          filePath,
+          tabs: openFilesRef.current,
+          failure,
+          setFileContents
+        })
       } finally {
         if (outstandingFileReadsRef.current[id] === generation) {
           delete outstandingFileReadsRef.current[id]

@@ -33,9 +33,7 @@ afterEach(() => {
 })
 
 describe('floating workspace resolved-worktree minting', () => {
-  // Regression: this mixin file is @ts-nocheck, so a missing module import there is invisible to
-  // `pnpm tc` and only fails at call time (shipped once as a ReferenceError from the structured
-  // createSupport path). Calling the real method pins the import wiring.
+  // A missing resolver import previously broke structured-session creation at call time.
   it('mints the synthetic floating row through the shared module', () => {
     class FloatingResolverProbe extends OrcaRuntimeService {
       mintFloatingResolvedWorktree(path: string): ResolvedWorktree {
@@ -72,8 +70,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
     })
   })
 
-  // Why here: the runtime resolvers this crosses are @ts-nocheck, so only a call that runs them
-  // proves the floating workspace resolves to a location a structured session can be filed under.
+  // Floating workspaces still need a local path for structured-session records.
   it.each(selectors)('supports a structured session for %s on the local host', async (selector) => {
     const runtime = new OrcaRuntimeService()
 
@@ -87,13 +84,13 @@ describe('agent.launch with the real floating workspace resolver', () => {
   describe.each([true, false])('structured preference %s', (structuredPreference) => {
     it.each(selectors)('routes %s by preference, not by workspace kind', async (selector) => {
       const runtime = new OrcaRuntimeService()
-      vi.spyOn(runtime, 'getClientSettings').mockReturnValue(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only these preferences and optional agentCmdOverrides; no other settings consumer runs because terminal creation is stubbed.
-        {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these launch readers use only getSettings from the private store fixture.
+      vi.spyOn(runtime, 'requireStore').mockReturnValue({
+        getSettings: () => ({
           ...STRUCTURED_PREFERENCE,
-          openAgentTabsInChatByDefault: structuredPreference
-        } as ReturnType<OrcaRuntimeService['getClientSettings']>
-      )
+          experimentalNativeChat: structuredPreference
+        })
+      } as never)
       const scope = vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope')
       const createSupport = vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport')
       const structuredHost = vi.spyOn(runtime, 'ensureStructuredAgentSessionHost')
@@ -130,6 +127,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
           `id:${FLOATING_TERMINAL_WORKTREE_ID}`,
           {
             startupAgent: 'codex',
+            terminalImageViewerSupported: false,
             // Derived on the host by the window's rule, from the same chat-view setting.
             viewMode: 'terminal',
             // A paired device's launch never moves the desktop window.

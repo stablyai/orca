@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   dropDeletedSshResumeCwd,
-  prepareAiVaultSessionForResume
+  prepareAiVaultSessionForFork,
+  prepareAiVaultSessionForResume,
+  prepareAiVaultSessionForTerminalResume
 } from './ai-vault-session-resume-preparation'
 
 afterEach(() => {
@@ -95,6 +97,85 @@ describe('prepareAiVaultSessionForResume', () => {
 
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
     expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+describe('ordinary Resume against an older paired host', () => {
+  it.each([
+    new Error(
+      "Error invoking remote method 'aiVault:prepareSessionResume': Error: aiVault.prepareSessionResume: method_not_found"
+    ),
+    Object.assign(new Error('Unknown method: aiVault.prepareSessionResume'), {
+      code: 'method_not_found'
+    })
+  ])('retains neutral resumes but requires managed Codex home preparation', async (error) => {
+    stubPreparation(vi.fn().mockRejectedValue(error))
+    const remote = session({ agent: 'claude', executionHostId: 'runtime:paired' })
+    await expect(prepareAiVaultSessionForTerminalResume(remote)).resolves.toBe(remote)
+    await expect(
+      prepareAiVaultSessionForTerminalResume(
+        session({
+          executionHostId: 'runtime:paired',
+          codexHome: '/tmp/orca/codex-runtime-home/home'
+        })
+      )
+    ).rejects.toBe(error)
+  })
+})
+
+describe('prepareAiVaultSessionForFork', () => {
+  // A fork of a chat-owned conversation must run under the selected account, as a resume does.
+  it('repins a chat-owned per-account session, asking the host as a fork', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({
+      useRealCodexHome: false,
+      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
+    })
+    stubPreparation(prepareSessionResume)
+    const owned = session({
+      codexHome: '/tmp/orca/codex-accounts/account-1/home',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    const prepared = await prepareAiVaultSessionForFork(owned)
+
+    expect(prepared.copied).toBe(false)
+    expect(prepared.session.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
+    expect(prepareSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      sessionId: owned.sessionId,
+      filePath: owned.filePath,
+      codexHome: owned.codexHome,
+      executionHostId: 'local',
+      fork: true
+    })
+  })
+
+  it('does not ask the host for a home that needs no preparation', async () => {
+    const prepareSessionResume = vi.fn()
+    stubPreparation(prepareSessionResume)
+    const owned = session({
+      agent: 'claude',
+      codexHome: null,
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForFork(owned)).resolves.toEqual({
+      session: owned,
+      copied: false
+    })
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it("refuses a host that made no copy rather than resuming the chat's own conversation", async () => {
+    stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
+    const owned = session({
+      agent: 'omp',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForFork(owned)).rejects.toThrow(
+      'Update Orca on the host that runs this chat to resume it in a new CLI.'
+    )
   })
 })
 

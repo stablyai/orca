@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 vi.mock('electron', () => ({
@@ -6,14 +6,6 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn(() => null) },
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), emit: vi.fn(() => true) },
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
-}))
-
-const getSshGitProviderMock = vi.hoisted(() => vi.fn())
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: vi.fn(() => 0),
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable',
-  requireSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
@@ -42,7 +34,8 @@ function makeStore() {
     setWorkspaceSession: vi.fn(),
     getRepos: vi.fn(() => [REPO]),
     getRepo: vi.fn((id: string) => (id === REPO.id ? REPO : undefined)),
-    getAllWorktreeMeta: vi.fn(() => ({})),
+    // Why: this process serves no SSH git, so the SSH repo lists its stored rows.
+    getAllWorktreeMeta: vi.fn(() => ({ [WORKTREE_ID]: {} })),
     getWorktreeMeta: vi.fn(() => undefined),
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn(),
@@ -81,15 +74,6 @@ async function psRow(runtime: OrcaRuntimeService) {
 }
 
 describe('worktree.ps terminal verdicts for an SSH host', () => {
-  beforeEach(() => {
-    getSshGitProviderMock.mockReset()
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: vi.fn(async () => [
-        { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
-      ])
-    })
-  })
-
   it('counts a terminal the reachable host lists as live', async () => {
     const runtime = makeRuntime({
       hasPty: () => true,

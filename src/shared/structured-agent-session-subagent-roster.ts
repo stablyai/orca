@@ -15,7 +15,8 @@ import {
   compareAgentJournalPositions
 } from './agent-session-journal-position'
 import type { AgentSessionHistoryPage, AgentSessionSubagentRosterEntry } from './agent-session-wire'
-import { isSubagentGroupBlock, type NativeChatSubagentEntry } from './native-chat-types'
+import { namedSubagents } from './native-chat-subagent-items'
+import type { NativeChatSubagentEntry } from './native-chat-types'
 
 /** One subagent as the first roster row naming it records it. */
 export type StructuredAgentSubagentRosterEntry = {
@@ -93,18 +94,13 @@ export function foldStructuredAgentSubagentRoster(
     if (!isRootAgentJournalItem(item) || item.body.kind !== 'message') {
       continue
     }
-    for (const block of item.body.blocks) {
-      if (!isSubagentGroupBlock(block)) {
-        continue
-      }
-      for (const entry of block.agents) {
-        take({
-          entry,
-          rosterItemId: item.itemId,
-          rosterPosition: agentJournalItemPosition(item),
-          rosterRevision: item.revision
-        })
-      }
+    for (const entry of item.body.blocks.flatMap(namedSubagents)) {
+      take({
+        entry,
+        rosterItemId: item.itemId,
+        rosterPosition: agentJournalItemPosition(item),
+        rosterRevision: item.revision
+      })
     }
   }
   const next = draft.next
@@ -125,10 +121,8 @@ function rosterAgentIds(item: AgentJournalRenderItem): ReadonlySet<string> | nul
   if (!isRootAgentJournalItem(item) || item.body.kind !== 'message') {
     return null
   }
-  const groups = item.body.blocks.filter(isSubagentGroupBlock)
-  return groups.length === 0
-    ? null
-    : new Set(groups.flatMap((group) => group.agents.map((agent) => agent.id)))
+  const named = item.body.blocks.flatMap(namedSubagents)
+  return named.length === 0 ? null : new Set(named.map((agent) => agent.id))
 }
 
 /** Folds a history page: its rows, its removals, and the entries it names beside them. */

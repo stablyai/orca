@@ -10,7 +10,7 @@ import {
 } from './orcad-source-scope'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { collectSessionOwnerKeys } from './orcad-source-workspace-session-fragments'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
 /** On a copy of the profile only, like every subtraction the delta view runs. */

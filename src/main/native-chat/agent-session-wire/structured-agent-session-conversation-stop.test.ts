@@ -30,9 +30,10 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import {
   THREAD_ID,
+  acquireReadyCodexForTest,
   adapterFor,
   answerWithOpenedTurn,
   fakeCodex,
@@ -76,7 +77,7 @@ beforeEach(async () => {
   log = recordingStructuredAgentSessionLogger()
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
-    agents: NO_STRUCTURED_AGENTS,
+    agents: claudeAndCodexDeclared(),
     logger: log.logger,
     store,
     adapter: {
@@ -99,6 +100,7 @@ beforeEach(async () => {
           }
         }
       },
+      open: async () => ({ reportedOptions: { model: '' } }),
       dispatch,
       closeSession,
       acknowledgeSessionRelease,
@@ -203,11 +205,11 @@ describe('a Stop that names no turn', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-catalog',
-      options: { fastMode: 'true' },
+      options: { serviceTier: 'priority' },
       // Codex's turn events reach the host's journal, as the runtime wires them.
       events: hostEvents()
     })
@@ -215,6 +217,11 @@ describe('a Stop that names no turn', () => {
     cancelTurn.mockImplementation((input) => adapter.cancelTurn(input))
     setOption.mockImplementation((input) => adapter.setOption(input))
 
+    const listing = adapter.readOptions({ sessionId: SESSION, fence: 1 })
+    const catalogReads = codex.connections[0].calls.filter(
+      (call) => call.method === 'model/list'
+    ).length
+    await pickOption('serviceTier', 'priority')
     const first = send('first send')
     await first.result
     await eventually(() =>
@@ -222,17 +229,15 @@ describe('a Stop that names no turn', () => {
     )
     expect(await pickOption('model', 'gpt-next')).toMatchObject({
       ok: true,
-      value: { options: { model: 'gpt-next', fastMode: 'true' } }
+      value: { options: { model: 'gpt-next' } }
     })
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
-      1
+      catalogReads
     )
 
     const followUp = send('follow-up')
     await followUp.result
-    await eventually(() =>
-      expect(codex.connections[0].calls.some((call) => call.method === 'turn/steer')).toBe(true)
-    )
+    expect(codex.connections[0].calls.some((call) => call.method === 'turn/steer')).toBe(false)
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
     codex.connections[0].handlers.onNotification?.('turn/completed', {
       threadId: THREAD_ID,
@@ -248,8 +253,9 @@ describe('a Stop that names no turn', () => {
     )
     expect(
       codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
-    ).toMatchObject({ model: 'gpt-next', serviceTier: 'default' })
+    ).toMatchObject({ serviceTier: 'priority' })
     pending.resolve({ data: [], nextCursor: null })
+    await expect(listing).rejects.toThrow('no available models')
   })
 
   // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never
@@ -275,7 +281,7 @@ describe('a Stop that names no turn', () => {
       return {}
     }
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-unstarted',
@@ -317,7 +323,7 @@ describe('a Stop that names no turn', () => {
       return {}
     }
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-unstarted-item',
@@ -346,7 +352,7 @@ describe('a Stop that names no turn', () => {
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor(SESSION),
       fence: 1,
       spawnToken: 'spawn-unstarted-failed',
@@ -369,11 +375,11 @@ describe('a Stop that names no turn', () => {
     ])
   })
 
-  it('fails a turn Codex refuses for a model picked before the list, then sends again', async () => {
+  it('records a provider-refused turn, then sends again without changing saved picks', async () => {
     const pending = Promise.withResolvers<unknown>()
     const codex = fakeCodex({ 'model/list': () => pending.promise })
     codex.routes['turn/start'] = (params) => {
-      if (params?.model === 'gpt-missing') {
+      if (codex.connections[0].calls.filter((call) => call.method === 'turn/start').length === 1) {
         throw new CodexAppServerRequestError(
           'turn/start',
           -32602,
@@ -386,7 +392,11 @@ describe('a Stop that names no turn', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({ identity: identityFor(SESSION), fence: 1, spawnToken: 'spawn-bad' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor(SESSION),
+      fence: 1,
+      spawnToken: 'spawn-bad'
+    })
     dispatch.mockImplementation((input) => adapter.dispatch(input))
     setOption.mockImplementation((input) => adapter.setOption(input))
 
@@ -409,9 +419,7 @@ describe('a Stop that names no turn', () => {
         codex.connections[0].calls.filter((call) => call.method === 'turn/start')
       ).toHaveLength(2)
     )
-    expect(
-      codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
-    ).toMatchObject({ model: 'gpt-live' })
+    expect(store.getRecord(SESSION)?.options?.model).toBe('gpt-live')
     await eventually(async () =>
       expect((await submission(retried.id))?.dispatchState).not.toBe('rejected')
     )
@@ -769,7 +777,22 @@ describe('a Stop that names no turn', () => {
 })
 
 describe('a Stop that names its turn, as an older client sends it', () => {
+  it('is a quiet no-op, reaching no agent, when that turn is already over', async () => {
+    expect(await stop('turn-1')).toMatchObject({
+      ok: true,
+      value: { turnId: 'turn-1', cancelled: false }
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(await statusRows()).toEqual([])
+  })
+
   it('reaches the provider with that turn, and writes no row when it stopped nothing', async () => {
+    // Only a turn the journal shows running: one already over is a late Stop, a no-op.
+    events!.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
     expect(await stop('turn-1')).toMatchObject({
@@ -777,18 +800,6 @@ describe('a Stop that names its turn, as an older client sends it', () => {
       value: { turnId: 'turn-1', cancelled: false }
     })
     expect(cancelTurn).toHaveBeenCalledWith(expect.objectContaining({ turnId: 'turn-1' }))
-    expect(await statusRows()).toEqual([])
-  })
-
-  it('keeps the child, and writes no row, when the provider could not interrupt it with the conversation at rest', async () => {
-    cancelTurn.mockResolvedValueOnce({
-      cancelled: false,
-      refusal: { detail: { text: 'failed to interrupt turn', audience: 'person' } }
-    })
-
-    expect(await stop('turn-1')).toMatchObject({ ok: true, value: { cancelled: false } })
-
-    expect(closeSession).not.toHaveBeenCalled()
     expect(await statusRows()).toEqual([])
   })
 
@@ -886,11 +897,14 @@ describe('a Stop on a provider whose Stop ends its session', () => {
 
   it('leaves the child alone when the Stop named a turn that is no longer live', async () => {
     stopEndsSession = true
+    // Handed over, with no row yet for the turn it names: the Stop reaches the provider.
+    await handedOver()
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
     expect(await stop('turn-1')).toMatchObject({ ok: true, value: { cancelled: false } })
     await laneDrained()
 
+    expect(cancelTurn).toHaveBeenCalledWith(expect.objectContaining({ turnId: 'turn-1' }))
     expect(closeSession).not.toHaveBeenCalled()
     // It stopped nothing, so it writes no row.
     expect(await statusRows()).toEqual([])

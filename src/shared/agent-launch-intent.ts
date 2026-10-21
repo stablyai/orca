@@ -7,12 +7,12 @@
  * resolves it once — settings default plus per-launch feasibility from
  * `structured-native-chat-launch-route` — so no surface carries its own copy of that decision.
  *
- * The intent deliberately does NOT name a mode. A caller states what it wants to happen, not how
- * to deliver it; picking structured vs terminal is the host's job and is reported back in the
- * receipt rather than requested here.
+ * A caller may name the surface it wants (`surface`); otherwise picking structured vs terminal is
+ * the host's job. Either way the host decides feasibility and reports the result in the receipt.
  */
 
 import type { TuiAgent } from './tui-agent'
+import type { AgentLaunchSurface } from './agent-launch-surface'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -52,6 +52,8 @@ export type AgentLaunchTarget =
   /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
    *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
   | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
+  /** A folder workspace this launch creates. `create` is the `folderWorkspace.create` request. */
+  | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
 
 /** An existing terminal the caller wants reused rather than a fresh surface. Always resolves to a
  *  terminal agent: a running PTY keeps its execution transport. */
@@ -96,6 +98,12 @@ export type AgentLaunchIntent = {
   /** The caller-minted id of the chat session a structured launch creates. Not a route input;
    *  refused when that session already exists. */
   sessionId?: string
+  /** Account routing env for a terminal agent (`agent.launch`'s `accountEnv`). Not a route input. */
+  accountEnv?: Readonly<Record<string, string>>
+  /** `agent.launch`'s `nativeChatDefault`: the caller's chat default in place of the host's own. */
+  nativeChatDefault?: boolean
+  /** `agent.launch`'s `surface`: the user's pick for this launch, ahead of either default. */
+  surface?: AgentLaunchSurface
 }
 
 /**
@@ -209,10 +217,11 @@ export type AgentLaunchResult = {
 
 export type AgentLaunchMode = 'structured' | 'terminal'
 
-/** Why a launch ran in the mode it did. `user_default` is the preference being honoured; every
- *  other member is a reason the preference could not be applied to this launch. */
+/** Why a launch ran in the mode it did. `user_default` is the preference being honoured and
+ *  `requested` the caller's explicit pick; every other member is a reason a chat could not run. */
 export type AgentLaunchModeReason =
   | 'user_default'
+  | 'requested'
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
@@ -230,7 +239,7 @@ export type AgentLaunchModeReason =
 export type AgentLaunchModeReceipt = {
   /** The mode the launch actually ran in. */
   mode: AgentLaunchMode
-  /** The user's settings default for a new agent tab. */
+  /** The caller's explicit pick, else the user's settings default for a new agent tab. */
   preferred: AgentLaunchMode
   reason: AgentLaunchModeReason
   /** One sentence, always present, so a fallback is never silent. */
@@ -333,12 +342,6 @@ function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeRecei
 
 function isAgentLaunchPromptDelivery(value: unknown): value is AgentLaunchPromptDelivery {
   return value === 'submit' || value === 'draft'
-}
-
-export function agentLaunchTargetIsCreate(
-  target: AgentLaunchTarget
-): target is Extract<AgentLaunchTarget, { kind: 'create-worktree' }> {
-  return target.kind === 'create-worktree'
 }
 
 /** The agent fields a create payload must not carry: the launch owns placement, and a caller that

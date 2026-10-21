@@ -10,6 +10,7 @@ const fakes = vi.hoisted(() => ({
   },
   wsl: {
     prepareLaunch: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
+    preparation: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
     publish: async (_distro: string): Promise<void> => {},
     runningDistros: async (): Promise<string[]> => []
   }
@@ -31,15 +32,22 @@ vi.mock('./claude-profile-wsl-router', () => ({
     return fakes.wsl
   }
 }))
-vi.mock('./claude-profile-installed-router', () => ({ installClaudeProfileRouter: () => {} }))
+vi.mock('./claude-profile-installed-router', () => ({
+  installClaudeProfileRouter: () => {},
+  installClaudeWslProfileRouter: () => {}
+}))
 
 import { ClaudeRuntimeAuthService } from './runtime-auth-service'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-function service(platformName: NodeJS.Platform, overrides: Partial<GlobalSettings> = {}) {
+function service(
+  platformName: NodeJS.Platform,
+  overrides: Partial<GlobalSettings> = {},
+  isDistroRunning: (distro: string) => Promise<boolean> = async () => true
+) {
   Object.defineProperty(process, 'platform', { configurable: true, value: platformName })
   const settings = { ...getDefaultSettings('/home/user'), ...overrides }
-  return new ClaudeRuntimeAuthService({ getSettings: () => settings })
+  return new ClaudeRuntimeAuthService({ getSettings: () => settings }, isDistroRunning)
 }
 
 beforeEach(() => {
@@ -51,6 +59,20 @@ afterEach(() => {
 })
 
 describe('ClaudeRuntimeAuthService', () => {
+  it('skips a quota preparation for a stopped distro instead of booting it', async () => {
+    const preparation = vi.spyOn(fakes.wsl, 'preparation')
+    const auth = service('win32', {}, async () => false)
+    await expect(
+      auth.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({ usageError: 'WSL distro Ubuntu is not running.' })
+    expect(preparation).not.toHaveBeenCalled()
+
+    const running = service('win32')
+    await expect(
+      running.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).resolves.toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
   it('keeps a stale WSL account setting on the host off Windows', async () => {
     const auth = service('darwin', { localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' })
     expect(auth.getRuntimeConfigDir()).toBe('/host/.claude')

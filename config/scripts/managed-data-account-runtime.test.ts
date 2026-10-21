@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path'
 import { resolveConfig } from 'electron-vite'
 import { build } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { stagePackagedProcessHost } from './packaged-process-host-fixture.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -29,13 +30,14 @@ beforeAll(async () => {
       ...main.build,
       outDir: join(outputDir, 'bundle'),
       sourcemap: false,
-      rollupOptions: {
-        ...main.build.rollupOptions,
+      rolldownOptions: {
+        ...main.build.rolldownOptions,
         input: join(projectDir, 'src/main/managed-data-accounts/credential-capture.ts'),
         output: { format: 'cjs', entryFileNames: 'credential-capture.cjs' }
       }
     }
   })
+  await stagePackagedProcessHost(outputDir)
   mkdirSync(join(outputDir, 'source', 'devin'), { recursive: true })
   writeFileSync(
     join(outputDir, 'source', 'devin', 'credentials.toml'),
@@ -59,6 +61,8 @@ describe('managed account credentials in the production main bundle', () => {
       const environment: Record<string, string | undefined> = {
         ...process.env,
         ORCA_BACKGROUND_LAUNCH: '1',
+        NODE_PATH: '',
+        NODE_OPTIONS: '',
         ELECTRON_RUN_AS_NODE: '1'
       }
       for (const key of [

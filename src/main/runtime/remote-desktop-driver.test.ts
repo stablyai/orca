@@ -14,6 +14,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import { OrcaRuntimeService } from './orca-runtime'
+import { createPtyWriteInput } from '../ipc/pty/ipc/write-input'
+import { ptyOwnership } from '../ipc/pty/provider/ownership-state'
+
+const { hostProviderWrite } = vi.hoisted(() => ({ hostProviderWrite: vi.fn(() => true) }))
+vi.mock('../ipc/pty/provider/registry', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  tryGetProviderForPty: () => ({ write: hostProviderWrite, hasPty: () => true })
+}))
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -46,6 +54,10 @@ vi.mock('../git/git-username', async () => {
 })
 
 class TestOrcaRuntimeService extends OrcaRuntimeService {
+  getLayoutForTest(ptyId: string) {
+    return this.getLayout(ptyId)
+  }
+
   getLayoutQueues() {
     return this.layoutQueues
   }
@@ -162,6 +174,17 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 800, rows: 40 })
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 2000, 40)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 1024, rows: 40 })
+  })
+
+  // #27425: a pane taller than 120 rows must get a PTY of the same height.
+  it('keeps a tall desktop viewport through resize', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 137)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 292, rows: 137 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 500)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 292, rows: 500 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 292, 5000)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 292, rows: 500 })
   })
 
   it('sizes the PTY to the latest active desktop viewer', async () => {
@@ -284,6 +307,81 @@ describe('remote desktop viewer width driver', () => {
 
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     expect(resizeCalls).toHaveLength(1)
+  })
+
+  it('keeps a reconnected pane at its own grid when the heartbeat reaps its stale stream', async () => {
+    const { runtime, resizeCalls, fitOverrideEvents } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:old:1', 'pane-A', 159, 61)
+    // Current clients re-subscribe without claiming; the dead socket is reaped seconds later.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:new:1', 'pane-A', 159, 61, false)
+    resizeCalls.splice(0)
+    fitOverrideEvents.splice(0)
+
+    await runtime.unregisterRemoteDesktopViewers('pty-1', ['multiplex:old:1'])
+
+    expect(resizeCalls).toEqual([])
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 159, rows: 61 })
+    expect(fitOverrideEvents.map((event) => event.mode)).not.toContain('desktop-fit')
+    expect(runtime.getRemoteDesktopFitHold('pty-1', 'multiplex:new:1').mode).toBe('desktop-fit')
+  })
+
+  it('restores a reaped owner grid when the same pane re-subscribes after a long outage', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:old:1', 'pane-A', 159, 61)
+    await runtime.unregisterRemoteDesktopViewers('pty-1', ['multiplex:old:1'])
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:new:1', 'pane-A', 159, 61, false)
+
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 159, rows: 61 })
+    expect(runtime.getRemoteDesktopFitHold('pty-1', 'multiplex:new:1')).toEqual({
+      mode: 'desktop-fit',
+      cols: 159,
+      rows: 61
+    })
+  })
+
+  it('keeps the host grid when the host typed between a reap and the passive reconnect', async () => {
+    const { runtime, fitOverrideEvents } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:old:1', 'pane-A', 80, 24)
+    await runtime.unregisterRemoteDesktopViewers('pty-1', ['multiplex:old:1'])
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+    ptyOwnership.set('pty-1', 'local')
+    try {
+      const input = createPtyWriteInput({ runtime })
+      // A query reply is not the host driving; only the typed command revokes the resume.
+      await input.writePtyInput({ id: 'pty-1', data: '\x1b[?1;2c', inputKind: 'query-reply' })
+      await input.writePtyInput({ id: 'pty-1', data: 'top\r', inputKind: 'driving' })
+      expect(hostProviderWrite).toHaveBeenCalledWith('pty-1', 'top\r')
+
+      await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:new:1', 'pane-A', 80, 24, false)
+
+      expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+      expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
+      expect(fitOverrideEvents.at(-1)?.mode).toBe('desktop-fit')
+    } finally {
+      ptyOwnership.delete('pty-1')
+    }
+  })
+
+  it('still restores the reaped owner when the host only answered terminal queries', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:old:1', 'pane-A', 80, 24)
+    await runtime.unregisterRemoteDesktopViewers('pty-1', ['multiplex:old:1'])
+    ptyOwnership.set('pty-1', 'local')
+    try {
+      const input = createPtyWriteInput({ runtime })
+      await input.writePtyInput({ id: 'pty-1', data: '\x1b[?1;2c', inputKind: 'query-reply' })
+      await input.writePtyInput({ id: 'pty-1', data: '\x1b[I', inputKind: 'driving' })
+      await input.writePtyInput({ id: 'pty-1', data: 'claude\r', inputKind: 'launch' })
+
+      await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:new:1', 'pane-A', 80, 24, false)
+
+      expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 24 })
+      expect(runtime.isRemoteDesktopViewerOwner('pty-1', 'multiplex:new:1')).toBe(true)
+    } finally {
+      ptyOwnership.delete('pty-1')
+    }
   })
 
   it('reclaims the host width when the last viewer detaches', async () => {
@@ -619,5 +717,107 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
     expect(resizeCalls.slice(resizesBefore)).toContainEqual({ ptyId: 'pty-1', cols: 100, rows: 30 })
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 30 })
+  })
+})
+
+describe('terminal layout runtime dispatch and ownership', () => {
+  it('dispatches resize ownership through the current Root driver method', () => {
+    const { runtime } = createRuntime()
+    const driver = vi
+      .spyOn(runtime, 'getDriver')
+      .mockReturnValue({ kind: 'mobile', clientId: 'phone' })
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
+    expect(driver.mock.calls).toEqual([['pty-1']])
+  })
+
+  it('dispatches the persisted preference reader through Root overrides', () => {
+    class PreferenceRuntime extends OrcaRuntimeService {
+      protected override getAutoRestoreFitMs(): number | null {
+        return 24_680
+      }
+    }
+    expect(new PreferenceRuntime().getMobileAutoRestoreFitMs()).toBe(24_680)
+  })
+
+  it('reads the current store again before invoking its settings writer', () => {
+    const { runtime } = createRuntime()
+    const first = { ...store, updateSettings: vi.fn() }
+    const second = { ...store, updateSettings: vi.fn() }
+    let reads = 0
+    Object.defineProperty(runtime, 'store', { get: () => (++reads === 1 ? first : second) })
+
+    expect(runtime.setMobileAutoRestoreFitMs(12_345)).toBe(12_345)
+    expect(reads).toBe(2)
+    expect(first.updateSettings).not.toHaveBeenCalled()
+    expect(second.updateSettings.mock.calls).toEqual([
+      [{ mobileAutoRestoreFitMs: 12_345 }, { notifyListeners: true }]
+    ])
+    expect(second.updateSettings.mock.contexts).toEqual([second])
+  })
+
+  it('keeps floors, subscribers, queues and listeners isolated for identical IDs', async () => {
+    const first = createRuntime().runtime
+    const second = createRuntime().runtime
+    const secondResize = vi.fn()
+    second.subscribeToTerminalResize('pty-1', secondResize)
+    await first.handleMobileSubscribe('pty-1', 'client', { cols: 50, rows: 25 })
+
+    expect(first.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'client' })
+    expect(first.getLayoutForTest('pty-1')).toMatchObject({ kind: 'phone', cols: 50, rows: 25 })
+    expect(second.getDriver('pty-1')).toEqual({ kind: 'idle' })
+    expect(second.isMobileSubscriberActive('pty-1')).toBe(false)
+    expect(second.getLayoutForTest('pty-1')).toBeNull()
+    expect(second.getTerminalFitOverride('pty-1')).toBeNull()
+    expect(secondResize).not.toHaveBeenCalled()
+
+    await second.handleMobileSubscribe('pty-1', 'client', { cols: 60, rows: 30 })
+    first.onPtyExit('pty-1', 0)
+
+    expect(second.isMobileSubscriberActive('pty-1')).toBe(true)
+    expect(second.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'client' })
+    expect(second.getTerminalFitOverride('pty-1')).toMatchObject({ cols: 60, rows: 30 })
+    expect(secondResize).toHaveBeenCalledOnce()
+  })
+
+  it('uses providers and notifiers replaced after construction before publishing resize', async () => {
+    const runtime = new TestOrcaRuntimeService()
+    const events: string[] = []
+    let size = { cols: 120, rows: 40 }
+    runtime.subscribeToTerminalResize('pty', (event) => events.push(`wire:${event.seq}`))
+    const install = (label: string) => {
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        getSize: () => size,
+        resize: (_ptyId, cols, rows) => {
+          events.push(`provider:${label}`)
+          size = { cols, rows }
+          return true
+        }
+      })
+      runtime.setNotifier({
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        focusTerminal: vi.fn(),
+        closeTerminal: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalDriverChanged: () => events.push(`driver:${label}`),
+        terminalFitOverrideChanged: () => events.push(`fit:${label}`)
+      })
+    }
+    install('first')
+    await runtime.handleMobileSubscribe('pty', 'client', { cols: 50, rows: 25 })
+    expect(events).toEqual(['driver:first', 'provider:first', 'fit:first', 'wire:1'])
+
+    events.length = 0
+    install('second')
+    await runtime.reclaimTerminalForDesktop('pty')
+    expect(events).toEqual(['provider:second', 'fit:second', 'wire:2', 'driver:second'])
+    expect(runtime.getTerminalFitOverride('pty')).toBeNull()
   })
 })

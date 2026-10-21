@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
@@ -10,16 +10,22 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getRouteForLocalPathOpenOwner,
+  isRevealOrEditorOpenBlocked
+} from '@/lib/local-path-open-guard'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -54,16 +60,19 @@ export function SourceControlEntryContextMenu({
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
-  const settings = useAppStore((s) => s.settings)
   // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
   // cannot tell that host's path from a local one of the same name.
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, currentWorktreeId)
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, currentWorktreeId)
   )
-  const revealBlocked = isRevealInFileManagerBlocked(settings, {
-    connectionId,
-    runtimeEnvironmentId
-  })
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
+  )
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
+  const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(revealOwner), [revealOwner])
+  const runtimeSshHost = useAppStore(
+    useShallow((s) => getWorkspaceEditorSshHost(s, { workspaceId: currentWorktreeId }))
+  )
 
   const handleCopyPath = useCallback(() => {
     if (!absolutePath) {
@@ -88,9 +97,9 @@ export function SourceControlEntryContextMenu({
 
   const handleRevealInFileManager = useCallback(() => {
     if (absolutePath) {
-      void revealInFileManager(absolutePath)
+      void revealInFileManager(absolutePath, revealOwner)
     }
-  }, [absolutePath])
+  }, [absolutePath, revealOwner])
 
   const handleOpenInApplication = useCallback(
     (command: string) => {
@@ -100,11 +109,12 @@ export function SourceControlEntryContextMenu({
       void openWorktreePath({
         target: 'external-editor',
         worktreePath: absolutePath,
-        connectionId,
+        ...openInRoute,
+        workspace: { workspaceId: currentWorktreeId },
         command
       })
     },
-    [absolutePath, connectionId]
+    [absolutePath, currentWorktreeId, openInRoute]
   )
 
   return (
@@ -140,8 +150,10 @@ export function SourceControlEntryContextMenu({
             {openInApplications.map((application) => {
               const availability = getOpenInEntryAvailability(
                 { ...application, target: 'external-editor' },
-                settings,
-                connectionId
+                openInRoute.connectionId,
+                openInRoute.runtimeEnvironmentId,
+                openInRoute.ownerUnresolved,
+                runtimeSshHost
               )
               return (
                 <ContextMenuItem

@@ -1,4 +1,5 @@
-import type { ExecutionHostId } from '../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
+import type { Repo } from '../shared/repo-types'
 import { deriveGitRemoteIdentity, type GitRemoteIdentity } from '../shared/git-remote-identity'
 import { gitExecFileAsync } from './git/runner'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
@@ -8,9 +9,6 @@ import { resolveGitRouteForHost } from './providers/execution-host-provider-disp
 // Matches the background local-git-read budget in git/git-username.ts; a probe cut off early just
 // reports `unavailable` and retries on the enrichment TTL.
 const LOCAL_PROBE_TIMEOUT_MS = 5000
-// Why looser but still bounded: the relay adds a round trip a local spawn does not have, and the
-// budget must stay under the multiplexer's 30s request timeout so this deadline is the one that fires.
-const SSH_PROBE_TIMEOUT_MS = 20_000
 
 export type GitRemoteIdentityProbeOptions = {
   signal?: AbortSignal
@@ -33,18 +31,10 @@ export async function runGitProbeOnHost(
   executionHostId: ExecutionHostId,
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<{ stdout: string } | null> {
-  const route = resolveGitRouteForHost(executionHostId)
-  if (route.kind === 'runtime') {
-    // That environment's server runs its own git, and the SSH target on its repo row is nested in
-    // that server's namespace — dialing it here answers for a same-named box of ours.
+  // A runtime server runs its own git (its repo row's SSH target is nested in that server's
+  // namespace), and this process serves no `ssh:` host.
+  if (resolveGitRouteForHost(executionHostId).kind !== 'local') {
     return null
-  }
-  if (route.kind === 'ssh') {
-    const result = await route.provider?.exec(args, repoPath, {
-      signal: options.signal,
-      timeoutMs: options.timeoutMs ?? SSH_PROBE_TIMEOUT_MS
-    })
-    return result ?? null
   }
   return gitExecFileAsync(args, {
     cwd: repoPath,
@@ -81,4 +71,19 @@ export async function detectGitRemoteIdentity(
 ): Promise<GitRemoteIdentity | null> {
   const probe = await probeGitRemoteIdentity(repoPath, executionHostId, options)
   return probe.status === 'resolved' ? probe.identity : null
+}
+
+/** A registered folder's remote as git reports it now; the stored answer only when git is unreachable. */
+export async function readCurrentGitRemoteIdentity(
+  repo: Pick<Repo, 'path' | 'kind' | 'gitRemoteIdentity'>
+): Promise<Pick<Repo, 'gitRemoteIdentity'>> {
+  if (repo.kind === 'folder') {
+    return { gitRemoteIdentity: null }
+  }
+  // Local on purpose: both setup paths register and read the folder in this process.
+  const probe = await probeGitRemoteIdentity(repo.path, LOCAL_EXECUTION_HOST_ID)
+  if (probe.status === 'resolved') {
+    return { gitRemoteIdentity: probe.identity }
+  }
+  return { gitRemoteIdentity: probe.status === 'no-remote' ? null : repo.gitRemoteIdentity }
 }

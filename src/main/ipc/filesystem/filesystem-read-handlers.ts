@@ -1,4 +1,3 @@
-import { listFilesystemMarkdownDocuments } from '../../providers/filesystem-markdown-listing'
 import { classifyFilesystemDirectoryEntries } from '../filesystem-symlink-directory-entries'
 import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
 import {
@@ -10,7 +9,7 @@ import { ipcMain } from 'electron'
 import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../shared/file-name-sort'
-import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
@@ -46,11 +45,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       try {
         if (args.connectionId) {
           throwSite = 'ssh-provider'
-          const provider = requireSshFilesystemProvider(args.connectionId)
-          // Why: re-sort locally — the remote relay may be an older build with lexicographic ordering.
-          return sortDirEntries(
-            await provider.readDir(args.dirPath, { followSymlinks: args.followSymlinks })
-          )
+          throw new SshHostNotServedError(args.connectionId)
         }
         const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
@@ -89,12 +84,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       }
     ): Promise<LocalFileContent> => {
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        const media = readMediaPreview(event, args, store)
-        if (media) {
-          return media
-        }
-        return provider.readFile(args.filePath)
+        throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
       const media = readMediaPreview(event, args, store)
@@ -114,8 +104,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       args: { rootPath: string; connectionId?: string }
     ): Promise<MarkdownDocument[]> => {
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return listFilesystemMarkdownDocuments(provider, args.rootPath)
+        throw new SshHostNotServedError(args.connectionId)
       }
       const isFolderRoot = store
         .getFolderWorkspaces?.()
@@ -143,9 +132,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       args: { filePath: string; connectionId?: string; access?: LocalFileAccess }
     ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        const result = await provider.stat(args.filePath)
-        return { size: result.size, isDirectory: result.type === 'directory', mtime: result.mtime }
+        throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
       const stats = await stat(filePath)
@@ -160,17 +147,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       args: { filePaths: string[]; connectionId?: string }
     ): Promise<PathExistenceResult[]> => {
       validatePathExistenceBatch(args.filePaths)
-      const provider = args.connectionId ? requireSshFilesystemProvider(args.connectionId) : null
-      if (provider?.pathsExist) {
-        return provider.pathsExist(args.filePaths)
+      if (args.connectionId) {
+        throw new SshHostNotServedError(args.connectionId)
       }
       return Promise.all(
         args.filePaths.map((filePath) =>
           capturePathExistence(async () => {
             try {
-              await (provider
-                ? provider.stat(filePath)
-                : stat(await resolveDesktopAuthorizedPath(filePath, store)))
+              await stat(await resolveDesktopAuthorizedPath(filePath, store))
               return true
             } catch (error) {
               if (isENOENT(error)) {
@@ -192,9 +176,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     ): Promise<boolean> => {
       try {
         if (args.connectionId) {
-          const provider = requireSshFilesystemProvider(args.connectionId)
-          await provider.stat(args.filePath)
-          return true
+          throw new SshHostNotServedError(args.connectionId)
         }
         const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
         await stat(filePath)

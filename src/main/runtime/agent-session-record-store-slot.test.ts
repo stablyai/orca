@@ -54,7 +54,7 @@ describe('the record store slot', () => {
       ...location(),
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({}),
       resolveLaunchArgs: () => []
     })

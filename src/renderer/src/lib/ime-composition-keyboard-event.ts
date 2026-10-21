@@ -36,6 +36,7 @@ export function useImeEnterGestureOwnership(): {
   isComposing: () => boolean
   ownsKeyDown: (event: ImeEnterGestureEvent) => boolean
   onKeyUp: (event: ImeEnterGestureEvent) => void
+  onCompositionEnd: () => void
   reset: () => void
   setComposing: (active: boolean) => void
 } {
@@ -47,6 +48,16 @@ export function useImeEnterGestureOwnership(): {
   return useMemo(() => {
     const reset = (): void => {
       stateRef.current = { composing: false, pendingEnter: null }
+    }
+    const expirePendingEnter = (): void => {
+      const pendingEnter = stateRef.current.pendingEnter
+      if (pendingEnter) {
+        requestAnimationFrame(() => {
+          if (stateRef.current.pendingEnter === pendingEnter) {
+            stateRef.current.pendingEnter = null
+          }
+        })
+      }
     }
     // Shift+Enter is a newline, never a submit — it must never be owned or swallowed.
     const isPlainEnter = (event: ImeEnterGestureEvent): boolean =>
@@ -93,13 +104,15 @@ export function useImeEnterGestureOwnership(): {
       },
       onKeyUp: (): void => {
         // Any keyup can precede the redispatch, including an IME-owned Process/229 release.
-        const pendingEnter = stateRef.current.pendingEnter
-        if (pendingEnter) {
-          requestAnimationFrame(() => {
-            if (stateRef.current.pendingEnter === pendingEnter) {
-              stateRef.current.pendingEnter = null
-            }
-          })
+        expirePendingEnter()
+      },
+      onCompositionEnd: () => {
+        const compositionWasActive = stateRef.current.composing
+        stateRef.current.composing = false
+        if (compositionWasActive && !stateRef.current.pendingEnter) {
+          // IBus can finish composition before its only unmarked confirming Enter.
+          stateRef.current.pendingEnter = {}
+          expirePendingEnter()
         }
       },
       reset,

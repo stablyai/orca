@@ -216,8 +216,13 @@ describe.runIf(process.platform !== 'win32')(
         stdinMode: 'ignore',
         useCwdForNative: false
       })
+      const stdout = child.stdout
+      if (!stdout) {
+        child.kill('SIGKILL')
+        throw new Error('The source-control fixture requires a stdout pipe')
+      }
       const agentPid = await new Promise<number>((resolve) =>
-        child.stdout.once('data', (chunk: Buffer) => resolve(Number(chunk.toString().trim())))
+        stdout.once('data', (chunk: Buffer) => resolve(Number(chunk.toString().trim())))
       )
 
       try {

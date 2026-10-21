@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'
@@ -80,8 +80,7 @@ vi.mock('./local-worktree-runtime-options', () => ({
 }))
 
 vi.mock('./markdown-documents', () => ({
-  listMarkdownDocuments: vi.fn(),
-  markdownDocumentsFromRelativePaths: vi.fn()
+  listMarkdownDocuments: vi.fn()
 }))
 
 import { registerFilesystemHandlers } from './filesystem'

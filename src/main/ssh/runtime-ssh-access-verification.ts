@@ -1,6 +1,6 @@
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import { verifyRuntimeEnvironmentIdentity } from '../runtime/runtime-environment-identity-verification'
-import type { PairingOffer } from '../../shared/pairing'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 
 export async function verifyRuntimeEnvironmentSshTunnel(
@@ -8,7 +8,7 @@ export async function verifyRuntimeEnvironmentSshTunnel(
   localPort: number,
   signal?: AbortSignal
 ): Promise<{
-  verifiedPairing: PairingOffer
+  verifiedConnection: PairedRuntimeConnection
   verifiedRuntimeId: string
   runtimeStatus: RuntimeStatus
 }> {

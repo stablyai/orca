@@ -6,7 +6,9 @@ import {
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { registerPtyHandlers, getPtyIdForPaneKey, setLocalPtyProvider } from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { getPtyIdForPaneKey } from './pty/pane/key-state'
+import { setLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -100,7 +102,19 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
-    registerPtyHandlers(mainWindow as never, runtime as never)
+    let claimReleased = false
+    const preparedAfterRelease: boolean[] = []
+    const prepareClaudeAuth = vi.fn(async () => {
+      preparedAfterRelease.push(claimReleased)
+      return { configDir: '/tmp/claude', envPatch: {}, provenance: 'managed:test' }
+    })
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      prepareClaudeAuth
+    )
     const tabId = 'tab-early-runtime-claim'
     const leafId = '44444444-4444-4444-8444-444444444444'
     const worktreeId = 'repo-1::/tmp/early-runtime-claim'
@@ -118,6 +132,7 @@ describe('registerPtyHandlers', () => {
       worktreeId,
       tabId,
       leafId,
+      command: 'claude',
       env: {
         ORCA_PANE_KEY: makePaneKey(tabId, leafId),
         ORCA_TAB_ID: tabId,
@@ -127,9 +142,12 @@ describe('registerPtyHandlers', () => {
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(providerSpawn).not.toHaveBeenCalled()
 
+    claimReleased = true
     releaseClaim()
     await expect(mounted).resolves.toMatchObject({ id: 'pty-after-runtime-claim' })
     expect(providerSpawn).toHaveBeenCalledOnce()
+    // C6 keeps "the joiner prepares before": the window prepares its launch only after the claim settles.
+    expect(preparedAfterRelease).toEqual([true])
   })
   it('adopts a runtime reservation created during renderer preflight', async () => {
     type RuntimeSpawnController = {
@@ -186,7 +204,6 @@ describe('registerPtyHandlers', () => {
     let releaseAuth!: (value: {
       configDir: string
       envPatch: Record<string, never>
-      stripAuthEnv: false
       provenance: string
     }) => void
     const prepareClaudeAuth = vi.fn(
@@ -194,7 +211,6 @@ describe('registerPtyHandlers', () => {
         new Promise<{
           configDir: string
           envPatch: Record<string, never>
-          stripAuthEnv: false
           provenance: string
         }>((resolve) => {
           releaseAuth = resolve
@@ -233,7 +249,6 @@ describe('registerPtyHandlers', () => {
     releaseAuth({
       configDir: '/tmp/claude',
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'managed:test'
     })
     await new Promise<void>((resolve) => setImmediate(resolve))
@@ -382,14 +397,7 @@ describe('registerPtyHandlers', () => {
       }
     })
     expect(providerSpawn).toHaveBeenCalledTimes(1)
-    expect(store.persistPtyBinding).toHaveBeenCalledWith({
-      worktreeId: 'repo-1::/tmp',
-      tabId: 'tab-race',
-      leafId,
-      ptyId: 'pty-renderer',
-      startupCwd: '/tmp',
-      origin: 'spawn'
-    })
+    expect(store.persistPtyBinding).toHaveBeenCalledWith(expect.any(Function), undefined)
   })
   it.each([
     {
@@ -433,6 +441,7 @@ describe('registerPtyHandlers', () => {
       const leafId = '66666666-6666-4666-8666-666666666666'
       const paneKey = makePaneKey(tabId, leafId)
       let ownerPublished = false
+      const ownerId = 'pty-live-owner'
       let releaseAttach!: () => void
       let attachBarrier: Promise<void>
       const resetAttachBarrier = (): void => {
@@ -448,7 +457,7 @@ describe('registerPtyHandlers', () => {
           if (options.attachOnly) {
             await attachBarrier
             return {
-              id: 'pty-live-owner',
+              id: options.sessionId ?? ownerId,
               incarnationId: 'inc-live-owner',
               isReattach: true,
               snapshot: 'original-live-output',
@@ -512,7 +521,7 @@ describe('registerPtyHandlers', () => {
             handle: 'term-live-owner',
             tabId,
             leafId,
-            ptyId: 'pty-live-owner',
+            ptyId: ownerId,
             worktreeId
           }
         }),

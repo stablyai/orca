@@ -13,6 +13,7 @@ export const SAME_CAP_CELLS = [
   'production-gce-c23', 'production-gce-c24', 'production-gce-c25', 'production-gce-c26',
   'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
   'production-gce-c31', 'production-gce-c32', 'production-gce-c33', 'production-gce-c34',
+  'production-gce-c35',
   ...SAME_CAP_MIGRATION_ONLY_CELLS
 ]
 

@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@source not '../**/*.test.{ts,tsx}';
+@source not '../**/*.spec.{ts,tsx}';
 @import 'tw-animate-css';
 @import '@xterm/xterm/css/xterm.css';
 @import 'katex/dist/katex.min.css';
@@ -6,6 +8,7 @@
 @import './markdown-preview.css';
 @import './terminal.css';
 @import './mobile-page.css';
+@import '../../../shared/styles/scrollbar-sleek.css';
 
 @font-face {
   font-family: 'Geist';
@@ -41,6 +44,16 @@
   transition: none !important;
 }
 
+/* Not inline: the chat root rescales these, so utilities must read the variables. */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: calc(1 / 0.6875);
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: calc(0.875 / 0.625);
+  --text-chat-code: 0.75rem;
+  --text-chat-code--line-height: calc(1 / 0.75);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -48,6 +61,7 @@
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
+  --color-chat-unread: var(--chat-unread);
   --color-chat-user-surface: var(--chat-user-surface);
   --color-chat-user-border: var(--chat-user-border);
   --color-chat-code-foreground: var(--chat-code-foreground);
@@ -57,6 +71,9 @@
   --color-chat-inline-code-border: var(--chat-inline-code-border);
   --color-chat-composer-surface: var(--chat-composer-surface);
   --color-chat-composer-border: var(--chat-composer-border);
+  --color-chat-warning: var(--chat-warning);
+  --color-chat-diff-added: var(--chat-diff-added);
+  --color-chat-diff-removed: var(--chat-diff-removed);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -76,6 +93,7 @@
   --color-ring: var(--ring);
   --color-editor-surface: var(--editor-surface);
   --color-agent-question: var(--agent-question);
+  --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -119,6 +137,9 @@
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
   --color-status-warning: var(--status-warning);
+  --color-jira-priority-high: var(--jira-priority-high);
+  --color-jira-priority-medium: var(--jira-priority-medium);
+  --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
   --color-callout-note: var(--callout-note);
@@ -212,6 +233,8 @@
      it (sidebar, tabs, dashboard, kanban). Orange, not amber: it has to stay
      separable from working-yellow at a glance. */
   --agent-question: var(--color-orange-600);
+  /* The working-state yellow every agent working/monitoring glyph paints. */
+  --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
@@ -393,6 +416,9 @@
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Needs-attention states use yellow, separate from errors and working states. */
   --status-warning: #ca8a04;
+  --jira-priority-high: var(--destructive);
+  --jira-priority-medium: var(--status-warning);
+  --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* GitHub's own hues for the two callout kinds no status token covers. */
@@ -419,6 +445,9 @@
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --status-warning: #eab308;
+  --jira-priority-high: var(--destructive);
+  --jira-priority-medium: var(--status-warning);
+  --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --callout-note: #4493f8;
@@ -468,7 +497,8 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
-  z-index: var(--toaster-z-index, 40) !important;
+  /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
+  z-index: var(--toaster-z-index, 47) !important;
 }
 
 /* Keep errors above standard modal backdrops at the existing popover tier.
@@ -494,6 +524,13 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
   min-width: 0;
   flex: 1 1 calc(100% - 30px);
   gap: 6px;
+}
+
+/* Why: a folded back toast is squeezed to the front toast's height without clipping, so a taller
+   toast's content hangs below the stack; hovering it re-expands the stack in a loop. clip, not
+   hidden: hidden makes a scroll container that focusing a folded control would scroll. */
+[data-sonner-toaster] [data-sonner-toast][data-expanded='false'][data-front='false'] {
+  overflow: clip;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
@@ -611,6 +648,21 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
     var(--chat-source-foreground) var(--chat-composer-border-mix),
     transparent
   );
+  /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
+  --chat-focus-ring: color-mix(in srgb, var(--chat-source-foreground) 50%, var(--chat-canvas));
+  --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
+  /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
+  --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
+  --chat-diff-added: color-mix(
+    in srgb,
+    var(--git-decoration-added) 70%,
+    var(--chat-source-foreground)
+  );
+  --chat-diff-removed: color-mix(
+    in srgb,
+    var(--git-decoration-deleted) 70%,
+    var(--chat-source-foreground)
+  );
 }
 
 @layer base {
@@ -663,58 +715,6 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
     width: 0;
     height: 0;
   }
-}
-
-/* ── Sleek scrollbar (VS Code-like) ─────────────────── */
-
-.scrollbar-sleek {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
-}
-
-.scrollbar-sleek::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-
-.scrollbar-sleek::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-sleek::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
-  border: 3px solid transparent;
-  border-radius: 0;
-  background-clip: padding-box;
-  min-height: 28px;
-}
-
-/* Thicker variant for dense data tables where the default 6px-thumb is hard to grab. */
-.scrollbar-sleek-lg {
-  scrollbar-width: auto;
-}
-
-.scrollbar-sleek-lg::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
-}
-
-.scrollbar-sleek-lg::-webkit-scrollbar-thumb {
-  border-width: 3px;
-  min-height: 36px;
-}
-
-.scrollbar-sleek::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
-}
-
-.scrollbar-sleek::-webkit-scrollbar-thumb:active {
-  background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
-}
-
-.scrollbar-sleek-parent:hover .scrollbar-sleek,
-.scrollbar-sleek:hover {
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent) transparent;
 }
 
 /* Why: no reserved `scrollbar-gutter` — paired with `overflow-y: auto`, a list
@@ -1240,8 +1240,8 @@ html.native-shell .app-layout {
   align-items: center;
   /* Keep adjacent actions aligned with the app's compact toolbar spacing. */
   gap: 4px;
-  min-height: 36px;
-  padding: 6px 14px;
+  min-height: 32px;
+  padding: 3px 14px;
   background: var(--editor-surface);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
@@ -1350,11 +1350,13 @@ html.native-shell .app-layout {
 
 /* Why the extra qualifier: CommandItem also sets data-[selected=true]:bg-accent;
    this selector must beat that utility so light-mode selection is actually visible.
-   The role='option' arm covers virtualized rows that render outside cmdk. */
+   The role='option' arm covers virtualized rows that render outside cmdk; the
+   session-row arm is Session History's keyboard cursor, which has no cmdk either. */
 [data-slot='command-item'].jump-palette-item[data-selected='true'],
 [role='option'].jump-palette-item[data-selected='true'],
 .jump-palette-command [data-slot='command-item'][data-selected='true'],
-.jump-palette-command [role='option'][data-selected='true'] {
+.jump-palette-command [role='option'][data-selected='true'],
+.ai-vault-session-row[data-selected='true'] {
   /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
      in light mode — the keyboard cursor has to read as a solid selected row.
      Mix foreground into background and draw an inset ring; expose the surface
@@ -1369,7 +1371,8 @@ html.native-shell .app-layout {
 .dark [data-slot='command-item'].jump-palette-item[data-selected='true'],
 .dark [role='option'].jump-palette-item[data-selected='true'],
 .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
-.dark .jump-palette-command [role='option'][data-selected='true'] {
+.dark .jump-palette-command [role='option'][data-selected='true'],
+.dark .ai-vault-session-row[data-selected='true'] {
   /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
      dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);
@@ -1556,12 +1559,20 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
 }
 
-/* Why: one-shot status-bar callout is portaled fixed above the meters.
-   Opaque popover surface (not glass) so titlebar/terminal chrome cannot
-   bleed through; use design tokens + the documented floating elevation. */
+/* Opaque token-based gradient lifts the callout above surrounding chrome. */
 .status-bar-change-notice-card {
-  border: 1px solid var(--border);
-  background: var(--popover);
+  --status-bar-notice-border: color-mix(in srgb, var(--popover-foreground) 12%, var(--border));
+  --status-bar-notice-surface-bottom: color-mix(
+    in srgb,
+    var(--popover-foreground) 4%,
+    var(--popover)
+  );
+  border: 1px solid var(--status-bar-notice-border);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--popover-foreground) 10%, var(--popover)),
+    var(--status-bar-notice-surface-bottom)
+  );
   color: var(--popover-foreground);
   /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
   box-shadow: var(--shadow-floating);
@@ -1576,9 +1587,9 @@ html.native-shell .app-layout {
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background: var(--popover);
+  border-right: 1px solid var(--status-bar-notice-border);
+  border-bottom: 1px solid var(--status-bar-notice-border);
+  background: var(--status-bar-notice-surface-bottom);
 }
 
 /* Why: the first-run Mobile Emulator intro sits directly under that menu row;
@@ -3339,4 +3350,59 @@ html.native-shell .app-layout {
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.workspace-reference-stack {
+  isolation: isolate;
+  position: relative;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.workspace-reference-stack-front,
+.workspace-reference-stack-ghost {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-reference-stack-front {
+  z-index: 2;
+}
+
+.workspace-reference-stack-ghost[data-depth='1'] {
+  transform: translate(-1.5px, 2px);
+  opacity: 0.45;
+  z-index: 1;
+}
+
+.workspace-reference-stack-ghost[data-depth='2'] {
+  transform: translate(-3px, 4px);
+  opacity: 0.25;
+}
+
+.workspace-reference-stack svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-reference-stack-count {
+  position: absolute;
+  top: -8px;
+  right: -5px;
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 11px;
+  color: var(--worktree-sidebar-foreground);
+  text-shadow: 0px 1px 1px var(--background);
+}
+
+.workspace-reference-stack-count[data-multiple-digits='true'] {
+  letter-spacing: -0.02em;
 }

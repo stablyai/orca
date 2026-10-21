@@ -12,6 +12,7 @@ import {
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
+  selectKnownWorktreeById,
   selectRepoByIdForActiveWorkspace,
   selectFloatingVisibleTabCount,
   selectFloatingWorkspaceHasUnread
@@ -376,6 +377,43 @@ describe('store selectors', () => {
           activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
         },
         'shared-repo'
+      )
+    ).toBe(ssh)
+  })
+
+  it('resolves the active worktree id on the active workspace host', () => {
+    const local = {
+      ...makeWorktree({ id: 'repo::/same', repoId: 'repo', displayName: 'local' }),
+      path: '/local/same',
+      hostId: 'local' as const
+    }
+    const ssh = {
+      ...makeWorktree({ id: 'repo::/same', repoId: 'repo', displayName: 'ssh' }),
+      path: '/ssh/same',
+      hostId: toSshExecutionHostId('target-1')
+    }
+    const catalog = {
+      worktreesByRepo: { repo: [local, ssh] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [],
+      floatingWorkspacePath: null
+    }
+
+    expect(
+      selectKnownWorktreeById(
+        {
+          ...catalog,
+          activeWorktreeId: 'repo::/same',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('target-1')
+        },
+        'repo::/same'
+      )
+    ).toBe(ssh)
+    expect(
+      selectKnownWorktreeById(
+        { ...catalog, activeWorktreeId: 'repo::/same', activeWorkspaceExecutionHostId: null },
+        'repo::/same',
+        toSshExecutionHostId('target-1')
       )
     ).toBe(ssh)
   })

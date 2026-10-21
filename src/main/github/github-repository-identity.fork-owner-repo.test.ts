@@ -20,10 +20,6 @@ vi.mock('../git/runner', async (importOriginal) => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: () => null
-}))
-
 vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
@@ -31,7 +27,7 @@ vi.mock('./local-git-config-signature', () => ({
 import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
 import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
 import { getOwnerRepo } from './github-owner-repo-selection'
-import { getRepoUpstream } from './client'
+import { getRepoUpstream } from './client/fetch/repo-slug-upstream'
 
 const FORK_PATH = '/tmp/fork-checkout'
 const NON_FORK_PATH = '/tmp/plain-checkout'

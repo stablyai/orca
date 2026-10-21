@@ -56,9 +56,8 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
  * The window is always filled: a read that stops early only means the file really ended, which the
  * caller answers as a changed asset instead of paging a client past a truncation.
  *
- * Measured through asar (Electron 43): `open` hands back a descriptor on a per-asset copy the asar
- * layer materialises once under the OS temp dir and then reuses for the life of the process, so a
- * positional read costs one pread and never re-inflates the archive. Nothing to cache here.
+ * Packaged builds ship the bundle unpacked (#27976), so `open` is a plain file and a positional read
+ * costs one pread. Nothing to cache here.
  */
 export async function readMobileWebBundleAssetWindow(
   root: string,

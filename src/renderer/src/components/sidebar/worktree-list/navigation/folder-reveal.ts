@@ -1,24 +1,46 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getProjectGroupHeaderKey } from '../grouping/group-keys'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getFolderWorkspaceLaneKey } from '../grouping/folder-workspace-lanes'
-import type { WorktreeGroupBy } from '../grouping/row-types'
-import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
-import { getHostSectionCollapseKey } from '../../host-section-collapse'
+import {
+  folderWorkspaceToWorktree,
+  getFolderWorkspaceHostIdentity
+} from '../../../../../../shared/folder-workspace-worktree'
+import {
+  normalizeWorkspaceSessionKeyToWorkspaceId,
+  parseWorkspaceKey
+} from '../../../../../../shared/workspace-scope'
+import {
+  composeWorktreeHostIdentity,
+  getExecutionHostIdFromWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
+import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/folder-workspace-host-id'
+import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
 
 function findFolderWorkspaceByKey(
   worktreeId: string,
-  folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[],
+  executionHostId?: ExecutionHostId | null
 ): FolderWorkspace | null {
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type !== 'folder') {
     return null
   }
-  return folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId) ?? null
+  return (
+    folderWorkspaces.find(
+      (workspace) =>
+        workspace.id === scope.folderWorkspaceId &&
+        (!executionHostId ||
+          getFolderWorkspaceHostIdentity(workspace) ===
+            composeWorktreeHostIdentity(executionHostId, worktreeId))
+    ) ?? null
+  )
 }
 
 export function getKnownSidebarWorktreeById(
@@ -28,15 +50,17 @@ export function getKnownSidebarWorktreeById(
   worktrees?: readonly Worktree[],
   executionHostId?: ExecutionHostId | null
 ): Worktree | null {
-  const worktree = executionHostId
+  const workspaceId = normalizeWorkspaceSessionKeyToWorkspaceId(worktreeId)
+  const ownerHostId = getExecutionHostIdFromWorktreeHostIdentity(worktreeId) ?? executionHostId
+  const worktree = ownerHostId
     ? (worktrees?.find(
-        (candidate) => candidate.id === worktreeId && candidate.hostId === executionHostId
+        (candidate) => candidate.id === workspaceId && candidate.hostId === ownerHostId
       ) ?? null)
-    : worktreeMap.get(worktreeId)
+    : worktreeMap.get(workspaceId)
   if (worktree) {
     return worktree
   }
-  const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
+  const folderWorkspace = findFolderWorkspaceByKey(workspaceId, folderWorkspaces, ownerHostId)
   return folderWorkspace ? folderWorkspaceToWorktree(folderWorkspace) : null
 }
 
@@ -55,7 +79,7 @@ export function sidebarWorkspaceStillExists(
   ) {
     return true
   }
-  return findFolderWorkspaceByKey(worktreeId, folderWorkspaces) !== null
+  return findFolderWorkspaceByKey(worktreeId, folderWorkspaces, executionHostId) !== null
 }
 
 export function getFolderWorkspaceRevealGroupKeys(
@@ -67,20 +91,37 @@ export function getFolderWorkspaceRevealGroupKeys(
     workspaceStatuses?: readonly WorkspaceStatusDefinition[]
     defaultHostId?: ExecutionHostId
     hostScopedGroups?: boolean
+    executionHostId?: ExecutionHostId
   }
 ): string[] {
-  const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
+  const folderWorkspace = findFolderWorkspaceByKey(
+    worktreeId,
+    folderWorkspaces,
+    options?.executionHostId
+  )
   if (!folderWorkspace) {
     return []
   }
 
-  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const groupsById = new Map(
+    projectGroups
+      .filter(
+        (group) =>
+          !options?.executionHostId || getRepoExecutionHostId(group) === options.executionHostId
+      )
+      .map((group) => [group.id, group])
+  )
+  // Why unfiltered: same-id host copies render under the last copy's parents, whichever host's row
+  // the folder is (getDistinctProjectGroups); header keys carry no host.
+  const renderedGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const keys: string[] = []
   const seen = new Set<string>()
-  let groupId: string | null = folderWorkspace.projectGroupId
+  let groupId: string | null = groupsById.has(folderWorkspace.projectGroupId)
+    ? folderWorkspace.projectGroupId
+    : null
   while (groupId && !seen.has(groupId)) {
     seen.add(groupId)
-    const group = groupsById.get(groupId)
+    const group = renderedGroupsById.get(groupId)
     if (!group) {
       break
     }

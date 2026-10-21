@@ -1,11 +1,13 @@
-import { EventEmitter } from 'node:events'
+import { FAKE_APP_SERVER } from './__fixtures__/codex-connection-app-server'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import type { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { ProcessSpec, PipedProcessSpawner } from '@orca/process-host/process-spec'
+
 import {
   isCodexAppServerRequestError,
   openCodexAppServerConnection,
@@ -14,6 +16,7 @@ import {
 } from './codex-app-server-connection'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 import { isCodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 
 // close() waits out the supervisor's own stop before forcing the tree.
@@ -36,36 +39,6 @@ afterEach(() => {
  * a stub, but it is the only thing that proves the spawn, the environment, and
  * both traffic directions actually work end to end.
  */
-const FAKE_APP_SERVER = String.raw`
-  const readline = require('node:readline')
-  const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
-  readline.createInterface({ input: process.stdin }).on('line', (line) => {
-    const message = JSON.parse(line)
-    if (message.method === 'initialize') return send({ id: message.id, result: {} })
-    if (message.method === 'test/env') {
-      return send({ id: message.id, result: { codexHome: process.env.CODEX_HOME ?? null } })
-    }
-    if (message.method === 'test/cwd') {
-      return send({ id: message.id, result: { cwd: process.cwd() } })
-    }
-    if (message.method === 'test/notify') {
-      send({ method: 'turn/started', params: { threadId: 'thread-1', turn: { id: 'turn-7' } } })
-      return send({ id: message.id, result: {} })
-    }
-    if (message.method === 'test/ask') {
-      return send({ id: 99, method: 'item/fileChange/requestApproval', params: { itemId: 'i1' } })
-    }
-    if (message.method === 'test/refuse') {
-      return send({ id: message.id, error: { code: -32602, message: 'bad params' } })
-    }
-    if (message.method === 'test/missing') {
-      return send({ id: message.id, error: { code: -32601, message: 'method not found' } })
-    }
-    if (message.id === 99) {
-      return send({ method: 'test/answered', params: message })
-    }
-  })
-`
 
 async function openFakeServer(
   handlers: CodexAppServerConnectionHandlers = {},
@@ -89,11 +62,11 @@ type StubChild = EventEmitter & {
 
 /** Full control over framing and death, which a real child cannot give. */
 function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
-  child: StubChild
-  spawnImpl: typeof spawnProcess
+  child: ReturnType<typeof createFakePipedChild>
+  spawnImpl: PipedProcessSpawner
   written: Record<string, unknown>[]
 } {
-  const child = new EventEmitter() as StubChild
+  const child = createFakePipedChild(9_999_999)
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.stdin = new PassThrough()
@@ -112,7 +85,7 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
   if (options.exitOnStdinEnd !== false) {
     child.stdin.on('finish', () => child.emit('exit', 0, null))
   }
-  return { child, spawnImpl: (() => child) as unknown as typeof spawnProcess, written }
+  return { child, spawnImpl: () => child, written }
 }
 
 /** Answers the handshake so `openCodexAppServerConnection` can resolve. */
@@ -196,7 +169,7 @@ describe('openCodexAppServerConnection', () => {
       const connection = await openCodexAppServerConnection(
         { command: 'codex', args: ['app-server'] },
         {},
-        (spec: ProcessSpec) => {
+        (spec) => {
           specs.push(spec)
           return spawnImpl(spec)
         }
@@ -402,7 +375,9 @@ describe('openCodexAppServerConnection', () => {
 
     const slow = rejection(connection.request('turn/interrupt', undefined, { timeoutMs: 50 }))
     await vi.advanceTimersByTimeAsync(60)
-    expect((await slow).name).toBe('CodexAppServerTimeoutError')
+    const timedOut = await slow
+    expect(timedOut.name).toBe('CodexAppServerTimeoutError')
+    expect(providerRequestTimeoutOf(timedOut)).toEqual({ method: 'turn/interrupt', timeoutMs: 50 })
     const id = Number(written.find((frame) => frame.method === 'turn/interrupt')?.id)
     child.stdout.write(`${JSON.stringify({ id, result: {} })}\n`)
     child.stdout.write(`${JSON.stringify({ id: 999, error: { message: 'no such request' } })}\n`)
@@ -572,7 +547,7 @@ describe('openCodexAppServerConnection', () => {
 
   // A root that outlived one kill is killed again by the next ask, which then proves it gone.
   it('kills the root again on a close after an unproven attempt', async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const connection = await openCodexAppServerConnection(
@@ -581,18 +556,21 @@ describe('openCodexAppServerConnection', () => {
       spawnImpl
     )
 
-    const first = connection.close()
-    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
-    await expect(first).resolves.toBe(false)
-    child.kill.mockImplementation((signal) => {
-      if (signal === 'SIGKILL') {
-        setTimeout(() => child.emit('exit', null, 'SIGKILL'), 10)
-      }
-      return true
+    await expect(closeWithoutObservedExit(() => connection.close(), child)).resolves.toBe(false)
+    const secondForcedKill = new Promise<void>((resolve) => {
+      child.kill.mockImplementation((signal) => {
+        if (signal === 'SIGKILL') {
+          setTimeout(() => child.emit('exit', null, 'SIGKILL'), 10)
+          resolve()
+        }
+        return true
+      })
     })
 
     const second = connection.close()
-    await vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS + 3_500)
+    await flushStreams().then(() => vi.advanceTimersByTimeAsync(GRACEFUL_EXIT_MS))
+    await secondForcedKill
+    await vi.advanceTimersByTimeAsync(10)
     await expect(second).resolves.toBe(true)
     expect(child.kill.mock.calls.filter(([signal]) => signal === 'SIGKILL')).toHaveLength(2)
   })
@@ -792,18 +770,14 @@ describe('openCodexAppServerConnection', () => {
       },
       spawnImpl
     )
-    child.kill.mockImplementation(() => {
-      child.emit('exit', null, 'SIGKILL')
-      return true
-    })
-
     const inFlight = rejection(connection.request('turn/start'))
     child.stdout.write(`${JSON.stringify(frame)}\n`)
 
     expect((await inFlight).message).toContain('structured sink failed')
-    expect(exits).toEqual([expect.stringContaining('structured sink failed')])
+    expect(exits).toHaveLength(0)
     expect(connection.closed).toBe(true)
-    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
+    child.emit('exit', null, 'SIGKILL')
+    expect(exits).toEqual([expect.stringContaining('structured sink failed')])
     await connection.close()
   })
 
@@ -865,20 +839,16 @@ describe('openCodexAppServerConnection', () => {
       { onExit: (error) => exits.push(error.message) },
       spawnImpl
     )
-    child.kill.mockImplementation(() => {
-      child.emit('exit', null, 'SIGKILL')
-      return true
-    })
-
     const inFlight = rejection(connection.request('turn/start'))
     child.stdin.emit('error', new Error('write EPIPE'))
 
     expect((await inFlight).message).toContain('EPIPE')
-    expect(exits).toHaveLength(1)
+    expect(exits).toHaveLength(0)
     // A child nobody can write to is not a live session: the owner must see the
     // connection as gone rather than keep issuing calls that can only time out.
     expect(connection.closed).toBe(true)
-    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
+    child.emit('exit', null, 'SIGKILL')
+    expect(exits).toHaveLength(1)
     expect((await rejection(connection.request('turn/start'))).message).toContain('EPIPE')
     await connection.close()
   })

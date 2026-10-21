@@ -62,7 +62,12 @@ describe('current-document annotation marker projection', () => {
     )
     syncGuestAnnotationViewportBridge({ ...args, pendingPayload: notes[1].payload })
     expect(setAnnotationViewportBridge).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: true, emitViewport: true, markers: [] })
+      expect.objectContaining({
+        enabled: true,
+        emitViewport: true,
+        markers: [],
+        selectionId: notes[1].payload.page.capturedAt
+      })
     )
     syncGuestAnnotationViewportBridge({
       ...args,

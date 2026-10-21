@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
 import { HermesHookService } from './hook-service'
 
 describe('Hermes remote installer through a local filesystem adapter (no SSH)', () => {

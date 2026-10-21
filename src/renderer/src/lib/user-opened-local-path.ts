@@ -1,10 +1,8 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isPathOutsideAllowedDirectoriesError } from '../../../shared/local-file-access'
-import {
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
+import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { userNamedFileAccess } from './local-file-access'
 import { isPathInsideWorktree } from './terminal-links'
 

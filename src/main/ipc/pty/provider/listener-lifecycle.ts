@@ -1,3 +1,5 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { notifyLocalPtyProviderRebound } from './local-provider-rebound'
 import type { PtyRendererDelivery } from '../session'
 
 // Why: localProvider.onData/onExit return unsubscribe functions. Without
@@ -36,10 +38,13 @@ export let rendererDidStartNavigationHandler:
 
 // Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
 export let rebindProviderListeners: (() => void) | null = null
-export let sshOutputIntakeCleanup: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
+  // Switch point: main shows the live terminals a new or restarted provider reports.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    notifyLocalPtyProviderRebound()
+  }
 }
 
 export function setRebindProviderListeners(fn: (() => void) | null): void {
@@ -48,10 +53,6 @@ export function setRebindProviderListeners(fn: (() => void) | null): void {
 
 export function setClearBackgroundedDeliverySyncForPty(fn: (id: string) => void): void {
   clearBackgroundedDeliverySyncForPtyImpl = fn
-}
-
-export function setSshOutputIntakeCleanup(fn: (() => void) | null): void {
-  sshOutputIntakeCleanup = fn
 }
 
 export function setLocalDataUnsub(fn: (() => void) | null): void {

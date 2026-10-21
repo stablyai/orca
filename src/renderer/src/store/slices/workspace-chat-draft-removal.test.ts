@@ -24,7 +24,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: { list: vi.fn(), remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
-  repos: { remove: vi.fn() },
+  repos: { removeForHost: vi.fn() },
   folderWorkspaces: { delete: vi.fn() },
   pty: { kill: vi.fn() },
   runtimeEnvironments: { call: vi.fn().mockResolvedValue({ ok: true, result: {} }) }
@@ -174,7 +174,7 @@ describe('workspace chat drafts on removal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
-    mockApi.repos.remove.mockResolvedValue(undefined)
+    mockApi.repos.removeForHost.mockResolvedValue(undefined)
     clearNativeChatComposerDraftsForTests()
     clearNativeChatPendingAttachmentsForTests()
   })
@@ -286,7 +286,7 @@ describe('workspace chat drafts on removal', () => {
       }
     })
 
-    await store.getState().removeProject('repo1')
+    await store.getState().removeProject('repo1', { hostId: 'local' })
 
     expect(draftTexts()).toEqual(['', '', 'other'])
   })

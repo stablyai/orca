@@ -6,7 +6,9 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -48,6 +50,7 @@ vi.mock('../macos-keychain/generic-password', () => ({
 
 const roots: string[] = []
 afterEach(() => {
+  vi.useRealTimers()
   shell.hang = false
   installClaudeProfileRouter(undefined)
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
@@ -96,13 +99,147 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
     dataRoot,
     userHome,
     env,
-    runSetup
+    runSetup,
+    refreshWaitMs: 500
   })
   const home = (id: string) => join(dataRoot, 'claude-profiles', id, 'home')
   return { root, userHome, dataRoot, settings, router, home, setup }
 }
 
+function signIn(stateDir: string, email: string, organizationUuid?: string): void {
+  mkdirSync(stateDir, { recursive: true })
+  const stateFile = join(stateDir, '.claude.json')
+  const previousMtimeMs = existsSync(stateFile) ? statSync(stateFile).mtimeMs : 0
+  writeFileSync(
+    stateFile,
+    JSON.stringify({ oauthAccount: { emailAddress: email, organizationUuid } })
+  )
+  // Equal-size fixture revisions must invalidate the real reader's mtime cache.
+  const mtime = new Date(
+    Math.max(
+      Math.floor(Date.now() / 1000) * 1000,
+      Math.floor(previousMtimeMs / 1000) * 1000 + 2_000
+    )
+  )
+  utimesSync(stateFile, mtime, mtime)
+}
+
+async function advanceRefreshDeadline(launch: Promise<unknown>, waitMs: number): Promise<void> {
+  let settled = false
+  void launch.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    }
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(waitMs - 1)
+  expect(settled).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+}
+
+/** Runs the POSIX claude function under bash (after `rc`); prints the folder Claude would use. */
+function claudeShellProbe(root: string): (env: Record<string, string>, rc?: string) => string {
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'claude'), '#!/bin/sh\nprintf "%s" "${CLAUDE_CONFIG_DIR-unset}"\n')
+  chmodSync(join(bin, 'claude'), 0o700)
+  return (env, rc = '') =>
+    spawnSync(
+      '/bin/bash',
+      ['--norc', '--noprofile', '-c', `${getPosixClaudeShellFunction()}\n${rc}claude`],
+      { env: { ...env, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' }
+    ).stdout
+}
+
 describe('ClaudeProfileRouter', () => {
+  it('runs an account with no login of its own on System default while that is signed in to it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture()
+    mkdirSync(f.home('a'), { recursive: true })
+    writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
+    // ~/.claude's state file sits in the home folder; the email matches case-insensitively.
+    signIn(f.userHome, 'A@Example.test')
+    await expect(f.router.prepareLaunch()).resolves.toMatchObject({
+      configDir: join(f.userHome, '.claude'),
+      provenance: 'system'
+    })
+    expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
+    expect(f.router.routedHome()).toBeNull()
+    // The pointer names the folder actually chosen, so a typed claude agrees with Orca's launches.
+    expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
+    expect(f.router.coveredBySystemDefault('a')).toBe(true)
+
+    // After the account signs in to its own folder, the next launch uses it.
+    signIn(f.home('a'), 'a@example.test')
+    const ownFolderLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(ownFolderLaunch, 500)
+    await expect(ownFolderLaunch).resolves.toMatchObject({
+      configDir: f.home('a')
+    })
+    expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('a'))
+    expect(f.router.coveredBySystemDefault('a')).toBe(false)
+  })
+
+  it('tells whether a terminal opened before routing runs another account than the selected one', () => {
+    const f = fixture()
+    expect(f.router.systemDefaultRunsAnotherAccount()).toBe(true)
+    signIn(f.userHome, 'a@example.test')
+    expect(f.router.systemDefaultRunsAnotherAccount()).toBe(false)
+    // The account's own login names it once it has one.
+    const other = fixture()
+    signIn(other.userHome, 'a@example.test')
+    signIn(other.home('a'), 'someone-else@example.test')
+    expect(other.router.systemDefaultRunsAnotherAccount()).toBe(true)
+    f.settings.activeClaudeManagedAccountId = null
+    expect(f.router.systemDefaultRunsAnotherAccount()).toBeNull()
+  })
+
+  it('keeps an account on its own folder when System default is signed in to another email, or out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture()
+    mkdirSync(f.home('a'), { recursive: true })
+    writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
+    signIn(f.userHome, 'b@example.test')
+    const anotherAccountLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(anotherAccountLaunch, 500)
+    await expect(anotherAccountLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+    writeFileSync(join(f.userHome, '.claude.json'), '{}')
+    const signedOutLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(signedOutLaunch, 500)
+    await expect(signedOutLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+  })
+
+  it('never covers an account saved for another organization of the same email', () => {
+    const f = fixture()
+    f.settings.claudeManagedAccounts = f.settings.claudeManagedAccounts.map((account) => ({
+      ...account,
+      organizationUuid: account.id === 'a' ? 'org-a' : null
+    }))
+    signIn(f.userHome, 'a@example.test', 'org-b')
+    expect(f.router.coveredBySystemDefault('a')).toBe(false)
+    expect(f.router.systemDefaultRunsAnotherAccount()).toBe(true)
+    signIn(f.userHome, 'a@example.test', 'org-a')
+    expect(f.router.coveredBySystemDefault('a')).toBe(true)
+    // Either side naming no organization compares by email alone.
+    signIn(f.userHome, 'b@example.test', 'org-b')
+    expect(f.router.coveredBySystemDefault('b')).toBe(true)
+  })
+
+  it("compares against the user's own CLAUDE_CONFIG_DIR login when they set one", async () => {
+    const own = resolve(mkdtempSync(join(tmpdir(), 'claude-router-own-')))
+    roots.push(own)
+    const f = fixture({ CLAUDE_CONFIG_DIR: own })
+    signIn(f.userHome, 'b@example.test')
+    signIn(own, 'a@example.test')
+    await expect(f.router.prepareLaunch()).resolves.toMatchObject({ configDir: own })
+    // A covered account's folder is neither needed nor refreshed for the launch.
+    expect(f.setup.calls).toBe(0)
+  })
+
   it('prepares an account folder for sign-in only when setup succeeds', async () => {
     const f = fixture({ CLAUDE_CONFIG_DIR: resolve('/custom/claude') })
     expect(f.router.accountHome('b')).toBe(f.home('b'))
@@ -162,7 +299,8 @@ describe('ClaudeProfileRouter', () => {
     expect(f.setup.calls).toBe(1)
   })
 
-  it('never makes a launch wait on, or fail with, a re-run of a set-up folder', async () => {
+  it('refreshes a set-up folder before each launch, which never fails or hangs on it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
     const first = f.router.prepareLaunch()
@@ -170,15 +308,29 @@ describe('ClaudeProfileRouter', () => {
     f.setup.settle()
     await expect(first).resolves.toMatchObject({ configDir: f.home('a') })
 
-    // Startup or a switch re-runs setup; it stays pending, then fails.
-    f.setup.outcome = 'refused'
-    f.router.publish()
+    // The next launch waits for its refresh.
+    let launched = false
+    const second = f.router.prepareLaunch().then((prepared) => {
+      launched = true
+      return prepared
+    })
     await vi.waitFor(() => expect(f.setup.calls).toBe(2))
-    await expect(f.router.prepareLaunch()).resolves.toMatchObject({ configDir: f.home('a') })
+    expect(launched).toBe(false)
     f.setup.settle()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    await expect(f.router.prepareLaunch()).resolves.toMatchObject({ configDir: f.home('a') })
-    expect(f.setup.calls).toBe(2)
+    await expect(second).resolves.toMatchObject({ configDir: f.home('a') })
+
+    // A refresh that hangs, then fails, only delays a launch briefly.
+    f.setup.outcome = 'refused'
+    const hungRefreshLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(hungRefreshLaunch, 500)
+    await expect(hungRefreshLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+    expect(f.setup.calls).toBe(3)
+    f.setup.settle()
+    await vi.advanceTimersByTimeAsync(10)
+    const fourth = f.router.prepareLaunch()
+    await vi.waitFor(() => expect(f.setup.calls).toBe(4))
+    f.setup.settle()
+    await expect(fourth).resolves.toMatchObject({ configDir: f.home('a') })
   })
 
   it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
@@ -208,17 +360,21 @@ describe('ClaudeProfileRouter', () => {
     await expect(launch).resolves.toMatchObject({ configDir: f.home('a') })
   })
 
-  it("launches a set-up account without waiting for the login shell's env", async () => {
+  it("launches a set-up, signed-in account without waiting for the login shell's env", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     shell.hang = true
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
     writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
+    signIn(f.home('a'), 'a@example.test')
     const router = new ClaudeProfileRouter({
       getSettings: () => f.settings,
       dataRoot: f.dataRoot,
       userHome: f.userHome
     })
-    await expect(router.prepareLaunch()).resolves.toMatchObject({ configDir: f.home('a') })
+    const launch = router.prepareLaunch()
+    await advanceRefreshDeadline(launch, 5_000)
+    await expect(launch).resolves.toMatchObject({ configDir: f.home('a') })
   })
 
   it("sets up a pre-update account's missing folder without a login, for Claude's own first run", async () => {
@@ -252,7 +408,6 @@ describe('ClaudeProfileRouter', () => {
     mkdirSync(f.home('a'), { recursive: true })
     expect(f.router.preparation()).toMatchObject({
       configDir: f.home('a'),
-      stripAuthEnv: true,
       envPatch: {
         ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath,
         CLAUDE_CONFIG_DIR: f.home('a'),
@@ -262,13 +417,20 @@ describe('ClaudeProfileRouter', () => {
     f.settings.activeClaudeManagedAccountId = null
     expect(f.router.preparation()).toMatchObject({
       configDir: resolve('/user/own'),
-      stripAuthEnv: false,
       envPatch: { ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath }
     })
     expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
   })
 
-  it('carries the user’s own value beside an account terminal’s injected one', () => {
+  it('carries the user’s own value exactly as set, since Claude keys its login by that string', () => {
+    const f = fixture({ CLAUDE_CONFIG_DIR: 'C:/Claude Config/' })
+    f.settings.activeClaudeManagedAccountId = null
+    expect(f.router.terminalEnv()).toMatchObject({
+      ORCA_CLAUDE_USER_CONFIG_DIR: 'C:/Claude Config/'
+    })
+  })
+
+  it('carries the user’s own value in every host terminal, beside an injected one too', () => {
     const f = fixture({ CLAUDE_CONFIG_DIR: resolve('/user/own') })
     mkdirSync(f.home('a'), { recursive: true })
     expect(f.router.terminalEnv()).toEqual({
@@ -279,7 +441,10 @@ describe('ClaudeProfileRouter', () => {
     })
     expect(f.router.preparation().envPatch).not.toHaveProperty('ORCA_CLAUDE_USER_CONFIG_DIR')
     f.settings.activeClaudeManagedAccountId = null
-    expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
+    expect(f.router.terminalEnv()).toEqual({
+      ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath,
+      ORCA_CLAUDE_USER_CONFIG_DIR: resolve('/user/own')
+    })
     const none = fixture()
     mkdirSync(none.home('a'), { recursive: true })
     expect(none.router.terminalEnv()).not.toHaveProperty('ORCA_CLAUDE_USER_CONFIG_DIR')
@@ -292,16 +457,7 @@ describe('ClaudeProfileRouter', () => {
       for (const inherited of [{ CLAUDE_CONFIG_DIR: resolve('/user/own') }, {}]) {
         const f = fixture(inherited)
         mkdirSync(f.home('a'), { recursive: true })
-        const bin = join(f.root, 'bin')
-        mkdirSync(bin)
-        writeFileSync(join(bin, 'claude'), '#!/bin/sh\nprintf "%s" "${CLAUDE_CONFIG_DIR-unset}"\n')
-        chmodSync(join(bin, 'claude'), 0o700)
-        const claude = (env: Record<string, string>): string =>
-          spawnSync(
-            '/bin/bash',
-            ['--norc', '--noprofile', '-c', `${getPosixClaudeShellFunction()}\nclaude`],
-            { env: { ...env, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' }
-          ).stdout
+        const claude = claudeShellProbe(f.root)
         // The pane opens while account A is selected, so Orca replaces the inherited value.
         f.router.publish()
         const pane = { ...inherited, ...f.router.terminalEnv() }
@@ -310,6 +466,30 @@ describe('ClaudeProfileRouter', () => {
         f.router.publish()
         expect(claude(pane)).toBe(inherited.CLAUDE_CONFIG_DIR ?? 'unset')
       }
+    }
+  )
+
+  // Why not win32: runs the POSIX claude function under bash.
+  it.skipIf(process.platform === 'win32')(
+    'moves a System default terminal whose rc exports the user’s own value to a later selection',
+    () => {
+      const own = resolve('/user/own')
+      const f = fixture({ CLAUDE_CONFIG_DIR: own })
+      mkdirSync(f.home('a'), { recursive: true })
+      const claude = claudeShellProbe(f.root)
+      f.settings.activeClaudeManagedAccountId = null
+      f.router.publish()
+      const pane = { CLAUDE_CONFIG_DIR: own, ...f.router.terminalEnv() }
+      expect(claude(pane)).toBe(own)
+      f.settings.activeClaudeManagedAccountId = 'a'
+      f.router.publish()
+      expect(claude(pane)).toBe(f.home('a'))
+      // An rc export lands after Orca's injected value, and a pane's own folder still wins.
+      const injected = { ...f.router.terminalEnv() }
+      expect(claude(injected, `export CLAUDE_CONFIG_DIR='${own}'\n`)).toBe(f.home('a'))
+      expect(claude(injected, "export CLAUDE_CONFIG_DIR='/somewhere/else'\n")).toBe(
+        '/somewhere/else'
+      )
     }
   )
 
@@ -326,6 +506,21 @@ describe('ClaudeProfileRouter', () => {
     f.setup.settle()
     await removal
     expect(existsSync(join(f.dataRoot, 'claude-profiles', 'a'))).toBe(false)
+  })
+
+  it("gives a pane only the pointer until the login shell's env arrives, then rewrites it", async () => {
+    const f = fixture()
+    mkdirSync(f.home('a'), { recursive: true })
+    signIn(f.home('a'), 'a@example.test')
+    const router = new ClaudeProfileRouter({
+      getSettings: () => f.settings,
+      dataRoot: f.dataRoot,
+      userHome: f.userHome,
+      runSetup: async () => ({ outcome: 'prepared', warnings: [], surfaces: {} })
+    })
+    expect(router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: router.pointerPath })
+    await vi.waitFor(() => expect(readFileSync(router.pointerPath, 'utf8')).toBe(f.home('a')))
+    expect(router.terminalEnv()).toMatchObject({ CLAUDE_CONFIG_DIR: f.home('a') })
   })
 
   it('takes System default from the login shell, which a Dock launch does not inherit', async () => {

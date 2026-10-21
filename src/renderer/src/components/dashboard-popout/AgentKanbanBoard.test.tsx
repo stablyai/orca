@@ -127,6 +127,29 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByText('Needs You')).toBeInTheDocument()
   })
 
+  it('names the visible column regions and keeps cards inside their region', () => {
+    renderBoard([card({ bucket: 'attention', worktreeName: 'needs-review' })])
+
+    expect(
+      screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'))
+    ).toEqual(['Needs You', 'Working', 'Done'])
+    expect(
+      within(screen.getByRole('region', { name: 'Needs You' })).getByText('needs-review')
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Idle' })).not.toBeInTheDocument()
+  })
+
+  it('uses the visible translated names for all regions when idle agents are shown', async () => {
+    await i18n.changeLanguage('zh')
+    renderBoard([], { showIdle: true })
+
+    expect(screen.getAllByRole('region')).toHaveLength(4)
+    for (const name of ['需要你', '工作中', '已完成', '空闲']) {
+      const region = screen.getByRole('region', { name })
+      expect(within(region).getByText(name)).toBeInTheDocument()
+    }
+  })
+
   it('offers project filters without agent-state map filters', async () => {
     renderBoard([card({ paneKey: 'busy' })])
 

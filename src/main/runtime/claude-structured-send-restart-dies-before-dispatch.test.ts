@@ -1,6 +1,6 @@
 // A send is accepted into a chat whose Claude child is gone, and its delivery restarts the child
-// and writes the message to it at once. When that child dies before it proves its start, it never
-// ran the message, so the send settles `rejected` with the child's own diagnostic, never as a
+// and holds the message until that child proves its start. When it dies first, it was never handed
+// the message, so the send settles `rejected` with the child's own diagnostic, never as a
 // delivery nobody can confirm, and a client that was subscribed the whole time receives the
 // failure row and the rejected submission over the wire. Against the production runtime, adapter,
 // record store and host, with only the CLI scripted.
@@ -95,6 +95,7 @@ async function submission(host: StructuredAgentSessionHost, clientMessageId: str
 
 async function failLatestStart(host: StructuredAgentSessionHost, count: number): Promise<void> {
   await eventually(() => expect(claude.children(SESSION)).toHaveLength(count))
+  await eventually(() => expect(claude.child(SESSION).initializing).toBe(true))
   claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
   await waitForStructuredAgentSessionRecovery()
   await eventually(() =>
@@ -141,7 +142,9 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     // Accepted: the answer comes before the restart it needs.
     expect(answered.get(sent)).toBe('pending')
     await eventually(() => expect(claude.children(SESSION)).toHaveLength(2))
-    await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
+    await eventually(() => expect(claude.child(SESSION).initializing).toBe(true))
+    expect(await submission(host, sent)).toMatchObject({ dispatchState: 'pending' })
+    expect(claude.child(SESSION).calls).not.toContain('send')
     await failLatestStart(host, 2)
 
     // Provably not delivered, with the cause; not "unconfirmed".

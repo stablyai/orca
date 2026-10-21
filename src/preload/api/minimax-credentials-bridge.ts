@@ -1,29 +1,16 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import type { MiniMaxCredentialsStatus } from '../../shared/minimax-credentials-status'
 
 export const minimaxCredentialsApi = {
-  getStatus: (): Promise<{
-    configured: boolean
-    cookieConfigured: boolean
-    apiKeyConfigured: boolean
-    cookieProtection: SecretAtRestProtection | null
-    apiKeyProtection: SecretAtRestProtection | null
-  }> => ipcRenderer.invoke('minimaxCredentials:getStatus'),
-  saveCookie: (
-    cookie: string
-  ): Promise<{ cookieConfigured: boolean; cookieProtection: SecretAtRestProtection | null }> =>
+  getStatus: (): Promise<MiniMaxCredentialsStatus> =>
+    ipcRenderer.invoke('minimaxCredentials:getStatus'),
+  saveCookie: (cookie: string): Promise<MiniMaxCredentialsStatus> =>
     ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
-  clearCookie: (): Promise<{
-    cookieConfigured: boolean
-    cookieProtection: SecretAtRestProtection | null
-  }> => ipcRenderer.invoke('minimaxCredentials:clearCookie'),
-  saveApiKey: (
-    key: string
-  ): Promise<{ apiKeyConfigured: boolean; apiKeyProtection: SecretAtRestProtection | null }> =>
+  clearCookie: (): Promise<MiniMaxCredentialsStatus> =>
+    ipcRenderer.invoke('minimaxCredentials:clearCookie'),
+  saveApiKey: (key: string): Promise<MiniMaxCredentialsStatus> =>
     ipcRenderer.invoke('minimaxCredentials:saveApiKey', key),
-  clearApiKey: (): Promise<{
-    apiKeyConfigured: boolean
-    apiKeyProtection: SecretAtRestProtection | null
-  }> => ipcRenderer.invoke('minimaxCredentials:clearApiKey')
+  clearApiKey: (): Promise<MiniMaxCredentialsStatus> =>
+    ipcRenderer.invoke('minimaxCredentials:clearApiKey')
 } satisfies PreloadApi['minimaxCredentials']

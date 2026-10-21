@@ -1,8 +1,9 @@
 import type { PublicKnownRuntimeEnvironment } from './runtime-environments'
 import type { OrcadTerminalCensus } from './orcad-terminal-census'
-import type { OrcadMigrationBlocker } from './orcad-migration-preflight'
-import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration-source-cutover'
+import type { OrcadMigrationBlocker } from './orcad-migration/orcad-migration-preflight'
+import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration/orcad-migration-source-cutover'
 import type { OrcadDaemonRetirementVerdict } from './orcad-stop-request'
+import type { SshManagedServerLinkedProject } from './ssh-types'
 
 export const ORCAD_MANAGED_REMOTE_PORT = 6_768
 
@@ -12,6 +13,8 @@ export type OrcadManagedRefusal = {
   verdict: 'live' | 'unverifiable'
   code: string
   reason: string
+  /** Only saved state blocks, which a confirmed "Move anyway" leaves on this desktop. */
+  canLeaveBehind?: true
 }
 
 export type OrcadManagedDeferral = {
@@ -63,6 +66,29 @@ export type OrcadManagedStopResult =
       sshTargetId: string
       stoppedVersion: string | null
       retirement: OrcadDaemonRetirementVerdict | null
+    }
+  | OrcadManagedRefusal
+
+/**
+ * Restarting the server from the current SSH session. Refused while any terminal runs or can't be
+ * counted (`liveSessions: null`): the terminal daemon outlives orcad and keeps what it inherited.
+ */
+export type OrcadManagedRestartResult =
+  | { outcome: 'restarted'; environmentId: string }
+  | { outcome: 'terminals-running'; liveSessions: number | null }
+  | { outcome: 'not-restarted'; reason: string }
+
+/**
+ * Unlinks the server from this desktop without reaching its host, for a host that is gone or
+ * unreachable. Never a claim of exit: the server may still run there, so the verdict stays
+ * `unverifiable`.
+ */
+export type OrcadManagedForgetResult =
+  | {
+      outcome: 'forgotten'
+      verdict: 'unverifiable'
+      environmentId: string
+      sshTargetId: string
     }
   | OrcadManagedRefusal
 
@@ -124,6 +150,8 @@ export type OrcadManagedConversionResult =
       outcome: 'converted'
       environment: PublicKnownRuntimeEnvironment
       migrationId: string
+      /** Projects the server already held, so this desktop's own state for them did not move. */
+      linkedProjects?: SshManagedServerLinkedProject[]
     }
   | OrcadManagedDeferral
   | OrcadManagedRefusal

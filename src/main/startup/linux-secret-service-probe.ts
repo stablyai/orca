@@ -1,4 +1,4 @@
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import type { SecretServiceCollectionState } from './linux-keyring-backend-selection'
 
 /**

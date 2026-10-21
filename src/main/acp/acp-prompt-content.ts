@@ -21,8 +21,9 @@ import {
 } from '../../shared/node-bounded-file-reader'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { resolveAcpPeerOptions } from './acp-peer-limits'
-import { acpAgentName } from './acp-structured-acquire'
+import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from './acp-structured-connection'
+import { acpSessionAcceptsImages } from './acp-structured-options'
 import type { ContentBlock } from './generated/acp-protocol.generated'
 
 const ACP_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
@@ -135,20 +136,30 @@ export async function acpPromptBlocks(
   return blocks
 }
 
+/** A message that is only one of the dialect's withheld commands, with no attachment. */
+function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
+  const [block, ...rest] = body.blocks
+  const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
+  return text.startsWith('/') && withheld.includes(text.slice(1))
+}
+
 /** The prompt for `body` to `session`'s agent, or Orca's refusal of it in words that name the
- *  agent. Images go only where the agent's row offers them and its start advertised them. */
+ *  agent. Images go only where `acpSessionAcceptsImages` allows them. */
 export async function acpDispatchPrompt(
   body: AgentJournalMessageItem,
   session: {
-    spec: Pick<AcpLaunchSpec, 'agent' | 'imagePrompts'>
+    spec: Pick<AcpLaunchSpec, 'agent' | 'imagePrompts' | 'dialect'>
     connection: Pick<AcpStructuredConnection, 'initialize'>
   }
 ): Promise<ContentBlock[] | AgentJournalDispatchRejection> {
+  if (isWithheldCommand(body, session.spec.dialect.withheldCommands ?? [])) {
+    return agentSessionFailureWords(agentSessionFailureFact('commandUnavailable'), {
+      surface: 'rejection',
+      agentName: acpAgentName(session.spec.agent)
+    })
+  }
   try {
-    const advertised =
-      session.spec.imagePrompts === true &&
-      (await session.connection.initialize()).agentCapabilities?.promptCapabilities?.image === true
-    return await acpPromptBlocks(body, advertised)
+    return await acpPromptBlocks(body, await acpSessionAcceptsImages(session))
   } catch (error) {
     if (error instanceof AcpPromptContentError) {
       return agentSessionFailureWords(error.failure, {

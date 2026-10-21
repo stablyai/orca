@@ -8,13 +8,16 @@
  */
 import { randomUUID } from 'node:crypto'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import type { OrcadMigrationBlocker } from '../../shared/orcad-migration-preflight'
+import type { OrcadMigrationBlocker } from '../../shared/orcad-migration/orcad-migration-preflight'
 import {
   ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
   type OrcadMigrationSourceCutover
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshTarget } from '../../shared/ssh-types'
-import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import {
+  assertOrcadMigrationRequestFits,
+  createOrcadMigrationManifest
+} from './orcad-migration-manifest-export'
 import {
   findOrcadMigrationSourceCutoverForTarget,
   removeOrcadMigrationSourceCutover,
@@ -24,13 +27,17 @@ import {
   confirmOrcadMigrationTerminalsUnderFence,
   type OrcadMigrationTerminalVerdict
 } from './orcad-migration-terminal-gate'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import {
   isBlockingOrcadMigrationBlocker,
   preflightOrcadMigrationExport,
   type OrcadMigrationPreflightStore
-} from './ssh-target-orcad-preflight'
+} from './targets/ssh-target-orcad-preflight'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
+
+export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS = 'orcad_migration_leave_behind_terminals'
+export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON =
+  'Move anyway needs every terminal on this host closed first, and Orca could not confirm they all exited. Close them, or end them on the host, then connect again.'
 
 export type OrcadMigrationFenceState =
   | { state: 'none' }
@@ -83,7 +90,6 @@ export async function fenceOrcadMigrationSource(args: {
   destinationName: string
   /** Taken by the caller while the relay could still answer; see orcad-migration-terminal-gate. */
   terminalProof: OrcadMigrationTerminalVerdict
-  hasDirectSshAuthority: (targetId: string) => boolean
   now?: () => Date
   signal?: AbortSignal
 }): Promise<OrcadMigrationFenceResult> {
@@ -104,17 +110,24 @@ export async function fenceOrcadMigrationSource(args: {
       fenceStateReason(existing)
     )
   }
-  if (args.terminalProof.verdict !== 'exited') {
+  const proof = args.terminalProof
+  if (proof.verdict !== 'exited' && proof.verdict !== 'bridged') {
+    return refuse(proof.verdict, 'orcad_migration_terminals', proof.reason)
+  }
+  if (proof.verdict === 'bridged' && target.managedServerLeaveBehind) {
+    // Why: leaving the saved tabs behind drops the identities the relay bridge reattaches through.
     return refuse(
-      args.terminalProof.verdict,
-      'orcad_migration_terminals',
-      args.terminalProof.reason
+      proof.relayVerdict,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON
     )
   }
-  if (args.hasDirectSshAuthority(target.id)) {
-    return refuse('live', 'orcad_migration_direct_ssh_connected', 'Disconnect this SSH host first.')
-  }
-  const preflight = preflightOrcadMigrationExport(args.store, target.id)
+  const preflight = preflightOrcadMigrationExport(
+    args.store,
+    target.id,
+    undefined,
+    proof.verdict === 'bridged' ? proof.bridgedPtyIds : []
+  )
   if (!preflight.claimable) {
     return {
       ...refuse(
@@ -137,6 +150,8 @@ export async function fenceOrcadMigrationSource(args: {
     { ...target, generation },
     { migrationId: randomUUID(), destinationEnvironmentId: args.destinationEnvironmentId }
   )
+  // Before the journal: a fence on a manifest no request can carry could never be released.
+  assertOrcadMigrationRequestFits({ manifest })
   const cutover: OrcadMigrationSourceCutover = {
     version: ORCAD_MIGRATION_SOURCE_CUTOVER_VERSION,
     migrationId: manifest.migrationId,
@@ -148,7 +163,8 @@ export async function fenceOrcadMigrationSource(args: {
     sshTargetId: target.id,
     sshTargetGeneration: generation,
     manifestSha256: manifest.manifestSha256,
-    provenPtyIds: args.terminalProof.provenPtyIds,
+    provenPtyIds: proof.verdict === 'exited' ? proof.provenPtyIds : [],
+    ...(proof.verdict === 'bridged' ? { bridgedPtyIds: proof.bridgedPtyIds } : {}),
     // Taken with the export, before any commit is possible: the only proof of what the server holds.
     manifest
   }
@@ -161,7 +177,7 @@ export async function fenceOrcadMigrationSource(args: {
     target.id,
     args.terminalProof
   )
-  if (underFence.verdict !== 'exited') {
+  if (underFence.verdict !== 'exited' && underFence.verdict !== 'bridged') {
     await releaseUnstagedFence(args, cutover)
     return refuse(underFence.verdict, 'orcad_migration_terminals', underFence.reason)
   }
@@ -219,9 +235,9 @@ export async function releaseUndeployedMigrationFence(args: {
 function fenceStateReason(state: OrcadMigrationFenceState): string {
   switch (state.state) {
     case 'owned-by-deploy':
-      return 'This SSH host already belongs to a managed server.'
+      return 'Orca already runs on this SSH host.'
     case 'fenced-unverifiable':
-      return 'This SSH host is held for a migration whose record is missing. Recover it from the managed server first.'
+      return 'This SSH host is held for a migration whose record is missing. Recover it from this host’s Orca server first.'
     case 'stale-journal':
       return 'A migration record names this SSH host but its fence is gone. Resolve that migration first.'
     case 'fenced':

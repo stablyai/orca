@@ -18,6 +18,7 @@ import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
   TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
 } from '../shared/terminal-scrollback-limits'
+import { errorMessage } from '../shared/error-message'
 
 const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
 const REF_PREFIX = 'v1'
@@ -156,9 +157,7 @@ export function writeTerminalScrollbackSnapshotSync(args: {
     }
     return ref
   } catch (err) {
-    console.warn(
-      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
-    )
+    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
     return null
   }
 }
@@ -188,9 +187,7 @@ export async function writeTerminalScrollbackSnapshot(args: {
     renamed = true
     return ref
   } catch (err) {
-    console.warn(
-      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
-    )
+    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
     return null
   } finally {
     if (!renamed) {

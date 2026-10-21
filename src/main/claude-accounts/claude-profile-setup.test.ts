@@ -67,7 +67,7 @@ describe('Claude account profile setup', () => {
       projects: 'linked',
       'history.jsonl': 'linked',
       skills: 'linked',
-      'settings.json': 'merged',
+      'settings.json': 'synced',
       '.claude.json': 'absent',
       hooks: 'merged'
     })
@@ -167,7 +167,8 @@ describe('Claude account profile setup', () => {
       platform: 'linux'
     })
     expect(skipped.surfaces.hooks).toBe('absent')
-    writeFileSync(join(f.dataRoot, 'claude-profiles/a/home/settings.json'), '{bad')
+    // Copied as is from the default home, where Claude reports it the same way.
+    writeFileSync(join(f.defaultHome, 'settings.json'), '{bad')
     const failed = await f.setup()
     expect(failed.surfaces.hooks).toBe('failed')
     expect(failed.surfaces.projects).toBe('unchanged')

@@ -33,6 +33,11 @@ describe('structured agent launch persistence', () => {
       JSON.stringify([
         {
           sessionId: 'codex_session',
+          surfaceAddress: {
+            worktreeId: 'repo::/workspace',
+            targetGroupId: 'original',
+            precedingTabIds: ['source']
+          },
           agent: 'codex',
           lifecycle: 'pending',
           clientOperationId: 'operation-1',
@@ -43,6 +48,11 @@ describe('structured agent launch persistence', () => {
     )
 
     expect(readStructuredAgentLaunchRecord('codex_session')).toMatchObject({
+      surfaceAddress: {
+        worktreeId: 'repo::/workspace',
+        targetGroupId: 'original',
+        precedingTabIds: ['source']
+      },
       lifecycle: 'visibility-unknown',
       clientOperationId: 'operation-1',
       // Written before a paired host could hold a chat, so it was launched on this machine.
@@ -61,6 +71,7 @@ describe('structured agent launch persistence', () => {
           sessionId,
           agent,
           lifecycle: 'pending',
+          surfaceAddress: { worktreeId: 'workspace', precedingTabIds: [false] },
           clientOperationId: `${sessionId}-op`,
           payloadFingerprint: 'fingerprint',
           expectedRuntimeFence: null
@@ -69,6 +80,7 @@ describe('structured agent launch persistence', () => {
     )
 
     expect(readStructuredAgentLaunchRecord('grok_session')?.agent).toBe('grok')
+    expect(readStructuredAgentLaunchRecord('grok_session')?.surfaceAddress).toBeUndefined()
     expect(readStructuredAgentLaunchRecord('bogus_session')).toBeUndefined()
   })
 

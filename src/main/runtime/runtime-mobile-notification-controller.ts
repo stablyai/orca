@@ -15,10 +15,8 @@ import type {
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import {
-  MobileNotificationDismissalStore,
-  type DeliveredNotificationIdentity
-} from './mobile-notification-dismissal-store'
+import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
+import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
@@ -30,6 +28,8 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
+  /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
+  executionHost?: `runtime:${string}`
   notificationId?: string
   notificationSeq?: number
   notificationEpoch?: string
@@ -69,6 +69,15 @@ export class RuntimeMobileNotificationController {
 
   configureDismissalStore(userDataPath: string): void {
     this.dismissalStore = new MobileNotificationDismissalStore(userDataPath)
+  }
+
+  /** Waits for the pending dismissal write without closing the store. */
+  flushDismissals(): Promise<void> {
+    return this.dismissalStore?.flush() ?? Promise.resolve()
+  }
+
+  closeDismissals(): Promise<void> {
+    return this.dismissalStore?.close() ?? Promise.resolve()
   }
 
   reconcileDismissedPushes(

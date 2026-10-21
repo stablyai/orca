@@ -10,13 +10,14 @@ describe('cross-version wire routing for the send path', () => {
     'src/shared/structured-agent-session-send-mutation.ts',
     'src/main/runtime/rpc/core.ts',
     'src/main/runtime/rpc/errors.ts',
-    'src/main/runtime/rpc/rpc-streaming-dispatcher.ts',
     'src/main/runtime/rpc/orchestration-contract-fence.ts',
     'src/main/runtime/rpc/orchestration-session-caller.ts',
     'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
     'src/main/runtime/rpc/orchestration-mutation-executor.ts',
     'src/shared/orchestration-rpc-contract.ts',
-    'src/main/runtime/orchestration/db/schema/migrate.ts'
+    'src/main/runtime/orchestration/db/schema/migrate.ts',
+    'src/main/runtime/rpc/ws-transport.ts',
+    'src/shared/web-origin-security.ts'
   ])('runs the cross-version suites when %s changes', (file) => {
     expect(classifyPrJobs([file])).toMatchObject({ should_run: true, 'cross-version-wire': true })
   })

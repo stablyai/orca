@@ -29,6 +29,10 @@ export type SessionTabsStreamEvent =
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
   | { type: 'end' }
 
+export function isSessionTabsStreamEnd(result: unknown): boolean {
+  return typeof result === 'object' && result !== null && 'type' in result && result.type === 'end'
+}
+
 export type SessionTabsListAllResult = {
   snapshots: RuntimeMobileSessionTabsResult[]
   authoritative?: boolean
@@ -85,6 +89,23 @@ export type VisibilityResumeOmission = {
 
 export const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 export const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+
+export function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): string {
+  return `${environmentId}:${worktreeId}`
+}
+
+// Why: a replay may repeat the current epoch/version; permit only that exact
+// identity once so an older concurrent frame cannot bypass monotonic ordering.
+export function acceptReplayedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  if (current) {
+    replayableSessionTabsSnapshotByWorktree.set(key, current)
+  }
+}
 export const latestReceivedSessionTabsSnapshotByWorktree = new Map<
   string,
   ReceivedSessionTabsSnapshot
@@ -136,7 +157,6 @@ export const latestReceivedSessionTabsInventoryFrameByEnvironment = new Map<stri
 export const sessionTabsRemovalWatermarkByWorktree = new Map<string, number>()
 export const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
 export const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
-export const sessionTabsTrackingGenerationByEnvironment = new Map<string, number>()
 export const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 export const MAX_TRACKED_SESSION_TABS_INVENTORY_OMISSIONS = 512
 export type SessionTabsInventoryOmissionObservation = {
@@ -148,6 +168,8 @@ export const sessionTabsInventoryOmissionsByWorktree = new Map<
   SessionTabsInventoryOmissionObservation
 >()
 export const hostSessionTabIdByLocalKey = new Map<string, string>()
+// Why: desktop and host mint their own ids for a group a split creates; moves name the host's.
+export const hostSessionGroupIdByLocalKey = new Map<string, string>()
 export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
@@ -213,6 +235,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'browserPagesByWorkspace'
   | 'browserCertificateFailuresByPageId'
   | 'browserTabsByWorktree'
+  | 'editorBuffers'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'openFiles'

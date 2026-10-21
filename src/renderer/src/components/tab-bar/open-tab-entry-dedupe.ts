@@ -63,10 +63,10 @@ export function dropHistoryRowsCoveredByBrowserPages(
 
 // The history row carries a real page title, so it beats the bare typed-URL row
 // it duplicates — mirroring the address bar's synthetic-row fold.
-export function dropUrlEntriesCoveredByHistoryRows(
-  options: readonly TabEntryOption[],
+export function dropUrlEntriesCoveredByHistoryRows<Option extends TabEntryOption>(
+  options: readonly Option[],
   rows: readonly BrowserHistoryOmniboxRow[]
-): readonly TabEntryOption[] {
+): readonly Option[] {
   if (rows.length === 0) {
     return options
   }

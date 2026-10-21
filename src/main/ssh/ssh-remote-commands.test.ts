@@ -11,36 +11,34 @@ import {
   utimesSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
   lockAgeSecondsCommand,
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
-} from './ssh-relay-install-lock-commands'
+} from '../managed-server/install/remote-install-lock-commands'
 import {
   commandWithNodePath,
-  listRelayBaseDirsCommand,
-  MAX_RELAY_GC_LISTING_ENTRIES,
-  makeRemoteDirectoryCommand,
+  listRemoteInstallBaseDirsCommand,
+  MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES,
   moveRemoteTreeCommand,
-  probeDirectoryExistsCommand,
-  probeRelayInstalledCommand,
+  probeRemoteInstallCompleteCommand,
   readRemoteHomeCommand,
-  relayLivenessProbeCommand
+  removeRemoteTreeCommand
 } from './ssh-remote-commands'
+import {
+  ORCAD_INSTALL_MODEL,
+  RELAY_INSTALL_MODEL
+} from '../managed-server/install/remote-install-model'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import {
   createRelayGcListingFixture,
   readUncappedRelayGcPaths,
   runCappedRelayGcShellCommand,
   SSH_EXEC_OUTPUT_CAP_CHARS
-} from './ssh-relay-gc-listing.test-fixture'
-import {
-  RELAY_INSTALL_COMPLETE_FILENAME,
-  relayArtifactFilenames
-} from '../../shared/relay-artifacts'
+} from '../managed-server/install/remote-install-gc-listing.test-fixture'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const nativePosix = getRemoteHostPlatform(
@@ -66,6 +64,16 @@ const powerShell51Executable =
   }).status === 0
     ? 'powershell.exe'
     : undefined
+
+const listRelayBaseDirsCommand = (host: typeof posix, baseDir: string): string =>
+  listRemoteInstallBaseDirsCommand(host, baseDir, RELAY_INSTALL_MODEL)
+
+function probeOrcadInstalledCommand(host: typeof posix, dir: string): string {
+  return probeRemoteInstallCompleteCommand(host, dir, [
+    ...ORCAD_INSTALL_MODEL.requiredArtifacts(host),
+    ORCAD_INSTALL_MODEL.installCompleteFilename
+  ])
+}
 
 function decodePowerShellCommand(command: string): string {
   return command.includes('-EncodedCommand ') ? decodeRemotePowerShellScript(command) : ''
@@ -126,83 +134,79 @@ function runPowerShellCommand(executable: string, script: string): Promise<strin
 describe('ssh remote command builders', () => {
   it('keeps POSIX deploy commands POSIX-native', () => {
     expect(readRemoteHomeCommand(posix)).toBe('echo $HOME')
-    expect(makeRemoteDirectoryCommand(posix, '/home/me/.orca-remote')).toContain('mkdir -p')
-    const probe = probeRelayInstalledCommand(posix, '/home/me/relay')
-    expect(probe).toContain('test -d')
-    expect(probe).toContain('managed-hook-runtime.js')
-    expect(probe).toContain('relay-ai-vault-service.js')
+    expect(removeRemoteTreeCommand(posix, '/home/me/.orca-remote/x')).toContain('rm -rf')
+    const probe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
+    expect(probe).toContain("cd '/home/me/orcad'")
+    expect(probe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })
 
-  it('requires every declared relay artifact before calling an install complete', () => {
-    const posixProbe = probeRelayInstalledCommand(posix, '/home/me/relay')
-    for (const filename of relayArtifactFilenames(false)) {
+  it('requires every declared artifact before calling an install complete', () => {
+    const posixProbe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
+    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(posix)) {
       expect(posixProbe, `POSIX probe ignores ${filename}`).toContain(filename)
     }
-    expect(posixProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
-    // A POSIX relay must not be asked for the Windows-only node-pty patch.
-    expect(posixProbe).not.toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
+    expect(posixProbe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
 
     const windowsProbe = decodePowerShellCommand(
-      probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
+      probeOrcadInstalledCommand(windows, 'C:/Users/me/orcad')
     )
-    for (const filename of relayArtifactFilenames(true)) {
+    for (const filename of ORCAD_INSTALL_MODEL.requiredArtifacts(windows)) {
       expect(windowsProbe, `Windows probe ignores ${filename}`).toContain(filename)
     }
-    expect(windowsProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
+    expect(windowsProbe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })
 
-  // Stage a complete install, then remove one companion: the probe must flip.
-  function stageRelayInstall(isWindows: boolean): string {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-relay-probe-'))
-    for (const filename of relayArtifactFilenames(isWindows)) {
+  // Stage a complete install, then remove one artifact: the probe must flip.
+  function stageOrcadInstall(host: typeof posix): { dir: string; artifact: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-install-probe-'))
+    const artifacts = ORCAD_INSTALL_MODEL.requiredArtifacts(host)
+    for (const filename of artifacts) {
+      mkdirSync(dirname(join(dir, filename)), { recursive: true })
       writeFileSync(join(dir, filename), '')
     }
-    writeFileSync(join(dir, RELAY_INSTALL_COMPLETE_FILENAME), '')
-    return dir
+    writeFileSync(join(dir, ORCAD_INSTALL_MODEL.installCompleteFilename), '')
+    return { dir, artifact: artifacts.at(-1)! }
   }
 
-  it.skipIf(!powerShellExecutable)(
-    'rejects a Windows install missing only the WSL transcript helper',
-    async () => {
-      const dir = stageRelayInstall(true)
-      const probe = (): string => decodePowerShellCommand(probeRelayInstalledCommand(windows, dir))
-      try {
-        expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('OK')
-
-        // The exact shape a pre-STA-4831 relay left behind: everything but this.
-        rmSync(join(dir, 'wsl-transcript-fs-process-entry.js'))
-        expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('MISSING')
-      } finally {
-        rmSync(dir, { recursive: true, force: true })
-      }
-    }
-  )
-
   it.skipIf(process.platform === 'win32')(
-    'rejects a POSIX install missing only the WSL transcript helper',
+    'answers a POSIX install complete only with every artifact present, in its own dir',
     async () => {
-      const dir = stageRelayInstall(false)
-      const probe = (): string => probeRelayInstalledCommand(posix, dir)
+      const { dir, artifact } = stageOrcadInstall(nativePosix)
       try {
-        expect((await runShellCommand(probe())).trim()).toBe('OK')
-
-        rmSync(join(dir, 'wsl-transcript-fs-process-entry.js'))
-        expect((await runShellCommand(probe())).trim()).toBe('MISSING')
+        const run = async (installDir: string): Promise<string> =>
+          (await runShellCommand(probeOrcadInstalledCommand(nativePosix, installDir))).trim()
+        expect(await run(dir)).toBe('OK')
+        // The relative test must not resolve against the caller's working directory.
+        expect(await run(join(dir, 'missing slot'))).toBe('MISSING')
+        rmSync(join(dir, artifact))
+        expect(await run(dir)).toBe('MISSING')
       } finally {
         rmSync(dir, { recursive: true, force: true })
       }
     }
   )
+
+  it.skipIf(!powerShellExecutable)('rejects a Windows install missing one artifact', async () => {
+    const { dir, artifact } = stageOrcadInstall(windows)
+    const probe = (): string => decodePowerShellCommand(probeOrcadInstalledCommand(windows, dir))
+    try {
+      expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('OK')
+
+      rmSync(join(dir, artifact))
+      expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('MISSING')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 
   it('uses encoded PowerShell for Windows deploy commands', () => {
     expect(readRemoteHomeCommand(windows)).toContain('powershell.exe')
-    expect(makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
+    expect(removeRemoteTreeCommand(windows, 'C:/Users/me/.orca-remote/x')).toContain(
       '-EncodedCommand'
     )
-    const probe = probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
+    const probe = probeOrcadInstalledCommand(windows, 'C:/Users/me/orcad')
     expect(probe).toContain('-EncodedCommand')
-    expect(decodePowerShellCommand(probe)).toContain('managed-hook-runtime.js')
-    expect(decodePowerShellCommand(probe)).toContain('relay-ai-vault-service.js')
+    expect(decodePowerShellCommand(probe)).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })
 
   it('writes a holder token inside the lock in the same command that creates it', () => {
@@ -237,19 +241,14 @@ describe('ssh remote command builders', () => {
   })
 
   it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {
-    const mkdirScript = decodePowerShellCommand(
-      makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')
-    )
     const lockScript = decodePowerShellCommand(
       tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
     )
 
-    expect(mkdirScript).toContain('New-Item -ItemType Directory -Force -Path')
     expect(lockScript).toContain('[System.IO.FileMode]::CreateNew')
     expect(lockScript).toContain('[System.IO.FileShare]::None')
     expect(lockScript).toContain('New-Item -ItemType Directory -Path $lock')
     expect(lockScript).toContain("Join-Path $lock '.owner'")
-    expect(mkdirScript).not.toContain('New-Item -ItemType Directory -Force -LiteralPath')
   })
 
   it('moves GC candidates to a sibling tombstone with host-native commands', () => {
@@ -262,32 +261,6 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain('Move-Item -LiteralPath')
     expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
     expect(windowsScript).toContain("'MOVED'")
-  })
-
-  it('emits an explicit POSIX liveness result so GC can fail closed', () => {
-    const command = relayLivenessProbeCommand(posix, '/home/u/.orca-remote/relay-0.1.0')
-
-    expect(command).toContain('state=DEAD')
-    expect(command).toContain('[ -S "$f" ] && state=ALIVE')
-    expect(command).toContain('echo "$state"')
-  })
-
-  it('uses named pipe try-connect liveness for Windows GC', () => {
-    const command = relayLivenessProbeCommand(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', {
-      nodePath: 'C:/Program Files/nodejs/node.exe',
-      pipePaths: ['\\\\.\\pipe\\orca-relay-1234567890abcdef1234']
-    })
-    const script = decodePowerShellCommand(command)
-
-    expect(command).toContain('powershell.exe')
-    expect(script).toContain('net.connect(pipe)')
-    expect(script).toContain('.windows-active-pipe-')
-    expect(script).toContain('markerCount===0&&pipes.length===0')
-    expect(script).toContain('C:\\Program Files\\nodejs')
-    expect(script).not.toContain('Win32_Process')
-    expect(listRelayBaseDirsCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
-      '-EncodedCommand'
-    )
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -310,9 +283,9 @@ describe('ssh remote command builders', () => {
         )
         const entries = output.trim().split('\n')
 
-        expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+        expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
         expect(Buffer.byteLength(output)).toBeLessThan(1_024)
-        expect(entries.length).toBeLessThanOrEqual(MAX_RELAY_GC_LISTING_ENTRIES)
+        expect(entries.length).toBeLessThanOrEqual(MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES)
 
         fixture.fillValidEntryBoundary()
         const validNames = new Set(fixture.validNames)
@@ -347,18 +320,6 @@ describe('ssh remote command builders', () => {
       }
     }
   )
-
-  it('escapes double quotes before passing JavaScript to native Windows commands', () => {
-    const script = decodePowerShellCommand(
-      relayLivenessProbeCommand(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', {
-        nodePath: 'C:/Program Files/nodejs/node.exe',
-        pipePaths: ['\\\\.\\pipe\\orca-relay-1234567890abcdef1234']
-      })
-    )
-
-    expect(script).toContain('fs=require(\\"fs\\")')
-    expect(script).toContain('net=require(\\"net\\")')
-  })
 
   it('prepends the Windows node bin directory to PATH with native separators', () => {
     const script = decodePowerShellCommand(
@@ -570,7 +531,8 @@ describe('ssh remote command builders', () => {
       try {
         const lockPath = join(root, '.install-lock')
         const acquire = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
-        const legacyProbe = decodePowerShellCommand(probeDirectoryExistsCommand(windows, lockPath))
+        // The directory-only lock probe older Orca builds still run against this host.
+        const legacyProbe = `if (Test-Path -LiteralPath '${lockPath}' -PathType Container) { 'LOCKED' } else { 'OPEN' }`
 
         await expect(runPowerShellCommand(powerShellExecutable!, acquire)).resolves.toMatch(/OK/)
         await expect(runPowerShellCommand(powerShellExecutable!, legacyProbe)).resolves.toMatch(

@@ -1,4 +1,4 @@
-import type { ChildProcess, SpawnOptions } from 'node:child_process'
+import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import {
@@ -12,6 +12,17 @@ import {
 } from '../../shared/quit-teardown-deadline'
 import { serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
+import {
+  mayRespawn,
+  supervisedStopSignal,
+  trackServeChild,
+  untrackServeChild
+} from './serve-supervised-stop'
+import {
+  decideAfterServeChildExit,
+  type InstallRequestedHandoff,
+  type ServeReadiness
+} from './serve-supervisor-policy'
 
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
 export const SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS = 5_000
@@ -20,39 +31,52 @@ export const SERVE_CHILD_FORCE_KILL_GRACE_MS =
   WILL_QUIT_TEARDOWN_DEADLINE_MS +
   SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS
 
-type InstallRequestedHandoff = Extract<ServeUpdateHandoffState, { phase: 'install-requested' }>
-type ServeReadiness = 'not-expected' | 'pending' | 'verified' | 'failed'
-
 type ServeSupervisorArgs = {
-  executable: string
-  childArgs: string[]
-  spawnOptions: SpawnOptions
-  spawnChild: (program: string, args: string[], options: SpawnOptions) => ChildProcess
+  /** Respawned on update; `program` is also the bundle whose installed version a handoff awaits. */
+  spec: ProcessSpec
+  spawnChild: (spec: ProcessSpec) => ChildProcessHandle
   handoffPath: string | null
 }
 
 export async function resumeInterruptedServeUpdate(
   args: ServeSupervisorArgs & { handoffPath: string; handoff: InstallRequestedHandoff }
 ): Promise<number> {
-  const installed = await waitForMacBundleVersion(args.executable, args.handoff.targetVersion)
-  if (!installed) {
-    await recordServeUpdateHandoffFailure(
-      args.handoffPath,
-      args.handoff,
-      `Timed out waiting for Orca ${args.handoff.targetVersion} to be installed.`
-    )
+  const expectedHandoff = await awaitInstalledHandoff(
+    args.spec.program,
+    args.handoffPath,
+    args.handoff
+  )
+  if (!(await mayRespawn())) {
+    return 0
   }
-  const child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
-  return superviseForegroundServe({
-    ...args,
-    child,
-    expectedHandoff: installed ? args.handoff : null
-  })
+  const child = args.spawnChild(args.spec)
+  return superviseForegroundServe({ ...args, child, expectedHandoff })
+}
+
+async function awaitInstalledHandoff(
+  executable: string,
+  handoffPath: string,
+  handoff: InstallRequestedHandoff
+): Promise<InstallRequestedHandoff | null> {
+  const stop = supervisedStopSignal()
+  if (await waitForMacBundleVersion(executable, handoff.targetVersion, undefined, stop)) {
+    return handoff
+  }
+  if (stop.aborted) {
+    // A stop is not a failed update: the next start resumes this handoff.
+    return null
+  }
+  await recordServeUpdateHandoffFailure(
+    handoffPath,
+    handoff,
+    `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
+  )
+  return null
 }
 
 export async function superviseForegroundServe(
   args: ServeSupervisorArgs & {
-    child: ChildProcess
+    child: ChildProcessHandle
     expectedHandoff: InstallRequestedHandoff | null
   }
 ): Promise<number> {
@@ -66,49 +90,46 @@ export async function superviseForegroundServe(
         ? { handoffPath: args.handoffPath, handoff: expectedHandoff }
         : null
     )
-
-    if (result.readiness === 'failed') {
-      return 1
-    }
-    if (expectedHandoff && result.readiness !== 'verified') {
-      if (args.handoffPath) {
-        await recordServeUpdateHandoffFailure(
+    const decision = decideAfterServeChildExit({
+      exit: { ...result, childPid: child.pid },
+      expectedHandoff,
+      handoff:
+        result.readiness === 'failed' || (expectedHandoff && result.readiness !== 'verified')
+          ? null
+          : args.handoffPath
+            ? await readServeUpdateHandoff(args.handoffPath)
+            : null,
+      hasHandoffPath: args.handoffPath !== null
+    })
+    switch (decision.kind) {
+      case 'exit':
+        return decision.code
+      case 'fail-replacement':
+        if (args.handoffPath) {
+          await recordServeUpdateHandoffFailure(args.handoffPath, decision.handoff, decision.reason)
+        }
+        return 1
+      case 'signal-exit':
+        throw serveSignalExitError(decision.signal)
+      case 'await-install':
+        if (!args.handoffPath) {
+          return 1
+        }
+        expectedHandoff = await awaitInstalledHandoff(
+          args.spec.program,
           args.handoffPath,
-          expectedHandoff,
-          `Replacement exited before serving version ${expectedHandoff.targetVersion}.`
+          decision.handoff
         )
-      }
-      return 1
+        if (!(await mayRespawn())) {
+          return 0
+        }
+        child = args.spawnChild(args.spec)
     }
-
-    const handoff = args.handoffPath ? await readServeUpdateHandoff(args.handoffPath) : null
-    if (
-      handoff?.phase !== 'install-requested' ||
-      (child.pid !== undefined && handoff.servingPid !== child.pid)
-    ) {
-      if (typeof result.code === 'number' || result.signalWasForwarded) {
-        return result.code ?? 0
-      }
-      throw serveSignalExitError(result.signal)
-    }
-
-    const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
-    if (!installed) {
-      await recordServeUpdateHandoffFailure(
-        args.handoffPath!,
-        handoff,
-        `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
-      )
-      expectedHandoff = null
-    } else {
-      expectedHandoff = handoff
-    }
-    child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
   }
 }
 
 function waitForForegroundChild(
-  child: ChildProcess,
+  child: ChildProcessHandle,
   expected: { handoffPath: string; handoff: InstallRequestedHandoff } | null
 ): Promise<{
   code: number | null
@@ -163,6 +184,7 @@ function waitForForegroundChild(
       }
       forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
     }
+    const tracked = { pid: child.pid ?? null, stop: () => forwardSignal('SIGTERM') }
     const handleMessage = (value: unknown): void => {
       const message = parseServeSupervisorMessage(value)
       if (!message || !expected || readiness !== 'pending') {
@@ -190,6 +212,7 @@ function waitForForegroundChild(
       })
     }
     const cleanup = (): void => {
+      untrackServeChild(tracked)
       process.off('SIGINT', forwardSignal)
       process.off('SIGTERM', forwardSignal)
       if (forwardsHangup) {
@@ -213,6 +236,7 @@ function waitForForegroundChild(
     if (typeof child.on === 'function') {
       child.on('message', handleMessage)
     }
+    trackServeChild(tracked)
     if (expected) {
       readyTimer = setTimeout(() => {
         rejectReplacement(
@@ -256,10 +280,6 @@ export function readServeUpdateHandoffSync(handoffPath: string): ServeUpdateHand
   }
 }
 
-export async function clearServeUpdateHandoff(handoffPath: string): Promise<void> {
-  await unlink(handoffPath).catch(() => undefined)
-}
-
 export async function completeServeUpdateHandoff(
   handoffPath: string,
   state: InstallRequestedHandoff,
@@ -270,7 +290,7 @@ export async function completeServeUpdateHandoff(
     phase: 'completed',
     runtimeId
   })
-  await clearServeUpdateHandoff(handoffPath)
+  await unlink(handoffPath).catch(() => undefined)
 }
 
 export async function recordServeUpdateHandoffFailure(

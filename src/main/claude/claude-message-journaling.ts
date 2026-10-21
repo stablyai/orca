@@ -6,6 +6,8 @@
 // read off an explicit context, so the open turn and the collaborators it
 // writes through stay owned by the translator.
 
+import { writeClaudeTerminalFailure } from './claude-terminal-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
@@ -30,9 +32,12 @@ import type { createClaudeStreamedBlockRegistry } from './claude-streamed-block-
 import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
 import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
-import type { ClaudeSubagentRoster } from './claude-subagent-roster'
+import type { ClaudeSubagentIdentities } from './claude-subagent-identities'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
+import type { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import type { ClaudeUsageLimits } from './claude-usage-limits'
+import type { ClaudeThreadGoal } from './claude-thread-goal'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
@@ -40,7 +45,7 @@ export type ClaudeMessageJournalContext = {
   streamedBlocks: ReturnType<typeof createClaudeStreamedBlockRegistry>
   streamedText: ReturnType<typeof createClaudeStreamedTextCheckpoints>
   streamedThinking: ClaudeStreamedThinking
-  subagents: ClaudeSubagentRoster
+  subagents: ClaudeSubagentIdentities
   toolOrigins: ClaudeToolOriginRegistry
   backgroundTasks: ClaudeBackgroundTaskRows
   providerFallback: ClaudeProviderFrameFallback
@@ -50,6 +55,9 @@ export type ClaudeMessageJournalContext = {
   /** The session's open turn. Sole owner of turn identity and of the reopen
    *  latch; this module asks it rather than tracking a copy. */
   turn: ClaudeOpenTurn
+  authenticationFailures: ClaudeAuthenticationFailures
+  usageLimits: ClaudeUsageLimits
+  threadGoal: ClaudeThreadGoal
 }
 
 export function journalClaudeMessage(
@@ -65,9 +73,6 @@ export function journalClaudeMessage(
     return false
   }
   let changed = false
-  if (envelope.parentToolUseId) {
-    ctx.subagents.observeChildActivity(envelope.parentToolUseId)
-  }
   const results = claudeToolResults(envelope)
   // Everything this envelope journals belongs to whoever produced the envelope.
   // A child's rows live in the parent's journal, so without this the parent's
@@ -90,25 +95,59 @@ export function journalClaudeMessage(
       : envelope.parentToolUseId
   const stamp = ctx.corrections.stampFor(producerRef)
   const outputEnvelope = claudeOutputEnvelope(envelope)
-  const body = claudeMessageBody(outputEnvelope)
-  const identity =
-    (body && envelope.role === 'assistant'
-      ? ctx.streamedBlocks.reconcile(envelope)?.identity
-      : null) ?? claudeMessageIdentity(envelope)
-  ctx.streamedText.forget(agentJournalItemKey(identity))
-  const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
+  ctx.threadGoal.observe(message)
   const source: ClaudeTurnSource = {
     sessionId: envelope.sessionId,
     uuid: envelope.uuid,
     assistant: envelope.role === 'assistant'
   }
   const openOutputTurn = (): void => ctx.turn.ensureOpen(message, source, observedAt)
+  const messageBody = claudeMessageBody(outputEnvelope)
+  const ordinaryFailure =
+    typeof message.api_error === 'string' && message.api_error !== 'usage_limit_reached'
+      ? {
+          kind: 'status' as const,
+          tone: 'error' as const,
+          ...agentSessionFailureWords(
+            { kind: 'providerRejected' },
+            { agentName: 'Claude', provider: 'claude', surface: 'row' }
+          )
+        }
+      : null
+  const terminal =
+    envelope.role === 'assistant' &&
+    producerRef === null &&
+    (typeof message.api_error === 'string' || message.error === 'rate_limit')
+  if (
+    envelope.role === 'assistant' &&
+    (messageBody || typeof message.api_error === 'string' || message.error === 'rate_limit')
+  ) {
+    openOutputTurn()
+  }
+  const usageLimit = ctx.usageLimits.assistant(message, ctx.turn)
+  const body =
+    ctx.authenticationFailures.assistant(message) ??
+    usageLimit ??
+    ctx.threadGoal.report(message, claudeMessageIdentity(envelope), observedAt) ??
+    messageBody ??
+    ordinaryFailure
+  const terminalIdentity = terminal && ctx.turn.identity && usageLimit ? ctx.turn.identity : null
+  const identity =
+    (body && envelope.role === 'assistant'
+      ? ctx.streamedBlocks.reconcile(envelope)?.identity
+      : null) ?? claudeMessageIdentity(envelope)
+  ctx.streamedText.forget(agentJournalItemKey(identity))
+  const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
   if (body) {
     // Opening before the append is what brackets a turn around its own first
     // output; a reader that scans back to the turn record and stops would
     // otherwise look straight past the row that opened it.
     ctx.turn.ensureOpen(message, source, observedAt)
-    ctx.sink.appendItem(identity, body, stamp(identity, body))
+    if (terminalIdentity) {
+      writeClaudeTerminalFailure(ctx.sink, terminalIdentity, body)
+    } else {
+      ctx.sink.appendItem(identity, body, stamp(identity, body))
+    }
     changed = true
   }
   for (const tool of claudeToolUses(outputEnvelope)) {
@@ -137,7 +176,6 @@ export function journalClaudeMessage(
     const resultIdentity = claudeToolIdentity(envelope.sessionId, result.toolUseId)
     const resultBody = claudeToolBody({ tool, result })
     ctx.sink.appendItem(resultIdentity, resultBody, stamp(resultIdentity, resultBody))
-    ctx.subagents.observeToolResult(result.toolUseId, result.failed)
     if (
       results.length === 1 &&
       envelope.parentToolUseId === null &&

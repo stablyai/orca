@@ -3,6 +3,7 @@ import type { Page } from '@stablyai/playwright-test'
 import type { TerminalPaneLayoutNode } from '../../src/shared/terminal-tab-types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 
 type SmartSortScenario = {
   blockedId: string
@@ -211,6 +212,8 @@ async function getSmartSortScenarioReadiness(
 }
 
 test.describe('Worktree Smart Sort', () => {
+  // The window-seeded statuses here never reach the host, which owns Smart in that build.
+  test.skip(SIDEBAR_INPUTS_BUILD, 'ORCA_SIDEBAR_INPUTS=main sorts by host stamps')
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)

@@ -6,7 +6,12 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as PullRequestContextModule from '../text-generation/pull-request-context'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
+import {
+  SSH_HOST_NOT_SERVED_MESSAGE,
+  SshHostNotServedError
+} from '../providers/ssh-host-not-served-error'
+import { RuntimeGitCommands } from './orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   checkoutBranch: vi.fn(),
@@ -19,7 +24,6 @@ const mocks = vi.hoisted(() => ({
   resolveCommitMessageSettings: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn(),
   loadPullRequestLinkedIssue: vi.fn(),
-  getSshGitProvider: vi.fn(),
   getStatus: vi.fn()
 }))
 
@@ -49,10 +53,6 @@ vi.mock('../text-generation/pull-request-context', async () => ({
     '../text-generation/pull-request-context'
   )),
   getPullRequestDraftContext: mocks.getPullRequestDraftContext
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: mocks.getSshGitProvider
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -108,7 +108,6 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
     mocks.loadPullRequestLinkedIssue.mockReset()
     mocks.loadPullRequestLinkedIssue.mockResolvedValue(null)
-    mocks.getSshGitProvider.mockReset()
     mocks.getStatus.mockReset()
     mocks.checkoutBranch.mockReset()
     mocks.discardChanges.mockReset()
@@ -144,9 +143,7 @@ describe('RuntimeGitCommands', () => {
     })
   })
 
-  it('does not resolve shared link paths for a remote runtime status', async () => {
-    const provider = { getStatus: vi.fn().mockResolvedValue({ entries: [] }) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
+  it('refuses an SSH runtime status without running git here', async () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
@@ -156,9 +153,7 @@ describe('RuntimeGitCommands', () => {
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
 
-    await commands.getRuntimeGitStatus('id:wt-1')
-
-    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo')
+    await expect(commands.getRuntimeGitStatus('id:wt-1')).rejects.toThrow(SshHostNotServedError)
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
@@ -184,26 +179,6 @@ describe('RuntimeGitCommands', () => {
       admissionTier: 'interactive',
       wslDistro: 'Ubuntu'
     })
-  })
-
-  it('checks out a remote branch through the SSH git provider', async () => {
-    const provider = { checkoutBranch: vi.fn().mockResolvedValue(undefined) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        executionHostId: 'ssh:conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
-      ok: true,
-      branch: 'feature/x'
-    })
-
-    expect(provider.checkoutBranch).toHaveBeenCalledWith('/remote/repo', 'feature/x')
-    expect(mocks.checkoutBranch).not.toHaveBeenCalled()
   })
 
   it('lists local branches through the resolved worktree', async () => {
@@ -236,45 +211,6 @@ describe('RuntimeGitCommands', () => {
       admissionTier: 'interactive',
       wslDistro: 'Ubuntu'
     })
-  })
-
-  it('keeps a remote single-file discard owned by the SSH provider', async () => {
-    const provider = { discardChanges: vi.fn() }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        executionHostId: 'ssh:conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await commands.discardRuntimeGitPath('id:wt-1', 'src/app.ts')
-
-    expect(provider.discardChanges).toHaveBeenCalledWith('/remote/repo', 'src/app.ts')
-    expect(mocks.discardChanges).not.toHaveBeenCalled()
-  })
-
-  it('lists remote local branches through the SSH git provider', async () => {
-    const provider = {
-      listLocalBranches: vi.fn().mockResolvedValue({ current: 'main', branches: ['main'] })
-    }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        executionHostId: 'ssh:conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(commands.listRuntimeGitLocalBranches('id:wt-1')).resolves.toEqual({
-      current: 'main',
-      branches: ['main']
-    })
-
-    expect(provider.listLocalBranches).toHaveBeenCalledWith('/remote/repo')
-    expect(mocks.listLocalBranches).not.toHaveBeenCalled()
   })
 
   it('rejects slash-only git mutation paths before they can target the worktree root', async () => {
@@ -582,24 +518,10 @@ describe('RuntimeGitCommands', () => {
     )
   })
 
-  it('resolves remote commit-message settings against the SSH host cache', async () => {
+  it('resolves SSH commit-message settings against the host cache, then reports it unserved', async () => {
     const worktreePath = '/remote/repo'
-    const context = {
-      branch: 'main',
-      stagedSummary: 'M\tREADME.md',
-      stagedPatch: '+hello'
-    }
     const params = { agentId: 'cursor', model: 'remote-model' }
     mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
-    mocks.generateCommitMessageFromContext.mockResolvedValue({
-      success: true,
-      message: 'docs: update remote readme'
-    })
-    const provider = {
-      getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
-    }
-    mocks.getSshGitProvider.mockReturnValue(provider)
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree(worktreePath),
@@ -616,8 +538,8 @@ describe('RuntimeGitCommands', () => {
     })
 
     await expect(commands.generateRuntimeCommitMessage('id:wt-1')).resolves.toEqual({
-      success: true,
-      message: 'docs: update remote readme'
+      success: false,
+      error: SSH_HOST_NOT_SERVED_MESSAGE
     })
 
     expect(mocks.resolveCommitMessageSettings).toHaveBeenCalledWith(
@@ -626,14 +548,8 @@ describe('RuntimeGitCommands', () => {
       'commitMessage',
       null
     )
-    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
-      context,
-      params,
-      expect.objectContaining({
-        kind: 'remote',
-        cwd: worktreePath
-      })
-    )
+    expect(mocks.getStagedCommitContext).not.toHaveBeenCalled()
+    expect(mocks.generateCommitMessageFromContext).not.toHaveBeenCalled()
   })
 
   it('enriches the local commit context with the workspace linked issue', async () => {
@@ -655,33 +571,6 @@ describe('RuntimeGitCommands', () => {
       { ...context, linkedIssue: 123 },
       params,
       expect.objectContaining({ kind: 'local' })
-    )
-  })
-
-  it('enriches the SSH commit context with the workspace linked issue', async () => {
-    const worktreePath = '/home/tester/wt'
-    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
-    const params = { agentId: 'cursor', model: 'remote-model' }
-    mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
-    mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
-    mocks.getSshGitProvider.mockReturnValue({
-      getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
-    })
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree(worktreePath, 77),
-        executionHostId: 'ssh:conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await commands.generateRuntimeCommitMessage('id:wt-1')
-
-    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
-      { ...context, linkedIssue: 77 },
-      params,
-      expect.objectContaining({ kind: 'remote' })
     )
   })
 
@@ -804,53 +693,6 @@ describe('RuntimeGitCommands', () => {
     expect(mocks.generateCommitMessageFromContext.mock.calls[0][0]).not.toHaveProperty(
       'linkedIssue'
     )
-  })
-
-  it('shares one linked-issue attach across both pull-request branches', async () => {
-    const context = {
-      base: 'main',
-      branch: 'feature/login',
-      commitSummary: 'abc123 feat: test',
-      changeSummary: 'M README.md',
-      patch: '+hello',
-      currentTitle: '',
-      currentBody: '',
-      currentDraft: false
-    }
-    const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
-    mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
-    mocks.getSshGitProvider.mockReturnValue({
-      exec: vi.fn(),
-      executeCommitMessagePlan: vi.fn()
-    })
-
-    for (const connectionId of [undefined, 'conn-1']) {
-      const worktreePath = connectionId
-        ? '/home/tester/wt'
-        : mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
-      if (!connectionId) {
-        tempDirs.push(worktreePath)
-      }
-      mocks.getPullRequestDraftContext.mockResolvedValue(context)
-      const commands = new RuntimeGitCommands({
-        resolveRuntimeGitTarget: async () => ({
-          worktree: makeWorktree(worktreePath, 55),
-          executionHostId: connectionId ? (`ssh:${connectionId}` as const) : ('local' as const)
-        }),
-        getRuntimeSettings: () => ({}) as GlobalSettings
-      })
-
-      await commands.generateRuntimePullRequestFields(
-        'id:wt-1',
-        { base: 'main', title: '', body: '', draft: false },
-        { sourceControlAiResolvedParams: params }
-      )
-    }
-
-    expect(mocks.generatePullRequestFieldsFromContext.mock.calls).toHaveLength(2)
-    for (const call of mocks.generatePullRequestFieldsFromContext.mock.calls) {
-      expect(call[0]).toEqual({ ...context, linkedIssue: 55 })
-    }
   })
 
   it('leaves the pull-request context untouched when no issue is linked', async () => {

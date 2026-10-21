@@ -24,7 +24,7 @@ export function renderAccountsRemovalDialogs(
     runCodexAccountAction,
     setRemoveClaudeTarget,
     setRemoveCodexTarget,
-    settings
+    accountOwner
   } = model
   return (
     <>
@@ -61,7 +61,7 @@ export function renderAccountsRemovalDialogs(
                 setRemoveCodexTarget(null)
                 void runCodexAccountAction(
                   `remove:${target.id}`,
-                  () => removeCodexProviderAccount(settings, target.id),
+                  () => removeCodexProviderAccount(accountOwner, target.id),
                   target.runtime
                 )
               }}
@@ -104,7 +104,7 @@ export function renderAccountsRemovalDialogs(
                 setRemoveClaudeTarget(null)
                 void runClaudeAccountAction(
                   `remove:${target.id}`,
-                  () => removeClaudeProviderAccount(settings, target.id),
+                  () => removeClaudeProviderAccount(accountOwner, target.id),
                   target.runtime
                 )
               }}

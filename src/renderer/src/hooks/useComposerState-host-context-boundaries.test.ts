@@ -39,7 +39,7 @@ describe('useComposerState host-context boundaries', () => {
         },
         repoId: 'repo-1'
       })
-    ).toEqual({ repoId: 'repo-1', item })
+    ).toEqual({ kind: 'github-pr', repoId: 'repo-1', item })
     expect(
       getInitialGitHubPrStartPointSelection({
         item,
@@ -120,6 +120,30 @@ describe('useComposerState host-context boundaries', () => {
     ).toBe('fix-workspace-name')
   })
 
+  it('auto-owns Jira prefilled names generated with the uppercase key policy', () => {
+    const initialLinkedWorkItem = {
+      type: 'issue' as const,
+      provider: 'jira' as const,
+      number: 0,
+      title: 'PROJ-7 Fix flaky import',
+      url: 'https://example.atlassian.net/browse/PROJ-7',
+      jiraIdentifier: 'PROJ-7'
+    }
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'PROJ-7-fix-flaky-import',
+        initialLinkedWorkItem,
+        jiraIssueKeyCasing: 'preserve'
+      })
+    ).toBe('PROJ-7-fix-flaky-import')
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'PROJ-7-fix-flaky-import',
+        initialLinkedWorkItem
+      })
+    ).toBe('')
+  })
+
   it('seeds initial workspace run target from the task source context', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
@@ -151,6 +175,30 @@ describe('useComposerState host-context boundaries', () => {
       hostId: 'local',
       projectHostSetupId: 'setup-local'
     })
+  })
+
+  it('uses an explicit creation target without borrowing the linked Jira account host', () => {
+    expect(
+      resolveInitialWorkspaceRunSeed({
+        initialTaskSourceContext: {
+          projectId: 'account-backed-task-source',
+          hostId: 'local',
+          projectHostSetupId: 'unrelated-setup'
+        },
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
+      })
+    ).toEqual({ projectId: 'mapped-project', hostId: 'ssh:builder', projectHostSetupId: null })
+  })
+
+  it('keeps a restored draft target ahead of an explicit creation target', () => {
+    expect(
+      resolveInitialWorkspaceRunSeed({
+        draftProjectId: 'draft-project',
+        draftHostId: 'local',
+        draftProjectHostSetupId: 'draft-setup',
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
+      })
+    ).toEqual({ projectId: 'draft-project', hostId: 'local', projectHostSetupId: 'draft-setup' })
   })
 
   it('restores Jira draft context only when its site and issue identity agree', () => {

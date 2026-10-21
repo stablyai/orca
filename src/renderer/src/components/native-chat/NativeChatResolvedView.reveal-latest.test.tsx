@@ -24,7 +24,11 @@ vi.mock('./use-native-chat-retained-session', () => ({
 }))
 vi.mock('./NativeChatMessageList', () => ({
   NativeChatMessageList: (props: { ref?: React.Ref<NativeChatMessageListHandle> }) => {
-    useImperativeHandle(props.ref, () => ({ revealLatest: stubs.revealLatest }))
+    useImperativeHandle(props.ref, () => ({
+      revealLatest: stubs.revealLatest,
+      revealFindMatch: () => {},
+      messageCopyText: () => null
+    }))
     return null
   }
 }))

@@ -6,8 +6,17 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: ({ value }: { value: string | null }) =>
-    React.createElement('div', { 'data-agent-value': value ?? '' })
+  default: ({
+    value,
+    allowBlankTerminal
+  }: {
+    value: string | null
+    allowBlankTerminal?: boolean
+  }) =>
+    React.createElement('div', {
+      'data-agent-value': value ?? '',
+      'data-allow-blank': String(allowBlankTerminal === true)
+    })
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -108,6 +117,10 @@ describe('SourceControlAgentActionDialogForm', () => {
     const markup = renderForm()
 
     expect(markup).toContain('Resolve the merge conflicts reported for this pull request.')
+  })
+
+  it('offers agents only, since an action cannot start without one', () => {
+    expect(renderForm()).toContain('data-allow-blank="false"')
   })
 
   it('checks already-saved copy against the selected save target', () => {

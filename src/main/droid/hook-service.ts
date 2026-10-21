@@ -10,12 +10,12 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
@@ -70,11 +70,9 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  // Why: Factory invokes the .cmd via cmd.exe, but the raw path still splits at
-  // whitespace when the user profile contains a space (e.g. `C:\Users\Jane Doe`).
-  // The shared Windows wrapper keeps the path out of cmd.exe's raw command line. #6078.
+  // Why: Factory runs hooks via cmd.exe, which splits a bare path at a profile space (#6078).
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 

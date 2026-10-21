@@ -5,6 +5,8 @@ import type { Selection } from 'monaco-editor'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
 import type { NotesSendMenu } from '../editor/NotesSendMenu'
 
+vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
+
 const notesMenuFixture = vi.hoisted(() => ({
   NotesSendMenu: vi.fn<typeof NotesSendMenu>(() => {
     throw new Error('Range selection must not render the agent notes menu')

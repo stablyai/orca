@@ -12,6 +12,25 @@ import {
 } from './claude-structured-session-test-support'
 
 describe('ClaudeStructuredSessionAdapter turns and controls', () => {
+  it('applies a sent model and effort before handing Claude the message', async () => {
+    const claude = fakeClaude({ replayUuid: 'chosen-uuid' })
+    const adapter = await acquired(claude)
+    const connection = claude.connections[0]!
+    const before = connection.calls.length
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'chosen-send',
+        body: USER_MESSAGE,
+        fence: 7,
+        executionOptions: { model: 'sonnet', effort: 'high' }
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    const controls = connection.calls.slice(before).map((call) => call.subtype)
+    expect(controls.indexOf('set_model')).toBeGreaterThan(-1)
+    expect(controls.indexOf('apply_flag_settings')).toBeGreaterThan(controls.indexOf('set_model'))
+  })
+
   it("admits a dispatch on the write and names it from Claude's replay", async () => {
     const claude = fakeClaude({ replayUuid: 'user-provider-uuid' })
     const settled = vi.fn()
@@ -24,7 +43,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       fence: 7
     })
 
-    expect(result).toEqual({ state: 'admitted' })
+    expect(result).toMatchObject({ state: 'admitted' })
     expect(settled).toHaveBeenCalledWith({
       sessionId: 'session-1',
       clientMessageId: 'client-1',
@@ -51,7 +70,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(settled).not.toHaveBeenCalled()
   })
 
@@ -84,11 +103,9 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'sonnet', fence: 7 })
     ).resolves.toEqual({ model: 'sonnet' })
-    // The model write pre-flights the catalog first; this CLI lists nothing, which
-    // identifies no model and so refuses none. Then it asks for the new model's window.
-    expect(claude.connections[0].calls.slice(-4)).toEqual([
+    // A literal model goes straight to the CLI; then it asks for the new model's window.
+    expect(claude.connections[0].calls.slice(-3)).toEqual([
       { subtype: 'interrupt', params: {} },
-      { subtype: 'list_models' },
       { subtype: 'set_model', params: { model: 'sonnet' } },
       { subtype: 'get_context_usage' }
     ])
@@ -163,7 +180,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
           body: USER_MESSAGE,
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
       expect(settled).toHaveBeenCalledWith({
         sessionId: 'session-1',
         clientMessageId: 'client-T',
@@ -176,7 +193,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
           body: USER_MESSAGE,
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
       expect(claude.connections[0].sent).toHaveLength(2)
 
       await expect(
@@ -239,7 +256,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       fence: 7
     })
 
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+    const { catalogListing, ...options } = await adapter.readOptions({
+      sessionId: 'session-1',
+      fence: 7
+    })
+    // The listing the host saves for the account: the CLI's rows, none of this session's state.
+    expect(catalogListing?.models.map((model) => model.id)).toEqual(['opus', 'sonnet'])
+    expect(options).toEqual({
       models: [
         {
           id: 'opus',

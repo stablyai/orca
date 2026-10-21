@@ -46,7 +46,7 @@ vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
@@ -93,7 +93,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
+import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { launchAndReconcile } from '@/lib/structured-agent-session-launch-recovery'
 import {
   cancelStructuredAgentLaunch,
@@ -341,7 +341,12 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
 
     expect(mocks.launch).toHaveBeenCalledOnce()
-    expect(mocks.launch).toHaveBeenCalledWith(intent, expect.any(Function))
+    expect(mocks.launch).toHaveBeenCalledWith(
+      intent,
+      expect.any(Function),
+      false,
+      expect.any(Function)
+    )
     expect(toast.message).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
   })
@@ -367,12 +372,14 @@ describe('startStructuredAgentLaunch', () => {
       'claude',
       undefined,
       undefined,
+      undefined,
       undefined
     )
     expect(mocks.createIntent).toHaveBeenNthCalledWith(
       2,
       worktreeId,
       'codex',
+      undefined,
       undefined,
       undefined,
       undefined

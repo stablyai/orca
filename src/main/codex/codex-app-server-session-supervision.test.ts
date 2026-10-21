@@ -11,12 +11,7 @@ import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
 import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
 import { classifyCodexTrustGrantError } from './codex-trust-grant-telemetry'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
-import {
-  alive,
-  createSupervisedProbeRig,
-  waitFor,
-  type SupervisedProbeRig
-} from './supervised-probe-owner.test-fixture'
+import { alive, createSupervisedProbeRig, waitFor } from './supervised-probe-owner.test-fixture'
 
 // Answers initialize, then nothing; it ignores its stdin end, as a wedged Codex can.
 const WEDGED_APP_SERVER = String.raw`
@@ -38,15 +33,6 @@ setInterval(() => {}, 60_000)
 `
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-let rig: SupervisedProbeRig | null = null
-
-afterEach(() => {
-  if (originalPlatform) {
-    Object.defineProperty(process, 'platform', originalPlatform)
-  }
-  rig?.cleanup()
-  rig = null
-})
 
 type CapturedSpawn = { program: string; args: string[]; options: Record<string, unknown> }
 
@@ -70,13 +56,25 @@ function decodedSupervisorSpec(env: unknown): unknown {
 }
 
 describe('short-lived Codex app-server session spawn', () => {
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
   it('runs a POSIX session under the provider supervisor in session lifetime', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const { spawnImpl, calls } = captureSpawn()
 
     await expect(
       runCodexAppServerSession(
-        { command: '/bin/codex', cliPath: null, args: ['app-server'], timeoutMs: 1_000 },
+        {
+          command: '/bin/codex',
+          cliPath: null,
+          args: ['app-server'],
+          cwd: '/workspace',
+          timeoutMs: 1_000
+        },
         async () => null,
         spawnImpl
       )
@@ -86,8 +84,10 @@ describe('short-lived Codex app-server session spawn', () => {
     expect(program).toBe(process.execPath)
     expect(args.slice(args.indexOf('--') + 1)).toEqual(['/bin/codex', 'app-server'])
     expect(options.detached).toBe(true)
+    expect(options.cwd).toBe('/workspace')
     expect(decodedSupervisorSpec(options.env)).toMatchObject({
       lifetime: 'session',
+      cwd: '/workspace',
       ownerPid: process.pid
     })
   })
@@ -142,8 +142,12 @@ describe('short-lived Codex app-server session spawn', () => {
 })
 
 describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessions', () => {
-  it('stops a wedged session at its deadline with SIGTERM to its whole group', async () => {
-    rig = createSupervisedProbeRig()
+  it.concurrent('stops a wedged session at its deadline with SIGTERM to its whole group', async ({
+    expect,
+    onTestFinished
+  }) => {
+    const rig = createSupervisedProbeRig()
+    onTestFinished(() => rig.cleanup())
     const standIn = rig.writeStandIn('codex', WEDGED_APP_SERVER)
 
     const readPids = rig.readPids
@@ -178,8 +182,12 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     expect(alive(pids.grandchild)).toBe(false)
   })
 
-  it('drains, then stops the session group, when its owner is SIGKILLed mid-session', async () => {
-    rig = createSupervisedProbeRig()
+  it.concurrent('drains, then stops the session group, when its owner is SIGKILLed mid-session', async ({
+    expect,
+    onTestFinished
+  }) => {
+    const rig = createSupervisedProbeRig()
+    onTestFinished(() => rig.cleanup())
     const standIn = rig.writeStandIn('codex', WEDGED_APP_SERVER)
     const bundle = await rig.bundleOwner(OWNER, __dirname)
     const owner = rig.launchOwner(bundle, { ORCA_TEST_STAND_IN: standIn })
@@ -201,8 +209,12 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     )
   })
 
-  it('reports a missing Codex binary as the spawn error, not an early exit', async () => {
-    rig = createSupervisedProbeRig()
+  it('reports a missing Codex binary as the spawn error, not an early exit', async ({
+    expect,
+    onTestFinished
+  }) => {
+    const rig = createSupervisedProbeRig()
+    onTestFinished(() => rig.cleanup())
     const error = await runCodexAppServerSession(
       {
         command: join(rig.dir, 'missing', 'codex'),

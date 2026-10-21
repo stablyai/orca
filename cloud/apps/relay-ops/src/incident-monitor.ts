@@ -182,6 +182,8 @@ export type IncidentCellExpectation = {
   runtimeKnown: boolean
   powered: boolean
   expectedAdmissionState: AdmissionState
+  // Step 5 reserve mode: the director's cell-status and migration reads refuse the cell.
+  reserve?: boolean
 }
 
 export type IncidentSample = {
@@ -558,6 +560,15 @@ function checkCell(
     ]
   ] as const
   for (const [source, signals, signalName, threshold, comparison] of checks) {
+    // Probes, logs and selector still judge a reserve cell; the reserve watch reads its runtime.
+    if (
+      cell.reserve &&
+      ['heartbeat_fresh', 'heartbeat_age_ms', 'migration_blocked', 'migration_target_inactive'].some(
+        (suffix) => signalName.endsWith(suffix)
+      )
+    ) {
+      continue
+    }
     if (
       migrationPolicy === 'recover-forward' &&
       cell.cellId === recoverySourceCellId &&

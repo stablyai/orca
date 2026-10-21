@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +9,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
+import { ORCHESTRATION_CHECK_METHODS } from './rpc/methods/orchestration/messaging/check-methods'
+import { ORCHESTRATION_ASK_METHODS } from './rpc/methods/orchestration/messaging/ask-methods'
 import {
   withCurrentOrchestrationContract,
   waitFor,
@@ -45,6 +48,7 @@ describe('OrcaRuntimeRpcServer', () => {
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
     const server = new OrcaRuntimeRpcServer({
       runtime,
+      methods: [...ORCHESTRATION_CHECK_METHODS, ...ORCHESTRATION_ASK_METHODS],
       userDataPath,
       enableWebSocket: false,
       longPollCap: 1
@@ -54,7 +58,9 @@ describe('OrcaRuntimeRpcServer', () => {
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
     server['mobileSocketWiring'] = {
+      dispose: () => {},
       getConnectionId: () => 'conn-test'
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const replies: Record<string, unknown>[] = []
@@ -124,6 +130,7 @@ describe('OrcaRuntimeRpcServer', () => {
     // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
     const server = new OrcaRuntimeRpcServer({
       runtime,
+      methods: [...ORCHESTRATION_CHECK_METHODS, ...ORCHESTRATION_ASK_METHODS],
       userDataPath,
       enableWebSocket: false,
       longPollCap: 4
@@ -132,7 +139,9 @@ describe('OrcaRuntimeRpcServer', () => {
     // Why: 'runtime' scope, not 'mobile' — orchestration.ask is absent from the mobile allowlist.
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
     server['mobileSocketWiring'] = {
+      dispose: () => {},
       getConnectionId: () => 'conn-test'
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const replies: Record<string, unknown>[] = []
@@ -210,11 +219,18 @@ describe('OrcaRuntimeRpcServer', () => {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime'
     } as unknown as OrcaRuntimeService
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      methods: [],
+      userDataPath,
+      enableWebSocket: false
+    })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
     server['mobileSocketWiring'] = {
+      dispose: () => {},
       getConnectionId: () => 'conn-test'
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     let activeDispatches = 0

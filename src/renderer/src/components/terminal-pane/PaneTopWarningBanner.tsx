@@ -3,6 +3,25 @@ import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
+/** Stacks the pane's banners top to bottom and reserves their total height for the terminal. */
+function layoutPaneTopBanners(pane: HTMLElement, leaving?: HTMLElement): void {
+  let offset = 0
+  let count = 0
+  for (const banner of pane.querySelectorAll<HTMLElement>(':scope > .pane-top-banner')) {
+    if (banner === leaving) {
+      continue
+    }
+    banner.style.setProperty('--orca-pane-top-banner-offset', `${offset}px`)
+    offset += banner.offsetHeight
+    count += 1
+  }
+  if (count === 0) {
+    pane.style.removeProperty('--orca-pane-top-banner-height')
+  } else {
+    pane.style.setProperty('--orca-pane-top-banner-height', `${offset}px`)
+  }
+}
+
 /** Reserves the banner's height at the top of its pane so the terminal refits below it. */
 function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null)
@@ -12,15 +31,15 @@ function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
     if (!banner || !pane) {
       return
     }
-    const reserve = (): void => {
-      pane.style.setProperty('--orca-pane-top-banner-height', `${banner.offsetHeight}px`)
-    }
+    // Why the whole pane: two banners can share it, so each one's height moves the ones below.
+    const reserve = (): void => layoutPaneTopBanners(pane)
     reserve()
     const observer = new ResizeObserver(reserve)
     observer.observe(banner)
     return () => {
       observer.disconnect()
-      pane.style.removeProperty('--orca-pane-top-banner-height')
+      // Why exclude this banner: React runs this before it takes the node out of the pane.
+      layoutPaneTopBanners(pane, banner)
     }
   }, [])
   return ref
@@ -38,7 +57,7 @@ export function PaneBannerLearnMore({ onClick }: { onClick: () => void }): React
   )
 }
 
-/** The warning strip across the top of a terminal pane, with its actions and Dismiss. */
+/** The warning strip across the top of a terminal pane, with its actions and optional Dismiss. */
 export function PaneTopWarningBanner({
   title,
   body,
@@ -48,9 +67,9 @@ export function PaneTopWarningBanner({
   onShown
 }: {
   title: string
-  body: React.ReactNode
+  body?: React.ReactNode
   primaryAction: React.ReactNode
-  onDismiss: () => void
+  onDismiss?: () => void
   onDontShowAgain?: () => void
   onShown?: () => void
 }): React.JSX.Element {
@@ -76,7 +95,7 @@ export function PaneTopWarningBanner({
           />
           <div className="min-w-0 leading-5">
             <p className="font-medium text-foreground">{title}</p>
-            <p className="text-muted-foreground">{body}</p>
+            {body ? <p className="text-muted-foreground">{body}</p> : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1 @[44rem]:shrink-0 @max-[44rem]:mt-1.5 @max-[44rem]:pl-6.5">
@@ -86,9 +105,11 @@ export function PaneTopWarningBanner({
               {translate('terminal.paneTopBanner.dontShowAgain', "Don't show again")}
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" size="xs" onClick={onDismiss}>
-            {translate('terminal.paneTopBanner.dismiss', 'Dismiss')}
-          </Button>
+          {onDismiss ? (
+            <Button type="button" variant="ghost" size="xs" onClick={onDismiss}>
+              {translate('terminal.paneTopBanner.dismiss', 'Dismiss')}
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

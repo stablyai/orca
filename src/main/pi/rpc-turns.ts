@@ -1,4 +1,3 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
@@ -9,7 +8,7 @@ import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcContextUsage } from './rpc-context-usage'
 import { PiRpcMessages } from './rpc-messages'
-import { PiRpcPromptDelivery } from './rpc-prompt-delivery'
+import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
 import { piRpcMessageSchema } from './rpc-protocol'
@@ -263,9 +262,7 @@ export class PiRpcTurns {
         : 'success'
     const events: ProviderTimelineEvent[] = []
     if (outcome === 'failure' && this.failure) {
-      const fact = agentSessionFailureFact('providerRejected', {
-        detail: providerDiagnostic(this.failure, 'person')
-      })
+      const fact = piRpcFailureFact(this.failure)
       events.push({
         type: 'item.close',
         item: `error:${this.active}`,

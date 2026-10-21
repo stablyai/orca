@@ -20,7 +20,7 @@ import {
   packCompilerCache
 } from './headless-detector-compiler-cache.mjs'
 import { collectNodeServerInputs } from './node-server-change-scope.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const temporary = []
 afterEach(() => {
@@ -66,15 +66,17 @@ it('separates policy, Node, platform and architecture identities with the same a
   }
 })
 
-it('activates only the actual compiler packages and preserves import graph behavior', async () => {
+it('activates the compiler and workspace-policy parser and preserves import graph behavior', async () => {
   const { root, identity } = fixture()
   expect(await activateCompilerCache({ root, identity })).toEqual({ available: true })
-  expect(readdirSync(join(root, 'node_modules')).sort()).toEqual(['@esbuild', 'esbuild'])
+  expect(readdirSync(join(root, 'node_modules')).sort()).toEqual(['@esbuild', 'esbuild', 'yaml'])
   for (const name of [
     'node-server-change-scope',
     'node-server-test-paths',
     'node-server-qualification',
-    'orcad-entry-build'
+    'node-server-native-compat-scope',
+    'orcad-entry-build',
+    'workspace-source-exports'
   ]) {
     mkdirSync(join(root, 'config', 'scripts'), { recursive: true })
     cpSync(
@@ -82,6 +84,10 @@ it('activates only the actual compiler packages and preserves import graph behav
       join(root, 'config', 'scripts', `${name}.mjs`)
     )
   }
+  cpSync(
+    new URL('../dark-build-switches.cjs', import.meta.url),
+    join(root, 'config', 'dark-build-switches.cjs')
+  )
   mkdirSync(join(root, 'src', 'shared'), { recursive: true })
   cpSync(
     new URL('../../src/shared/orcad-artifacts.ts', import.meta.url),
@@ -89,7 +95,20 @@ it('activates only the actual compiler packages and preserves import graph behav
   )
   writeFileSync(
     join(root, 'entry.ts'),
-    "import './first'; export * from './exports'; import('./dynamic'); require('./required'); import 'external-package'; import './native.node'"
+    "import './first'; export * from './exports'; import('./dynamic'); require('./required'); import 'external-package'; import './native.node'; import '@orca/process-host'"
+  )
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - src/packages/*\n')
+  mkdirSync(join(root, 'src/packages/process-host/src'), { recursive: true })
+  writeFileSync(
+    join(root, 'src/packages/process-host/package.json'),
+    JSON.stringify({
+      name: '@orca/process-host',
+      exports: { '.': { 'orca-source': './src/run-process.ts', default: './dist/run-process.js' } }
+    })
+  )
+  writeFileSync(
+    join(root, 'src/packages/process-host/src/run-process.ts'),
+    'export const value = 1'
   )
   for (const name of ['first', 'exports', 'dynamic', 'required']) {
     writeFileSync(join(root, `${name}.ts`), 'export const value = 1')
@@ -99,6 +118,8 @@ it('activates only the actual compiler packages and preserves import graph behav
     "import { collectNodeServerInputs } from './config/scripts/node-server-change-scope.mjs'; console.log(JSON.stringify([...(await collectNodeServerInputs({ root: process.cwd(), entryPoints: ['entry.ts'] }))].sort()))"
   )
   const baseline = [...(await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }))].sort()
+  expect(baseline).toContain('src/packages/process-host/src/run-process.ts')
+  expect(baseline).toContain('src/packages/process-host/package.json')
   const candidate = runProcessSync({
     program: process.execPath,
     args: ['probe.mjs'],
@@ -179,9 +200,7 @@ it('uses exact optional restores, seeds only main and retains full dependency fa
   ).toBe(
     "steps.scope.outputs.graph_required == 'true' && steps.compiler.outputs.available != 'true'"
   )
-  for (const event of ['push', 'pull_request']) {
-    expect(workflow.on[event].paths).toContain('.github/actions/prepare-headless-compiler/**')
-  }
+  expect(workflow.on.pull_request.paths).toContain('.github/actions/prepare-headless-compiler/**')
   const warmer = parse(readFileSync('.github/workflows/ci-cache-warmup.yml', 'utf8'))
   const warmSteps = warmer.jobs.warm.steps
   expect(

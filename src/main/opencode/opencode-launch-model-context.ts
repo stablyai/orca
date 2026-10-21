@@ -1,18 +1,19 @@
 import { randomBytes } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import {
   forceTerminateProcessTree,
   signalProcessTree
-} from '../../shared/child-process/process-tree-termination'
+} from '@orca/process-host/process-tree-termination'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import { createOutputSink } from '../../shared/child-process/bounded-output-sink'
+import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
 
 const OPENCODE_PREFLIGHT_KILL_SITE = 'opencode-launch-model-preflight'
 // A supervisor's pipes are its own, so they close as it exits.
@@ -29,7 +30,10 @@ const agent = z.object({
 const location = z.object({ directory: z.string() })
 const modelResponse = z.object({ location, data: availableModel.array() })
 const agentResponse = z.object({ location, data: agent.array() })
-const defaultModelResponse = z.object({ location, data: availableModel.nullable() })
+const defaultModelResponse = z.object({
+  location,
+  data: availableModel.nullable()
+})
 const configResponse = z.array(
   z.object({
     type: z.enum(['directory', 'document']),
@@ -107,7 +111,11 @@ export async function probeOpenCodeLaunchModelContext(options: {
       args: ['serve', '--hostname', '127.0.0.1', '--port', '0'],
       cwd: options.cwd
     },
-    { ...options.env, OPENCODE_SERVER_USERNAME: 'opencode', OPENCODE_SERVER_PASSWORD: password },
+    {
+      ...options.env,
+      OPENCODE_SERVER_USERNAME: 'opencode',
+      OPENCODE_SERVER_PASSWORD: password
+    },
     process.platform,
     // `opencode serve` never exits on stdin end, so on POSIX only its supervisor stops it with Orca.
     { lifetime: 'one-shot' }
@@ -117,7 +125,12 @@ export async function probeOpenCodeLaunchModelContext(options: {
     args: spawnSpec.args,
     cwd: options.cwd,
     env: spawnSpec.env,
-    detached: true
+    detached: true,
+    stdio: ['pipe', 'pipe', 'pipe', ...spawnSpec.groupReportStdio]
+  })
+  guardSupervisedProviderGroup(child, {
+    site: OPENCODE_PREFLIGHT_KILL_SITE,
+    supervised: spawnSpec.supervised
   })
   const output = createOutputSink(4096)
   let childClosed = false

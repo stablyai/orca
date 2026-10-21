@@ -10,14 +10,14 @@ import {
 import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
-import type * as DeployHelpers from './ssh-relay-deploy-helpers'
+import { runProcess, spawnProcess } from '@orca/process-host'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 
 // The proof's remote commands run in a real local shell.
-vi.mock('./ssh-relay-deploy-helpers', async (importOriginal) => {
-  const { runProcess: run } = await import('../../shared/child-process/run-process')
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
+  const { runProcess: run } = await import('@orca/process-host')
   return {
-    ...(await importOriginal<typeof DeployHelpers>()),
+    ...(await importOriginal<typeof ExecCommandModule>()),
     execCommand: async (_conn: unknown, command: string) =>
       (await run({ program: '/bin/sh', args: ['-c', command] })).stdout
   }
@@ -26,10 +26,12 @@ vi.mock('./ssh-relay-deploy-helpers', async (importOriginal) => {
 const { exitedOwnLockProof } = await import('./orcad-exited-own-lock')
 const { initOrcadHeldFenceTokenFile, ORCAD_HELD_FENCE_TOKENS_FILE_NAME } =
   await import('./orcad-held-fence-tokens')
-const { tryStealInstallLockCommand } = await import('./ssh-relay-install-lock-commands')
-const { serializedStateMutationCommand } = await import('./orcad-state-snapshot')
+const { tryStealInstallLockCommand } =
+  await import('../managed-server/install/remote-install-lock-commands')
+const { serializedStateMutationCommand } =
+  await import('../managed-server/host-state/orcad-state-snapshot')
 const { ORCAD_FENCE_LOST_EXIT, ORCAD_FENCE_LOST_MARKER } =
-  await import('./orcad-activation-fence-scope')
+  await import('../managed-server/activation/orcad-activation-fence-scope')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 
 const OWNER = '.orca-fence-owner'

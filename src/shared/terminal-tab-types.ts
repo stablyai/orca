@@ -23,8 +23,6 @@ export type TerminalPaneRecoveryReason =
   // ACKs it — main's delivery health stays green while the pane shows nothing.
   | 'spawn-left-pane-unbound'
 
-/** Same vocabulary the direct-SSH pane retry ledger settles with
- *  (DirectSshPaneRetryResult), so a pane reports both through one call. */
 export type TerminalPaneRecoveryOutcome =
   | 'pending'
   | 'success'
@@ -97,11 +95,10 @@ export type TerminalTab = {
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
   /**
-   * The pane an `agent.launch` laid out before its agent existed, while its fate is open or once it
-   * is final. Pending (no `outcome`): the pane's spawn reads the launch record. Cleared once the
-   * agent attaches or the pane is an ordinary terminal again. `outcome`: the launch never ran there,
-   * and the pane says so for the tab's life, until a different launch (`operationId`) reuses it; a
-   * retry of the same launch changes nothing.
+   * The pane an `agent.launch` laid out before its agent existed, for this session only. Cleared once
+   * the agent attaches or the pane is an ordinary terminal again. `outcome`: what main says the
+   * launch left the pane, which it keeps until it quits; the pane says so until a different launch
+   * (`operationId`) reuses it, and a retry of the same launch changes nothing. Never saved.
    */
   agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
@@ -114,6 +111,9 @@ export type TerminalTab = {
    *  `sortEpoch` increments. Split layouts use a numeric count because one tab
    *  can remount several panes. Never persisted — it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
+  /** Hydrated from the saved session, so its own persisted PTY bindings identify it; a host
+   *  surface may retire it only by that identity. Never persisted; dropped once a PTY binds. */
+  restoredFromSession?: true
   /** Transient recovery ledger for this tab. Never persisted — it describes a
    *  mounted pane's in-flight heal, and a stale one would refuse the first
    *  legitimate recovery after restart. Stripped exactly like
@@ -153,4 +153,8 @@ export type TerminalLayoutSnapshot = {
   /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
+  /** Each pane's last grid, so main starts its terminal at that size. Older builds drop it. */
+  lastGridsByLeafId?: Record<string, TerminalGrid>
 }
+
+export type TerminalGrid = { cols: number; rows: number }

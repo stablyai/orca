@@ -19,7 +19,7 @@ export function queuedSendAnswer(
         ? journal.submission(draft.consumedAs)
         : undefined
     return consumed
-      ? { clientMessageId, submission: consumed }
+      ? { clientMessageId, submission: { ...consumed } }
       : {
           clientMessageId,
           queued: { messageId: draft.messageId, position: draft.position, state: draft.state }
@@ -38,5 +38,5 @@ export function queuedSendAnswer(
       queued: { messageId: clientMessageId, position: 0, state: 'withdrawn' }
     }
   }
-  return handoff ? { clientMessageId, submission: handoff } : null
+  return handoff ? { clientMessageId, submission: { ...handoff } } : null
 }

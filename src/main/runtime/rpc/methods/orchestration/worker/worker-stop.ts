@@ -9,12 +9,13 @@ import {
   resolveStructuredWorkerForDispatch,
   stopStructuredWorker
 } from '../../orchestration-structured-worker-lifecycle'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) =>
       dedupeWorkerStop(runtime, params.dispatch, async () => {

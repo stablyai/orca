@@ -91,7 +91,7 @@ describe('a launch the caller cannot show as a chat', () => {
 
 describe('Grok with the structured-chat setting off', () => {
   it('opens as a terminal for every caller, as Claude and Codex do', async () => {
-    const off = { ...STRUCTURED_PREFERENCE, experimentalStructuredNativeChat: false }
+    const off = { ...STRUCTURED_PREFERENCE, experimentalNativeChat: false }
     for (const agent of ['grok', 'claude']) {
       const { result, runtime } = await launchInto(agent, {}, off)
       expect(result.outcome).toMatchObject({ kind: 'terminal' })
@@ -99,5 +99,19 @@ describe('Grok with the structured-chat setting off', () => {
       expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
     }
     expect(createStructuredSession).not.toHaveBeenCalled()
+  })
+})
+
+describe("a launch carrying its caller's chat default", () => {
+  it("opens a chat for a relayed phone whose desktop has chats on, though this host's are off", async () => {
+    const runtime = runtimeStub({ settings: { experimentalNativeChat: false } })
+    const parsed = AGENT_LAUNCH.params.parse({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'id:wt-7' },
+      nativeChatDefault: true
+    })
+    const result = await AGENT_LAUNCH.handler(parsed, rpcContext(runtime, CAPABLE_CLIENT))
+    expect(result.outcome).toMatchObject({ kind: 'structured' })
+    expect(runtime.createTerminal).not.toHaveBeenCalled()
   })
 })

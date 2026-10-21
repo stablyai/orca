@@ -14,10 +14,8 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
-import {
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from './web-session-tabs-sync'
+import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,

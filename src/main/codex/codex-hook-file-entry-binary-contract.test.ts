@@ -1,5 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,6 +12,10 @@ import {
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
+import { createCodexComposerReadyScanner } from '../../shared/codex-composer-ready-scanner'
+import { createTerminalEscapeScanner } from '../../shared/terminal-escape-scanner'
 import { promisify } from 'node:util'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexListedHook } from './codex-app-server-client'
@@ -277,8 +282,9 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
           enabled: true
         }
       ])
-      const { screen } = await runCodexTui()
+      const { screen, posts } = await runCodexTui(accountHome(), true)
       expect(screen).toMatch(/eeds?review/i)
+      expect(posts).toEqual([])
     }
   )
 
@@ -403,11 +409,13 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
 
   /** A TUI Codex in a pty: start, type a prompt, quit; the screen without spaces or escapes. */
   async function runCodexTui(
-    codexHome: string | null = accountHome()
+    codexHome: string | null = accountHome(),
+    expectReview = false
   ): Promise<{ screen: string; posts: string[] }> {
     const codexHomeEnv = codexHome ? { CODEX_HOME: codexHome } : {}
     const posts: string[] = []
-    const receiver = await listen(recordPosts(posts))
+    const control = mkdtempSync(join(root, 'tui-control-'))
+    const receiver = await listen(recordPosts(posts, control))
     const model = await startMockResponses()
     // Why resolved: Codex 0.158 matches the trusted project only by the real path, and a symlinked
     // HOME (the ~/.codex case) left it untrusted, so the turn never ran and no hook posted.
@@ -418,7 +426,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       env: { PATH: process.env.PATH, HOME: home, ...codexHomeEnv }
     })
     try {
-      await execFileAsync(
+      const run = execFileAsync(
         'python3',
         [
           '-c',
@@ -426,6 +434,8 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
           out,
           'say hi',
           workdir,
+          control,
+          expectReview ? 'review' : 'turn',
           '--',
           binary!,
           ...(help.stdout.includes('--no-daemon') ? ['--no-daemon'] : []),
@@ -440,6 +450,7 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
         ],
         {
           timeout: TIMEOUT_MS,
+          maxBuffer: 64 * 1024 * 1024,
           env: {
             PATH: process.env.PATH,
             HOME: home,
@@ -452,49 +463,102 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
           }
         }
       )
+      const composer = createCodexComposerReadyScanner()
+      const decoder = new StringDecoder('utf8')
+      let painted = ''
+      const text = createTerminalEscapeScanner({
+        onCsi: () => {},
+        onText: (chunk) => {
+          painted = (painted + chunk).slice(-16_384)
+        }
+      })
+      const mark = (name: string): void => {
+        const file = join(control, name)
+        if (!existsSync(file)) {
+          writeFileSync(file, '')
+        }
+      }
+      run.child.stdout?.on('data', (bytes: Buffer) => {
+        const chunk = decoder.write(bytes)
+        const ready = composer.observe(chunk).ready
+        text.observe(chunk)
+        const folded = painted.replace(/\s+/g, '')
+        if (/eeds?review/i.test(folded)) {
+          mark('review-started')
+        }
+        if (/\d+hooks?n?eeds?reviewbeforeitcanrun/i.test(folded)) {
+          mark('review-table')
+        }
+        if (ready && /\b(?:default|minimal|low|medium|high|xhigh)\s*·/.test(painted)) {
+          mark('ready')
+        }
+        if (folded.includes('•hi') && ready) {
+          mark('assistant-painted')
+        }
+      })
+      await run
     } finally {
       model.close()
       receiver.close()
     }
-    const screen = readFileSync(out, 'utf-8').replace(/\s+/g, '')
+    const screen = stripAnsiEscapeSequences(readFileSync(out, 'utf-8')).replace(/\s+/g, '')
     return { screen, posts }
   }
 })
 
 // Why a pty: Codex's review screen only exists in the TUI, which `codex exec` never shows.
 const PTY_DRIVER = `
-import os, pty, re, sys, time, select, signal, struct, fcntl, termios
+import os, pty, sys, time, select, signal, struct, fcntl, termios
 out, prompt, cwd = sys.argv[1], sys.argv[2], sys.argv[3]
+control, expected = sys.argv[4], sys.argv[5]
 cmd = sys.argv[sys.argv.index('--') + 1:]
+def send(data):
+    os.write(fd, data)
+buf = b''
+def present(name):
+    return os.path.isfile(os.path.join(control, name))
+def pump(sec, done=None):
+    global buf
+    end = time.monotonic() + sec
+    while time.monotonic() < end:
+        if done and done(): return True
+        r, _, _ = select.select([fd], [], [], 0.2)
+        if r:
+            try: d = os.read(fd, 65536)
+            except OSError: return False
+            if not d: return False
+            buf += d
+            os.write(sys.stdout.fileno(), d)
+            if b'\\x1b[6n' in d: send(b'\\x1b[1;1R')
+    return bool(done and done())
 pid, fd = pty.fork()
 if pid == 0:
     os.chdir(cwd); os.execv(cmd[0], cmd)
-fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
-buf = b''
-def pump(sec):
-    global buf
-    end = time.time() + sec
-    while time.time() < end:
-        r, _, _ = select.select([fd], [], [], 0.2)
-        if r:
-            try:
-                d = os.read(fd, 65536)
-            except OSError:
-                return
-            if not d: return
-            buf += d
-            if b'\\x1b[6n' in d: os.write(fd, b'\\x1b[1;1R')
-pump(8)
-os.write(fd, prompt.encode()); time.sleep(0.5); os.write(fd, b'\\r'); pump(10)
-for _ in range(3):
-    try: os.write(fd, b'\\x03')
-    except OSError: break
-    pump(1)
-try: os.kill(pid, signal.SIGKILL)
-except ProcessLookupError: pass
-buf = re.sub(rb'\\x1b\\[[0-9;?<>=]*[A-Za-z]', b'', buf)
-buf = re.sub(rb'\\x1b\\][^\\x07]*\\x07', b'', buf)
-open(out, 'wb').write(buf)
+try:
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
+    start = 'review-started' if expected == 'review' else 'ready'
+    if not pump(8, lambda: present(start)):
+        raise RuntimeError('Codex did not paint its expected startup state within 8 seconds')
+    send(prompt.encode()); time.sleep(0.5); send(b'\\r')
+    if expected == 'review':
+        done = lambda: present('review-table') and not present('stop')
+    else:
+        done = lambda: present('stop') and present('assistant-painted')
+    if not pump(10, done):
+        raise RuntimeError('Codex did not deliver/paint its expected turn or review within 10 seconds')
+finally:
+    try:
+        for _ in range(3):
+            try: send(b'\\x03')
+            except OSError: break
+            pump(1)
+    finally:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+        finally:
+            waited_pid, status = os.waitpid(pid, 0)
+        open(out, 'wb').write(buf)
 `
 
 function hasPython(): boolean {
@@ -506,11 +570,32 @@ function hasPython(): boolean {
   }
 }
 
-function recordPosts(posts: string[]): Server {
+function recordPosts(posts: string[], control?: string): Server {
   return createServer((request, response) => {
+    const chunks: Buffer[] = []
+    if (control) {
+      request.on('data', (chunk: Buffer) => chunks.push(chunk))
+    }
     request.resume()
     request.on('end', () => {
       posts.push(request.url ?? '')
+      if (control && request.url === '/hook/codex') {
+        const raw = Buffer.concat(chunks).toString('utf8')
+        const form = new URLSearchParams(raw)
+        try {
+          const payload: unknown = JSON.parse(form.get('payload') ?? raw)
+          if (
+            typeof payload === 'object' &&
+            payload !== null &&
+            'hook_event_name' in payload &&
+            payload.hook_event_name === 'Stop'
+          ) {
+            response.once('finish', () => writeFileSync(join(control, 'stop'), raw))
+          }
+        } catch {
+          /* A malformed owner payload must not satisfy the delivery gate. */
+        }
+      }
       response.writeHead(204).end()
     })
   })

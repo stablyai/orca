@@ -99,6 +99,7 @@ type SettingsChangedListener = (
 const store = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  updateSettingsAndFlush: vi.fn(),
   getGitHubCache: vi.fn(),
   setGitHubCache: vi.fn(),
   onSettingsChanged: vi.fn(() => () => {})
@@ -107,6 +108,7 @@ const store = {
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
+    store.updateSettingsAndFlush.mockReset()
     onMock.mockClear()
     applyAppIconMock.mockClear()
     applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
@@ -239,6 +241,40 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('propagates a failed durable force-delete preference write through settings:set', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeleteWorktrees: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeleteWorktrees: true, editorWordWrap: false })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeleteWorktrees: true, editorWordWrap: false },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('flushes the preserved-branch deletion preference before returning', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeletePreservedBranches: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeletePreservedBranches: true })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeletePreservedBranches: true },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('persists Active Server only through the dedicated preference channel', () => {
     store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'windows-2' })
     registerSettingsHandlers(store as never)
@@ -260,7 +296,7 @@ describe('registerSettingsHandlers', () => {
     )
 
     expect(() => handler(settingsInvokeEvent, { environmentId: 42 as never })).toThrow(
-      'Invalid Active Server preference'
+      'Invalid default host for new projects'
     )
     expect(() => handler(settingsInvokeEvent, { environmentId: 'does-not-exist' })).toThrow(
       'Runtime environment not found'

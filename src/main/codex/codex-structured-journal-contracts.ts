@@ -1,4 +1,5 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -20,6 +21,7 @@ export type CodexActiveJournalItem = {
 }
 
 export type CodexJournalTranslatorDeps = {
+  account?: () => AgentSessionAccountKind | undefined
   sink: StructuredAgentSessionEventSink
   /** Names this connection in frame-row identities, so a later connection never revises its rows. */
   acquisitionId?: string
@@ -37,9 +39,6 @@ export type CodexJournalTranslatorDeps = {
    *  identity the journal row carries so a replay computes the same key. */
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
-  /** Codex reported the primary thread is not running while no turn is open here.
-   *  A send whose dispatch was never answered is owed nothing after this. */
-  onPrimaryThreadStoppedRunning?: () => void
   /** Submission origin for one exact client message still awaiting its echo. */
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   subagentExecutions?: CodexSubagentExecutions

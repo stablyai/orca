@@ -6,6 +6,47 @@ import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
+import type { ResolveDispatchInput } from './journal-store-contracts'
+
+export type JournalPendingSubmission = Pick<
+  AgentJournalSubmission,
+  'clientMessageId' | 'dispatchState' | 'handoverRecorded' | 'handedOverAt' | 'recovered'
+> & { reason?: string | null }
+
+/** The same pending-send verdicts for standalone recovery and an atomic terminal settlement. */
+export function journalPendingSubmissionResolutions(
+  submissions: readonly JournalPendingSubmission[],
+  fence: number,
+  verdict: { reason: string } | { rejection: AgentJournalDispatchRejection }
+): ResolveDispatchInput[] {
+  return submissions
+    .filter(
+      (entry) =>
+        !isQueuedAgentJournalSubmission(entry) &&
+        (entry.dispatchState === 'pending' ||
+          (entry.dispatchState === 'unknown' && entry.recovered !== true))
+    )
+    .map((entry) =>
+      'rejection' in verdict
+        ? {
+            clientMessageId: entry.clientMessageId,
+            state: 'rejected',
+            ...verdict.rejection,
+            fence,
+            recovered: true
+          }
+        : {
+            clientMessageId: entry.clientMessageId,
+            state: 'unknown',
+            reason:
+              entry.dispatchState === 'unknown' && entry.reason != null
+                ? entry.reason
+                : verdict.reason,
+            fence,
+            recovered: true
+          }
+    )
+}
 
 /** Settles every submission a process fact left unanswerable. Doubt is never
  *  proof of non-delivery, so nothing here ever becomes re-deliverable. A queued
@@ -15,25 +56,9 @@ export async function markJournalPendingSubmissionsUnknown(
   fence: number,
   reason: string = DISPATCH_DOUBT_HOST_RESTARTED
 ): Promise<string[]> {
-  const unresolved = journal
-    .submissions()
-    .filter(
-      (entry) =>
-        !isQueuedAgentJournalSubmission(entry) &&
-        (entry.dispatchState === 'pending' ||
-          (entry.dispatchState === 'unknown' && entry.recovered !== true))
-    )
-  for (const entry of unresolved) {
-    // An earlier reason already names a sharper fact than "the host restarted".
-    const resolvedReason =
-      entry.dispatchState === 'unknown' && entry.reason !== null ? entry.reason : reason
-    await journal.resolveDispatch({
-      clientMessageId: entry.clientMessageId,
-      state: 'unknown',
-      reason: resolvedReason,
-      fence,
-      recovered: true
-    })
+  const unresolved = journalPendingSubmissionResolutions(journal.submissions(), fence, { reason })
+  for (const resolution of unresolved) {
+    await journal.resolveDispatch(resolution)
   }
   return unresolved.map((entry) => entry.clientMessageId)
 }
@@ -46,22 +71,9 @@ export async function rejectJournalPendingSubmissions(
   fence: number,
   rejection: AgentJournalDispatchRejection
 ): Promise<string[]> {
-  const unwritten = journal
-    .submissions()
-    .filter(
-      (entry) =>
-        !isQueuedAgentJournalSubmission(entry) &&
-        (entry.dispatchState === 'pending' ||
-          (entry.dispatchState === 'unknown' && entry.recovered !== true))
-    )
-  for (const entry of unwritten) {
-    await journal.resolveDispatch({
-      clientMessageId: entry.clientMessageId,
-      state: 'rejected',
-      ...rejection,
-      fence,
-      recovered: true
-    })
+  const unwritten = journalPendingSubmissionResolutions(journal.submissions(), fence, { rejection })
+  for (const resolution of unwritten) {
+    await journal.resolveDispatch(resolution)
   }
   return unwritten.map((entry) => entry.clientMessageId)
 }

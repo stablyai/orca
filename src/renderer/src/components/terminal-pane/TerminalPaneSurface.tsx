@@ -8,9 +8,9 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { isPaneOwnerRecoveryError, TerminalErrorToast } from './TerminalErrorToast'
+import { openTerminalBesideTab } from './open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
-import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
@@ -18,6 +18,7 @@ import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
+import { TerminalPaneSleepingPortals } from './TerminalPaneSleepingPortals'
 import {
   TerminalPaneCodexRestartPortals,
   TerminalPaneMobileDriverPortals,
@@ -27,7 +28,8 @@ import {
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { useAppStore } from '@/store'
-import { isTerminalPaneOnClient } from './terminal-pane-client-host'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 export function TerminalPaneSurface({
   controller
@@ -37,7 +39,7 @@ export function TerminalPaneSurface({
   const {
     activePane,
     activePaneCanContinueInNewSession,
-    activePaneCanToggleChat,
+    activePaneCanResumeInChat,
     activePaneIsChatLeaf,
     activatePaneTitleInteraction,
     agentSessionContinuation,
@@ -118,21 +120,26 @@ export function TerminalPaneSurface({
     visibleTerminalError,
     worktreeId
   } = controller
-  const paneOnClient = useAppStore((state) => isTerminalPaneOnClient(state, worktreeId))
+  // Why: an SSH, runtime, or not-yet-known host must not be described with this client's OS/shell.
+  const paneOnClient = useAppStore(
+    (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
+  )
 
   return (
     <>
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
-        data-os-file-drop-boundary=""
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
-        onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
+        onMouseDownCapture={(event) => {
+          contextMenu.onMouseDownCapture(event)
+          handlePrimarySelectionMiddleMouseDown(event)
+        }}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(event) => {
           if (
@@ -195,27 +202,16 @@ export function TerminalPaneSurface({
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={
-                isPaneOwnerUnverifiedError(visibleTerminalError)
-                  ? () => {
-                      const ptyId = activePane
-                        ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
-                        : null
-                      return requestTerminalPaneRecovery({
-                        tabId,
-                        ptyId,
-                        reason: 'reattach-unverifiable',
-                        // The user asking again is the new trigger that reopens
-                        // a reason an observed failure has closed.
-                        trigger: 'user'
-                      }).then((recovered) => {
-                        if (recovered) {
-                          dismissTerminalError()
-                        }
-                        return recovered
-                      })
-                    }
+                isPaneOwnerRecoveryError(visibleTerminalError)
+                  ? () =>
+                      Promise.resolve(
+                        paneTransportsRef.current.get(activePane.id)?.retryRecovery?.() ?? false
+                      )
                   : undefined
               }
+              onOpenNewTerminal={() => {
+                openTerminalBesideTab(tabId)
+              }}
             />,
             activePane.container,
             `terminal-error-${activePane.id}`
@@ -345,9 +341,9 @@ export function TerminalPaneSurface({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
-        canToggleNativeChat={activePaneCanToggleChat}
-        isChatViewMode={activePaneIsChatLeaf}
-        onToggleNativeChat={handleToggleNativeChat}
+        canShowTerminal={activePaneIsChatLeaf}
+        onShowTerminal={handleToggleNativeChat}
+        canResumeInNewNativeChat={activePaneCanResumeInChat}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
@@ -365,6 +361,7 @@ export function TerminalPaneSurface({
         onRenameBlur={handleRenameBlur}
       />
       <TerminalPaneRecoveryPortals controller={controller} />
+      <TerminalPaneSleepingPortals controller={controller} />
       <TerminalPaneMobileDriverPortals controller={controller} />
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}

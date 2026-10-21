@@ -1,4 +1,4 @@
-import type { ParsedAgentStatusPayload } from './agent-status-types'
+import { mainAgentStatusEqual, type ParsedAgentStatusPayload } from './agent-status-types'
 
 /** Whether a terminal status is the same hook status with only hook-owned metadata omitted.
  *
@@ -13,6 +13,8 @@ export function terminalStatusPayloadMatchesHook(
   // OSC never carries model/children; compare only fields its protocol owns.
   return (
     cachedHookPayload.state === terminalPayload.state &&
+    (terminalPayload.mainAgent === undefined ||
+      mainAgentStatusEqual(cachedHookPayload.mainAgent, terminalPayload.mainAgent)) &&
     // OSC never carries workingMode either; only a stated mismatch breaks equivalence.
     (terminalPayload.workingMode === undefined ||
       cachedHookPayload.workingMode === terminalPayload.workingMode) &&

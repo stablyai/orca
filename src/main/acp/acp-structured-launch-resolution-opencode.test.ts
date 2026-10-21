@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
@@ -6,11 +7,8 @@ import { restoreManagedDataAccountEnvironment } from '../../shared/managed-data-
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import { ACP_CHILD_ENV_TO_DELETE, acpLaunchSpecFor } from './acp-launch-specs'
-import {
-  createAcpStructuredLaunchResolver,
-  type AcpStructuredLaunchResolverDeps
-} from './acp-structured-launch-resolution'
+import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 
 const PROFILE = '123e4567-e89b-42d3-a456-426614174000'
 
@@ -61,11 +59,12 @@ function resolver(
     launchEnv?: Record<string, string>
     inheritedEnv?: NodeJS.ProcessEnv
     base?: Record<string, string>
-    probeVersion?: AcpStructuredLaunchResolverDeps['probeVersion']
+    probeVersion?: Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']
+    spec?: AcpLaunchSpec
   } = {}
 ) {
-  return createAcpStructuredLaunchResolver(OPENCODE, {
-    store: { getRecord: () => record },
+  return createAcpStructuredLaunchResolver(options.spec ?? OPENCODE, {
+    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     readJournal: () => null,
     resolveWorkspacePath: async () => '/repo/worktree',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user', ...options.base }),
@@ -106,7 +105,7 @@ describe('OpenCode ACP launch resolution', () => {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       {},
       'darwin'
@@ -159,7 +158,7 @@ describe('OpenCode ACP launch resolution', () => {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       inheritedEnv,
       'darwin'
@@ -179,7 +178,7 @@ describe('OpenCode ACP launch resolution', () => {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       inheritedEnv,
       'darwin'
@@ -215,12 +214,19 @@ describe('OpenCode ACP launch resolution', () => {
   it('refuses a record that pins a single directory instead of an OpenCode account', async () => {
     await expect(
       resolver(openCodeRecord({ variable: 'XDG_DATA_HOME', path: '/data' }))({ identity })
-    ).rejects.toThrow(/pinned data account/)
+    ).rejects.toThrow(/sessions pin opencode/)
   })
 
-  it('refuses an `opencode` that is 2.x before spawning it, as a host that cannot run the chat', async () => {
-    const launch = resolver(openCodeRecord(UNMANAGED), {
+  it('runs an `opencode` that is stable 2.x', async () => {
+    const launch = await resolver(openCodeRecord(UNMANAGED), {
       probeVersion: async (_input, supports) => supports('2.0.21')
+    })({ identity })
+    expect(launch.args).toEqual(['acp'])
+  })
+
+  it('refuses a release outside its lines before spawning it, as a host that cannot run the chat', async () => {
+    const launch = resolver(openCodeRecord(UNMANAGED), {
+      probeVersion: async (_input, supports) => supports('3.0.0')
     })({ identity })
     await expect(launch).rejects.toMatchObject({
       refusal: {
@@ -238,10 +244,45 @@ describe('OpenCode ACP launch resolution', () => {
   })
 
   it('asks the version of exactly the binary, folder and environment it spawns', async () => {
-    const asked: Parameters<NonNullable<AcpStructuredLaunchResolverDeps['probeVersion']>>[0][] = []
+    const asked: Parameters<
+      NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
+    >[0][] = []
     const launch = await resolver(openCodeRecord(UNMANAGED), {
       probeVersion: async (input, supports) => (asked.push(input), supports('1.18.31'))
     })({ identity })
     expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
   })
+})
+
+// Since OpenCode 2.0.0 `opencode2` is an alias the 2.x installer writes beside `opencode`.
+describe('OpenCode 2 ACP launch resolution', () => {
+  const OPENCODE2 = {
+    ...acpLaunchSpecFor('opencode2')!,
+    account: openCodeAcpAccountBinding(() => managedAccounts)
+  }
+  const launchOn = (version: string) =>
+    resolver(
+      { ...openCodeRecord(UNMANAGED), provider: 'opencode2' },
+      { spec: OPENCODE2, probeVersion: async (_input, supports) => supports(version) }
+    )({ identity: { ...identity, agent: 'opencode2' } })
+
+  it('runs `opencode2 acp` as an ACP client, and names its own sign-in command', async () => {
+    const launch = await launchOn('2.0.28')
+    expect(launch).toMatchObject({ command: '/resolved/opencode2', args: ['acp'] })
+    expect(launch.env).toMatchObject({ OPENCODE_CLIENT: 'acp' })
+    expect(OPENCODE2.loginCommand).toEqual(['opencode2', 'auth', 'login'])
+  })
+
+  // 1.x, below the 2.x floor, and a pre-release: none is the OpenCode 2 this row runs.
+  it.each(['1.18.35', '2.0.13', '2.1.0-beta.1'])(
+    'refuses %s before spawning it',
+    async (version) => {
+      await expect(launchOn(version)).rejects.toMatchObject({
+        refusal: {
+          code: 'structured_agent_session_unsupported',
+          details: { reason: 'hostUnsupported' }
+        }
+      })
+    }
+  )
 })

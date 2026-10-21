@@ -32,7 +32,6 @@ function newNonce(): string {
 
 function createVisualExtension(
   owner: NativeChatVisualOwner,
-  messageId: string,
   nonce: string
 ): CommentMarkdownExtension {
   function VisualPlaceholder({ node: _node, ...props }: DivProps): React.JSX.Element {
@@ -50,7 +49,6 @@ function createVisualExtension(
     return (
       <NativeChatInlineVisual
         owner={owner}
-        messageId={messageId}
         file={file}
         title={typeof title === 'string' && title.length > 0 ? title : null}
       />
@@ -73,7 +71,7 @@ export function useNativeChatVisualMarkdownExtension(
   const owner = useNativeChatVisualOwner()
   const [nonce] = useState(newNonce)
   return useMemo(
-    () => (owner && messageId ? createVisualExtension(owner, messageId, nonce) : undefined),
+    () => (owner && messageId ? createVisualExtension(owner, nonce) : undefined),
     [messageId, nonce, owner]
   )
 }

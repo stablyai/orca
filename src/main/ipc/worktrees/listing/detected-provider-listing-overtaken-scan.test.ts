@@ -33,13 +33,6 @@ const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScan
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only id, path, displayName and connectionId off the repo row.
 const localRepo = { id: 'repo-local', path: '/repos/local', displayName: 'local' } as Repo
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above; connectionId routes the listing to the provider branch.
-const sshRepo = {
-  id: 'repo-ssh',
-  path: '/remote/repo',
-  displayName: 'remote',
-  connectionId: 'ssh-1'
-} as Repo
 
 function createStore(repo: Repo) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only these store methods; the pruning that would need more is mocked above.
@@ -81,10 +74,6 @@ type ListingBranch = {
   list: () => ReturnType<typeof listDetectedWorktreesForCapturedRepo>
 }
 
-const sshListWorktrees = vi.fn()
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing calls only listWorktrees on the captured provider.
-const sshProvider = { listWorktrees: sshListWorktrees } as never
-
 const branches: [string, () => ListingBranch][] = [
   [
     'local (through the scan cache)',
@@ -94,27 +83,17 @@ const branches: [string, () => ListingBranch][] = [
       list: () =>
         listDetectedWorktreesForCapturedRepo(createStore(localRepo), localRepo, () => true)
     })
-  ],
-  [
-    'ssh (through the captured provider)',
-    () => ({
-      repo: sshRepo,
-      listMock: sshListWorktrees,
-      list: () =>
-        listDetectedWorktreesForCapturedRepo(createStore(sshRepo), sshRepo, () => true, sshProvider)
-    })
   ]
 ]
 
 // Why this suite exists: a worktree created while a listing ran is absent from that listing, and an
 // authoritative absence is a deletion to every client. The host re-runs the overtaken scan before it
-// answers, and it does so under one rule for hosts with a scan cache and hosts without one.
+// answers.
 describe.each(branches)(
   'detected listing overtaken by a worktree mutation: %s',
   (_name, branch) => {
     beforeEach(() => {
       listRepoWorktreesMock.mockReset()
-      sshListWorktrees.mockReset()
       __resetDetectedWorktreeScanCacheForTests()
     })
 

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   captureGuard: vi.fn(),
   prepare: vi.fn()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
@@ -91,8 +91,6 @@ beforeEach(() => {
     results: [{ status: 'imported', destPath: '/repo/app/src/a.txt' }]
   })
   vi.stubGlobal('api', {
-    // The legacy broadcast stays available; only the element drop may import.
-    ui: { onFileDrop: () => () => undefined },
     fs: {
       getPathForFile: (file: File) => `/source/${file.name}`,
       prepareDroppedPaths: mocks.prepare

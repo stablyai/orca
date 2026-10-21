@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { AgentSessionBackgroundTaskState } from './agent-session-wire'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
-import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import {
+  structuredSessionBackgroundTasksView,
+  structuredSessionConfirmedStopsStillListed,
+  structuredSessionListedTaskRun
+} from './structured-session-background-tasks-view'
 
 function view(membership: 'live' | 'settled', kind: AgentChildWorkView['kind'] = 'agent') {
   return {
@@ -17,6 +22,49 @@ function view(membership: 'live' | 'settled', kind: AgentChildWorkView['kind'] =
 }
 
 describe('structuredSessionBackgroundTasksView', () => {
+  it('does not mount the strip for a foreground command from an older host', () => {
+    const id = 'codex-command:primary:pwd'
+    const foreground = new Set([id])
+    expect(
+      structuredSessionBackgroundTasksView(
+        { state: 'monitoring', tasks: [{ id, kind: 'command' }] },
+        'turn-1',
+        foreground
+      )
+    ).toMatchObject({ show: false, isMonitoring: false, tasks: [] })
+  })
+
+  it('removes the foreground command from child views and legacy tasks together', () => {
+    const id = 'codex-command:primary:pwd'
+    const shell = { ...view('live', 'command'), providerId: id }
+    const agent = view('live')
+    const tasks = [
+      { id, kind: 'command' as const },
+      { id: 'child-agent', kind: 'agent' as const }
+    ]
+    const shown = structuredSessionBackgroundTasksView(
+      { state: 'monitoring', tasks, children: [shell, agent] },
+      'turn-1',
+      new Set([id])
+    )
+    expect(shown).toMatchObject({ show: true, tasks: [tasks[1]], children: [agent] })
+  })
+
+  it('keeps unrelated rosters and commands from earlier turns during the current turn', () => {
+    const tasks = [
+      { id: 'codex-command:primary:server', kind: 'command' as const },
+      { id: 'claude-shell', kind: 'command' as const },
+      { id: 'codex-command:thread:child:pwd', kind: 'command' as const }
+    ]
+    const shown = structuredSessionBackgroundTasksView(
+      { state: 'monitoring', tasks },
+      'turn-2',
+      new Set(['codex-command:primary:pwd'])
+    )
+    expect(shown.show).toBe(true)
+    expect(shown.tasks).toBe(tasks)
+  })
+
   it('shows finished children until the next turn, but they hold nothing open', () => {
     const finished = structuredSessionBackgroundTasksView(
       { state: 'monitoring', children: [view('settled')] },
@@ -42,6 +90,36 @@ describe('structuredSessionBackgroundTasksView', () => {
       expect(again.tasks).toBe(first.tasks)
       expect(again.settledTasks).toBe(first.settledTasks)
     }
+  })
+
+  // Absence of a row never reads as idle when the host says some work went unrecorded; commands
+  // and rewind still follow the records, as the host's own admission does.
+  it('keeps the strip and its Stop when the host could not record some work', () => {
+    expect(
+      structuredSessionBackgroundTasksView(
+        { state: 'monitoring', children: [], supportsTaskStop: true, incomplete: true },
+        null
+      )
+    ).toMatchObject({ show: true, isMonitoring: false, incomplete: true, offersStopAll: true })
+  })
+
+  it('offers the untargeted Stop only where no row stop reaches the work, and the host has one', () => {
+    const offers = (
+      state: Partial<AgentSessionBackgroundTaskState>,
+      turnId: string | null = null
+    ) =>
+      structuredSessionBackgroundTasksView({ state: 'monitoring', ...state }, turnId).offersStopAll
+    expect(offers({ supportsTaskStop: true })).toBe(false)
+    expect(offers({ supportsTaskStop: false })).toBe(true)
+    expect(offers({ supportsTaskStop: false }, 'turn-1')).toBe(true)
+    expect(offers({ supportsTaskStop: false, supportsStopAll: false })).toBe(false)
+    expect(offers({ supportsTaskStop: true, incomplete: true })).toBe(true)
+    // Unlisted work is reached by ending the agent: no untargeted provider stop is needed, as on an
+    // ACP agent, and none is offered under a running turn the agent would end with it.
+    const acp = { supportsTaskStop: true, supportsStopAll: false, incomplete: true } as const
+    expect(offers(acp)).toBe(true)
+    expect(offers(acp, 'turn-1')).toBe(false)
+    expect(offers({ ...acp, supportsTaskStop: false })).toBe(true)
   })
 
   it('reads live work beneath an idle session as monitoring, and a running turn as its own', () => {
@@ -74,11 +152,53 @@ describe('structuredSessionBackgroundTasksView', () => {
       tasks,
       settledTasks: [],
       supportsStop: false,
-      supportsStopAll: true
+      offersStopAll: true,
+      incomplete: false
     })
     expect(structuredSessionBackgroundTasksView(null, null)).toMatchObject({
       show: false,
       isMonitoring: false
     })
+  })
+})
+
+describe('a confirmed Stop held per run', () => {
+  const helper = (invocationId: string, generation: number): AgentChildWorkView => ({
+    ...view('live'),
+    providerId: 'thread-helper',
+    invocation: { invocationId, generation }
+  })
+  const withChildren = (children: AgentChildWorkView[]) =>
+    structuredSessionBackgroundTasksView({ state: 'monitoring', children }, null)
+
+  it("keys a child's run by its invocation, so the next run under the same id is another", () => {
+    const first = withChildren([helper('turn-1', 1)])
+    const run = structuredSessionListedTaskRun(first, 'thread-helper')
+    expect(run).not.toBeNull()
+    const confirmed = new Map([['thread-helper', run!]])
+
+    expect(structuredSessionConfirmedStopsStillListed(first, confirmed)).toBe(confirmed)
+    const next = withChildren([helper('turn-2', 2)])
+    expect(structuredSessionListedTaskRun(next, 'thread-helper')).not.toBe(run)
+    expect(structuredSessionConfirmedStopsStillListed(next, confirmed)).toEqual(new Map())
+    expect(structuredSessionConfirmedStopsStillListed(withChildren([]), confirmed)).toEqual(
+      new Map()
+    )
+  })
+
+  it("keys an older host's roster row by its id, which it has no run marker beside", () => {
+    const legacy = structuredSessionBackgroundTasksView(
+      { state: 'monitoring', tasks: [{ id: 'task-1', kind: 'command' }] },
+      null
+    )
+    expect(structuredSessionListedTaskRun(legacy, 'task-1')).toBe('task-1')
+    expect(structuredSessionListedTaskRun(legacy, 'task-2')).toBeNull()
+    const confirmed = new Map([['task-1', 'task-1']])
+    expect(structuredSessionConfirmedStopsStillListed(legacy, confirmed)).toBe(confirmed)
+  })
+
+  it('lists nothing while the strip is hidden', () => {
+    const hidden = structuredSessionBackgroundTasksView(null, null)
+    expect(structuredSessionListedTaskRun(hidden, 'task-1')).toBeNull()
   })
 })

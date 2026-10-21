@@ -296,7 +296,6 @@ describe('RateLimitService', () => {
       service.setClaudeAuthPreparationResolver(async () => ({
         configDir: '/own/claude-config',
         envPatch: {},
-        stripAuthEnv: false,
         provenance: 'system'
       }))
       await service.refresh()
@@ -323,7 +322,6 @@ describe('RateLimitService', () => {
       service.setClaudeAuthPreparationResolver(async () => ({
         configDir: '/shell/claude-config',
         envPatch: {},
-        stripAuthEnv: false,
         provenance: 'system'
       }))
       await service.refresh()
@@ -500,7 +498,6 @@ describe('RateLimitService', () => {
           envPatch: {
             CLAUDE_CONFIG_DIR: outgoing ? '/outgoing/.claude' : '/incoming/.claude'
           },
-          stripAuthEnv: false,
           provenance: outgoing ? 'managed:outgoing' : 'managed:incoming'
         }
       })

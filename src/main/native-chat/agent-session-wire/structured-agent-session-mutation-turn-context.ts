@@ -6,16 +6,18 @@ import type { AgentSessionMutationRequest } from './structured-agent-session-mut
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export function mutationTurnContext<TValue>(
-  request: AgentSessionMutationRequest<TValue>,
+  request: Omit<AgentSessionMutationRequest<TValue>, 'plan'>,
   journal: AgentSessionJournal,
   record: AgentSessionRecord
 ): AgentSessionTurnContext {
   const fence = record.lease.runtimeFence
-  const persistedOptions = request.store.getRecord(request.envelope.sessionId)?.options
+  const { sessionId } = request.envelope
+  const persistedOptions = request.store.getRecord(sessionId)?.options
   return {
-    sessionId: request.envelope.sessionId,
+    sessionId,
     journal,
     fence,
+    ...(request.currentWork ? { currentWork: request.currentWork } : {}),
     adapter: request.adapter,
     agents: request.agents,
     agent: record.provider,
@@ -32,7 +34,6 @@ export function mutationTurnContext<TValue>(
         .then(() => undefined),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
-    ...(request.providerChildPhase ? { providerChildPhase: request.providerChildPhase } : {}),
     now: () => request.now()
   }
 }

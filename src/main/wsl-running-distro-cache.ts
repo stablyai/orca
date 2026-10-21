@@ -10,6 +10,54 @@ let retryAfterMs = 0
 let failureStreak = 0
 type RunningDistroObservation = { distros: string[]; confirmed: boolean }
 let inFlightProbe: Promise<RunningDistroObservation> | null = null
+type RunningDistroStopListener = (stopped: string[], running: string[]) => void
+const stopListeners = new Set<RunningDistroStopListener>()
+
+/** Notified when a confirmed probe no longer lists a distro the previous one did. */
+export function onRunningWslDistrosStopped(listener: RunningDistroStopListener): () => void {
+  stopListeners.add(listener)
+  return () => stopListeners.delete(listener)
+}
+
+function notifyStopped(previous: string[] | null, running: string[]): void {
+  if (!previous || stopListeners.size === 0) {
+    return
+  }
+  const current = new Set(running.map((distro) => distro.toLowerCase()))
+  const stopped = previous.filter((distro) => !current.has(distro.toLowerCase()))
+  if (stopped.length === 0) {
+    return
+  }
+  for (const listener of stopListeners) {
+    try {
+      listener(stopped, running)
+    } catch (error) {
+      console.warn('[wsl] running-distro stop listener failed', error)
+    }
+  }
+}
+
+const confirmedObservationListeners = new Set<(distros: readonly string[]) => void>()
+
+/** Notified with every confirmed (successful) probe result; never with a fallback list. */
+export function onConfirmedRunningWslDistros(
+  listener: (distros: readonly string[]) => void
+): () => void {
+  confirmedObservationListeners.add(listener)
+  return () => {
+    confirmedObservationListeners.delete(listener)
+  }
+}
+
+function notifyConfirmedObservation(distros: readonly string[]): void {
+  for (const listener of confirmedObservationListeners) {
+    try {
+      listener(distros)
+    } catch (error) {
+      console.warn('[wsl] running-distro listener failed', error)
+    }
+  }
+}
 
 function armRetryAfterFailure(): void {
   const now = Date.now()
@@ -51,9 +99,12 @@ function observeRunningWslDistros(
   }
   const result = probe()
     .then((distros) => {
+      const previous = cache
       cache = distros
       retryAfterMs = 0
       failureStreak = 0
+      notifyStopped(previous, distros)
+      notifyConfirmedObservation(distros)
       return { distros, confirmed: true }
     })
     .catch((error: unknown) => {

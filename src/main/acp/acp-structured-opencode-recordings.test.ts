@@ -1,5 +1,6 @@
-// The adapter against OpenCode's recorded `opencode acp` traffic (1.18.31): each
-// recording plays back as the agent, and the assertions read the journal a client would see.
+// The adapter against OpenCode's recorded `opencode acp` traffic (1.18.31, and 2.0.29 for the
+// `opencode-v2-*` ones): each recording plays back as the agent, and the assertions read the
+// journal a client would see.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
@@ -27,10 +28,10 @@ const ask: AgentJournalMessageItem = {
   blocks: [{ type: 'text', text: 'Fixture prompt' }]
 }
 
-async function replaying(name: string) {
+async function replaying(name: string, agent: 'opencode' | 'opencode2' = 'opencode') {
   const replay = new GrokFixtureReplay(await readAcpFixture(name))
   const rig = await openAcpAdapterRig({
-    spec: acpLaunchSpecFor('opencode')!,
+    spec: acpLaunchSpecFor(agent)!,
     script: (scripted) => replay.attach(scripted)
   })
   await rig.acquire()
@@ -66,14 +67,14 @@ async function answer(rig: AcpAdapterRig, replay: GrokFixtureReplay, optionId: s
 }
 
 describe('OpenCode recordings through the adapter', () => {
-  it('an approved shell command lands with its exit code, and "always" says it lasts until OpenCode restarts', async () => {
+  it('an approved shell command lands with its exit code, and "always" keeps OpenCode\'s own name', async () => {
     const { rig, replay } = await replaying('opencode-v1-tool')
     const approval = await answer(rig, replay, 'once')
     expect(approval.body).toMatchObject({
       kind: 'approval',
       options: [
         { id: 'once', label: 'Allow once' },
-        { id: 'always', label: 'Allow until OpenCode restarts' },
+        { id: 'always', label: 'Always allow' },
         { id: 'reject', label: 'Reject' }
       ]
     })
@@ -125,5 +126,53 @@ describe('OpenCode recordings through the adapter', () => {
     await waitFor(async () => expect(await turns(rig)).toMatchObject([{ outcome: 'failure' }]))
     const texts = JSON.stringify((await rig.rig.rows()).map((row) => row.body))
     expect(texts).toContain('CAPTURE_PROVIDER_400')
+  })
+})
+
+describe('OpenCode 2 recordings through the adapter', () => {
+  it('an approved shell command completes with its output and exit code', async () => {
+    const { rig, replay } = await replaying('opencode-v2-tool', 'opencode2')
+    const approval = await answer(rig, replay, 'once')
+    expect(approval.body).toMatchObject({
+      kind: 'approval',
+      options: [
+        { id: 'once', label: 'Allow once' },
+        { id: 'always', label: 'Always allow' },
+        { id: 'reject', label: 'Reject' }
+      ]
+    })
+    await waitFor(() => expect(replay.awaiting).toBeNull())
+    await waitFor(async () =>
+      expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
+    )
+    expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({
+      state: 'completed',
+      exitCode: 0
+    })
+  })
+
+  // Unlike 1.x, 2.x ends the turn when a permission is rejected: it answers `cancelled`.
+  it('a rejected permission fails its tool and OpenCode ends the turn as cancelled', async () => {
+    const { rig, replay } = await replaying('opencode-v2-deny', 'opencode2')
+    await answer(rig, replay, 'reject')
+    await waitFor(() => expect(replay.awaiting).toBeNull())
+    await waitFor(async () =>
+      expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
+    )
+    expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({ state: 'failed' })
+  })
+
+  it('Stop during an approved command cancels it and ends the turn', async () => {
+    const { rig, replay } = await replaying('opencode-v2-stop', 'opencode2')
+    await answer(rig, replay, 'once')
+    await waitFor(() => expect(replay.awaiting).toBe('session/cancel'))
+    await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })).resolves.toEqual({
+      cancelled: true
+    })
+    await waitFor(() => expect(replay.awaiting).toBeNull())
+    await waitFor(async () =>
+      expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
+    )
+    expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({ state: 'failed' })
   })
 })

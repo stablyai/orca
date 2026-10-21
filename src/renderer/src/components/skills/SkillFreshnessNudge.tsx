@@ -5,7 +5,10 @@ import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { skillPlacementParticipatesInGlobalFreshness } from '../../../../shared/skill-freshness'
+import {
+  isOrcaSkillLockSource,
+  skillPlacementParticipatesInGlobalFreshness
+} from '../../../../shared/skill-freshness'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
@@ -20,9 +23,9 @@ type ActiveFreshnessNudge = {
 function candidateKey(args: {
   physicalIdentity: string
   name: string
-  currentReleaseRevision: number
+  currentPackageDigest: string
 }): string {
-  return [args.physicalIdentity, args.name, args.currentReleaseRevision].join('\0')
+  return [args.physicalIdentity, args.name, args.currentPackageDigest].join('\0')
 }
 
 export function SkillFreshnessNudge(): null {
@@ -70,13 +73,15 @@ export function SkillFreshnessNudge(): null {
       skillPlacementParticipatesInGlobalFreshness(installation) &&
       installation.status === 'outdated' &&
       eligibleNames.has(installation.name) &&
+      // Why: a same-named skill from somewhere else is listed in the dialog, never nudged.
+      isOrcaSkillLockSource(installation.lockSource) &&
       installation.physicalIdentity
         ? [
             {
               key: candidateKey({
                 physicalIdentity: installation.physicalIdentity,
                 name: installation.name,
-                currentReleaseRevision: installation.currentReleaseRevision
+                currentPackageDigest: installation.currentPackageDigest
               }),
               name: installation.name
             }

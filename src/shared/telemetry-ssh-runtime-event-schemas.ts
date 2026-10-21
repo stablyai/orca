@@ -68,7 +68,8 @@ export const SSH_RUNTIME_REFUSAL_VALUES = [
   'target_unresolved',
   'artifacts_unavailable',
   'runtime_unavailable',
-  'host_node_missing'
+  'host_node_missing',
+  'install_failed'
 ] as const
 
 export const SSH_RUNTIME_DURATION_BUCKETS = ['lt_5s', '5s_15s', '15s_60s', 'gte_60s'] as const

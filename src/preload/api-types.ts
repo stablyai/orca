@@ -53,10 +53,12 @@ import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
 import type { RuntimeApi } from './api/runtime-api'
+import type { WslMoveApi } from './api/wsl-move-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
 import type { SshApi } from './api/ssh-api'
+import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
 import type { UiWindowApi } from './api/ui-window-api'
@@ -124,7 +126,6 @@ export type PreloadApi = {
   ephemeralVm: EphemeralVmApi
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
-  remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   docPreview: DocPreviewApi['docPreview']
@@ -152,8 +153,11 @@ export type PreloadApi = {
   grokAccounts: GrokAccountsApi
   cursorAccounts: CursorAccountsApi
   ssh: SshApi
+  /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
+  legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']
+  wslMove: WslMoveApi
   pwsh: RuntimeApi['pwsh']
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi
@@ -204,7 +208,9 @@ export type {
   PtyManagementDaemonCwdClass,
   PtyManagementFolderAccessMismatch,
   PtyManagementMacTccAttributionHealth,
-  PtyManagementSession
+  PtyManagementSession,
+  PtyManagementSeveredDaemon,
+  PtyManagementSeveredDaemonRestartResult
 } from './api/pty-management-api'
 export type {
   ShellOpenExternalEditorRequest,

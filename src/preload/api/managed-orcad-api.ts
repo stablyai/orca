@@ -6,8 +6,10 @@ import type {
   OrcadManagedCancelStopResult,
   OrcadManagedConversionResult,
   OrcadManagedDeployResult,
+  OrcadManagedForgetResult,
   OrcadManagedPendingMigrationRow,
   OrcadManagedRecoveryResult,
+  OrcadManagedRestartResult,
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
@@ -32,8 +34,11 @@ export type ManagedOrcadPreloadApi = {
     /** Restore the snapshot over state a rejected build changed; see ORCAD_RECOVERY_CHANGED_STATE_CODE. */
     acceptChangedState?: boolean
   }) => Promise<OrcadManagedRecoveryResult>
+  /** Restarts from this client's SSH session; refused while terminals run. */
+  restart: (args: { selector: string }) => Promise<OrcadManagedRestartResult>
   stop: (args: { selector: string }) => Promise<OrcadManagedStopResult>
   cancelStop: (args: { selector: string }) => Promise<OrcadManagedCancelStopResult>
+  forget: (args: { selector: string }) => Promise<OrcadManagedForgetResult>
   linkSshAccess: (args: RuntimeSshAccessLinkRequest) => Promise<PublicKnownRuntimeEnvironment>
   unlinkSshAccess: (args: RuntimeSshAccessUnlinkRequest) => Promise<PublicKnownRuntimeEnvironment>
   convertSshHost: (args: {
@@ -44,6 +49,8 @@ export type ManagedOrcadPreloadApi = {
   previewDeltaMove: (args: { sshTargetId: string }) => Promise<OrcadDeltaMovePreview>
   moveDelta: (args: { sshTargetId: string }) => Promise<OrcadDeltaMoveResult>
   keepServerVersion: (args: { sshTargetId: string }) => Promise<void>
+  /** "Move anyway": the next connect leaves what can't move on this desktop. */
+  allowMoveLeavingBehind: (args: { sshTargetId: string }) => Promise<void>
 }
 
 export const managedOrcadApi: ManagedOrcadPreloadApi = {
@@ -52,8 +59,10 @@ export const managedOrcadApi: ManagedOrcadPreloadApi = {
   update: (args) => ipcRenderer.invoke('runtimeEnvironments:updateOrcad', args),
   rollback: (args) => ipcRenderer.invoke('runtimeEnvironments:rollbackOrcad', args),
   recover: (args) => ipcRenderer.invoke('runtimeEnvironments:recoverOrcad', args),
+  restart: (args) => ipcRenderer.invoke('runtimeEnvironments:restartOrcad', args),
   stop: (args) => ipcRenderer.invoke('runtimeEnvironments:stopOrcad', args),
   cancelStop: (args) => ipcRenderer.invoke('runtimeEnvironments:cancelOrcadStop', args),
+  forget: (args) => ipcRenderer.invoke('runtimeEnvironments:forgetOrcad', args),
   linkSshAccess: (args) => ipcRenderer.invoke('runtimeEnvironments:linkSshAccess', args),
   unlinkSshAccess: (args) => ipcRenderer.invoke('runtimeEnvironments:unlinkSshAccess', args),
   convertSshHost: (args) =>
@@ -62,5 +71,7 @@ export const managedOrcadApi: ManagedOrcadPreloadApi = {
   previewDeltaMove: (args) => ipcRenderer.invoke('runtimeEnvironments:previewOrcadDeltaMove', args),
   moveDelta: (args) => ipcRenderer.invoke('runtimeEnvironments:moveOrcadDelta', args),
   keepServerVersion: (args) =>
-    ipcRenderer.invoke('runtimeEnvironments:keepOrcadServerVersion', args)
+    ipcRenderer.invoke('runtimeEnvironments:keepOrcadServerVersion', args),
+  allowMoveLeavingBehind: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:allowOrcadMoveLeavingBehind', args)
 }

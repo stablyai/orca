@@ -1,3 +1,4 @@
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ORIGIN_HEAD_COMPONENT,
@@ -9,7 +10,6 @@ import {
   getGlabKnownHostsMock,
   getPullRequestPushTargetMock,
   gitRunner,
-  registerSshGitProvider,
   setPlatform
 } from '../orca-runtime-test-mocks.spec'
 import {
@@ -178,7 +178,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('resolves SSH GitHub fork PR heads through the write-capable fetch RPC', async () => {
+  it('refuses SSH GitHub fork PR heads instead of resolving them on this machine', async () => {
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -193,54 +193,17 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'remote' && args[1] === 'get-url') {
-          return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-        }
-        if (args[0] === 'remote') {
-          return { stdout: 'origin\nupstream\n', stderr: '' }
-        }
-        if (
-          args[0] === 'rev-parse' &&
-          args[2] === `refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42^{commit}`
-        ) {
-          return { stdout: 'remote-fork-pr-sha\n', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      fetchGitHubPullRequestHead: vi
-        .fn()
-        .mockResolvedValue(`refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42`),
-      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined)
-    }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    const result = await runtime.resolveManagedPrBase({
-      repoSelector: 'id:repo-1',
-      prNumber: 42,
-      headRefName: 'contributor/fix',
-      isCrossRepository: true
-    })
-
-    expect(result).toEqual({
-      baseBranch: 'remote-fork-pr-sha',
-      headSha: 'remote-fork-pr-sha',
-      branchNameOverride: 'contributor/fix'
-    })
-    expect(provider.fetchGitHubPullRequestHead).toHaveBeenCalledWith('/remote/repo', 'origin', 42)
-    expect(getPullRequestPushTargetMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      42,
-      'ssh-1',
-      {},
-      'origin'
-    )
-    expect(provider.exec).not.toHaveBeenCalledWith(
-      expect.arrayContaining(['fetch']),
-      '/remote/repo'
-    )
+    await expect(
+      runtime.resolveManagedPrBase({
+        repoSelector: 'id:repo-1',
+        prNumber: 42,
+        headRefName: 'contributor/fix',
+        isCrossRepository: true
+      })
+    ).rejects.toThrow(SshHostNotServedError)
+    expect(getPullRequestPushTargetMock).not.toHaveBeenCalled()
   })
 
   it('resolves local GitLab fork MR bases from the target project MR head ref', async () => {

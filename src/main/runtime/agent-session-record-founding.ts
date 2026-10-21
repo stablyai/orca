@@ -1,3 +1,4 @@
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
@@ -19,13 +20,17 @@ export function agentSessionRecordIdentityFields(
   identity: AgentSessionRecordIdentity,
   now: number
 ) {
+  // Callers name the mode among the options, as the wire does; the record keeps it as its own field.
+  const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode, ...options } =
+    identity.options ?? {}
   return {
     schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
-    ...(identity.options ? { options: { ...identity.options } } : {}),
+    ...(Object.keys(options).length > 0 ? { options } : {}),
+    ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // A /clear continues in the same tab, so it stays in the folder the chat ran in.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
@@ -36,6 +41,20 @@ export function agentSessionRecordIdentityFields(
 
 /** The fence a founded conversation starts at; every reservation moves it. */
 export const AGENT_SESSION_FOUNDING_FENCE = 1
+
+/** A founded row with no reservation, owner, or provider handle has never started an agent. */
+export function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
+  const { lease } = record
+  return (
+    lease.claimStatus === 'released' &&
+    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
+    lease.minimumNextFence === undefined &&
+    lease.ownerProcess === null &&
+    lease.reservedSpawnToken === null &&
+    lease.handoffStage === null &&
+    record.providerHandleChain.length === 0
+  )
+}
 
 /**
  * A conversation no agent has run yet, at rest: its first send starts one. The empty handle chain
@@ -60,7 +79,6 @@ export function foundAgentSessionRecord(
       leaseDeadlineAt: lease.now,
       lastRenewedAt: lease.now,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: lease.claimKeyId,
       claimStatus: 'released',
       unreconciled: false,

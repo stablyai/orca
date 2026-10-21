@@ -24,7 +24,10 @@ export type WorktreeRemovalRecord = {
   deleteBranch: boolean
   force: boolean
   requestedAt: number
-  /** The delete failed after Git dropped the registration with the checkout still on disk. */
+  /**
+   * The delete failed after Git dropped the registration with the checkout still on disk. Its Git
+   * side (branch, push-target remote) ran when it failed; the record owes only the folder.
+   */
   failure?: WorktreeRemovalFailure
 }
 

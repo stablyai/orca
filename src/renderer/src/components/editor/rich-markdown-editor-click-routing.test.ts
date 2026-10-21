@@ -1,84 +1,217 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MutableRefObject } from 'react'
-import type { EditorView } from '@tiptap/pm/view'
+// @vitest-environment happy-dom
+
+import { Editor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRichMarkdownEditorClick } from './rich-markdown-editor-click-routing'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import {
+  registerHttpLinkStoreAccessor,
+  registerWorkspaceHttpLinkBrowserOpener,
+  type HttpLinkSourceOwner
+} from '@/lib/http-link-routing'
+import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 
-const openHttpLinkMock = vi.hoisted(() => vi.fn())
-
-vi.mock('@/lib/http-link-routing', () => ({
-  openHttpLink: openHttpLinkMock
+type RoutingState = {
+  settings: { activeRuntimeEnvironmentId?: string } & Record<string, unknown>
+  worktreesByRepo: Record<
+    string,
+    { id: string; repoId: string; hostId: 'local' | `runtime:${string}` }[]
+  >
+  canOpenOwnedBrowser: boolean
+}
+const routing = vi.hoisted((): RoutingState => ({
+  settings: { openLinksInApp: false, openLinksInAppModifierInverts: false },
+  worktreesByRepo: {},
+  canOpenOwnedBrowser: true
+}))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => routing } }))
+vi.mock('@/lib/workspace-browser-tab-open', () => ({
+  canOpenWorkspaceBrowserTabOnRuntime: () => routing.canOpenOwnedBrowser,
+  canOpenWorkspaceBrowserTabOnSsh: () => routing.canOpenOwnedBrowser
 }))
 
+const openUrl = vi.fn()
+const openFileUri = vi.fn()
+const createBrowserTab = vi.fn()
+const openOwnedBrowser = vi.fn(async () => {})
+const activateMarkdownLink = vi.fn()
+let editor: Editor | null = null
+
 beforeEach(() => {
-  openHttpLinkMock.mockReset()
+  vi.clearAllMocks()
+  routing.settings = {
+    openLinksInApp: false,
+    openLinksInAppModifierInverts: false
+  }
+  routing.worktreesByRepo = {
+    repo: [{ id: 'wt-1', repoId: 'repo', hostId: 'local' }]
+  }
+  routing.canOpenOwnedBrowser = true
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      shell: { openUrl, openFileUri, pathExists: vi.fn(async () => true) }
+    }
+  })
+  registerHttpLinkStoreAccessor(() => ({
+    settings: routing.settings,
+    setActiveWorktree: vi.fn(),
+    createBrowserTab
+  }))
+  registerWorkspaceHttpLinkBrowserOpener(openOwnedBrowser)
+})
+afterEach(() => {
+  editor?.destroy()
+  editor = null
+  registerWorkspaceHttpLinkBrowserOpener(null)
 })
 
-// Why: the preview deliberately routes differently; this pins the editor side so a
-// future "make them consistent" change cannot land silently.
-function clickExternalLinkWithShift(sourceOwner: HttpLinkSourceOwner, isMac = true): boolean {
-  const href = 'https://example.com/docs'
-  const view = {
-    state: {
-      doc: {
-        nodeAt: () => null,
-        resolve: () => ({
-          marks: () => [{ type: { name: 'link' }, attrs: { href } }]
-        })
-      }
-    }
-  } as unknown as EditorView
-
+function clickLink({
+  sourceOwner = { kind: 'local' },
+  isMac = true,
+  shiftKey = true,
+  modKey = true,
+  href = 'https://example.com/docs'
+}: {
+  sourceOwner?: HttpLinkSourceOwner
+  isMac?: boolean
+  shiftKey?: boolean
+  modKey?: boolean
+  href?: string
+} = {}): boolean {
+  editor = new Editor({
+    extensions: [StarterKit],
+    content: `<p><a href="${href}">example</a></p>`
+  })
   return handleRichMarkdownEditorClick({
-    activateMarkdownLink: vi.fn(),
-    editorRef: { current: {} } as unknown as MutableRefObject<unknown>,
-    event: { metaKey: isMac, ctrlKey: !isMac, shiftKey: true } as MouseEvent,
+    activateMarkdownLink,
+    editorRef: { current: editor },
+    event: new MouseEvent('click', {
+      metaKey: isMac && modKey,
+      ctrlKey: !isMac && modKey,
+      shiftKey
+    }),
     filePath: '/repo/docs/README.md',
     isMac,
-    htmlSuperscriptLinkContext: {
-      getSnapshot: () => ({ sourceOwner })
-    },
+    htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
+      sourceOwner,
+      sourceFilePath: '/repo/docs/README.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    }),
     markdownCommentsRef: { current: [] },
     markdownSourceLineOffsetRef: { current: 0 },
     onOpenDocLinkRef: { current: undefined },
-    pos: 1,
+    pos: 2,
     rootRef: { current: null },
     scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),
-    settings: {} as never,
-    view,
+    view: editor.view,
     worktreeId: 'wt-1',
     worktreeRoot: '/repo'
-  } as never)
+  })
 }
 
-describe('rich markdown editor Shift+modifier click on external links', () => {
-  // Why: intentionally NOT the preview's behavior — this path hands the link to the
-  // client OS, so it must keep forcing the system browser even when inverting is on.
-  it('forces the system browser rather than following the invert setting', () => {
-    expect(clickExternalLinkWithShift({ kind: 'local' })).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/docs', {
-      forceSystemBrowser: true,
-      sourceOwner: { kind: 'local' }
+describe('rich Markdown alternate browser click', () => {
+  it.each([true, false])('opens Orca when the system browser is primary (Mac: %s)', (isMac) => {
+    expect(clickLink({ isMac })).toBe(true)
+    expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/docs', {
+      activate: true
     })
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(activateMarkdownLink).not.toHaveBeenCalled()
   })
 
-  // Why: AGENTS.md — Shift+Ctrl is the chord off macOS, and modKey reads a
-  // different event field there.
-  it('uses the Ctrl chord off macOS', () => {
-    expect(clickExternalLinkWithShift({ kind: 'local' }, false)).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/docs', {
-      forceSystemBrowser: true,
-      sourceOwner: { kind: 'local' }
+  it.each([true, false])(
+    'opens the system browser when Orca is primary (invert: %s)',
+    (inverts) => {
+      routing.settings = {
+        openLinksInApp: true,
+        openLinksInAppModifierInverts: inverts
+      }
+      expect(clickLink()).toBe(true)
+      expect(openUrl).toHaveBeenCalledWith('https://example.com/docs')
+      expect(createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each<HttpLinkSourceOwner>([
+    { kind: 'ssh', connectionId: 'conn-1' },
+    { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
+  ])('opens the alternate Orca browser on the source owner: %j', (sourceOwner) => {
+    expect(clickLink({ sourceOwner })).toBe(true)
+    expect(openOwnedBrowser).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/docs',
+      intent: { kind: 'url' },
+      ...(sourceOwner.kind === 'ssh'
+        ? { expectedSshConnectionId: sourceOwner.connectionId }
+        : sourceOwner.kind === 'runtime'
+          ? { expectedRuntimeEnvironmentId: sourceOwner.runtimeEnvironmentId }
+          : {})
     })
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
   })
 
-  it('forwards a non-local source owner untouched', () => {
-    const sourceOwner = { kind: 'ssh', connectionId: 'conn-1' } as HttpLinkSourceOwner
+  it('uses the sole system destination when the remote browser is unavailable', () => {
+    routing.canOpenOwnedBrowser = false
+    expect(clickLink({ sourceOwner: { kind: 'ssh', connectionId: 'conn-1' } })).toBe(true)
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/docs')
+    expect(openOwnedBrowser).not.toHaveBeenCalled()
+  })
 
-    expect(clickExternalLinkWithShift(sourceOwner)).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith(
+  it('keeps unresolved ownership inert', () => {
+    expect(clickLink({ sourceOwner: { kind: 'unknown' } })).toBe(true)
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(openOwnedBrowser).not.toHaveBeenCalled()
+  })
+
+  it('keeps plain modifier clicks on the existing activation path', () => {
+    expect(clickLink({ shiftKey: false })).toBe(true)
+    expect(activateMarkdownLink).toHaveBeenCalledWith(
       'https://example.com/docs',
-      expect.objectContaining({ forceSystemBrowser: true, sourceOwner })
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        sourceOwner: { kind: 'local' }
+      })
     )
+    expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('keeps Shift alone from opening a link', () => {
+    expect(clickLink({ modKey: false })).toBe(false)
+    expect(activateMarkdownLink).not.toHaveBeenCalled()
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  it('keeps Shift-modified relative files on the client OS path', async () => {
+    expect(clickLink({ href: 'child.md' })).toBe(true)
+    await vi.waitFor(() =>
+      expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md', 'local')
+    )
+    expect(activateMarkdownLink).not.toHaveBeenCalled()
+    expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('opens a local document through the client OS while a server is focused', async () => {
+    routing.settings = {
+      ...routing.settings,
+      activeRuntimeEnvironmentId: 'env-1'
+    }
+    expect(clickLink({ href: 'child.md' })).toBe(true)
+    await vi.waitFor(() =>
+      expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md', 'local')
+    )
+  })
+
+  it('refuses a runtime-owned document even when the path exists locally', async () => {
+    routing.worktreesByRepo = {
+      repo: [{ id: 'wt-1', repoId: 'repo', hostId: 'runtime:env-1' }]
+    }
+    expect(clickLink({ href: 'child.md' })).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(openFileUri).not.toHaveBeenCalled()
   })
 })

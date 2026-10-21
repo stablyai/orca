@@ -92,6 +92,14 @@ export function renderDetailsAttributes(attrs: Record<string, unknown> | undefin
   return attributes.join(' ')
 }
 
+export function createDetailsMatcher(content: string): (start: number) => DetailsHtmlBlock | null {
+  let fenceRanges: MarkdownFenceRanges | undefined
+  return (start) =>
+    /^<details\b[^>]*>/i.test(content.slice(start))
+      ? matchDetailsHtmlBlock(content, start, (fenceRanges ??= getMarkdownFenceRanges(content)))
+      : null
+}
+
 export function matchDetailsHtmlBlock(
   content: string,
   start: number,

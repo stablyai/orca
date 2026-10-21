@@ -264,16 +264,16 @@ describe('createUISlice Codex shared-settings notice', () => {
   })
 })
 
-describe('createUISlice Claude account sign-in notice', () => {
-  it('counts as seen until hydration, then follows the persisted flag, and persists marking', () => {
-    vi.stubGlobal('window', { api: { ui: { set: vi.fn(() => Promise.resolve()) } } })
+describe('createUISlice Claude diff panel notice', () => {
+  it('counts as seen until hydration, then follows the persisted flag', () => {
     const store = createUIStore()
-    expect(store.getState().claudeAccountSignInNoticeSeen).toBe(true)
+    expect(store.getState().claudeDiffPanelNoticeSeen).toBe(true)
+
     store.getState().hydratePersistedUI(makePersistedUI({}))
-    expect(store.getState().claudeAccountSignInNoticeSeen).toBe(false)
-    store.getState().markClaudeAccountSignInNoticeSeen()
-    expect(store.getState().claudeAccountSignInNoticeSeen).toBe(true)
-    expect(window.api.ui.set).toHaveBeenCalledWith({ claudeAccountSignInNoticeSeen: true })
+    expect(store.getState().claudeDiffPanelNoticeSeen).toBe(false)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ claudeDiffPanelNoticeSeen: true }))
+    expect(store.getState().claudeDiffPanelNoticeSeen).toBe(true)
   })
 })
 

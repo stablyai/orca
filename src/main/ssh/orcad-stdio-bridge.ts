@@ -1,17 +1,20 @@
 /** Which command runs the stdio bridge on a host, and whether it can run there at all. */
-import type { ClientChannel } from 'ssh2'
 import {
   OrcadHostUnsupportedError,
   OrcadStdioBridgeUnavailableError
-} from './orcad-host-unavailable'
-import { resolveOrcadRemoteContext } from './orcad-remote-context'
-import { orcadRemoteBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+} from '../orcad/orcad-host-unavailable'
+import { resolveOrcadRemoteContext } from '../managed-server/install/orcad-remote-context'
+import { orcadWindowsHomeOpCommand } from '../managed-server/install/orcad-remote-windows-node'
 import {
   orcadPosixStdioBridgeCommand,
   type OrcadStdioBridgeMode
-} from './orcad-stdio-bridge-script'
-import { OrcadStdioBridgeDecoder, type OrcadStdioBridgeSignal } from './orcad-stdio-bridge-stream'
-import type { SshConnection } from './ssh-connection'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
+import {
+  OrcadStdioBridgeDecoder,
+  type OrcadStdioBridgeSignal
+} from '../managed-server/lifecycle/orcad-stdio-bridge-stream'
+import { isWslOrcadHostTarget, type OrcadHostTransport } from './orcad-host-transport'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 import { isWindowsRemoteHost } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 
@@ -27,38 +30,38 @@ const MAX_STDERR_TAIL_CHARS = 2_000
 const COMMAND_NOT_FOUND_EXITS: ReadonlySet<number | null> = new Set([127, 9009])
 
 export async function resolveOrcadStdioBridge(
-  conn: SshConnection,
+  conn: OrcadHostTransport,
   port: number
 ): Promise<OrcadStdioBridge> {
   const host = await detectRemoteHostPlatform(conn)
   if (!host) {
-    throw new OrcadHostUnsupportedError('This SSH host platform is not supported by managed orcad.')
+    throw new OrcadHostUnsupportedError('Orca’s server doesn’t support this SSH host’s platform.')
   }
   if (!isWindowsRemoteHost(host)) {
     return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
   }
+  const target = conn.getTarget()
+  // A WSL distro is a Linux host, so a Windows answer from it is not one this path can serve.
+  if (isWslOrcadHostTarget(target)) {
+    throw new OrcadHostUnsupportedError('This WSL distro reported a Windows host platform.')
+  }
   // Stages this client's pinned node.exe and host script, which an app update may have changed.
-  const context = await resolveOrcadRemoteContext(conn.getTarget(), conn, undefined, host)
+  const context = await resolveOrcadRemoteContext(target, conn, undefined, host)
   return {
-    command: orcadWindowsHostOpCommand(
-      host,
-      orcadRemoteBaseDir(host, context.remoteHome),
-      'stdio-bridge',
-      [String(port)]
-    ),
+    command: orcadWindowsHomeOpCommand(host, context.remoteHome, 'stdio-bridge', [String(port)]),
     mode: 'base64',
     wrapCommand: host.commandDialect !== 'powershell'
   }
 }
 
 export function openOrcadStdioBridgeChannel(
-  conn: SshConnection,
+  conn: OrcadHostTransport,
   bridge: OrcadStdioBridge
-): Promise<ClientChannel> {
+): Promise<RemoteCommandChannel> {
   return conn.exec(bridge.command, { wrapCommand: bridge.wrapCommand })
 }
 
-function closeQuietly(channel: ClientChannel): void {
+function closeQuietly(channel: RemoteCommandChannel): void {
   try {
     channel.close()
   } catch {
@@ -71,11 +74,11 @@ function closeQuietly(channel: ClientChannel): void {
  * exit the host reported without one is proof it can't run; anything else is unverifiable.
  */
 export async function checkOrcadStdioBridge(
-  conn: SshConnection,
+  conn: OrcadHostTransport,
   bridge: OrcadStdioBridge,
   timeoutMs = ORCAD_STDIO_BRIDGE_CHECK_TIMEOUT_MS
 ): Promise<'running' | 'unverifiable'> {
-  let channel: ClientChannel
+  let channel: RemoteCommandChannel
   try {
     channel = await openOrcadStdioBridgeChannel(conn, bridge)
   } catch {
@@ -103,7 +106,7 @@ export async function checkOrcadStdioBridge(
     }
     const unavailable = (detail: string): Error =>
       new OrcadStdioBridgeUnavailableError(
-        `The SSH host could not run the managed Orca server's stdio bridge: ${detail}`
+        `The SSH host could not run the stdio bridge for this host’s Orca server: ${detail}`
       )
     decoder.on('signal', (signal: OrcadStdioBridgeSignal) => {
       settle(signal === 'no-node' ? unavailable('no pinned Node runtime') : 'running')

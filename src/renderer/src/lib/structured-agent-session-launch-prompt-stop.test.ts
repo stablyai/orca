@@ -36,7 +36,7 @@ import {
   hasStagedStructuredLaunchPrompt,
   settleStructuredAgentLaunchPrompt,
   stageStructuredLaunchPrompt,
-  takeBackStructuredLaunchPrompts
+  takeBackLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
 import { newAgentPromptOutcome } from './new-agent-prompt-outcome'
 
@@ -97,14 +97,14 @@ function unpublishedStop(stopSends = () => stopStructuredAgentSessionSends(SESSI
   const hostStop = vi.fn(async () => null)
   const control = structuredAgentSessionStopControl({
     published: false,
+    legacyLaunch: { takeBackText: () => takeBackLegacyStructuredLaunchPrompts(SESSION) },
     host: { stopsConversation: true, stop: hostStop },
     transportState: { turnId: null, isWorking: false },
     sends: {
       sending: getStructuredAgentSessionPendingSends(SESSION).some(
         (entry) => entry.phase === 'sending'
       ),
-      stopSends,
-      takeBackLaunchText: () => takeBackStructuredLaunchPrompts(SESSION)
+      stopSends
     }
   })
   return { control, hostStop }

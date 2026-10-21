@@ -135,8 +135,8 @@ export function assertNodePtyPatchApplied(nodePtyDir) {
       [
         '[orcad-prebuilds] refusing to build: config/patches/node-pty@1.1.0.patch is not applied.',
         ...missing.map((line) => `  - ${line}`),
-        'A prebuilt compiled without it will not load on Ubuntu 20.04 (see',
-        'docs/reference/linux-glibc-compatibility.md and #9902). Run `pnpm install` to apply patches.'
+        'A prebuilt compiled without it will not load on Ubuntu 20.04 (#9902).',
+        'Run `pnpm install` to apply patches.'
       ].join('\n')
     )
   }

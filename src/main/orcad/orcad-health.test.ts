@@ -26,7 +26,7 @@ vi.mock('../daemon/daemon-health', () => ({
       reportedCoverage.value.shift() ?? (process.platform === 'win32' ? 'handshake' : 'pty-spawn')
   })
 }))
-vi.mock('../daemon/daemon-init', () => ({
+vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonEndpointFacts: getDaemonEndpointFactsMock,
   readDaemonPidRecord: readDaemonPidRecordMock,
   daemonOwnsFreshPersistentPtys: daemonOwnsFreshPersistentPtysMock

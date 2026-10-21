@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react'
+import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths, type RuntimeGitContext } from '@/runtime/runtime-git-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {
@@ -20,7 +22,7 @@ import type { PendingDiscardConfirmation } from './discard-dialog'
 import type { SourceControlEntryGroups } from '../listing/section-order'
 
 export function useSourceControlDiscardConfirmation({
-  activeRepoSettings,
+  activeRepoTarget,
   activeWorktreeId,
   worktreePath,
   grouped,
@@ -31,7 +33,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle,
   refreshActiveGitStatusAfterMutation
 }: {
-  activeRepoSettings: RuntimeGitContext['settings']
+  activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
   grouped: SourceControlEntryGroups
@@ -96,7 +98,7 @@ export function useSourceControlDiscardConfirmation({
             bulkUnstageRuntimeGitPaths(
               {
                 // Why: route unstaging by the repo OWNER host, not the focused runtime.
-                settings: activeRepoSettings,
+                target: requireGitOwnerTarget(activeRepoTarget),
                 worktreeId: activeWorktreeId,
                 worktreePath,
                 connectionId
@@ -149,7 +151,7 @@ export function useSourceControlDiscardConfirmation({
       }
     },
     [
-      activeRepoSettings,
+      activeRepoTarget,
       worktreePath,
       activeWorktreeId,
       grouped,

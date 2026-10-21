@@ -14,8 +14,10 @@ const {
   readDaemonPidRecordMock: vi.fn<() => { pid: number } | null>()
 }))
 
-vi.mock('../daemon/daemon-init', () => ({
-  initDaemonPtyProvider: initDaemonPtyProviderMock,
+vi.mock('../daemon/daemon-provider-init', () => ({
+  initDaemonPtyProvider: initDaemonPtyProviderMock
+}))
+vi.mock('../daemon/daemon-provider-state', () => ({
   disconnectDaemon: disconnectDaemonMock,
   // Exported here purely so the test can prove it is never reached — killing the daemon on
   // orcad shutdown is what would make an orcad restart destructive again.
@@ -52,7 +54,9 @@ describe('startOrcadDaemon', () => {
     // daemon must survive its SSH session ending — arming it would kill every terminal the
     // moment the operator logged out, which is the opposite of the property being bought.
     expect(initDaemonPtyProviderMock).toHaveBeenCalledWith(undefined, {
-      macosLoginSessionWatch: false
+      macosLoginSessionWatch: false,
+      recycleStaleDaemonOnEveryPlatform: true,
+      spawnAdmission: 'enforce'
     })
   })
 
@@ -60,6 +64,8 @@ describe('startOrcadDaemon', () => {
     await startOrcadDaemon('win32')
     expect(initDaemonPtyProviderMock).toHaveBeenCalledWith(undefined, {
       macosLoginSessionWatch: false,
+      recycleStaleDaemonOnEveryPlatform: true,
+      spawnAdmission: 'enforce',
       startupTimeoutMs: 30_000
     })
   })

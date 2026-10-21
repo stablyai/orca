@@ -1,15 +1,6 @@
-/**
- * Turns a saved record back into the editor's draft shape.
- *
- * Both builders are total: a schedule the editor cannot represent produces a
- * warning rather than a silently rewritten one, because saving would otherwise
- * replace a working cron the user never chose to change.
- */
-
-import type { Automation, ExternalAutomationJob } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import {
-  isRunnableAutomationCronSchedule,
   isRunnableAutomationSchedule,
   tryParseAutomationRrule
 } from '../../../../shared/automation-schedule-parsing'
@@ -24,6 +15,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     name: automation.name,
     prompt: automation.prompt,
     agentId: automation.agentId,
+    extraAgentArgs: automation.extraAgentArgs ?? '',
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,
     workspaceId: automation.workspaceId ?? '',
@@ -45,35 +37,5 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
       schedule || hasCustomSchedule
         ? null
         : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-  }
-}
-
-export function buildExternalAutomationEditDraft(
-  job: ExternalAutomationJob,
-  placement: { projectId: string; workspaceId: string }
-): AutomationDraft {
-  const rawSchedule = job.rawSchedule?.trim() ?? ''
-  const hasCustomSchedule = isRunnableAutomationCronSchedule(rawSchedule)
-  return {
-    name: job.name,
-    prompt: job.prompt ?? job.promptPreview,
-    agentId: 'hermes',
-    projectId: placement.projectId,
-    workspaceMode: 'existing',
-    workspaceId: placement.workspaceId,
-    baseBranch: '',
-    setupDecision: undefined,
-    reuseSession: false,
-    precheckCommand: '',
-    precheckTimeoutSeconds: '60',
-    preset: hasCustomSchedule ? 'custom' : 'weekdays',
-    time: AUTOMATION_DEFAULT_TIME,
-    dayOfWeek: '1',
-    customSchedule: hasCustomSchedule ? rawSchedule : '',
-    savedSchedule: rawSchedule || null,
-    missedRunGraceMinutes: '720',
-    scheduleWarning: hasCustomSchedule
-      ? null
-      : 'This Hermes automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
   }
 }

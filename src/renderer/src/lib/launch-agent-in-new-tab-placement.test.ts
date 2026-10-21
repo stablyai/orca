@@ -6,7 +6,10 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
+/** Startup commands published with the created tabs, in creation order. */
+function queuedStartups() {
+  return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
+}
 const mockSetActiveTabType = vi.fn()
 const mockSeedNativeChatAppliedSessionOptions = vi.fn()
 
@@ -16,8 +19,6 @@ type PlacementSettings = {
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
   experimentalNativeChat?: boolean
-  experimentalStructuredNativeChat?: boolean
-  openAgentTabsInChatByDefault?: boolean
   nativeChatSessionOptions?: Record<
     string,
     { model?: string; valuesByModel?: Record<string, Record<string, string>> }
@@ -44,7 +45,6 @@ const store = {
   tabBarOrderByWorktree: {},
   createTab: mockCreateTab,
   queueTabInitialCwd: vi.fn(),
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: vi.fn()
 }
@@ -63,13 +63,13 @@ vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => false
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
 }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
@@ -108,11 +108,9 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     }
   )
 
-  it('honours the chat default in a floating launch and scopes its surface to the floating workspace', async () => {
+  it('scopes a floating terminal fallback to the floating workspace with Chat UI on', async () => {
     store.settings = placementSettings({
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
-      openAgentTabsInChatByDefault: true,
       nativeChatSessionOptions: {
         codex: {
           model: 'gpt-5.2-codex',
@@ -134,18 +132,15 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       undefined,
       {
         launchAgent: 'codex',
-        viewMode: 'chat'
+        quickCommandLabel: undefined,
+        pendingStartup: expect.anything()
       }
     )
     expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
       'terminal',
       FLOATING_TERMINAL_WORKTREE_ID
     )
-    // Why: the panel hosts the chat pane itself, so the launch carries the user's model/effort
-    // preferences the same way a main-window launch does.
-    expect(mockSeedNativeChatAppliedSessionOptions).toHaveBeenCalledWith('tab-1', 'codex', {
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
+    // Chat UI model preferences belong to structured chats, not a terminal fallback.
+    expect(queuedStartups()[0]).not.toHaveProperty('sessionOptions')
   })
 })

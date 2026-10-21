@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
   NATIVE_CHAT_VISUAL_CSP,
+  NATIVE_CHAT_VISUAL_HOST_CSP,
   NATIVE_CHAT_VISUAL_MAX_HEIGHT,
   NATIVE_CHAT_VISUAL_MIN_HEIGHT,
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
+  NATIVE_CHAT_VISUAL_PING_TYPE,
+  NATIVE_CHAT_VISUAL_PONG_TYPE,
+  NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE,
   buildNativeChatVisualDocument,
   clampNativeChatVisualHeight,
+  nativeChatVisualPingMessage,
   nativeChatVisualThemeCss,
   nativeChatVisualThemeMessage,
-  readNativeChatVisualFrameMessage
+  readNativeChatVisualFrameMessage,
+  readNativeChatVisualPong
 } from './native-chat-visual-shell'
 
 const theme = {
@@ -18,9 +24,9 @@ const theme = {
   tokens: { '--background': 'oklch(0.2 0 0)', '--chart-1': '#123456' }
 }
 
-function directives(): Map<string, string> {
+function directives(policy = NATIVE_CHAT_VISUAL_CSP): Map<string, string> {
   return new Map(
-    NATIVE_CHAT_VISUAL_CSP.split(';').map((part) => {
+    policy.split(';').map((part) => {
       const [name, ...values] = part.trim().split(/\s+/)
       return [name, values.join(' ')]
     })
@@ -59,6 +65,18 @@ describe('NATIVE_CHAT_VISUAL_CSP', () => {
   })
 })
 
+describe('NATIVE_CHAT_VISUAL_HOST_CSP', () => {
+  it('is the visual policy except that it admits only an about: base, for the shell', () => {
+    const host = directives(NATIVE_CHAT_VISUAL_HOST_CSP)
+    const visual = directives()
+    expect(host.get('base-uri')).toBe('about:')
+    expect(visual.get('base-uri')).toBe("'none'")
+    host.delete('base-uri')
+    visual.delete('base-uri')
+    expect(host).toEqual(visual)
+  })
+})
+
 describe('buildNativeChatVisualDocument', () => {
   const html = '<!doctype html><html><head><title>x</title></head><body><p>hi</p></body></html>'
   const document = buildNativeChatVisualDocument({ html, channel: 'abc123', theme })
@@ -77,8 +95,22 @@ describe('buildNativeChatVisualDocument', () => {
     expect(document).toContain('"channel":"abc123"')
   })
 
+  it('resolves in-page links against the visual itself, ahead of the policy that bars any other base', () => {
+    const baseAt = document.indexOf('<base href="about:srcdoc">')
+    expect(baseAt).toBeGreaterThan(0)
+    expect(baseAt).toBeLessThan(document.indexOf('http-equiv="Content-Security-Policy"'))
+    // A srcdoc page otherwise resolves '#x' against Orca's own URL and navigates away.
+    expect(new URL('#overview', 'about:srcdoc').href).toBe('about:srcdoc#overview')
+    expect(() => new URL('page-2.html', 'about:srcdoc')).toThrow()
+  })
+
   it('checks the theme message comes from the host window', () => {
     expect(document).toContain('event.source !== host')
+  })
+
+  it('answers a ping from the host with the ping id', () => {
+    expect(document).toContain(`"ping":"${NATIVE_CHAT_VISUAL_PING_TYPE}"`)
+    expect(document).toContain('send({ type: C.pong, id: data.id })')
   })
 })
 
@@ -124,6 +156,17 @@ describe('readNativeChatVisualFrameMessage', () => {
     ).toEqual({ kind: 'open-link', url: 'https://example.com/a%20b' })
   })
 
+  it('accepts a wheel with a finite nonzero delta and a touch drag', () => {
+    const scroll = { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c' }
+    expect(
+      readNativeChatVisualFrameMessage({ ...scroll, input: 'wheel', deltaY: -30 }, 'c')
+    ).toEqual({ kind: 'reader-scroll', input: 'wheel', deltaY: -30 })
+    expect(readNativeChatVisualFrameMessage({ ...scroll, input: 'touch' }, 'c')).toEqual({
+      kind: 'reader-scroll',
+      input: 'touch'
+    })
+  })
+
   it.each([
     ['another channel', { type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: 'x', height: 10 }],
     ['no channel', { type: NATIVE_CHAT_VISUAL_SIZE_TYPE, height: 10 }],
@@ -144,11 +187,55 @@ describe('readNativeChatVisualFrameMessage', () => {
         url: `https://example.com/${'a'.repeat(3000)}`
       }
     ],
+    [
+      'zero wheel delta',
+      { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c', input: 'wheel', deltaY: 0 }
+    ],
+    [
+      'NaN wheel delta',
+      {
+        type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
+        channel: 'c',
+        input: 'wheel',
+        deltaY: Number.NaN
+      }
+    ],
+    [
+      'string wheel delta',
+      { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c', input: 'wheel', deltaY: '-3' }
+    ],
+    [
+      'unknown input',
+      { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel: 'c', input: 'key', deltaY: -3 }
+    ],
     ['unknown type', { type: 'orca-panel-action', channel: 'c' }],
     ['a string', 'orca-visual-size'],
     ['null', null]
   ])('refuses %s', (_name, data) => {
     expect(readNativeChatVisualFrameMessage(data, 'c')).toBeNull()
+  })
+})
+
+describe('readNativeChatVisualPong', () => {
+  it('reads the ping id on its own channel', () => {
+    const pong = { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c', id: 2 }
+    expect(readNativeChatVisualPong(pong, 'c')).toBe(2)
+    expect(nativeChatVisualPingMessage(2, 'c')).toEqual({
+      type: NATIVE_CHAT_VISUAL_PING_TYPE,
+      channel: 'c',
+      id: 2
+    })
+  })
+
+  it.each([
+    ['another channel', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'x', id: 2 }],
+    ['a ping', { type: NATIVE_CHAT_VISUAL_PING_TYPE, channel: 'c', id: 2 }],
+    ['no id', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c' }],
+    ['a fractional id', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c', id: 1.5 }],
+    ['a string id', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c', id: '2' }],
+    ['null', null]
+  ])('refuses %s', (_name, data) => {
+    expect(readNativeChatVisualPong(data, 'c')).toBeNull()
   })
 })
 

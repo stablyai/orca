@@ -5,7 +5,9 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { announceRestartResults } from './native-chat-restart-action-notifications'
 import { lastToastShow } from './native-chat-resume-toast.test-support'
 
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const show = vi.fn()
 const refusedBoth = [
@@ -13,33 +15,59 @@ const refusedBoth = [
   { sessionId: 'b', outcome: 'refused' as const }
 ]
 
-beforeEach(() => vi.mocked(toast).mockClear())
+beforeEach(() => vi.clearAllMocks())
 
 function titles(): unknown[] {
   return vi.mocked(toast).mock.calls.map(([text]) => text)
 }
 
-it('says how many chats were resumed', () => {
+it.each([true, false])('offers View chats on a success toast with a failure list: %s', (listed) => {
   announceRestartResults(
     ['a', 'b'],
     [
       { sessionId: 'a', outcome: 'continued' },
       { sessionId: 'b', outcome: 'continued' }
     ],
-    [],
+    listed ? [] : undefined,
     show
   )
-  expect(vi.mocked(toast).mock.calls).toEqual([['Resumed 2 chats']])
+  expect(titles()).toEqual(['Resumed 2 chats'])
+  expect(toast.success).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(toast).mock.calls[0]?.[1]?.action).toEqual({
+    label: 'View chats',
+    onClick: expect.any(Function)
+  })
+  expect(lastToastShow()).toBeDefined()
 })
 
-it('offers Show for chats a resume could not carry on', () => {
+it('offers Review on an error toast for chats a resume could not carry on', () => {
   announceRestartResults(['a', 'b'], refusedBoth, refusedBoth, show)
   expect(titles()).toEqual(['2 chats couldn’t be resumed'])
   const options = vi.mocked(toast).mock.calls[0]?.[1]
   expect(options).not.toHaveProperty('description')
-  expect(options?.action).toEqual({ label: 'Show', onClick: expect.any(Function) })
+  expect(toast.error).toHaveBeenCalledTimes(1)
+  expect(options?.action).toEqual({ label: 'Review', onClick: expect.any(Function) })
   lastToastShow()?.()
   expect(show).toHaveBeenCalledTimes(1)
+})
+
+// An unconfirmed chat may already be working, so it warns rather than errs.
+it('offers Review on a warning toast when a resume could not be confirmed', () => {
+  announceRestartResults(
+    ['a', 'b'],
+    [
+      { sessionId: 'a', outcome: 'continued' },
+      { sessionId: 'b', outcome: 'unknown' }
+    ],
+    [{ sessionId: 'b', outcome: 'unconfirmed' }],
+    show
+  )
+  expect(titles()).toEqual(['Couldn’t confirm 1 chat was resumed'])
+  expect(toast.warning).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(toast).mock.calls[0]?.[1]?.action).toEqual({
+    label: 'Review',
+    onClick: expect.any(Function)
+  })
 })
 
 // One resume, one toast: the chats it resumed ride along under the ones it could not.
@@ -99,7 +127,7 @@ it('says nothing when the host lists none of them as failed', () => {
 })
 
 // A request that never reached the host leaves no read to narrow by, so every chat it named failed.
-it('counts every chat not carried on when no failure list was read, with nothing to Show', () => {
+it('counts every chat not carried on when no failure list was read, with nothing to open', () => {
   announceRestartResults(['a', 'b'], [], undefined, show)
   expect(titles()).toEqual(['2 chats couldn’t be resumed'])
   expect(vi.mocked(toast).mock.calls[0]?.[1]).not.toHaveProperty('action')

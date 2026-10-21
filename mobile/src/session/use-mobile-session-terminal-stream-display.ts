@@ -16,7 +16,6 @@ export function useMobileSessionTerminalStreamDisplay(
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
-    initializedHandlesRef,
     webReadyHandlesRef,
     activeSessionTab,
     nativeChatInputLeaseReady,
@@ -34,7 +33,6 @@ export function useMobileSessionTerminalStreamDisplay(
     subscribingRef: subscribingHandlesRef,
     leaseOnlyRef: leaseOnlyHandlesRef,
     webReadyRef: webReadyHandlesRef,
-    initializedRef: initializedHandlesRef,
     subscribe: subscribeToTerminal,
     unsubscribe: unsubscribeTerminal
   })

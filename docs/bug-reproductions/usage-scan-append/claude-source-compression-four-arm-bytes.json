@@ -1,0 +1,528 @@
+{
+  "purpose": "Four-arm actual production persistence bytes and dominant cache fields; no timing claim.",
+  "node": "v24.20.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "exactColdParity": true,
+  "crossArmProjectionParity": true,
+  "methodology": "Original/published use their actual store indentation and full-state layout. Fixed main/current use their production source writers and report serializers. Source component lengths exclude enclosing property names and are diagnostic, not additive file sizes.",
+  "toolingSha256": "9ce36bf6c213f05a00f97e54e088027afa3f4404651604907c325b3f149d3a6a",
+  "arms": {
+    "original": {
+      "commit": "51e7181850b022bae2d41091fe1229accef4bd50",
+      "storeSha256": "c2457e55948c1982fd1a1cd045d847c1e6cecb6eb5e9eadfc3647da8c6a226c2",
+      "scanner": {
+        "bundleSha256": "ff7da33319be01f944cee557d1a0b326b2445f0c898b6b5f466cab61953dc8da",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "51e7181850b022bae2d41091fe1229accef4bd50",
+            "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "51e7181850b022bae2d41091fe1229accef4bd50",
+            "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "51e7181850b022bae2d41091fe1229accef4bd50",
+            "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "51e7181850b022bae2d41091fe1229accef4bd50",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "51e7181850b022bae2d41091fe1229accef4bd50",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          }
+        }
+      },
+      "persistence": null
+    },
+    "published": {
+      "commit": "8467877ed92aba2ef59737aebf461e9cab52c273",
+      "storeSha256": "cd0305c4ed01af5bc8c11c8247feb9bf92d6e9df00551a87574cdff8e7389d0b",
+      "scanner": {
+        "bundleSha256": "8bb88b61faf2cf1131631c37dd89d16dcdedfeb5d3c2f925dd5ebb550b573e20",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "6598c02e38ea1776ef5ef926ca424dbc5880f27e7ff03b651cf8f60b791996f6"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "4534b3ff429df50140595ee536507c33f0a8b45434f09d7446f4592a37dbe2fb",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b03bc2db9f1f93e9d26ba31b8a469f85f27237498a520ea5cc128df397d1ff94"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "7df97e1a448696348cf89506085ea4959a7e876dae1a03b8ef02e32346feb295"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "baffe60b5c403b0d65afc7608c1903f726dee12d61a597c1d9525c82b4ed7bc4"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "49759bda2ba0efb81ac785eb13d4c51685dac505f5aa245144d441353793b5b0"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "1ecfcf5f829617792a2b16615001aee4c888cc80c3e8156191378c4a57d637b6"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        }
+      }
+    },
+    "main": {
+      "commit": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+      "storeSha256": "7247d4f8288249a95085a2150048c76b797d64d7e21bf432802b5881c2a0f2ab",
+      "scanner": {
+        "bundleSha256": "ff7da33319be01f944cee557d1a0b326b2445f0c898b6b5f466cab61953dc8da",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "55d1990fb662bfd005bfbfac8a2732702aa28b8511161b6259a72cd0e9f5a265",
+        "sourceFingerprints": {
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "d1a7041ef4e1366f7dc1c9225e663b49ebe5ef3ca60717d572bc4b9a85579232"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "657f5317536c7504416431c378bcc7a956ed5de7b7649a35f8d90674688f5da9"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        }
+      }
+    },
+    "current": {
+      "commit": null,
+      "storeSha256": "5beb17f973fbd12b70408e7c8526fda9486ca3fdba2acc89dccb3b0f6d3e8b39",
+      "scanner": {
+        "bundleSha256": "46154f2200b925b31db4103fc5a6abf52e70f66a014d867667819e60e0855bce",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/scanner.ts": {
+            "source": "worktree",
+            "sha256": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "worktree",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "worktree",
+            "sha256": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "worktree",
+            "sha256": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "worktree",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "worktree",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "worktree",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "worktree",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "cc18078db9f4fa4632e9653ee3e963fc7d559d05f063a5e1b87c34e43ccca948",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-source-cache.ts": {
+            "source": "worktree",
+            "sha256": "9b4de097982b7b2d705647456e319ab9cab8b11c786e244fb19349fe63931ab5"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/persisted-usage-report.ts": {
+            "source": "worktree",
+            "sha256": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04"
+          },
+          "src/main/claude-usage/source-cache-compression.ts": {
+            "source": "worktree",
+            "sha256": "b6a0d3ad3bb447905d056dd98ded0a58c6e4750048c5a530c5ca09a7ce63328f"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "worktree",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "worktree",
+            "sha256": "33b18046e3a2b68fcfc5c3654ff0ad1f70888113ea21420d5db24f32109b82a9"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "worktree",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-cache-json-integrity.ts": {
+            "source": "worktree",
+            "sha256": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7"
+          },
+          "src/main/usage/usage-inline-cache-preservation.ts": {
+            "source": "worktree",
+            "sha256": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "worktree",
+            "sha256": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "worktree",
+            "sha256": "4f2cee1b76a034153fd9c24ef7e2701e0831bf19d1d4c1f817772e8597cdf17e"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "worktree",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "worktree",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "worktree",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "worktree",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "worktree",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "usageKeys": 16384,
+      "maximaPattern": "repeated",
+      "historyBytes": 7465268,
+      "suffixBytes": 451,
+      "fixtureSha256": "f3b342d71da6a2dfdd696c1bb9cf2841e4f8c548420e46632bd1e0d915eaa051",
+      "measurements": {
+        "original": {
+          "sourceBytes": 0,
+          "reportBytes": 620849,
+          "totalPersistedBytes": 620849,
+          "productionIndent": 2,
+          "sourceComponents": {
+            "fileBytes": 470833,
+            "ownedKeyListBytes": 469301,
+            "tokenColumnsBytes": null,
+            "tokenRowsBytes": null,
+            "columnValueCounts": null,
+            "projectionCount": null
+          }
+        },
+        "published": {
+          "sourceBytes": 0,
+          "reportBytes": 768008,
+          "totalPersistedBytes": 768008,
+          "productionIndent": null,
+          "sourceComponents": {
+            "fileBytes": 766562,
+            "ownedKeyListBytes": 469301,
+            "tokenColumnsBytes": null,
+            "tokenRowsBytes": 294915,
+            "columnValueCounts": null,
+            "projectionCount": 1
+          }
+        },
+        "main": {
+          "sourceBytes": 470891,
+          "reportBytes": 1426,
+          "totalPersistedBytes": 472317,
+          "productionIndent": null,
+          "sourceComponents": {
+            "fileBytes": 470832,
+            "ownedKeyListBytes": 469301,
+            "tokenColumnsBytes": null,
+            "tokenRowsBytes": null,
+            "columnValueCounts": null,
+            "projectionCount": null
+          }
+        },
+        "current": {
+          "sourceBytes": 82411,
+          "reportBytes": 1510,
+          "totalPersistedBytes": 83921,
+          "productionIndent": null,
+          "sourceComponents": {
+            "fileBytes": 537221,
+            "ownedKeyListBytes": 469301,
+            "tokenColumnsBytes": 65553,
+            "tokenRowsBytes": null,
+            "columnValueCounts": [16384, 1, 1, 1, 1, 1],
+            "projectionCount": 1
+          }
+        }
+      }
+    },
+    {
+      "usageKeys": 100000,
+      "maximaPattern": "unique",
+      "historyBytes": 47222805,
+      "suffixBytes": 453,
+      "fixtureSha256": "af7af784522047431204709330653590043792311bdd5c40e56c1a592ec0bad8",
+      "measurements": {
+        "original": {
+          "sourceBytes": 0,
+          "reportBytes": 3883175,
+          "totalPersistedBytes": 3883175,
+          "productionIndent": 2,
+          "sourceComponents": {
+            "fileBytes": 2979821,
+            "ownedKeyListBytes": 2977781,
+            "tokenColumnsBytes": null,
+            "tokenRowsBytes": null,
+            "columnValueCounts": null,
+            "projectionCount": null
+          }
+        },
+        "published": {
+          "sourceBytes": 0,
+          "reportBytes": 6327804,
+          "totalPersistedBytes": 6327804,
+          "productionIndent": null,
+          "sourceComponents": {
+            "fileBytes": 6325852,
+            "ownedKeyListBytes": 2977781,
+            "tokenColumnsBytes": null,
+            "tokenRowsBytes": 3345029,
+            "columnValueCounts": null,
+            "projectionCount": 2
+          }
+        },
+        "main": {
+          "sourceBytes": 2979880,
+          "reportBytes": 1932,
+          "totalPersistedBytes": 2981812,
+          "productionIndent": null,
+          "sourceComponents": {
+            "fileBytes": 2979821,
+            "ownedKeyListBytes": 2977781,
+            "tokenColumnsBytes": null,
+            "tokenRowsBytes": null,
+            "columnValueCounts": null,
+            "projectionCount": null
+          }
+        },
+        "current": {
+          "sourceBytes": 1596451,
+          "reportBytes": 2016,
+          "totalPersistedBytes": 1598467,
+          "productionIndent": null,
+          "sourceComponents": {
+            "fileBytes": 6125887,
+            "ownedKeyListBytes": 2977781,
+            "tokenColumnsBytes": 3145041,
+            "tokenRowsBytes": null,
+            "columnValueCounts": [100000, 100000, 100000, 100000, 100000, 100000],
+            "projectionCount": 2
+          }
+        }
+      }
+    }
+  ]
+}

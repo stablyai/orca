@@ -1,7 +1,11 @@
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
-import type { ExtraUsageBalance, ProviderRateLimits } from '../../shared/rate-limit-types'
+import type {
+  ExtraUsageBalance,
+  ProviderRateLimits,
+  UsageRateLimitFailureKind
+} from '../../shared/rate-limit-types'
 import {
   clearOpenCodeSessionCookies,
   createOpenCodeRequestSession,
@@ -13,6 +17,7 @@ import {
   parseOpenCodeGoBillingStatusPayload,
   parseOpenCodeGoStatusPayload
 } from './opencode-go-status-parsing'
+import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const OPENCODE_GO_STATUS_URL = `${OPENCODE_BASE_URL}/console/api/go/status`
@@ -118,7 +123,7 @@ export async function fetchOpenCodeGoRateLimits(
   try {
     openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
   } catch (error) {
-    return makeOpenCodeError(error)
+    return makeOpenCodeError(error instanceof Error ? error.message : 'Unknown error')
   }
 
   try {
@@ -146,6 +151,7 @@ function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string
         signal: abortController.signal
       })
       if (!response.ok) {
+        abortController.abort()
         return makeOpenCodeGoZenBalance(null, 'refresh-failed')
       }
       const balance = parseOpenCodeGoBillingStatusPayload(await response.text())
@@ -159,15 +165,19 @@ function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string
   return { promise, abort: () => abortController.abort() }
 }
 
-function makeOpenCodeError(error: unknown): ProviderRateLimits {
+function makeOpenCodeError(
+  error: string,
+  failureKind?: UsageRateLimitFailureKind
+): ProviderRateLimits {
   return {
     provider: 'opencode-go',
     session: null,
     weekly: null,
     monthly: null,
     updatedAt: Date.now(),
-    error: error instanceof Error ? error.message : 'Unknown error',
-    status: 'error'
+    error,
+    status: 'error',
+    ...(failureKind ? { usageMetadata: { failureKind } } : {})
   }
 }
 
@@ -181,15 +191,9 @@ async function fetchOpenCodeGoRateLimitsWithSession(
 
   if (override) {
     if (!/^(org|wrk|wk)_[A-Za-z0-9]+$/.test(override)) {
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        monthly: null,
-        updatedAt: Date.now(),
-        error: 'Invalid workspace ID format: must match ^(org|wrk|wk)_[A-Za-z0-9]+$',
-        status: 'error'
-      }
+      return makeOpenCodeError(
+        'Invalid workspace ID format: must match ^(org|wrk|wk)_[A-Za-z0-9]+$'
+      )
     }
     ids = [override]
   } else {
@@ -211,49 +215,26 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       })
 
       if (!workspacesRes.ok) {
-        return {
-          provider: 'opencode-go',
-          session: null,
-          weekly: null,
-          monthly: null,
-          updatedAt: Date.now(),
-          error: `Workspaces fetch failed (${workspacesRes.status})`,
-          status: 'error'
-        }
+        return makeOpenCodeError(`Workspaces fetch failed (${workspacesRes.status})`)
       }
 
       const workspacesText = await workspacesRes.text()
       ids = parseWorkspaceIds(workspacesText)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        monthly: null,
-        updatedAt: Date.now(),
-        error: message,
-        status: 'error'
-      }
+      return makeOpenCodeError(message, classifyThrownUsageRequestError(err))
     }
   }
 
   if (ids.length === 0) {
-    return {
-      provider: 'opencode-go',
-      session: null,
-      weekly: null,
-      monthly: null,
-      updatedAt: Date.now(),
-      error:
-        'No workspace found for this cookie — add an OpenCode Go API key (or run /connect in OpenCode), or set a Workspace ID override',
-      status: 'error'
-    }
+    return makeOpenCodeError(
+      'No workspace found for this cookie — add an OpenCode Go API key (or run /connect in OpenCode), or set a Workspace ID override'
+    )
   }
 
   // Why: /workspace/<id>/go now 302s to console login. Usage is JSON at
   // /console/api/go/status, scoped by x-org-id and authed by the console session.
-  let lastError = ''
+  let lastFailure: ProviderRateLimits | null = null
   let balanceOnlyResult: ProviderRateLimits | null = null
   for (const candidateId of ids) {
     let billingTask: ReturnType<typeof startOptionalBillingFetch> | null = null
@@ -273,10 +254,11 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       if (!statusRes.ok) {
         billingTask.abort()
         await billingTask.promise
-        lastError =
+        lastFailure = makeOpenCodeError(
           statusRes.status === 401
             ? 'Usage fetch failed (401) — paste the full Cookie header including __Host-console_session (auth alone is not enough)'
             : `Usage fetch failed (${statusRes.status})`
+        )
         continue
       }
 
@@ -286,7 +268,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       if (!parsed && !explicitNoAccess) {
         billingTask.abort()
         await billingTask.promise
-        lastError = 'Could not parse usage data'
+        lastFailure = makeOpenCodeError('Could not parse usage data')
         continue
       }
 
@@ -315,7 +297,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
           status: 'ok'
         }
       } else {
-        lastError = 'Could not parse usage data'
+        lastFailure = makeOpenCodeError('Could not parse usage data')
       }
     } catch (err) {
       if (billingTask) {
@@ -323,20 +305,12 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         await billingTask.promise
       }
       const message = err instanceof Error ? err.message : 'Unknown error'
-      lastError = message
+      lastFailure = makeOpenCodeError(message, classifyThrownUsageRequestError(err))
     }
   }
 
   if (balanceOnlyResult) {
     return balanceOnlyResult
   }
-  return {
-    provider: 'opencode-go',
-    session: null,
-    weekly: null,
-    monthly: null,
-    updatedAt: Date.now(),
-    error: lastError || 'Could not parse usage data from any available workspace',
-    status: 'error'
-  }
+  return lastFailure ?? makeOpenCodeError('Could not parse usage data from any available workspace')
 }

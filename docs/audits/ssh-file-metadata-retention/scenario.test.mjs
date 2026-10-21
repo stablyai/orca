@@ -9,7 +9,7 @@ import {
   STREAM_ACK_WINDOW_CHUNKS,
   STREAM_CHUNK_SIZE,
   RelayErrorCode
-} from '../../../src/relay/protocol'
+} from '../../../src/wsl-guest/protocol'
 import {
   candidate,
   report,

@@ -19,7 +19,7 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
-import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-view-mode'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
@@ -63,7 +63,6 @@ export type AgentLaunchRouteArgs = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   /** A working directory only a terminal can apply; a structured session runs in its workspace. */
   tuiCustomization?: { cwd?: string | null }
-  initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
 export { workspaceKindForWorktreeId }
@@ -172,7 +171,6 @@ export function buildAgentLaunchRouteInput(
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
         store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
     }),
-    initialSessionOptions: args.initialSessionOptions,
     ...hostStructuredAgentsInput(store, executionHostId)
   }
 }

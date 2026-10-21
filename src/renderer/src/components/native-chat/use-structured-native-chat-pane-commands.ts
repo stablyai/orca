@@ -4,13 +4,14 @@ import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
 import { resolveStructuredSessionOrcaSessionId } from '../../runtime/structured-session-orca-session-id'
-import type { RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
-  type NativeChatContextMenuActions
+  type NativeChatContextMenuActions,
+  type NativeChatContextMenuTargetArgs
 } from './use-native-chat-context-menu'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
@@ -24,7 +25,8 @@ export function useStructuredNativeChatPaneCommands({
   questionAnswerInputRef,
   terminalPaneActions,
   sessionId,
-  target
+  target,
+  ...menuTargets
 }: {
   tabId: string
   groupId?: string
@@ -35,7 +37,7 @@ export function useStructuredNativeChatPaneCommands({
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
   sessionId: string
   target: RuntimeClientTarget
-}) {
+} & NativeChatContextMenuTargetArgs) {
   const keybindings = useAppStore((state) => state.keybindings)
   const resolveOrcaSessionId = useMemo(
     () =>
@@ -50,6 +52,7 @@ export function useStructuredNativeChatPaneCommands({
     questionAnswerInputRef
   })
   const contextMenu = useNativeChatContextMenu({
+    ...menuTargets,
     rootRef,
     actions: {
       ...emptyNativeChatContextMenuActions,

@@ -1,3 +1,4 @@
+import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -9,6 +10,7 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,
+  AgentSessionProviderHandle,
   AgentSessionProviderHandleLink
 } from '../../../shared/agent-session-provider-handle'
 import {
@@ -16,8 +18,6 @@ import {
   agentSessionProviderHandleFromWire,
   type AgentSessionWireProviderHandle
 } from '../../../shared/agent-session-provider-handle-encoding'
-import { claudeProviderHandleLink } from '../../claude/claude-structured-owner-identity'
-import { codexProviderHandleLink } from '../../codex/codex-structured-owner-identity'
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
@@ -40,7 +40,6 @@ import {
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
@@ -79,9 +78,10 @@ export type AgentSessionAttachParams = {
    * without adopting — presence of a handle must never be what triggers a resume.
    */
   adopt?: {
-    providerHandle: AgentSessionWireProviderHandle
+    providerHandle: AgentSessionProviderHandle
     /** Omitted only when the exact committed operation replays an already-imported journal. */
     transcriptPath?: string
+    source?: { providerSessionId: string; workspaceCwd: string }
   }
 }
 
@@ -163,10 +163,13 @@ export function journalIdentityFor(
   record: AgentSessionRecord,
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
-  const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+  const active = activeProviderContext(record)
+  const head = active.head
   const providerHandle =
     head?.handle ??
-    (params.providerHandle ? agentSessionProviderHandleFromWire(params.providerHandle) : null)
+    (!active.pendingClear && params.providerHandle
+      ? agentSessionProviderHandleFromWire(params.providerHandle)
+      : null)
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -279,25 +282,19 @@ async function reconcileAgainstProviderHistory(input: {
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(
-  handle: AgentSessionWireProviderHandle,
+  handle: AgentSessionProviderHandle,
   observedAt: number
 ): AgentSessionProviderHandleLink {
-  return handle.kind === 'claude'
-    ? claudeProviderHandleLink({
-        sessionId: handle.sessionId,
-        leafUuid: handle.leafUuid,
-        resumed: false,
-        origin: 'adopted',
-        fence: ADOPTED_HANDLE_FENCE,
-        observedAt
-      })
-    : codexProviderHandleLink({
-        threadId: handle.threadId,
-        resumed: false,
-        origin: 'adopted',
-        fence: ADOPTED_HANDLE_FENCE,
-        observedAt
-      })
+  return {
+    // A link id is a bounded slug; Pi's native id is a file path.
+    linkId: `${handle.agent}-${ADOPTED_HANDLE_FENCE}-${handle.nativeId}`
+      .replace(/[^A-Za-z0-9_-]/g, '_')
+      .slice(0, 128),
+    handle,
+    origin: 'adopted',
+    mintedAtFence: ADOPTED_HANDLE_FENCE,
+    observedAt
+  }
 }
 
 export function reserveRequestFor(input: {
@@ -307,6 +304,7 @@ export function reserveRequestFor(input: {
   callerKey: string
   fingerprint: string
   now: number
+  models?: Parameters<AgentSessionRecordStore['reserveOwner']>[0]['models']
 }): Parameters<AgentSessionRecordStore['reserveOwner']>[0] {
   const { params, authority } = input
   return {
@@ -314,7 +312,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
-    ...(params.options ? { options: params.options } : {}),
+    ...(params.options ? { options: params.options, models: input.models } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }
       : {}),

@@ -8,7 +8,9 @@ import {
 } from '../terminal/terminal-live-dictation-routing'
 import {
   fetchDictationSetup,
-  isDictationSetupRequiredError
+  isDictationSetupRequiredError,
+  isSpeechlessServerError,
+  SPEECHLESS_SERVER_MESSAGE
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
@@ -79,6 +81,7 @@ export function useMobileSessionNativeChatDictation(
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
+  nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
   const nativeChatOverlayInputLockReason =
     activeSessionTab?.type === 'agent-session'
       ? connState === 'connected'
@@ -106,7 +109,7 @@ export function useMobileSessionNativeChatDictation(
         return
       }
       triggerError()
-      showToast(message)
+      showToast(isSpeechlessServerError(message) ? SPEECHLESS_SERVER_MESSAGE : message)
     },
     [setShowDictationSetup, showToast]
   )

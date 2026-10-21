@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ import {
   CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE
 } from './claude-account-selection'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
+import { describeClaudeProfile } from './claude-profile-paths'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import { ClaudeAccountService } from './service'
 
@@ -37,13 +38,14 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
   roots.push(root)
   const home = (id: string) => join(root, id, 'home')
   // Stands in for Claude finishing `claude auth login` in a folder.
-  const signIn = (id: string, email: string) => {
+  const signIn = (id: string, email: string, organizationUuid?: string) => {
     mkdirSync(home(id), { recursive: true })
     writeFileSync(
       join(home(id), '.claude.json'),
-      JSON.stringify({ oauthAccount: { emailAddress: email } })
+      JSON.stringify({ oauthAccount: { emailAddress: email, organizationUuid } })
     )
   }
+  const covered = new Set<string>()
   let settings: GlobalSettings = {
     ...getDefaultSettings('/tmp'),
     claudeManagedAccounts: accounts,
@@ -54,7 +56,8 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     router: {
       accountHome: home,
       userConfigDir: () => join(root, 'personal'),
-      copiedLoginIntoSystemDefault: () => existsSync(join(root, 'claude-runtime-auth'))
+      copiedLoginIntoSystemDefault: () => existsSync(join(root, 'claude-runtime-auth')),
+      coveredBySystemDefault: (id: string) => covered.has(id)
     },
     syncForCurrentSelection: vi.fn(async (_target?: ClaudeAccountSelectionTarget) => {}),
     publishAll: vi.fn(async () => {}),
@@ -88,12 +91,19 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     runtimeAuth,
     runLogin
   )
-  return { root, home, service, runtimeAuth, runLogin, signIn, settings: () => settings }
+  return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
 }
 
 // The id the last sign-in prepared a folder for.
 function newId(f: ReturnType<typeof fixture>): string {
   return f.runtimeAuth.prepareAccountFolder.mock.calls.at(-1)![0]
+}
+
+// Why rename: the stand-in hands its link over whole; a direct write lets the poller read it empty.
+function handOverClaudeSignInLink(windowsPath: string, link: string): void {
+  const helperPath = join(windowsPath, '.orca-sign-in-browser')
+  writeFileSync(`${helperPath}.tmp`, link)
+  renameSync(`${helperPath}.tmp`, `${helperPath}.link`)
 }
 
 describe('ClaudeAccountService', () => {
@@ -119,6 +129,15 @@ describe('ClaudeAccountService', () => {
     expect(byId.get('b')).toMatchObject({ email: 'b@example.test', needsSignIn: true })
     expect(byId.get('old-wsl')).toMatchObject({ needsSignIn: true })
     expect(byId.get('new-wsl')?.needsSignIn).toBeUndefined()
+  })
+
+  it('asks no sign-in of an account System default runs, and lets it be selected', async () => {
+    const f = fixture()
+    f.covered.add('b')
+    const row = f.service.listAccounts().accounts.find((candidate) => candidate.id === 'b')
+    expect(row?.needsSignIn).toBeUndefined()
+    expect(row?.runsOnSystemDefault).toBe(true)
+    await expect(f.service.selectAccount('b')).resolves.toMatchObject({ activeAccountId: 'b' })
   })
 
   it("reports System default's login from the user's own folder", () => {
@@ -167,6 +186,58 @@ describe('ClaudeAccountService', () => {
     expect(f.settings().claudeManagedAccounts).toHaveLength(2)
   })
 
+  it.each([
+    { email: 'new@example.test', organizationUuid: 'new-org', duplicate: false },
+    { email: 'imported@example.test', organizationUuid: 'saved-org', duplicate: true },
+    { email: 'current@example.test', organizationUuid: 'current-org', duplicate: true }
+  ])(
+    'finishes sign-in for $email despite an invalid imported account ID',
+    async ({ email, organizationUuid, duplicate }) => {
+      const imported = account('invalid.id', {
+        email: 'imported@example.test',
+        organizationUuid: 'saved-org',
+        organizationName: 'Saved organization'
+      })
+      const f = fixture([imported, account('a')])
+      vi.spyOn(f.runtimeAuth.router, 'accountHome').mockImplementation((id) => {
+        describeClaudeProfile(f.root, id, { executionHostId: 'local', runtime: 'host' })
+        return f.home(id)
+      })
+      f.signIn('a', 'current@example.test', 'current-org')
+      const rows = f.service.listAccounts().accounts
+      expect(rows).toEqual([
+        expect.objectContaining({
+          id: imported.id,
+          email: imported.email,
+          organizationUuid: imported.organizationUuid,
+          organizationName: imported.organizationName,
+          needsSignIn: true
+        }),
+        expect.objectContaining({
+          id: 'a',
+          email: 'current@example.test',
+          organizationUuid: 'current-org'
+        })
+      ])
+
+      const begun = await f.service.beginSignIn({ runtime: 'host' })
+      f.signIn(begun.accountId, email, organizationUuid)
+      if (duplicate) {
+        await expect(f.service.finishSignIn(begun)).rejects.toThrow('already added')
+        expect(existsSync(f.home(begun.accountId))).toBe(false)
+        expect(f.settings().claudeManagedAccounts).toEqual([imported, account('a')])
+      } else {
+        await expect(f.service.finishSignIn(begun)).resolves.toMatchObject({
+          accounts: expect.arrayContaining([
+            expect.objectContaining({ id: begun.accountId, email, organizationUuid })
+          ])
+        })
+        expect(f.settings().claudeManagedAccounts).toHaveLength(3)
+        expect(existsSync(f.home(begun.accountId))).toBe(true)
+      }
+    }
+  )
+
   it('relabels a saved account signed in again under another login', async () => {
     const f = fixture()
     const begun = await f.service.beginSignIn({ accountId: 'b' })
@@ -177,6 +248,36 @@ describe('ClaudeAccountService', () => {
       createdAt: 1
     })
   })
+
+  it.each([
+    { savedEmail: 'old@example.test', currentEmail: 'current@example.test' },
+    { savedEmail: 'same@example.test', currentEmail: 'same@example.test' }
+  ])(
+    'checks the listed identity after a folder changes from $savedEmail',
+    async ({ savedEmail, currentEmail }) => {
+      const f = fixture([account('a', { email: savedEmail, organizationUuid: 'old-org' })])
+      f.signIn('a', currentEmail, 'current-org')
+      expect(f.service.listAccounts().accounts[0]).toMatchObject({
+        email: currentEmail,
+        organizationUuid: 'current-org'
+      })
+
+      const original = await f.service.beginSignIn({ runtime: 'host' })
+      f.signIn(original.accountId, savedEmail, 'old-org')
+      await expect(f.service.finishSignIn(original)).resolves.toMatchObject({
+        accounts: expect.arrayContaining([
+          expect.objectContaining({ id: original.accountId, email: savedEmail })
+        ])
+      })
+
+      const duplicate = await f.service.beginSignIn({ runtime: 'host' })
+      f.signIn(duplicate.accountId, currentEmail, 'current-org')
+      await expect(f.service.finishSignIn(duplicate)).rejects.toThrow('already added')
+      expect(existsSync(join(f.root, duplicate.accountId))).toBe(false)
+      expect(f.service.listAccounts().accounts).toHaveLength(2)
+      expect(existsSync(f.home('a'))).toBe(true)
+    }
+  )
 
   it('signs in with a hidden login straight into the new account folder', async () => {
     const f = fixture()
@@ -198,6 +299,103 @@ describe('ClaudeAccountService', () => {
       managedAuthPath: f.home(newId(f))
     })
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
+  })
+
+  it('lets Claude open the browser itself for a plain sign-in', async () => {
+    const f = fixture()
+    f.runLogin.mockImplementationOnce(async (_args, config, _timeoutMs, options) => {
+      expect(options?.browser).toBeUndefined()
+      expect(existsSync(join(config.windowsPath, '.orca-sign-in-browser'))).toBe(false)
+      f.signIn(newId(f), 'new@example.test')
+      return ''
+    })
+    await f.service.addAccount({ runtime: 'host' })
+    expect(f.runLogin).toHaveBeenCalledTimes(1)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'hands the link Claude gives BROWSER to Settings when asked to copy it',
+    async () => {
+      const LINK =
+        'https://claude.com/cai/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fcallback'
+      const f = fixture()
+      let copied: string | null = null
+      f.runLogin.mockImplementationOnce(async (_args, config) => {
+        // Stands in for Claude running BROWSER, then finishing once the browser signs in.
+        handOverClaudeSignInLink(config.windowsPath, LINK)
+        await vi.waitFor(() => expect(copied).toBe(LINK))
+        f.signIn(newId(f), 'new@example.test')
+        return ''
+      })
+      const adding = f.service.addAccount({ runtime: 'host' }, true)
+      copied = await f.service.waitForSignInLink()
+      await adding
+      expect(existsSync(join(f.home(newId(f)), '.orca-sign-in-browser'))).toBe(false)
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    }
+  )
+
+  it('fails a copy-link sign-in it cannot catch, rather than opening a browser', async () => {
+    const f = fixture()
+    // A folder that does not exist: the BROWSER stand-in cannot be written there.
+    f.runtimeAuth.prepareAccountFolder.mockImplementationOnce(async (id: string) => ({
+      configDir: join(f.root, id, 'missing'),
+      readPath: join(f.root, id, 'missing')
+    }))
+    const adding = f.service.addAccount({ runtime: 'host' }, true)
+    await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
+    expect(f.runLogin).not.toHaveBeenCalled()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'ends a copy-link sign-in when Claude hands BROWSER something other than a sign-in link',
+    async () => {
+      const f = fixture()
+      f.runLogin.mockImplementationOnce(
+        (_args, _config, _timeoutMs, options) =>
+          new Promise((_resolve, reject) => {
+            writeFileSync(`${options!.browser}.link`, 'https://example.test/not-a-sign-in')
+            options?.signal?.addEventListener('abort', () =>
+              reject(new Error('Claude sign-in was cancelled.'))
+            )
+          })
+      )
+      const adding = f.service.addAccount({ runtime: 'host' }, true)
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+      await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
+    }
+  )
+
+  it('reports no link when a copy-link sign-in ends before Claude hands one over', async () => {
+    const f = fixture()
+    f.runLogin.mockRejectedValueOnce(new Error('Claude sign-in was cancelled.'))
+    const adding = f.service.reauthenticateAccount('b', true)
+    await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    await expect(adding).rejects.toThrow('cancelled')
+  })
+
+  it('opens the link of a WSL sign-in through the desktop opener', async () => {
+    const LINK =
+      'https://claude.com/cai/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fcallback'
+    const f = fixture()
+    const opened: string[] = []
+    f.service.setWslSignInLinkOpener((link) => opened.push(link))
+    f.runtimeAuth.prepareAccountFolder.mockImplementation(async (id: string) => {
+      mkdirSync(f.home(id), { recursive: true })
+      return { configDir: `/home/u/claude-profiles/${id}/home`, readPath: f.home(id) }
+    })
+    f.runLogin.mockImplementationOnce(async (_args, config, _timeoutMs, options) => {
+      expect(options?.browser).toBe(
+        `/home/u/claude-profiles/${newId(f)}/home/.orca-sign-in-browser`
+      )
+      handOverClaudeSignInLink(config.windowsPath, LINK)
+      await vi.waitFor(() => expect(opened).toEqual([LINK]))
+      f.signIn(newId(f), 'wsl@example.test')
+      return ''
+    })
+    await f.service.addAccount({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(opened).toEqual([LINK])
   })
 
   it('runs a WSL login against the guest folder', async () => {

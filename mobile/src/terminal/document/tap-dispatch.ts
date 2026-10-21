@@ -1,5 +1,5 @@
 import { handleDragMove, stopEdgeScroll } from './selection-overlay'
-import { cancelSelect, enterSelect } from './selection-range'
+import { cancelSelect, enterSelect } from './selection-mode'
 import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'

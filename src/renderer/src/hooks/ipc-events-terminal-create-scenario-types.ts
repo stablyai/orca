@@ -84,6 +84,7 @@ export type TerminalCreateSurfacingStore = {
     { id: string; ptyId?: string | null; title?: string; agentLaunchPane?: { leafId: string } }[]
   >
   folderWorkspaces: unknown[]
+  sleepingAgentSessionsByPaneKey: Record<string, unknown>
   projectGroups: unknown[]
   repos: { id: string; connectionId: string | null; executionHostId: string }[]
   worktreesByRepo: Record<string, { id: string; repoId: string }[]>
@@ -118,7 +119,6 @@ export type TerminalCreateSurfacingStore = {
   settings: {
     terminalFontSize: number
     experimentalNativeChat: boolean
-    openAgentTabsInChatByDefault: boolean
     activeRuntimeEnvironmentId: string | undefined
   }
 }

@@ -3,15 +3,26 @@
  * starts. A host whose sshd refuses forwarding (`AllowTcpForwarding no`) is reached through the
  * stdio bridge instead (orcad-managed-tunnel-transport.ts).
  */
+import { connect, type Socket } from 'node:net'
 import type { ClientChannel } from 'ssh2'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
+import type { StartedPortForward } from './port-forwarding/ssh-port-forward-provider'
 
 export type TcpForwardingVerdict = 'allowed' | 'refused' | 'unverifiable'
+/** `not-listening`: no dial ever connected, so the forward never got as far as its listener. */
+export type ForwardChannelVerdict = TcpForwardingVerdict | 'not-listening'
 
 /** RFC 4254 open-failure codes: sshd policy, versus a port with nothing listening. */
 const ADMINISTRATIVELY_PROHIBITED = 1
 const CONNECT_FAILED = 2
-export const TCP_FORWARDING_PROBE_TIMEOUT_MS = 10_000
+const TCP_FORWARDING_PROBE_TIMEOUT_MS = 10_000
+const FORWARD_CHANNEL_CHECK_TIMEOUT_MS = 5_000
+// The client logs a failed open just before it drops the socket; the two can arrive out of order.
+const FORWARD_CHANNEL_FAILURE_LOG_GRACE_MS = 500
+const FORWARD_CHANNEL_FAILURE_LOG_POLL_MS = 25
+const FORWARD_CHANNEL_REDIAL_MS = 100
+// Not HTTP: an HTTP server answers it with a 400 at once, proving bytes cross the channel.
+const FORWARD_CHANNEL_CHECK_BYTES = '\0\r\n\r\n'
 
 function closeQuietly(channel: ClientChannel | undefined): void {
   try {
@@ -61,5 +72,85 @@ export function probeTcpForwarding(
     } catch {
       settle('unverifiable')
     }
+  })
+}
+
+/**
+ * The forward's own end-to-end check, for a client that forwards out of process (system SSH):
+ * its listener is up before sshd has been asked for a channel, so only a dial through it answers.
+ * Any reply bytes, or a channel still open at the timeout, mean the channel opened.
+ */
+export function checkForwardChannel(
+  forward: Pick<StartedPortForward, 'entry' | 'lastChannelOpenFailure'>,
+  timeoutMs = FORWARD_CHANNEL_CHECK_TIMEOUT_MS
+): Promise<ForwardChannelVerdict> {
+  const readFailure = forward.lastChannelOpenFailure
+  if (!readFailure) {
+    return Promise.resolve('unverifiable')
+  }
+  const verdictOf = (): TcpForwardingVerdict | null => {
+    const failure = readFailure()
+    return failure === 'administratively-prohibited'
+      ? 'refused'
+      : failure === 'connect-failed'
+        ? 'allowed'
+        : null
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    let poll: ReturnType<typeof setInterval> | undefined
+    let redial: ReturnType<typeof setTimeout> | undefined
+    let socket: Socket | undefined
+    let everConnected = false
+    const settle = (verdict: ForwardChannelVerdict): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      clearTimeout(redial)
+      clearInterval(poll)
+      socket?.destroy()
+      resolve(verdict)
+    }
+    const timer = setTimeout(
+      () => settle(verdictOf() ?? (everConnected ? 'unverifiable' : 'not-listening')),
+      timeoutMs
+    )
+    const awaitFailureLog = (): void => {
+      if (settled || poll) {
+        return
+      }
+      const deadline = Date.now() + FORWARD_CHANNEL_FAILURE_LOG_GRACE_MS
+      const check = (): void => {
+        const verdict = verdictOf()
+        if (verdict || Date.now() >= deadline) {
+          settle(verdict ?? 'unverifiable')
+        }
+      }
+      poll = setInterval(check, FORWARD_CHANNEL_FAILURE_LOG_POLL_MS)
+      check()
+    }
+    const dial = (): void => {
+      let connected = false
+      const current = connect({ host: '127.0.0.1', port: forward.entry.localPort })
+      socket = current
+      current.once('connect', () => {
+        connected = true
+        everConnected = true
+        current.write(FORWARD_CHANNEL_CHECK_BYTES)
+      })
+      current.once('data', () => settle('allowed'))
+      current.on('error', () => {})
+      current.once('close', () => {
+        if (connected) {
+          awaitFailureLog()
+        } else if (!settled) {
+          // Why: the startup wait can end on its grace timer before ssh has bound the listener.
+          redial = setTimeout(dial, FORWARD_CHANNEL_REDIAL_MS)
+        }
+      })
+    }
+    dial()
   })
 }

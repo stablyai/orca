@@ -4,13 +4,9 @@ import {
   closeProviderTimelineRigs,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import {
-  AgentSessionAcquisitionExitProvenError,
-  AgentSessionAcquisitionRefusal,
-  AgentSessionAcquisitionRootExitObservedError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
-import { ACP_CHILD_ENV_TO_DELETE } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import {
   GROK,
@@ -21,6 +17,8 @@ import {
   type AcpAdapterRig
 } from './acp-structured-adapter.test-support'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -50,7 +48,7 @@ describe('ACP structured session adapter: acquire', () => {
     const acquired = await rig.acquire()
     expect(rig.spawned).toEqual(['spawn', 'onSpawned', 'initialize'])
     expect(acquired.process).toMatchObject({ pid: PID, spawnToken: 'spawn-1', hostId: 'local' })
-    expect(acquired.link).toMatchObject({
+    expect(rig.started().link).toMatchObject({
       handle: { transport: 'acp', agent: 'grok', nativeId: PROVIDER_SESSION },
       origin: 'created',
       mintedAtFence: 1
@@ -65,10 +63,30 @@ describe('ACP structured session adapter: acquire', () => {
   })
 
   it('launches without any pane identity, so the agent own status hooks stay silent', async () => {
-    const rig = await openAcpAdapterRig()
+    const record = agentSessionRecordFixture({
+      sessionId: SESSION,
+      provider: 'grok',
+      accountHome: { variable: 'GROK_HOME', path: '/home/work/.grok' }
+    })
+    // The launch its registration composes: the shared seal names the child, not this adapter.
+    const rig = await openAcpAdapterRig({
+      deps: {
+        resolveLaunch: createAcpStructuredLaunchResolver(GROK, {
+          store: { getRecord: () => record, pinLaunchDirectory: async () => record },
+          resolveWorkspacePath: async () => '/workspace/project',
+          resolveEnvironment: async () => ({
+            PATH: '/usr/bin',
+            ORCA_PANE_KEY: 'tab-1:pane-1',
+            ORCA_AGENT_HOOK_PORT: '1234'
+          }),
+          resolveCommand: () => '/opt/bin/grok',
+          readJournal: () => null
+        })
+      }
+    })
     await rig.acquire()
     const launch = rig.child().launch
-    expect(launch.envToDelete).toEqual(expect.arrayContaining([...ACP_CHILD_ENV_TO_DELETE]))
+    expect(launch.envToDelete).toEqual(expect.arrayContaining([...STRUCTURED_CHILD_ENV_TO_DELETE]))
     expect(launch.envToDelete).toEqual(
       expect.arrayContaining(['ORCA_PANE_KEY', 'ORCA_AGENT_PANE', ...AGENT_HOOK_RUNTIME_ENV_KEYS])
     )
@@ -91,8 +109,8 @@ describe('ACP structured session adapter: acquire', () => {
       script: (agent) =>
         agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Session not found'))
     })
-    const acquired = await rig.acquire({ fence: 2 })
-    expect(acquired.link).toMatchObject({ origin: 'created', supersedesKey: 'old-key' })
+    await rig.acquire({ fence: 2 })
+    expect(rig.started().link).toMatchObject({ origin: 'created', supersedesKey: 'old-key' })
   })
 
   it('refuses a signed-out agent through the existing start-failure surface and stops its child', async () => {
@@ -100,9 +118,9 @@ describe('ACP structured session adapter: acquire', () => {
       script: (agent) =>
         agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Authentication required'))
     })
-    const failure = await rig.acquire().catch((error: unknown) => error)
-    expect(failure).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(failure).toMatchObject({ reason: 'notSignedIn' })
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(rig.ended).toMatchObject([{ cause: 'requested-close' }])
     expect(rig.child().closes).toBe(1)
   })
 })
@@ -116,10 +134,10 @@ it('reports an agent that exits while starting with its own last words', async (
         child.exit()
       })
   })
-  const failure = await rig.acquire().catch((error: unknown) => error)
-  expect(failure).toBeInstanceOf(AgentSessionAcquisitionExitProvenError)
-  expect(failure).toMatchObject({ message: 'grok: config.toml is invalid' })
-  expect(rig.lifecycle).toEqual([])
+  await rig.acquire()
+  expect(rig.ended).toMatchObject([
+    { failure: { detail: { text: 'grok: config.toml is invalid' } } }
+  ])
 })
 
 it('reads those last words when the agent ends its stdout before its exit is seen', async () => {
@@ -133,12 +151,35 @@ it('reads those last words when the agent ends its stdout before its exit is see
         setTimeout(() => child.exit(), 5)
       })
   })
-  const failure = await rig.acquire().catch((error: unknown) => error)
-  expect(failure).toBeInstanceOf(AgentSessionAcquisitionExitProvenError)
-  expect(failure).toMatchObject({ message: 'grok: config.toml is invalid' })
+  await rig.acquire()
+  expect(rig.ended).toMatchObject([
+    { failure: { detail: { text: 'grok: config.toml is invalid' } } }
+  ])
 })
 
 describe('ACP structured session adapter: turns', () => {
+  it('applies a sent message’s model and effort before its prompt', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      fence: 1,
+      clientMessageId: 'chosen-send',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      executionOptions: { model: 'grok-4.6', effort: 'low' }
+    })
+    await rig.frame('session/prompt')
+    const methods = rig.child().agent.frames.map((frame) => frame.method)
+    expect(methods.slice(-3)).toEqual([
+      'session/set_config_option',
+      'session/set_config_option',
+      'session/prompt'
+    ])
+    await expect(rig.adapter.readOptions({ sessionId: SESSION, fence: 1 })).resolves.toMatchObject({
+      current: { model: 'grok-4.6', effort: 'low' }
+    })
+  })
+
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {
     const rig = await openAcpAdapterRig({
       deps: { spec: { ...GROK, dialect: GENERIC_ACP_DIALECT } }
@@ -298,7 +339,7 @@ describe('ACP structured session adapter: requests a Stop cancels', () => {
       cancelled: true
     })
     expect(await question).toMatchObject({ result: { outcome: 'cancelled' } })
-    expect(agent.frames.filter((frame) => frame.id === 5)).toHaveLength(1)
+    expect(agent.frames.filter((frame) => frame.id === 5 && !frame.method)).toHaveLength(1)
   })
 
   it("shows Grok's plan in the plan row and answers its plan-mode exit at once, with no card", async () => {
@@ -412,18 +453,18 @@ describe('ACP structured session adapter: close and exit', () => {
     await expect(rig.adapter.closeSession(SESSION)).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
-    expect(rig.lifecycle).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
+    expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
   })
 
   it('closes with proof and reports a requested close', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
-    expect(rig.lifecycle).toMatchObject([
+    expect(rig.ended).toMatchObject([
       { type: 'ended', sessionId: SESSION, cause: 'requested-close', fence: 1 }
     ])
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
-    expect(rig.lifecycle).toHaveLength(1)
+    expect(rig.ended).toHaveLength(1)
   })
 
   it('ends the session on an unexpected exit: held sends rejected, the running one unknown', async () => {
@@ -435,7 +476,7 @@ describe('ACP structured session adapter: close and exit', () => {
     rig.child().stderr = 'grok: crashed'
     rig.child().exit()
     await waitFor(() =>
-      expect(rig.lifecycle).toMatchObject([
+      expect(rig.ended).toMatchObject([
         {
           type: 'ended',
           cause: 'unexpected-exit',
@@ -456,8 +497,19 @@ describe('ACP structured session adapter: close and exit', () => {
 
 describe('Grok launch spec', () => {
   it('runs `grok agent stdio`, asking for always-approve only with full access', () => {
-    expect(GROK.args({ fullAccess: false })).toEqual(['agent', 'stdio'])
-    expect(GROK.args({ fullAccess: true })).toEqual(['agent', '--always-approve', 'stdio'])
+    expect(GROK.args({ fullAccess: false, pluginDir: null })).toEqual(['agent', 'stdio'])
+    expect(GROK.args({ fullAccess: true, pluginDir: null })).toEqual([
+      'agent',
+      '--always-approve',
+      'stdio'
+    ])
+    expect(GROK.args({ fullAccess: true, pluginDir: '/orca/visuals' })).toEqual([
+      'agent',
+      '--always-approve',
+      '--plugin-dir',
+      '/orca/visuals',
+      'stdio'
+    ])
     expect(GROK.env).toEqual({})
   })
 })

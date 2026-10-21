@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-delivery-loop'
+import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionEndedChild
@@ -32,9 +32,17 @@ describe('what a child end means for the messages queued behind it', () => {
   })
 
   it.each([false, true])(
-    'is a start Orca stopped after a host stop (during startup: %s)',
+    'keeps a recorded failure after a host stop (during startup: %s)',
     (starting) => {
       expect(structuredAgentSessionEndedChildFailure(ended('host-stop', starting))).toEqual({
+        failure: EXIT_FAILURE
+      })
+      expect(
+        structuredAgentSessionEndedChildFailure({
+          ...ended('host-stop', starting),
+          failure: undefined
+        })
+      ).toEqual({
         failure: { kind: 'hostStopped' }
       })
     }

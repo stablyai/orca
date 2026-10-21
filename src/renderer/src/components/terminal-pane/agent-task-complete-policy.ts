@@ -28,10 +28,6 @@ export function isAgentTaskCompleteOsNotificationEnabledFromState(
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
 }
 
-export function isTerminalAttentionEnabledFromState(state: NotificationSettingsState): boolean {
-  return state.settings?.experimentalTerminalAttention === true
-}
-
 /** Track completions once settings hydrate; each delivery surface applies its own filter. */
 export function isAgentTaskCompleteTrackingEnabledFromState(state: {
   settings: object | null

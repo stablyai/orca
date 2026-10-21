@@ -353,7 +353,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     )
 
     expect(events).toEqual([
-      ['idle', 'Codex done', undefined],
+      ['idle', 'Codex done', {}],
       ['title', 'Codex', { staleWorkingTitleClear: true }],
       ['idle', 'Codex', { staleWorkingTitleClear: true }]
     ])

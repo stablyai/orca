@@ -4,16 +4,15 @@ import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest
 } from '@/components/terminal-pane/terminal-pane-split-request-routing'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
-import {
-  activateTerminalInitiatedWorktree,
-  focusTerminalInitiatedTab
-} from './terminal-command-state'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { focusTerminalInitiatedTab } from './terminal-command-state'
+import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 
 type RuntimeTerminalSplitRequest = SplitTerminalPaneDetail & { worktreeId?: string }
 
@@ -118,6 +117,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
     })
   )
 
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (window.api.ui.onSetPaneTitle) {
+    unsubs.push(window.api.ui.onSetPaneTitle(applyRuntimePaneTitle))
+  }
+
   unsubs.push(
     window.api.ui.onFocusTerminal(
       ({
@@ -129,9 +133,8 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         scrollToBottomIfOutputSinceLastView
       }) => {
         const store = useAppStore.getState()
-        activateTerminalInitiatedWorktree(store, worktreeId)
+        revealWorkspaceSurface(store, worktreeId)
         store.setActiveTab(tabId)
-        store.revealWorktreeInSidebar(worktreeId)
         if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
           activateTabAndFocusPane(tabId, leafId ?? null, {
             ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
@@ -169,18 +172,13 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       if (!tab) {
         if (browserTarget) {
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
-          store.setActiveWorktree(worktreeId)
-          store.markWorktreeVisited(worktreeId)
-          store.setActiveView('terminal')
+          revealWorkspaceSurface(store, worktreeId)
           store.setActiveBrowserTab(browserTarget.workspaceId)
           store.setActiveTabType('browser', worktreeId)
-          store.revealWorktreeInSidebar(worktreeId)
         }
         return
       }
-      store.setActiveWorktree(worktreeId)
-      store.markWorktreeVisited(worktreeId)
-      store.setActiveView('terminal')
+      revealWorkspaceSurface(store, worktreeId)
       store.focusGroup(worktreeId, tab.groupId)
       store.activateTab(tab.id)
       if (tab.contentType === 'agent-session') {
@@ -193,7 +191,6 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         store.setActiveFile(tab.entityId)
         store.setActiveTabType('editor', worktreeId)
       }
-      store.revealWorktreeInSidebar(worktreeId)
     })
   )
 }
