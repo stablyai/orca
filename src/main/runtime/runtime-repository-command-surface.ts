@@ -3,6 +3,7 @@ import type { RuntimeHostedReviewCommands } from './runtime-hosted-review-comman
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import type { RuntimeRepositoryAddScripts } from './runtime-repository-add-scripts'
 import type { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import type { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import type { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-command'
@@ -75,6 +76,11 @@ export type RuntimeRepositoryCommandSurface = {
   inspectRepoSetupScriptImports: RuntimeRepositoryHooksCommands['inspectRepoSetupScriptImports']
   readRepoIssueCommand: RuntimeRepositoryIssueCommand['read']
   writeRepoIssueCommand: RuntimeRepositoryIssueCommand['write']
+  createRepositoryAddScriptCollector: RuntimeRepositoryAddScripts['createCollector']
+  decideRepositoryAddScript: RuntimeRepositoryAddScripts['decide']
+  getRepositoryAddScriptOutcome: RuntimeRepositoryAddScripts['getOutcome']
+  closeRepositoryAddScripts: RuntimeRepositoryAddScripts['close']
+  hasUnsettledRepositoryAddScriptRuns: RuntimeRepositoryAddScripts['hasUnsettledRuns']
 } & Pick<RuntimeHostedReviewCommands, HostedReviewCommandName> &
   Pick<RuntimeGitHubRepositoryQueryCommands, GitHubRepositoryQueryCommandName>
 
@@ -92,6 +98,7 @@ type RuntimeRepositoryCommandOwners = {
   gitHubRepositoryQueries: RuntimeGitHubRepositoryQueryCommands
   repositoryHooks: RuntimeRepositoryHooksCommands
   repositoryIssueCommand: RuntimeRepositoryIssueCommand
+  repositoryAddScripts: RuntimeRepositoryAddScripts
 }
 
 export function installRuntimeRepositoryCommandSurface(
@@ -111,6 +118,7 @@ export function installRuntimeRepositoryCommandSurface(
   const queries = owners.gitHubRepositoryQueries
   const hooks = owners.repositoryHooks
   const issueCommand = owners.repositoryIssueCommand
+  const addScripts = owners.repositoryAddScripts
   Object.assign(target, {
     listProjects: host.listProjects.bind(host),
     updateProject: host.updateProject.bind(host),
@@ -170,6 +178,11 @@ export function installRuntimeRepositoryCommandSurface(
     checkRepoHooks: hooks.checkRepoHooks.bind(hooks),
     inspectRepoSetupScriptImports: hooks.inspectRepoSetupScriptImports.bind(hooks),
     readRepoIssueCommand: issueCommand.read.bind(issueCommand),
-    writeRepoIssueCommand: issueCommand.write.bind(issueCommand)
+    writeRepoIssueCommand: issueCommand.write.bind(issueCommand),
+    createRepositoryAddScriptCollector: addScripts.createCollector.bind(addScripts),
+    decideRepositoryAddScript: addScripts.decide.bind(addScripts),
+    getRepositoryAddScriptOutcome: addScripts.getOutcome.bind(addScripts),
+    closeRepositoryAddScripts: addScripts.close.bind(addScripts),
+    hasUnsettledRepositoryAddScriptRuns: addScripts.hasUnsettledRuns.bind(addScripts)
   })
 }

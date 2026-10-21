@@ -65,6 +65,7 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
+          hostScope={model.settingsHostScope}
           fontSuggestions={model.terminalFontSuggestions}
           onRequestFontSuggestions={interactions.requestFontSuggestions}
           wslSupportedPlatform={terminal.localWslSupportedPlatform}

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/repo-types'
 import { getCloneDestinationAutoFill } from './clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { resolveAddRepoRuntimeTarget, worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { cloneRepositoryWithAddScript } from '@/store/repos/repository-add-script-clone'
+import { offerRegistrationAddScript } from '@/store/repos/repository-add-script-offer'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoCloneFlow({
@@ -133,23 +133,11 @@ export function useAddRepoCloneFlow({
     setCloneProgress(null)
     try {
       const target = resolveAddRepoRuntimeTarget(activeRuntimeEnvironmentId)
-      const repo =
-        target.kind === 'environment'
-          ? (
-              await callRuntimeRpc<{ repo: Repo }>(
-                target,
-                'repo.clone',
-                {
-                  url: trimmedUrl,
-                  destination: cloneDestination.trim()
-                },
-                { timeoutMs: 10 * 60_000 }
-              )
-            ).repo
-          : ((await window.api.repos.clone({
-              url: trimmedUrl,
-              destination: cloneDestination.trim()
-            })) as Repo)
+      const { request, repo, preview } = await cloneRepositoryWithAddScript(
+        target,
+        trimmedUrl,
+        cloneDestination.trim()
+      )
       if (!isCurrent()) {
         return
       }
@@ -160,6 +148,9 @@ export function useAddRepoCloneFlow({
         translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
         { description: ownedRepo.displayName }
       )
+      // Why: only the host mints a preview, so it already proves a first registration; a
+      // concurrent catalog refresh can make this row look pre-existing and must not drop it.
+      offerRegistrationAddScript(request, ownedRepo.id, preview)
       // Why: once the repo exists, a transient non-authoritative refresh
       // should fall through to project reveal instead of leaving the add flow open.
       const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId)

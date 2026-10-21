@@ -6,6 +6,10 @@ import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { RepositoryAddScriptRequestParam } from '../../../shared/rpc-contract/repository-add-script-params'
+
+// Opt-in only: absent keeps the original registration, an invalid value rejects it before any work.
+export const RepositoryAddScriptRequestIpcArg = RepositoryAddScriptRequestParam.optional()
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -43,7 +47,8 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
   path: z.string().min(1),
   kind: z.enum(['git', 'folder']).optional(),
   displayName: z.string().min(1).optional(),
-  setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
+  setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional(),
+  repositoryAddScriptPreview: RepositoryAddScriptRequestIpcArg
 })
 
 const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
@@ -214,7 +219,8 @@ export const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
     scanId: z.string().min(1).optional(),
-    mode: z.literal('group')
+    mode: z.literal('group'),
+    repositoryAddScriptPreview: RepositoryAddScriptRequestIpcArg
   }),
   z.object({
     parentPath: z.string().min(1),
@@ -222,7 +228,8 @@ export const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
     scanId: z.string().min(1).optional(),
-    mode: z.literal('separate')
+    mode: z.literal('separate'),
+    repositoryAddScriptPreview: RepositoryAddScriptRequestIpcArg
   })
 ])
 

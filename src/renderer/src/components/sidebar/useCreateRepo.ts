@@ -7,8 +7,11 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { resolveRuntimeRepositoryAddScriptRequest } from '@/runtime/runtime-repository-add-script'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepositoryAddScriptRegistrationFields } from '../../../../shared/repository-add-script-types'
+import { offerRegistrationAddScript } from '@/store/repos/repository-add-script-offer'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -95,28 +98,35 @@ export function useCreateRepo(
       // Why: Create Project is intentionally Git-only; non-Git folders use the
       // existing add-folder flows instead of this path.
       const createKind = 'git' as const
+      const request = await resolveRuntimeRepositoryAddScriptRequest(target)
       const result =
         target.kind === 'environment'
-          ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
+          ? await callRuntimeRpc<
+              ({ repo: Repo } & RepositoryAddScriptRegistrationFields) | { error: string }
+            >(
               target,
               'repo.create',
               {
                 parentPath,
                 name,
-                kind: createKind
+                kind: createKind,
+                ...(request ? { repositoryAddScriptPreview: request } : {})
               },
               { timeoutMs: 60_000 }
             )
           : await window.api.repos.create({
               parentPath,
               name,
-              kind: createKind
+              kind: createKind,
+              ...(request ? { repositoryAddScriptPreview: request } : {})
             })
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.
       if (!isCurrent()) {
         return
       }
+      // Why: an error result must never carry a preview onward.
+      const preview = 'error' in result ? undefined : result.repositoryAddScriptPreview
       if ('error' in result) {
         setCreateError(result.error)
         return
@@ -149,6 +159,9 @@ export function useCreateRepo(
           }
         )
       }
+      // Why: only the host mints a preview, so it already proves a first registration; a
+      // concurrent catalog refresh can make this row look deduped and must not drop it.
+      offerRegistrationAddScript(request, repo.id, preview)
       const ownerOptions = worktreeRefreshOptions(options.runtimeEnvironmentId)
       if (isGitRepoKind(repo)) {
         // Why: Git repos use the shared default-checkout completion path.

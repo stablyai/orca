@@ -223,6 +223,22 @@
     "followSymlinkedDirectoriesDescription": "クイックオープンでリンクされたフォルダーを検索し、ファイルエクスプローラーでローカルのリンクされたフォルダーを展開します。",
     "accounts": {
       "claudeRemoveFolder": "Orca はこのアカウントの Claude フォルダーとサインイン情報をこのコンピュータから削除します。システムのデフォルトと共有しているチャット履歴は残ります。このアカウントが選択されている場合、次に起動する Claude はシステムのデフォルトを使用します。"
+    },
+    "repositoryAddScript": {
+      "title": "リポジトリ追加スクリプト",
+      "webUnavailable": "リポジトリ追加スクリプトは Web クライアントから編集できません。デスクトップアプリでこのホストの設定を開いてください。",
+      "loadingHost": "リポジトリ追加スクリプトを読み込み中…",
+      "localDescription": "Git リポジトリを初めて追加したときに Orca がこのコンピューターで実行を提案するスクリプトです。リポジトリのルートで実行され、毎回実行するかスキップするかを選べます。",
+      "unsupportedHost": "このサーバーを更新すると、リポジトリ追加スクリプトを編集できます。",
+      "readFailedHost": "リポジトリ追加スクリプトを読み取れませんでした。ホストとの接続を確認して再試行してください。",
+      "retry": "再試行",
+      "hostDescription": "Git リポジトリを初めて追加したときに Orca が {{host}} で実行を提案するスクリプトです。リポジトリのルートで実行され、毎回実行するかスキップするかを選べます。",
+      "tooLong": "スクリプトが {{max}} 文字を超えています。保存する前に短くしてください。",
+      "save": "保存",
+      "clear": "クリア",
+      "saveFailed": "スクリプトを保存できませんでした。ホストとの接続を確認して再試行してください。",
+      "saved": "保存しました",
+      "sectionDescription": "Git リポジトリを初めて追加したときに Orca が実行を提案するスクリプトです。リポジトリのルートで実行され、毎回実行するかスキップするかを選べます。"
     }
   },
   "menu": {
@@ -6639,6 +6655,27 @@
           "outsideDistro": "{{value0}} 内のフォルダーを選択してください。",
           "underDistro": "このホストで追加できるのは \\\\wsl.localhost\\{{value0}} 以下のフォルダーのみです。",
           "windowsDrive": "Windows ドライブ上のフォルダーはこのコンピュータに残ります。追加するにはホストとしてこのコンピュータを選択してください。"
+        },
+        "RepositoryAddScriptPromptDialog": {
+          "title": "{{repo}} の追加スクリプトを実行しますか？",
+          "description": "このスクリプトは {{host}} 用に設定されています。リポジトリを初めて Orca に追加するときに実行され、毎回実行またはスキップできます。",
+          "scriptLabel": "追加スクリプト",
+          "target": "{{host}} の {{cwd}} で実行",
+          "skip": "スキップ",
+          "run": "実行"
+        },
+        "RepositoryAddScriptResultDialog": {
+          "failedTitle": "追加スクリプトに失敗しました",
+          "unverifiableTitle": "追加スクリプトがまだ実行中の可能性があります",
+          "failedDescription": "{{host}} の {{repo}} の追加スクリプトは正常に終了しませんでした。",
+          "executionFailedDescription": "Orca は {{host}} の {{repo}} の追加スクリプトを開始できませんでした。",
+          "unverifiableDescription": "Orca は {{host}} の {{repo}} の追加スクリプトを停止しましたが、停止したことを確認できませんでした。まだ実行中の可能性があります。",
+          "exitCode": "終了コード {{code}}",
+          "noExitCode": "終了コードは記録されていません。",
+          "output": "出力",
+          "noOutput": "出力は記録されていません。",
+          "truncated": "出力は切り詰められています。以前の行は表示されていません。",
+          "close": "閉じる"
         }
       },
       "shared": {
@@ -10127,7 +10164,13 @@
             "command": "コマンド",
             "confirm": "確認",
             "close": "近い",
-            "omp": "OMP"
+            "omp": "OMP",
+            "repositoryAddScript": "リポジトリ追加スクリプト",
+            "repositoryAddScriptDescription": "Git リポジトリを初めて追加したときに、リポジトリのルートでスクリプトを実行します。",
+            "git": "git",
+            "repository": "リポジトリ",
+            "script": "スクリプト",
+            "setup": "セットアップ"
           }
         },
         "git": {
@@ -18268,6 +18311,18 @@
       "forgeCredentialTarget": {
         "unknownHost": "このリポジトリを所有するマシンはまだ判明していません。再接続して再試行してください。",
         "thisComputer": "このコンピュータ"
+      },
+      "repositoryAddScriptExecution": {
+        "running": "追加スクリプトを実行中…",
+        "finished": "追加スクリプトが完了しました",
+        "checking": "追加スクリプトを確認中…",
+        "unconfirmedTitle": "追加スクリプトの完了を確認できません",
+        "unconfirmedDescription": "スクリプトの実行中に Orca は {{host}} との接続を失いました。まだ実行中の可能性があります。",
+        "checkAgain": "再確認",
+        "notStartedTitle": "追加スクリプトは開始されませんでした",
+        "notStartedDescription": "Orca はこのリクエストを {{host}} に送信できませんでした。何も実行されていません。",
+        "rejectedTitle": "追加スクリプトは開始されませんでした",
+        "rejectedDescription": "Orca はこの追加スクリプトのリクエストを拒否しました。リポジトリを再度追加して、新しい確認を取得してください。"
       }
     },
     "ssh": {

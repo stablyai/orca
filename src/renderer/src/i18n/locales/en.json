@@ -418,6 +418,22 @@
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+    },
+    "repositoryAddScript": {
+      "title": "Repository add script",
+      "webUnavailable": "The repository add script can’t be edited from the web client. Open this host’s Settings in the desktop app.",
+      "loadingHost": "Loading repository add script…",
+      "localDescription": "A script Orca offers to run on this computer when a Git repository is first added. It runs from the repository root, and you can run or skip it each time.",
+      "unsupportedHost": "Update this server to edit its repository add script.",
+      "readFailedHost": "Couldn’t read the repository add script. Check the host connection and try again.",
+      "retry": "Retry",
+      "hostDescription": "A script Orca offers to run on {{host}} when a Git repository is first added. It runs from the repository root, and you can run or skip it each time.",
+      "tooLong": "The script is longer than {{max}} characters. Shorten it before saving.",
+      "save": "Save",
+      "clear": "Clear",
+      "saveFailed": "Couldn’t save the script. Check the host connection and try again.",
+      "saved": "Saved",
+      "sectionDescription": "A script Orca offers to run when a Git repository is first added. It runs from the repository root, and you can run or skip it each time."
     }
   },
   "menu": {
@@ -6914,6 +6930,27 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
+        },
+        "RepositoryAddScriptPromptDialog": {
+          "title": "Run add script for {{repo}}?",
+          "description": "This script was configured for {{host}}. It runs the first time a repository is added to Orca, and you can run or skip it each time.",
+          "scriptLabel": "Add script",
+          "target": "Runs in {{cwd}} on {{host}}",
+          "skip": "Skip",
+          "run": "Run"
+        },
+        "RepositoryAddScriptResultDialog": {
+          "failedTitle": "Add script failed",
+          "unverifiableTitle": "Add script may still be running",
+          "failedDescription": "The add script for {{repo}} on {{host}} did not finish successfully.",
+          "executionFailedDescription": "Orca could not start the add script for {{repo}} on {{host}}.",
+          "unverifiableDescription": "Orca stopped the add script for {{repo}} on {{host}}, but could not confirm that it stopped. It may still be running.",
+          "exitCode": "Exit code {{code}}",
+          "noExitCode": "No exit code was recorded.",
+          "output": "Output",
+          "noOutput": "No output was recorded.",
+          "truncated": "Output was truncated; earlier lines are not shown.",
+          "close": "Close"
         }
       },
       "shared": {
@@ -10435,7 +10472,13 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "repositoryAddScript": "Repository add script",
+            "repositoryAddScriptDescription": "Run a script from the repository root when a Git repository is first added.",
+            "git": "git",
+            "repository": "repository",
+            "script": "script",
+            "setup": "setup"
           }
         },
         "git": {
@@ -18531,6 +18574,18 @@
       "forgeCredentialTarget": {
         "unknownHost": "The machine that owns this repository is not known yet. Reconnect it and try again.",
         "thisComputer": "this computer"
+      },
+      "repositoryAddScriptExecution": {
+        "running": "Running add script…",
+        "finished": "Add script finished",
+        "checking": "Checking add script…",
+        "unconfirmedTitle": "Can't confirm the add script finished",
+        "unconfirmedDescription": "Orca lost contact with {{host}} while the script was running. It may still be running.",
+        "checkAgain": "Check again",
+        "notStartedTitle": "The add script was not started",
+        "notStartedDescription": "Orca could not send this request to {{host}}. Nothing ran.",
+        "rejectedTitle": "The add script was not started",
+        "rejectedDescription": "Orca refused this add script request. Add the repository again to get a new prompt."
       }
     },
     "ssh": {

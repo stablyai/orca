@@ -4,6 +4,10 @@ import {
   RuntimeRpcCallQueueOverloadError,
   RuntimeRpcCallQueuePool
 } from './runtime-rpc-call-queue'
+import {
+  REPOSITORY_ADD_SCRIPT_DECIDE_METHOD,
+  REPOSITORY_ADD_SCRIPT_OUTCOME_METHOD
+} from './repository-add-script-wire'
 
 describe('runtime RPC call queue', () => {
   it('classifies per-worktree decoration lookups as background work', () => {
@@ -87,6 +91,40 @@ describe('runtime RPC call queue', () => {
       resolve()
     }
     await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
+  })
+
+  it('keeps foreground slots free while add-script decisions wait for their runs, still bounded', async () => {
+    const queue = new RuntimeRpcCallQueuePool(2, 1, 10, 2)
+    const release: (() => void)[] = []
+    const decide = (label: string) =>
+      queue.enqueue('web-runtime', REPOSITORY_ADD_SCRIPT_DECIDE_METHOD, async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return label
+      })
+    const running = [decide('run-1'), decide('run-2')]
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+
+    // Both foreground slots would be taken if decisions shared them.
+    await expect(
+      queue.enqueue('web-runtime', 'agentSession.send', async () => 'sent')
+    ).resolves.toBe('sent')
+    // The outcome read is an ordinary quick call and never uses the long-wait lane.
+    await expect(
+      queue.enqueue('web-runtime', REPOSITORY_ADD_SCRIPT_OUTCOME_METHOD, async () => 'read')
+    ).resolves.toBe('read')
+
+    const waiting = [decide('wait-1'), decide('wait-2')]
+    await expect(decide('overflow')).rejects.toMatchObject({ scope: 'global' })
+
+    release.splice(0).forEach((resolve) => resolve())
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+    release.splice(0).forEach((resolve) => resolve())
+    await expect(Promise.all([...running, ...waiting])).resolves.toEqual([
+      'run-1',
+      'run-2',
+      'wait-1',
+      'wait-2'
+    ])
   })
 
   it('frees the queue slot when a runtime call throws synchronously', async () => {

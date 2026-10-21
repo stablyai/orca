@@ -20,6 +20,7 @@ import {
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeStoredRepositoryAddScript } from '../../../shared/repository-add-script-settings'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
@@ -129,6 +130,9 @@ export function normalizeLoadedGlobalSettings(
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
     machineName: normalizeMachineName(parsed.settings?.machineName),
+    // Why: a malformed stored script must load as unconfigured, never as something runnable.
+    repositoryAddScript:
+      normalizeStoredRepositoryAddScript(parsed.settings?.repositoryAddScript) ?? undefined,
     // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.

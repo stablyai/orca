@@ -223,6 +223,22 @@
     "followSymlinkedDirectoriesDescription": "Busca carpetas enlazadas en Apertura rápida y expande las carpetas enlazadas locales en el Explorador de archivos.",
     "accounts": {
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
+    },
+    "repositoryAddScript": {
+      "title": "Script al añadir repositorio",
+      "webUnavailable": "El script al añadir repositorio no se puede editar desde el cliente web. Abre los ajustes de este host en la aplicación de escritorio.",
+      "loadingHost": "Cargando el script al añadir repositorio…",
+      "localDescription": "Un script que Orca ofrece ejecutar en este equipo cuando se añade un repositorio Git por primera vez. Se ejecuta desde la raíz del repositorio y puedes ejecutarlo u omitirlo cada vez.",
+      "unsupportedHost": "Actualiza este servidor para editar su script al añadir repositorio.",
+      "readFailedHost": "No se pudo leer el script al añadir repositorio. Comprueba la conexión con el host e inténtalo de nuevo.",
+      "retry": "Reintentar",
+      "hostDescription": "Un script que Orca ofrece ejecutar en {{host}} cuando se añade un repositorio Git por primera vez. Se ejecuta desde la raíz del repositorio y puedes ejecutarlo u omitirlo cada vez.",
+      "tooLong": "El script supera los {{max}} caracteres. Acórtalo antes de guardar.",
+      "save": "Guardar",
+      "clear": "Borrar",
+      "saveFailed": "No se pudo guardar el script. Comprueba la conexión con el host e inténtalo de nuevo.",
+      "saved": "Guardado",
+      "sectionDescription": "Un script que Orca ofrece ejecutar cuando se añade un repositorio Git por primera vez. Se ejecuta desde la raíz del repositorio y puedes ejecutarlo u omitirlo cada vez."
     }
   },
   "menu": {
@@ -6634,6 +6650,27 @@
           "outsideDistro": "Elige una carpeta dentro de {{value0}}.",
           "underDistro": "Este host solo puede agregar carpetas en \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Las carpetas de una unidad de Windows se quedan en este equipo. Elige este equipo como host para agregar una."
+        },
+        "RepositoryAddScriptPromptDialog": {
+          "title": "¿Ejecutar el script de adición de {{repo}}?",
+          "description": "Este script está configurado para {{host}}. Se ejecuta la primera vez que se añade un repositorio a Orca, y puedes ejecutarlo u omitirlo cada vez.",
+          "scriptLabel": "Script de adición",
+          "target": "Se ejecuta en {{cwd}} en {{host}}",
+          "skip": "Omitir",
+          "run": "Ejecutar"
+        },
+        "RepositoryAddScriptResultDialog": {
+          "failedTitle": "El script de adición falló",
+          "unverifiableTitle": "Es posible que el script de adición siga en ejecución",
+          "failedDescription": "El script de adición de {{repo}} en {{host}} no terminó correctamente.",
+          "executionFailedDescription": "Orca no pudo iniciar el script de adición de {{repo}} en {{host}}.",
+          "unverifiableDescription": "Orca detuvo el script de adición de {{repo}} en {{host}}, pero no pudo confirmar que se haya detenido. Es posible que siga en ejecución.",
+          "exitCode": "Código de salida {{code}}",
+          "noExitCode": "No se registró ningún código de salida.",
+          "output": "Salida",
+          "noOutput": "No se registró ninguna salida.",
+          "truncated": "La salida se truncó; no se muestran las líneas anteriores.",
+          "close": "Cerrar"
         }
       },
       "shared": {
@@ -10100,7 +10137,13 @@
             "running_terminal": "correr",
             "command": "dominio",
             "confirm": "confirmar",
-            "omp": "OMP"
+            "omp": "OMP",
+            "repositoryAddScript": "Script al añadir repositorio",
+            "repositoryAddScriptDescription": "Ejecuta un script desde la raíz del repositorio cuando se añade un repositorio Git por primera vez.",
+            "git": "git",
+            "repository": "repositorio",
+            "script": "script",
+            "setup": "configuración"
           }
         },
         "git": {
@@ -18263,6 +18306,18 @@
       "forgeCredentialTarget": {
         "unknownHost": "Aún no se conoce el equipo que posee este repositorio. Vuelve a conectarlo e inténtalo de nuevo.",
         "thisComputer": "este equipo"
+      },
+      "repositoryAddScriptExecution": {
+        "running": "Ejecutando el script de adición…",
+        "finished": "Script de adición finalizado",
+        "checking": "Comprobando el script de adición…",
+        "unconfirmedTitle": "No se puede confirmar que el script de adición haya finalizado",
+        "unconfirmedDescription": "Orca perdió el contacto con {{host}} mientras se ejecutaba el script. Es posible que siga en ejecución.",
+        "checkAgain": "Comprobar de nuevo",
+        "notStartedTitle": "El script de adición no se inició",
+        "notStartedDescription": "Orca no pudo enviar esta solicitud a {{host}}. No se ejecutó nada.",
+        "rejectedTitle": "El script de adición no se inició",
+        "rejectedDescription": "Orca rechazó esta solicitud de script de adición. Añade el repositorio de nuevo para obtener otro aviso."
       }
     },
     "ssh": {

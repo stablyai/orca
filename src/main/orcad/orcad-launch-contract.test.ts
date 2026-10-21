@@ -18,6 +18,10 @@ import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
+import {
+  ORCAD_REPOSITORY_ADD_SCRIPTS_CLEANUP_BUDGET_MS,
+  registerOrcadRepositoryAddScriptsCleanup
+} from '../repository-add-scripts/repository-add-script-shutdown'
 
 describe('parseArgs', () => {
   it('accepts help alongside valid server flags', () => {
@@ -205,6 +209,109 @@ describe('orcad lifecycle cleanup', () => {
       return {}
     }, cleanupHost)
     await expect(handle.stop()).rejects.toBe(failure)
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(false)
+  })
+})
+
+describe('orcad repository add script cleanup', () => {
+  function addScriptRuntime(close: () => Promise<void>, unsettled = false) {
+    return {
+      closeRepositoryAddScripts: vi.fn(close),
+      hasUnsettledRepositoryAddScriptRuns: vi.fn(() => unsettled)
+    }
+  }
+
+  it('seals before RPC stops and spends one budget when startup fails', async () => {
+    vi.useFakeTimers()
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const order: string[] = []
+      const runtime = addScriptRuntime(() => {
+        order.push('close')
+        return new Promise<void>(() => {})
+      })
+      const rpcStop = Promise.withResolvers<void>()
+      const earlierCleanup = vi.fn(async () => {})
+      const cleanupHost = vi.fn(async () => {})
+      const startup = startOrcadWithLifecycle(async (registerCleanup) => {
+        registerCleanup(earlierCleanup)
+        const addScripts = registerOrcadRepositoryAddScriptsCleanup(runtime, registerCleanup)
+        registerCleanup(() => {
+          addScripts.start()
+          order.push('rpc')
+          return rpcStop.promise
+        })
+        throw new Error('bind failed')
+      }, cleanupHost)
+      const failed = expect(startup).rejects.toThrow('bind failed')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(order).toEqual(['close', 'rpc'])
+      // The budget started with the RPC cleanup; waiting on RPC does not restart it.
+      await vi.advanceTimersByTimeAsync(3_000)
+      rpcStop.resolve()
+      await vi.advanceTimersByTimeAsync(ORCAD_REPOSITORY_ADD_SCRIPTS_CLEANUP_BUDGET_MS - 3_001)
+      expect(earlierCleanup).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      // A timed-out close fails the teardown, but every later cleanup still runs.
+      expect(earlierCleanup).toHaveBeenCalledOnce()
+      expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(false)
+      await failed
+      expect(runtime.closeRepositoryAddScripts).toHaveBeenCalledOnce()
+      expect(report).toHaveBeenCalledWith(
+        '[orcad] startup cleanup failed:',
+        new Error('Repository add script cleanup could not be verified.')
+      )
+    } finally {
+      report.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('closes once across repeated stops and releases when every run settled', async () => {
+    const runtime = addScriptRuntime(async () => {})
+    const cleanupHost = vi.fn(async () => {})
+    const handle = await startOrcadWithLifecycle(async (registerCleanup) => {
+      registerOrcadRepositoryAddScriptsCleanup(runtime, registerCleanup)
+      return {}
+    }, cleanupHost)
+    await Promise.all([handle.stop(), handle.stop()])
+    await handle.stop()
+    expect(runtime.closeRepositoryAddScripts).toHaveBeenCalledOnce()
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(true)
+  })
+
+  it.each([
+    ['a fulfilled close that left a run unverified', addScriptRuntime(async () => {}, true)],
+    [
+      'a rejected close',
+      addScriptRuntime(async () => {
+        throw new Error('secret script text')
+      })
+    ],
+    [
+      'a close that throws',
+      addScriptRuntime(() => {
+        throw new Error('secret script text')
+      })
+    ]
+  ])('keeps the fences after %s', async (_name, runtime) => {
+    const rpcStop = Promise.withResolvers<void>()
+    const cleanupHost = vi.fn(async () => {})
+    const handle = await startOrcadWithLifecycle(async (registerCleanup) => {
+      const addScripts = registerOrcadRepositoryAddScriptsCleanup(runtime, registerCleanup)
+      registerCleanup(() => {
+        addScripts.start()
+        return rpcStop.promise
+      })
+      return {}
+    }, cleanupHost)
+    const stopped = handle.stop()
+    // A failed close waits behind a pending RPC stop without becoming an unhandled rejection.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    rpcStop.resolve()
+    await expect(stopped).rejects.toThrow(
+      new Error('Repository add script cleanup could not be verified.')
+    )
     expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(false)
   })
 })

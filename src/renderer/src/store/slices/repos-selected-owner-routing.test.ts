@@ -209,7 +209,9 @@ describe('selected Add Project owner routing', () => {
     }
     const result = {
       group: projectGroup,
-      repos: [{ path: runtimeRepo.path, projectId: runtimeRepo.id, status: 'imported' as const }],
+      projects: [
+        { path: runtimeRepo.path, projectId: runtimeRepo.id, status: 'imported' as const }
+      ],
       importedCount: 1,
       alreadyKnownCount: 0,
       failedCount: 0

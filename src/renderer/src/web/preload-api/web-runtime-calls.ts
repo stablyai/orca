@@ -181,10 +181,10 @@ export function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo 
   return { ...repo, executionHostId: hostId }
 }
 
-export function withRuntimeRepoMutationOwner(
-  result: { repo: Repo } | { error: string },
+export function withRuntimeRepoMutationOwner<T extends { repo: Repo } | { error: string }>(
+  result: T,
   hostId: ExecutionHostId
-): { repo: Repo } | { error: string } {
+): T {
   return 'repo' in result ? { ...result, repo: withRuntimeRepoOwner(result.repo, hostId) } : result
 }
 

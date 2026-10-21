@@ -417,6 +417,17 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+      # Why: traces only upload on failure; this spec's screenshots are the visual proof for a green run.
+      - name: Upload repository add-script proof
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: repository-add-script-proof${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: test-results/**/repository-add-script-*.png
+          retention-days: 14
+          if-no-files-found: ignore
+
   ssh-browser-network-route:
     name: ssh browser network route
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')

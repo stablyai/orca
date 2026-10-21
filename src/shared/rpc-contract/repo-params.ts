@@ -2,22 +2,29 @@ import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
+import { RepositoryAddScriptRequestParam } from './repository-add-script-params'
+
+// Opt-in only: an absent field keeps the original registration, an invalid one rejects it whole.
+const AddScriptPreviewParam = RepositoryAddScriptRequestParam.optional()
 
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
   kind: z.enum(['git', 'folder']).optional(),
-  displayName: OptionalString
+  displayName: OptionalString,
+  repositoryAddScriptPreview: AddScriptPreviewParam
 })
 
 export const RepoCreate = z.object({
   parentPath: requiredString('Missing parent path'),
   name: requiredString('Missing repo name'),
-  kind: z.enum(['git', 'folder']).optional()
+  kind: z.enum(['git', 'folder']).optional(),
+  repositoryAddScriptPreview: AddScriptPreviewParam
 })
 
 export const RepoClone = z.object({
   url: requiredString('Missing clone URL'),
-  destination: requiredString('Missing clone destination')
+  destination: requiredString('Missing clone destination'),
+  repositoryAddScriptPreview: AddScriptPreviewParam
 })
 
 export const RepoSetBaseRef = z.object({
@@ -79,7 +86,8 @@ export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
     parentPath: requiredString('Missing parent path'),
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
-    mode: z.literal('group')
+    mode: z.literal('group'),
+    repositoryAddScriptPreview: AddScriptPreviewParam
   }),
   z.object({
     parentPath: requiredString('Missing parent path'),
@@ -87,7 +95,8 @@ export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
     // imports do not create a group but share the same renderer payload shape.
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
-    mode: z.literal('separate')
+    mode: z.literal('separate'),
+    repositoryAddScriptPreview: AddScriptPreviewParam
   })
 ])
 

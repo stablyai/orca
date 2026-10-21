@@ -9,11 +9,17 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
-import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
+import { getGitRepoRootAsync, getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
+import { isFolderRepo } from '../../shared/repo-kind'
+import {
+  reportNewGitRepository,
+  type InsertedRepoObserver,
+  type NewGitRepositoryObserver
+} from '../repository-add-scripts/new-git-repository-observer'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
@@ -33,7 +39,9 @@ export class RuntimeRepositoryRegistrationController {
     path: string,
     kind: 'git' | 'folder' = 'git',
     executionHostId?: ExecutionHostId | null,
-    displayName?: string
+    displayName?: string,
+    onNewGitRepository?: NewGitRepositoryObserver,
+    onInserted?: InsertedRepoObserver
   ): Promise<Repo> {
     const store = this.requireStore()
     if (!isAbsolute(path)) {
@@ -52,23 +60,31 @@ export class RuntimeRepositoryRegistrationController {
     const sameHostRepos = store
       .getRepos()
       .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+    // Why: a linked worktree reports itself as its own toplevel, so only its owning checkout can match a tracked row.
+    const mainRepoRoot =
+      kind === 'git' && gitInfo?.mainRepoPath
+        ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
+        : null
+    const findTracked = (): Repo | undefined =>
+      store
+        .getRepos()
+        .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+        .find(
+          (repo) =>
+            runtimePathsEqual(repo.path, path) ||
+            runtimePathsEqual(repo.path, repoPath) ||
+            (mainRepoRoot !== null &&
+              !isFolderRepo(repo) &&
+              runtimeRepoIsRegistrationCandidate(
+                repo,
+                executionHostId ?? LOCAL_EXECUTION_HOST_ID
+              ) &&
+              runtimePathsEqual(repo.path, mainRepoRoot))
+        )
     // Why: git's toplevel is already resolved through symlinks, so an alias of a tracked checkout finds it.
-    const existing =
-      sameHostRepos.find(
-        (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
-      ) ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
+    const existing = findTracked() ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
     if (existing) {
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
-        const adopted =
-          store.updateRepo(existing, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
-        this.invalidate(existing.id)
-        return adopted
-      }
-      return existing
+      return this.reuseTracked(store, existing, executionHostId)
     }
     // Local on purpose, whatever `executionHostId` stamps on the row: this controller already
     // validated and will read `path` in this process. A `runtime:` stamp is how a paired client
@@ -78,6 +94,11 @@ export class RuntimeRepositoryRegistrationController {
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // Why: icon discovery is async, so another registration can land after the checks above.
+    const raceWinner = findTracked()
+    if (raceWinner) {
+      return this.reuseTracked(store, raceWinner, executionHostId)
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
@@ -90,15 +111,36 @@ export class RuntimeRepositoryRegistrationController {
       ...(kind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
     }
     store.addRepo(repo)
+    onInserted?.(repo)
+    reportNewGitRepository(onNewGitRepository, repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
   }
 
+  private reuseTracked(
+    store: RuntimeStore,
+    existing: Repo,
+    executionHostId?: ExecutionHostId | null
+  ): Repo {
+    if (
+      existing.executionHostId == null &&
+      parseExecutionHostId(executionHostId)?.kind === 'runtime'
+    ) {
+      const adopted =
+        store.updateRepo(existing, { executionHostId }) ??
+        ({ ...existing, executionHostId } as Repo)
+      this.invalidate(existing.id)
+      return adopted
+    }
+    return existing
+  }
+
   async create(
     parentPath: string,
     name: string,
-    kind: 'git' | 'folder' = 'git'
+    kind: 'git' | 'folder' = 'git',
+    onNewGitRepository?: NewGitRepositoryObserver
   ): Promise<{ repo: Repo } | { error: string }> {
     const store = this.requireStore()
     const trimmedName = name.trim()
@@ -170,6 +212,17 @@ export class RuntimeRepositoryRegistrationController {
       kind: repoKind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // Why: icon discovery is async, so another registration can land after the check above.
+    const raceWinnerAfterIcon = store
+      .getRepos()
+      .find(
+        (repo) =>
+          runtimePathsEqual(repo.path, targetPath) &&
+          runtimeRepoIsRegistrationCandidate(repo, LOCAL_EXECUTION_HOST_ID)
+      )
+    if (raceWinnerAfterIcon) {
+      return { repo: raceWinnerAfterIcon }
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: targetPath,
@@ -181,6 +234,7 @@ export class RuntimeRepositoryRegistrationController {
       ...(repoKind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
     }
     store.addRepo(repo)
+    reportNewGitRepository(onNewGitRepository, repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)

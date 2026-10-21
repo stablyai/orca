@@ -21,6 +21,7 @@ import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
 import { stopBackgroundWorktreeRemovals } from '../worktree-background-removal'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
+import { closeRepositoryAddScriptsForQuit } from '../repository-add-scripts/repository-add-script-shutdown'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
 import { shutdownTelemetry } from '../telemetry/client'
@@ -114,6 +115,8 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    // Why first: a committed quit must refuse every add-script approval before anything awaits.
+    const repositoryAddScriptsShutdown = closeRepositoryAddScriptsForQuit(state.runtime)
     // Layout-owner build: a pane's grid still inside its write burst joins the final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
@@ -284,6 +287,7 @@ function installWillQuitHandler(): void {
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
+      { name: 'repository-add-scripts', promise: repositoryAddScriptsShutdown },
       { name: 'watchers', promise: watcherShutdown },
       { name: 'emulator', promise: emulatorShutdown },
       { name: 'browser-client-hosts', promise: browserClientHostShutdown },

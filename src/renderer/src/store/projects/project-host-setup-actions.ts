@@ -7,7 +7,6 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
@@ -16,6 +15,9 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { cloneRepositoryWithAddScript } from '../repos/repository-add-script-clone'
+import { offerRegistrationAddScript } from '../repos/repository-add-script-offer'
+import { resolveRuntimeRepositoryAddScriptRequest } from '../../runtime/runtime-repository-add-script'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
   assertProjectHostSetupMutationRuntimeCapabilities,
@@ -37,15 +39,25 @@ export function createProjectHostSetupActions(
   | 'setupProjectClone'
 > {
   return {
-    setupProjectExistingFolder: async (args) => {
+    setupProjectExistingFolder: async (args, options) => {
       try {
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
         const projectProviderIdentity =
           args.projectProviderIdentity ??
           get().projects.find((project) => project.id === args.projectId)?.providerIdentity
+        // Why: this path registers a brand-new repo from Settings, so it earns the same offer; the
+        // clone's follow-up call already owns the clone's preview and passes false. SSH rows and
+        // folders never mint a script, so they are not asked to opt in.
+        const request =
+          options?.offerAddScript === false ||
+          args.kind === 'folder' ||
+          parseExecutionHostId(args.hostId)?.kind === 'ssh'
+            ? undefined
+            : await resolveRuntimeRepositoryAddScriptRequest(target)
         // Why: the target host may not have a project record yet; carry the selected source-host identity across the boundary.
-        const setupArgs = projectProviderIdentity ? { ...args, projectProviderIdentity } : args
+        const baseArgs = projectProviderIdentity ? { ...args, projectProviderIdentity } : args
+        const setupArgs = request ? { ...baseArgs, repositoryAddScriptPreview: request } : baseArgs
         const result =
           target.kind === 'local'
             ? await window.api.projects.setupExistingFolder(setupArgs)
@@ -90,6 +102,7 @@ export function createProjectHostSetupActions(
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
           description: repo.displayName
         })
+        offerRegistrationAddScript(request, repo.id, result.repositoryAddScriptPreview)
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
@@ -261,31 +274,28 @@ export function createProjectHostSetupActions(
         }
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
-        const repo =
-          target.kind === 'local'
-            ? await window.api.repos.clone({
-                url: args.url,
-                destination: args.destination
-              })
-            : (
-                await callRuntimeRpc<{ repo: Repo }>(
-                  target,
-                  'repo.clone',
-                  {
-                    url: args.url,
-                    destination: args.destination
-                  },
-                  { timeoutMs: 10 * 60_000 }
-                )
-              ).repo
-        return await get().setupProjectExistingFolder({
-          projectId: args.projectId,
-          hostId: args.hostId,
-          path: repo.path,
-          kind: 'git',
-          displayName: args.displayName,
-          setupMethod: 'cloned'
-        })
+        const { request, repo, preview } = await cloneRepositoryWithAddScript(
+          target,
+          args.url,
+          args.destination
+        )
+        // Why: this call registers the row the clone already created; a second opt-in would let a
+        // concurrent removal mint a second preview for the same repo.
+        const setupResult = await get().setupProjectExistingFolder(
+          {
+            projectId: args.projectId,
+            hostId: args.hostId,
+            path: repo.path,
+            kind: 'git',
+            displayName: args.displayName,
+            setupMethod: 'cloned'
+          },
+          { offerAddScript: false }
+        )
+        if (setupResult) {
+          offerRegistrationAddScript(request, setupResult.repo.id, preview)
+        }
+        return setupResult
       } catch (err) {
         console.error('Failed to clone project on host:', err)
         const message = err instanceof Error ? err.message : String(err)

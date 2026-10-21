@@ -17,6 +17,10 @@ import { runWithGitReadCacheInvalidation } from '../git/status'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { getRepoName } from '../git/repo'
+import {
+  reportNewGitRepository,
+  type NewGitRepositoryObserver
+} from '../repository-add-scripts/new-git-repository-observer'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
@@ -38,7 +42,8 @@ export class RuntimeRepositoryCloneController {
   async clone(
     url: string,
     destination: string,
-    executionHostId?: ExecutionHostId | null
+    executionHostId?: ExecutionHostId | null,
+    onNewGitRepository?: NewGitRepositoryObserver
   ): Promise<Repo> {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
@@ -68,7 +73,8 @@ export class RuntimeRepositoryCloneController {
           trimmedDestination,
           clonePath,
           clonePathKey,
-          executionHostId
+          executionHostId,
+          onNewGitRepository
         )
       )
     } finally {
@@ -84,7 +90,8 @@ export class RuntimeRepositoryCloneController {
     trimmedDestination: string,
     clonePath: string,
     clonePathKey: string,
-    executionHostId?: ExecutionHostId | null
+    executionHostId?: ExecutionHostId | null,
+    onNewGitRepository?: NewGitRepositoryObserver
   ): Promise<Repo> {
     const store = this.deps.getStore()
     if (!store) {
@@ -185,6 +192,14 @@ export class RuntimeRepositoryCloneController {
       kind: 'git',
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // Why: icon discovery is async, so another registration can land after the check above.
+    const raceWinner = findSaved()
+    if (raceWinner) {
+      await prepareLocalWorktreeRootForRepo(store, raceWinner)
+      invalidateAuthorizedRootsCache()
+      this.invalidate(raceWinner.id)
+      return raceWinner
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: clonePath,
@@ -197,6 +212,7 @@ export class RuntimeRepositoryCloneController {
       externalWorktreeVisibilityLegacy: false
     }
     store.addRepo(repo)
+    reportNewGitRepository(onNewGitRepository, repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)

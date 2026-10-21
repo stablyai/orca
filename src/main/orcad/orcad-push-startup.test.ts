@@ -148,6 +148,10 @@ vi.mock('../runtime/orca-runtime', () => ({
     flushPaneGrids() {
       return null
     }
+    async closeRepositoryAddScripts() {}
+    hasUnsettledRepositoryAddScriptRuns() {
+      return false
+    }
     syncWindowGraph() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]

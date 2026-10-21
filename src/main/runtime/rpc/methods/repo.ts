@@ -29,6 +29,7 @@ import {
   RepoUpdate
 } from '../../../../shared/rpc-contract/repo-params'
 import { RepoAddRemote } from '../../../../shared/rpc-contract/ssh-params'
+import { openRepositoryAddScriptRequestScope } from '../../../repository-add-scripts/repository-add-script-request-scope'
 
 export const REPO_METHODS = [
   defineMethod({
@@ -100,7 +101,11 @@ export const REPO_METHODS = [
     name: 'projectGroup.importNested',
     permission: 'workspace',
     params: ProjectGroupImportNested,
-    handler: async (params, { runtime }) => runtime.importNestedRepos(params)
+    handler: async ({ repositoryAddScriptPreview, ...args }, { runtime }) => {
+      const scope = openRepositoryAddScriptRequestScope(runtime, repositoryAddScriptPreview)
+      const result = await runtime.importNestedRepos(args, scope.observer)
+      return { ...result, ...scope.manyFields() }
+    }
   }),
   defineMethod({
     name: 'repo.sparsePresets',
@@ -126,12 +131,20 @@ export const REPO_METHODS = [
     name: 'repo.add',
     permission: 'workspace',
     params: RepoPath,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName),
-        context
+    handler: async (params, context) => {
+      const scope = openRepositoryAddScriptRequestScope(
+        context.runtime,
+        params.repositoryAddScriptPreview
       )
-    })
+      const repo = await context.runtime.addRepo(
+        params.path,
+        params.kind,
+        undefined,
+        params.displayName,
+        scope.observer
+      )
+      return { repo: projectRepoVisibilityForClient(repo, context), ...scope.singleFields() }
+    }
   }),
   // Why a new method, not a field on repo.add: an old host would strip the field and register the
   // path on itself instead of on its SSH target. Gated by ssh.target-management.v1.
@@ -147,11 +160,19 @@ export const REPO_METHODS = [
     name: 'repo.create',
     permission: 'workspace',
     params: RepoCreate,
-    handler: async (params, context) =>
-      projectRepoResultVisibilityForClient(
-        await context.runtime.createRepo(params.parentPath, params.name, params.kind),
-        context
+    handler: async (params, context) => {
+      const scope = openRepositoryAddScriptRequestScope(
+        context.runtime,
+        params.repositoryAddScriptPreview
       )
+      const result = await context.runtime.createRepo(
+        params.parentPath,
+        params.name,
+        params.kind,
+        scope.observer
+      )
+      return projectRepoResultVisibilityForClient({ ...result, ...scope.singleFields() }, context)
+    }
   }),
   defineMethod({
     name: 'repo.gitAvailable',
@@ -163,12 +184,19 @@ export const REPO_METHODS = [
     name: 'repo.clone',
     permission: 'workspace',
     params: RepoClone,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.cloneRepo(params.url, params.destination),
-        context
+    handler: async (params, context) => {
+      const scope = openRepositoryAddScriptRequestScope(
+        context.runtime,
+        params.repositoryAddScriptPreview
       )
-    })
+      const repo = await context.runtime.cloneRepo(
+        params.url,
+        params.destination,
+        undefined,
+        scope.observer
+      )
+      return { repo: projectRepoVisibilityForClient(repo, context), ...scope.singleFields() }
+    }
   }),
   defineMethod({
     name: 'repo.show',

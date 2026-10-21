@@ -8,7 +8,7 @@ import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { probeGitAvailability } from '../../git/git-availability'
 import { gitExecFileAsync } from '../../git/runner'
@@ -18,8 +18,19 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import { RepositoryAddScriptRequestIpcArg } from './repo-ipc-arg-schemas'
+import {
+  openRepositoryAddScriptRequestScope,
+  type RepositoryAddScriptCollectorSource
+} from '../../repository-add-scripts/repository-add-script-request-scope'
+import { reportNewGitRepository } from '../../repository-add-scripts/new-git-repository-observer'
+import type {
+  RepositoryAddScriptRequest,
+  RepoWithRepositoryAddScriptPreview
+} from '../../../shared/repository-add-script-types'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
+const INVALID_ADD_SCRIPT_REQUEST_ERROR = 'Invalid repository add script request'
 
 // Only ENOENT proves Git absent; rejecting other failures preserves the renderer's unknown state.
 export async function probeLocalGitAvailability(): Promise<boolean> {
@@ -57,7 +68,11 @@ function getDefaultCreateProjectParent(store: Store): string {
   return join(home, 'orca', 'projects')
 }
 
-export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCreationHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  addScripts: RepositoryAddScriptCollectorSource
+): void {
   ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
   ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
 
@@ -65,9 +80,26 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
     'repos:add',
     async (
       _event,
-      args: { path: string; kind?: 'git' | 'folder'; displayName?: string }
-    ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await addLocalRepoFromPath(store, args.path, args.kind, args.displayName)
+      args: {
+        path: string
+        kind?: 'git' | 'folder'
+        displayName?: string
+        repositoryAddScriptPreview?: RepositoryAddScriptRequest
+      }
+    ): Promise<RepoWithRepositoryAddScriptPreview | { error: string }> => {
+      const request = RepositoryAddScriptRequestIpcArg.safeParse(args.repositoryAddScriptPreview)
+      if (!request.success) {
+        return { error: INVALID_ADD_SCRIPT_REQUEST_ERROR }
+      }
+      // The collector belongs to this call; nothing about it outlives the handler.
+      const scope = openRepositoryAddScriptRequestScope(addScripts, request.data)
+      const result = await addLocalRepoFromPath(
+        store,
+        args.path,
+        args.kind,
+        args.displayName,
+        scope.observer
+      )
       if ('error' in result) {
         return result
       }
@@ -77,7 +109,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
-      return { repo: result.repo }
+      return { repo: result.repo, ...scope.singleFields() }
     }
   )
 
@@ -86,8 +118,18 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
     'repos:create',
     async (
       _event,
-      args: { parentPath: string; name: string; kind: 'git' | 'folder' }
-    ): Promise<{ repo: Repo } | { error: string }> => {
+      args: {
+        parentPath: string
+        name: string
+        kind: 'git' | 'folder'
+        repositoryAddScriptPreview?: RepositoryAddScriptRequest
+      }
+    ): Promise<RepoWithRepositoryAddScriptPreview | { error: string }> => {
+      const request = RepositoryAddScriptRequestIpcArg.safeParse(args.repositoryAddScriptPreview)
+      if (!request.success) {
+        return { error: INVALID_ADD_SCRIPT_REQUEST_ERROR }
+      }
+      const scope = openRepositoryAddScriptRequestScope(addScripts, request.data)
       const name = args.name?.trim() ?? ''
       const parentPath = args.parentPath?.trim() ?? ''
       // Why: IPC input is untrusted — coerce to the narrow union so a bogus kind can't skip git init yet persist in the store.
@@ -223,6 +265,19 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         kind: repoKind,
         executionHostId: LOCAL_EXECUTION_HOST_ID
       })
+      // Icon discovery is async, so another registration can land after the check above.
+      const raceWinnerAfterIcon = store
+        .getRepos()
+        .find(
+          (r) =>
+            r.path === targetPath &&
+            !r.connectionId &&
+            getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
+        )
+      if (raceWinnerAfterIcon) {
+        emitRepoAdded('folder_picker', true, repoKind === 'git')
+        return { repo: raceWinnerAfterIcon }
+      }
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,
@@ -240,12 +295,13 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       store.addRepo(repo)
+      reportNewGitRepository(scope.observer, repo)
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       // Why: repos:create git-inits when kind is 'git', so repoKind is the true git-vs-folder signal.
       emitRepoAdded('folder_picker', false, repoKind === 'git')
-      return { repo }
+      return { repo, ...scope.singleFields() }
     }
   )
 }

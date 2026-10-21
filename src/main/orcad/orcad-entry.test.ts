@@ -195,9 +195,24 @@ describe('orcad runtime cleanup order', () => {
   it('closes notification dismissals in a cleanup that runs after RPC stops', () => {
     const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
     const close = entry.indexOf('registerCleanup(() => runtime.closeNotificationDismissals())')
-    const rpcStop = entry.indexOf('registerCleanup(() => rpc.stop())')
+    const rpcStop = entry.indexOf('return rpc.stop()')
     expect(close).toBeGreaterThan(-1)
     // Cleanups run in reverse registration order.
     expect(close).toBeLessThan(rpcStop)
+  })
+
+  it('registers the add-script close right after the runtime exists and seals it before RPC stops', () => {
+    const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
+    const construct = entry.indexOf('const runtime = new OrcaRuntimeService(')
+    const register = entry.indexOf(
+      'const repositoryAddScripts = registerOrcadRepositoryAddScriptsCleanup(runtime, registerCleanup)'
+    )
+    // Nothing awaits between construction and registration, so a failed startup still closes it.
+    const between = entry.slice(construct, register)
+    expect(construct).toBeGreaterThan(-1)
+    expect(register).toBeGreaterThan(construct)
+    expect(between).not.toContain('await ')
+    const rpcCleanup = entry.indexOf('repositoryAddScripts.start()\n    return rpc.stop()')
+    expect(rpcCleanup).toBeGreaterThan(register)
   })
 })

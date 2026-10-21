@@ -32,6 +32,7 @@ import { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { installRuntimeSkillCommandSurface } from '../runtime-skill-command-contract'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
+import { RuntimeRepositoryAddScripts } from '../runtime-repository-add-scripts'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
 import { RuntimeAutomationController } from '../runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
@@ -77,6 +78,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly agentSessionClaimSigner: HostServices['agentSessionClaimSigner']
   declare protected readonly store: IdentityState['store']
   declare protected readonly clientSettings: IdentityState['clientSettings']
+  declare protected readonly repositoryAddScripts: IdentityState['repositoryAddScripts']
   declare protected readonly automation: IdentityState['automation']
   declare protected readonly orchestrationEnvironmentTransport: IdentityState['orchestrationEnvironmentTransport']
   declare protected readonly orchestrationFederation: IdentityState['orchestrationFederation']
@@ -108,6 +110,10 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     super()
     this.store = store
     this.machineName.start()
+    this.repositoryAddScripts = new RuntimeRepositoryAddScripts({
+      getStore: () => this.store,
+      readMachineName: () => this.machineName.read()
+    })
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     // oxlint-disable-next-line typescript/no-this-alias -- SAFETY: Preserve the constructor receiver captured by callbacks.
     const runtime: this = this
@@ -126,7 +132,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       hostedReviews: this.hostedReviews,
       gitHubRepositoryQueries: this.gitHubRepositoryQueries,
       repositoryHooks: this.repositoryHooks,
-      repositoryIssueCommand: this.repositoryIssueCommand
+      repositoryIssueCommand: this.repositoryIssueCommand,
+      repositoryAddScripts: this.repositoryAddScripts
     })
     installRuntimeReviewCommandSurface(runtime, {
       gitLabQueries: this.gitLabQueryCommands,

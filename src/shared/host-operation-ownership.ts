@@ -54,6 +54,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   projectHostSetup: 'host',
   reference: 'host',
   repo: 'host',
+  repositoryAddScript: 'host',
   runtime: 'host',
   session: 'host',
   settings: 'scope-picked',

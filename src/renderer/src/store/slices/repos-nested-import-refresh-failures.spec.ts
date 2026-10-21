@@ -9,7 +9,7 @@ export function registerReposNestedImportRefreshFailureTests(): void {
 
   const result = {
     group: null,
-    repos: [],
+    projects: [],
     importedCount: 0,
     alreadyKnownCount: 0,
     failedCount: 0

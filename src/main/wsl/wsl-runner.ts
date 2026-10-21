@@ -1,6 +1,7 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import { runProcess } from '@orca/process-host'
+import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
@@ -61,6 +62,13 @@ export type WslCommand =
       shell?: 'sh' | 'bash'
     }
 
+/** Guest process-group cleanup supplied by the caller; structurally a `ProcessTerminationBarrier`. */
+export type WslGuestTermination = ProcessTerminationBarrier & {
+  wrapGuestArgs: (args: readonly string[]) => string[]
+  stripControlOutput: (stderr: string) => string
+  launchRefused?: (stderr: string) => boolean
+}
+
 export type WslSpec = WslCommand & {
   /** Undefined selects the distro's default. */
   distro?: string
@@ -74,6 +82,15 @@ export type WslSpec = WslCommand & {
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
+  /** Guest-side group cleanup; a bare `wsl.exe` kill cannot reach the guest process tree. */
+  guestTermination?: WslGuestTermination
+  /** Refuses to start once aborted, before or after the probe; after the spawn it stops the call. */
+  signal?: AbortSignal
+  /**
+   * Synchronous last check after the awaited environment probe, in the same tick as the spawn.
+   * Only a literal `true` allows it; anything else, including a promise, refuses.
+   */
+  beforeSpawn?: () => boolean
 }
 
 export type WslResult = {
@@ -94,9 +111,17 @@ export type WslResult = {
   timedOut: boolean
   /** True when stdout or stderr hit `maxOutputBytes` and was clipped. */
   outputTruncated?: boolean
+  /** The signal that ended `wsl.exe`; absent when it exited on its own. */
+  signal?: NodeJS.Signals
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
+
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new Error('WSL launch was aborted before it started.')
+  }
+}
 
 function assertGuestPath(cwd: string): void {
   // Why reject rather than convert: a caller passing a Windows path here has
@@ -187,7 +212,8 @@ function buildGuestArgv(
   const argv = environment
     ? [environment.envBinary, `PATH=${environment.path}`, `HOME=${environment.home}`, ...command]
     : command
-  return withGuestCwd(spec.cwd, argv)
+  const guestArgv = withGuestCwd(spec.cwd, argv)
+  return spec.guestTermination ? spec.guestTermination.wrapGuestArgs(guestArgv) : guestArgv
 }
 
 /**
@@ -205,6 +231,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   if (spec.cwd) {
     assertGuestPath(spec.cwd)
   }
+  assertNotAborted(spec.signal)
   const deadline = Date.now() + (spec.timeoutMs ?? DEFAULT_WSL_TIMEOUT_MS)
 
   const wantsEnvironment = spec.loginPath === 'preferred'
@@ -244,6 +271,17 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // One budget for the whole call: the probe used to run on its own 10s timer
   // ahead of the timed leg, so a 5s caller could wait 15s.
   const remainingMs = Math.max(1, deadline - Date.now())
+  assertNotAborted(spec.signal)
+  if (spec.beforeSpawn) {
+    const verdict: unknown = spec.beforeSpawn()
+    if (verdict !== true) {
+      // A rejected promise from a misused async validator must not become unhandled.
+      if (verdict instanceof Promise) {
+        verdict.catch(() => undefined)
+      }
+      throw new Error('WSL pre-spawn check did not authorize the launch.')
+    }
+  }
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv, { user: spec.user }),
@@ -254,15 +292,21 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     env: buildHostEnv(spec.env),
     input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
-    maxOutputBytes: spec.maxOutputBytes
+    maxOutputBytes: spec.maxOutputBytes,
+    ...(spec.guestTermination ? { terminationBarrier: spec.guestTermination } : {}),
+    ...(spec.signal ? { signal: spec.signal } : {})
   })
 
+  if (spec.guestTermination?.launchRefused?.(result.stderr)) {
+    throw new Error('WSL guest cannot isolate a process group; the command was not run.')
+  }
   return {
     environmentResolved: !wantsEnvironment || environment !== null,
     code: result.code,
     stdout: result.stdout,
-    stderr: result.stderr,
+    stderr: spec.guestTermination?.stripControlOutput(result.stderr) ?? result.stderr,
     timedOut: result.timedOut,
-    outputTruncated: result.outputTruncated ?? false
+    outputTruncated: result.outputTruncated ?? false,
+    ...(result.signal ? { signal: result.signal } : {})
   }
 }

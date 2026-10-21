@@ -111,6 +111,22 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
         'file explorer'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.repositoryAddScript',
+      'Repository add script'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.repositoryAddScriptDescription',
+      'Run a script from the repository root when a Git repository is first added.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.git', 'git'),
+      ...translateSearchKeyword('auto.components.settings.general.search.repository', 'repository'),
+      ...translateSearchKeyword('auto.components.settings.general.search.script', 'script'),
+      ...translateSearchKeyword('auto.components.settings.general.search.setup', 'setup')
+    ]
   }
 ])
 

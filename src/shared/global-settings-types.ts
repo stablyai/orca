@@ -477,6 +477,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   mobilePairingCustomAddresses?: string[]
   /** Name this runtime reports to paired clients; empty uses the host's detected name. */
   machineName: string
+  /** Optional script this host offers to run when a Git repository is first added; absent means none. */
+  repositoryAddScript?: string
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
    *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean

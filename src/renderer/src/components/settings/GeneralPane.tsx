@@ -24,6 +24,7 @@ import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormContr
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
 import { defaultScopeHost } from '@/lib/default-creation-host'
+import type { SettingsHostScope } from './settings-host-scope'
 
 export {
   createAutoSaveDelayDraftState,
@@ -80,7 +81,8 @@ const EMPTY_WSL_DISTROS: string[] = []
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  hostScope: SettingsHostScope
   fontSuggestions: string[]
   onRequestFontSuggestions?: () => void
   wslSupportedPlatform?: boolean
@@ -93,6 +95,7 @@ export function GeneralPane({
   settings,
   updateSettings,
   updateSettingsOrThrow,
+  hostScope,
   fontSuggestions,
   onRequestFontSuggestions,
   wslSupportedPlatform,
@@ -224,6 +227,7 @@ export function GeneralPane({
         settings={settings}
         updateSettings={updateSettings}
         updateSettingsOrThrow={updateSettingsOrThrow}
+        hostScope={hostScope}
         defaultsSupported={defaultsSupported}
         sourceDefaultsSupported={sourceDefaultsSupported}
       />
