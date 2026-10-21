@@ -1,5 +1,6 @@
 import {
   mkdirSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -124,6 +125,14 @@ it('propagates emitter failures', async () => {
   ).rejects.toThrow('signal=SIGKILL')
 })
 
+it('rejects unknown compiler selections before emission', async () => {
+  const execute = vi.fn()
+  await expect(buildCli({ compiler: 'unknown', execute })).rejects.toThrow(
+    'Invalid ORCA_CLI_BUILD_COMPILER'
+  )
+  expect(execute).not.toHaveBeenCalled()
+})
+
 it('produces byte-identical JavaScript, declarations and maps with the real compilers', async () => {
   const root = fixture()
   const baseline = await runProcess({
@@ -181,3 +190,31 @@ it('blocks output for real type errors and rejects compiler version drift', asyn
   )
   expect(execute).not.toHaveBeenCalled()
 })
+
+const supportsRustCompiler =
+  (process.platform === 'darwin' && process.arch === 'arm64') ||
+  (process.platform === 'linux' && ['arm64', 'x64'].includes(process.arch))
+
+it.skipIf(!supportsRustCompiler)(
+  'the optional compiler preserves emitted bytes and blocks output on type errors',
+  async () => {
+    const root = fixture()
+    await buildCli({ root, outDir: 'baseline', compiler: 'bun', resolveBunExecutable })
+    await buildCli({ root, outDir: 'optimized', compiler: 'tsrs' })
+    const files = readdirSync(join(root, 'baseline')).sort()
+    expect(readdirSync(join(root, 'optimized')).sort()).toEqual(files)
+    for (const file of files) {
+      expect(
+        readFileSync(join(root, 'optimized', file)).equals(
+          readFileSync(join(root, 'baseline', file))
+        ),
+        file
+      ).toBe(true)
+    }
+    writeFileSync(join(root, 'src', 'entry.ts'), 'export const value: number = "wrong"\n')
+    await expect(buildCli({ root, outDir: 'failed', compiler: 'tsrs' })).rejects.toThrow(
+      'CLI compilation failed'
+    )
+    expect(existsSync(join(root, 'failed'))).toBe(false)
+  }
+)

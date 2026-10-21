@@ -9,6 +9,7 @@ import {
   fetchDictationSetup,
   isDictationReady,
   isDictationSetupRequiredError,
+  isSpeechlessServerError,
   isModelInFlight,
   setDictationConfig,
   type MobileSpeechModel,
@@ -168,6 +169,26 @@ describe('rpc wrappers', () => {
     await expect(fetchDictationSetup(client)).rejects.toThrow(
       'Update the paired desktop Orca app to use mobile voice settings.'
     )
+  })
+
+  it('maps a headless server with no speech to update guidance (#31174)', async () => {
+    const client = clientWith([
+      malformedFailure({
+        code: 'runtime_error',
+        message: 'speech_unavailable: this host has no speech services'
+      })
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'Update Orca on this server to use voice dictation.'
+    )
+  })
+
+  it('recognizes an old server refusing a dictation start', () => {
+    expect(isSpeechlessServerError('speech_unavailable: this host has no speech services')).toBe(
+      true
+    )
+    expect(isSpeechlessServerError('voice_dictation_disabled')).toBe(false)
   })
 
   it('keeps unrelated speech model failures specific', async () => {

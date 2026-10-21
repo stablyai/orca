@@ -79,20 +79,22 @@ export function layoutFrameApplyErrors({
   cache,
   changed,
   fullBuilt,
-  rowFieldsTaken
+  rowFieldsTaken,
+  selectTakenMovedTabs
 }: LayoutFrameApplyObservation): string[] {
   const keys = changed.filter((key) => key in cache && !fullBuilt.includes(key))
   if (keys.length === 0) {
     return []
   }
-  const built: AppState = {
+  // The moved tabs the flush selected are selected the same way here, so a wrong one still shows.
+  const built = selectTakenMovedTabs({
     ...before,
     ...fullLayoutFrameBuildPatch(before, cache, keys, {
       keepsTerminalLayout: isTabPaneTreeHeld,
       newRowFields: (tabId) => rowFieldsTaken.get(tabId) ?? null,
       held: { isTabHeld: isDrawnTabHeld, isGroupLayoutHeld: isDrawnGroupLayoutHeld }
     })
-  }
+  })
   const whole = fullBuilt.length === 0
   const expected: Record<string, unknown> = whole ? { ...built } : recordsOf(built, keys)
   const shown: Record<string, unknown> = whole ? { ...after } : recordsOf(after, keys)

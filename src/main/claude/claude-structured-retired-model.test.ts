@@ -12,7 +12,8 @@ import {
   tick,
   identityFor,
   PROVIDER_SESSION_ID,
-  recordingJournalSink
+  recordingJournalSink,
+  USER_MESSAGE
 } from './claude-structured-session-test-support'
 
 const RETIRED = 'claude-retired-1'
@@ -154,6 +155,16 @@ describe('a live child still launched with a retired model', () => {
     expect(setModelCalls(claude)).toEqual([{ subtype: 'set_model', params: { model: undefined } }])
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.model).not.toBe(RETIRED)
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'saved-choice',
+        body: USER_MESSAGE,
+        executionOptions: { model: RETIRED },
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(setModelCalls(claude).map((call) => call.params?.model)).toEqual([undefined, RETIRED])
     await adapter.closeAll()
   })
 

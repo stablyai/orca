@@ -33,6 +33,11 @@ type RuntimeTerminalTailState = {
   tailWaitState?: TerminalTailWaitState
 }
 
+export type PtyRegistrationClaim = {
+  incarnationId: PtyIncarnationId | null
+  exitedIncarnations: Set<PtyIncarnationId | null>
+}
+
 export type RuntimeLeafRecord = RuntimeSyncedLeaf &
   RuntimeTerminalTailState & {
     ptyGeneration: number

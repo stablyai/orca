@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { beginLayoutFramePositions, endLayoutFramePositions } from '@/runtime/layout-frame-position'
@@ -65,10 +65,12 @@ beforeEach(() => {
   mocks.send.mockReset()
   mocks.send.mockReturnValue(true)
 })
+afterEach(() => endLayoutFramePositions())
 
 describe('dropTabThroughLayoutOwner', () => {
-  it('moves the tab only once main has, then selects it in its new group', () => {
+  it('leaves the move to main’s frame while frames flow, moving nothing itself', () => {
     const { right } = seeded()
+    beginLayoutFramePositions()
     expect(
       dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right, index: 0 })
     ).toBe(true)
@@ -77,82 +79,37 @@ describe('dropTabThroughLayoutOwner', () => {
       { type: 'moveTab', tabId: 'a', toGroupId: right, index: 0 },
       expect.anything()
     )
-    expect(groupOf('a')).not.toBe(right)
 
     lastHandlers().apply({})
 
-    expect(orderOf(right)).toEqual(['a', 'c'])
-    expect(store().getState().activeGroupIdByWorktree[WT]).toBe(right)
+    expect(groupOf('a')).not.toBe(right)
+    expect(orderOf(right)).toEqual(['c'])
   })
 
-  it('only selects the tab when main’s frame already moved it', () => {
+  it('selects nothing on main’s answer: the frame that shows the move selects the tab (L120)', () => {
     const { left, right } = seeded()
+    beginLayoutFramePositions()
     dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right })
-    // Main's frame lands first: the tab is in its group, the window's selection unchanged.
+    // Main's frame lands first (drawn here without frame sync); the user selects meanwhile.
     store().getState().dropUnifiedTab('a', { groupId: right, index: 1 })
     store().getState().focusGroup(WT, left)
 
     lastHandlers().apply({})
 
     expect(orderOf(right)).toEqual(['c', 'a'])
-    expect(store().getState().activeGroupIdByWorktree[WT]).toBe(right)
-    expect(
-      store()
-        .getState()
-        .groupsByWorktree[WT]!.find((g) => g.id === right)?.activeTabId
-    ).toBe('a')
-  })
-
-  it('splits off a group under main’s id when the window makes the move itself', () => {
-    const { left } = seeded()
-
-    dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'b', groupId: left, direction: 'down' })
-    expect(mocks.send.mock.calls[0]![1]).toEqual({
-      type: 'splitGroup',
-      tabId: 'b',
-      besideGroupId: left,
-      direction: 'down'
-    })
-    lastHandlers().apply({ groupId: 'group-main' })
-
-    expect(groupOf('b')).toBe('group-main')
-    expect(store().getState().activeGroupIdByWorktree[WT]).toBe('group-main')
-  })
-
-  it('moves a lone tab’s group whole when main kept its id', () => {
-    const { left, right } = seeded()
-
-    dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'c', groupId: left, direction: 'left' })
-    lastHandlers().apply({ groupId: right })
-
-    expect(
-      store()
-        .getState()
-        .groupsByWorktree[WT]!.map((group) => group.id)
-    ).toEqual([left, right])
-    expect(store().getState().layoutByWorktree[WT]).toEqual({
-      type: 'split',
-      direction: 'horizontal',
-      first: { type: 'leaf', groupId: right },
-      second: { type: 'leaf', groupId: left },
-      ratio: 0.5
-    })
-    expect(store().getState().activeGroupIdByWorktree[WT]).toBe(right)
+    expect(store().getState().activeGroupIdByWorktree[WT]).toBe(left)
   })
 
   it('leaves placing a lone tab’s group to main’s frame while frames flow', () => {
     const { left, right } = seeded()
     const layout = store().getState().layoutByWorktree[WT]
     beginLayoutFramePositions()
-    try {
-      dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'c', groupId: left, direction: 'left' })
-      lastHandlers().apply({ groupId: right })
-    } finally {
-      endLayoutFramePositions()
-    }
+    const selectedBefore = store().getState().activeGroupIdByWorktree[WT]
+    dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'c', groupId: left, direction: 'left' })
+    lastHandlers().apply({ groupId: right })
 
     expect(store().getState().layoutByWorktree[WT]).toBe(layout)
-    expect(store().getState().activeGroupIdByWorktree[WT]).toBe(right)
+    expect(store().getState().activeGroupIdByWorktree[WT]).toBe(selectedBefore)
   })
 
   it('leaves a drop the window would skip to today’s path, sending nothing', () => {
@@ -181,7 +138,7 @@ describe('dropTabThroughLayoutOwner', () => {
     expect(orderOf(left)).toEqual(before)
   })
 
-  it('reorders within a group at the index main got', () => {
+  it('reorders within a group at the index main got, and leaves drawing it to main’s frame', () => {
     const { left } = seeded()
 
     dropTabThroughLayoutOwner(WT, {
@@ -198,7 +155,7 @@ describe('dropTabThroughLayoutOwner', () => {
     })
     lastHandlers().apply({})
 
-    expect(orderOf(left)).toEqual(['b', 'a'])
+    expect(orderOf(left)).toEqual(['a', 'b'])
   })
 
   it('moves as today when main cannot act, and not at all when main refuses', () => {
@@ -213,30 +170,36 @@ describe('dropTabThroughLayoutOwner', () => {
     expect(orderOf(right)).toEqual(['c', 'a'])
   })
 
-  it('splits as today when main moved a group whole that holds more tabs here', () => {
+  it('moves nothing itself while main’s stream is down; the reconnect’s snapshot shows the split', () => {
     const { left } = seeded()
 
     dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'b', groupId: left, direction: 'down' })
-    // Main had only `b` in that group, so it kept the group's id and moved it.
-    lastHandlers().apply({ groupId: left })
+    lastHandlers().apply({ groupId: 'group-main' })
 
-    expect(orderOf(left)).toEqual(['a'])
-    expect(groupOf('b')).not.toBe(left)
+    expect(groupOf('b')).toBe(left)
   })
 })
 
 describe('setGroupRatioThroughLayoutOwner', () => {
-  it('sets the ratio here, then has main save the group tree', () => {
+  it('sets the ratio here, then sends main that divider’s ratio, not the group tree', () => {
     seeded()
 
     setGroupRatioThroughLayoutOwner(WT, '', 0.3)
 
-    const groupLayout = store().getState().layoutByWorktree[WT]
-    expect(groupLayout).toMatchObject({ type: 'split', ratio: 0.3 })
+    expect(store().getState().layoutByWorktree[WT]).toMatchObject({ type: 'split', ratio: 0.3 })
     expect(mocks.send).toHaveBeenCalledWith(
       WT,
-      { type: 'setGroupRatios', groupLayout },
-      expect.anything()
+      {
+        type: 'setGroupRatios',
+        ratios: [
+          {
+            path: '',
+            ratio: 0.3,
+            split: expect.objectContaining({ direction: expect.any(String) })
+          }
+        ]
+      },
+      expect.objectContaining({ drawn: true })
     )
   })
 

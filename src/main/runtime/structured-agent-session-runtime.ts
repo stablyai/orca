@@ -123,6 +123,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
+  conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
@@ -313,6 +314,7 @@ async function installOnJournal(
     logger: deps.logger,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
+    ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),

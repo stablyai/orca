@@ -6,7 +6,7 @@ import {
   providerDiagnosticOf
 } from '../../../shared/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-import type { StructuredAgentSessionHandedOptions } from './structured-agent-session-ran-options'
+import type { StructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
 import { isAgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
@@ -37,7 +37,7 @@ export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverC
   deliveryOrder?: StructuredAgentSessionDeliveryOrder
   workChanged?: () => void
   /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
-  recordRanOptions?: (handed: StructuredAgentSessionHandedOptions) => Promise<void>
+  recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
 }
 
 /** A handover whose pending row and abort handle are committed: the provider call runs outside the
@@ -212,7 +212,9 @@ async function dispatchSafely(
       ...(executionOptions ? { executionOptions } : {}),
       ...(signal ? { signal } : {}),
       fence: ctx.fence,
-      requestedAt
+      requestedAt,
+      onInputPreparation: ctx.recordRanOptions?.prepareInput,
+      onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })
     return signal?.aborted && outcome.state === 'rejected' ? cancelledDispatch() : outcome
   } catch (error) {

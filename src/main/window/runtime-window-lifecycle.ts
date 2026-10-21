@@ -4,16 +4,11 @@ import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type {
-  RuntimeMarkdownReadTabResult,
-  RuntimeMarkdownSaveTabResult
-} from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
@@ -205,20 +200,6 @@ export function registerRuntimeWindowLifecycle(
         runtimeEnvironmentId,
         ...(navigation ? { navigation } : {})
       }),
-    readMobileMarkdownTab: (worktreeId, tabId) =>
-      requestMobileMarkdownFromRenderer(mainWindow, {
-        operation: 'read',
-        worktreeId,
-        tabId
-      }) as Promise<RuntimeMarkdownReadTabResult>,
-    saveMobileMarkdownTab: (worktreeId, tabId, baseVersion, content) =>
-      requestMobileMarkdownFromRenderer(mainWindow, {
-        operation: 'save',
-        worktreeId,
-        tabId,
-        baseVersion,
-        content
-      }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>

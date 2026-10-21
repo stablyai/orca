@@ -1,5 +1,8 @@
 import { once } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { setImmediate as nextTurn, setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
@@ -17,6 +20,14 @@ describe('daemon stream backpressure with a stalled Socket reader', () => {
   ])(
     'bounds $chunkSize-character writes (hidden=$hidden) and resumes',
     async ({ chunkSize, hidden }) => {
+      // Why: the daemon stream runs over a Unix socket or named pipe. Linux TCP loopback autotunes its
+      // kernel buffers to several MiB, enough to absorb the flood before the 4 MiB high-water mark.
+      // A fixed POSIX root keeps the full Unix socket path below the kernel's byte limit.
+      const dir = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'orca-dsbp-'))
+      const socketPath =
+        process.platform === 'win32'
+          ? `\\\\.\\pipe\\${basename(dir)}.sock`
+          : join(dir, 'stream.sock')
       const server = createServer()
       const writer = new Socket()
       let reader: Socket | undefined
@@ -42,13 +53,9 @@ describe('daemon stream backpressure with a stalled Socket reader', () => {
       writer.on('drain', () => batcher.flush('client'))
       try {
         const accepted = once(server, 'connection')
-        server.listen(0, '127.0.0.1')
+        server.listen(socketPath)
         await once(server, 'listening')
-        const address = server.address()
-        if (!address || typeof address === 'string') {
-          throw new Error('Expected TCP address')
-        }
-        writer.connect(address.port, '127.0.0.1')
+        writer.connect(socketPath)
         await once(writer, 'connect')
         const [acceptedSocket] = await accepted
         if (!(acceptedSocket instanceof Socket)) {
@@ -139,6 +146,7 @@ describe('daemon stream backpressure with a stalled Socket reader', () => {
         writer.destroy()
         reader?.destroy()
         await new Promise<void>((resolve) => server.close(() => resolve()))
+        rmSync(dir, { recursive: true, force: true })
       }
     }
   )

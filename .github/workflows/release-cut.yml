@@ -1183,6 +1183,7 @@ jobs:
     if: needs.cut.outputs.should_release == 'true' && needs.cut.outputs.ships_orcad_template == 'true'
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}

@@ -125,7 +125,7 @@ describe('terminal layout title persist', () => {
     expect(push).toHaveBeenCalledOnce()
   })
 
-  it('a layout-owner build shows a title change only once main has saved it', () => {
+  it('a layout-owner build sends a title change to main, whose frame draws it', () => {
     mocks.layoutOwnerIsMain = true
     mocks.sendLayoutCommandToOwner.mockReturnValue(true)
     const { hook, push } = renderPersistence()
@@ -143,6 +143,7 @@ describe('terminal layout title persist', () => {
     for (const [, , handlers] of mocks.sendLayoutCommandToOwner.mock.calls) {
       handlers.apply({})
     }
-    expect(push).toHaveBeenCalledTimes(2)
+    // The pane follows the layout's titles main's frame writes (use-host-pane-title-sync.ts).
+    expect(push).not.toHaveBeenCalled()
   })
 })

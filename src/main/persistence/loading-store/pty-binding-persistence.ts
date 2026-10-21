@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
 import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
@@ -110,10 +111,14 @@ export class PtyBindingPersistenceOperations {
     this[ptyBindingPersistenceOperationsContext] = { runtime, sessions }
   }
 
-  /** Clears a stopped process's binding, keeping the pane; fenced on the id, which is dead in any incarnation. */
+  /**
+   * Clears a stopped process's binding, keeping the pane; fenced on the id, which is dead in any
+   * incarnation. `fence.incarnationId` narrows that to one process, for an absence answer.
+   */
   async retirePtyBinding(
     binding: Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId'>,
-    hostId?: string | null
+    hostId?: string | null,
+    fence?: { incarnationId: string | undefined }
   ): Promise<boolean> {
     const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolved = resolveHostId(hostId)
@@ -136,6 +141,13 @@ export class PtyBindingPersistenceOperations {
         return { value: true, persist: 'if-dirty' }
       }
       if (currentId !== binding.ptyId) {
+        return { value: false, persist: false }
+      }
+      if (
+        fence &&
+        session.terminalPtyIncarnationsByPaneKey?.[makePaneKey(binding.tabId, binding.leafId)] !==
+          fence.incarnationId
+      ) {
         return { value: false, persist: false }
       }
       if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {

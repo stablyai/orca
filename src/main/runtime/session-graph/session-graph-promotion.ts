@@ -22,6 +22,21 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
   /** The group each workspace shows, as the attached window last reported it (syncWindowGraph). */
   protected readonly activeGroupViewFacts = new ActiveGroupViewFacts()
 
+  /** A paired desktop's `layout.reportView`: its reports count until its connection closes. */
+  reportClientView(
+    connectionId: string,
+    activeGroupByWorkspace: Readonly<Record<string, string | null>>,
+    refresh = false
+  ): void {
+    if (this.activeGroupViewFacts.mergeFromClient(connectionId, activeGroupByWorkspace, refresh)) {
+      this.registerSubscriptionCleanup(
+        `layout-view:${connectionId}`,
+        () => this.activeGroupViewFacts.dropClient(connectionId),
+        connectionId
+      )
+    }
+  }
+
   protected editorOpenGroupFor(worktreeId: string): string | undefined {
     return this.activeGroupViewFacts.groupFor(worktreeId, () => {
       const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)

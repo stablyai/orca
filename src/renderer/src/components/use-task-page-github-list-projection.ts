@@ -1,5 +1,5 @@
 import type { TaskPageJiraCreationMetadataModel } from './use-task-page-jira-creation-metadata'
-import { getGitHubWorkItemRepo } from '@/lib/github-work-item-repo-row'
+import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page-github-work-item-mutation-registry'
@@ -103,7 +103,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
       if (item.type !== 'pr' || item.checksSummary) {
         return
       }
-      const repo = getGitHubWorkItemRepo(repos, item)
+      const repo = getWorkItemRepo(repos, item)
       if (!repo) {
         return
       }

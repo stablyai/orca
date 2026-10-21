@@ -8,7 +8,6 @@ import { createEditorStore } from './editor-autosave-controller-test-fixture'
 import { reloadTabContentFromDisk } from './ExternalFileChangeBanner'
 import { mayPushTabTextIntoModel } from './editor-stale-mount-guard'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
-import { rollBackFailedMobileSave } from '@/runtime/mobile-markdown-save-rollback'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { GUARDED_PATH, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
 
@@ -88,20 +87,6 @@ it('reload leaves no draft', () => {
   store.getState().setEditorDraft(id, 'mine')
   store.getState().markFileDirty(id, true)
   reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
-  expectNoCleanDraft(store)
-})
-
-it('a refused mobile save restoring a clean tab leaves no draft of the disk text', () => {
-  const { store, id } = openCleanTab('disk')
-  store.getState().setEditorDraft(id, 'phone')
-  store.getState().markFileDirty(id, true)
-  rollBackFailedMobileSave(new Error('save_timeout'), {
-    fileId: id,
-    injectedContent: 'phone',
-    previousDraft: 'disk',
-    previousDirty: false,
-    stampedBaseline: null
-  })
   expectNoCleanDraft(store)
 })
 

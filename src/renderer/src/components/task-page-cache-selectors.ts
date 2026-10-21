@@ -1,4 +1,5 @@
 import { workItemsCacheKey } from '@/store/github/cache-identity'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   CacheEntry,
   WorkItemsCacheError,
@@ -22,6 +23,7 @@ export type TaskPageRepoCacheInput = {
   id: string
   path: string
   executionHostId?: string | null
+  connectionId?: string | null
   sourceCacheScope?: string | null
 }
 
@@ -35,6 +37,8 @@ export type TaskPageDialogWorkItemKey = {
 export type TaskPageRepoSourceState = {
   repoId: string
   repoPath: string
+  /** The row's host: a twin's two rows share repoId and can share repoPath. */
+  hostId: ExecutionHostId
   sourceKey: string
   sources: WorkItemsCacheSources | null
   error: WorkItemsCacheError | null
@@ -58,6 +62,11 @@ export function deriveTaskPageGitHubWorkItemsFetchOptions(
   }
 }
 
+// Why canonical: the fetch keys by the row's execution host, and an SSH row may carry only connectionId.
+function taskPageRepoCacheScope(repo: TaskPageRepoCacheInput): string {
+  return repo.sourceCacheScope ?? getRepoExecutionHostId(repo)
+}
+
 export function selectTaskPageWorkItemsCacheEntries(
   workItemsCache: WorkItemsCache,
   repos: readonly TaskPageRepoCacheInput[],
@@ -65,10 +74,7 @@ export function selectTaskPageWorkItemsCacheEntries(
   query: string
 ): (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
   return repos.map(
-    (repo) =>
-      workItemsCache[
-        workItemsCacheKey(repo.id, limit, query, repo.sourceCacheScope ?? repo.executionHostId)
-      ]
+    (repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))]
   )
 }
 
@@ -81,7 +87,8 @@ export function buildTaskPageRepoSourceState(
     return {
       repoId: repo.id,
       repoPath: repo.path,
-      sourceKey: `${repo.id}::${repo.sourceCacheScope ?? repo.executionHostId ?? 'local'}`,
+      hostId: getRepoExecutionHostId(repo),
+      sourceKey: `${repo.id}::${taskPageRepoCacheScope(repo)}`,
       sources: entry?.sources ?? null,
       error: entry?.error ?? null
     }

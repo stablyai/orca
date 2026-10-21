@@ -59,6 +59,14 @@ on:
         required: false
         type: boolean
         default: false
+      fast_release:
+        description: Use the faster unsigned-build runner outside signing provenance
+        type: boolean
+        default: false
+      javascript_source_sha:
+        description: Restore this run's shared dev JavaScript instead of rebuilding it
+        type: string
+        default: ''
       orcad_template:
         description: Ship the orcad-template artifact the calling run built
         required: false
@@ -104,12 +112,15 @@ jobs:
     # that can write to the dev-channel repos, and it should be reachable from
     # exactly the same place those secrets already live.
     environment: adhoc-mac-build
-    # Why windows-2022 and not windows-latest: windows-latest moved to the
-    # Windows 2025 / VS 2026 image before node-gyp could detect VS 18, breaking
-    # native dependency install. release-cut pins the same image.
-    runs-on: windows-2022
+    # The fast image has VS Build Tools 2022; signed release provenance stays separate.
+    runs-on: ${{ inputs.fast_release && 'blacksmith-8vcpu-windows-2025' || 'windows-2022' }}
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 90
     env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      JOBS: ${{ inputs.fast_release && 'max' || '' }}
       NODE_OPTIONS: --max-old-space-size=4096
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
@@ -171,6 +182,14 @@ jobs:
             exit 1
           fi
           echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
+
+      - name: Enable parallel checkout
+        if: inputs.fast_release
+        shell: bash
+        run: |
+          git config --global checkout.workers 0
+          # These fresh native builds do not need MSBuild's incremental file tracking.
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
 
       - name: Checkout the built commit
         uses: actions/checkout@v6
@@ -250,6 +269,7 @@ jobs:
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: inputs.javascript_source_sha == ''
 
       # Why the packaging check runs before the 20-minute build: it only needs
       # node_modules, and a stale config should cost seconds rather than a build.
@@ -257,14 +277,54 @@ jobs:
         shell: bash
         run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
 
+      - name: Download shared JavaScript
+        if: inputs.javascript_source_sha != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
       - name: Build app
         shell: bash
-        run: pnpm build:release
+        run: |
+          if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm build:release
+          fi
         env:
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
           # Why unset ORCA_BUILD_IDENTITY: telemetry's transport gate accepts only
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # Inline so refs predating the wait can still use the trusted dispatch workflow.
+      - name: Wait for the qualified orcad template
+        if: inputs.fast_release && inputs.stage_only && inputs.orcad_template
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
+              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for the qualified orcad template')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template

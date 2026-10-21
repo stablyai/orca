@@ -464,20 +464,33 @@ describe('useNativeChatExternalAttachments', () => {
       expect(mocks.stat).not.toHaveBeenCalled()
     })
 
-    it('refuses a captured drop if its destination changed before preparation finished', async () => {
+    it.each([null, 'env-1'])('fences captured results for %s', async (runtimeEnvironmentId) => {
       const chips = trackingChips()
+      const attachResolvedPaths = vi.fn()
+      const setNotice = vi.fn()
       const probe = await renderProbe({
         structuredWorktreeId: 'worktree-1',
-        structuredSession: session,
-        attachResolvedPaths: vi.fn(),
+        structuredSession: { ...session, runtimeEnvironmentId },
+        attachResolvedPaths,
+        setNotice,
         pendingChips: chips
       })
       let current = true
       const deliver = probe.latest().captureExternalDrop(() => current)
+      expect(deliver.preparationConsumer).toBe(runtimeEnvironmentId ? 'agent' : 'local-chat')
       current = false
       await act(async () => deliver(['/Users/me/notes.md']))
       expect(chips.begun).toEqual([])
       expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+      expect(attachResolvedPaths).not.toHaveBeenCalled()
+      expect(setNotice).toHaveBeenCalledWith(
+        'This workspace changed hosts while attaching — drop the files again.'
+      )
+      await probe.setDisabled(true)
+      setNotice.mockClear()
+      await act(async () => deliver(['/Users/me/notes.md']))
+      expect(setNotice).not.toHaveBeenCalled()
+      expect(attachResolvedPaths).not.toHaveBeenCalled()
     })
 
     it('discards uploaded files if the captured drop destination changed during upload', async () => {

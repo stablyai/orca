@@ -40,8 +40,7 @@ import {
   managedServerHasConfirmation,
   ManagedServerMenuItems,
   managedServerHasPrimaryAction,
-  ManagedServerPrimaryAction,
-  managedServerTitle
+  ManagedServerPrimaryAction
 } from './managed-server-row-parts'
 import type { ManagedServerLifecycle } from './use-managed-server-lifecycle'
 
@@ -283,10 +282,8 @@ export function RuntimeServerRow({
         sectionId={environment.id}
         name={
           deployment
-            ? managedServerTitle(
-                sshTargets.find((target) => target.id === deployment.sshTargetId)?.label ??
-                  environment.name
-              )
+            ? (sshTargets.find((target) => target.id === deployment.sshTargetId)?.label ??
+              environment.name)
             : row.title
         }
         descriptor={row.hostDescriptorText}

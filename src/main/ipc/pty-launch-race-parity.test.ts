@@ -77,12 +77,6 @@ describe('launch race parity, both spawn lanes', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
 
   describe('who owns the pane', () => {
-    // C6 picks one: the window joins before its setup and checks nothing; the host joins after and verifies.
-    const JOINED_UNVERIFIED_WINNER: Record<LaunchRaceLane, 'reattach' | 'refused'> = {
-      ipc: 'reattach',
-      runtime: 'refused'
-    }
-    const JOINER_PREPARES_ITS_OWN_LAUNCH: Record<LaunchRaceLane, number> = { ipc: 0, runtime: 1 }
     it.each(LAUNCH_RACE_LANES)(
       '%s lane: a spawn arriving while a window spawn is starting the pane joins it',
       async (lane) => {
@@ -114,17 +108,15 @@ describe('launch race parity, both spawn lanes', () => {
         onTestFinished(() => joinPaneSpawn.mockRestore())
         const joiner = lanes.spawn[lane]({ ...pane.args, command: 'claude' })
         if (lane === 'runtime') {
-          // Runtime preflight does filesystem work before it can join the reserved pane.
+          // Both lanes join before any fresh launch preparation.
           await vi.waitFor(() => expect(joinPaneSpawn).toHaveBeenCalledOnce())
         }
         finishSpawn()
 
         await expect(winner).resolves.toMatchObject({ id: 'pty-join-winner' })
-        await (JOINED_UNVERIFIED_WINNER[lane] === 'reattach'
-          ? expect(joiner).resolves.toMatchObject({ id: 'pty-join-winner', isReattach: true })
-          : expect(joiner).rejects.toThrow('terminal_pane_owner_unknown'))
+        await expect(joiner).resolves.toMatchObject({ id: 'pty-join-winner' })
         expect(spawn).toHaveBeenCalledOnce()
-        expect(auth.prepareClaudeAuth).toHaveBeenCalledTimes(JOINER_PREPARES_ITS_OWN_LAUNCH[lane])
+        expect(auth.prepareClaudeAuth).not.toHaveBeenCalled()
       }
     )
 
@@ -402,7 +394,7 @@ describe('launch race parity, both spawn lanes', () => {
           immediate: true,
           expectedIncarnationId: 'inc-1'
         })
-        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(ptyId, 'inc-1')
+        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(ptyId, 'inc-1', undefined)
       }
     )
 
@@ -433,7 +425,11 @@ describe('launch race parity, both spawn lanes', () => {
         await (EXITED_DURING_REGISTRATION[lane] === 'resolves'
           ? expect(spawn).resolves.toMatchObject({ id: ptyId, incarnationId: 'inc-exited' })
           : expect(spawn).rejects.toThrow('agent_session_exited_during_start'))
-        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(ptyId, 'inc-exited')
+        expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(
+          ptyId,
+          'inc-exited',
+          undefined
+        )
         expect(runtime.noteTerminalSpawnCommit).not.toHaveBeenCalled()
         expect(runtime.reflowHeadlessTerminalToPtyGrid).not.toHaveBeenCalled()
       }

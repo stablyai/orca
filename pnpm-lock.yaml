@@ -617,6 +617,9 @@ importers:
       tar:
         specifier: 7.5.22
         version: 7.5.22
+      tsrs:
+        specifier: 0.16.0-ts7.1.0-dev.20260929
+        version: 0.16.0-ts7.1.0-dev.20260929
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -4009,6 +4012,40 @@ packages:
 
   '@ts-morph/common@0.27.0':
     resolution: {integrity: sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ==}
+
+  '@tsrs/darwin-arm64@0.16.0-ts7.1.0-dev.20260929':
+    resolution: {integrity: sha512-9e7ZeELv0Fq06PL7xr0w7jeU45cd2UcDAejH3uloTPD37Vm6h099u/hAj90CPbY88ky15eXCiKE5hJzqvSvCBA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tsrs/linux-arm64-gnu@0.16.0-ts7.1.0-dev.20260929':
+    resolution: {integrity: sha512-+pWQ4gnuIVeDJsUYKxwRuSF9smST209Srto2B0LrCwnomgbMHENB7hzN+kAOe+HGWvmss9sjoQiwNHME3C9nNA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tsrs/linux-arm64-musl@0.16.0-ts7.1.0-dev.20260929':
+    resolution: {integrity: sha512-T2whHu5XbgEAnre71GVHBavdypwZu4tD/vEZDWTctfKrQ2LDbtt5QTbWhxN1SOkNS9i8EqWYaRUKQEDPjFntZg==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@tsrs/linux-x64-gnu@0.16.0-ts7.1.0-dev.20260929':
+    resolution: {integrity: sha512-hPsRzR/oG4+wQwiCFSLM7Vct70yO1C4mHjDebEUAqyzyVlhRzZsqJVDpy+xYVyB1eebDD9VJ+c5UEzA2PuKDiw==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tsrs/linux-x64-musl@0.16.0-ts7.1.0-dev.20260929':
+    resolution: {integrity: sha512-oW49ztnYwI0uOc/Yf8PCcXqAaVlkbvYJByLcz3u1cT2I7R8D649jDdegHWrqDfPPCa9yM7Q7WdNKstZIaQCjeg==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
 
   '@types/aria-query@5.0.4':
     resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}
@@ -8013,6 +8050,11 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  tsrs@0.16.0-ts7.1.0-dev.20260929:
+    resolution: {integrity: sha512-/SfYc9iIH353Fj1evYYtiRWbz+/+ieYhlHuu2A3iDvA2DLjzlV1vKMzyh2eXuACPNsmFI2hc3w9EPPx6B+E8OA==}
+    engines: {node: '>=16.20.0'}
+    hasBin: true
+
   tsx@4.23.15:
     resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
@@ -11268,6 +11310,21 @@ snapshots:
       fast-glob: 3.3.3
       minimatch: 10.2.5
       path-browserify: 1.0.1
+
+  '@tsrs/darwin-arm64@0.16.0-ts7.1.0-dev.20260929':
+    optional: true
+
+  '@tsrs/linux-arm64-gnu@0.16.0-ts7.1.0-dev.20260929':
+    optional: true
+
+  '@tsrs/linux-arm64-musl@0.16.0-ts7.1.0-dev.20260929':
+    optional: true
+
+  '@tsrs/linux-x64-gnu@0.16.0-ts7.1.0-dev.20260929':
+    optional: true
+
+  '@tsrs/linux-x64-musl@0.16.0-ts7.1.0-dev.20260929':
+    optional: true
 
   '@types/aria-query@5.0.4': {}
 
@@ -15828,6 +15885,14 @@ snapshots:
       strip-bom: 3.0.0
 
   tslib@2.8.1: {}
+
+  tsrs@0.16.0-ts7.1.0-dev.20260929:
+    optionalDependencies:
+      '@tsrs/darwin-arm64': 0.16.0-ts7.1.0-dev.20260929
+      '@tsrs/linux-arm64-gnu': 0.16.0-ts7.1.0-dev.20260929
+      '@tsrs/linux-arm64-musl': 0.16.0-ts7.1.0-dev.20260929
+      '@tsrs/linux-x64-gnu': 0.16.0-ts7.1.0-dev.20260929
+      '@tsrs/linux-x64-musl': 0.16.0-ts7.1.0-dev.20260929
 
   tsx@4.23.15:
     dependencies:

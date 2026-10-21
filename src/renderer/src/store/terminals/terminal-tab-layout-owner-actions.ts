@@ -59,16 +59,19 @@ function generatedTitleChanges(
 
 /**
  * A layout-owner build's terminal tab changes from any caller (CLI rename, templates, agent
- * titles, an ended launch agent): main changes its copy first, then the window's own action shows
- * the same change. Before this, only the tab bar's rename and color reached main; the rest reached
- * it only through the window's session save.
+ * titles, an ended launch agent): main changes its copy and its frame draws the change. The
+ * window's own action runs only for a tab main is not asked about or a paired server holds.
  */
 export function routeTerminalTabChangesThroughLayoutOwner(
   actions: RoutedActions,
   get: TerminalStoreGet
 ): RoutedActions {
-  const route = (tabId: string, change: TabChange, local: () => void): void => {
-    sendRenamableTabChangeToLayoutOwner(get(), tabId, change, local)
+  const route = (tabId: string, change: TabChange, local: () => void, shown?: () => void): void => {
+    sendRenamableTabChangeToLayoutOwner(get(), tabId, change, local, { shown })
+  }
+  // The tab bar's own rename and color count as a use of terminal tabs, as the window's action does.
+  const recordTabsInteraction = (): void => {
+    void get().recordFeatureInteraction?.('terminal-tabs')
   }
   /** Tabs whose generated title main has and the window does not yet: the window keeps a first title. */
   const generatedTitleSent = new Map<string, object>()
@@ -94,16 +97,27 @@ export function routeTerminalTabChangesThroughLayoutOwner(
     const entry = {}
     const sent = sendGeneratedTabTitles(
       state,
-      toMain.map(({ tab, title }) => ({ worktreeId: tab.worktreeId, tabId: tab.id, title })),
-      (shown) => {
+      toMain.map(({ tab, title, updates: given }) => ({
+        worktreeId: tab.worktreeId,
+        tabId: tab.id,
+        title,
+        // Main keeps a tab's first generated title, as the window does, unless the update replaces it.
+        ...(given.some((update) => update.options?.replaceExistingGeneratedTitle === true)
+          ? { replaceExisting: true as const }
+          : {})
+      })),
+      (outcomes) => {
         for (const { tabId } of toMain) {
           if (generatedTitleSent.get(tabId) === entry) {
             generatedTitleSent.delete(tabId)
           }
         }
-        const ofShown = toMain.flatMap((change, index) => (shown[index] ? change.updates : []))
-        if (ofShown.length > 0) {
-          actions.setGeneratedTabTitlesFromAgentPrompts(ofShown)
+        // Main's frame drew the titles it gave; the window shows only those left to it as today.
+        const asToday = toMain.flatMap((change, index) =>
+          outcomes[index] === 'asToday' ? change.updates : []
+        )
+        if (asToday.length > 0) {
+          actions.setGeneratedTabTitlesFromAgentPrompts(asToday)
         }
       }
     )
@@ -123,13 +137,15 @@ export function routeTerminalTabChangesThroughLayoutOwner(
       route(
         tabId,
         (id) => ({ type: 'renameTab', tabId: id, kind: 'custom', title }),
-        () => actions.setTabCustomTitle(tabId, title, opts)
+        () => actions.setTabCustomTitle(tabId, title, opts),
+        opts?.recordInteraction === false ? undefined : recordTabsInteraction
       ),
     setTabColor: (tabId, color, opts) =>
       route(
         tabId,
         (id) => ({ type: 'setTabProps', tabId: id, color }),
-        () => actions.setTabColor(tabId, color, opts)
+        () => actions.setTabColor(tabId, color, opts),
+        opts?.recordInteraction === false ? undefined : recordTabsInteraction
       ),
     setAiVaultTabTitle: (tabId, title) => {
       const current = terminalTab(get(), tabId)?.aiVaultTitle ?? null

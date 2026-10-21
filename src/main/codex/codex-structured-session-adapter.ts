@@ -240,6 +240,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     try {
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
+      input.onInputPreparation?.()
       const turnOptions = await waitForPromiseWithSignal(
         resolvedCodexMessageOptions(session, input.executionOptions),
         input.signal

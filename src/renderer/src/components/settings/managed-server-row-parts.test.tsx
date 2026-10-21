@@ -10,8 +10,7 @@ import {
   ManagedServerConfirmations,
   ManagedServerDetailLines,
   ManagedServerMenuItems,
-  ManagedServerPrimaryAction,
-  managedServerTitle
+  ManagedServerPrimaryAction
 } from './managed-server-row-parts'
 import { useManagedServerLifecycle } from './use-managed-server-lifecycle'
 
@@ -42,7 +41,7 @@ function ManagedRowHarness({
   })
   return (
     <>
-      <span>{managedServerTitle(environment.name)}</span>
+      <span>{environment.name}</span>
       <ManagedServerDetailLines lifecycle={lifecycle} />
       <ManagedServerPrimaryAction lifecycle={lifecycle} />
       <ManagedServerConfirmations lifecycle={lifecycle} />
@@ -118,7 +117,7 @@ const button = (container: HTMLElement, label: string) =>
 describe('managed server row', () => {
   it('reports unknown terminals, the running migration and the deferred update', async () => {
     const { container } = await render()
-    expect(container.textContent).toContain('Orca on Builder')
+    expect(container.textContent).toContain('Builder')
     expect(container.textContent).toContain('Running terminals: unknown')
     expect(container.textContent).toContain('Migration: Copy staged')
     expect(container.textContent).toContain('Update to 1.3.0 deferred.')

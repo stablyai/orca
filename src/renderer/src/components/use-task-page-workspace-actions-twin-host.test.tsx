@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskPageSearchActionsModel } from './use-task-page-search-actions'
 import { useTaskPageWorkspaceActions } from './use-task-page-workspace-actions'
@@ -33,18 +34,50 @@ const pr: GitHubWorkItem = {
   repoHostId: 'ssh:builder'
 }
 
-describe('starting work from a PR card on a repo id two hosts share', () => {
-  it('opens the composer for the host that returned the PR', () => {
-    const openModal = vi.fn()
-    const repos = [sshRow, localRow]
-    // By id a map keeps the last twin, which is the row that did not return the PR.
-    const model = { repos, repoMap: new Map(repos.map((repo) => [repo.id, repo])), openModal }
-    const { result } = renderHook(() =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these fields.
-      useTaskPageWorkspaceActions(model as unknown as TaskPageSearchActionsModel)
-    )
+const mr: GitLabWorkItem = {
+  id: 'mr-9',
+  type: 'mr',
+  number: 9,
+  title: 'Fix it on GitLab',
+  state: 'opened',
+  url: 'https://gitlab.com/o/r/-/merge_requests/9',
+  labels: [],
+  updatedAt: '2026-10-20T00:00:00Z',
+  author: 'octo',
+  repoId: 'twin',
+  repoHostId: 'ssh:builder'
+}
 
-    result.current.handleUseWorkItem(pr)
+function renderTwinActions() {
+  const openModal = vi.fn()
+  const repos = [sshRow, localRow]
+  // By id a map keeps the last twin, which is the row that did not return the item.
+  const model = { repos, repoMap: new Map(repos.map((repo) => [repo.id, repo])), openModal }
+  const { result } = renderHook(() =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these fields.
+    useTaskPageWorkspaceActions(model as unknown as TaskPageSearchActionsModel)
+  )
+  return { openModal, actions: result.current }
+}
+
+describe('starting work from a card on a repo id two hosts share', () => {
+  it('opens the composer for the host that returned the GitLab MR', () => {
+    const { openModal, actions } = renderTwinActions()
+
+    actions.handleUseGitLabItem(mr)
+
+    expect(openModal).toHaveBeenCalledWith(
+      'new-workspace-composer',
+      expect.objectContaining({
+        taskSourceContext: expect.objectContaining({ hostId: 'ssh:builder', repoId: 'twin' })
+      })
+    )
+  })
+
+  it('opens the composer for the host that returned the PR', () => {
+    const { openModal, actions } = renderTwinActions()
+
+    actions.handleUseWorkItem(pr)
 
     expect(openModal).toHaveBeenCalledWith(
       'new-workspace-composer',

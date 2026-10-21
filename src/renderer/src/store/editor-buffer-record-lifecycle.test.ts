@@ -10,6 +10,10 @@ import {
   type EditorBufferRecords
 } from './slices/editor/buffers/editor-buffer-record'
 import type { OpenFile } from './slices/editor/types/open-file'
+import {
+  EMPTY_EDITOR_BUFFER_VIEW_INDEX,
+  type EditorBufferViewIndex
+} from './slices/editor/buffers/editor-buffer-views'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 function openEditTab(filePath = '/repo/a.md', worktreeId = 'wt-1'): string {
@@ -218,7 +222,7 @@ describe('editor buffer records', () => {
         )
         return {
           openFiles,
-          editorBuffers: adoptMirroredEditorBuffers(state.editorBuffers, openFiles)
+          editorBuffers: adoptMirroredEditorBuffers(state.editorBuffers, openFiles, state)
         }
       })
 
@@ -231,7 +235,7 @@ describe('editor buffer records', () => {
   })
 
   it('rejects a slice write that changes a mirror field without its record', () => {
-    type State = {
+    type State = EditorBufferViewIndex & {
       openFiles: OpenFile[]
       editorBuffers: EditorBufferRecords
       dirtyMirrorOnly: () => void
@@ -250,6 +254,7 @@ describe('editor buffer records', () => {
           }
         ],
         editorBuffers: {},
+        ...EMPTY_EDITOR_BUFFER_VIEW_INDEX,
         dirtyMirrorOnly: () =>
           set((s) => ({
             openFiles: s.openFiles.map((file) => ({ ...file, isDirty: true }))

@@ -260,6 +260,7 @@ it('pins every foreground and background step to its selected phase', () => {
     ['Enforce id-only store write ratchet', staticPhase],
     ['Enforce repo host-read ratchet', staticPhase],
     ['Check Node runtime pin', staticPhase],
+    ['Check root and mobile lock the same shared dependencies', staticPhase],
     ['Decide whether the orcad terminal smoke runs', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
     ['Verify the generated ACP protocol schema', staticPhase],

@@ -202,6 +202,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-wedged-profile-migration.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-wire-admission.test.ts',
   'src/main/native-chat/agent-session-wire/structured-conversation-command.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-conversation-compaction.test.ts',
   'src/main/opencode/opencode-acp-stored-messages.test.ts',
   'src/main/orcad/orcad-automations.test.ts',
   'src/main/orcad/orcad-local-serve-selection.test.ts',

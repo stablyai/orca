@@ -3,6 +3,7 @@ import type { RuntimeSpeechModelSummary, RuntimeSpeechSetupState } from '../../s
 import { getDefaultVoiceSettings } from '../../shared/constants'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { hasLocalSpeechRecognizer } from '../speech/stt-worker-paths'
 import {
   deleteLocalSpeechModel,
   getSpeechModelDeletionErrorCode
@@ -29,7 +30,11 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.map((manifest) => {
+    // Why omit, not mark: a status arm older phones don't know would read as a model they can pick.
+    const runnable = hasLocalSpeechRecognizer()
+      ? SPEECH_MODEL_CATALOG
+      : SPEECH_MODEL_CATALOG.filter((manifest) => !isLocalSpeechModel(manifest))
+    const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
         id: manifest.id,
@@ -52,7 +57,7 @@ export class RuntimeMobileSpeechCatalog {
   async download(modelId: string): Promise<{ started: true }> {
     const store = this.requireStore()
     const manifest = getCatalogModel(modelId)
-    if (!manifest || !isLocalSpeechModel(manifest)) {
+    if (!manifest || !isLocalSpeechModel(manifest) || !hasLocalSpeechRecognizer()) {
       throw new Error('voice_model_not_downloadable')
     }
     void getSpeechModelManager(store)

@@ -11,6 +11,7 @@ import {
   SURFACE_PTYS,
   SURFACE_TAB_ID,
   captureSurfaceReplies,
+  mountedSurfaceGraph,
   recordedSurfaceReplies,
   surfaceRuntime
 } from './terminal-surface-replies.test-fixture'
@@ -211,5 +212,42 @@ describe('terminal replies from main (switch on)', () => {
       tabId: SURFACE_TAB_ID,
       paneKey: `${SURFACE_TAB_ID}:${HEADLESS_SECOND_LEAF_ID}`
     })
+  })
+
+  it('reinstall after a graph sync reconnects a terminal, never inside it', async () => {
+    const { runtime } = surfaceRuntime()
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, mountedSurfaceGraph())
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ptysById is the runtime's PTY registry; the test edits the record it keeps.
+    const { ptysById } = runtime as unknown as { ptysById: Map<string, { connected: boolean }> }
+    // Disconnected, not exited: the graph's leaf loop records it connected again.
+    ptysById.get('pty-a')!.connected = false
+    const installs: { depth: number; connected: boolean | undefined }[] = []
+    let depth = 0
+    const sync = runtime.syncWindowGraph.bind(runtime)
+    vi.spyOn(runtime, 'syncWindowGraph').mockImplementation((windowId, graph) => {
+      installs.push({ depth, connected: ptysById.get('pty-a')?.connected })
+      depth += 1
+      try {
+        return sync(windowId, graph)
+      } finally {
+        depth -= 1
+      }
+    })
+
+    runtime.syncWindowGraph(1, mountedSurfaceGraph())
+    expect(installs).toHaveLength(1)
+    await Promise.resolve()
+
+    // One deferred reinstall, outside the sync, after the record says connected.
+    expect(installs).toEqual([
+      { depth: 0, connected: false },
+      { depth: 0, connected: true }
+    ])
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.terminals.map(({ ptyId, connected }) => ({ ptyId, connected }))).toEqual([
+      { ptyId: 'pty-a', connected: true },
+      { ptyId: 'pty-b', connected: true }
+    ])
   })
 })

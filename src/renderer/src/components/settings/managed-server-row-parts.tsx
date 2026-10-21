@@ -12,13 +12,6 @@ import {
 } from './managed-server-copy'
 import type { ManagedServerLifecycle } from './use-managed-server-lifecycle'
 
-/** What a server Orca installed over SSH is called: where it runs, not "managed server". */
-export function managedServerTitle(hostLabel: string): string {
-  return translate('auto.components.settings.managedServers.row.title', 'Orca on {{host}}', {
-    host: hostLabel
-  })
-}
-
 // Why: a status that never loaded is unknown, not exited; only a loaded status may say "Not running".
 export function managedServerVersionLabel(
   status: OrcadManagedRuntimeStatus | null,

@@ -169,6 +169,8 @@ describe('tab.close uses the unified active tab', () => {
       getActiveTab: () => tab,
       unifiedTabsByWorktree: { [worktreeId]: [tab] },
       openFiles: [],
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       browserPagesByWorkspace: {},
       closeUnifiedTab,
       closeFile,
@@ -349,6 +351,8 @@ describe('tab.closeAll confirmation', () => {
       activeView: 'terminal',
       activeTabType: 'editor',
       openFiles: [makeOpenFile({ id: 'file-1', worktreeId })],
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       unifiedTabsByWorktree: { [worktreeId]: [] },
       getActiveTab: () => null
     }

@@ -74,8 +74,12 @@ export async function noteStructuredAgentSessionReportedOptions(
   }
   const runs = childRuns.get(child)
   childRuns.set(child, { reported: ran })
-  if (runs?.owed) {
-    await recordStructuredAgentSessionRanOptions(context, sessionId, fence, runs.owed)
+  if (runs?.owed && ran.model) {
+    const owed = runs.owed
+    await recordStructuredAgentSessionRanOptions(context, sessionId, fence, {
+      ...owed,
+      ...(owed.executed ? { executed: { ...owed.executed, model: ran.model } } : {})
+    })
   }
 }
 
@@ -83,14 +87,43 @@ export async function noteStructuredAgentSessionReportedOptions(
 export type StructuredAgentSessionRanRecorder = (
   sessionId: string,
   fence: number
-) => (handed: StructuredAgentSessionHandedOptions) => Promise<void>
+) => ((handed: StructuredAgentSessionHandedOptions) => Promise<void>) & {
+  prepareInput?: () => void
+  checkpoint?: () => void
+}
+
+/** Keeps observation identity at input, so an early report is neither lost nor an old fallback. */
+export function createStructuredAgentSessionRanRecorder(
+  context: RanOptionsContext,
+  sessionId: string,
+  fence: number
+): ReturnType<StructuredAgentSessionRanRecorder> {
+  let checkpoint: { reported?: RanOptions } | undefined
+  return Object.assign(
+    (handed: StructuredAgentSessionHandedOptions) =>
+      recordStructuredAgentSessionRanOptions(context, sessionId, fence, handed, checkpoint),
+    {
+      prepareInput: () => {
+        const child = currentChild(context, sessionId, fence)
+        if (child) {
+          delete childRuns.get(child)?.owed
+        }
+      },
+      checkpoint: () => {
+        const child = currentChild(context, sessionId, fence)
+        checkpoint = { reported: child ? childRuns.get(child)?.reported : undefined }
+      }
+    }
+  )
+}
 
 /** After a turn was handed over; bookkeeping, so a failure is logged and never refuses the send. */
 export async function recordStructuredAgentSessionRanOptions(
   context: RanOptionsContext,
   sessionId: string,
   fence: number,
-  handed: StructuredAgentSessionHandedOptions
+  handed: StructuredAgentSessionHandedOptions,
+  checkpoint?: { reported?: RanOptions }
 ): Promise<void> {
   const child = currentChild(context, sessionId, fence)
   const { store, logger, agents } = context.deps
@@ -100,7 +133,10 @@ export async function recordStructuredAgentSessionRanOptions(
   }
   const { message, executed } = handed
   const reported = childRuns.get(child)?.reported
-  const model = executed?.model ?? message?.model ?? reported?.model
+  const newerModel = checkpoint && reported !== checkpoint.reported ? reported?.model : undefined
+  const model = executed
+    ? (executed.model ?? message?.model ?? newerModel)
+    : (message?.model ?? reported?.model)
   childRuns.set(child, { ...(reported ? { reported } : {}), ...(model ? {} : { owed: handed }) })
   if (!model) {
     return

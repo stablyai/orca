@@ -154,6 +154,7 @@ type PtyCallbacks = {
 }
 
 export type PtyTransportRecoveryState = {
+  reason?: 'ownership'
   phase:
     | 'connecting'
     | 'connected'

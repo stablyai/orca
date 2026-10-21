@@ -35,6 +35,7 @@ export const WINDOWS_PACKAGE_TESTS = [
   'src/shared/__tests__/process-host/windows-command-line.win32.test.ts',
   'src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts',
   'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
+  'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/omp-fresh-launch-cmd.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts',

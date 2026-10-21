@@ -19,11 +19,17 @@ import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-
 import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type {
-  StatusFeedSession,
-  StructuredAgentSessionStatusFeedDeps
+import {
+  structuredAgentSessionNamingSnapshot,
+  type StatusFeedSession,
+  type StatusPublication,
+  type StructuredAgentSessionStatusSubscriber,
+  type StructuredAgentSessionStatusFeedDeps
 } from './structured-agent-session-status-feed-deps'
-import { structuredAgentSessionStatusSummary } from './structured-agent-session-status-summary'
+import {
+  renamedStructuredStatusSummary,
+  structuredAgentSessionStatusSummary
+} from './structured-agent-session-status-summary'
 import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
 import {
   StructuredAgentSessionJournalProjections,
@@ -41,10 +47,7 @@ export type { StructuredAgentSessionStatusFeedDeps } from './structured-agent-se
 
 export type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 
-export type StructuredAgentSessionStatusSubscriber = {
-  id: string
-  emit: (event: AgentSessionStatusEvent) => void
-}
+export type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed-deps'
 
 export class StructuredAgentSessionStatusFeed {
   private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
@@ -52,13 +55,7 @@ export class StructuredAgentSessionStatusFeed {
   )
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
   // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
-  private readonly published = new Map<
-    string,
-    {
-      summary: AgentSessionStatusSummary
-      firstInputSubmissionKey: string | null
-    }
-  >()
+  private readonly published = new Map<string, StatusPublication>()
   /** The user's newest accepted send each session was last projected with; a new one retires
    *  settled children. */
   private readonly acceptedSends = new Map<string, string>()
@@ -75,6 +72,10 @@ export class StructuredAgentSessionStatusFeed {
 
   /** Opens with every session this host has projected, live ones re-read, then only changes. */
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
+    // Naming completion must be observable even if a held journal cannot be read.
+    if (this.deps.namingActiveSessionIds) {
+      this.emit(subscriber, structuredAgentSessionNamingSnapshot(this.deps))
+    }
     // Re-project before registering: a change found here has to reach the subscribers that
     // already read the old value, and the arriving one carries it in its snapshot instead.
     for (const [sessionId] of this.deps.sessions) {
@@ -158,22 +159,21 @@ export class StructuredAgentSessionStatusFeed {
     })
   }
 
-  /** The record's name changed outside the journal. A closed chat's retained row follows it too,
-   *  so every list still showing that conversation learns the name without a tab. */
+  /** The record's name, or its naming failure, changed outside the journal. A closed chat's
+   *  retained row follows it too, so every list still showing it learns the name without a tab. */
   publishConversationName(sessionId: string): void {
+    this.broadcast(structuredAgentSessionNamingSnapshot(this.deps))
     if (this.deps.sessions.has(sessionId)) {
       this.publish(sessionId)
       return
     }
     const publication = this.published.get(sessionId)
-    const name = this.deps.getRecord(sessionId)?.conversationName
-    if (!publication || publication.summary.conversationName === name) {
-      return
+    const summary =
+      publication && renamedStructuredStatusSummary(publication.summary, this.deps, sessionId)
+    if (publication && summary) {
+      this.published.set(sessionId, { ...publication, summary })
+      this.broadcast({ type: 'status', session: summary })
     }
-    const { conversationName: _previous, ...rest } = publication.summary
-    const summary = name ? { ...rest, conversationName: name } : rest
-    this.published.set(sessionId, { ...publication, summary })
-    this.broadcast({ type: 'status', session: summary })
   }
 
   /** The summary last published for the session, as every status subscriber last saw it. */
@@ -210,6 +210,7 @@ export class StructuredAgentSessionStatusFeed {
       state: projection.state,
       stopping: projection.stopping,
       childWork: this.childWorkFields(sessionId, session.params.provider),
+      namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now
     })
     const publication = this.published.get(sessionId)

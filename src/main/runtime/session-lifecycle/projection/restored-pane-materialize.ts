@@ -18,6 +18,10 @@ import {
   type RestoredPane,
   type RestoredPaneTrigger
 } from '../../terminal/recovery/restored-pane-start'
+import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
+import { reopenNewerDaemonTerminals } from '../../../daemon/daemon-newer-protocol-hold'
+import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
+import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected abstract resolveAgentLaunchRuntime(
@@ -27,6 +31,10 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
   protected abstract resolvePaneOwnedResumeStartup(
     ...args: Parameters<MobileSessionNavigation['resolvePaneOwnedResumeStartup']>
   ): ReturnType<MobileSessionNavigation['resolvePaneOwnedResumeStartup']>
+
+  abstract subscribeWorkspaceLayouts(
+    listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
+  ): ReturnType<WorkspaceLayoutStream['subscribe']>
 
   private restoredPanes: RestoredPaneStarter | null = null
 
@@ -67,6 +75,19 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       }
     })
     return this.restoredPanes.ensureStarted(pane, trigger)
+  }
+
+  /** Layout-owner build: a paired desktop's Reopen of the panes main publishes held. */
+  reopenHeldTerminalPanes(panes: readonly RestoredPane[]): Promise<NewerDaemonReopenResult> {
+    // Why the published layout: its status is the one the desktop's banner showed.
+    const { snapshot, unsubscribe } = this.subscribeWorkspaceLayouts(() => {})
+    unsubscribe()
+    const published = snapshot.map((entry) => entry.layout)
+    return reopenHeldPanes(panes, {
+      isHeld: (pane) => isPublishedHeld(published, pane),
+      stopNewerDaemons: () => reopenNewerDaemonTerminals().then((result) => result.reopened),
+      start: (pane) => this.ensureRestoredPaneStarted(pane)
+    })
   }
 
   /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
