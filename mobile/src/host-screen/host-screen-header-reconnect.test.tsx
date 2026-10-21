@@ -10,6 +10,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  CalendarClock: 'Icon',
   ChevronLeft: 'Icon',
   Filter: 'Icon',
   Layers: 'Icon',

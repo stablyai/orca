@@ -14,6 +14,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
+  CalendarClock: 'CalendarClock',
   ListTodo: 'ListTodo',
   Plus: 'Plus',
   QrCode: 'QrCode'
@@ -57,6 +58,7 @@ describe('MobileHomeListFooter tasks', () => {
     taskProvidersByHost: Record<string, TaskProvider[]> = {}
   ) {
     const onOpenTasks = vi.fn()
+    const onOpenAutomations = vi.fn()
     const onCreateWorkspace = vi.fn()
     const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
@@ -74,12 +76,13 @@ describe('MobileHomeListFooter tasks', () => {
           onOpenAccounts: vi.fn(),
           onOpenResume: vi.fn(),
           onOpenTasks,
+          onOpenAutomations,
           onPairDesktop: vi.fn()
         })
       )
     })
     consoleError.mockRestore()
-    return { onOpenTasks, onCreateWorkspace }
+    return { onOpenTasks, onCreateWorkspace, onOpenAutomations }
   }
 
   function pressable(matches: (node: ReactTestInstance) => boolean) {
@@ -139,6 +142,17 @@ describe('MobileHomeListFooter tasks', () => {
     act(() => tasksPicker().props.onAfterClose())
 
     expect(callbacks.onOpenTasks).toHaveBeenCalledWith('laptop', undefined)
+  })
+
+  it('chooses the automation host independently of the Tasks picker', async () => {
+    const callbacks = await renderFooter([desk, laptop])
+    act(() => pressableWithText('Automations').props.onPress())
+    expect(picker('Open Automations On').props.visible).toBe(true)
+    expect(tasksPicker().props.visible).toBe(false)
+    act(() => picker('Open Automations On').props.onSelect('laptop'))
+    act(() => picker('Open Automations On').props.onAfterClose())
+    expect(callbacks.onOpenAutomations).toHaveBeenCalledWith('laptop')
+    expect(callbacks.onOpenTasks).not.toHaveBeenCalled()
   })
 
   it('lists each provider once, in the order connected hosts report them', async () => {

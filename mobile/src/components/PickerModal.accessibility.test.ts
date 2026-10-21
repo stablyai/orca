@@ -4,13 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PickerModal } from './PickerModal'
 
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
+  TextInput: 'TextInput',
   View: 'View'
 }))
 
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Search: 'Search', X: 'X' }))
 
 vi.mock('./BottomDrawer', async () => {
   const React = await import('react')

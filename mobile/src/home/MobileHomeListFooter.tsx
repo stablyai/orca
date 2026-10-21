@@ -10,6 +10,7 @@ import type { HomeResumeCard } from '../worktree/home-resume-card'
 import { MobileHomeAccountUsageCards } from './MobileHomeAccountUsageCards'
 import { MobileHomeResumeCard } from './MobileHomeResumeCard'
 import { MobileHomeTasksCard } from './MobileHomeTasksCard'
+import { MobileHomeAutomationsCard } from './MobileHomeAutomationsCard'
 
 const DEFAULT_TASK_PROVIDERS: TaskProvider[] = ['github']
 
@@ -22,9 +23,11 @@ export function MobileHomeListFooter(props: {
   onOpenAccounts: (hostId: string) => void
   onOpenResume: (card: HomeResumeCard) => void
   onOpenTasks: (hostId: string, provider?: TaskProvider) => void
+  onOpenAutomations: (hostId: string) => void
   onPairDesktop: () => void
 }) {
   const tasksHostPicker = useConnectedHostPicker(props.connectedHosts)
+  const automationsHostPicker = useConnectedHostPicker(props.connectedHosts)
   const hostProviders = props.connectedHosts.map((host) => ({
     host,
     providers: props.taskProvidersByHost[host.id] ?? DEFAULT_TASK_PROVIDERS
@@ -56,6 +59,12 @@ export function MobileHomeListFooter(props: {
         onOpen={openTasks}
       />
       <PickerModal title="Open Tasks On" {...tasksHostPicker.pickerProps} />
+      <Text style={styles.sectionHeading}>Automations</Text>
+      <MobileHomeAutomationsCard
+        enabled={props.connectedHosts.length > 0}
+        onOpen={() => automationsHostPicker.pickHost(props.onOpenAutomations)}
+      />
+      <PickerModal title="Open Automations On" {...automationsHostPicker.pickerProps} />
       <MobileHomeQuickActions
         connectedHosts={props.connectedHosts}
         onPairDesktop={props.onPairDesktop}

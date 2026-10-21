@@ -41,6 +41,12 @@ export type RpcSubscriptionSite = {
 }
 
 export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
+  {
+    file: 'src/automations/use-automation-catalog.ts',
+    method: 'runtime.clientEvents.subscribe',
+    release: 'ready-id',
+    coverage: { kind: 'unwritten-scenario' }
+  },
   // The account snapshot, opened twice. The home screen wires one per connected host; the host
   // screen opens its own. Both decode the same snapshot, and neither is the wall — the loader
   // reaches `decodeAccountsSnapshot` and it throws its own domain error on a bad one.

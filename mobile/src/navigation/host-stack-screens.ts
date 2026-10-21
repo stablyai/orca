@@ -4,6 +4,7 @@ export const HOST_STACK_SCREENS = [
   { name: '[hostId]/edit', title: 'Edit host' },
   { name: '[hostId]/accounts', title: 'Accounts' },
   { name: '[hostId]/tasks', title: 'Tasks' },
+  { name: '[hostId]/automations', title: 'Automations' },
   { name: '[hostId]/session/[worktreeId]', title: 'Terminal' },
   { name: '[hostId]/source-control/[worktreeId]', title: 'Source Control' },
   { name: '[hostId]/agent-history/[worktreeId]', title: 'Agent Session History' },
