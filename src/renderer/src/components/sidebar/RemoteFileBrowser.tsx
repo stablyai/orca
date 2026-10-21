@@ -25,6 +25,7 @@ type RemoteFileBrowserProps = (
 }
 
 const FILE_HINT_MS = 2000
+const NO_ENTRIES: readonly DirEntry[] = []
 const FILE_HINT_TEXT = "Files can't be opened as a project"
 
 export function RemoteFileBrowser({
@@ -42,7 +43,10 @@ export function RemoteFileBrowser({
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
   // Tied to the list it was moved on, so any new listing or filter starts from its own default.
-  const [highlight, setHighlight] = useState<{ entries: DirEntry[]; index: number } | null>(null)
+  const [highlight, setHighlight] = useState<{
+    entries: readonly DirEntry[]
+    index: number
+  } | null>(null)
   const listboxId = useId()
   const genRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -164,7 +168,8 @@ export function RemoteFileBrowser({
     () => (preview ? filterEntries(preview.entries, preview.filter) : null),
     [preview]
   )
-  const displayEntries = previewFilteredEntries ?? filteredEntries
+  // Why: while a listing loads only the spinner renders, so the prior rows can't be targeted.
+  const displayEntries = loading ? NO_ENTRIES : (previewFilteredEntries ?? filteredEntries)
   const activeIndex =
     highlight?.entries === displayEntries
       ? highlight.index
