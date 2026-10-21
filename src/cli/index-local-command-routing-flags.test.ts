@@ -45,6 +45,10 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
+import {
+  redactRuntimeEnvironment,
+  type KnownRuntimeEnvironment
+} from '../shared/runtime-environments'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -316,15 +320,24 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   })
 
   it('still treats --environment as the selector argument on `environment show` and `rm`', async () => {
-    const environment = {
+    const environment: KnownRuntimeEnvironment = {
       id: 'env-m4air',
       name: 'm4air',
       createdAt: 1,
       updatedAt: 1,
       lastUsedAt: null,
       runtimeId: null,
-      endpoints: [],
-      preferredEndpointId: null
+      endpoints: [
+        {
+          id: 'ws-env-m4air',
+          kind: 'websocket',
+          label: 'WebSocket',
+          endpoint: 'ws://127.0.0.1:9876',
+          deviceToken: 'device-token',
+          publicKeyB64: 'public-key'
+        }
+      ],
+      preferredEndpointId: 'ws-env-m4air'
     }
     resolveEnvironmentMock.mockReturnValue(environment)
     removeEnvironmentMock.mockReturnValue(environment)
@@ -336,9 +349,15 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(resolveEnvironmentMock).toHaveBeenCalledExactlyOnceWith('/tmp/orca-user-data', 'm4air')
     expect(removeEnvironmentMock).toHaveBeenCalledExactlyOnceWith('/tmp/orca-user-data', 'm4air')
     expect(logSpy).toHaveBeenCalledTimes(2)
+    const publicEnvironment = redactRuntimeEnvironment(environment)
     expect(logSpy.mock.calls.map(([output]) => JSON.parse(String(output)).result)).toEqual([
-      { environment },
-      { removed: environment }
+      {
+        environment: {
+          ...publicEnvironment,
+          reachability: { status: 'unknown', checkedAt: null, lastSeenAt: null, failureCode: null }
+        }
+      },
+      { removed: publicEnvironment }
     ])
     expect(callMock).not.toHaveBeenCalled()
   })

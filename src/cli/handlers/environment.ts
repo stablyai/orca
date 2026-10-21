@@ -11,6 +11,11 @@ import { listSshTargets, LOCAL_HOST_LIST_NAME } from '../host-selector-alternati
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
+import { getOptionalPositiveIntegerFlag } from '../flags'
+import {
+  probeEnvironmentReachability,
+  readEnvironmentReachability
+} from '../runtime/environment-reachability'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
@@ -80,7 +85,8 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       kind: 'environment' as const,
       name: environment.name,
       id: environment.id,
-      selector: `--environment ${environment.name}`
+      selector: `--environment ${environment.name}`,
+      reachability: readEnvironmentReachability(getDefaultUserDataPath(), environment)
     }))
     const hosts = [
       {
@@ -102,14 +108,29 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca environment list`. Paired servers are stored on this machine, so there is no other host to ask.',
       'Run `orca environment list` on that machine to see the servers paired with it.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
+    const userDataPath = getDefaultUserDataPath()
+    const environments = listEnvironments(userDataPath).map((environment) => ({
+      ...redactRuntimeEnvironment(environment),
+      reachability: readEnvironmentReachability(userDataPath, environment)
+    }))
     printResult(localSuccess({ environments }), json, formatEnvironmentList)
   },
   'environment show': async ({ flags, json }) => {
     const selector = getRequiredStringFlag(flags, 'environment')
-    const environment = redactRuntimeEnvironment(
-      resolveEnvironment(getDefaultUserDataPath(), selector)
-    )
+    const probing = flags.get('probe') === true
+    if (!probing && flags.has('timeout-ms')) {
+      throw new RuntimeClientError('invalid_argument', '--timeout-ms requires --probe.')
+    }
+    const userDataPath = getDefaultUserDataPath()
+    const saved = resolveEnvironment(userDataPath, selector)
+    const reachability = probing
+      ? await probeEnvironmentReachability(
+          userDataPath,
+          saved,
+          getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
+        )
+      : readEnvironmentReachability(userDataPath, saved)
+    const environment = { ...redactRuntimeEnvironment(saved), reachability }
     printResult(localSuccess({ environment }), json, ({ environment: value }) =>
       formatEnvironment(value)
     )

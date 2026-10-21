@@ -75,6 +75,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'report-path': '--report-path <path>  Report path to include in orchestration payload JSON',
   phase: '--phase <text>        Worker phase to include in orchestration payload JSON',
   'timeout-ms': '--timeout-ms <ms>     Maximum wait time before timing out',
+  probe: '--probe                Check the saved endpoint with an authenticated status request',
   'to-element-index': '--to-element-index <n> Destination element index from get-app-state',
   'to-x': '--to-x <x>             Destination window-local x coordinate',
   'to-y': '--to-y <y>             Destination window-local y coordinate',

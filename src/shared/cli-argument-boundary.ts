@@ -33,6 +33,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'messages',
   'me',
   'mobile',
+  'probe',
   'mobile-pairing',
   'no-pairing',
   'screen',

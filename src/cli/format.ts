@@ -2,6 +2,8 @@ import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
+import type { EnvironmentReachability } from './runtime/environment-reachability'
+import { formatEnvironmentReachabilitySummary } from './workspace-format'
 
 export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
 
@@ -87,6 +89,7 @@ export type HostListEntry = {
   machineName?: string
   connected?: boolean
   connectionStatus?: string
+  reachability?: EnvironmentReachability
 }
 
 // Explicit host selectors prevent callers from using a display name on the wrong host scope.
@@ -115,6 +118,9 @@ export function formatHostName(result: HostNameResult): string {
 }
 
 function formatHostConnection(host: HostListEntry): string {
+  if (host.kind === 'environment' && host.reachability) {
+    return formatEnvironmentReachabilitySummary(host.reachability)
+  }
   if (host.kind !== 'ssh') {
     return ''
   }
