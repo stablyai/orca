@@ -2,15 +2,15 @@ import { spawnSync } from 'node:child_process'
 
 const SHARED_LIBRARY_LOAD_ERROR = /error while loading shared libraries: ([^\s:]+)/
 
-// Debian/Ubuntu packages Electron links against that a server image usually lacks.
+// Why t64 names: on Ubuntu 24.04+ the plain `libasound2` is a multi-provider virtual package apt refuses.
 export const ELECTRON_LINUX_RUNTIME_PACKAGES = [
-  'libgtk-3-0',
-  'libatk1.0-0',
-  'libatk-bridge2.0-0',
-  'libatspi2.0-0',
-  'libcups2',
+  'libgtk-3-0t64',
+  'libatk1.0-0t64',
+  'libatk-bridge2.0-0t64',
+  'libatspi2.0-0t64',
+  'libcups2t64',
   'libxdamage1',
-  'libasound2'
+  'libasound2t64'
 ]
 
 /** The library the dynamic loader could not find, or null when `output` names none. */
@@ -39,7 +39,8 @@ export function describeMissingElectronLibrary(library) {
   return (
     `Electron can't start on this host: ${library} is missing, so native modules were not ` +
     'checked against it. On Debian/Ubuntu run `sudo apt-get install -y ' +
-    `${ELECTRON_LINUX_RUNTIME_PACKAGES.join(' ')}\`, then \`pnpm run rebuild:electron\`.`
+    `${ELECTRON_LINUX_RUNTIME_PACKAGES.join(' ')}\` (drop the \`t64\` suffixes before Ubuntu ` +
+    '24.04 / Debian 13), then `pnpm run rebuild:electron`.'
   )
 }
 
