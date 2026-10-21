@@ -1,11 +1,17 @@
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { useState } from 'react'
+import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
+import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
+import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-source-result'
+import { getWorkspaceReferenceLinearWorkspaceId } from './workspace-reference-details'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { areTaskSourceContextsEqual } from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
@@ -43,8 +49,10 @@ export function useWorktreeCardReviewDetails({
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
     : isFolder
+  const hostedReviewExactKey = getDetachedWorkspaceReviewRequest(worktree, repo)?.key
   const hostedReviewCacheKey =
-    repo && branch
+    hostedReviewExactKey ??
+    (repo && branch
       ? getHostedReviewCacheKey(
           repo.path,
           branch,
@@ -54,7 +62,7 @@ export function useWorktreeCardReviewDetails({
           repo.executionHostId,
           true
         )
-      : ''
+      : '')
   const prCacheKey =
     repo && branch
       ? getGitHubPRCacheKey(
@@ -79,8 +87,23 @@ export function useWorktreeCardReviewDetails({
           true
         )
       : ''
-  // Why: use 'all' — the issue may belong to a different Linear workspace than the selected one.
-  const linearIssueCacheKey = worktree.linkedLinearIssue ? `all::${worktree.linkedLinearIssue}` : ''
+  // Saved workspace bindings keep equal Linear identifiers separate.
+  const nextLinearSourceContext = getWorkspaceAttachmentSourceContext('linear', repo, worktree)
+  // Why: every workspace write rebuilds this object; holding it while equal keeps the card's Linear fetch effects from re-running.
+  const [linearSourceContext, setLinearSourceContext] = useState(nextLinearSourceContext)
+  if (!areTaskSourceContextsEqual(linearSourceContext, nextLinearSourceContext)) {
+    setLinearSourceContext(nextLinearSourceContext)
+  }
+  const linearWorkspaceId = getWorkspaceReferenceLinearWorkspaceId(
+    worktree.linkedLinearIssueWorkspaceId,
+    linearSourceContext
+  )
+  const linearIssueCacheKey = worktree.linkedLinearIssue
+    ? scopedLinearCacheKey(
+        getLinearReadScope(settings, linearSourceContext),
+        `${linearWorkspaceId}::${worktree.linkedLinearIssue}`
+      )
+    : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
   const hostedReviewEntry = useAppStore((s) =>
@@ -92,7 +115,9 @@ export function useWorktreeCardReviewDetails({
     linearIssueCacheKey ? s.linearIssueCache[linearIssueCacheKey] : undefined
   )
   const linearIssueFallbackEntry = useAppStore((s) =>
-    worktree.linkedLinearIssue ? s.linearIssueCache[worktree.linkedLinearIssue] : undefined
+    !linearSourceContext && worktree.linkedLinearIssue
+      ? s.linearIssueCache[worktree.linkedLinearIssue]
+      : undefined
   )
 
   const hostedReview: HostedReviewInfo | null | undefined =
@@ -188,6 +213,8 @@ export function useWorktreeCardReviewDetails({
     issueEntry,
     linearIssueEntry,
     linearIssueFallbackEntry,
+    linearSourceContext,
+    linearWorkspaceId,
     linkedGitHubPR,
     linkedGitLabMR,
     linkedBitbucketPR,

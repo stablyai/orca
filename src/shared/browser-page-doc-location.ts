@@ -1,8 +1,4 @@
-import type {
-  BrowserPage,
-  BrowserPageDocLocation,
-  BrowserWorkspace
-} from './browser-workspace-types'
+import type { BrowserPageDocLocation } from './browser-workspace-types'
 import { relativePathInsideRoot, resolveRuntimePath } from './cross-platform-path'
 
 /**
@@ -18,13 +14,6 @@ export function browserPageDocLocationsEqual(
     return left === right
   }
   return left.worktreeId === right.worktreeId && left.filePath === right.filePath
-}
-
-/** True for a page or tab that shows a workspace document rather than a URL. */
-export function isWorkspaceDocSurface(
-  surface: Pick<BrowserPage | BrowserWorkspace, 'docLocation'>
-): boolean {
-  return Boolean(surface.docLocation)
 }
 
 export function remapBrowserPageDocLocation(

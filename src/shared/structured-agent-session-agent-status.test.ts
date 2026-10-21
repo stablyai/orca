@@ -109,4 +109,15 @@ describe('structuredAgentSessionAgentStatus', () => {
       structuredAgentSessionAgentStatus({ status: 'working', turnOutcome: 'failure' })
     ).toEqual({ state: 'working', mainAgent: { state: 'working' } })
   })
+
+  it("carries the host's Stopping on a working main agent only", () => {
+    expect(structuredAgentSessionAgentStatus({ status: 'working', stopping: true })).toEqual({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    expect(structuredAgentSessionAgentStatus({ status: 'idle', stopping: true })).toEqual({
+      state: 'done',
+      mainAgent: { state: 'done' }
+    })
+  })
 })

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { NO_LEGACY_JOURNAL_RECORDS, openJournalDatabase } from './journal-database'
+import { openJournalDatabase } from './journal-database'
 import {
   classifyJournalOpenFailure,
   createJournalOpenReadRefusals,
@@ -31,7 +31,7 @@ afterEach(async () => {
 /** What the journal's own open, then a chat's replay, throws for the file as it stands. */
 function openFailure(): unknown {
   try {
-    const db = openJournalDatabase(journalDatabasePath(root), NO_LEGACY_JOURNAL_RECORDS).db
+    const db = openJournalDatabase(journalDatabasePath(root)).db
     try {
       replayJournal(db, 'session-1')
     } finally {
@@ -62,7 +62,7 @@ describe('classifyJournalOpenFailure', () => {
 
   it('calls a journal whose pages are damaged corrupt', async () => {
     const path = journalDatabasePath(root)
-    const opened = openJournalDatabase(path, NO_LEGACY_JOURNAL_RECORDS).db
+    const opened = openJournalDatabase(path).db
     opened.exec('PRAGMA journal_mode = DELETE')
     opened.close()
     const bytes = await readFile(path)

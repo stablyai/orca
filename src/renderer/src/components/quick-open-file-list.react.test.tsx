@@ -5,7 +5,15 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RuntimeFileListState } from './quick-open-file-list'
+import {
+  getRuntimeFileListTarget,
+  getNestedWorktreeExcludeRequest,
+  getNestedWorktreeExcludePaths,
+  isNestedWorktreePath,
+  type RuntimeFileListState
+} from './quick-open-file-list'
+import * as fileListTarget from './quick-open-file-list-target'
+import * as nestedWorktrees from './quick-open-nested-worktrees'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from './quick-open-search'
 import {
   listRuntimeFilesMock,
@@ -21,13 +29,20 @@ import {
   renderProbe
 } from './quick-open-file-list-test-harness'
 
-vi.mock('@/runtime/runtime-file-client', async () => {
+vi.mock('@/runtime/runtime-file-search-client', async () => {
   const mocks = await import('./__mocks__/quick-open-runtime-file-client')
   return {
     listRuntimeFiles: mocks.listRuntimeFilesMock,
     cancelRuntimeFileList: mocks.cancelRuntimeFileListMock,
     searchRuntimeFilePaths: mocks.searchRuntimeFilePathsMock
   }
+})
+
+it('keeps the pure file list functions available through the hook module', () => {
+  expect(getRuntimeFileListTarget).toBe(fileListTarget.getRuntimeFileListTarget)
+  expect(getNestedWorktreeExcludeRequest).toBe(fileListTarget.getNestedWorktreeExcludeRequest)
+  expect(getNestedWorktreeExcludePaths).toBe(nestedWorktrees.getNestedWorktreeExcludePaths)
+  expect(isNestedWorktreePath).toBe(nestedWorktrees.isNestedWorktreePath)
 })
 
 describe('useRuntimeFileListForWorktree', () => {
@@ -98,7 +113,7 @@ describe('useRuntimeFileListForWorktree', () => {
         worktreeId: workspaceKey,
         worktreePath: '/srv/platform',
         connectionId: 'ssh-1',
-        settings: expect.objectContaining({ activeRuntimeEnvironmentId: null })
+        target: { kind: 'local' }
       }),
       {
         includeIgnored: true,
@@ -170,7 +185,7 @@ describe('useRuntimeFileListForWorktree', () => {
 
       expect(searchRuntimeFilePathsMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment', environmentId: 'env-1' },
           worktreeId: workspaceKey,
           worktreePath: '/srv/platform'
         }),
@@ -300,7 +315,7 @@ describe('useRuntimeFileListForWorktree', () => {
 
       expect(searchRuntimeFilePathsMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment', environmentId: 'env-1' },
           worktreeId: 'wt-remote',
           worktreePath: '/srv/remote'
         }),
@@ -598,93 +613,108 @@ describe('useRuntimeFileListForWorktree', () => {
 })
 
 it('merges host-eligible history beyond remote top32 once per palette lifetime', async () => {
-  seedRemoteWorktree()
-  const states: RuntimeFileListState[] = []
-  searchRuntimeFilePathsMock.mockResolvedValue({
-    files: Array.from({ length: 32 }, (_, i) => `src/file${i}.ts`),
-    truncated: true
-  })
-  listRuntimeFilesMock.mockResolvedValue(['src/file99.ts'])
-  const args = {
-    enabled: true,
-    worktreeId: 'wt-remote',
-    query: 'file',
-    recentPaths: ['src/file99.ts', 'src/deleted.ts'],
-    states
+  vi.useFakeTimers()
+  try {
+    seedRemoteWorktree()
+    const states: RuntimeFileListState[] = []
+    searchRuntimeFilePathsMock.mockResolvedValue({
+      files: Array.from({ length: 32 }, (_, i) => `src/file${i}.ts`),
+      truncated: true
+    })
+    listRuntimeFilesMock.mockResolvedValue(['src/file99.ts'])
+    const args = {
+      enabled: true,
+      worktreeId: 'wt-remote',
+      query: 'file',
+      recentPaths: ['src/file99.ts', 'src/deleted.ts'],
+      states
+    }
+    const root = await renderProbe(args)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    expect(states.at(-1)?.files).toContain('src/file99.ts')
+    expect(states.at(-1)?.files).not.toContain('src/deleted.ts')
+    expect(listRuntimeFilesMock).toHaveBeenCalledOnce()
+    expect(listRuntimeFilesMock.mock.calls[0][1]).toMatchObject({
+      candidatePaths: args.recentPaths,
+      maxResults: 2
+    })
+    await act(async () => {
+      root.render(createElement(HookProbe, { ...args, query: 'file9' }))
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    expect(listRuntimeFilesMock).toHaveBeenCalledOnce()
+    await act(async () => {
+      root.render(createElement(HookProbe, { ...args, enabled: false }))
+    })
+    await act(async () => {
+      root.render(createElement(HookProbe, args))
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.useRealTimers()
   }
-  const root = await renderProbe(args)
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-  })
-  expect(states.at(-1)?.files).toContain('src/file99.ts')
-  expect(states.at(-1)?.files).not.toContain('src/deleted.ts')
-  expect(listRuntimeFilesMock).toHaveBeenCalledOnce()
-  expect(listRuntimeFilesMock.mock.calls[0][1]).toMatchObject({
-    candidatePaths: args.recentPaths,
-    maxResults: 2
-  })
-  await act(async () => {
-    root.render(createElement(HookProbe, { ...args, query: 'file9' }))
-  })
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-  })
-  expect(listRuntimeFilesMock).toHaveBeenCalledOnce()
-  await act(async () => {
-    root.render(createElement(HookProbe, { ...args, enabled: false }))
-  })
-  await act(async () => {
-    root.render(createElement(HookProbe, args))
-  })
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-  })
-  expect(listRuntimeFilesMock).toHaveBeenCalledTimes(2)
 })
 
 it('keeps ordinary remote search available when recent eligibility is unsupported', async () => {
-  seedRemoteWorktree()
-  const states: RuntimeFileListState[] = []
-  searchRuntimeFilePathsMock.mockResolvedValue({ files: ['src/file0.ts'], truncated: true })
-  listRuntimeFilesMock.mockRejectedValue(new Error('Update the remote host'))
-  await renderProbe({
-    enabled: true,
-    worktreeId: 'wt-remote',
-    query: 'file',
-    recentPaths: ['src/file99.ts'],
-    states
-  })
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-  })
-  expect(states.at(-1)?.files).toEqual(['src/file0.ts'])
-  expect(states.at(-1)?.loadError).toBeNull()
-  expect(states.at(-1)?.recentError).toContain('Update the remote host')
+  vi.useFakeTimers()
+  try {
+    seedRemoteWorktree()
+    const states: RuntimeFileListState[] = []
+    searchRuntimeFilePathsMock.mockResolvedValue({ files: ['src/file0.ts'], truncated: true })
+    listRuntimeFilesMock.mockRejectedValue(new Error('Update the remote host'))
+    await renderProbe({
+      enabled: true,
+      worktreeId: 'wt-remote',
+      query: 'file',
+      recentPaths: ['src/file99.ts'],
+      states
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    expect(states.at(-1)?.files).toEqual(['src/file0.ts'])
+    expect(states.at(-1)?.loadError).toBeNull()
+    expect(states.at(-1)?.recentError).toContain('Update the remote host')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('merges an eligible recent beyond the local empty-query inventory cap', async () => {
-  const workspace = makeFolderWorkspace()
-  useAppStore.setState({ folderWorkspaces: [workspace], projectGroups: [makeProjectGroup()] })
-  const states: RuntimeFileListState[] = []
-  listRuntimeFilesMock.mockImplementation((_context, args) =>
-    Promise.resolve(
-      args.candidatePaths
-        ? ['late.ts']
-        : Array.from({ length: QUICK_OPEN_LISTING_MAX_RESULTS }, (_, i) => `file${i}.ts`)
+  vi.useFakeTimers()
+  try {
+    const workspace = makeFolderWorkspace()
+    useAppStore.setState({ folderWorkspaces: [workspace], projectGroups: [makeProjectGroup()] })
+    const states: RuntimeFileListState[] = []
+    listRuntimeFilesMock.mockImplementation((_context, args) =>
+      Promise.resolve(
+        args.candidatePaths
+          ? ['late.ts']
+          : Array.from({ length: QUICK_OPEN_LISTING_MAX_RESULTS }, (_, i) => `file${i}.ts`)
+      )
     )
-  )
-  await renderProbe({
-    enabled: true,
-    worktreeId: folderWorkspaceKey(workspace.id),
-    query: '',
-    recentPaths: ['late.ts'],
-    states
-  })
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 250))
-  })
-  await flushEffects()
-  expect(states.at(-1)?.files).toContain('late.ts')
-  expect(states.at(-1)?.truncated).toBe(true)
-  expect(listRuntimeFilesMock).toHaveBeenCalledTimes(2)
+    await renderProbe({
+      enabled: true,
+      worktreeId: folderWorkspaceKey(workspace.id),
+      query: '',
+      recentPaths: ['late.ts'],
+      states
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250)
+    })
+    await flushEffects()
+    expect(states.at(-1)?.files).toContain('late.ts')
+    expect(states.at(-1)?.truncated).toBe(true)
+    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.useRealTimers()
+  }
 })

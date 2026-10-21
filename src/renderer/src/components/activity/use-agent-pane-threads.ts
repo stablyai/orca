@@ -14,7 +14,7 @@ import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '@/components/sidebar/workspace-creator-visibility'
+} from '../../../../shared/workspace-creator-visibility'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
@@ -23,6 +23,11 @@ import {
   buildActivityThreadGroups,
   isActivitySearchQueryTooLarge
 } from './activity-thread-grouping'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import type {
   ActivityGroupBy,
   ActivityThreadGroup,
@@ -40,6 +45,7 @@ export type AgentPaneThreadsStoreData = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
+  | 'floatingWorkspacePath'
   | 'detectedWorktreesByRepo'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
@@ -123,9 +129,10 @@ export function useAgentPaneThreads(args: {
         return projected
       })(),
       repos: s.repos,
-      worktreesByRepo: s.worktreesByRepo,
-      folderWorkspaces: s.folderWorkspaces,
-      detectedWorktreesByRepo: s.detectedWorktreesByRepo,
+      worktreesByRepo: selectWorktreesByRepo(s),
+      folderWorkspaces: selectFolderWorkspaces(s),
+      floatingWorkspacePath: s.floatingWorkspacePath,
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
       getKnownWorktreeById: s.getKnownWorktreeById,
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),

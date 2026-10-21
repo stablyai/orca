@@ -11,8 +11,8 @@ import {
 import { nodeServerTestPaths } from './node-server-test-paths.mjs'
 import { ORCAD_CHILD_ENTRY_POINTS } from './orcad-entry-build.mjs'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
-import { runProcessSync } from './script-child-process.mjs'
-import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { NODE_SERVER_RUNNERS, nodeServerQualification } from './node-server-qualification.mjs'
 
 const temporaryDirs = []
 afterEach(() => {
@@ -63,6 +63,82 @@ it('runs the matrix when a dependency is deleted or graph analysis fails', async
   expect((await classifyNodeServerChanges([])).shouldRun).toBe(true)
 })
 
+function workspaceTree(imported = '@orca/process-host') {
+  const manifest = (name, source) =>
+    JSON.stringify({
+      name,
+      exports: { '.': { 'orca-source': source, default: './dist/index.js' } }
+    })
+  return moduleTree({
+    'entry.ts': `export * from '${imported}'`,
+    'pnpm-workspace.yaml': 'packages:\n  - src/packages/*\n',
+    'src/packages/process-host/package.json': manifest(
+      '@orca/process-host',
+      './src/run-process.ts'
+    ),
+    'src/packages/process-host/src/run-process.ts':
+      "import('@orca/byte-buffer'); require('./private'); export const value = 1",
+    'src/packages/process-host/src/private.ts': 'module.exports = 2',
+    'src/packages/process-host/dist/index.js': "require('./missing-stale-output')",
+    'src/packages/byte-buffer/package.json': manifest('@orca/byte-buffer', './src/byte-buffer.ts'),
+    'src/packages/byte-buffer/src/byte-buffer.ts': 'export const value = 3',
+    'src/packages/unrelated/package.json': manifest('@orca/unrelated', './src/unrelated.ts'),
+    'src/packages/unrelated/src/unrelated.ts': 'throw Error("unrelated")'
+  })
+}
+
+it('tracks workspace source and manifest closures without trusting dist or widening to unrelated packages', async () => {
+  const root = workspaceTree()
+  const inputs = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  expect([...inputs].sort()).toEqual([
+    'entry.ts',
+    'src/packages/byte-buffer/package.json',
+    'src/packages/byte-buffer/src/byte-buffer.ts',
+    'src/packages/process-host/package.json',
+    'src/packages/process-host/src/private.ts',
+    'src/packages/process-host/src/run-process.ts'
+  ])
+  for (const file of [
+    'src/packages/process-host/package.json',
+    'src/packages/process-host/src/private.ts',
+    'src/packages/byte-buffer/src/byte-buffer.ts'
+  ]) {
+    expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(true)
+  }
+  expect(
+    (
+      await classifyNodeServerChanges(
+        ['src/packages/unrelated/src/unrelated.ts'],
+        async () => inputs
+      )
+    ).shouldRun
+  ).toBe(false)
+})
+
+it.each([
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json'
+])('runs for a change to the process-host build input %s', async (file) => {
+  const result = await classifyNodeServerChanges([file], async () => new Set())
+  expect(result.shouldRun).toBe(true)
+  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+})
+
+it.each(['@orca/unknown', '@orca/process-host/private'])(
+  'retains qualification for an unresolved internal package export: %s',
+  async (specifier) => {
+    const root = workspaceTree(specifier)
+    const result = await classifyNodeServerChanges(
+      ['src/packages/process-host/src/run-process.ts'],
+      () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+    )
+    expect(result.shouldRun).toBe(true)
+    expect(result.graphUnavailable).toBe(true)
+    expect(result.reason).toContain('No public orca-source export')
+  }
+)
+
 it.each([
   ['tests/e2e/daemon-running-work-probe.unit.test.ts'],
   ['config/scripts/zip-extractor-command.test.mjs'],
@@ -82,18 +158,110 @@ it.each([
   'tsconfig.json',
   'config/tsconfig.node.json',
   'config/scripts/node-server-qualification.mjs',
+  'config/scripts/node-server-native-compat-scope.mjs',
   'config/patches/node-pty@1.1.0.patch',
   'native/windows-registry/src/addon.cc',
   '.github/actions/install-node-dependencies/action.yml',
   '.github/actions/restore-pnpm-verification/action.yml',
   '.github/actions/prepare-headless-compiler/action.yml',
   'config/scripts/headless-detector-compiler-cache.mjs',
+  'config/scripts/workspace-source-exports.mjs',
+  'config/scripts/workspace-source-exports.test.mjs',
   '.github/actions/prepare-native-runtime/action.yml',
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   '.github/workflows/node-server-tests.yml',
   'src/main/persistence/profile-state/new-worker.ts'
 ])('always selects build, native and dynamically opened inputs: %s', async (file) => {
   expect((await classifyNodeServerChanges([file], async () => new Set())).shouldRun).toBe(true)
+})
+
+it('checks ordinary source unit files against actual imports before skipping the matrix', async () => {
+  const reachable = 'src/main/persistence/example/used.test.ts'
+  const unrelated = 'src/main/persistence/example/unrelated.test.tsx'
+  const removed = 'src/main/persistence/example/removed.test.ts'
+  const root = moduleTree({
+    'entry.ts': `import './${reachable}'; throw Error('never execute')`,
+    [reachable]: 'export const value = 1',
+    [unrelated]: 'throw Error("never execute unrelated test")'
+  })
+  const inputs = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  expect(inputs.has(reachable)).toBe(true)
+  expect(inputs.has(unrelated)).toBe(false)
+  expect((await classifyNodeServerChanges([reachable], async () => inputs)).shouldRun).toBe(true)
+  expect((await classifyNodeServerChanges([unrelated], async () => inputs)).shouldRun).toBe(false)
+  expect((await classifyNodeServerChanges([removed], async () => inputs)).shouldRun).toBe(false)
+})
+
+it('retains qualification when a removed ordinary unit file breaks an actual import', async () => {
+  const removed = 'src/main/persistence/example/removed.test.ts'
+  const root = moduleTree({ 'entry.ts': `import './${removed}'` })
+  const result = await classifyNodeServerChanges([removed], () =>
+    collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  )
+  expect(result.shouldRun).toBe(true)
+  expect(result.graphUnavailable).toBe(true)
+  expect(result.reason).toContain('Dependency graph unavailable')
+  expect(result.reason).toContain('removed.test.ts')
+})
+
+it('requests the graph for an ordinary source unit edit before dependencies are installed', async () => {
+  const result = await classifyNodeServerChanges(
+    ['src/main/persistence/example/unrelated.test.ts'],
+    async () => {
+      throw new Error('graph must not run before installation')
+    },
+    { deferGraph: true }
+  )
+  expect(result.graphRequired).toBe(true)
+  expect(result.shouldRun).toBeUndefined()
+})
+
+it.each([
+  'src/main/persistence/profile-state/removed.test.ts',
+  'src/main/sqlite/removed.test.ts',
+  'src/main/orcad/orcad-entry.test.ts',
+  'src/main/daemon/pty-subprocess/removed.test.ts',
+  'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
+  'config/scripts/node-server-change-scope.test.mjs'
+])('forces explicitly protected tests without relying on graph discovery: %s', async (file) => {
+  const result = await classifyNodeServerChanges([file], async () => {
+    throw new Error('protected test must not require graph analysis')
+  })
+  expect(result.shouldRun).toBe(true)
+  expect(result.graphUnavailable).toBeUndefined()
+  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+})
+
+it.each([
+  'src/main/persistence/example/worker.ts',
+  'src/main/persistence/example/state.fixture.ts',
+  'src/main/persistence/example/state.test.ts.fixture',
+  'src/main/persistence/example/state.spec.ts',
+  'src/main/persistence/example/../state.test.ts',
+  'src/main/persistence/example/./state.test.ts',
+  '.github/actions/prepare-native-runtime/cache.test.ts'
+])(
+  'retains prefix protection for production, fixtures and other file conventions: %s',
+  async (file) => {
+    const result = await classifyNodeServerChanges([file], async () => {
+      throw new Error('protected input must not require graph analysis')
+    })
+    expect(result.shouldRun).toBe(true)
+    expect(result.graphUnavailable).toBeUndefined()
+    expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+  }
+)
+
+it('retains a production force when an unrelated unit test changes in the same diff', async () => {
+  const result = await classifyNodeServerChanges(
+    ['src/main/persistence/example/unrelated.test.ts', 'src/main/persistence/example/worker.ts'],
+    async () => {
+      throw new Error('production input must not require graph analysis')
+    }
+  )
+  expect(result.shouldRun).toBe(true)
+  expect(result.graphUnavailable).toBeUndefined()
+  expect(result.reason).toBe('Build or CI input changed: src/main/persistence/example/worker.ts')
 })
 
 it('defers uncertain paths without issuing a qualification verdict', async () => {
@@ -130,29 +298,48 @@ it.each([
     fullQualification: false,
     expected: 'should_run=true'
   },
+  {
+    files: ['src/main/persistence/profile-state/profile-state-recovery-crash-boundaries.test.ts'],
+    deferred: true,
+    fullQualification: false,
+    pullRequest: true,
+    nativeGraph: true,
+    expected: 'should_run=true'
+  },
   { files: ['src/renderer/src/example.ts'], deferred: true, expected: 'graph_required=true' },
   { files: ['src/renderer/src/example.ts'], deferred: false, expected: 'should_run=true' }
 ])('fails closed or requests dependencies in an uninstalled checkout: %j', (scenario) => {
   const root = moduleTree(
     Object.fromEntries(
-      ['node-server-change-scope', 'node-server-test-paths', 'node-server-qualification'].map(
-        (name) => [
-          `config/scripts/${name}.mjs`,
-          readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
-        ]
-      )
+      [
+        'node-server-change-scope',
+        'node-server-test-paths',
+        'node-server-qualification',
+        'node-server-native-compat-scope'
+      ].map((name) => [
+        `config/scripts/${name}.mjs`,
+        readFileSync(new URL(`./${name}.mjs`, import.meta.url), 'utf8')
+      ])
     )
   )
   const changes = join(root, 'changes')
   const stepOutput = join(root, 'step-output')
+  const statuses = join(root, 'native-diff')
   writeFileSync(changes, scenario.files.map((file) => `${file}\0`).join(''))
+  writeFileSync(
+    statuses,
+    scenario.files
+      .map((file) => `:100644 100644 ${'1'.repeat(40)} ${'2'.repeat(40)} M\0${file}\0`)
+      .join('')
+  )
   const result = runProcessSync({
     program: process.execPath,
     args: [
       realpathSync(join(root, 'config/scripts/node-server-change-scope.mjs')),
       changes,
       ...(scenario.fullQualification === false ? [] : ['--full-qualification']),
-      ...(scenario.deferred ? ['--defer-graph'] : [])
+      ...(scenario.deferred ? ['--defer-graph'] : []),
+      ...(scenario.pullRequest ? ['--pull-request', '--diff-paths', statuses] : [])
     ],
     cwd: root,
     env: { ...process.env, GITHUB_OUTPUT: stepOutput },
@@ -161,6 +348,10 @@ it.each([
   expect(result.code).toBe(0)
   const output = readFileSync(stepOutput, 'utf8')
   expect(output).toContain(scenario.expected)
+  if (scenario.nativeGraph) {
+    expect(output).toContain('graph_required=true')
+    expect(output).not.toContain('native_compatibility=')
+  }
   if (scenario.expected === 'graph_required=true') {
     expect(output).not.toContain('should_run=')
     expect(output).not.toContain('runners=')
@@ -168,6 +359,133 @@ it.each([
     expect(output).toContain(`qualification=${scenario.qualification !== false}`)
     expect(output).toContain(`runners=${JSON.stringify(scenario.runners ?? NODE_SERVER_RUNNERS)}`)
   }
+})
+
+const registry = 'config/scripts/vitest-node-runtime-files.mjs'
+const unrelatedSshUnit = 'src/main/ssh/pinned-runtime-materializer-context.test.ts'
+
+function qualificationTree(extra = {}) {
+  return moduleTree({
+    'entry.ts': `import './${registry}'; throw Error('never execute')`,
+    [registry]: 'export const NODE_RUNTIME_INCLUDE = []',
+    [unrelatedSshUnit]: 'throw Error("never execute unrelated test")',
+    ...extra
+  })
+}
+
+it('keeps a Node harness smoke without widening it for an unrelated modified SSH unit', async () => {
+  const root = qualificationTree()
+  writeFileSync(join(root, registry), 'export const NODE_RUNTIME_INCLUDE = ["new.unit.test.ts"]')
+  const changed = [registry, unrelatedSshUnit]
+  const scope = await classifyNodeServerChanges(
+    changed,
+    () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
+    { modifiedFiles: changed }
+  )
+  expect(scope.shouldRun).toBe(true)
+  expect(nodeServerQualification(changed, scope)).toEqual({
+    qualification: false,
+    runners: ['ubuntu-22.04']
+  })
+  expect(nodeServerQualification(changed, scope, { fullQualification: true })).toEqual({
+    qualification: true,
+    runners: NODE_SERVER_RUNNERS
+  })
+})
+
+it.each([
+  ['src/main/daemon/daemon-authenticated-client-activity.test.ts', NODE_SERVER_RUNNERS, true],
+  [
+    'src/main/daemon/daemon-endpoint-windows.test.ts',
+    ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
+    false
+  ]
+])('retains daemon platform coverage: %s', async (daemon, runners, qualification) => {
+  const root = qualificationTree({ [daemon]: 'throw Error("unselected")' })
+  const diff = [registry, daemon, unrelatedSshUnit]
+  const g = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  expect(g.has(registry)).toBe(true)
+  expect(g.has(daemon)).toBe(false)
+  const s = await classifyNodeServerChanges(diff, async () => g, { modifiedFiles: diff })
+  expect(s.shouldRun).toBe(true)
+  expect(nodeServerQualification(diff, s)).toEqual({ qualification, runners })
+})
+
+it('keeps every host when the modified SSH production module is an actual consumer', async () => {
+  const ssh = 'src/main/ssh/pinned-runtime-materializer.ts'
+  const root = qualificationTree({
+    'entry.ts': `import './${registry}'; import './${ssh}'; throw Error('never execute')`,
+    [ssh]: 'export const materializer = 1'
+  })
+  const changed = [registry, ssh, unrelatedSshUnit]
+  const scope = await classifyNodeServerChanges(
+    changed,
+    () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
+    { modifiedFiles: changed }
+  )
+  expect(scope.shouldRun).toBe(true)
+  expect(scope).toMatchObject({ graphResolved: true, matchedFiles: [registry, ssh] })
+  expect(nodeServerQualification(changed, scope)).toEqual({
+    qualification: true,
+    runners: NODE_SERVER_RUNNERS
+  })
+})
+
+it.each(['added', 'deleted', 'renamed', 'unknown', 'duplicate', 'foreign'])(
+  'retains complete-path qualification when modification evidence is %s',
+  async (status) => {
+    const root = qualificationTree()
+    const changed = [registry, unrelatedSshUnit]
+    let modifiedFiles = [registry]
+    if (status === 'deleted' || status === 'renamed') {
+      rmSync(join(root, unrelatedSshUnit))
+    }
+    if (status === 'renamed') {
+      const renamed = 'src/main/ssh/renamed-context.test.ts'
+      writeFileSync(join(root, renamed), 'throw Error("never execute renamed test")')
+      changed.push(renamed)
+    }
+    if (status === 'duplicate') {
+      modifiedFiles = [registry, registry]
+    }
+    if (status === 'foreign') {
+      modifiedFiles = [registry, 'src/main/ssh/foreign.test.ts']
+    }
+    const scope = await classifyNodeServerChanges(
+      changed,
+      () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
+      status === 'unknown' ? {} : { modifiedFiles }
+    )
+    expect(scope.shouldRun).toBe(true)
+    expect(nodeServerQualification(changed, scope)).toEqual({
+      qualification: true,
+      runners: NODE_SERVER_RUNNERS
+    })
+  }
+)
+
+it('retains protected server tests and broken imports despite complete modification evidence', async () => {
+  const protectedTest = 'src/main/sqlite/example.test.ts'
+  const root = qualificationTree({ [protectedTest]: 'export const value = 1' })
+  const changed = [registry, protectedTest, unrelatedSshUnit]
+  const collect = () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  const protectedScope = await classifyNodeServerChanges(changed, collect, {
+    modifiedFiles: changed
+  })
+  expect(nodeServerQualification(changed, protectedScope)).toEqual({
+    qualification: true,
+    runners: NODE_SERVER_RUNNERS
+  })
+  writeFileSync(join(root, 'entry.ts'), `import './${registry}'; import './missing'`)
+  const brokenChanged = [registry, unrelatedSshUnit]
+  const brokenScope = await classifyNodeServerChanges(brokenChanged, collect, {
+    modifiedFiles: brokenChanged
+  })
+  expect(brokenScope.graphUnavailable).toBe(true)
+  expect(nodeServerQualification(brokenChanged, brokenScope)).toEqual({
+    qualification: true,
+    runners: NODE_SERVER_RUNNERS
+  })
 })
 
 describe('the actual Bun build and profile-test dependency graph', () => {
@@ -190,6 +508,7 @@ describe('the actual Bun build and profile-test dependency graph', () => {
     'src/renderer/src/components/terminal/pty-running-work-probe.ts',
     'src/renderer/src/runtime/runtime-terminal-inspection.ts',
     'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',
+    'src/main/persistence/terminal-topology/terminal-topology-boundary-ratchet.test.ts',
     'src/main/menu/register-app-menu.ts'
   ])('skips unrelated work: %s', async (file) => {
     expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(false)
@@ -205,7 +524,7 @@ describe('the actual Bun build and profile-test dependency graph', () => {
     'src/main/worker-thread-entry-path.ts',
     'config/scripts/zip-extractor-command.mjs',
     'config/scripts/windows-process-tree-gyp-rebuild.mjs',
-    'config/scripts/relay-windows-process-tree-prepared-addon.mjs',
+    'config/scripts/windows-process-tree-prepared-addon.mjs',
     'config/scripts/orcad-windows-prebuild-cache.mjs',
     'config/scripts/profile-state-worker-smoke.mjs',
     'config/scripts/vitest-host-ports-setup.ts',
@@ -230,6 +549,9 @@ it('keeps every platform job and runs them when detection is skipped or fails', 
     readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
   )
   expect(workflow.on).toHaveProperty('workflow_dispatch')
+  expect(workflow.on).toHaveProperty('workflow_call')
+  expect(workflow.on).not.toHaveProperty('push')
+  expect(workflow.on.schedule).toHaveLength(1)
   expect(workflow.jobs.changes.if).toBe(
     "github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft != true)"
   )
@@ -242,55 +564,24 @@ it('keeps every platform job and runs them when detection is skipped or fails', 
   expect(detect.run).toContain('git diff --name-only --no-renames -z "$PUSH_BASE" HEAD')
   expect(detect.run).toContain('node-server-changes" --defer-graph --full-qualification')
   expect(workflow.on.pull_request.types).toContain('ready_for_review')
-  expect(workflow.on.schedule).toHaveLength(1)
-  // A pull request may qualify one platform, so the merged commit must re-qualify all six.
-  expect(workflow.on.push.branches).toEqual(['main'])
-  expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths)
-  // The push and schedule paths must not rest on a null property comparison.
+  // Release callers can inherit push or schedule events without a pull request.
   expect(workflow.jobs.persistence.if).toContain(
     "github.event_name != 'pull_request' || github.event.pull_request.draft != true"
   )
   expect(workflow.jobs.persistence.strategy.matrix.os).toContain('needs.changes.outputs.runners')
   for (const jobName of ['linux_glibc_floor', 'linux_musl']) {
     const job = workflow.jobs[jobName]
-    expect(job.needs).toEqual(['changes', 'persistence'])
-    expect(job.if).toContain("needs.persistence.result == 'success'")
+    expect(job.needs).toEqual(['changes', 'mobile_web_bundle'])
+    // The containers never install mobile/, and orcad refuses to build without the page.
+    expect(job.steps.some((step) => step.with?.name === 'orcad-mobile-web-bundle')).toBe(true)
+    expect(job.steps.some((step) => step.name === 'Wait for the qualified mobile bundle')).toBe(
+      false
+    )
+    expect(job.if).not.toContain('needs.persistence')
     expect(job.if).toContain("needs.changes.outputs.qualification != 'false'")
     expect(job.if).toContain("needs.changes.outputs.should_run != 'false'")
     expect(job.strategy.matrix.os).toEqual(['ubuntu-22.04', 'ubuntu-24.04-arm'])
   }
-})
-
-it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (design D6)', () => {
-  const workflow = parse(
-    readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
-  )
-  const floor = workflow.jobs.linux_glibc_floor
-  expect(floor.container).toBe('${{ matrix.image }}')
-  expect(floor.strategy.matrix.include).toEqual([
-    {
-      os: 'ubuntu-22.04',
-      image: expect.stringMatching(/^quay\.io\/pypa\/manylinux_2_28_x86_64@sha256:[0-9a-f]{64}$/)
-    },
-    {
-      os: 'ubuntu-24.04-arm',
-      image: expect.stringMatching(/^quay\.io\/pypa\/manylinux_2_28_aarch64@sha256:[0-9a-f]{64}$/)
-    }
-  ])
-  expect(floor.env).toMatchObject({ CC: 'gcc', CXX: 'g++' })
-
-  const compat = workflow.jobs.linux_glibc217_compat
-  expect(compat.needs).toEqual(['changes', 'persistence'])
-  expect(compat.if).toBe(floor.if)
-  expect(compat['runs-on']).toBe('ubuntu-22.04')
-  const run = compat.steps.map((step) => step.run ?? '').join('\n')
-  expect(run).toMatch(/quay\.io\/pypa\/manylinux2014_x86_64@sha256:[0-9a-f]{64} /)
-  expect(run).toContain('--slot=linux-x64-glibc217 --print-runtime')
-  expect(run).toContain('build-orcad-prebuilds.mjs --slot=linux-x64-glibc217\n')
-  expect(run).toContain('--require-slots linux-x64-glibc217')
-  expect(run).toContain(
-    'env -u LD_LIBRARY_PATH node config/scripts/build-orcad-prebuilds.mjs --slot=linux-x64-glibc217 --smoke'
-  )
 })
 
 it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', () => {
@@ -300,8 +591,7 @@ it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', (
   const steps = workflow.jobs.persistence.steps
   const setupBun = steps.find((step) => String(step.uses).startsWith('oven-sh/setup-bun@'))
   expect(setupBun.uses).toMatch(/^oven-sh\/setup-bun@[0-9a-f]{40}$/)
-  // Mirrors LAST_BUN_ORCAD_VERSION in src/main/orcad/orcad-node-slot-fixture.ts.
-  expect(setupBun.with['bun-version']).toBe('1.4.2')
+  expect(setupBun.with['bun-version-file']).toBe('config/.bun-version')
   const build = steps.find((step) => String(step.run).includes('build-orcad-bun.mjs'))
   expect(build.env.BUN_ORCAD_COMMIT).toMatch(/^[0-9a-f]{40}$/)
   expect(setupBun.if).toBe("runner.os == 'Linux'")

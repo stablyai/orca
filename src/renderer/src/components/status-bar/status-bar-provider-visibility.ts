@@ -41,7 +41,7 @@ type UsageProviderSnapshots = {
 
 type UsageProviderId = ProviderRateLimits['provider']
 
-function hasUsageData(provider: ProviderRateLimits): boolean {
+export function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
     provider.session ||
     provider.weekly ||
@@ -135,7 +135,7 @@ export function hasUsageProviderSettingsForProvider(
   return false
 }
 
-function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
+export function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
   return {
     provider: providerId,
     session: null,

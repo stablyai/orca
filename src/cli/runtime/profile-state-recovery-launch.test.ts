@@ -10,8 +10,8 @@ import {
 } from './profile-state-recovery-launch'
 
 const mocks = vi.hoisted(() => ({ run: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.run }))
-vi.mock('./launch', () => ({
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.run }))
+vi.mock('./orca-app-executable', () => ({
   resolveForegroundOrcaExecutable: () => '/packaged/Orca',
   resolveAppRoot: () => '/application',
   getExecutableAppArgs: () => ['/application'],

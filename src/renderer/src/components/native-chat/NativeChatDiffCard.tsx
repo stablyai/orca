@@ -1,3 +1,4 @@
+import { NativeChatExpandable } from './NativeChatExpandable'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { ChevronRight, FilePlus2, FileMinus2, FilePen } from 'lucide-react'
@@ -5,24 +6,15 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
+import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
+import { nativeChatEditFilePatchText } from '../../../../shared/native-chat-edit-cards'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
 } from '../../../../shared/native-chat-edit-model'
-
-function verbLabel(file: NativeChatEditFile): string {
-  switch (file.changeKind) {
-    case 'added':
-      return translate('components.native-chat.tool.row.added', 'Added')
-    case 'deleted':
-      return translate('components.native-chat.tool.row.deleted', 'Deleted')
-    case 'renamed':
-      return translate('components.native-chat.tool.row.renamed', 'Renamed')
-    case 'edited':
-      return translate('components.native-chat.tool.row.edited', 'Edited')
-  }
-}
 
 function VerbIcon({ kind }: { kind: NativeChatEditFile['changeKind'] }): React.JSX.Element {
   const className = 'size-3.5 shrink-0 text-chat-foreground-faint'
@@ -37,13 +29,6 @@ function VerbIcon({ kind }: { kind: NativeChatEditFile['changeKind'] }): React.J
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).at(-1) || path
-}
-
-function patchText(lines: readonly NativeChatEditLine[]): string {
-  return lines
-    .filter((line) => line.kind !== 'gap')
-    .map((line) => `${line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}${line.text}`)
-    .join('\n')
 }
 
 /** The break between two regions of the file, quiet enough not to read as a
@@ -91,8 +76,8 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
       <span
         className={cn(
           'w-3 shrink-0 select-none text-center',
-          line.kind === 'add' && 'text-[var(--git-decoration-added)]',
-          line.kind === 'del' && 'text-[var(--git-decoration-deleted)]'
+          line.kind === 'add' && 'text-chat-diff-added',
+          line.kind === 'del' && 'text-chat-diff-removed'
         )}
         aria-hidden
       >
@@ -101,6 +86,32 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
       <span className="min-w-0 whitespace-pre-wrap break-words pr-2 text-chat-foreground">
         {line.text}
       </span>
+    </div>
+  )
+}
+
+/** The card's rows. Its own component so a collapsed card builds none of them. */
+function DiffCardRows({
+  lines,
+  gutterWidth
+}: {
+  lines: NativeChatEditFile['lines']
+  gutterWidth: number
+}): React.JSX.Element {
+  const seen = new Map<string, number>()
+  return (
+    // Focusable so the rows can be scrolled from the keyboard.
+    <div
+      data-native-chat-code-content
+      tabIndex={0}
+      className="ml-6 mt-1 max-h-72 overflow-auto rounded-lg border border-chat-code-border bg-chat-code-surface py-1 font-mono text-chat-code leading-relaxed text-chat-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+    >
+      {lines.map((line) => {
+        const signature = `${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${line.text}`
+        const occurrence = seen.get(signature) ?? 0
+        seen.set(signature, occurrence + 1)
+        return <DiffRow key={`${signature}:${occurrence}`} line={line} gutterWidth={gutterWidth} />
+      })}
     </div>
   )
 }
@@ -114,19 +125,21 @@ export function NativeChatDiffCard({
   file,
   revealSignal,
   onReveal,
-  initiallyExpanded = false,
-  disclosureKey
+  disclosureKey,
+  initialOpen = false,
+  onLinkClick
 }: {
   file: NativeChatEditFile
   revealSignal?: number
   onReveal?: (element: HTMLElement) => void
-  initiallyExpanded?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
+  initialOpen?: boolean
 }): React.JSX.Element {
   const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(
     disclosureKey,
-    initiallyExpanded
+    initialOpen
   )
   const cardRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
@@ -139,7 +152,7 @@ export function NativeChatDiffCard({
   }, [revealSignal, onReveal, setExpanded])
   // Joining every row to seed the copy button is the card's most expensive
   // work, and a collapsed card renders none of those rows.
-  const copyText = useMemo(() => patchText(file.lines), [file.lines])
+  const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const hasBody = file.lines.length > 0
   const widest = file.lineNumbersKnown
     ? file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
@@ -153,15 +166,17 @@ export function NativeChatDiffCard({
           type="button"
           onClick={() => hasBody && setExpanded(!expanded)}
           className={cn(
-            'flex min-h-[26px] min-w-0 flex-1 items-center gap-2 text-left font-sans text-[13px]',
-            hasBody ? 'cursor-pointer hover:bg-accent/30' : 'cursor-default'
+            'flex min-h-6.5 min-w-0 flex-1 items-center gap-2 rounded-md text-left font-sans text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            hasBody ? 'cursor-pointer hover:bg-accent/20' : 'cursor-default'
           )}
           aria-expanded={hasBody ? expanded : undefined}
         >
           <span aria-hidden className="flex size-4 shrink-0 items-center justify-center">
             <VerbIcon kind={file.changeKind} />
           </span>
-          <span className="shrink-0 text-chat-foreground-faint">{verbLabel(file)}</span>
+          <span className="shrink-0 text-chat-foreground-faint">
+            {nativeChatToolRowVerb(file.changeKind)}
+          </span>
           {file.oldPath ? (
             <>
               <span
@@ -175,14 +190,13 @@ export function NativeChatDiffCard({
               <span className="shrink-0 text-chat-foreground-faint">→</span>
             </>
           ) : null}
-          <span
+          <NativeChatToolFileTarget
+            path={file.path}
+            label={baseName(file.path)}
             className="min-w-0 truncate text-chat-foreground"
-            title={file.path}
-            aria-hidden="true"
-          >
-            {baseName(file.path)}
-          </span>
-          <span className="sr-only">{file.path}</span>
+            // A deleted file has nothing left to open.
+            onLinkClick={file.changeKind === 'deleted' ? undefined : onLinkClick}
+          />
           <DiffLineCounts added={file.added} removed={file.removed} size="sm" />
           {file.truncated ? (
             <span className="shrink-0 text-xs text-chat-foreground-faint">
@@ -192,7 +206,7 @@ export function NativeChatDiffCard({
           {hasBody ? (
             <ChevronRight
               className={cn(
-                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform',
+                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
                 expanded && 'rotate-90'
               )}
             />
@@ -204,25 +218,10 @@ export function NativeChatDiffCard({
           className="ml-auto shrink-0"
         />
       </div>
-      {hasBody && expanded ? (
-        // Focusable so the rows can be scrolled from the keyboard.
-        <div
-          data-native-chat-code-content
-          tabIndex={0}
-          className="ml-6 mt-1 max-h-72 overflow-auto rounded-lg border border-chat-code-border bg-chat-code-surface py-1 font-mono text-xs leading-relaxed text-chat-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
-        >
-          {(() => {
-            const seen = new Map<string, number>()
-            return file.lines.map((line) => {
-              const signature = `${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${line.text}`
-              const occurrence = seen.get(signature) ?? 0
-              seen.set(signature, occurrence + 1)
-              return (
-                <DiffRow key={`${signature}:${occurrence}`} line={line} gutterWidth={gutterWidth} />
-              )
-            })
-          })()}
-        </div>
+      {hasBody ? (
+        <NativeChatExpandable open={expanded}>
+          <DiffCardRows lines={file.lines} gutterWidth={gutterWidth} />
+        </NativeChatExpandable>
       ) : null}
     </div>
   )

@@ -71,7 +71,7 @@ export function AgentDetectionCatalog({
                   activeServerEnvironmentId
                     ? translate(
                         'auto.components.settings.AgentsPane.25a41a9aad',
-                        'Re-detect agents installed on the active server'
+                        'Re-detect agents installed on this server'
                       )
                     : translate(
                         'auto.components.settings.AgentsPane.13647f9f80',

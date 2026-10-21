@@ -14,12 +14,14 @@ import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
 }
 
 type WorktreeLookupEntry = {
+  owners: Worktree[]
   first: Worktree
   unique: Worktree | null
 }
@@ -34,14 +36,15 @@ const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
 
 export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
-  for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
+  for (const worktrees of Object.values(selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
       if (existing) {
+        existing.owners.push(worktree)
         existing.unique = null
       } else {
-        byId.set(worktreeId, { first: worktree, unique: worktree })
+        byId.set(worktreeId, { owners: [worktree], first: worktree, unique: worktree })
       }
     }
   }
@@ -65,7 +68,7 @@ const worktreeLookupIndexes = new WeakMap<
 >()
 
 export function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
-  const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
+  const worktreesByRepo = selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO
   const repos = state.repos ?? EMPTY_WORKTREE_REPOS
   const cached = worktreeLookupIndexes.get(worktreesByRepo)
   if (cached && cached.repos === repos) {

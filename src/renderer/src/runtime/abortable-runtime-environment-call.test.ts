@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
 import { callAbortableRuntimeEnvironment } from './abortable-runtime-environment-call'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
@@ -15,7 +16,7 @@ it('cancels setup using the preselected id and unsubscribes a late handle', asyn
       })
   )
   const cancelSubscription = vi.fn().mockResolvedValue(undefined)
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe, cancelSubscription } } })
+  stubRuntimeEnvironmentBridge({ subscribe, cancelSubscription })
   const controller = new AbortController()
   const pending = callAbortableRuntimeEnvironment(
     'env',
@@ -40,7 +41,7 @@ it('keeps the response deadline while setup is pending', async () => {
   vi.useFakeTimers()
   const subscribe = vi.fn(() => new Promise(() => {}))
   const cancelSubscription = vi.fn().mockResolvedValue(undefined)
-  vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe, cancelSubscription } } })
+  stubRuntimeEnvironmentBridge({ subscribe, cancelSubscription })
   const pending = callAbortableRuntimeEnvironment(
     'env',
     'files.search',

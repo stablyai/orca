@@ -2,8 +2,7 @@ import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
 } from '../../pty-hidden-delivery-gate'
-import { propagatePendingProjectionRemainder } from '../../pty-pending-projection-admissions'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
 import {
   PTY_BATCH_DRAIN_CONTINUE_MS,
@@ -11,12 +10,7 @@ import {
   PTY_BATCH_FLUSH_MAX_WRITES,
   PTY_DISPATCHER_READY_WATCHDOG_MS
 } from './constants'
-import {
-  getDroppedMode2031RendererData,
-  getDroppedSynchronizedOutputRendererData,
-  pendingProjectionAdmissionOptions,
-  updatePendingProjectionAdmissions
-} from './pending'
+import { getDroppedMode2031RendererData, getDroppedSynchronizedOutputRendererData } from './pending'
 import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
@@ -115,19 +109,14 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingOverflowMarkedPtys.delete(id)
         session.updateProducerFlowControl(id)
         const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
-        if (pending.projectionAdmissionIds) {
-          session.sshOutputIntake?.transferProjections(
-            pending.projectionAdmissionIds,
-            'hidden-drop'
-          )
-        }
         warnIfDroppingHiddenBytesForVisiblePty(session, id, pending.data.length)
         if (drop.shouldEmitRestoreMarker) {
           sendModelRestoreNeededMarker(
             session,
             id,
             'hidden-drop',
-            session.runtime?.getPtyOutputSequence(id)
+            session.runtime?.getPtyOutputSequence(id),
+            drop.hiddenDropEpisode
           )
         }
         continue
@@ -141,21 +130,16 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.updateProducerFlowControl(id)
         // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
         if (
-          !sendPtyDataToRenderer(
-            session,
+          !sendPtyDataToRenderer(session, id, {
             id,
-            {
-              id,
-              // 2026 release before the 2031 data: that payload ends with a retained
-              // partial private-mode sequence an ESC after it would abort.
-              data:
-                pending.data +
-                getDroppedSynchronizedOutputRendererData(pending) +
-                getDroppedMode2031RendererData(pending),
-              droppedOutput: true
-            },
-            pending.projectionAdmissionIds
-          ).sent
+            // 2026 release before the 2031 data: that payload ends with a retained
+            // partial private-mode sequence an ESC after it would abort.
+            data:
+              pending.data +
+              getDroppedSynchronizedOutputRendererData(pending) +
+              getDroppedMode2031RendererData(pending),
+            droppedOutput: true
+          })
         ) {
           sendFailed = true
           break
@@ -173,20 +157,13 @@ export function flushPendingData(session: PtyIpcSession): void {
         : resolveSynchronizedOutputSafeSplit(data, PTY_BATCH_FLUSH_CHUNK_CHARS)
       const chunk = indivisible ? data : data.slice(0, splitAt)
       const remaining = indivisible ? '' : data.slice(splitAt)
-      let nextPending: PendingPtyData | undefined
       if (remaining) {
-        nextPending = { data: remaining }
+        const nextPending: PendingPtyData = { data: remaining }
         if (typeof pending.startSeq === 'number') {
           nextPending.startSeq = pending.startSeq + chunk.length
         }
         if (pending.containsBackgroundOutput === true) {
           nextPending.containsBackgroundOutput = true
-        }
-        if (pending.projectionAdmissionIds) {
-          nextPending.projectionAdmissionIds = pending.projectionAdmissionIds
-        }
-        if (pending.projectionAdmissionsTransferred) {
-          nextPending.projectionAdmissionsTransferred = true
         }
         session.pendingData.replaceWithRemainder(selection, nextPending)
       } else {
@@ -194,7 +171,7 @@ export function flushPendingData(session: PtyIpcSession): void {
         session.pendingOverflowMarkedPtys.delete(id)
       }
       session.updateProducerFlowControl(id)
-      const delivery = sendPtyDataToRenderer(
+      const sent = sendPtyDataToRenderer(
         session,
         id,
         makePtyDataPayload(
@@ -204,20 +181,9 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.containsBackgroundOutput,
           pending.rawLength,
           pending.transformed
-        ),
-        pending.projectionAdmissionIds
-      )
-      if (nextPending) {
-        updatePendingProjectionAdmissions(
-          nextPending,
-          propagatePendingProjectionRemainder(
-            nextPending,
-            delivery,
-            pendingProjectionAdmissionOptions(session)
-          )
         )
-      }
-      if (!delivery.sent) {
+      )
+      if (!sent) {
         sendFailed = true
         break
       }

@@ -94,9 +94,9 @@ test.describe('Create Workspace', () => {
       await expect(nameInput).toBeVisible()
       await nameInput.fill(workspaceName)
 
-      // 4. Click Create. This fires the full submitQuick path:
-      // createWorktree IPC, applyWorktreeMeta, activateAndRevealWorktree,
-      // and closeModal via onCreated.
+      // 4. Click Create. submitQuick starts the background creation
+      // (createWorktree IPC, then activateAndRevealWorktree) and closes the
+      // modal via onCreated.
       const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
       await expect(createButton).toBeEnabled()
       await createButton.click()

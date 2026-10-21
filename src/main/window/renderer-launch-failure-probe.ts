@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 
 /** 'ok' when a throwaway child could start, the spawn errno (EAGAIN = per-user process limit), or 'skipped' on Windows. */

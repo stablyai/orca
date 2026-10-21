@@ -1,11 +1,12 @@
 import type { AgentProcessPresence } from './agent-process-presence'
+import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
-// the relay sends to Orca. Consumed by `src/relay/agent-hook-server.ts` (which
+// the relay sends to Orca. Consumed by `src/wsl-guest/agent-hook-server.ts` (which
 // produces it after the shared listener parses an HTTP POST) and by
 // `src/main/agent-hooks/server.ts` (which ingests it via `ingestRemote`).
 //
 // Lives in `shared/` because the relay deliberately has no Electron dependency
-// (cf. `src/relay/protocol.ts` header). `agent-hook-types.ts` is reserved for
+// (cf. `src/wsl-guest/protocol.ts` header). `agent-hook-types.ts` is reserved for
 // the renderer-bound IPC + installer contract; this module is the wire envelope
 // between Orca's main process and the remote relay.
 //
@@ -25,7 +26,11 @@ import type { AgentProcessPresence } from './agent-process-presence'
 
 import { createHash } from 'node:crypto'
 
-import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type {
+  AgentSubagentSnapshot,
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
 
@@ -62,7 +67,8 @@ const AGENT_HOOK_SOURCES = [
   'muse',
   'zcode',
   'dsh',
-  'jcode'
+  'jcode',
+  'kiro'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
@@ -106,6 +112,8 @@ export type AgentHookRelayEnvelope = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
+  /** Optional, replay only: Claude requests the relay saw end while this receiver may have been away. */
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */
@@ -118,6 +126,10 @@ export type AgentHookRelayEnvelope = {
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
+  /** The relay's turn-end stamp (see AgentHookEventPayload.turnEndedAt); older relays omit it. */
+  turnEndedAt?: number
+  /** How the relay identified that end; older relays omit it (legacy). */
+  turnEndDisposition?: TurnEndDisposition
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification), for input-interrupt inference on the receiving host. */
   claudeRunningNonAgentTask?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
@@ -148,7 +160,7 @@ export type AgentHookUnavailableEnvelope = {
 export const AGENT_HOOK_NOTIFICATION_METHOD = 'agent.hook' as const
 
 /** Identifies optional payload fields the relay dropped to fit an oversized frame
- *  (see `src/relay/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
+ *  (see `src/wsl-guest/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
  *  "shed in transit" from "the agent cleared it"; rosters include their digest. */
 export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
@@ -247,18 +259,11 @@ export type AgentHookInstallManagedHooksParams = {
   claudeVersion?: string
 }
 
-/** Feature-flag env var. Read once at process start by Orca and the relay.
- *  Remote agent hooks ship as the default SSH behavior; set "0" to opt out. */
+/** Opt-out env var for the Windows WSL agent-hook relay, read on each relay start; set "0" to
+ *  disable. */
 export const ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV = 'ORCA_FEATURE_REMOTE_AGENT_HOOKS' as const
 
-export function isRemoteAgentHooksEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isWslAgentHookRelayEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
-  if (raw === undefined) {
-    return true
-  }
-  const trimmed = raw.trim()
-  if (trimmed.length === 0 || trimmed === '0') {
-    return false
-  }
-  return true
+  return raw === undefined || !['', '0'].includes(raw.trim())
 }

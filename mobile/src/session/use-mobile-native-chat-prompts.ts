@@ -58,8 +58,9 @@ export function useMobileNativeChatPrompts(args: {
   const detectedAsk = askFromStatus ?? askFromMessages
 
   return {
-    permission,
-    question,
+    // Why: a heuristic card read from the same waiting status would answer the Ask's dialog.
+    permission: askFromStatus ? null : permission,
+    question: askFromStatus ? null : question,
     detectedAsk: enabled ? detectedAsk : null,
     // Only the status payload needs the paused gate the approval envelope uses:
     // it outlives its answer, so a working/done agent must not surface one. The

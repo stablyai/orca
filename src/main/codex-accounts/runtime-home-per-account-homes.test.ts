@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
@@ -21,6 +22,7 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -71,7 +73,7 @@ describe('CodexRuntimeHomeService', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     // A host managed account's own home is its CODEX_HOME.
-    expect(service.isHostSystemDefaultRealHome()).toBe(false)
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.isHostSystemDefaultSessionMigrationEligible()).toBe(false)
     expect(service.prepareForCodexLaunch()).toBe(managedHomePath)
     expect(
@@ -411,7 +413,7 @@ describe('CodexRuntimeHomeService', () => {
 
     // Launching the account from its own home never populates the
     // legacy shared mirror.
-    expect(service.isHostSystemDefaultRealHome()).toBe(false)
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.prepareForCodexLaunch()).toBe(managedHomePath)
 
     // A stale pre-E process writes matching, newer bytes to the shared mirror.
@@ -421,7 +423,7 @@ describe('CodexRuntimeHomeService', () => {
     // syncForCurrentSelection), then Codex launches on the real home.
     settings.activeCodexManagedAccountId = null
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
-    expect(service.isHostSystemDefaultRealHome()).toBe(true)
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
     expect(service.prepareForCodexLaunch()).toBeNull()
 
     // E owns refreshes in place, so takeover ignores later shared-mirror bytes.

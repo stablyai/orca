@@ -30,6 +30,7 @@ function createHarness() {
     methods: [
       defineMethod({
         name: 'orchestration.send',
+        permission: 'workspace',
         params: Params,
         handler: ({ subject }) => ({ message: effect(subject) })
       }),
@@ -118,6 +119,7 @@ describe('orchestration.requestShow', () => {
       methods: [
         defineMethod({
           name: 'orchestration.send',
+          permission: 'workspace',
           params: Params,
           handler: async () => {
             reportStarted?.()

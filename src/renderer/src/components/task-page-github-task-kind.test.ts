@@ -67,6 +67,14 @@ describe('normalizeGitHubTaskPreset', () => {
 })
 
 describe('getGitHubTaskKind', () => {
+  it('lets an explicit issue query override a PR-focused preset', () => {
+    for (const preset of ['prs', 'my-prs', 'review'] as const) {
+      expect(getGitHubTaskKind(preset, 'is:issue is:open')).toBe('issues')
+      expect(getGitHubTaskKind(preset, 'is:"issue"')).toBe('issues')
+      expect(getGitHubTaskKind(preset, 'label:is:issue')).toBe('prs')
+    }
+  })
+
   it('reports prs when the preset is PR-focused', () => {
     expect(getGitHubTaskKind('review', '')).toBe('prs')
   })
@@ -125,7 +133,7 @@ describe('scopeGitHubTaskSearch', () => {
   it('lets a parsed issue scope override the caller kind', () => {
     // characterization: quoting hides `is:issue` from the literal-scope regex but
     // not from the tokenizer, so the parsed issue scope beats the prs caller kind.
-    expect(scopeGitHubTaskSearch('is:"issue"', 'prs')).toBe('is:issue is:"issue"')
+    expect(scopeGitHubTaskSearch('is:"issue"', 'prs')).toBe('is:"issue"')
   })
 
   it('re-prefixes a merged-state query with the caller kind', () => {

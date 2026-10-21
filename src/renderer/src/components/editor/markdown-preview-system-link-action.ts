@@ -1,8 +1,9 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { openHttpLink } from '@/lib/http-link-routing'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { useAppStore } from '@/store'
 import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import type { MarkdownPreviewLinkContext } from './markdown-preview-link-actions'
@@ -23,14 +24,7 @@ export function handleMarkdownPreviewSystemLinkClick({
   filePath: string
   context: MarkdownPreviewLinkContext
 }): boolean {
-  const {
-    isMac,
-    sourceOwner,
-    sourceRoutingWorktreeId,
-    sourceConnectionId,
-    resolvedSourceRuntimeEnvironmentId,
-    worktreeRoot
-  } = context
+  const { isMac, sourceOwner, sourceRoutingWorktreeId, worktreeRoot } = context
   if (!isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
     return false
   }
@@ -59,8 +53,7 @@ export function handleMarkdownPreviewSystemLinkClick({
   }
   if (
     isLocalPathOpenBlocked(
-      settingsForRuntimeOwner(useAppStore.getState().settings, resolvedSourceRuntimeEnvironmentId),
-      { connectionId: sourceConnectionId }
+      getLinkSourceLocalOpenOwner(useAppStore.getState(), sourceOwner, sourceRoutingWorktreeId)
     )
   ) {
     // Why: the client OS cannot open server-local runtime or SSH paths.
@@ -84,10 +77,10 @@ export function handleMarkdownPreviewSystemLinkClick({
         )
         return
       }
-      void window.api.shell.openFileUri(cleanUri)
+      void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID)
     })
     return true
   }
-  void window.api.shell.openFileUri(parsed.toString())
+  void window.api.shell.openFileUri(parsed.toString(), LOCAL_EXECUTION_HOST_ID)
   return true
 }

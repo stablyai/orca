@@ -35,7 +35,7 @@ export type BridgeClearableRouteParam = (typeof BRIDGE_CLEARABLE_ROUTE_PARAMS)[n
  * Whether two routes are different screens as the page experiences them.
  *
  * `shellScreenRouteKey` is the page's own identity for a route, so "moved" means here exactly what
- * a remount means at the switch, and both ends of the seam read the same definition: the host will
+ * a remount means at the route file, and both ends of the seam read the same definition: the host will
  * not send an `init` for a route that did not move, and the page will not publish one it was sent
  * anyway. The second half is not redundant — the shell answers every `ready`, including the ones
  * the page's own backoff and its stale-`state` restart ask for, and each of those carries the held

@@ -33,26 +33,48 @@ function Write-WindowsSshReceiptStage([hashtable]$Report,[string]$Receipt,[strin
   return $written
 }
 
-function Install-WindowsInboxSshCapability([ValidateSet('arm64','x64')][string]$Arch,[hashtable]$Report,[scriptblock]$Stage) {
+function Install-WindowsInboxSshCapability([ValidateSet('arm64','x64')][string]$Arch,[hashtable]$Report,[scriptblock]$Stage,[Parameter(Mandatory=$true)][string]$LogDirectory) {
   Assert-IsolatedWindowsSshCi $Arch
   Assert-WindowsSshGlobalServerDormant 'inbox'
   Assert-WindowsSshStockShell
   & $Stage 'inbox-capability-start'
-  $capability=Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
-  $Report.inboxCapabilityInitialState=[string]$capability.State
-  if($capability.State -ne 'Installed'){Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null}
+  New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+  $invocation=[Guid]::NewGuid().ToString('N')
+  $query=@{operation='query';status='running';log="inbox-capability-query-$invocation.log"}
+  $Report.inboxCapabilityOperations=@($query)
+  & $Stage 'inbox-capability-query-start'
+  $watch=[Diagnostics.Stopwatch]::StartNew()
+  try {
+    $capability=Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -LogPath (Join-Path $LogDirectory $query.log) -ErrorAction Stop
+    $Report.inboxCapabilityInitialState=[string]$capability.State
+    $query.status='passed'
+  } catch {$query.status='failed';$query.error=$_.Exception.Message;throw}
+  finally {$watch.Stop();$query.elapsedMs=$watch.ElapsedMilliseconds;& $Stage 'inbox-capability-query-finished'}
+  if($capability.State -ne 'Installed'){
+    $install=@{operation='install';status='running';log="inbox-capability-install-$invocation.log"}
+    $Report.inboxCapabilityOperations+=@($install)
+    & $Stage 'inbox-capability-install-start'
+    $watch=[Diagnostics.Stopwatch]::StartNew()
+    try {
+      $result=Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' -LogPath (Join-Path $LogDirectory $install.log) -ErrorAction Stop
+      $Report.inboxCapabilityInstallResult=@{path=$result.Path;online=$result.Online;restartNeeded=$result.RestartNeeded}
+      $install.status='passed'
+    } catch {$install.status='failed';$install.error=$_.Exception.Message;throw}
+    finally {$watch.Stop();$install.elapsedMs=$watch.ElapsedMilliseconds;& $Stage 'inbox-capability-install-finished'}
+  }
+  & $Stage 'inbox-capability-guards-start'
   Assert-WindowsSshGlobalServerDormant 'inbox'
   Assert-WindowsSshStockShell
   & $Stage 'inbox-capability-complete'
 }
 
-function Initialize-WindowsInboxSshCapability([ValidateSet('arm64','x64')][string]$Arch,[string]$Receipt) {
-  $report=@{scope='Windows inbox OpenSSH.Server capability preparation only';arch=$Arch;sourceSha=$env:GITHUB_SHA;runId=$env:GITHUB_RUN_ID;runAttempt=$env:GITHUB_RUN_ATTEMPT;runnerName=$env:RUNNER_NAME;imageVersion=$env:ImageVersion;status='running';stages=@();globalBootstrapCleanup='Disposable CI VM destruction is the boundary; no global sshd is started'}
+function Initialize-WindowsInboxSshCapability([ValidateSet('arm64','x64')][string]$Arch,[string]$Receipt,[ValidateSet('overlap','serial')][string]$PreparationMode='overlap') {
+  $report=@{scope='Windows inbox OpenSSH.Server capability preparation only';arch=$Arch;sourceSha=$env:GITHUB_SHA;runId=$env:GITHUB_RUN_ID;runAttempt=$env:GITHUB_RUN_ATTEMPT;runnerName=$env:RUNNER_NAME;imageVersion=$env:ImageVersion;preparationMode=$PreparationMode;status='running';stages=@();globalBootstrapCleanup='Disposable CI VM destruction is the boundary; no global sshd is started'}
   try {
     if(-not (Write-WindowsSshReceiptStage $report $Receipt 'preparation-start')){throw 'Initial progress receipt unavailable; refuse provisioning'}
     Install-WindowsInboxSshCapability $Arch $report {param($name)
       if(-not (Write-WindowsSshReceiptStage $report $Receipt $name)){throw 'Capability preparation progress receipt unavailable'}
-    }
+    } ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Receipt)))
     $report.status='passed'
   } catch {$report.status='failed';$report.error=$_.Exception.Message;throw}
   finally {

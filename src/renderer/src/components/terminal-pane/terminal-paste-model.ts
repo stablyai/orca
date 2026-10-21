@@ -10,7 +10,7 @@ export type TerminalPasteSource =
 export type TerminalPasteRuntime = {
   platform: NodeJS.Platform
   runtimeKey: string
-  kind: 'local' | 'wsl' | 'ssh' | 'remote-runtime'
+  kind: 'local' | 'wsl' | 'remote-runtime'
   isWindowsConpty?: boolean
 }
 

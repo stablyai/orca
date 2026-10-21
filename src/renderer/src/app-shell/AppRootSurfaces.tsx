@@ -18,6 +18,7 @@ import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
+import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-jump-palette-preload'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -27,7 +28,6 @@ import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel
 import type { OnboardingGate } from './use-onboarding-and-feature-tips'
 
 const QuickOpen = lazy(() => import('../components/QuickOpen'))
-const WorktreeJumpPalette = lazy(() => import('../components/WorktreeJumpPalette'))
 const WorkspaceCleanupDialog = lazy(
   () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
 )
@@ -42,7 +42,12 @@ const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolder
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/AddProjectFromFolderDialog')
 )
+const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
+const NodeDistMirrorDialog = lazy(() => import('../components/settings/NodeDistMirrorDialog'))
+const AiVaultSessionHistoryDialog = lazy(
+  () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
+)
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
@@ -132,6 +137,7 @@ export function AppRootSurfaces(props: {
 }): React.JSX.Element {
   const { floatingWorkspace, onboardingGate } = props
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
+  usePreloadWorktreeJumpPalette()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Keep this always-mounted surface subscribed only to the settings fields it reads. A
@@ -218,6 +224,24 @@ export function AppRootSurfaces(props: {
         {activeModal === 'project-added' ? (
           <ModalBoundary boundaryId="modal.project-added" resetKey>
             <ProjectAddedDialog />
+          </ModalBoundary>
+        ) : null}
+        {/* Root-hosted: inside a chat, its React events would reach the chat's capture handlers. */}
+        {activeModal === 'agent-session-history' ? (
+          <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
+            <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {/* Root-hosted: a toast, the SSH host row and a terminal pane all open it. */}
+        {activeModal === 'node-dist-mirror' ? (
+          <ModalBoundary boundaryId="modal.node-dist-mirror" resetKey>
+            <NodeDistMirrorDialog />
+          </ModalBoundary>
+        ) : null}
+        {/* Why: chat rows are virtualized, so the viewer must outlive the message that opened it. */}
+        {activeModal === 'diagram-viewer' ? (
+          <ModalBoundary boundaryId="modal.diagram-viewer" resetKey>
+            <DiagramViewerModal />
           </ModalBoundary>
         ) : null}
       </Suspense>

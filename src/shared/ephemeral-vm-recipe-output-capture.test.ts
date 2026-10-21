@@ -7,7 +7,7 @@ import {
   DEFAULT_MAX_CAPTURE_BYTES,
   runRecipeCommand
 } from './ephemeral-vm-recipe-process'
-import { GrowingByteBuffer } from './growing-byte-buffer'
+import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 
 afterEach(() => {
   vi.restoreAllMocks()

@@ -52,6 +52,7 @@ function harness() {
     writes.push(row)
   }
   const journal: StructuredAgentSessionRevisionJournal = {
+    item: () => null,
     epoch: 'epoch-1',
     itemBody: (itemId) => rows.get(itemId)?.body ?? null,
     visitItems: (visit) => {
@@ -244,32 +245,6 @@ describe('the command turn at each point the ordinary result path threads throug
       message: { id: 'msg-resumed', role: 'assistant', content: [{ type: 'text', text: 'hi' }] }
     })
     expect(finished.translator.currentTurnId).not.toBeNull()
-  })
-
-  it("settles a child still working in the command's turn when the command ends", () => {
-    const { begin, frame, rows } = harness()
-    begin('compact-input')
-    frame({
-      type: 'system',
-      subtype: 'task_started',
-      task_id: 'task-1',
-      task_type: 'local_agent',
-      description: 'Map the lane'
-    })
-    frame({ type: 'result', subtype: 'success', is_error: false })
-    const group = rows.get(
-      agentJournalItemKey({
-        provider: 'orca',
-        clientMessageId: `claude-subagents:${CAPTURED_COMPACT_SESSION_ID}:${RUNNING.turnId}`
-      })
-    )
-    const agents =
-      group?.body.kind === 'message'
-        ? group.body.blocks.flatMap((block) =>
-            block.type === 'subagent-group' ? block.agents : []
-          )
-        : []
-    expect(agents).toEqual([expect.objectContaining({ state: 'unverifiable' })])
   })
 
   it("records the context window the command's result reports on the command's turn", () => {

@@ -92,29 +92,36 @@ describe('terminal checkpoint serializer', () => {
     expect(Buffer.byteLength(serialized, 'utf8')).toBeLessThanOrEqual(maxBytes)
   })
 
-  it('does not materialize and rescan a passing candidate', async () => {
+  it('keeps native conversion bounded without materializing the whole candidate', async () => {
     let reads = 0
     const input = snapshot()
     Object.defineProperty(input, 'snapshotAnsi', {
       enumerable: true,
       get: () => {
         reads += 1
-        return 'visible'
+        return 'visible'.repeat(20_000)
       }
     })
     const stringify = vi.spyOn(JSON, 'stringify')
     const byteLength = vi.spyOn(Buffer, 'byteLength')
 
     try {
-      await serializeTerminalCheckpointWithinLimit(input, metadata, 20 * 1024)
+      await serializeTerminalCheckpointWithinLimit(input, metadata, 200 * 1024)
 
-      expect({
-        fullCandidateStringifies: stringify.mock.calls.filter(
-          ([value]) => typeof value === 'object' && value !== null
-        ).length,
-        byteLengthCalls: byteLength.mock.calls.length,
-        snapshotReads: reads
-      }).toEqual({ fullCandidateStringifies: 0, byteLengthCalls: 0, snapshotReads: 1 })
+      expect(
+        stringify.mock.calls.some(([value]) => typeof value === 'object' && value !== null)
+      ).toBe(false)
+      for (const [value] of stringify.mock.calls) {
+        if (typeof value === 'string') {
+          expect(value.length).toBeLessThanOrEqual(64 * 1024)
+        }
+      }
+      for (const [value] of byteLength.mock.calls) {
+        if (typeof value === 'string') {
+          expect(value.length).toBeLessThanOrEqual(128 * 1024)
+        }
+      }
+      expect(reads).toBe(1)
     } finally {
       stringify.mockRestore()
       byteLength.mockRestore()
@@ -169,6 +176,55 @@ describe('terminal checkpoint serializer', () => {
       expect(materializedOversizedCandidate).toBe(false)
     } finally {
       stringify.mockRestore()
+    }
+  })
+  it.each([16 * 1024 - 1, 16 * 1024])(
+    'preserves hardcoded control and surrogate JSON after %i code units',
+    async (prefixLength) => {
+      const prefix = 'x'.repeat(prefixLength)
+      const input = snapshot({
+        snapshotAnsi: `${prefix}😀\ud800x\udc00"\b\t\n\f\r\\\0`
+      })
+      const expectedPrefix =
+        `{"snapshotAnsi":"${prefix}😀\\ud800x\\udc00\\"\\b\\t\\n\\f\\r\\\\\\u0000",` +
+        '"scrollbackAnsi":""'
+      const serialized = await serializeTerminalCheckpointWithinLimit(input, metadata, 40 * 1024)
+      expect(serialized.startsWith(expectedPrefix)).toBe(true)
+      expect(JSON.parse(serialized).snapshotAnsi).toBe(input.snapshotAnsi)
+      const exactBytes = Buffer.byteLength(serialized, 'utf8')
+      await expect(
+        serializeTerminalCheckpointWithinLimit(input, metadata, exactBytes)
+      ).resolves.toBe(serialized)
+      const trimmed = await serializeTerminalCheckpointWithinLimit(input, metadata, exactBytes - 1)
+      expect(Buffer.byteLength(trimmed, 'utf8')).toBeLessThan(exactBytes)
+    }
+  )
+
+  it('rejects huge escaped metadata using bounded native conversions near the byte cap', async () => {
+    const stringify = vi.spyOn(JSON, 'stringify')
+    const byteLength = vi.spyOn(Buffer, 'byteLength')
+    try {
+      await expect(
+        serializeTerminalCheckpointWithinLimit(
+          snapshot(),
+          { ...metadata, cwd: String.fromCharCode(0).repeat(1_000_000) },
+          512
+        )
+      ).rejects.toThrow('Terminal checkpoint metadata exceeds byte limit')
+      for (const [value] of stringify.mock.calls) {
+        expect(typeof value === 'object' && value !== null).toBe(false)
+        if (typeof value === 'string') {
+          expect(value.length).toBeLessThanOrEqual(512)
+        }
+      }
+      for (const [value] of byteLength.mock.calls) {
+        if (typeof value === 'string') {
+          expect(value.length).toBeLessThanOrEqual(512 * 6)
+        }
+      }
+    } finally {
+      stringify.mockRestore()
+      byteLength.mockRestore()
     }
   })
 })

@@ -40,9 +40,8 @@ function directTransport() {
   let id = 0
   const registry = new RpcClientStreamRegistry({
     nextId: () => `rpc-${++id}`,
-    deviceToken: 'device-token',
     getState: () => 'connected',
-    sendEncrypted: (request) => {
+    sendFrame: (request) => {
       sent.push(readSentFrame(request))
       return true
     }

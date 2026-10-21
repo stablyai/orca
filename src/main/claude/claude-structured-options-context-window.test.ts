@@ -4,23 +4,17 @@ import { selectStructuredAgentContextUsage } from '../../shared/structured-agent
 import { assistantFrame, journal, userFrame } from './claude-context-usage-test-support'
 import { sessionFor } from './claude-structured-dispatch-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import {
-  restoreClaudeStructuredSessionOptions,
-  setClaudeStructuredOption
-} from './claude-structured-options'
+import { setClaudeStructuredOption } from './claude-structured-options'
+import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 function ringSession(catalog: unknown[] = []) {
   const session = sessionFor()
   const setModel = vi.fn<ClaudeSession['connection']['setModel']>(async () => undefined)
-  const setPermissionMode = vi.fn<ClaudeSession['connection']['setPermissionMode']>(
-    async () => undefined
-  )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every connection member a model or permission-mode write and its catalog read call.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every connection member a model write and its catalog read call.
   session.connection = {
     ...session.connection,
     setModel,
-    setPermissionMode,
     supportedModels: async () => catalog
   } as ClaudeSession['connection']
   const state = journal()
@@ -38,10 +32,12 @@ function ringSession(catalog: unknown[] = []) {
 }
 
 describe('the context ring after a session option write', () => {
-  it('sizes a new session from the model its restore applied', async () => {
-    const s = ringSession([{ value: 'opus[1m]', displayName: 'Opus (1M)' }])
-    s.session.options.set('model', 'opus[1m]')
-    await restoreClaudeStructuredSessionOptions(s.session, undefined)
+  it('sizes a new session from the model it was launched with', () => {
+    const s = ringSession()
+    adoptClaudeStructuredSpawnOptions(s.session, {
+      options: new Map([['model', 'opus[1m]']]),
+      fastModeAtStart: false
+    })
     expect(s.respond('turn-a', 1_000)).toMatchObject({ windowTokens: 1_000_000, percentage: 10 })
   })
 
@@ -53,22 +49,16 @@ describe('the context ring after a session option write', () => {
     expect(s.respond('turn-b', 2_000)).toMatchObject({ windowTokens: 1_000_000, percentage: 10 })
   })
 
-  it('implies no window for a model the child refused or a restore could not put back', async () => {
+  it('implies no window for a model the child refused', async () => {
     const refused = ringSession()
     refused.setModel.mockRejectedValueOnce(new ClaudeControlRequestError('set_model', 'refused'))
     await expect(refused.write('model', 'opus[1m]')).rejects.toThrow()
     expect(refused.respond('turn-a', 1_000)).toBeNull()
-
-    const skipped = ringSession([{ value: 'sonnet', displayName: 'Sonnet' }])
-    skipped.session.options.set('model', 'retired-model[1m]')
-    await restoreClaudeStructuredSessionOptions(skipped.session, undefined)
-    expect(skipped.respond('turn-a', 1_000)).toBeNull()
   })
 
-  it('holds estimates after a permission-mode write even with a model written before it', async () => {
+  // The permission mode is a launch flag: a live write of it is refused like any unknown option.
+  it('refuses a live permission-mode write', async () => {
     const s = ringSession()
-    await s.write('model', 'sonnet[1m]')
-    await s.write('permissionMode', 'plan')
-    expect(s.respond('turn-a', 1_000)).toBeNull()
+    await expect(s.write('permissionMode', 'plan')).rejects.toThrow(/permissionMode/)
   })
 })

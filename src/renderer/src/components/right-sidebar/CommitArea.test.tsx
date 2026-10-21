@@ -3,12 +3,12 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { fireEvent, render } from '@testing-library/react'
+import { CommitArea } from './source-control/commit/commit-area'
 import {
-  CommitArea,
   ConflictSummaryCard,
-  handleSourceControlCommitShortcut,
   OperationBanner
-} from './SourceControl'
+} from './source-control/listing/conflict-status-cards'
+import { handleSourceControlCommitShortcut } from './source-control/commit/commit-shortcut'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs

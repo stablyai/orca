@@ -4,6 +4,7 @@ import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-request-t
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
 import type { AppState } from '../types'
+import { matchesRepoCacheEviction, type RepoCacheEviction } from './cache-identity'
 
 export type InflightPR = {
   promise: Promise<PRInfo | null>
@@ -96,13 +97,9 @@ export function releaseProviderRequestSlot(): void {
   providerRequestsInFlight -= 1
 }
 
-export function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
-  const prefixes = [`${repoId}::`]
-  if (repoPath && repoPath !== repoId) {
-    prefixes.push(`${repoPath}::`)
-  }
+export function clearInflightWorkItemsForRepo(eviction: RepoCacheEviction): void {
   for (const key of Array.from(inflightWorkItemsRequests.keys())) {
-    if (prefixes.some((prefix) => key.startsWith(prefix))) {
+    if (matchesRepoCacheEviction(key, eviction)) {
       inflightWorkItemsRequests.delete(key)
     }
   }

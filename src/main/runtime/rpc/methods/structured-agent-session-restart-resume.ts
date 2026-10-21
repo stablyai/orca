@@ -11,12 +11,17 @@ import {
   requireStructuredHost,
   structuredCallerFor
 } from './structured-agent-session-gate'
-import { RestartResumableParams, RestartResumeParams } from './structured-agent-session-schemas'
+import {
+  ContinueInterruptedParams,
+  RestartResumableParams,
+  RestartResumeParams
+} from './structured-agent-session-schemas'
 import { structuredAgentsReadBy } from './structured-agent-session-policy'
 
 export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
   defineMethod({
     name: 'agentSession.restartResumable',
+    permission: 'workspace',
     params: RestartResumableParams,
     handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -33,6 +38,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // Explicitly abandons the markers without resuming. Closing the dialog is a snooze and does
     // not call this method, so the status-bar entry can reopen the offer later.
     name: 'agentSession.restartResumableDismiss',
+    permission: 'workspace',
     params: RestartResumableParams,
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -57,6 +63,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     // and what an opted-in launch runs without asking. Separate from `restartResume`, which sends
     // nothing, but reachable from a setting rather than only from a button.
     name: 'agentSession.restartContinue',
+    permission: 'workspace',
     params: RestartResumeParams,
     handler: async (params, ctx) => {
       await ensureStructuredHostInstalled(ctx)
@@ -69,10 +76,24 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     }
   }),
   defineMethod({
+    // Continue on a reply an Orca stop cut off: the same continuation, bound to the cut turn
+    // instead of an offer. Clients gate it on AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY.
+    // It names one chat the client shows, as a send does, so no agent audience applies.
+    name: 'agentSession.continueInterrupted',
+    permission: 'workspace',
+    params: ContinueInterruptedParams,
+    handler: async (params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredHost(ctx)
+      return host.restartResume.continueInterrupted(params.sessionId, params.turnItemId)
+    }
+  }),
+  defineMethod({
     // Reattach only, no send. Reattaching is nothing now — an agent starts only for work — so this
     // answers that nothing was resumed. No Orca surface calls it, but it is a PUBLISHED wire
     // method, so dropping it is a wire removal an older client would meet as an unknown method.
     name: 'agentSession.restartResume',
+    permission: 'workspace',
     params: RestartResumeParams,
     handler: async (_params, ctx) => {
       await ensureStructuredHostInstalled(ctx)

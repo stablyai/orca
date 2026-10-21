@@ -73,6 +73,8 @@ export function codexTurnLifecycleFake(
       active = null
       pickedRuns = false
     }
+    // As Codex does: clearing `running` publishes the thread idle ahead of the turn's end.
+    notify()('thread/status/changed', { threadId, status: { type: 'idle' } })
     notify()('turn/completed', {
       threadId,
       turn: { id: turnId, status, ...(errorMessage ? { error: { message: errorMessage } } : {}) }

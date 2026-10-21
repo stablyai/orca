@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import type * as GitExecError from '../git/exec-error'
 import type * as WorkItemLookup from './client/fetch/get-work-item'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const { ghMock, fixture } = vi.hoisted(() => {
   const fixture: {

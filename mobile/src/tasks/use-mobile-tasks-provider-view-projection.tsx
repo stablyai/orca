@@ -1,4 +1,6 @@
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
+import { JIRA_FILTER_LABELS } from './mobile-jira-issue-filters'
+import { jiraSiteLabel } from './jira-mobile-connection'
 import {
   type PickerOption,
   githubProjectKey,
@@ -36,6 +38,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     items,
     linearDisplayProperties,
     linearFilter,
+    jiraFilter,
+    jiraConnection,
     linearGroupBy,
     linearOrderBy,
     linearTeamPropertyTouched,
@@ -46,7 +50,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     selectedLinearTeamIds,
     selectedLinearWorkspaceId,
     setAppliedGithubProjectSearch,
-    setSelectedRepoIds
+    setSelectedRepoIds,
+    effectiveRepoIds
   } = model
   const githubPresetOptions = githubKind === 'prs' ? PR_PRESETS : ISSUE_PRESETS
   const githubPresetPickerOptions = useMemo(
@@ -62,6 +67,12 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ?? 'Open'
   const gitlabFilterLabel =
     GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ?? 'Open'
+  const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
+  const jiraSelectedSite =
+    jiraConnection.selection && jiraConnection.selection !== 'all'
+      ? (jiraConnection.sites.find((site) => site.id === jiraConnection.selection) ?? null)
+      : null
+  const jiraSiteChipLabel = jiraSelectedSite ? jiraSiteLabel(jiraSelectedSite) : 'All sites'
   const linearFilterLabel =
     LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ?? 'All'
   const linearViewLabel =
@@ -224,20 +235,19 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
 
   const toggleRepoSelection = useCallback(
     (repoId: string) => {
-      setSelectedRepoIds((current) => {
-        const next = new Set(current)
-        if (next.has(repoId)) {
-          next.delete(repoId)
-        } else {
-          next.add(repoId)
-        }
-        const normalized =
-          next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
-        persistRepoSelection(normalized, hostedRepos)
-        return normalized
-      })
+      // Why: an edit starts from what the user sees, so it rewrites the choice from listed repos.
+      const next = new Set(effectiveRepoIds)
+      if (next.has(repoId)) {
+        next.delete(repoId)
+      } else {
+        next.add(repoId)
+      }
+      const normalized =
+        next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
+      setSelectedRepoIds(normalized)
+      persistRepoSelection(normalized, hostedRepos)
     },
-    [hostedRepos, persistRepoSelection]
+    [effectiveRepoIds, hostedRepos, persistRepoSelection]
   )
 
   const applyGitHubProjectSearch = useCallback(() => {
@@ -250,6 +260,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubPresetPickerOptions,
     githubPresetLabel,
     gitlabFilterLabel,
+    jiraFilterLabel,
+    jiraSiteChipLabel,
     linearFilterLabel,
     linearViewLabel,
     linearGroupLabel,

@@ -9,7 +9,7 @@ export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unav
 export type SshWorkspaceBrowserRouteState =
   | { kind: 'unrouted' }
   | { kind: 'preparing' }
-  | { kind: 'ready'; partition: string; targetId: string }
+  | { kind: 'ready'; partition: string; targetId: string; expectedSshTargetGeneration?: number }
   | { kind: 'error'; errorKind: SshWorkspaceBrowserRouteErrorKind; message: string }
 
 export function classifySshWorkspaceBrowserRouteError(
@@ -47,16 +47,19 @@ export function useSshWorkspaceBrowserRoute(
 } {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
+  const environments = useAppStore((s) => s.runtimeEnvironments)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(
     executionHostId,
-    browserRoutingSettings
+    browserRoutingSettings,
+    environments
   )
   const sshTargetId = routeEligibility?.targetId ?? null
   const targetId = routeEligibility?.eligible === true ? routeEligibility.targetId : null
+  const expectedSshTargetGeneration = routeEligibility?.expectedSshTargetGeneration
   const browserProfileId = sessionProfileId ?? 'default'
   const [attempt, setAttempt] = useState<{ count: number; skipProbe: boolean }>({
     count: 0,
@@ -65,13 +68,16 @@ export function useSshWorkspaceBrowserRoute(
   const [state, setState] = useState<SshWorkspaceBrowserRouteState>(
     targetId ? { kind: 'preparing' } : { kind: 'unrouted' }
   )
-  const hostConnection = useWorktreeHostConnection(worktreeId)
+  const hostConnection = useWorktreeHostConnection(worktreeId, targetId)
   const routeHost =
     targetId !== null && hostConnection.targetId === targetId ? hostConnection : null
   // Why only an unsettled route waits: a dial is a transient, so it must not unmount a ready
   // page or swap a failed route's card for "preparing". A connect (below) re-derives a failed one.
   // Unrouted and another target's page are unsettled too: neither answers for this target.
-  const routeReady = state.kind === 'ready' && state.targetId === targetId
+  const routeReady =
+    state.kind === 'ready' &&
+    state.targetId === targetId &&
+    state.expectedSshTargetGeneration === expectedSshTargetGeneration
   const awaitingHost = routeHost?.phase === 'connecting' && state.kind !== 'error' && !routeReady
   const connectedHostEpoch = routeHost?.connectedEpoch ?? null
   const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
@@ -104,11 +110,17 @@ export function useSshWorkspaceBrowserRoute(
       .prepareSshWorkspacePartition({
         targetId,
         browserProfileId,
+        ...(expectedSshTargetGeneration !== undefined ? { expectedSshTargetGeneration } : {}),
         ...(skipProbe ? { skipProbe: true } : {})
       })
       .then((result) => {
         if (!cancelled) {
-          setState({ kind: 'ready', partition: result.partition, targetId })
+          setState({
+            kind: 'ready',
+            partition: result.partition,
+            targetId,
+            ...(expectedSshTargetGeneration !== undefined ? { expectedSshTargetGeneration } : {})
+          })
         }
       })
       .catch((error: unknown) => {
@@ -124,7 +136,7 @@ export function useSshWorkspaceBrowserRoute(
     return () => {
       cancelled = true
     }
-  }, [targetId, browserProfileId, attempt, skipProbe, awaitingHost])
+  }, [targetId, expectedSshTargetGeneration, browserProfileId, attempt, skipProbe, awaitingHost])
 
   // Why (review P1-1): `state` lags one commit behind a targetId transition on
   // an already-mounted instance; returning stale 'unrouted' (or a stale
@@ -133,9 +145,7 @@ export function useSshWorkspaceBrowserRoute(
   // routed/unrouted decision must be derived from targetId in-render.
   const effectiveState: SshWorkspaceBrowserRouteState = !targetId
     ? { kind: 'unrouted' }
-    : awaitingHost ||
-        state.kind === 'unrouted' ||
-        (state.kind === 'ready' && state.targetId !== targetId)
+    : awaitingHost || state.kind === 'unrouted' || (state.kind === 'ready' && !routeReady)
       ? { kind: 'preparing' }
       : state
   const rederive = (nextSkipProbe: boolean): void => {
@@ -183,13 +193,17 @@ export function useSshWorkspaceBrowserRoute(
 export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
+  const environments = useAppStore((s) => s.runtimeEnvironments)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const targetId =
-    resolveSshWorkspaceBrowserRouteEligibility(executionHostId, browserRoutingSettings)?.targetId ??
-    null
+    resolveSshWorkspaceBrowserRouteEligibility(
+      executionHostId,
+      browserRoutingSettings,
+      environments
+    )?.targetId ?? null
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }

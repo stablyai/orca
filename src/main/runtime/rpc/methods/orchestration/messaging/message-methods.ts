@@ -8,7 +8,7 @@ import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
 import {
   readMutationReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
+} from '../../../orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
@@ -24,6 +24,7 @@ import {
 export const ORCHESTRATION_MESSAGE_METHODS = [
   defineMethod({
     name: 'orchestration.reply',
+    permission: 'workspace',
     params: ReplyParams,
     handler: async (
       params,
@@ -139,6 +140,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.inbox',
+    permission: 'workspace',
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -155,6 +157,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskCreate',
+    permission: 'workspace',
     params: TaskCreateParams,
     handler: (
       params,
@@ -203,6 +206,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskList',
+    permission: 'workspace',
     params: TaskListParams,
     handler: (
       params,
@@ -245,6 +249,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskUpdate',
+    permission: 'workspace',
     params: TaskUpdateParams,
     handler: (
       params,

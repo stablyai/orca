@@ -2,10 +2,11 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasNodeModulesBinSpawn } from './windows-bin-spawn-predicate.mjs'
+import { hasWindowsNativeBatchReferenceViolation } from './windows-native-batch-reference-policy'
 
 /**
- * Bare JS scripts cannot use the TS runProcess chokepoint; resolve package bins
- * under process.execPath instead (see oxc-cli-invocation.mjs). The list only shrinks.
+ * Resolve package bins under process.execPath (see oxc-cli-invocation.mjs).
+ * The legacy list only shrinks; reviewed native compiler references use process-host.
  * The literal check catches quoted .cmd/.bat paths, excluding drive letters and
  * templates; comment-only lines are dropped, but trailing comments fail closed.
  * The AST check catches spawn/spawnSync/execFile/execFileSync first arguments
@@ -13,10 +14,10 @@ import { hasNodeModulesBinSpawn } from './windows-bin-spawn-predicate.mjs'
  * local variable initializers and ternaries. It does not follow imports, function
  * returns, assignments, destructuring, aliased spawn names or computed members.
  * Names are matched without scope/import resolution; shadowed names and non-path
- * join/resolve calls can fail closed. Paths are joined textually, without reducing
- * dot segments. Neither check proves a Windows branch or an actual unsafe spawn.
+ * join/resolve calls can fail closed. Package paths fold dot segments.
+ * Neither check proves a Windows branch or an actual unsafe spawn.
  */
-const WINDOWS_SHIM_LITERAL = /['"][\w./\\-]*\.(?:cmd|bat)['"]/i
+const WINDOWS_SHIM_LITERAL = /['"][\w./\\-]*\.(?:cmd|bat)['"]/gi
 
 const SCANNED_ROOTS = ['config/scripts', 'tests/tools']
 
@@ -39,16 +40,8 @@ const WINDOWS_SHIM_SPAWN_ALLOWLIST = [
   // Benchmarks, repros and e2e drivers — developer-invoked or Linux-only in CI.
   'config/scripts/run-ai-vault-typing-bench.mjs',
   'config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs',
-  'config/scripts/run-local-ssh-browser-routing-e2e.mjs',
   'config/scripts/run-multi-client-navigation-e2e.mjs',
   'config/scripts/run-multi-workspace-typing-bench.mjs',
-  'config/scripts/run-nested-runtime-ssh-e2e.mjs',
-  'config/scripts/run-ssh-client-hosted-browser-drop-reconnect-e2e.mjs',
-  'config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs',
-  'config/scripts/run-ssh-docker-e2e.mjs',
-  'config/scripts/run-ssh-docker-perf-e2e.mjs',
-  'config/scripts/run-ssh-docker-terminal-parking-e2e.mjs',
-  'config/scripts/run-ssh-docker-watcher-isolation-e2e.mjs',
   'config/scripts/run-ssh-staged-upload-reliability.mjs',
   'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
   'config/scripts/run-terminal-scale-perf-e2e.mjs',
@@ -91,7 +84,13 @@ describe('windows batch shim spawn boundary', () => {
   )
   const offenders = scripts.filter((relativePath) => {
     const contents = readFileSync(path.join(repoRoot, relativePath), 'utf8')
-    return WINDOWS_SHIM_LITERAL.test(codeText(contents)) || hasNodeModulesBinSpawn(contents)
+    const literals = [...codeText(contents).matchAll(WINDOWS_SHIM_LITERAL)].map((match) =>
+      match[0].slice(1, -1)
+    )
+    return (
+      hasWindowsNativeBatchReferenceViolation(relativePath, contents, literals) ||
+      hasNodeModulesBinSpawn(contents)
+    )
   })
 
   it('scans a plausible number of scripts', () => {
@@ -103,7 +102,7 @@ describe('windows batch shim spawn boundary', () => {
     const unlisted = offenders.filter((name) => !WINDOWS_SHIM_SPAWN_ALLOWLIST.includes(name))
     expect(
       unlisted,
-      'Node cannot spawn a Windows batch shim without a shell. Resolve the real executable — see oxc-cli-invocation.mjs.'
+      'Resolve package shims to their real executable. Fixed native compiler batch runners must pass the scoped process-host policy.'
     ).toEqual([])
   })
 

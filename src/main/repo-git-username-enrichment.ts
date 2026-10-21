@@ -44,8 +44,7 @@ async function enrichRepoGitUsernamesInBackground(
   const candidates = repos.filter(
     (repo) =>
       repo.kind !== 'folder' &&
-      // Why: SSH repo paths are remote; local git cannot inspect them. The
-      // SSH username path (getSshGitUsername) stays caller-driven.
+      // Why: SSH repo paths are remote; local git cannot inspect them.
       !repo.connectionId &&
       !attemptedLocations.has(getRepoLocationKey(repo))
   )

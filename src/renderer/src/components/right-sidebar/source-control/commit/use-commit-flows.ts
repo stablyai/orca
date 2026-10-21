@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import type { SourceControlPanelFoundation } from '../panel/use-panel-foundation'
 import { useSourceControlCreatePrIntentCommitMessage } from '../review/use-create-pr-intent-commit-message'
 import { useSourceControlConflictAbort } from '../sync/use-conflict-abort'
@@ -12,7 +13,7 @@ import { useSourceControlCommitMessageGeneration } from './use-commit-message-ge
 export function useSourceControlCommitFlows(foundation: SourceControlPanelFoundation) {
   const {
     activeRepo,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     allocateCommitMessageGenerationRequestId,
@@ -60,7 +61,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   } = foundation
 
   const commitAction = useSourceControlCommitAction({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     beginGitBranchCompareRequest,
@@ -79,7 +80,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   })
   const commitMessageGeneration = useSourceControlCommitMessageGeneration({
     activeRepo,
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     allocateCommitMessageGenerationRequestId,
     commitMessageGenerationRecords,
@@ -97,6 +98,19 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     updateCommitMessageGenerationRecord,
     worktreePath
   })
+  const { handleCommit: commitStagedChanges } = commitAction
+  const { handleCancelGenerate } = commitMessageGeneration
+  // Why: committing the box's own message makes a running generation moot; cancel it so its late
+  // reply cannot refill the box the commit empties. Create PR commits carry their own target.
+  const handleCommit = useCallback<typeof commitStagedChanges>(
+    (messageOverride, options) => {
+      if (!options?.target) {
+        handleCancelGenerate()
+      }
+      return commitStagedChanges(messageOverride, options)
+    },
+    [commitStagedChanges, handleCancelGenerate]
+  )
   const createPrIntentCommitMessage = useSourceControlCreatePrIntentCommitMessage({
     activeRepo,
     generateInFlightRef,
@@ -107,7 +121,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     settings
   })
   const remoteActionRunner = useSourceControlRemoteActionRunner({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktree,
     activeWorktreeId,
     branchName,
@@ -115,7 +129,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     fastForwardBranch,
     fetchBranch,
     grouped,
-    handleCommit: commitAction.handleCommit,
+    handleCommit,
     pullBranch,
     pushBranch,
     rebaseFromBase,
@@ -130,7 +144,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     worktreePath
   })
   const conflictAbort = useSourceControlConflictAbort({
-    activeRepoSettings,
+    activeRepoTarget,
     activeWorktreeId,
     conflictOperation,
     isAbortingOperation,
@@ -143,7 +157,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   })
 
   return {
-    ...commitAction,
+    handleCommit,
     ...commitMessageGeneration,
     ...createPrIntentCommitMessage,
     ...remoteActionRunner,

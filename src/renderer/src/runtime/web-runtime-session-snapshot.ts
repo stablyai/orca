@@ -7,19 +7,19 @@ import {
   listRemoteRuntimeSessionTabsDeduped
 } from './remote-runtime-session-tabs-inflight'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from './web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from './web-runtime-browser-creation-e2e-fault'
 import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
 import { WEB_SESSION_TABS_FRAME_OUTRANKED } from './web-session-tabs-sync/tracking-decisions'
-// Not through the barrel: receipt ordering is this path's gate, not an optional collaborator a
-// caller's module mock may leave out — doing so is what left this path unordered to begin with.
+// Imported statically, not lazily: receipt ordering is this path's gate, not an optional
+// collaborator a caller's module mock may leave out — doing so is what left this path unordered.
 import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './web-session-tabs-sync/tracking'
-import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './web-session-tabs-sync/mirror-terminal-orphan-recovery'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
@@ -39,20 +39,31 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     errorMode?: 'warn' | 'throw'
   } = {}
 ): Promise<void> {
-  const webSessionTabsSync = await import('./web-session-tabs-sync')
+  // Why one await up front: the apply below must not yield between the list and its receipt.
+  const [
+    { applyWebSessionTabsSnapshot },
+    { applyWebSessionTabsStorePatch },
+    { decideWebSessionTabsSnapshot },
+    { getWebSessionTabsTrackingGeneration }
+  ] = await Promise.all([
+    import('./web-session-tabs-sync/snapshot-api'),
+    import('./web-session-tabs-sync/store-patch'),
+    import('./web-session-tabs-sync/tracking-decisions'),
+    import('./web-session-tabs-sync/tracking-lifecycle')
+  ])
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
   const expectedEnvironmentConnectionGeneration =
     getRuntimeEnvironmentConnectionGeneration(environmentId)
-  const expectedTrackingGeneration =
-    webSessionTabsSync.getWebSessionTabsTrackingGeneration(environmentId)
+  const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(
     environmentId,
     expectedEnvironmentPairingRevision
   )
   try {
     if (options.acceptCurrentSnapshot) {
-      const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
+      const { acceptReplayedWebSessionTabsSnapshot } =
+        await import('./web-session-tabs-sync/tracking-lifecycle')
       // Why: the host snapshot may have arrived before structured create returned;
       // re-accept its current version after the exact provisional handoff is known.
       acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
@@ -93,11 +104,6 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         ...options.confirmAgentSessionHandoff
       })
     }
-    const {
-      applyWebSessionTabsSnapshot,
-      applyWebSessionTabsStorePatch,
-      decideWebSessionTabsSnapshot
-    } = webSessionTabsSync
     // A list is evidence about a moment, not about now. Record its place in receipt order before
     // ranking it, or a snapshot the host answered before a close lands after the retraction did.
     recordReceivedWebSessionTabsSnapshot(
@@ -110,7 +116,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+    const recovered = await recoverMirroredTerminalOrphansBeforeApply(
       useAppStore.getState(),
       snapshot,
       environmentId,

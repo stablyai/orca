@@ -1,4 +1,7 @@
-import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ssh-target-registry'
+import {
+  getRegisteredSshState,
+  listRegisteredSshTargets
+} from '../../../ssh/targets/ssh-target-registry'
 import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
@@ -8,6 +11,7 @@ let clientEventSubscriptionSeq = 0
 export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
       await new Promise<void>((resolve) => {
@@ -51,6 +55,7 @@ export const CLIENT_EVENT_METHODS = [
   }),
   defineMethod({
     name: 'runtime.clientEvents.unsubscribe',
+    permission: 'workspace',
     params: ClientEventsUnsubscribeParams,
     handler: async (params, { runtime, connectionId }) => {
       const expectedPrefix = `runtime-client-events-${connectionId ?? 'inproc'}-`

@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -15,13 +14,14 @@ import {
   realpathMock,
   lstatMock,
   listWorktreesMock,
-  getSshFilesystemProviderMock,
   tryDeleteWslUncPathMock,
   recordCrashBreadcrumbMock,
   resetFilesystemIpcMocks,
   localFileHandleMock
 } from './filesystem-test-harness'
 
+const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
+vi.mock('./filesystem/local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock('node:fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
@@ -32,10 +32,6 @@ vi.mock(
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
-)
-vi.mock(
-  '../local-downloaded-folder-promotion',
-  async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
 vi.mock(
   '../git/status',
@@ -49,10 +45,6 @@ vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness'
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
-vi.mock(
-  '../providers/ssh-git-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
 vi.mock(
   '../text-generation/commit-message-text-generation',
@@ -90,30 +82,6 @@ describe('registerFilesystemHandlers', () => {
 
     expect(handlers.has('fs:readFile')).toBe(true)
     expect(handlers.has('fs:authorizeExternalPath')).toBe(false)
-  })
-
-  it('re-sorts SSH provider listings directories-first in natural order', async () => {
-    // Why: the remote relay may be an older build that still sorts lexicographically.
-    getSshFilesystemProviderMock.mockReturnValueOnce({
-      readDir: vi.fn().mockResolvedValue([
-        { name: '100 - b.txt', isDirectory: false, isSymlink: false },
-        { name: '9 - c.txt', isDirectory: false, isSymlink: false },
-        { name: '10 - dir', isDirectory: true, isSymlink: false },
-        { name: '99 - a.txt', isDirectory: false, isSymlink: false }
-      ])
-    })
-    registerFilesystemHandlers(store as never)
-
-    const result = (await handlers.get('fs:readDir')!(null, {
-      dirPath: '/remote/repo',
-      connectionId: 'ssh-1'
-    })) as { name: string }[]
-    expect(result.map((e) => e.name)).toEqual([
-      '10 - dir',
-      '9 - c.txt',
-      '99 - a.txt',
-      '100 - b.txt'
-    ])
   })
 
   it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
@@ -156,7 +124,6 @@ describe('registerFilesystemHandlers', () => {
 
   it('records a breadcrumb tagged ssh-provider when the SSH provider is gone', async () => {
     registerFilesystemHandlers(store as never)
-    getSshFilesystemProviderMock.mockReturnValue(undefined)
 
     await expect(
       handlers.get('fs:readDir')!(null, { dirPath: '/remote/repo', connectionId: 'ssh-1' })
@@ -282,24 +249,13 @@ describe('registerFilesystemHandlers', () => {
     )
 
     expect(statMock).toHaveBeenCalledWith(targetPath)
-  })
-
-  it('returns false from pathExists when an SSH provider reports a missing path', async () => {
-    const provider = {
-      stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-
-    registerFilesystemHandlers(store as never)
-
+    realpathMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     await expect(
       handlers.get('fs:pathExists')!(null, {
-        filePath: '/remote/repo/untitled-7.md',
-        connectionId: 'ssh-1'
+        filePath: path.resolve('/state/agent-session-attachments/upload/gone.png'),
+        access: { kind: 'chat-image' }
       })
     ).resolves.toBe(false)
-
-    expect(provider.stat).toHaveBeenCalledWith('/remote/repo/untitled-7.md')
   })
 
   it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {
@@ -360,6 +316,30 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Cannot write to a directory')
 
     expect(writeFileMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a guarded save through the shared compare-and-write and returns its refusal', async () => {
+    lstatMock.mockResolvedValue({ isDirectory: () => false })
+    diskPreconditionMock.writeLocalTextFileWithDiskPrecondition.mockResolvedValueOnce({
+      ok: false,
+      diskConflict: 'changed'
+    })
+    registerFilesystemHandlers(store as never)
+    const diskPrecondition = { expectedSignature: 'a-b-1' }
+
+    await expect(
+      handlers.get('fs:writeFile')!(null, {
+        filePath: path.resolve('/workspace/repo/file.txt'),
+        content: 'data',
+        diskPrecondition
+      })
+    ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
+
+    expect(diskPreconditionMock.writeLocalTextFileWithDiskPrecondition).toHaveBeenCalledWith(
+      path.resolve('/workspace/repo/file.txt'),
+      'data',
+      diskPrecondition
+    )
   })
 
   it.each([
@@ -544,163 +524,4 @@ describe('registerFilesystemHandlers', () => {
       isBinary: true
     })
   })
-
-  // Why: the original SSH Quick Open bug had two halves — relay-side policy
-  // drift AND the main dispatcher silently dropping excludePaths before the
-  // provider saw them. This test guards the second half: regardless of
-  // relay behavior, a new linked worktree under the root must be forwarded
-  // so the remote scan can prune it. See docs/design/share-quick-open-file-listing.md.
-  it('fs:listFiles forwards excludePaths to the SSH filesystem provider', async () => {
-    const listFilesMock = vi.fn().mockResolvedValue([])
-    getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
-
-    registerFilesystemHandlers(store as never)
-
-    await handlers.get('fs:listFiles')!(null, {
-      rootPath: '/home/user/repo',
-      connectionId: 'conn-1',
-      excludePaths: ['/home/user/repo/worktrees/feature']
-    })
-
-    expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
-      excludePaths: ['/home/user/repo/worktrees/feature']
-    })
-  })
-
-  it.each([1, 2, 3, 4])(
-    'keeps plain SSH queries on version %s hosts beyond the prefix limit',
-    async (version) => {
-      const listFilesMock = vi.fn().mockResolvedValue(['src/target.ts'])
-      const supportsQuickOpenSearch = vi.fn(
-        async (options: { minimumVersion?: number }) => version >= (options.minimumVersion ?? 3)
-      )
-      const inventory = [...Array.from({ length: 33 }, (_, i) => `file${i}.ts`), 'src/target.ts']
-      listFilesMock.mockImplementation(async (_root, options) =>
-        options.searchQuery
-          ? inventory.filter((file) => file.includes(options.searchQuery))
-          : inventory.slice(0, options.maxResults)
-      )
-      getSshFilesystemProviderMock.mockReturnValue({
-        listFiles: listFilesMock,
-        supportsQuickOpenSearch
-      })
-
-      registerFilesystemHandlers(store as never)
-      const request = {
-        rootPath: '/home/user/repo',
-        connectionId: 'conn-1',
-        maxResults: 33,
-        searchQuery: 'target'
-      }
-      await expect(handlers.get('fs:listFiles')!(null, request)).resolves.toEqual(['src/target.ts'])
-      expect(listFilesMock).toHaveBeenCalledOnce()
-      expect(supportsQuickOpenSearch).toHaveBeenCalledWith({ signal: undefined, minimumVersion: 1 })
-
-      expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
-        excludePaths: undefined,
-        maxResults: 33,
-        searchQuery: 'target'
-      })
-      for (const options of [
-        { includeIgnored: false },
-        { followSymlinks: true },
-        { candidatePaths: ['src/target.ts'] },
-        { searchQuery: 'tar get' },
-        { searchQuery: 'tar-get' },
-        { searchQuery: 'tar_get' }
-      ]) {
-        listFilesMock.mockClear()
-        const operation = handlers.get('fs:listFiles')!(null, { ...request, ...options })
-        const minimum = 'candidatePaths' in options ? 3 : 'searchQuery' in options ? 1 : 2
-        if (version < minimum) {
-          await expect(operation).rejects.toThrow('Update the remote host')
-          expect(listFilesMock).not.toHaveBeenCalled()
-        } else {
-          await operation
-          expect(listFilesMock).toHaveBeenCalledOnce()
-          expect(listFilesMock.mock.calls[0][1]).toMatchObject({ ...options, maxResults: 33 })
-        }
-      }
-    }
-  )
-
-  it.each(['target', 'tar get'])(
-    'retains bounded legacy SSH behavior for %s without capabilities',
-    async (query) => {
-      const listFilesMock = vi.fn().mockResolvedValue(['src/target.ts', 'src/index.ts'])
-      const supportsQuickOpenSearchMock = vi.fn().mockResolvedValue(false)
-      getSshFilesystemProviderMock.mockReturnValue({
-        listFiles: listFilesMock,
-        supportsQuickOpenSearch: supportsQuickOpenSearchMock
-      })
-
-      registerFilesystemHandlers(store as never)
-
-      await expect(
-        handlers.get('fs:listFiles')!(null, {
-          rootPath: '/home/user/repo',
-          connectionId: 'conn-1',
-          maxResults: 2,
-          searchQuery: query
-        })
-      ).resolves.toEqual(['src/target.ts'])
-
-      expect(supportsQuickOpenSearchMock).toHaveBeenCalled()
-      expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
-        excludePaths: undefined,
-        maxResults: 33
-      })
-    }
-  )
-
-  // Why #7721: without a cancel path, every workspace switch left the previous
-  // workspace's full-tree SSH scan running, stacking scans on the relay until
-  // interactive fs.readDir/fs.stat starved past their 30s timeout.
-  it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
-    'aborts an in-flight SSH file listing on %s (#7721)',
-    async (eventName) => {
-      let capturedSignal: AbortSignal | undefined
-      const listFilesMock = vi.fn(
-        (_rootPath: string, options: { signal?: AbortSignal }) =>
-          new Promise<string[]>((_resolve, reject) => {
-            capturedSignal = options.signal
-            options.signal?.addEventListener(
-              'abort',
-              () => reject(new Error('listing cancelled')),
-              {
-                once: true
-              }
-            )
-          })
-      )
-      getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
-
-      registerFilesystemHandlers(store as never)
-
-      // Why: cancellation keys are scoped to the issuing webContents, so the
-      // cancel must come from the same sender as the listing request.
-      const senderEvent = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
-      const pending = handlers.get('fs:listFiles')!(senderEvent, {
-        rootPath: '/home/user/repo',
-        connectionId: 'conn-1',
-        requestToken: 'token-1'
-      }) as Promise<string[]>
-
-      await Promise.resolve()
-      expect(capturedSignal?.aborted).toBe(false)
-      if (eventName === 'cancel') {
-        await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
-      } else {
-        senderEvent.sender.emit(eventName)
-      }
-      expect(capturedSignal?.aborted).toBe(true)
-      await expect(pending).rejects.toThrow('listing cancelled')
-      expect(senderEvent.sender.eventNames()).toEqual([])
-
-      // Unknown or already-settled tokens are a no-op, not an error.
-      expect(() =>
-        handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
-      ).not.toThrow()
-    }
-  )
 })

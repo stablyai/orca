@@ -8,6 +8,7 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionEndedChild,
   StructuredAgentSessionHostSession,
@@ -47,8 +48,54 @@ export function markProviderChildStarted(
   return child !== null
 }
 
+/** This runtime holds a child at `fence` whose process its adapter still sees running: first-hand
+ *  proof of life that needs no PID probe. A previous runtime's child is never on record here. */
+export function holdsLiveProviderChild(
+  session: Pick<ChildBearer, 'child'> | undefined,
+  fence: number,
+  processLive: (acquisitionGeneration: string) => boolean
+): boolean {
+  const child = session?.child
+  return (
+    !!child && child.fence === fence && child.generation !== null && processLive(child.generation)
+  )
+}
+
+/** The host's conversations, as lease renewal reads their children. */
+export type ProviderChildSessions = {
+  get(sessionId: string): Pick<ChildBearer, 'child'> | undefined
+}
+
+/** Lease renewal's held-child read, from the host's child record and the adapter's own handle. */
+export function heldProviderChildReader(
+  sessions: ProviderChildSessions,
+  adapter: Pick<StructuredAgentSessionAdapter, 'holdsLiveProviderProcess'> | undefined
+): (sessionId: string, fence: number) => boolean {
+  return (sessionId, fence) =>
+    holdsLiveProviderChild(
+      sessions.get(sessionId),
+      fence,
+      (generation) => adapter?.holdsLiveProviderProcess?.(sessionId, generation) === true
+    )
+}
+
 /** `endedAt` is a close's ask; an exit of the child's own ends where the journal stands. */
 export function endProviderChild(
+  session: ChildBearer,
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
+    endedAt?: AgentJournalCursor
+  }
+): boolean {
+  if (!recordProviderChildEnd(session, ended)) {
+    return false
+  }
+  session.child = null
+  return true
+}
+
+/** Records how the child on record ended, leaving it on record for its own teardown: every reader
+ *  projects its generation as ended from now on (`StructuredAgentSessionCurrentWork`). */
+export function recordProviderChildEnd(
   session: ChildBearer,
   ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
     endedAt?: AgentJournalCursor
@@ -58,7 +105,6 @@ export function endProviderChild(
   if (!child) {
     return false
   }
-  session.child = null
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),

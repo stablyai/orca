@@ -113,6 +113,7 @@ describe('registerZoomIpcBridge', () => {
       uiZoomLevel?: number
       nativeChatAppearance?: NativeChatAppearanceSettings
       editorFontZoomLevel?: number
+      pdfTakesZoom?: boolean
     } = {}
   ) {
     const {
@@ -121,7 +122,8 @@ describe('registerZoomIpcBridge', () => {
       activeElement = makeTarget({ editorClosest: true, hasXtermClass: true }),
       uiZoomLevel = 0,
       editorFontZoomLevel = 0,
-      nativeChatAppearance
+      nativeChatAppearance,
+      pdfTakesZoom = false
     } = args
 
     const applyUIZoom = vi.fn()
@@ -133,6 +135,8 @@ describe('registerZoomIpcBridge', () => {
       Object.assign(settings, updates)
     })
 
+    const requestPdfZoom = vi.fn(() => pdfTakesZoom)
+    vi.doMock('@/components/editor/pdf-zoom-request', () => ({ requestPdfZoom }))
     vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom }))
     vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged }))
     vi.doMock('../store', () => ({
@@ -176,6 +180,7 @@ describe('registerZoomIpcBridge', () => {
     }
     return {
       fire,
+      requestPdfZoom,
       applyUIZoom,
       dispatchZoomLevelChanged,
       setEditorFontZoomLevel,
@@ -206,6 +211,21 @@ describe('registerZoomIpcBridge', () => {
     )
     expect(zoom.applyUIZoom).not.toHaveBeenCalled()
     expect(zoom.setUI).not.toHaveBeenCalled()
+    expect(zoom.setEditorFontZoomLevel).not.toHaveBeenCalled()
+  })
+
+  it('consumes menu chat zoom while matching without changing saved size or app zoom', async () => {
+    const zoom = await mountZoomBridge({
+      activeTabType: 'terminal',
+      activeElement: makeTarget({ chatClosest: true }),
+      nativeChatAppearance: { fontSize: 18, matchTerminalInterface: true }
+    })
+    zoom.fire('in')
+    zoom.fire('out')
+    zoom.fire('reset')
+    await vi.waitFor(() => expect(zoom.settings.nativeChatAppearance?.fontSize).toBe(18))
+    expect(zoom.updateSettings).not.toHaveBeenCalled()
+    expect(zoom.applyUIZoom).not.toHaveBeenCalled()
     expect(zoom.setEditorFontZoomLevel).not.toHaveBeenCalled()
   })
 
@@ -247,6 +267,30 @@ describe('registerZoomIpcBridge', () => {
     // 13px base + one step = 14px, reported against the base as 108%.
     expect(zoom.dispatchZoomLevelChanged).toHaveBeenCalledWith('editor', 108)
     expect(zoom.applyUIZoom).not.toHaveBeenCalled()
+  })
+
+  it('hands editor-tab zoom to the PDF it shows instead of editor font zoom', async () => {
+    const zoom = await mountZoomBridge({
+      activeTabType: 'editor',
+      activeElement: makeTarget({}),
+      pdfTakesZoom: true
+    })
+
+    zoom.fire('out')
+
+    expect(zoom.requestPdfZoom).toHaveBeenCalledWith('out')
+    expect(zoom.setEditorFontZoomLevel).not.toHaveBeenCalled()
+    expect(zoom.dispatchZoomLevelChanged).not.toHaveBeenCalled()
+    expect(zoom.applyUIZoom).not.toHaveBeenCalled()
+  })
+
+  it('never offers app zoom outside editor tabs to a PDF', async () => {
+    const zoom = await mountZoomBridge({ activeTabType: 'browser', pdfTakesZoom: true })
+
+    zoom.fire('in')
+
+    expect(zoom.requestPdfZoom).not.toHaveBeenCalled()
+    expect(zoom.applyUIZoom).toHaveBeenCalledWith(0.5)
   })
 
   it('clamps app zoom at the supported maximum', async () => {

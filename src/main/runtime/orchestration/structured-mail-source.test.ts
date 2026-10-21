@@ -11,21 +11,32 @@ describe('who delivered mail is from', () => {
       mailboxHandle: 'run:r1',
       dispatchId: null,
       batch: [
-        { id: 'm1', from_handle: 'term_a', run_id: 'r1' },
-        { id: 'm2', from_handle: `orca_session_id:${SESSION}`, run_id: 'r2' },
-        { id: 'm3', from_handle: 'term_a', run_id: 'r1' }
-      ]
+        { id: 'm1', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null },
+        {
+          id: 'm2',
+          from_handle: `orca_session_id:${SESSION}`,
+          run_id: 'r2',
+          type: 'status',
+          payload: null
+        },
+        { id: 'm3', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null }
+      ],
+      senderName: (party) => (party.terminalHandle === 'term_a' ? 'Build tab' : null)
     })
     expect(source).toEqual({
       kind: 'agent',
       senders: [
-        { party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null } },
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Build tab'
+        },
         {
           party: {
             address: `orca_session_id:${SESSION}`,
             terminalHandle: null,
             orcaSessionId: SESSION
-          }
+          },
+          name: null
         }
       ],
       orchestration: {
@@ -39,5 +50,23 @@ describe('who delivered mail is from', () => {
         ]
       }
     })
+  })
+
+  it('bounds a snapshot name, and a naming failure costs only the name', () => {
+    const named = (senderName: (party: unknown) => string | null) =>
+      structuredMailSource({
+        db: null,
+        mailboxHandle: 'run:r1',
+        dispatchId: null,
+        batch: [{ id: 'm1', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null }],
+        senderName
+      }).senders[0]?.name
+    expect(named(() => `  Build\n${'x'.repeat(400)}`)).toHaveLength(200)
+    expect(named(() => '   ')).toBeNull()
+    expect(
+      named(() => {
+        throw new Error('records unavailable')
+      })
+    ).toBeNull()
   })
 })

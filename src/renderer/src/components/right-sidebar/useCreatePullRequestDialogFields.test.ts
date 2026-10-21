@@ -94,6 +94,7 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
       eligibility: currentInput.eligibility,
       currentBaseRef: currentInput.currentBaseRef,
       settings: currentInput.settings ?? null,
+      target: { kind: 'local' },
       submitting: false,
       generation: currentInput.generation
     })

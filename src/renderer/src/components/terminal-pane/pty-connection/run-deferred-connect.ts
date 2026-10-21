@@ -1,18 +1,19 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 import { useAppStore } from '@/store'
 import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
+import { waitsForMainPaneStart } from './main-pane-start-wait'
 import { findTerminalTabForPane } from './terminal-tab-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
 
-import { bindPrepaintParkedSshSnapshot } from './ssh-snapshot-prepaint'
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
 import { bindRegisterPaneSerializer } from './pane-serializer-register'
 import { bindHandleReattachResult } from './reattach-result-handler'
@@ -23,17 +24,21 @@ import { bindSettlePaneSerializer } from './pane-serializer-settle'
 
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
 import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
-import { bindHiddenRestoreStateAndSshProbe } from './hidden-restore-state-and-ssh-probe'
+import { bindHiddenRestoreState } from './hidden-restore-state'
 import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
+import { bindRemoteProgramRedraw } from './remote-program-redraw'
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
   const cwdPromise = session.deps.cwdPromise
   let cwdPromiseSettled = cwdPromise === undefined
   let cwdPromiseWaitStarted = false
   let wakeWaitStarted = false
+  let deadlinePassed = false
+  let failedFitRetries = 0
+  let releaseHideWait: (() => void) | null = null
 
   session.runDeferredConnect = (): void => {
-    if (session.connectStarted) {
+    if (session.connectStarted || session.disposed) {
       return
     }
     // Why: a deliberately slept workspace keeps its panes mounted, so connecting
@@ -74,10 +79,6 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     }
     if (!cwdPromiseSettled) {
       session.cancelScheduledConnectFrame()
-      if (session.connectFallbackTimer !== null) {
-        clearTimeout(session.connectFallbackTimer)
-        session.connectFallbackTimer = null
-      }
       if (!cwdPromiseWaitStarted) {
         cwdPromiseWaitStarted = true
         void cwdPromise?.then(
@@ -101,28 +102,53 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       }
       return
     }
-    if (!session.startupGridSettledForConnect && session.shouldSettleStartupGridBeforeConnect()) {
+    const fitCompleted = safeFit(session.pane)
+    // Visible local startup commands need their first fitted grid before a TUI can paint.
+    const waitForFit =
+      Boolean(session.paneStartup?.command || session.paneStartup?.agentLaunch) &&
+      session.deps.isVisibleRef.current &&
+      getWindowParkVisible() &&
+      !session.unservedSshTargetId &&
+      session.runtimeEnvironmentId === null
+    // Retained-grid fallback must not become slower while frames are available.
+    if (waitForFit && !fitCompleted && !deadlinePassed && failedFitRetries < 12) {
+      if (releaseHideWait === null) {
+        const unsubscribe = subscribeWindowParkVisibility(() => {
+          if (!getWindowParkVisible()) {
+            session.runDeferredConnect()
+          }
+        })
+        const release = (): void => {
+          releaseHideWait = null
+          const index = session.waitTeardowns.indexOf(release)
+          if (index !== -1) {
+            session.waitTeardowns.splice(index, 1)
+          }
+          unsubscribe()
+        }
+        releaseHideWait = release
+        session.waitTeardowns.push(release)
+      }
+      session.cancelScheduledConnectFrame()
+      failedFitRetries += 1
+      session.connectFrame = requestAnimationFrame(session.runDeferredConnect)
+      return
+    }
+    if (waitsForMainPaneStart(session, session.runDeferredConnect)) {
       session.cancelScheduledConnectFrame()
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
         session.connectFallbackTimer = null
       }
-      session.settleStartupGridBeforeConnect(() => {
-        session.startupGridSettledForConnect = true
-        session.runDeferredConnect()
-      })
       return
     }
     session.connectStarted = true
+    releaseHideWait?.()
     session.cancelScheduledConnectFrame()
     if (session.connectFallbackTimer !== null) {
       clearTimeout(session.connectFallbackTimer)
       session.connectFallbackTimer = null
     }
-    if (session.disposed) {
-      return
-    }
-    safeFit(session.pane)
     session.cols = session.pane.terminal.cols
     session.rows = session.pane.terminal.rows
 
@@ -152,7 +178,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         // parent/child root) is being deleted. That is expected teardown, not a
         // user-facing failure — the pane unmounts once removal completes, so never
         // surface the raw fence error. Covers the parent-removal-fences-child case
-        // that startFreshSpawn's own-worktree isDeleting skip cannot see.
+        // that startFreshSpawn's own-worktree teardown skip cannot see.
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)
@@ -188,18 +214,21 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       )
     }
 
+    bindRemoteProgramRedraw(session)
     bindSerializeHiddenOutputSnapshot(session)
     bindForegroundOutputRefresh(session)
     bindHiddenOutputSeqAndSkip(session)
-    bindHiddenRestoreStateAndSshProbe(session)
-
-    bindPrepaintParkedSshSnapshot(session)
+    bindHiddenRestoreState(session)
     bindParkRevealSnapshotVerdictActions(session)
     bindHandleReattachResult(session)
     runDeferredSessionAttach(session)
   }
 
   // Why: Wayland/CI compositors can starve rAF while timers/CDP stay responsive; the terminal must still start its PTY once.
-  session.connectFallbackTimer = setTimeout(session.runDeferredConnect, 250)
+  session.connectFallbackTimer = setTimeout(() => {
+    deadlinePassed = true
+    session.connectFallbackTimer = null
+    session.runDeferredConnect()
+  }, 250)
   session.connectFrame = requestAnimationFrame(session.runDeferredConnect)
 }

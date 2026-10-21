@@ -4,7 +4,7 @@
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { IDisposable } from '@xterm/xterm'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import {
   installTerminalImeCompositionRoute,
   XTERM_COMPOSITION_SESSION_END_EVENT,

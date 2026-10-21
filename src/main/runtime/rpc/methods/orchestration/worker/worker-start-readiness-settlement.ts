@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import { chatAssigneeSessionId } from '../../../../orchestration/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,
@@ -39,7 +40,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   setupReceipt: WorkerSetupReceipt
   launchReceipt: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
+  /** The caller's timeout, as the receipt reports it. */
   timeoutMs: number
+  /** When the caller's timeout runs out; a structured preamble waits on its agent until then. */
+  readinessDeadline: number
   effects: WorkerEffect[]
   terminalRevealWarning: string | undefined
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
@@ -55,12 +59,14 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     terminalHandle,
     dispatchId: args.dispatchId,
     dispatchDepth: args.dispatchDepth,
+    runId: run.id,
     taskId: task.id,
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
     devMode: args.devMode,
     requestId: args.requestId,
-    launchedAgent: args.launchedAgent
+    launchedAgent: args.launchedAgent,
+    readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now())
   })
   effects.push({
     kind: 'dispatch_input',
@@ -124,8 +130,10 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       residualResources: JSON.parse(worker.residual_resources) as unknown[],
       nextCommands: [
         `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
-        // A structured worker has no screen to read.
-        ...(structuredSession ? [] : [`orca terminal read --terminal ${terminalHandle} --screen`]),
+        // A structured worker or a chat has no screen to read.
+        ...(structuredSession || chatAssigneeSessionId(terminalHandle)
+          ? []
+          : [`orca terminal read --terminal ${terminalHandle} --screen`]),
         `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
       ],
       ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})

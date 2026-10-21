@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createLocalTmuxManagedPtyResolver } from './local-tmux-managed-pty'
-import type { PtyProcessInfo } from '../providers/types'
+import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 const row: PtyProcessInfo = {
   id: 'pty',

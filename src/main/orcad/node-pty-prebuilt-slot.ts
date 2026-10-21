@@ -11,7 +11,7 @@
  * The prebuilds themselves are built from the PATCHED source (config/patches/node-pty@1.1.0.patch)
  * by config/scripts/build-orcad-prebuilds.mjs. An upstream tarball would not do: the patch
  * carries the `.symver` pins and the `--no-as-needed` libutil/libpthread flags that hold the
- * glibc 2.28 server-slot floor (docs/reference/linux-glibc-compatibility.md).
+ * glibc 2.28 server-slot floor.
  *
  * The gate is N-API + libc + arch, not NODE_MODULE_VERSION: the slots are Node-API addons,
  * so one build loads on the pinned Node and on any host Node whose N-API level is at least

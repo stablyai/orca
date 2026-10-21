@@ -1,5 +1,7 @@
 import { AgentHookServer } from '../agent-hooks/server'
+import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
+import { AgentStatusObservedPaneIdentities } from './agent-status-observed-pane-identity'
 
 type WiredRuntime = {
   getTerminalWorktreeIdForHandle(handle: string): string | null
@@ -9,46 +11,23 @@ type WiredRuntime = {
 }
 
 /**
- * The agent-status wiring every real host performs, in one place for the runtime specs.
- *
- * `main-process-runtime-service.ts` and `orcad-entry.ts` both hand the runtime's OSC parse to
- * the store, read the listing back out of it, and install the republish signal. A runtime
- * constructed without these observes agent status and publishes it nowhere, so a spec that
- * exercises OSC 9999 has to compose the same three parts.
+ * The agent-status wiring every real host performs, for the runtime specs: the same
+ * `agentHookRuntimeDeps` bindings plus the republish signal. A runtime constructed without these
+ * observes agent status and publishes it nowhere.
  */
 export function makeAgentStatusStoreWiring(): {
   statusStore: AgentHookServer
-  deps: {
-    onTerminalAgentStatus: (event: Parameters<AgentHookServer['ingestTerminalStatus']>[0]) => void
-    getAgentStatusSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
-    getAgentProviderSessionSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
-    getAgentProviderSessionRowsForPane: (
-      paneKey: string
-    ) => ReturnType<AgentHookServer['getStatusSnapshotForPane']>
-    reconcileAgentStatusForEndedProcess: (
-      paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0]
-    ) => void
-    dropAgentStatusForRemovedWorktree: AgentHookServer['dropStatusEntriesForRemovedWorktree']
-  }
+  deps: ReturnType<typeof agentHookRuntimeDeps>
   /** Call once the runtime exists; returns the republish teardown. */
   attach: (runtime: WiredRuntime) => () => void
 } {
   const statusStore = new AgentHookServer()
   return {
     statusStore,
-    deps: {
-      onTerminalAgentStatus: (event) => statusStore.ingestTerminalStatus(event),
-      getAgentStatusSnapshot: () =>
-        statusStore.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
-      getAgentProviderSessionSnapshot: () => statusStore.getStatusSnapshot(),
-      getAgentProviderSessionRowsForPane: (paneKey) =>
-        statusStore.getStatusSnapshotForPane(paneKey),
-      reconcileAgentStatusForEndedProcess: (paneKeys) => {
-        statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
-      },
-      dropAgentStatusForRemovedWorktree: (worktreeId, host) =>
-        statusStore.dropStatusEntriesForRemovedWorktree(worktreeId, host)
-    },
+    // Hooks off: these specs drive status through OSC, and must not inject hook endpoint env.
+    deps: agentHookRuntimeDeps(statusStore, new AgentStatusObservedPaneIdentities(), () => ({
+      agentStatusHooksEnabled: false
+    })),
     attach: (runtime) => installHookStatusSessionTabsRepublish(statusStore, () => runtime)
   }
 }

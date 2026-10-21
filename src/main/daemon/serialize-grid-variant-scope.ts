@@ -29,10 +29,13 @@ export function variantOverlong(
   const alt = source.buffer.active.type === 'alternate'
   const altOverlong =
     alt && hasOverlongLine(source.buffer.alternate, 0, source.buffer.alternate.length, cols)
+  const normalStart = serializedNormalStart(source, scrollback)
+  const allNormalOverlong = altOverlong || hasOverlongLine(normal, 0, normal.length, cols)
   return [
-    altOverlong ||
-      hasOverlongLine(normal, serializedNormalStart(source, scrollback), normal.length, cols),
-    altOverlong || hasOverlongLine(normal, 0, normal.length, cols),
+    normalStart === 0
+      ? allNormalOverlong
+      : altOverlong || hasOverlongLine(normal, normalStart, normal.length, cols),
+    allNormalOverlong,
     hasOverlongLine(normal, rangeRow, Math.min(rangeRow + 2, normal.length - 1) + 1, cols)
   ]
 }
@@ -48,12 +51,13 @@ function hasTrailingBackgroundRow(
   if (buffer.length - start > rows || buffer.cursorX >= cols) {
     return false
   }
+  const scratch = buffer.getNullCell()
   // Text as the serializer counts it: width-0 cells (e.g. an orphan combining mark) never are.
   let lastTextRow = start - 1
   for (let y = start; y < end; y++) {
     const line = buffer.getLine(y)
     for (let x = 0; x < cols; x++) {
-      const cell = line?.getCell(x)
+      const cell = line?.getCell(x, scratch)
       if (cell && cell.getWidth() > 0 && cell.getChars() !== '') {
         lastTextRow = y
         break
@@ -63,7 +67,7 @@ function hasTrailingBackgroundRow(
   for (let y = lastTextRow + 1; y < end; y++) {
     const line = buffer.getLine(y)
     for (let x = 0; x < cols; x++) {
-      if (line?.getCell(x)?.isBgDefault() === false) {
+      if (line?.getCell(x, scratch)?.isBgDefault() === false) {
         return true
       }
     }
@@ -80,15 +84,14 @@ export function variantTrailingBackgroundRows(
   const altTrailing =
     source.buffer.active.type === 'alternate' &&
     hasTrailingBackgroundRow(source.buffer.alternate, 0, source.buffer.alternate.length, source)
+  const normalStart = serializedNormalStart(source, scrollback)
+  const allNormalTrailing =
+    altTrailing || hasTrailingBackgroundRow(normal, 0, normal.length, source)
   return [
-    altTrailing ||
-      hasTrailingBackgroundRow(
-        normal,
-        serializedNormalStart(source, scrollback),
-        normal.length,
-        source
-      ),
-    altTrailing || hasTrailingBackgroundRow(normal, 0, normal.length, source),
+    normalStart === 0
+      ? allNormalTrailing
+      : altTrailing || hasTrailingBackgroundRow(normal, normalStart, normal.length, source),
+    allNormalTrailing,
     hasTrailingBackgroundRow(
       normal,
       rangeRow,

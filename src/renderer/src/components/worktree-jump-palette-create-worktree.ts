@@ -1,3 +1,6 @@
+import { worktreeMatchesGitHubNumber } from '@/lib/github-work-item-workspace-attachment'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import {
   getLinkedWorkItemSuggestedName,
@@ -5,7 +8,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { getRepoMapFromState } from '@/store/selectors'
 import { useAppStore } from '@/store'
@@ -26,7 +29,7 @@ import type { WorktreeJumpPaletteTaskUrl } from './use-worktree-jump-palette-tas
 
 type WorktreeJumpPaletteCreateWorktreeInput = Pick<
   WorktreeJumpPaletteStoreState,
-  'allWorktrees' | 'closeModal' | 'openModal' | 'recordFeatureInteraction'
+  'workspaces' | 'closeModal' | 'openModal' | 'recordFeatureInteraction'
 > &
   Pick<WorktreeJumpPaletteFilter, 'repoMap'> &
   Pick<
@@ -52,7 +55,7 @@ type WorktreeJumpPaletteCreateWorktreeInput = Pick<
   >
 
 export function createWorktreeJumpPaletteWorktreeHandler({
-  allWorktrees,
+  workspaces,
   closeModal,
   createLookupGuard,
   createWorktreeName,
@@ -208,20 +211,31 @@ export function createWorktreeJumpPaletteWorktreeHandler({
 
     if (ghNumber !== null) {
       const state = useAppStore.getState()
-      const matches = allWorktrees.filter(
+      const matches = workspaces.filter(
         (worktree) =>
           !worktree.isArchived &&
-          (worktree.linkedIssue === ghNumber || worktree.linkedPR === ghNumber)
+          worktreeMatchesGitHubNumber(
+            worktree,
+            ghNumber,
+            findRepoForHost(state.repos, worktree.repoId, {
+              hostId: getPaletteWorktreeExecutionHostId(worktree),
+              settings: state.settings
+            }) ?? undefined
+          )
       )
       const activeMatch =
         matches.find((worktree) => worktree.repoId === state.activeRepoId) ?? matches[0]
       if (activeMatch) {
+        const executionHostId = getPaletteWorktreeExecutionHostId(activeMatch)
+        const activation = activateAndRevealWorkspace(
+          activeMatch.id,
+          executionHostId ? { executionHostId } : {}
+        )
+        if (!activation) {
+          return
+        }
         skipRestoreFocusRef.current = true
         closeModal()
-        const activation = activateAndRevealWorktree(
-          activeMatch.id,
-          activeMatch.hostId ? { executionHostId: activeMatch.hostId } : {}
-        )
         if (!queueWorkspaceActivationTerminalFocus(activeMatch.id, activation)) {
           focusFallbackSurface()
         }

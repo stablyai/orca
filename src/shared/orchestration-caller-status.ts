@@ -25,3 +25,15 @@ export type OrchestrationCallerShowResult = { caller: OrchestrationCallerSession
 
 /** `orchestration.sessionAddress`: a session's Orca session ID, its `/clear` root's. */
 export type OrchestrationSessionAddressResult = { orcaSessionId: string }
+
+/** Where a party is now: a chat at its `/clear` lineage's live session, or a terminal. */
+export type OrchestrationPartyLocation =
+  | { kind: 'chat'; sessionId: string; worktreeId: string }
+  | { kind: 'terminal'; handle: string }
+
+/** `orchestration.partyLocation`: a null location is a party this host does not find. `lost` says
+ *  it proved that party gone, and what it was; absent, the host cannot tell (one it does not run). */
+export type OrchestrationPartyLocationResult = {
+  location: OrchestrationPartyLocation | null
+  lost?: 'chat' | 'terminal'
+}

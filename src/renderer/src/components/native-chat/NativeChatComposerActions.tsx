@@ -7,6 +7,7 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
@@ -21,6 +22,8 @@ export type NativeChatComposerActionsProps = {
   /** Storage refused this draft; it is held in memory only. */
   draftNotSaved?: boolean
   isWorking: boolean
+  /** This client's Stop request is in flight: the Stop control is disabled and says so. */
+  isStopping?: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
@@ -32,10 +35,13 @@ export type NativeChatComposerActionsProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  focusComposer?: () => void
   /** Present while the composer is in goal mode; the chip calls it to leave. */
   onExitGoalMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
   contextUsage?: NativeChatContextUsageSummary | null
+  /** The chat's agent, whose permission modes the picker describes. */
+  agent?: string
 }
 
 export function NativeChatComposerActions({
@@ -45,6 +51,7 @@ export function NativeChatComposerActions({
   sendBlockedReason,
   draftNotSaved,
   isWorking,
+  isStopping = false,
   isDictating,
   isDictationHoldMode,
   onAttach,
@@ -57,15 +64,18 @@ export function NativeChatComposerActions({
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
-  contextUsage
+  contextUsage,
+  focusComposer,
+  agent
 }: NativeChatComposerActionsProps): React.JSX.Element {
+  const stops = isWorking
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
     // changed to Stop; ignore the second click instead of cancelling the new turn.
     if (event.detail > 1) {
       return
     }
-    if (isWorking) {
+    if (stops) {
       onStop?.()
     } else {
       onSend()
@@ -74,23 +84,27 @@ export function NativeChatComposerActions({
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
-  const sendReason = isWorking ? null : (sendBlockedReason ?? null)
+  const sendReason = stops ? null : (sendBlockedReason ?? null)
   const sendButton = (
     <Button
       type="button"
-      data-native-chat-critical-action={isWorking ? 'stop' : undefined}
+      data-native-chat-critical-action={stops ? 'stop' : undefined}
       aria-label={
-        isWorking
-          ? translate('components.native-chat.stop', 'Stop the agent')
+        stops
+          ? isStopping
+            ? translate('components.native-chat.status.stopping', 'Stopping…')
+            : translate('components.native-chat.stop', 'Stop the agent')
           : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
       }
-      disabled={sendDisabled}
+      disabled={sendDisabled || (isWorking && isStopping)}
+      // A press keeps focus where it was; a focused button drops it to <body> when it disables.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
-      variant={isWorking ? 'secondary' : 'default'}
+      variant={stops ? 'secondary' : 'default'}
       size="icon"
       className="size-8 rounded-full pointer-coarse:size-10"
     >
-      {isWorking ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
+      {stops ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
     </Button>
   )
 
@@ -115,16 +129,22 @@ export function NativeChatComposerActions({
             {translate('components.native-chat.composer.attach', 'Attach file')}
           </TooltipContent>
         </Tooltip>
+        <NativeChatComposerPermissionPicker
+          surface={sessionOptionsSurface}
+          snapshot={sessionOptionsSnapshot}
+          {...(agent ? { agent } : {})}
+        />
         {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Why: keep session controls beside the actions they affect; the
-        model trigger is ordered last so only the context ring separates it from dictation. */}
+        {/* Why: keep the session picker beside the actions it affects; only the
+        context ring separates it from dictation. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
+          focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
         <Tooltip>

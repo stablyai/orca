@@ -17,6 +17,7 @@ import {
   findLinearWorkflowStateForStatus,
   getLinearStatusSectionState
 } from './task-page-linear-issue-model'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel) {
   const {
     settings,
@@ -114,7 +115,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
       }
       try {
         const states = await linearTeamStates(
-          linearTaskSourceContext ?? settings,
+          linearTaskSourceContext ?? defaultScopeSource(settings),
           issue.team.id,
           issue.workspaceId
         )
@@ -151,7 +152,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
         })
         applyFallbackState(nextState)
         const result = await linearUpdateIssue(
-          linearTaskSourceContext ?? settings,
+          linearTaskSourceContext ?? defaultScopeSource(settings),
           issue.id,
           {
             stateId: workflowState.id

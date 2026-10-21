@@ -36,9 +36,9 @@ export function NativeChatEmptyState({
           <MessageSquare className="size-6" />
         )}
       </div>
-      <p className="text-sm font-medium text-foreground">{copy.title}</p>
+      <p className="text-sm font-medium text-chat-foreground-strong">{copy.title}</p>
       {copy.subtitle ? (
-        <p className="max-w-sm text-balance text-xs text-muted-foreground">{copy.subtitle}</p>
+        <p className="max-w-sm text-balance text-xs text-chat-foreground-faint">{copy.subtitle}</p>
       ) : null}
     </div>
   )

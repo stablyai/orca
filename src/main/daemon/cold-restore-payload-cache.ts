@@ -1,4 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 
 export type ColdRestorePayload = {
   scrollback: string
@@ -8,6 +10,27 @@ export type ColdRestorePayload = {
   oscLinks?: TerminalOscLinkRange[]
   /** Last OSC title from the recovered checkpoint; seeds title records only. */
   lastTitle?: string
+}
+
+export function coldRestorePayloadFromInfo(
+  restoreInfo: ColdRestoreInfo
+): ColdRestorePayload | null {
+  // Why no rehydrate on alt-screen: its ?1049h would paint the TUI frame on the alt buffer, which the appended ground's ?1049l then discards.
+  const scrollback = restoreInfo.modes.alternateScreen
+    ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
+    : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+  if (!scrollback) {
+    return null
+  }
+  return {
+    // Why grounded here too: main's mirror seeds from this payload, not the renderer's reset.
+    scrollback: `${scrollback}${PROCESS_BOUNDARY_GROUND}`,
+    cwd: restoreInfo.cwd,
+    cols: restoreInfo.cols,
+    rows: restoreInfo.rows,
+    oscLinks: restoreInfo.oscLinks,
+    ...(restoreInfo.lastTitle ? { lastTitle: restoreInfo.lastTitle } : {})
+  }
 }
 
 // Why: restore payloads remain sticky only for remount safety; cap their aggregate main-process footprint.

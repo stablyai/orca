@@ -88,6 +88,43 @@ describe('orca file CLI handlers', () => {
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
   })
 
+  it('forwards 1-based positions while preserving default background navigation', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('open', { worktree: 'wt-1', relativePath: 'a.ts', kind: 'text', opened: true })
+    )
+    await main(
+      ['file', 'open', 'a.ts', '--worktree', 'id:wt-1', '--line', '42', '--column', '7'],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith('files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'a.ts',
+      navigation: 'caller',
+      line: 42,
+      column: 7
+    })
+  })
+
+  it.each([
+    ['--column', '7'],
+    ['--line', '0'],
+    ['--line', '-1'],
+    ['--line', '4.5'],
+    ['--line', 'x'],
+    ['--line', '9007199254740992'],
+    ['--line='],
+    ['--line'],
+    ['--line', '2', '--column='],
+    ['--line', '2', '--column', '0']
+  ])('rejects invalid positioning %j before resolving a workspace', async (...flags) => {
+    await main(['file', 'open', 'a.ts', ...flags], '/tmp/repo')
+    expect(process.exitCode).toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0]?.[0]).toMatch(/--(?:line|column)/)
+    process.exitCode = undefined
+  })
+
   it('opens a staged diff for an explicit worktree without cwd inference', async () => {
     queueFixtures(
       callMock,

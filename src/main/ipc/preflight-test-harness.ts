@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { Mock } from 'vitest'
-import { _resetPreflightCache } from './preflight'
+import { _resetPreflightCache } from '../preflight/agent-detection'
 
 export type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
@@ -10,7 +10,6 @@ export type PreflightMocks = {
   runWslProcessMock?: Mock
   hydrateShellPathMock: Mock
   mergePathSegmentsMock: Mock
-  getActiveMultiplexerMock: Mock
   getBitbucketAuthStatusMock: Mock
   getAzureDevOpsAuthStatusMock: Mock
   getGiteaAuthStatusMock: Mock
@@ -47,7 +46,6 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     runWslProcessMock,
     hydrateShellPathMock,
     mergePathSegmentsMock,
-    getActiveMultiplexerMock,
     getBitbucketAuthStatusMock,
     getAzureDevOpsAuthStatusMock,
     getGiteaAuthStatusMock,
@@ -64,7 +62,6 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   hydrateShellPathMock.mockReset()
   hydrateShellPathMock.mockResolvedValue({ segments: [], ok: false, failureReason: 'no_shell' })
   mergePathSegmentsMock.mockReset()
-  getActiveMultiplexerMock.mockReset()
   // Why empty by default: with no fs candidates the local probe keeps its
   // historical bare-name spawn, so cases that stub only where/which and execFile
   // still assert on the command names they were written against.

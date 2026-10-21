@@ -8,6 +8,7 @@ import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
+import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/browser-guest-paint-retention'
 import {
   isClientHostedBrowserRowSelectionLive,
@@ -135,6 +136,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     }))
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
+  const isFloatingWorkspace = isFloatingWorkspaceId(worktreeId)
   const knownFocusedGroupId = useMemo(
     () =>
       focusedGroupId !== undefined && groups.some((group) => group.id === focusedGroupId)
@@ -180,7 +182,8 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
         const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
           ? 'inactive'
-          : knownFocusedGroupId === undefined
+          : // Why: 'focused' means the main window's focused split, so a floating browser answers only its own chords.
+            isFloatingWorkspace || knownFocusedGroupId === undefined
             ? 'owned-target'
             : assignment?.groupId === knownFocusedGroupId
               ? 'focused'

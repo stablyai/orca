@@ -6,7 +6,7 @@ import { planAgentSessionLaunch } from './agent-session-launch-plan'
 // Deliberately un-mocked: the defect this pins lives in the owner resolution itself, so a suite
 // that stages `getConnectionIdFromState` cannot catch it. Grok is the agent the answer routes on —
 // only agents whose hook discloses no transcript path read the local-readability input at all.
-const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true }
 const WORKTREE_ID = 'repo-1::/repo/wt-1'
 const WORKSPACE = { kind: 'git-worktree', worktreeId: WORKTREE_ID, repoId: 'repo-1' } as const
 
@@ -44,7 +44,7 @@ describe('launch route transcript readability', () => {
     expect(
       planAgentSessionLaunch(store, { requestId: 'request-1', agent: 'grok', workspace: WORKSPACE })
         .route
-    ).toBe('legacy-native-chat')
+    ).toBe('terminal-tui')
   })
 
   it('keeps a remote repo off native chat through the same fallback', () => {

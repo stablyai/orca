@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
+import { resolveProfileLoadingShell } from '../startup/hydrate-shell-path'
 
 const {
   handleMock,
@@ -7,7 +8,6 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
-  getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
@@ -22,7 +22,6 @@ const {
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
-  getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
@@ -56,7 +55,9 @@ vi.mock('child_process', () => {
 
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
-  mergePathSegments: mergePathSegmentsMock
+  mergePathSegments: mergePathSegmentsMock,
+  resolveProfileLoadingShell: vi.fn(() => null),
+  resolveProfileLoadingFallbackShell: () => null
 }))
 
 vi.mock('../../shared/node-cli-command-resolution', () => ({
@@ -73,12 +74,9 @@ vi.mock('./command-path-resolver', async (importOriginal) => ({
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
+  readPersistedWindowsPathSegmentsAsync: async () => [],
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
@@ -101,6 +99,7 @@ describe('preflight', () => {
   const handlers: HandlerMap = {}
 
   beforeEach(() => {
+    vi.mocked(resolveProfileLoadingShell).mockClear()
     runWslProcessMock.mockReset()
     resetPreflightMocks(
       {
@@ -108,7 +107,6 @@ describe('preflight', () => {
         execFileAsyncMock,
         hydrateShellPathMock,
         mergePathSegmentsMock,
-        getActiveMultiplexerMock,
         getBitbucketAuthStatusMock,
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
@@ -178,6 +176,7 @@ describe('preflight', () => {
     })
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
+    expect(resolveProfileLoadingShell).not.toHaveBeenCalled()
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

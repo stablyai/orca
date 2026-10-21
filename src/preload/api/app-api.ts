@@ -14,8 +14,15 @@ import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapsh
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 
 export type AppApi = {
+  /** A local profile storage operation is delayed and holds up subsequent saves. */
+  isProfileStateSaveDelayed: () => Promise<boolean>
+  onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
+  /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
+  getWindowsAdministratorStatus: () => Promise<boolean | null>
+  /** Restarts the installed Windows desktop with administrator approval and replaces its local terminal host. */
+  restartAsAdministrator: () => Promise<void>
   /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;
    *  in packaged builds this is file:// resources. Renderer appends filenames. */
   getFeatureWallAssetBaseUrl: () => Promise<string>

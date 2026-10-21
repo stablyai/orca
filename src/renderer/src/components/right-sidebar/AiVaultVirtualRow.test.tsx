@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { AiVaultVirtualRow } from './AiVaultVirtualRow'
 
 const cliSession: AiVaultSession = {
@@ -34,9 +35,16 @@ afterEach(() => {
   cleanup()
 })
 
-function renderSession(session: AiVaultSession, blocked = false) {
+function renderSession(
+  session: AiVaultSession,
+  blocked = false,
+  searchHit?: AiVaultSearchHit,
+  searchHitHostLabels?: ReadonlyMap<string, string>
+) {
   const buildResumeStartup = vi.fn(() => ({ command: session.resumeCommand }))
   const onCopyResume = vi.fn()
+  const onResume = vi.fn()
+  const onResumeInNewCli = vi.fn()
   render(
     <TooltipProvider>
       <AiVaultVirtualRow
@@ -48,6 +56,8 @@ function renderSession(session: AiVaultSession, blocked = false) {
         collapsedGroups={new Set()}
         expandedSessionIds={new Set()}
         vaultScope="all"
+        searchHits={searchHit ? new Map([[session.id, searchHit]]) : undefined}
+        searchHitHostLabels={searchHitHostLabels}
         buildResumeStartup={buildResumeStartup}
         getOriginalPaneTarget={() => null}
         isStructuredSessionOpen={() => false}
@@ -67,9 +77,10 @@ function renderSession(session: AiVaultSession, blocked = false) {
         onToggleSessionDetails={vi.fn()}
         onJumpToOriginalPane={vi.fn()}
         onJumpToWorktree={vi.fn()}
-        onResume={vi.fn()}
+        onResume={onResume}
         onContinueInNewSession={vi.fn()}
         onResumeInNewChat={vi.fn()}
+        onResumeInNewCli={onResumeInNewCli}
         onCopyResume={onCopyResume}
         onCopyId={vi.fn()}
         onCopyPath={vi.fn()}
@@ -80,8 +91,22 @@ function renderSession(session: AiVaultSession, blocked = false) {
       />
     </TooltipProvider>
   )
-  return { buildResumeStartup, onCopyResume }
+  return { buildResumeStartup, onCopyResume, onResume, onResumeInNewCli }
 }
+
+describe('AiVaultVirtualRow search hit source host', () => {
+  it('names the host a hit came from when hits span several hosts', () => {
+    renderSession(cliSession, false, undefined, new Map([['local', 'Local Mac']]))
+
+    expect(screen.getByTitle('Found on Local Mac').textContent).toBe('Local Mac')
+  })
+
+  it('shows no host badge when every hit came from one host', () => {
+    renderSession(cliSession)
+
+    expect(screen.queryByTitle(/^Found on /)).toBeNull()
+  })
+})
 
 describe('AiVaultVirtualRow resume command actions', () => {
   it('renders blocked IDE references without preparing an unsafe startup command', () => {
@@ -132,5 +157,74 @@ describe('AiVaultVirtualRow resume command actions', () => {
     expect(screen.queryByRole('menuitem', { name: 'Copy Resume Command' })).toBeNull()
     expect(onCopyResume).not.toHaveBeenCalled()
     expect(buildResumeStartup).not.toHaveBeenCalled()
+  })
+
+  it('opens a paired host native chat search hit that carries no resume command', async () => {
+    const owner = { sessionId: 'session-native', workspaceId: 'worktree-1' }
+    const session: AiVaultSession = {
+      ...cliSession,
+      id: 'runtime:paired:codex:session-1:',
+      executionHostId: 'runtime:paired',
+      title: 'Paired native chat',
+      filePath: '',
+      resumeCommand: '',
+      structuredSession: owner
+    }
+    const hit: AiVaultSearchHit = {
+      agent: 'codex',
+      sessionId: 'session-1',
+      title: 'Paired native chat',
+      cwd: '/repo',
+      branch: null,
+      updatedAt: null,
+      messageCount: 1,
+      score: 1,
+      source: { presence: 'present' },
+      evidence: null,
+      structuredSession: owner
+    }
+    const { onResume } = renderSession(session, false, hit)
+    const user = userEvent.setup()
+
+    fireEvent.contextMenu(screen.getByText('Paired native chat'))
+    await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Tab' }))
+    expect(onResume).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
+  })
+})
+
+describe('AiVaultVirtualRow Resume in New Terminal', () => {
+  const owner = { sessionId: 'chat-1', workspaceId: 'worktree-1' }
+
+  it.each(['claude', 'codex'] as const)(
+    'offers the fork on a chat-owned %s row from both menus',
+    async (agent) => {
+      const session: AiVaultSession = { ...cliSession, agent, structuredSession: owner }
+      const { onResumeInNewCli, onResume } = renderSession(session)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
+      expect(onResumeInNewCli).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
+
+      fireEvent.contextMenu(screen.getByText('CLI session'))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Terminal' }))
+      expect(onResumeInNewCli).toHaveBeenCalledTimes(2)
+      expect(onResume).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    { name: 'a terminal row', session: cliSession },
+    {
+      name: 'a chat-owned row of an agent that cannot fork',
+      session: { ...cliSession, agent: 'gemini' as const, structuredSession: owner }
+    }
+  ])('does not offer the fork on $name', async ({ session }) => {
+    renderSession(session)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+    await screen.findByRole('menu')
+    expect(screen.queryByRole('menuitem', { name: 'Resume in New Terminal' })).toBeNull()
   })
 })

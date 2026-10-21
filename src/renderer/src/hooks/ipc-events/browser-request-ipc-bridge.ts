@@ -7,31 +7,52 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import {
+  findBrowserTabWorktreeId,
+  isBrowserWorkspaceOwnedByPairedServer,
+  isDesktopRenderedBrowserTab,
+  resolveRemoteCliBrowserWorkspace
+} from './browser-request-workspace-owner'
 
-export function registerBrowserRequestIpcBridge(
-  unsubs: (() => void)[],
-  isRuntimeEnvironmentActive: () => boolean
-): void {
+function pairedServerWorkspaceError(): string {
+  return translate(
+    'browser.request.pairedServerWorkspace',
+    "This workspace runs on a paired server. Use that server's browser tabs."
+  )
+}
+
+// Why owner, not the Active Server setting: these requests come from this desktop's own runtime,
+// which only names workspaces it runs, so focus on a paired server must not refuse them (#22275).
+export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
+  unsubs.push(
+    window.api.ui.onRequestRemoteCliBrowserScope((data) => {
+      let workspaceId: string | null = null
+      try {
+        workspaceId = resolveRemoteCliBrowserWorkspace(useAppStore.getState(), data)
+      } catch {
+        // Why: an owner this window cannot prove is a refusal, never a pass.
+        workspaceId = null
+      }
+      window.api.ui.replyRemoteCliBrowserScope({ requestId: data.requestId, workspaceId })
+    })
+  )
   unsubs.push(
     window.api.ui.onRequestTabCreate((data) => {
       try {
-        if (isRuntimeEnvironmentActive()) {
-          // Why: browser automation targets client-local Electron webviews that runtime agents can't see or control.
-          window.api.ui.replyTabCreate({
-            requestId: data.requestId,
-            error: translate(
-              'auto.hooks.useIpcEvents.291c8ed902',
-              'Browser tabs are unavailable while a remote runtime is active'
-            )
-          })
-          return
-        }
         const store = useAppStore.getState()
         const worktreeId = data.worktreeId ?? store.activeWorktreeId
         if (!worktreeId) {
           window.api.ui.replyTabCreate({
             requestId: data.requestId,
             error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
+          })
+          return
+        }
+        // Why only the fallback: main resolved an explicit id against its own catalog already.
+        if (!data.worktreeId && isBrowserWorkspaceOwnedByPairedServer(store, worktreeId)) {
+          window.api.ui.replyTabCreate({
+            requestId: data.requestId,
+            error: pairedServerWorkspaceError()
           })
           return
         }
@@ -53,6 +74,9 @@ export function registerBrowserRequestIpcBridge(
           targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
           sessionProfileId: data.sessionProfileId,
           sessionPartition: data.sessionPartition,
+          // Why null, not inferred: this desktop's runtime only ever asks for a page this desktop
+          // renders, including one in a managed SSH host's workspace (as the tab bar's + does).
+          browserRuntimeEnvironmentId: null,
           activate: data.activate === true
         })
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
@@ -72,17 +96,15 @@ export function registerBrowserRequestIpcBridge(
   unsubs.push(
     window.api.ui.onRequestTabSetProfile((data) => {
       try {
-        if (isRuntimeEnvironmentActive()) {
+        const store = useAppStore.getState()
+        const pageWorktreeId = findBrowserTabWorktreeId(store, data.browserPageId)
+        if (pageWorktreeId && isBrowserWorkspaceOwnedByPairedServer(store, pageWorktreeId)) {
           window.api.ui.replyTabSetProfile({
             requestId: data.requestId,
-            error: translate(
-              'auto.hooks.useIpcEvents.f45fa2b03c',
-              'Browser profiles are unavailable while a remote runtime is active'
-            )
+            error: pairedServerWorkspaceError()
           })
           return
         }
-        const store = useAppStore.getState()
         const owningWorkspace = Object.values(store.browserTabsByWorktree)
           .flat()
           .find((workspace) => {
@@ -129,16 +151,6 @@ export function registerBrowserRequestIpcBridge(
   unsubs.push(
     window.api.ui.onRequestTabClose((data) => {
       try {
-        if (isRuntimeEnvironmentActive()) {
-          window.api.ui.replyTabClose({
-            requestId: data.requestId,
-            error: translate(
-              'auto.hooks.useIpcEvents.291c8ed902',
-              'Browser tabs are unavailable while a remote runtime is active'
-            )
-          })
-          return
-        }
         const store = useAppStore.getState()
         const explicitTargetId = data.tabId ?? null
         const replyBrowserTabNotFound = (tabId: string): void => {
@@ -183,6 +195,18 @@ export function registerBrowserRequestIpcBridge(
           window.api.ui.replyTabClose({
             requestId: data.requestId,
             error: translate('auto.hooks.useIpcEvents.a8d2bf8e9e', 'No active browser tab to close')
+          })
+          return
+        }
+        const closeWorktreeId = findBrowserTabWorktreeId(store, tabToClose)
+        if (
+          closeWorktreeId &&
+          isBrowserWorkspaceOwnedByPairedServer(store, closeWorktreeId) &&
+          !isDesktopRenderedBrowserTab(store, tabToClose)
+        ) {
+          window.api.ui.replyTabClose({
+            requestId: data.requestId,
+            error: pairedServerWorkspaceError()
           })
           return
         }

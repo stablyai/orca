@@ -130,10 +130,9 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
     status: 'inactive',
     agents: []
   } as unknown as RuntimeWorktreePsSummary
+  const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
-    summaries: new Map([[WORKTREE_ID, row]]),
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
+    summaries,
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
@@ -145,7 +144,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _paths, _missing, id) => map.get(id) ?? null
+    getSummary: (id) => summaries.get(id) ?? null
   })
   return row
 }

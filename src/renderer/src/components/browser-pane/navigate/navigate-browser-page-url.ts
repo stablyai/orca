@@ -2,7 +2,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -22,6 +22,7 @@ import type {
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -97,9 +98,10 @@ export function navigateBrowserPageToUrl({
       }
 
       try {
-        const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
+        // Why getKnownWorktreeById: folder and floating workspaces are absent from allWorktrees().
+        const activeWorktree = store.getKnownWorktreeById(worktreeId)
         const fileContext: RuntimeFileOperationArgs = {
-          settings: store.settings,
+          target: requireRuntimeTargetForFileOwner(store, worktreeId, undefined),
           worktreeId,
           worktreePath: activeWorktree?.path,
           connectionId: undefined

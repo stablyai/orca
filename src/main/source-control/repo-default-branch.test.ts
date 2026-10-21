@@ -1,16 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
 }))
 
 import {
@@ -31,7 +26,6 @@ function primeLocalGitExec(defaultRef = 'refs/remotes/origin/master'): void {
 describe('getRepoDefaultBranchName', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     __resetRepoDefaultBranchCacheForTests()
   })
 
@@ -59,28 +53,6 @@ describe('getRepoDefaultBranchName', () => {
     )
   })
 
-  it('routes resolution through the SSH provider exec and never local git', async () => {
-    const provider = {
-      exec: vi.fn(async (args: string[], repoPath: string) => {
-        expect(repoPath).toBe('/remote/repo')
-        if (args[0] === 'for-each-ref') {
-          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/trunk\n' }
-        }
-        return { stdout: 'oid\n' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-1')).resolves.toBe('trunk')
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-1')
-    expect(provider.exec).toHaveBeenCalledWith(
-      expect.arrayContaining(['for-each-ref', '--format=%(refname)%00%(symref)']),
-      '/remote/repo',
-      { timeoutMs: expect.any(Number) }
-    )
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('shares one wall-clock timeout budget across all fallback probes', async () => {
     let now = 1_000
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -105,8 +77,6 @@ describe('getRepoDefaultBranchName', () => {
   })
 
   it('returns null without running local git when the SSH provider is unavailable', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-
     await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-gone')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
@@ -167,7 +137,6 @@ describe('getRepoDefaultBranchName', () => {
 describe('shouldHideNonOpenReviewOnDefaultBranch', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     __resetRepoDefaultBranchCacheForTests()
   })
 

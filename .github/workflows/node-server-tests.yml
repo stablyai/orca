@@ -2,7 +2,7 @@ name: Headless Node server
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/**'
       - 'config/**'
@@ -14,28 +14,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'tsconfig.json'
       - '.npmrc'
-      - '.pnpmfile.cjs'
-      - '.github/actions/install-node-dependencies/**'
-      - '.github/actions/restore-pnpm-verification/**'
-      - '.github/actions/prepare-headless-compiler/**'
-      - '.github/actions/prepare-native-runtime/**'
-      - '.github/actions/prepare-orcad-prebuilds/**'
-      - '.github/workflows/node-server-tests.yml'
-  # Relevant main pushes qualify every platform after the dependency check.
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'config/**'
-      - 'native/**'
-      - 'tests/**'
-      - 'resources/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig.json'
-      - '.npmrc'
-      - '.pnpmfile.cjs'
+      - 'config/pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/actions/prepare-headless-compiler/**'
@@ -48,7 +27,11 @@ on:
         description: Also merge every lane's slot into the desktop orcad template artifact
         type: boolean
         default: false
-  # Release packaging calls this to build the orcad template it ships (design D2).
+      fast_runners:
+        description: Use faster runners where the platform and architecture are available
+        type: boolean
+        default: false
+  # Release and dev builds qualify every platform for the template they ship.
   workflow_call:
     inputs:
       ref:
@@ -59,13 +42,18 @@ on:
         description: Upload each lane's release slot and merge them into the orcad-template artifact
         type: boolean
         default: false
+      fast_runners:
+        description: Use faster runners where the platform and architecture are available
+        type: boolean
+        default: false
+  # Requalify fresh builds daily; publish missing immutable Windows cache keys.
   schedule:
     - cron: '30 11 * * *'
 
 permissions:
   contents: read
 
-# Main pushes must finish detection before they can supersede relevant qualification.
+# Keep template callers independent while replacing superseded PR qualification.
 concurrency:
   group: node-server-${{ (inputs.build_template || github.event_name == 'push') && format('run-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ !inputs.build_template && github.event_name != 'push' }}
@@ -75,11 +63,12 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft != true)
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
       qualification: ${{ steps.scope.outputs.qualification || steps.graph.outputs.qualification }}
+      native_compatibility: ${{ steps.scope.outputs.native_compatibility || steps.graph.outputs.native_compatibility }}
       runners: ${{ steps.scope.outputs.runners || steps.graph.outputs.runners }}
     steps:
       - uses: actions/checkout@v6
@@ -96,20 +85,28 @@ jobs:
         env:
           PUSH_BASE: ${{ github.event.before }}
           EVENT_NAME: ${{ github.event_name }}
+          ALLOW_TEST_ONLY_NATIVE_SKIP: ${{ github.event_name == 'pull_request' && !inputs.build_template && inputs.ref == '' }}
         run: |
           if [ "$EVENT_NAME" = push ]; then
             # Compare the entire push, including multi-commit pushes and removed files.
             if git fetch --no-tags --depth=1 origin "$PUSH_BASE" &&
-               git diff --name-only --no-renames -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-changes"; then
-              node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --full-qualification
+               git diff --name-only --no-renames -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-changes" &&
+               git diff --name-only --no-renames --diff-filter=M -z "$PUSH_BASE" HEAD > "$RUNNER_TEMP/node-server-modified"; then
+              node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
             else
               echo 'should_run=true' >> "$GITHUB_OUTPUT"
             fi
             exit 0
           fi
+          NATIVE_SCOPE_ARGS=()
+          if [ "$ALLOW_TEST_ONLY_NATIVE_SKIP" = true ]; then
+            NATIVE_SCOPE_ARGS=(--pull-request --diff-paths "$RUNNER_TEMP/node-server-native-diff")
+          fi
           # Compare the tested merge with its base, retaining both sides of renames.
-          if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-changes"; then
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph
+          if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-changes" &&
+             git diff --name-only --no-renames --diff-filter=M -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-modified" &&
+             git diff --raw --no-renames --no-abbrev -z HEAD^1 HEAD > "$RUNNER_TEMP/node-server-native-diff"; then
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --defer-graph --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
           else
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
@@ -126,49 +123,68 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          ALLOW_TEST_ONLY_NATIVE_SKIP: ${{ github.event_name == 'pull_request' && !inputs.build_template && inputs.ref == '' }}
         run: |
           if [ "$EVENT_NAME" = push ]; then
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --full-qualification --modified-paths "$RUNNER_TEMP/node-server-modified"
           else
-            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes"
+            NATIVE_SCOPE_ARGS=()
+            if [ "$ALLOW_TEST_ONLY_NATIVE_SKIP" = true ]; then
+              NATIVE_SCOPE_ARGS=(--pull-request --diff-paths "$RUNNER_TEMP/node-server-native-diff")
+            fi
+            node config/scripts/node-server-change-scope.mjs "$RUNNER_TEMP/node-server-changes" --modified-paths "$RUNNER_TEMP/node-server-modified" "${NATIVE_SCOPE_ARGS[@]}"
           fi
 
   persistence:
-    needs: changes
+    needs: [changes, mobile_web_bundle]
+    permissions:
+      contents: read
     concurrency:
       group: node-server-persistence-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
-    # A draft carries no platform verdict; readiness re-triggers this workflow. Spelled against
-    # the event name so the push and schedule paths do not rest on a null property comparison.
+    # Missing/failed detection runs the full matrix; scheduled and manual runs stay unconditional.
+    # Drafts re-trigger at readiness; inherited caller events must not depend on PR fields.
     if: >-
       ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      (needs.changes.outputs.qualification == 'false' || needs.mobile_web_bundle.result == 'success') &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
-    runs-on: ${{ matrix.os }}
+    # Keep platform keys stable for slot names and Windows cross-compilation.
+    runs-on: >-
+      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-large","windows-2022":"blacksmith-8vcpu-windows-2025","windows-11-arm":"orca-windows-11-arm64-8core"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
+      JOBS: ${{ inputs.fast_runners && 'max' || '' }}
     steps:
+      - name: Parallelize Windows checkout
+        if: inputs.fast_runners && runner.os == 'Windows'
+        shell: bash
+        run: |
+          git config --global checkout.workers 0
+          # These fresh native builds do not need MSBuild's incremental file tracking.
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
+        id: dependencies
         with:
           native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
-          cache-pnpm-store: ${{ runner.os != 'Windows' }}
+          # Template qualification must not wait for large download-cache uploads.
+          cache-pnpm-store: ${{ !inputs.build_template && runner.os != 'Windows' }}
           cache-pnpm-store-lookup-only: 'true'
       # Design D7 upgrade and rollback: the last Bun orcad, built from a main commit that shipped
-      # it, beside this checkout's Node slot; the live-terminal hand-over skips once PROTOCOL_VERSION
+      # it, using the current Bun pin beside this checkout's Node slot; hand-over skips once PROTOCOL_VERSION
       # moves past the Bun daemon's. Install its pinned dependencies independently of this checkout.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: runner.os == 'Linux'
         with:
-          bun-version: 1.4.2
+          bun-version-file: config/.bun-version
       - name: Build the last Bun orcad for the cross-runtime tests
         id: bun-orcad
         background: true
@@ -188,24 +204,57 @@ jobs:
         id: orcad-prebuild
         with:
           resolve-windows-cache: >-
-            ${{ !inputs.build_template && inputs.ref == '' &&
+            ${{ inputs.fast_runners || (!inputs.build_template && inputs.ref == '' &&
             (github.event_name == 'pull_request' ||
-            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
-          restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
+          restore-windows-cache: ${{ inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'push' }}
+      # The template lane cross-compiles arm64 too, as it does for the process-table addon.
+      - uses: ./.github/actions/prepare-windows-cli-launcher
+        if: runner.os == 'Windows'
+        with:
+          arches: ${{ (inputs.build_template && matrix.os == 'windows-2022') && 'x64 arm64' || (runner.arch == 'ARM64' && 'arm64' || 'x64') }}
+      - uses: actions/download-artifact@v8
+        if: needs.changes.outputs.qualification != 'false'
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
+      # Narrow test-only runs skip the shared producer but still need a page.
+      - uses: ./.github/actions/build-mobile-web-bundle
+        if: needs.changes.outputs.qualification == 'false'
       - run: pnpm build:orcad
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ runner.os == 'Windows' && steps.dependencies.outcome == 'success' }}
       - wait: bun-orcad
       - run: pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}
         env:
           ORCA_BUN_ORCAD_SLOT: ${{ steps.bun-orcad.outputs.slot }}
           BUN_EXECUTABLE: ${{ steps.bun-orcad.outputs.executable }}
-      # Only a Windows runner compiles it; arm64 cross-compiles here, as release-cut does for the relay.
+      - name: Build the host-target desktop server template
+        if: runner.os == 'Linux'
+        run: node config/scripts/build-orcad-template.mjs --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
+      - name: Verify a structured chat from the desktop server template
+        if: runner.os == 'Linux'
+        run: pnpm test:node-server --artifact src/main/orcad/orcad-packaged-structured-chat.integration.test.ts --maxWorkers=2
+      # Only a Windows runner compiles it; arm64 cross-compiles here.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
+      # orcad's instance lock and stop proof read a PID's creation time through it; the x64 binary this
+      # runner loads must answer it, and answer nothing for a missing PID rather than a stale time.
       - name: Build the Windows process-table addons for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022'
         shell: bash
         run: |
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=arm64
+          node -e "
+          const { assertWindowsProcessTreeCreationTime } = require('./config/scripts/windows-process-tree-creation-time.cjs')
+          const addon = require('./.build/windows-process-tree/x64/windows-process-tree.node')
+          assertWindowsProcessTreeCreationTime({ module: addon })
+          const own = addon.getProcessCreationTime(process.pid)
+          const started = Date.now() - process.uptime() * 1000
+          if (typeof own !== 'number' || Math.abs(own - started) > 5000) throw new Error('creation time ' + own + ' vs ' + started)
+          if (addon.getProcessCreationTime(0x7ffffff0) !== undefined) throw new Error('a missing PID must read undefined')
+          console.log('creation time ok:', own)
+          "
       - name: Keep the Windows process-table addons for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022'
         uses: actions/upload-artifact@v7
@@ -213,6 +262,33 @@ jobs:
           name: orcad-windows-process-tree
           path: .build/windows-process-tree/
           include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      - name: Keep the Windows CLI launchers for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-windows-cli-launcher
+          path: .build/windows-cli-launcher/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      # orcad's data-root privacy check fails closed without it, so every Windows slot needs one.
+      # Older requested refs use the previous security implementation and have no addon builder.
+      - name: Build the Windows security addons for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/build-windows-security-addon.mjs') != ''
+        shell: bash
+        run: |
+          node config/scripts/build-windows-security-addon.mjs --arch=x64
+          node config/scripts/build-windows-security-addon.mjs --arch=arm64
+          node -e "require('./.build/windows-security/x64/windows-security.node').currentUserSid()"
+      - name: Keep the Windows security addons for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/build-windows-security-addon.mjs') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-windows-security
+          path: .build/windows-security/*/windows-security.node
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -227,11 +303,12 @@ jobs:
           node out/orcad/orcad.js --orcad-smoke-load-check
           node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018 | tee "$RUNNER_TEMP/preflight.json"
           node -e "const r=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));if(r.runtime!=='node'||!/^24\./.test(r.runtimeVersion))process.exit(1)" "$RUNNER_TEMP/preflight.json"
-      - name: Save the freshly qualified Windows server prebuild on main
+      - name: Save the freshly qualified Windows server prebuild
         if: >-
           success() && runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64') &&
-          !inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
-          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name) &&
+          ((inputs.fast_runners && github.event_name == 'workflow_dispatch') ||
+          (!inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) &&
           steps.orcad-prebuild.outputs.cache-identity-outcome == 'success' &&
           steps.orcad-prebuild.outputs.cache-key != ''
         continue-on-error: true
@@ -251,16 +328,44 @@ jobs:
           # A rerun attempt re-uploads under the same name, which v4 otherwise refuses.
           overwrite: true
 
+  # Every qualification lane tests the same platform-independent page.
+  mobile_web_bundle:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
+      needs.changes.outputs.qualification != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: ./.github/actions/build-mobile-web-bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web/
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
   linux_glibc_floor:
-    needs: [changes, persistence]
+    needs: [changes, mobile_web_bundle]
+    permissions:
+      contents: read
     concurrency:
       group: node-server-linux_glibc_floor-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # A failed smoke already blocks qualification; missing scope still selects every platform.
+    # Each Linux lane owns its inputs; the template still requires every lane to pass.
     if: >-
-      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      ${{ !cancelled() &&
       needs.changes.outputs.should_run != 'false' &&
-      needs.changes.outputs.qualification != 'false' }}
+      needs.changes.outputs.qualification != 'false' &&
+      needs.mobile_web_bundle.result == 'success' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:
@@ -273,7 +378,7 @@ jobs:
             image: quay.io/pypa/manylinux_2_28_x86_64@sha256:407f771c51a2c3e83ebe5a7970b4289ead3a6db21d9b9c089168775cad11d328
           - os: ubuntu-24.04-arm
             image: quay.io/pypa/manylinux_2_28_aarch64@sha256:c22ffd129ac99a8a42d1f2c2f4e88a9089288dd9ee987a7092da1c7dc48f27a9
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
     container: ${{ matrix.image }}
     timeout-minutes: 25
     env:
@@ -307,6 +412,10 @@ jobs:
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds --smoke
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
       - run: pnpm build:orcad
       - run: pnpm test:node-server --artifact
       - name: Keep this runner's glibc 2.28 slot for the desktop template
@@ -320,16 +429,18 @@ jobs:
           overwrite: true
 
   linux_glibc217_compat:
-    needs: [changes, persistence]
+    needs: changes
     concurrency:
       group: node-server-linux_glibc217_compat-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
-      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      ${{ !cancelled() &&
       needs.changes.outputs.should_run != 'false' &&
-      needs.changes.outputs.qualification != 'false' }}
-    runs-on: ubuntu-22.04
+      needs.changes.outputs.qualification != 'false' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) &&
+      (github.event_name != 'pull_request' || inputs.build_template || inputs.ref != '' ||
+      needs.changes.outputs.native_compatibility != 'false') }}
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2204' || 'ubuntu-22.04' }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -375,20 +486,23 @@ jobs:
           overwrite: true
 
   linux_musl:
-    needs: [changes, persistence]
+    needs: [changes, mobile_web_bundle]
+    permissions:
+      contents: read
     concurrency:
       group: node-server-linux_musl-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
-    # A failed smoke already blocks qualification; missing scope still selects every platform.
     if: >-
-      ${{ !cancelled() && needs.persistence.result == 'success' &&
+      ${{ !cancelled() &&
       needs.changes.outputs.should_run != 'false' &&
-      needs.changes.outputs.qualification != 'false' }}
+      needs.changes.outputs.qualification != 'false' &&
+      needs.mobile_web_bundle.result == 'success' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04-arm]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -401,17 +515,19 @@ jobs:
         id: pnpm-verification
         with:
           container-toolchain: 'true'
-      - name: Verify native Alpine artifact and persistence
+      - name: Prepare native Alpine artifact
         env:
           VERIFICATION_CACHE_PATH: ${{ steps.pnpm-verification.outputs.path }}
         run: |
           touch "$VERIFICATION_CACHE_PATH"
+          mkdir -p out/mobile-web
           # Multi-arch index digest of the tag; re-resolve it whenever NODE_RUNTIME_PIN moves.
-          docker run --rm --init -i \
+          docker run --rm --init --detach --name orcad-alpine \
             -e ORCA_BACKGROUND_LAUNCH=1 \
             -v "$VERIFICATION_CACHE_PATH:/root/.cache/pnpm/lockfile-verified.jsonl" \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
-            node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sh -s <<'NODE_SERVER_QUALIFICATION'
+            node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sleep infinity
+          docker exec -i orcad-alpine sh -s <<'NODE_SERVER_PREPARATION'
           set -eu
           apk add --no-cache bash git libstdc++ python3 make g++
           git config --global --add safe.directory /work
@@ -420,9 +536,21 @@ jobs:
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds --smoke
+          NODE_SERVER_PREPARATION
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
+      - name: Verify native Alpine artifact and persistence
+        run: |
+          docker exec -i orcad-alpine sh -s <<'NODE_SERVER_QUALIFICATION'
+          set -eu
           pnpm build:orcad
           pnpm test:node-server --artifact
           NODE_SERVER_QUALIFICATION
+      - name: Clean up the Alpine qualification container
+        if: always()
+        run: docker rm --force orcad-alpine
       - name: Keep this runner's musl slot for the desktop template
         if: inputs.build_template
         uses: actions/upload-artifact@v7
@@ -435,12 +563,12 @@ jobs:
 
   # Design D2: the desktop ships every target's addons, merged from the lanes that qualified them.
   desktop_template:
-    needs: [persistence, linux_glibc_floor, linux_glibc217_compat, linux_musl]
-    if: >-
-      ${{ !cancelled() && inputs.build_template &&
-      needs.persistence.result == 'success' && needs.linux_glibc_floor.result == 'success' &&
-      needs.linux_glibc217_compat.result == 'success' && needs.linux_musl.result == 'success' }}
-    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && inputs.build_template }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -448,6 +576,45 @@ jobs:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
+      - name: Wait for every template qualification lane
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 25 * 60_000
+            const expected = {
+              persistence: 6,
+              mobile_web_bundle: 1,
+              linux_glibc_floor: 2,
+              linux_glibc217_compat: 1,
+              linux_musl: 2
+            }
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const assemblers = jobs.filter(job =>
+                job.name === 'desktop_template' || job.name.endsWith(' / desktop_template'))
+              if (assemblers.length > 1) throw new Error('Ambiguous desktop template qualification')
+              if (assemblers.length === 1) {
+                const prefix = assemblers[0].name.slice(0, -'desktop_template'.length)
+                let ready = true
+                for (const [name, count] of Object.entries(expected)) {
+                  const lanes = jobs.filter(job => job.name === `${prefix}${name}` ||
+                    job.name.startsWith(`${prefix}${name} (`))
+                  if (lanes.length > count) throw new Error(`Unexpected qualification lanes: ${name}`)
+                  for (const lane of lanes) {
+                    if (lane.status === 'completed' && lane.conclusion !== 'success') {
+                      throw new Error(`Template qualification did not succeed: ${lane.name} (${lane.conclusion})`)
+                    }
+                  }
+                  if (lanes.length !== count || lanes.some(lane => lane.status !== 'completed')) ready = false
+                }
+                if (ready) return
+              }
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for every template qualification lane')
+
       - name: Collect every lane's slot
         uses: actions/download-artifact@v8
         with:
@@ -458,12 +625,28 @@ jobs:
         with:
           name: orcad-windows-process-tree
           path: .build/windows-process-tree
+      - name: Collect the Windows CLI launchers
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-windows-cli-launcher
+          path: .build/windows-cli-launcher
+      - name: Collect the Windows security addons
+        if: hashFiles('config/scripts/build-windows-security-addon.mjs') != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-windows-security
+          path: .build/windows-security
       - name: Merge the lanes and gate the full slot matrix
         shell: bash
         run: |
           node config/scripts/merge-orcad-prebuilds.mjs "$RUNNER_TEMP"/orcad-prebuild-lanes/*
           pnpm build:orcad-prebuilds --require-slots
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
+      # The page the qualification lanes tested, not a rebuild.
+      - uses: actions/download-artifact@v8
+        with:
+          name: orcad-mobile-web-bundle
+          path: out/mobile-web
       - run: pnpm build:orcad-template
       - name: Report the template size
         shell: bash

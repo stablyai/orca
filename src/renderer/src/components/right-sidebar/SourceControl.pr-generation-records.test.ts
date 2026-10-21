@@ -39,6 +39,7 @@ function runningRecord(overrides: Partial<PullRequestGenerationRecord> = {}) {
       worktreePath: '/repo/a',
       connectionId: 'conn-a',
       requestId: 3,
+      runtimeTarget: { kind: 'local' as const },
       repoId: 'repo-1',
       branch: 'feature-a'
     },
@@ -175,6 +176,7 @@ describe('SourceControl pull request generation records', () => {
         worktreePath: '/repo/a',
         connectionId: 'conn-a',
         requestId: 1,
+        runtimeTarget: { kind: 'local' as const },
         repoId: 'repo-1',
         branch: 'feature-a'
       },
@@ -333,7 +335,7 @@ describe('SourceControl pull request generation records', () => {
         requestId: 1,
         repoId: 'repo-1',
         branch: 'feature-a',
-        runtimeTargetSettings: { activeRuntimeEnvironmentId: 'runtime-a' }
+        runtimeTarget: { kind: 'environment' as const, environmentId: 'runtime-a' }
       },
       seed,
       fieldRevisions
@@ -355,7 +357,7 @@ describe('SourceControl pull request generation records', () => {
     )
 
     expect(store.getState().pullRequestGenerationRecords[key!]).toMatchObject({
-      context: { runtimeTargetSettings: { activeRuntimeEnvironmentId: 'runtime-a' } },
+      context: { runtimeTarget: { kind: 'environment' as const, environmentId: 'runtime-a' } },
       status: 'succeeded',
       result: generated,
       hydrated: false
@@ -369,6 +371,7 @@ describe('SourceControl pull request generation records', () => {
         worktreePath: '/repo/a',
         connectionId: 'conn-a',
         requestId: 1,
+        runtimeTarget: { kind: 'local' as const },
         repoId: 'repo-1',
         branch: 'feature-a'
       },
@@ -423,6 +426,7 @@ describe('SourceControl pull request generation records', () => {
           worktreeId: 'wt-a',
           worktreePath: '/repo/a',
           requestId: 1,
+          runtimeTarget: { kind: 'local' as const },
           repoId: 'repo-1',
           branch: 'feature-a'
         },
@@ -437,6 +441,7 @@ describe('SourceControl pull request generation records', () => {
           worktreeId: 'wt-b',
           worktreePath: '/repo/b',
           requestId: 2,
+          runtimeTarget: { kind: 'local' as const },
           repoId: 'repo-1',
           branch: 'feature-b'
         },
@@ -468,6 +473,7 @@ describe('SourceControl pull request generation records', () => {
           worktreePath: '/repo/a',
           connectionId: 'conn-a',
           requestId: firstRequestId,
+          runtimeTarget: { kind: 'local' as const },
           repoId: 'repo-1',
           branch: 'feature-a'
         },
@@ -487,6 +493,7 @@ describe('SourceControl pull request generation records', () => {
           worktreePath: '/repo/a',
           connectionId: 'conn-a',
           requestId: secondRequestId,
+          runtimeTarget: { kind: 'local' as const },
           repoId: 'repo-1',
           branch: 'feature-a'
         },

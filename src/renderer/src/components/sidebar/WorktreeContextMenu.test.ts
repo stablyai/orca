@@ -13,7 +13,7 @@ import {
   planWorkspaceStatusAssignment,
   selectMenuScopedMap,
   shouldRevealWorktreeDeveloperMenu
-} from './WorktreeContextMenu'
+} from './worktree-context-menu-policy'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'

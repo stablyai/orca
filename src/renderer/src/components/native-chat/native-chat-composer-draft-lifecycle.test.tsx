@@ -8,9 +8,17 @@ import type * as AttachmentsHook from './use-native-chat-composer-attachments'
 import type * as SendHook from './use-native-chat-structured-composer-send'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { createMemoryNativeChatComposerDraftStorage } from './native-chat-composer-draft-storage'
+import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
 vi.mock('@/lib/worker-terminal-takeover-report', () => ({
   reportStructuredSessionUserInput: vi.fn()
@@ -142,6 +150,7 @@ function composer(
     const attachments = hooks.attachmentsHook.useNativeChatComposerAttachments({
       attachmentScopeKey: scopeKey,
       allowWithoutTarget: true,
+      imageReferences: true,
       caret: 0,
       disabled: false,
       isComposing: () => false,
@@ -158,11 +167,11 @@ function composer(
       structuredTransport: transport,
       isComposing: () => false,
       clearSkillOrigin: () => {},
-      setHistory: () => {},
       setDraft,
       setCaret
     })
-    onRender({ draft, setDraft, attachments, send })
+    // The composer fires a send and moves on; each test settles it through the transport.
+    onRender({ draft, setDraft, attachments, send: (text) => void send(text) })
     return null
   }
 }
@@ -301,7 +310,8 @@ describe('native-chat composer draft lifecycle', () => {
       seen.api?.attachments.resolvePendingImageAttachment(pending.id ?? '', '/repo/shot.png')
     )
 
-    expect(seen.api?.draft).toBe('')
+    // The chip went in after `/compact`, which the accepted command then took out.
+    expect(seen.api?.draft?.trim()).toBe(imageReferenceToken(pending.id ?? ''))
     expect(seen.api?.attachments.imageAttachments.map(({ path }) => path)).toEqual([
       '/repo/shot.png'
     ])
@@ -443,10 +453,18 @@ describe('native-chat composer draft lifecycle', () => {
         { scopeKey: 'tab-1:pane' }
       )
     )
-    expect(second.api?.attachments.imageAttachments.map(({ path }) => path)).toEqual([
-      '/repo/x.png'
+    // The paste still on its way comes back pending, so Send waits for it.
+    expect(
+      second.api?.attachments.imageAttachments.map(({ path, pending }) => ({ path, pending }))
+    ).toEqual([
+      { path: '/repo/x.png', pending: undefined },
+      { path: '', pending: true }
     ])
-    await act(async () => second.api?.attachments.clearImageAttachments())
+    // Sent: the prompt is emptied, then its images.
+    await act(async () => {
+      second.api?.setDraft('')
+      second.api?.attachments.clearImageAttachments()
+    })
     await unmount()
 
     // The paste's save fails late in the replaced composer, which drops its placeholder.
@@ -559,6 +577,30 @@ describe('native-chat composer draft lifecycle', () => {
     ])
   })
 
+  it('leaves a restored image a paired server stored to that server to check', async () => {
+    // Not on this machine's disk, so a local check could only call it gone.
+    const pathExists = vi.fn(async () => false)
+    vi.stubGlobal('api', { fs: { pathExists } })
+    const stored = { id: 'a', path: '/srv/orca/agent-session-attachments/0f6c/shot.png' }
+    storage.drafts.set('agent-session:s1', { text: 'see this', images: [stored], savedAt: 1 })
+    const hooks = await loadHooks()
+    const seen: { api?: ComposerApi } = {}
+    try {
+      await mount(
+        createElement(
+          composer(hooks, (next) => (seen.api = next)),
+          { scopeKey: 'agent-session:s1' }
+        )
+      )
+      await act(async () => {})
+    } finally {
+      vi.unstubAllGlobals()
+    }
+
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(seen.api?.attachments.imageAttachments).toEqual([stored])
+  })
+
   it('shows a restored paste from Orca’s paste folder once main confirms it is kept, and marks the rest', async () => {
     const folder = '/Users/me/Library/Application Support/orca/native-chat-pastes'
     let answer: () => void = () => {}
@@ -604,10 +646,6 @@ describe('native-chat composer draft lifecycle', () => {
       vi.unstubAllGlobals()
     }
 
-    expect(restoreNativeChatPastes).toHaveBeenCalledWith([
-      `${folder}/orca-paste-1-ab.png`,
-      `${folder}/orca-paste-2-ab.png`
-    ])
     expect(seen.api?.attachments.imageAttachments).toEqual([
       { id: 'kept', path: `${folder}/orca-paste-1-ab.png` },
       { id: 'swept', path: '', unavailableName: 'orca-paste-2-ab.png' }

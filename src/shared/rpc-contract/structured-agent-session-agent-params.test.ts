@@ -4,8 +4,10 @@ import {
   AttachParams,
   CreateIntentParams,
   CreateSupportParams,
-  ModelCatalogParams
+  ModelCatalogParams,
+  RespondToQuestionParams
 } from './structured-agent-session-params'
+import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session-question-answer'
 
 const ENVELOPE = {
   sessionId: 'agent-session-0123456789abcdef0123456789abcdef',
@@ -15,6 +17,53 @@ const ENVELOPE = {
 }
 
 describe('structured agent params', () => {
+  it('keeps normal question answers valid and bounds the combined answer body after schema extraction', () => {
+    const base = { envelope: ENVELOPE, itemId: 'question-1', expectedRevision: 1 }
+    const ordinary = { ...base, answers: [{ questionId: 'q1', optionIds: ['yes'], other: 'why' }] }
+    expect(() => RespondToQuestionParams.safeParse(ordinary)).not.toThrow()
+    expect(RespondToQuestionParams.safeParse(ordinary).success).toBe(true)
+    const oversized = {
+      ...base,
+      answers: Array.from({ length: 4 }, (_, index) => ({
+        questionId: `q${index}`,
+        optionIds: [],
+        other: 'x'.repeat(AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES)
+      }))
+    }
+    expect(RespondToQuestionParams.safeParse(oversized).success).toBe(false)
+  })
+  it('accepts only the same bounded user message a send accepts, with bounded options', () => {
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'opening text' }] }
+    const params = {
+      envelope: ENVELOPE,
+      worktree: 'wt',
+      agent: 'codex',
+      firstMessage: { clientMessageId: 'message-1', body },
+      options: { model: 'picked-model' }
+    }
+    expect(CreateIntentParams.safeParse(params).success).toBe(true)
+    for (const firstMessage of [
+      { clientMessageId: '', body },
+      { clientMessageId: 'message-1', body: { ...body, role: 'assistant' } },
+      { clientMessageId: 'message-1', body: { ...body, blocks: [] } },
+      { clientMessageId: 'message-1', body, source: 'provider' },
+      {
+        clientMessageId: 'message-1',
+        body: { ...body, blocks: [{ type: 'text', text: 'x'.repeat(256 * 1024) }] }
+      }
+    ]) {
+      expect(CreateIntentParams.safeParse({ ...params, firstMessage }).success).toBe(false)
+    }
+    expect(CreateIntentParams.safeParse({ ...params, options: { model: 1 } }).success).toBe(false)
+    expect(
+      CreateIntentParams.safeParse({
+        ...params,
+        options: Object.fromEntries(
+          Array.from({ length: 33 }, (_, index) => [`key-${index}`, 'value'])
+        )
+      }).success
+    ).toBe(false)
+  })
   it.each(['claude', 'codex', 'grok', 'qwen-code'])('accept the agent id %s', (agent) => {
     expect(CreateSupportParams.safeParse({ worktree: 'wt', agent }).success).toBe(true)
     expect(ModelCatalogParams.safeParse({ agent }).success).toBe(true)

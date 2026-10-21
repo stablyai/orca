@@ -1,3 +1,4 @@
+import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { RpcResponse } from './types'
 
 // The raw request port, kept in its own module so that reaching it is a visible act.
@@ -19,6 +20,8 @@ export type SendRequestOptions = {
   budgetSpansConnect?: boolean
   /** Reject instead of replaying the request after reconnect. */
   failWhenDisconnected?: boolean
+  /** Extra top-level wire fields; the transport's own always win. */
+  envelope?: RpcEnvelopeFields
 }
 
 /** Unvalidated: an arbitrary method name in, an unread envelope out. */

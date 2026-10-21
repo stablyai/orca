@@ -16,6 +16,7 @@ import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspace-space-a
 import { isLocalWorktreeScanGenerationCurrent } from '../../../local-worktree-scan-generation'
 import { localWorktreePathsExistOrAreUnverifiable } from '../../../local-worktree-path-presence'
 import { worktreeRetentionPathComparisonKey } from '../../../worktree-retention-path-comparison'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 
 type AuthoritativeLocalMetadataPruneArgs = {
   store: Store
@@ -65,7 +66,9 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   }
   const generationCurrent = () => isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
+  // Mid-move a scan can miss paths that still exist; nothing is pruned until the move settles.
   if (
+    isWslMoveRepoBlocked(repo) ||
     !generationCurrent() ||
     !isCallerCurrent() ||
     gitWorktrees.length === 0 ||
@@ -124,7 +127,8 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     return result([], generationCurrent())
   }
 
-  if (!generationCurrent() || !isCallerCurrent()) {
+  // The path probe awaits, so a move may have started since the entry check.
+  if (!generationCurrent() || !isCallerCurrent() || isWslMoveRepoBlocked(repo)) {
     return result([], generationCurrent())
   }
   const removedIds = store.pruneSessionlessMissingLocalWorktreeMetadataForRepo(

@@ -13,11 +13,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 // string would follow along in unit tests but silently change what this desktop does with that server.
 // This release advertises structured chat but predates client-chosen launch modes.
 const LEGACY_PAIRED_STRUCTURED_LAUNCH_RELEASE_REF = 'v1.4.219'
-const SETTINGS = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
-}
+const SETTINGS = { experimentalNativeChat: true }
 
 let legacyHostCapabilities: readonly string[]
 
@@ -56,7 +52,7 @@ describe(`a current desktop paired with a ${LEGACY_PAIRED_STRUCTURED_LAUNCH_RELE
         supported: false,
         blocker: 'runtime-capability'
       })
-      expect(resolveAgentLaunchRoute({ ...legacy, settings: SETTINGS })).toBe('legacy-native-chat')
+      expect(resolveAgentLaunchRoute({ ...legacy, settings: SETTINGS })).toBe('terminal-tui')
       // The same handshake against today's server: the refusal above is the old server's doing.
       expect(
         resolveAgentLaunchRoute({

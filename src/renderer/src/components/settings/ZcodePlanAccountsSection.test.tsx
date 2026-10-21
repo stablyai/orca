@@ -51,6 +51,16 @@ vi.mock('../../store', () => ({
 }))
 
 import { ZcodePlanAccountsSection } from './ZcodePlanAccountsSection'
+import { LOCAL_USAGE_CREDENTIAL_HOST } from './usage-credential-host'
+
+function renderSection() {
+  return render(
+    <ZcodePlanAccountsSection
+      host={LOCAL_USAGE_CREDENTIAL_HOST}
+      usageSettings={{ settings: mocks.settings, update: mocks.updateSettings }}
+    />
+  )
+}
 
 describe('ZcodePlanAccountsSection', () => {
   beforeEach(() => {
@@ -83,7 +93,7 @@ describe('ZcodePlanAccountsSection', () => {
   it('disables site and secret editing on a paired web client', async () => {
     mocks.isWeb.mockReturnValue(true)
     mocks.settings.zcodePlanSite = 'bigmodel'
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
     expect(
       await screen.findByText(
         'Change the plan site and API key in the desktop app on the computer running Orca.'
@@ -107,7 +117,7 @@ describe('ZcodePlanAccountsSection', () => {
       monthly: null,
       updatedAt: 1
     })
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
     expect(await screen.findByText('42%')).toBeInTheDocument()
     expect(
       screen.getByText('Plan credential details are only readable on the computer running Orca.')
@@ -119,14 +129,14 @@ describe('ZcodePlanAccountsSection', () => {
   it('does not invent a site or console link for an older host', async () => {
     mocks.isWeb.mockReturnValue(true)
     delete mocks.settings.zcodePlanSite
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
     expect(await screen.findByText('Host plan site unavailable')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Get API key' })).not.toBeInTheDocument()
     expect(screen.getByRole('combobox')).toBeDisabled()
   })
 
   it('shows the unlinked state when neither an API key nor a CLI config exists', async () => {
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     expect(await screen.findByText('No GLM Coding Plan linked')).toBeInTheDocument()
     expect(screen.queryByText('Using the ZCode CLI sign-in')).not.toBeInTheDocument()
@@ -135,16 +145,19 @@ describe('ZcodePlanAccountsSection', () => {
   it('explains the CLI fallback when only the ZCode CLI config exists', async () => {
     mocks.getStatus.mockResolvedValue({ apiKeyConfigured: false, zcodeCliConfigured: true })
 
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     expect(await screen.findByText('Using the ZCode CLI sign-in')).toBeInTheDocument()
-    expect(screen.getByText(/~\/\.zcode\/cli\/config\.json/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/selected Coding Plan from the ZCode CLI credential store/)
+    ).toBeInTheDocument()
   })
 
   it('saves a trimmed API key through the credential IPC', async () => {
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     const input = await screen.findByPlaceholderText('Paste your GLM Coding Plan API key')
+    mocks.getStatus.mockResolvedValue({ apiKeyConfigured: true, zcodeCliConfigured: false })
     fireEvent.change(input, { target: { value: '  glm-secret  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
@@ -156,7 +169,7 @@ describe('ZcodePlanAccountsSection', () => {
   })
 
   it('requires a non-empty key before saving', async () => {
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     const save = await screen.findByRole('button', { name: 'Save' })
     expect(save).toBeDisabled()
@@ -165,7 +178,7 @@ describe('ZcodePlanAccountsSection', () => {
   it('forgets a saved key through the credential IPC', async () => {
     mocks.getStatus.mockResolvedValue({ apiKeyConfigured: true, zcodeCliConfigured: true })
 
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Forget key' }))
 
@@ -179,7 +192,7 @@ describe('ZcodePlanAccountsSection', () => {
     mocks.getStatus.mockResolvedValue({ apiKeyConfigured: true, zcodeCliConfigured: false })
     mocks.settings.zcodePlanSite = 'bigmodel'
 
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     expect(
       await screen.findByText('API key saved · Zhipu · BigModel (open.bigmodel.cn)')
@@ -199,7 +212,7 @@ describe('ZcodePlanAccountsSection', () => {
       updatedAt: Date.now()
     })
 
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     expect(await screen.findByText('42%')).toBeInTheDocument()
     expect(screen.getByText('73%')).toBeInTheDocument()
@@ -226,7 +239,7 @@ describe('ZcodePlanAccountsSection', () => {
       updatedAt: Date.now()
     })
 
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
 
     expect(await screen.findByText('42%')).toBeInTheDocument()
     expect(screen.getByText(/5 hours — resets in 47m/)).toBeInTheDocument()
@@ -268,7 +281,7 @@ describe('GLM credential status races', () => {
         }
       }
     })
-    render(<ZcodePlanAccountsSection />)
+    renderSection()
     fireEvent.change(screen.getByPlaceholderText('Paste your GLM Coding Plan API key'), {
       target: { value: 'synthetic-key' }
     })

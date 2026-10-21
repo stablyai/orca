@@ -3,8 +3,8 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as UnreadBadgeCountModule from '@/lib/unread-badge-count'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeTab, makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeTab } from '../store/slices/store-session-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 
 const { getUnreadBadgeCount } = vi.hoisted(() => ({ getUnreadBadgeCount: vi.fn() }))
@@ -111,11 +111,25 @@ describe('useUnreadDockBadge', () => {
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(2)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
 
-    act(() => useAppStore.getState().markWorktreeUnread(worktree.id))
+    act(() =>
+      useAppStore.getState().markAgentAttentionUnread({
+        workspaceId: worktree.id,
+        subjectKey: null,
+        groupId: null,
+        reason: 'agent-completion'
+      })
+    )
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(3)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
 
-    act(() => useAppStore.getState().clearWorktreeUnread(worktree.id))
+    act(() =>
+      useAppStore
+        .getState()
+        .readOnScreenAttention(
+          { workspaceIds: [worktree.id], targets: [{ worktreeId: worktree.id, tabId: tab.id }] },
+          { screenArrived: true }
+        )
+    )
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(4)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
   })
@@ -149,11 +163,25 @@ describe('useUnreadDockBadge', () => {
     expect(useAppStore.getState().tabsByWorktree).not.toBe(tabsByWorktree)
     expect(renders).toBe(rendersAfterMount)
 
-    act(() => useAppStore.getState().markWorktreeUnread('repo::worktree-0'))
+    act(() =>
+      useAppStore.getState().markAgentAttentionUnread({
+        workspaceId: 'repo::worktree-0',
+        subjectKey: null,
+        groupId: null,
+        reason: 'agent-completion'
+      })
+    )
     expect(renders).toBe(rendersAfterMount + 1)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
 
-    act(() => useAppStore.getState().clearWorktreeUnread('repo::worktree-0'))
+    act(() =>
+      useAppStore
+        .getState()
+        .readOnScreenAttention(
+          { workspaceIds: ['repo::worktree-0'], targets: [] },
+          { screenArrived: true }
+        )
+    )
     expect(renders).toBe(rendersAfterMount + 2)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
   })
@@ -201,7 +229,7 @@ describe('useUnreadDockBadge', () => {
     )
     expect(renders).toBe(initialRenders)
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(1)
-    act(() => useAppStore.getState().clearTerminalTabUnread(tab.id))
+    act(() => useAppStore.setState({ unreadTerminalTabs: { orphan: 'terminal-bell' } }))
     expect(renders).toBe(initialRenders + 1)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
   })
@@ -220,7 +248,13 @@ describe('useUnreadDockBadge', () => {
     })
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
 
-    act(() => useAppStore.getState().markTerminalTabUnread(tab.id, 'terminal-bell'))
+    act(() =>
+      useAppStore.getState().markTerminalBell({
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        tabId: tab.id,
+        paneKey: `${tab.id}:0`
+      })
+    )
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
 
     // An open panel hides the launcher dot; the bell is then only a tab highlight.

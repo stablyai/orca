@@ -37,6 +37,7 @@ export type WorkspaceDecisionDetails = {
 export type WorkspaceDecisionInputs = {
   repoMap: ReadonlyMap<string, Repo>
   worktreeMap: ReadonlyMap<string, Worktree>
+  worktreeRecord?: Worktree
   repos?: readonly Repo[]
   tabsByWorktree: Record<string, readonly TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
@@ -111,7 +112,13 @@ export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
   inputs: WorkspaceDecisionInputs
 ): WorkspaceDecisionDetails {
-  const workspaceRecord = inputs.worktreeMap.get(worktree.worktreeId)
+  const candidateWorkspaceRecord =
+    inputs.worktreeRecord ?? inputs.worktreeMap.get(worktree.worktreeId)
+  const workspaceRecord =
+    candidateWorkspaceRecord &&
+    (!worktree.executionHostId || candidateWorkspaceRecord.hostId === worktree.executionHostId)
+      ? candidateWorkspaceRecord
+      : undefined
   const tabs = inputs.tabsByWorktree[worktree.worktreeId] ?? []
   const openFiles = inputs.openFiles.filter((file) => file.worktreeId === worktree.worktreeId)
   const dirtyEditorBufferCount = openFiles.filter(

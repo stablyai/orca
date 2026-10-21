@@ -10,7 +10,7 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export class StructuredConversationCommandController {
-  /** Held only by a clear, which replaces the conversation a send would land in. A compaction is
+  /** Held only while a clear resets the context a send would land in. A compaction is
    *  a queued message, and sends accepted behind it wait for it in the queue. */
   readonly pending = new Map<string, { key: string; count: number }>()
   constructor(
@@ -29,7 +29,9 @@ export class StructuredConversationCommandController {
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
     if (params.command === 'compact') {
-      return runStructuredCompaction(this.context(), this.host, caller, params)
+      return runStructuredCompaction(this.context(), this.host, caller, params, {
+        clearInFlight: this.pending.has(params.envelope.sessionId)
+      })
     }
     const key = JSON.stringify([caller.callerKey, params.envelope.clientOperationId])
     const pending = this.pending.get(params.envelope.sessionId)
@@ -46,51 +48,6 @@ export class StructuredConversationCommandController {
       // A clear can settle with no journal commit (a refusal), and drafts held behind it
       // would otherwise wait for an unrelated commit.
       this.context().wakeQueuedDrain?.(params.envelope.sessionId)
-    })
-  }
-
-  replacements = () => {
-    const store = this.context().deps.store
-    const records = store.listRecords()
-    const visible = new Set(store.listVisibleSessionIds())
-    const byId = new Map(records.map((record) => [record.sessionId, record]))
-    const destinations = new Map<string, string | null>()
-    const destination = (source: string): string | null => {
-      const path = new Set<string>()
-      let current = source
-      while (!destinations.has(current) && !path.has(current)) {
-        path.add(current)
-        const command = byId.get(current)?.conversationCommand
-        if (
-          command?.command !== 'clear' ||
-          command.phase !== 'committed' ||
-          !command.replacementSessionId
-        ) {
-          destinations.set(current, current)
-          break
-        }
-        current = command.replacementSessionId
-      }
-      const target = destinations.get(current) ?? null
-      for (const id of path) {
-        destinations.set(id, target)
-      }
-      return target
-    }
-    return records.flatMap((record) => {
-      const target = destination(record.sessionId)
-      const sessionId = target !== record.sessionId ? target : null
-      // Explicit history reveals remain readable; closed replacements stay closed.
-      return sessionId && visible.has(sessionId) && !visible.has(record.sessionId)
-        ? [
-            {
-              sourceSessionId: record.sessionId,
-              sessionId,
-              workspaceId: record.location.workspaceId,
-              agent: record.provider
-            }
-          ]
-        : []
     })
   }
 }

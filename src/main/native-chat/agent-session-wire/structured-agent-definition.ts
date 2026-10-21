@@ -11,6 +11,8 @@ import type { AgentSessionModelOption } from '../../../shared/agent-session-wire
 /** `agent` names the Orca agent whose sessions this describes; the storage fields bound its records. */
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
+  /** Whether Orca provides this agent's chat program on this host; absent when it never does. */
+  managedRuntime?: () => boolean
   /** How a session's options read and change while no child runs. */
   restingOptions: {
     /** Whether the agent takes a pick of this option key. */
@@ -20,4 +22,9 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     /** An unpicked effort reads as the model's default effort, as a running child reports it. */
     effortDefaultsToModel: boolean
   }
+}
+
+/** An agent whose account is one config directory, as Claude's and Codex's are. */
+export type DirectoryAccountAgentDefinition = StructuredAgentDefinition & {
+  accountHomeVariable: string
 }

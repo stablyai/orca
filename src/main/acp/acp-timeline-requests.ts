@@ -12,7 +12,11 @@ export const pendingAcpResolution = {
   resolvedAt: null
 } as const
 
-export function acpPermissionPresentation(params: unknown): AcpRequestPresentation {
+/** `description`: the agent's own words about what answering means, shown above the choices. */
+export function acpPermissionPresentation(
+  params: unknown,
+  description?: string
+): AcpRequestPresentation {
   // The runtime already read this request and reported any field it dropped.
   const request = readAcpPermissionRequest(params, () => {})
   if (!request) {
@@ -23,8 +27,12 @@ export function acpPermissionPresentation(params: unknown): AcpRequestPresentati
     body: {
       kind: 'approval',
       title: toolCall.title ?? 'Permission requested',
+      ...(description ? { description } : {}),
       detail: null,
-      options: options.map((option) => ({ id: option.optionId, label: option.name })),
+      options: options.map((option) => ({
+        id: option.optionId,
+        label: option.name
+      })),
       resolution: pendingAcpResolution
     },
     reply: (response) => {
@@ -43,6 +51,7 @@ export function acpPermissionPresentation(params: unknown): AcpRequestPresentati
 }
 
 const requestSessionSchema = z.object({ sessionId: z.string() })
+const UNADVERTISED_CLIENT_METHOD = /^(?:fs|terminal)\//
 const requestToolSchema = z.object({
   toolCallId: z.string().optional(),
   toolCall: z.object({ toolCallId: z.string() }).optional()
@@ -57,20 +66,54 @@ export function translateAcpRequest(
     dialect: AcpDialect
     tools: AcpToolTimeline
   }
-): { events: ProviderTimelineEvent[]; presentation?: AcpRequestPresentation } {
+): {
+  events: ProviderTimelineEvent[]
+  presentation?: AcpRequestPresentation
+  /** Answered at once: nobody is asked. */
+  settled?: { reply: unknown }
+} {
   const session = requestSessionSchema.safeParse(params)
   if (!session.success || session.data.sessionId !== options.sessionId) {
     throw new AcpRpcError(-32602, 'ACP request belongs to an unknown session')
   }
-  const presentation =
-    method === 'session/request_permission'
-      ? acpPermissionPresentation(params)
-      : options.dialect.request?.(method, params)
   const tool = requestToolSchema.safeParse(params)
   const callId = tool.success ? (tool.data.toolCall?.toolCallId ?? tool.data.toolCallId) : undefined
   const turn = callId ? options.tools.turn(callId) : undefined
   const join = { thread: options.sessionId, ...(turn === undefined ? {} : { turn }) }
+  const settlement =
+    method === 'session/request_permission'
+      ? undefined
+      : options.dialect.settleRequest?.(method, params)
+  if (settlement) {
+    const plan = settlement.plan
+    return {
+      settled: { reply: settlement.reply },
+      events:
+        plan === undefined
+          ? []
+          : [
+              {
+                type: 'item.update',
+                item: `${method}:${JSON.stringify(id)}`,
+                body: {
+                  kind: 'status',
+                  presentation: 'plan-document',
+                  text: plan
+                },
+                join
+              }
+            ]
+    }
+  }
+  const presentation =
+    options.dialect.request?.(method, params) ??
+    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined)
   if (!presentation) {
+    // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x
+    // repeats each approved edit as a file write it already made): refused, with no row.
+    if (UNADVERTISED_CLIENT_METHOD.test(method)) {
+      return { events: [] }
+    }
     return {
       events: [{ type: 'provider.frame', frameKind: `request:${method}`, payload: params, join }]
     }

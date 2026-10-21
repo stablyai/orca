@@ -1,6 +1,5 @@
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { forgetCodexPaneAccount } from '../../../codex/codex-pane-account-registry'
 import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
@@ -13,7 +12,7 @@ import {
 } from '../../pty-hidden-delivery-gate'
 import { agentSessionOwners } from '../pane/agent-session-owners'
 import { paneKeyPtyId, paneKeyTeardownListeners, ptyPaneKey } from '../pane/key-state'
-import { ptyIncarnationById, ptyOwnership } from './ownership-state'
+import { getPtyIdsForConnection, ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { clearBackgroundedDeliverySyncForPty } from './listener-lifecycle'
 import {
   activeRendererPtys,
@@ -49,8 +48,6 @@ export function clearProviderPtyState(
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
-  // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
-  markClaudePtyExited(id)
   ptySizes.delete(id)
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
@@ -91,7 +88,13 @@ export function clearProviderPtyState(
   // Why: clear the hook server's per-paneKey caches (via the spawn-time paneKey mapping, its only ptyId→paneKey correlation) so dead panes don't accumulate over process lifetime.
   if (paneKey) {
     if (stillOwnsPaneKey) {
-      agentHookServer.clearPaneState(paneKey)
+      // Why: a proven exit describes this PTY's agent, so only a real teardown (not a
+      // disconnect that can reconnect) may drop it.
+      if (opts.preserveAgentSessionOwners) {
+        agentHookServer.clearPaneState(paneKey)
+      } else {
+        agentHookServer.clearPaneState(paneKey, { forgetAgentExit: true })
+      }
       paneKeyPtyId.delete(paneKey)
     }
     ptyPaneKey.delete(id)
@@ -109,12 +112,10 @@ export function clearProviderPtyState(
 }
 
 export function clearPtyOwnershipForConnection(connectionId: string): void {
-  for (const [ptyId, connId] of ptyOwnership) {
-    if (connId === connectionId) {
-      // Why: pane-scoped caches cannot route while disconnected, but claimed
-      // ownership must survive until reconnect makes absence authoritative.
-      clearProviderPtyState(ptyId, { preserveAgentSessionOwners: true })
-      ptyOwnership.delete(ptyId)
-    }
+  for (const ptyId of getPtyIdsForConnection(connectionId)) {
+    // Why: pane-scoped caches cannot route while disconnected, but claimed
+    // ownership must survive until reconnect makes absence authoritative.
+    clearProviderPtyState(ptyId, { preserveAgentSessionOwners: true })
+    ptyOwnership.delete(ptyId)
   }
 }

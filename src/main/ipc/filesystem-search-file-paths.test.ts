@@ -188,7 +188,7 @@ describe('searchQuickOpenFilePaths', () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
 
-    const promise = searchQuickOpenFilePaths('C:\\repo', {} as Store, {
+    const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32
     })
@@ -201,6 +201,47 @@ describe('searchQuickOpenFilePaths', () => {
     expect(wslAwareSpawnMock).toHaveBeenCalledWith(
       '/bundled/linux/rg',
       expect.any(Array),
+      expect.objectContaining({ cwd: '/repo', wslDistro: 'Ubuntu' })
+    )
+  })
+
+  it('keeps the host rg for a Windows-drive worktree under a WSL runtime', async () => {
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const promise = searchQuickOpenFilePaths('C:\\repo', {} as Store, {
+      query: 'target',
+      limit: 32
+    })
+    await flushMicrotasks()
+    child.stdout?.emit('data', 'src/target.ts\0')
+    child.emit('close', 0, null)
+
+    await expect(promise).resolves.toMatchObject({ paths: ['src/target.ts'] })
+    expect(bundledRipgrepCommandMock).not.toHaveBeenCalledWith({ wsl: true })
+    const spawnOptions = wslAwareSpawnMock.mock.calls[0]?.[2]
+    expect(spawnOptions).toMatchObject({ cwd: 'C:\\repo' })
+    expect(spawnOptions?.wslDistro).toBeUndefined()
+  })
+
+  it('keeps a symlink-following scan of a Windows-drive worktree in WSL', async () => {
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const promise = searchQuickOpenFilePaths('C:\\repo', {} as Store, {
+      query: 'target',
+      limit: 32,
+      followSymlinks: true
+    })
+    await flushMicrotasks()
+    child.emit('close', 1, null)
+    await promise
+
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      '/bundled/linux/rg',
+      expect.arrayContaining(['--follow']),
       expect.objectContaining({ cwd: 'C:\\repo', wslDistro: 'Ubuntu' })
     )
   })

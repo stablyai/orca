@@ -2,7 +2,7 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAgentHookServer } from '../../relay/agent-hook-server'
+import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer, _internals } from './server'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 import {
@@ -57,6 +57,8 @@ async function host(remote: boolean, launchToken?: string) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            // Advancing fake time can expire a pooled HTTP socket before the next post.
+            Connection: 'close',
             'X-Orca-Agent-Hook-Token': relay.getCoordinates().token
           },
           body: JSON.stringify(body)

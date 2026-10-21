@@ -1,7 +1,7 @@
 import React from 'react'
 import { Bell, ExternalLink, X } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -159,7 +159,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
 
             <div className="flex min-w-0 items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
               <span className="inline-flex shrink-0" title={agentLabel}>
-                <AgentIcon agent={agentTypeToIconAgent(thread.agentType)} size={13} />
+                <AgentTypeIcon agentType={thread.agentType} size={13} />
               </span>
               <span className="min-w-0 flex-1 truncate" title={workspaceLabel}>
                 {workspaceLabel}
@@ -255,6 +255,11 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
             </div>
           </div>
         </div>
+        {/* Fills while the pointer rests; the hover card sets the attribute. Duration = rest minus progress delay. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-2 bottom-0 h-px origin-left scale-x-0 rounded-full bg-muted-foreground/50 group-data-[hover-card-resting]:scale-x-100 group-data-[hover-card-resting]:transition-transform group-data-[hover-card-resting]:duration-400 group-data-[hover-card-resting]:ease-linear motion-reduce:hidden"
+        />
       </div>
     </ActivityThreadHoverCard>
   )

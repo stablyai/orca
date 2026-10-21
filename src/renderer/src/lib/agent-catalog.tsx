@@ -84,7 +84,9 @@ export function AgentIcon({
   // Why: prefer the favicon bundled at build time so the icon renders without a
   // live network request — Google's favicon service is unreachable in some
   // regions and offline, which left these icons broken (#8451).
-  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
+  // Why: recognition-only DSB shares the bundled DeepSeek mark.
+  const iconAgent = agent === 'dsb' ? 'dsh' : agent
+  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[iconAgent]
   // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
   // a truthy `||` check while `??` still renders a broken `<img src="">`.
   const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl

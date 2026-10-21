@@ -36,8 +36,6 @@ export type FeedbackSubmitBody = {
   images?: FeedbackImageAttachment[]
 }
 
-export type { FeedbackRequestFailure } from '../../shared/feedback-submit-contract'
-
 export async function postFeedback(
   url: string,
   body: FeedbackSubmitBody,
@@ -71,6 +69,7 @@ export async function postFeedback(
     throw error
   } finally {
     clearTimeout(timeout)
+    controller.abort()
   }
 }
 

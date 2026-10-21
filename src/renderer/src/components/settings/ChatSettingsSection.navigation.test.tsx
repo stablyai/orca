@@ -5,8 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { ChatSettingsSection } from './ChatSettingsSection'
+import { TooltipProvider } from '../ui/tooltip'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
+import { getChatNamingSearchEntry } from './chat-naming-search'
+import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { useSettingsRepoScrollEffects } from './use-settings-repo-scroll-effects'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
@@ -17,26 +20,31 @@ vi.mock('../../store', () => ({
   useAppStore: (selector: (value: { settingsSearchQuery: string }) => unknown) =>
     selector({ settingsSearchQuery: '' })
 }))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 function NavigationHarness({
   enabled,
-  initialSection
+  initialSection,
+  targetSection = 'chat-code-text-size'
 }: {
   enabled: boolean
   initialSection: string
+  targetSection?: string
 }) {
   const [activeSectionId, setActiveSectionId] = useState(initialSection)
-  const settings = { ...getDefaultSettings('/tmp'), experimentalStructuredNativeChat: enabled }
+  const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
   const sections = buildSettingsNavigationMetadata({
     isMac: false,
     isWindows: false,
     isWebClient: false,
-    experimentalStructuredNativeChat: enabled,
+    nativeChatEnabled: enabled,
     repos: []
   })
   const pendingNavSectionRef = useRef<string | null>('chat')
-  const pendingScrollTargetRef = useRef<string | null>('chat-code-text-size')
+  const pendingScrollTargetRef = useRef<string | null>(targetSection)
   const contentScrollRef = useRef<HTMLDivElement>(null)
   const pendingScrollTargetWatchRef = useRef(null)
   const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
@@ -84,19 +92,44 @@ function NavigationHarness({
     terminal as SettingsTerminalModel
   )
   return (
-    <ActiveSettingsSectionProvider value={activeSectionId}>
-      <output aria-label="Selected settings page">{activeSectionId}</output>
-      <ChatSettingsSection
-        settings={settings}
-        updateSettings={vi.fn()}
-        searchEntries={getChatAppearanceSearchEntries()}
-        isMounted
-      />
-    </ActiveSettingsSectionProvider>
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value={activeSectionId}>
+        <output aria-label="Selected settings page">{activeSectionId}</output>
+        <ChatSettingsSection
+          settings={settings}
+          updateSettings={vi.fn()}
+          writeSourceControlAiSettings={async () => {}}
+          searchEntries={[
+            ...getChatAppearanceSearchEntries(),
+            getChatNamingSearchEntry(),
+            getChatInlineVisualsSearchEntry()
+          ]}
+          showDesktopOnlySettings
+          isMounted
+        />
+      </ActiveSettingsSectionProvider>
+    </TooltipProvider>
   )
 }
 
 describe('Chat settings deep links', () => {
+  it('activates Chat and scrolls to Inline visuals from another settings page', async () => {
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+    const { container } = render(
+      <NavigationHarness enabled initialSection="appearance" targetSection="chat-inline-visuals" />
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
+        'chat'
+      )
+    })
+    const visuals = container.querySelector('#chat-inline-visuals')
+    expect(visuals?.querySelector('[role="switch"]')).toBe(
+      screen.getByRole('switch', { name: 'Toggle inline visuals' })
+    )
+    await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
+  })
+
   it('activates Chat and renders the moved row for a deep link', async () => {
     render(<NavigationHarness enabled initialSection="appearance" />)
     await waitFor(() => {
@@ -105,6 +138,25 @@ describe('Chat settings deep links', () => {
       )
     })
     expect(screen.getByRole('spinbutton', { name: 'Code text size' })).toBeTruthy()
+  })
+
+  it('activates Chat and scrolls to the separate naming section for its deep link', async () => {
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+    const { container } = render(
+      <NavigationHarness enabled initialSection="appearance" targetSection="chat-names" />
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
+        'chat'
+      )
+    })
+    const names = container.querySelector('#chat-names')
+    const appearance = container.querySelector('#chat-appearance')
+    expect(names?.parentElement).toBe(appearance?.parentElement)
+    expect(names?.querySelector('[role="switch"]')).toBe(
+      screen.getByRole('switch', { name: 'Name chats automatically' })
+    )
+    await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(names))
   })
 
   it('falls back through the existing navigation rule when a hidden Chat page is selected', async () => {

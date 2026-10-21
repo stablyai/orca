@@ -27,6 +27,7 @@ describe('orchestration contract fence', () => {
       methods: [
         defineMethod({
           name: method,
+          permission: 'workspace',
           params: z.object({ subject: z.string() }),
           handler: effect
         })

@@ -25,7 +25,7 @@ export type NativeHostAbi = {
   nodeAbi: string
 }
 
-/** Stock Ubuntu 20.04. See docs/reference/linux-glibc-compatibility.md. */
+/** Stock Ubuntu 20.04. */
 export const GLIBC_FLOOR = '2.31'
 
 type ReportHeader = { glibcVersionRuntime?: unknown }

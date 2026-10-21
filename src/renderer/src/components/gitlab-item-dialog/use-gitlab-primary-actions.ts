@@ -1,3 +1,4 @@
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
@@ -28,7 +29,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('close')
     try {
-      const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
+      const res = await gitLabApiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -61,7 +62,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('reopen')
     try {
-      const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
+      const res = await gitLabApiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -94,7 +95,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('merge')
     try {
-      const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
+      const res = await gitLabApiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -141,12 +142,12 @@ export function useGitLabPrimaryActions(
       // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
-          ? await window.api.gl.addMRComment({
+          ? await gitLabApiFor(repoSelector).addMRComment({
               ...repoSelector,
               iid: item.number,
               body: bodyState.body
             })
-          : await window.api.gl.addIssueComment({
+          : await gitLabApiFor(repoSelector).addIssueComment({
               ...repoSelector,
               number: item.number,
               body: bodyState.body

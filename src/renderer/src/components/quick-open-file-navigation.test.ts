@@ -2,10 +2,10 @@ import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const route: {
     current: {
-      settings: { activeRuntimeEnvironmentId: string | null }
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
       connectionId: string | undefined
     }
-  } = { current: { settings: { activeRuntimeEnvironmentId: null }, connectionId: undefined } }
+  } = { current: { target: { kind: 'local' }, connectionId: undefined } }
   return {
     stat: vi.fn(),
     authorize: vi.fn(),
@@ -26,11 +26,13 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.stat,
-  isRemoteRuntimeFileOperation: (context: { connectionId?: string }) =>
-    Boolean(context.connectionId),
   isMissingRuntimePathError: (error: Error) => error.message.includes('ENOENT')
+}))
+vi.mock('@/runtime/runtime-file-routing', () => ({
+  isRemoteRuntimeFileOperation: (context: { connectionId?: string }) =>
+    Boolean(context.connectionId)
 }))
 vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ({}),
@@ -39,13 +41,7 @@ vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
     assertCurrent: mocks.assertCurrent
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: (settings: { activeRuntimeEnvironmentId: string | null }) =>
-    settings.activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
-      : { kind: 'local' },
-  callRuntimeRpc: mocks.rpc
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
   scheduleEditorLineReveal: mocks.reveal
 }))
@@ -53,7 +49,7 @@ import { openQuickOpenFile } from './quick-open-file-navigation'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.route.current = { settings: { activeRuntimeEnvironmentId: null }, connectionId: undefined }
+  mocks.route.current = { target: { kind: 'local' }, connectionId: undefined }
   mocks.stat.mockResolvedValue({ isDirectory: false })
   mocks.assertCurrent.mockReset()
   vi.stubGlobal('window', { api: { fs: { authorizeExternalPath: mocks.authorize } } })
@@ -129,7 +125,7 @@ it('probes SSH paths only on their owning host', async () => {
 })
 
 it('resolves paired paths on the host and never falls back to client filesystem access', async () => {
-  mocks.route.current.settings.activeRuntimeEnvironmentId = 'env-a'
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValue({
     exists: true,
     isDirectory: false,
@@ -189,7 +185,7 @@ it.each(['C:\\repo\\file.ts', '\\\\server\\share\\file.ts'])(
 )
 
 it('resolves literal colon names on a paired host before treating the suffix as navigation', async () => {
-  mocks.route.current.settings.activeRuntimeEnvironmentId = 'env-a'
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValueOnce({
     exists: true,
     isDirectory: false,

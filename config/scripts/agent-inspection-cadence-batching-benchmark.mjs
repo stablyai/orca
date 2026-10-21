@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import nodeModule from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 if (!process.execArgv.includes('--experimental-transform-types')) {
   const result = spawnSync(
@@ -51,13 +51,17 @@ for (const paneCount of PANE_COUNTS) {
 }
 
 const { nextCadenceInspectionDelayMs } = await import(
-  path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-interval.ts')
+  pathToFileURL(
+    path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-interval.ts')
+  ).href
 )
 const { POLL_TIER_INTERVAL_MS } = await import(
-  path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-cadence.ts')
+  pathToFileURL(
+    path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-cadence.ts')
+  ).href
 )
 const { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } = await import(
-  path.join(ROOT, 'src/shared/process-table-snapshot-reader.ts')
+  pathToFileURL(path.join(ROOT, 'src/shared/process-table-snapshot-reader.ts')).href
 )
 
 // Pre-change: independent ±10% jitter per pane, re-rolled on every reschedule.

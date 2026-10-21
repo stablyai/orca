@@ -117,12 +117,19 @@ async function connectedHost() {
   client.sendRequest.mockClear()
   return client
 }
+// The onboarding pager renders once its viewport reports a width.
+function layoutOnboarding() {
+  renderer!.root
+    .findAll((node) => node.props.onLayout !== undefined)[0]
+    ?.props.onLayout({ nativeEvent: { layout: { width: 390 } } })
+}
 async function choose(entry: string) {
   await act(async () => {
     renderer = create(
       createElement(entry === 'settings' ? NotificationsScreen : MobileOnboardingScreen)
     )
   })
+  await act(async () => layoutOnboarding())
   await act(async () => {
     if (entry === 'settings') {
       renderer!.root.findByType('Switch').props.onValueChange(true)
@@ -183,6 +190,7 @@ it('remembers Not now without registering and does not ask again', async () => {
   await act(async () => {
     renderer = create(createElement(MobileOnboardingScreen))
   })
+  await act(async () => layoutOnboarding())
   await act(async () => {
     renderer!.root.findByType('Page').props.onNotificationChoice('skip')
   })

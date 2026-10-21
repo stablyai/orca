@@ -7,7 +7,7 @@ import { detectRuntimeMachineName, type RuntimeMachineName } from './runtime-mac
 // loaded macOS runner can hit the lookup timeout and answer with the hostname while a second live
 // spawn does not, which is a flake and not a verdict.
 const runProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 

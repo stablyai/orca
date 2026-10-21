@@ -1,6 +1,7 @@
 import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-worktree'
 import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { ownsGlobalSelection } from '../global-selection-owner'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,
@@ -56,23 +57,13 @@ export function createTerminalTabNavigationActions(
     setActiveTab: (tabId) => {
       let tabOwnerWorktreeId: string | null = null
       set((s) => {
-        // Why: clear bells only for visible tabs; background bells must persist.
         tabOwnerWorktreeId = resolveActiveTabOwnerWorktreeId(
           s.tabsByWorktree,
           s.activeWorktreeId,
           tabId
         )
         const isActiveWorktreeTab =
-          tabOwnerWorktreeId !== null && tabOwnerWorktreeId === s.activeWorktreeId
-        const nextUnreadTerminalTabs =
-          isActiveWorktreeTab && s.unreadTerminalTabs[tabId]
-            ? (() => {
-                const copy = { ...s.unreadTerminalTabs }
-                delete copy[tabId]
-                return copy
-              })()
-            : s.unreadTerminalTabs
-        // Why: activeTabId marks the visible tab, so background bells remain unread.
+          tabOwnerWorktreeId !== null && ownsGlobalSelection(s, tabOwnerWorktreeId)
         return {
           activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
           // Why: a redundant activation must not reallocate this map — Terminal's
@@ -82,8 +73,7 @@ export function createTerminalTabNavigationActions(
           activeTabIdByWorktree:
             tabOwnerWorktreeId !== null && s.activeTabIdByWorktree[tabOwnerWorktreeId] !== tabId
               ? { ...s.activeTabIdByWorktree, [tabOwnerWorktreeId]: tabId }
-              : s.activeTabIdByWorktree,
-          unreadTerminalTabs: nextUnreadTerminalTabs
+              : s.activeTabIdByWorktree
         }
       })
       const state = get()

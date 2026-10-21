@@ -4,7 +4,60 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/structured-agent-session-start-failure-row-key'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionStartFailureWords } from './structured-agent-session-failure-text'
+import type {
+  StructuredAgentSessionStartFailureWords,
+  StructuredAgentSessionStartFailureCause
+} from './structured-agent-session-failure-text'
+import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
+import { failedProviderChildStart } from './structured-agent-session-provider-child'
+import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
+
+/** A queued message whose child died while it waited inherits that child's failure. */
+export function startThatFailedWhileQueued(
+  session: StructuredAgentSessionHostSession,
+  oldest: AgentJournalSubmission
+): { startKey: string | null; cause: StructuredAgentSessionStartFailureCause } | null {
+  const ended = failedProviderChildStart(session)
+  if (
+    !ended ||
+    oldest.acceptedSequence === undefined ||
+    ended.endedAt.epoch !== session.journal.cursor().epoch ||
+    ended.endedAt.sequence < oldest.acceptedSequence
+  ) {
+    return null
+  }
+  const cause = structuredAgentSessionEndedChildFailure(ended)
+  return cause ? { startKey: ended.generation, cause } : null
+}
+
+export function refusedStructuredAgentSessionStart(
+  record: AgentSessionRecord | null,
+  {
+    refusal,
+    diagnostic,
+    argumentProblem,
+    expired
+  }: Extract<StructuredAgentSessionResumeOutcome, { ok: false }>
+): { startKey: null; cause: StructuredAgentSessionStartFailureCause } {
+  if (expired) {
+    return { startKey: null, cause: { failure: agentSessionFailureFact('hostStopped') } }
+  }
+  return {
+    startKey: null,
+    cause: {
+      refusal,
+      ...(diagnostic ? { diagnostic } : {}),
+      ...(argumentProblem ? { argumentProblem } : {}),
+      ...(record?.providerHandleChain.length === 0 ? { newSession: true as const } : {})
+    }
+  }
+}
 
 /** A start that failed, keyed like its row, in the words `structuredAgentSessionStartFailure` gave. */
 export type StructuredAgentSessionStartFailure = StructuredAgentSessionStartFailureWords & {
@@ -43,25 +96,55 @@ export function hasStructuredAgentSessionStartFailureRow(
 
 /**
  * A start the delivery loop needed and did not get: every queued message rejected with the same
- * words, then the start's row. Writes nothing when nothing is still queued: a start whose messages
- * Stop withdrew did not fail anyone.
+ * words, then the start's row. A failed owned open also records its cause before any message.
  */
 export async function recordStructuredAgentSessionStartFailure(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
-  failure: StructuredAgentSessionStartFailure
+  failure: StructuredAgentSessionStartFailure,
+  /** Only these of what is queued: the rest was accepted after the start was asked for. */
+  which?: (submission: AgentJournalSubmission) => boolean
 ): Promise<void> {
   const oldest = oldestQueuedSubmission(session)
-  if (!oldest) {
+  const startKey = failure.startKey ?? oldest?.clientMessageId
+  const rejection = { reason: failure.reason, rejection: failure.rejection }
+  const chosen = which
+    ? session.journal
+        .submissions()
+        .filter((entry) => isQueuedAgentJournalSubmission(entry) && which(entry))
+    : null
+  if (startKey === undefined || chosen?.length === 0) {
     return
   }
-  const startKey = failure.startKey ?? oldest.clientMessageId
   await session.journal.appendLifecycleBatch({
     settlementId: `start-failure:${startKey}`,
     fence: session.fence,
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],
-    rejectsQueued: { reason: failure.reason, rejection: failure.rejection }
+    ...(chosen
+      ? {
+          dispatches: chosen.map(({ clientMessageId }) => ({
+            clientMessageId,
+            fence: session.fence,
+            state: 'rejected' as const,
+            recovered: true as const,
+            ...rejection
+          }))
+        }
+      : oldest
+        ? { rejectsQueued: rejection }
+        : {})
   })
+}
+
+/** Accepted no later than `cursor`, in the journal epoch it names. */
+export function acceptedNoLaterThan(
+  journal: Pick<StructuredAgentSessionHostSession['journal'], 'cursor'>,
+  cursor: AgentJournalCursor
+): (submission: AgentJournalSubmission) => boolean {
+  return (submission) =>
+    journal.cursor().epoch === cursor.epoch &&
+    submission.acceptedSequence !== undefined &&
+    submission.acceptedSequence <= cursor.sequence
 }
 
 export function oldestQueuedSubmission(

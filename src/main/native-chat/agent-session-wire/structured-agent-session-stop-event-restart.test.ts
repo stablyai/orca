@@ -321,8 +321,8 @@ describe('a restart between a Stop and its turn end', () => {
       scope
     )
     expect(settled(TURN).turn).toMatchObject({ outcome: 'cancellation' })
-    // A send after the Stop, the queue's drain here, opens its own turn.
-    const drained = rig.send('drained after the Stop', undefined, { internal: true })
+    // A host send after the Stop opens its own turn.
+    const drained = rig.send('drained after the Stop')
     await drained.result
     await rig.settleAccepted(drained.id, 'drained')
     await journal().appendItem(
@@ -364,7 +364,7 @@ describe('a restart between a Stop and its turn end', () => {
       return new Promise<never>(() => undefined)
     })
     void rig.stop()
-    await expect.poll(() => journal().activeTurnId()).toBe(TURN)
+    await expect.poll(() => journal().runningTurn()?.turnId ?? null).toBe(TURN)
     expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
 
     await restartAndSettle('exit-observed')

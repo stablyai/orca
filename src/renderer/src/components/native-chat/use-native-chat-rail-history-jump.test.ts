@@ -88,7 +88,8 @@ function createLane({
   }
   const useLaneRailJump = (
     jumpToLoaded: (item: NativeChatRailItem) => void,
-    sessionKey = 'session-1'
+    sessionKey = 'session-1',
+    isVisible = true
   ) => {
     const current = useSyncExternalStore(lane.subscribe, lane.getSnapshot)
     const items = useMemo<NativeChatRailItem[]>(() => {
@@ -103,6 +104,7 @@ function createLane({
     return useNativeChatRailHistoryJump({
       items,
       sessionKey,
+      isVisible,
       loadEarlier: lane.loadEarlier,
       jumpToLoaded
     })
@@ -285,6 +287,27 @@ describe('rail jump through unloaded history', () => {
     act(() => result.current.start(outlineItem('m25')))
     await waitFor(() => expect(lane.reads.count).toBe(1))
     rerender({ sessionKey: 'session-2' })
+    expect(result.current.pendingId).toBeNull()
+    await releasePage(lane)
+
+    expect(lane.reads.count).toBe(1)
+    expect(jumpToLoaded).not.toHaveBeenCalled()
+  })
+
+  // A hidden terminal-backed pane stops reading its transcript, so the page would never land.
+  it('abandons the jump when the pane hides mid-page', async () => {
+    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
+    lane.holdPages()
+    const jumpToLoaded = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ isVisible }: { isVisible: boolean }) =>
+        useLaneRailJump(jumpToLoaded, 'session-1', isVisible),
+      { initialProps: { isVisible: true } }
+    )
+
+    act(() => result.current.start(outlineItem('m25')))
+    await waitFor(() => expect(lane.reads.count).toBe(1))
+    rerender({ isVisible: false })
     expect(result.current.pendingId).toBeNull()
     await releasePage(lane)
 

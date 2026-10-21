@@ -1,5 +1,6 @@
 /**
- * What goes into one orcad node-pty prebuild slot, and the manifest that records it.
+ * What goes into one orcad node-pty prebuild slot (plus a compat slot's own addons), and the
+ * manifest that records it.
  *
  * The manifest is the loader's contract (src/main/orcad/node-pty-prebuilt-slot.ts): per-slot
  * N-API level, libc, the highest glibc symbol version the binaries need, and a sha256 per
@@ -16,8 +17,8 @@ const require = createRequire(import.meta.url)
 export const MANIFEST_SCHEMA_VERSION = 2
 
 /**
- * Node 18, the rung C host floor, supports N-API 8 (9 only from 18.17). Pinned here rather
- * than left to the headers' default so a header bump cannot silently raise it.
+ * Keep N-API 8 stable across bundled and host runtimes rather than using the headers'
+ * default, so a header bump cannot silently change the shipped addon ABI.
  */
 export const SLOT_NAPI_VERSION = 8
 
@@ -32,6 +33,23 @@ const NODE_API_EXPORTS = new Set(['node_api_module_get_api_version_v1'])
 export const COMPAT_SLOTS = Object.freeze({
   'linux-x64-glibc217': Object.freeze({ platform: 'linux', arch: 'x64', libc: 'glibc' })
 })
+
+/**
+ * Native addons a compat slot builds beside node-pty, by slot-relative path, mapped to where an
+ * orcad slot ships them. A compat target ships no native file without a compat build.
+ */
+export const COMPAT_SLOT_ADDONS = Object.freeze({
+  'parcel-watcher/watcher.node': 'node_modules/@parcel/watcher/watcher.node'
+})
+
+/**
+ * The native files of a compat target with no compat build behind them: each would be the base
+ * target's binary, built for a newer glibc and libstdc++ than the compat host has.
+ * `compatSources` maps orcad slot paths to the compat slot files that fill them.
+ */
+export function findCompatAddonGaps(targetFilenames, compatSources) {
+  return targetFilenames.filter((file) => file.endsWith('.node') && !compatSources.has(file))
+}
 
 export function isCompatSlot(slot) {
   return Object.hasOwn(COMPAT_SLOTS, slot)
@@ -98,6 +116,8 @@ export function findPostBaselineNodeApiNames(binary) {
   return [...names].filter((name) => !NODE_API_EXPORTS.has(name)).sort()
 }
 
+const WINDOWS_WINPTY_FILES = ['pty.node', 'winpty.dll', 'winpty-agent.exe']
+
 /**
  * Files a slot ships, as `[slot-relative path, source path]`.
  *
@@ -109,18 +129,20 @@ export function findPostBaselineNodeApiNames(binary) {
  * lib/conpty_console_list_agent.js loads it, but only on the non-DLL kill path, which Orca
  * never takes (it always passes useConptyDll on win32). Shipped so that path fails soft
  * rather than on a missing module.
+ * `pty.node`, `winpty.dll` and `winpty-agent.exe` are upstream's winpty prebuilds, also kept by
+ * the desktop: node-pty selects winpty below Windows build 18309 (Windows 10 1809 / Server 2019),
+ * so without them orcad cannot open a terminal there (#30906).
  */
 export function slotSourceFiles({ platform, arch, buildDir, nodePtyDir }) {
   if (platform === 'win32') {
     const conptyRuntime = windowsConptyRuntimeDir(nodePtyDir, arch)
+    const upstream = join(nodePtyDir, 'prebuilds', `win32-${arch}`)
     return [
       ['conpty.node', join(buildDir, 'conpty.node')],
-      [
-        'conpty_console_list.node',
-        join(nodePtyDir, 'prebuilds', `win32-${arch}`, 'conpty_console_list.node')
-      ],
+      ['conpty_console_list.node', join(upstream, 'conpty_console_list.node')],
       ['conpty/conpty.dll', join(conptyRuntime, 'conpty.dll')],
-      ['conpty/OpenConsole.exe', join(conptyRuntime, 'OpenConsole.exe')]
+      ['conpty/OpenConsole.exe', join(conptyRuntime, 'OpenConsole.exe')],
+      ...WINDOWS_WINPTY_FILES.map((file) => [file, join(upstream, file)])
     ]
   }
   // Why spawn-helper on macOS only: node-pty posix_spawns it there, and binding.gyp builds it
@@ -216,6 +238,13 @@ export function findSlotProblems(manifest, prebuildsDir, requiredSlots) {
     if (!entry) {
       problems.push(`${slot}: not built`)
       continue
+    }
+    if (isCompatSlot(slot)) {
+      for (const addon of Object.keys(COMPAT_SLOT_ADDONS)) {
+        if (!Object.hasOwn(entry.files ?? {}, addon)) {
+          problems.push(`${slot}/${addon}: not built`)
+        }
+      }
     }
     for (const [file, expected] of Object.entries(entry.files ?? {})) {
       const path = join(prebuildsDir, slot, ...file.split('/'))

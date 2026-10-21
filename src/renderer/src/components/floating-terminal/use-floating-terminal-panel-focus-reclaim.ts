@@ -1,28 +1,31 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import {
   clearFloatingPanelReclaimIntent,
-  consumeFloatingPanelReclaimIntent
+  consumeFloatingPanelReclaimIntent,
+  isFloatingPanelReclaimIntentArmed,
+  subscribeFloatingPanelReclaimIntent
 } from '@/lib/floating-workspace-focus-reclaim'
 import { reportFloatingFocus } from './floating-terminal-focus-reporting'
-import type { FloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
-import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
 
 type FloatingTerminalPanelFocusReclaimInput = Pick<
   FloatingTerminalPanelLocalState,
-  'panelRef' | 'shortcutFocusFrameRef' | 'shortcutFocusTimeoutRef' | 'pendingReclaimArmByFileIdRef'
+  'panelRef' | 'shortcutFocusFrameRef' | 'shortcutFocusTimeoutRef'
 > &
-  Pick<FloatingTerminalPanelItems, 'visibleFloatingItemCount'> &
-  Pick<FloatingTerminalPanelStoreState, 'floatingFiles'>
+  Pick<FloatingWorkspaceChromeModel, 'hasVisibleFloatingTabs'>
 
 export function useFloatingTerminalPanelFocusReclaim({
   panelRef,
   shortcutFocusFrameRef,
   shortcutFocusTimeoutRef,
-  pendingReclaimArmByFileIdRef,
-  visibleFloatingItemCount,
-  floatingFiles
+  hasVisibleFloatingTabs
 }: FloatingTerminalPanelFocusReclaimInput) {
+  const reclaimIntentArmed = useSyncExternalStore(
+    subscribeFloatingPanelReclaimIntent,
+    isFloatingPanelReclaimIntentArmed,
+    () => false
+  )
   const focusPanelForShortcuts = useCallback(
     (preserveExistingPanelFocus = true) => {
       const active = document.activeElement
@@ -86,27 +89,14 @@ export function useFloatingTerminalPanelFocusReclaim({
   }, [])
 
   useEffect(() => {
-    const pending = pendingReclaimArmByFileIdRef.current
-    if (pending.size === 0) {
-      return
-    }
-    for (const [fileId, armIfEmptying] of pending) {
-      if (!floatingFiles.some((file) => file.id === fileId)) {
-        pending.delete(fileId)
-        armIfEmptying()
-      }
-    }
-  }, [floatingFiles, pendingReclaimArmByFileIdRef])
-
-  useEffect(() => {
-    if (visibleFloatingItemCount > 0) {
+    if (hasVisibleFloatingTabs) {
       clearFloatingPanelReclaimIntent()
       return
     }
-    if (consumeFloatingPanelReclaimIntent()) {
+    if (reclaimIntentArmed && consumeFloatingPanelReclaimIntent()) {
       focusPanelForShortcutsAfterClose()
     }
-  }, [focusPanelForShortcutsAfterClose, visibleFloatingItemCount])
+  }, [focusPanelForShortcutsAfterClose, hasVisibleFloatingTabs, reclaimIntentArmed])
 
   return { focusPanelForShortcuts, setPanelNode, reportFloatingFocusFromTarget }
 }

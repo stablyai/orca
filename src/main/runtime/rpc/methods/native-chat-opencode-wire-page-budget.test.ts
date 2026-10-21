@@ -109,8 +109,12 @@ function denseFixture(version: 'v1' | 'v2'): string {
 }
 
 function context(clientKind: RpcContext['clientKind'] = 'mobile'): RpcContext {
-  const runtime = { registerSubscriptionCleanup: vi.fn(), cleanupSubscription: vi.fn() }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Native-chat only uses these subscription cleanup methods; its feature emitter records no interaction.
+  const runtime = {
+    getAgentProviderSessionRows: () => [],
+    registerSubscriptionCleanup: vi.fn(),
+    cleanupSubscription: vi.fn()
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Native-chat only uses the hook rows and these subscription cleanup methods; its feature emitter records no interaction.
   return { runtime: runtime as unknown as RpcContext['runtime'], clientKind }
 }
 

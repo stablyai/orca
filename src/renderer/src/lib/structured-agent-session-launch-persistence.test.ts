@@ -33,6 +33,11 @@ describe('structured agent launch persistence', () => {
       JSON.stringify([
         {
           sessionId: 'codex_session',
+          surfaceAddress: {
+            worktreeId: 'repo::/workspace',
+            targetGroupId: 'original',
+            precedingTabIds: ['source']
+          },
           agent: 'codex',
           lifecycle: 'pending',
           clientOperationId: 'operation-1',
@@ -43,11 +48,40 @@ describe('structured agent launch persistence', () => {
     )
 
     expect(readStructuredAgentLaunchRecord('codex_session')).toMatchObject({
+      surfaceAddress: {
+        worktreeId: 'repo::/workspace',
+        targetGroupId: 'original',
+        precedingTabIds: ['source']
+      },
       lifecycle: 'visibility-unknown',
       clientOperationId: 'operation-1',
       // Written before a paired host could hold a chat, so it was launched on this machine.
       executionHostId: 'local'
     })
+  })
+
+  it("keeps a registered agent's launch across a reload and drops a record naming no agent", () => {
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify(
+        [
+          ['grok_session', 'grok'],
+          ['bogus_session', 'not-an-agent']
+        ].map(([sessionId, agent]) => ({
+          sessionId,
+          agent,
+          lifecycle: 'pending',
+          surfaceAddress: { worktreeId: 'workspace', precedingTabIds: [false] },
+          clientOperationId: `${sessionId}-op`,
+          payloadFingerprint: 'fingerprint',
+          expectedRuntimeFence: null
+        }))
+      )
+    )
+
+    expect(readStructuredAgentLaunchRecord('grok_session')?.agent).toBe('grok')
+    expect(readStructuredAgentLaunchRecord('grok_session')?.surfaceAddress).toBeUndefined()
+    expect(readStructuredAgentLaunchRecord('bogus_session')).toBeUndefined()
   })
 
   it('keeps the host a launch was created on across a reload', () => {

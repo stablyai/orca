@@ -1,5 +1,6 @@
 // The status summary reads a session's child records from the sink its row landed in, and derives
-// the legacy task list an older client folds from those same records.
+// the legacy task list an older client folds from those same records. One chat's helpers are all
+// recorded whatever their number, and its next accepted send retires every settled one.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,6 +14,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
   StructuredAgentSessionStatusFeed,
@@ -33,14 +35,14 @@ const USER_IDENTITY = {
   ordinal: 1
 } as const
 /** The legacy row an older client reads for `childView()`, derived from it. These sessions are
- *  Codex's, so a subagent keeps the id its row carried before views. */
+ *  Codex's, so a subagent keeps the id its row carried before views, which no Stop can name. */
 const LEGACY_TASK = {
   id: 'codex-agent:task-1',
   kind: 'agent',
   name: 'deep_review',
   state: 'working',
   startedAt: 100,
-  stoppable: true
+  stoppable: false
 } as const
 
 let root: string
@@ -72,7 +74,9 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
   const sink: StructuredAgentSessionStatusSink = {
     publish: () => {},
     forget: () => {},
-    publishChildWork: (_subject, evidence) => admitted.push(evidence),
+    publishChildWork: (_subject, evidence) => {
+      admitted.push(evidence)
+    },
     readChildWork: () => views.current()
   }
   let now = 1_000
@@ -349,4 +353,79 @@ describe('structured status summary child records', () => {
       'children'
     )
   })
+})
+
+describe('structured status feed over the real child-record store', () => {
+  it('records every helper of a busy chat, and its next accepted send removes every settled one', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread-1')
+      },
+      stateDirectory: join(root, SESSION)
+    })
+    const { sink, views } = acpChildWorkStatusSink()
+    const feed = new StructuredAgentSessionStatusFeed({
+      logger: createStructuredAgentSessionLogger(),
+      sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
+      getRecord: () => null,
+      now: () => 1_000,
+      statusSink: () => sink
+    })
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    feed.publish(SESSION)
+    const live = (id: string, kind: 'agent' | 'command'): AgentChildWorkEvidence => ({
+      type: 'live',
+      observedAt: 100,
+      child: {
+        handle: { idKind: 'task_id', id },
+        kind,
+        residency: 'background',
+        state: 'working',
+        stoppable: true
+      }
+    })
+    const finished = Array.from({ length: 2_049 }, (_, index) => `finished-${index}`)
+    feed.publishChildWork(SESSION, [
+      ...finished.map((id) => live(id, 'agent')),
+      ...Array.from({ length: 40 }, (_, index) => live(`subagent-${index}`, 'agent')),
+      ...Array.from({ length: 300 }, (_, index) => live(`task-${index}`, 'command'))
+    ])
+    feed.publishChildWork(
+      SESSION,
+      finished.map((id): AgentChildWorkEvidence => ({
+        type: 'ended',
+        observedAt: 200,
+        handle: { idKind: 'task_id', id },
+        outcome: 'succeeded'
+      }))
+    )
+    expect(views()).toHaveLength(2_389)
+    expect(views().filter((view) => view.membership === 'settled')).toHaveLength(2_049)
+    expect(feed.childWorkIncomplete(SESSION)).toBe(false)
+
+    await journal.appendSubmission({
+      clientMessageId: 'send-1',
+      payloadFingerprint: 'send-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next' }] },
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'send-1',
+      state: 'accepted',
+      providerIdentity: { ...USER_IDENTITY, ordinal: USER_IDENTITY.ordinal + 1 },
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(views()).toHaveLength(340)
+    expect(views().every((view) => view.membership === 'live')).toBe(true)
+    expect(feed.childWorkIncomplete(SESSION)).toBe(false)
+  }, 60_000)
 })

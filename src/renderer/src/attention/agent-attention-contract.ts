@@ -52,14 +52,6 @@ export type AgentAttentionSurfaceAdmission =
   | { admitted: true; groupId: string }
   | { admitted: false; cause: 'unknown-surface' | 'superseded-surface' }
 
-/** Attention still held elsewhere in a workspace, as the owning surface sees it. */
-export type AgentAttentionRemainder = {
-  /** False when the workspace owns no surfaces at all, so nothing can hold its unread. */
-  hasSurfaces: boolean
-  unreadSubjectKeys: readonly string[]
-  unreadGroupIds: readonly string[]
-}
-
 /**
  * The surface-shaped half of the boundary. One implementation per agent surface kind;
  * the terminal implementation is the only holder of the PTY/leaf/layout predicates.
@@ -78,8 +70,8 @@ export type AgentAttentionSurface = {
   isWorkspaceViewed: (workspaceId: string) => boolean
   /** In-app selection only — true even when the window is in the background. */
   isWorkspaceActive: (workspaceId: string) => boolean
+  /** Has the user silenced this workspace's attention (a sidebar Filters switch hides it)? */
+  isWorkspaceMuted: (workspaceId: string) => boolean
   /** The subject on screen inside a container, if the container shows one. */
   resolveViewedSubjectKey: (groupId: string) => string | null
-  /** Attention held by the workspace's other surfaces, for sibling protection. */
-  collectWorkspaceAttentionRemainder: (workspaceId: string) => AgentAttentionRemainder
 }

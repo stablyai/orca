@@ -1,7 +1,9 @@
+vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const push = vi.hoisted(() => vi.fn())
 const transport = vi.hoisted(
   (): {
     forceReconnect: ((hostId: string) => Promise<void>) | null
@@ -25,16 +27,21 @@ vi.mock('react-native', () => ({
   View: 'View',
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
-vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 })
+}))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
 vi.mock('../navigation/route-handoff', () => ({
-  useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false })
+  useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false, push })
 }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
-vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
+vi.mock('./MobileFileMarkdownPreview', () => ({
+  MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
+}))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // A host the shell has not reached by default: no client, so the screen settles on `waiting`.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,
   useHostClient: () => ({ ...transport.connection, clientId: null })
 }))
@@ -105,5 +112,32 @@ describe('the file preview Retry while the host is unreachable', () => {
       rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE }))
     })
     expect(sendRequest).toHaveBeenCalled()
+  })
+})
+
+it('wires rendered file links through the preview screen to navigation', async () => {
+  transport.connection = {
+    state: 'connected',
+    client: {
+      sendRequest: vi.fn(async () => ({
+        ok: true,
+        id: '1',
+        _meta: { runtimeId: 'runtime-1' },
+        result: { content: '[Details](docs/details.md)', isBinary: false, truncated: false }
+      }))
+    }
+  }
+  const rendered = await render()
+  const markdown = rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview')
+  await act(async () => markdown.props.onOpenFile('docs/details.md'))
+  expect(push).toHaveBeenCalledWith({
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    params: {
+      hostId: 'host-a',
+      worktreeId: 'wt-1',
+      worktreeName: undefined,
+      source: 'worktree',
+      relativePath: 'docs/details.md'
+    }
   })
 })

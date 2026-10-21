@@ -1,3 +1,6 @@
+import type * as ClientReducer from '../../../src/shared/structured-agent-session-reducer'
+import type * as ClientProjection from '../../../src/shared/structured-agent-session-projection'
+import type * as ClientSchemas from '../../../src/shared/agent-session-journal-schemas'
 import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'
 import {
   importReleaseCheckoutModule,
@@ -13,6 +16,13 @@ import {
  */
 
 export const WORKING_TREE = 'working-tree' as const
+
+export type AgentSessionClientProjection = Pick<
+  typeof ClientReducer,
+  'EMPTY_STRUCTURED_AGENT_SESSION' | 'reduceStructuredAgentSession'
+> &
+  Pick<typeof ClientProjection, 'projectStructuredItemsToNativeChat'> &
+  Pick<typeof ClientSchemas, 'AgentJournalRenderItemSchema'>
 
 /** Each build owns its own copy of the module-level host slot, so a host installed
  *  in current source is invisible to a release checkout's dispatcher. */
@@ -69,6 +79,28 @@ export type AgentSessionWireBuild = {
    *  journal it stops after the fingerprint check: a fingerprint it derives differently refuses
    *  as `fingerprintMismatch`, one it agrees with as `sessionNotAttached`. */
   admitSend: (sent: SentMessage) => Promise<unknown>
+  clientProjection: () => Promise<AgentSessionClientProjection>
+}
+
+async function loadClientProjection(
+  load: (path: string) => Promise<Record<string, unknown>>
+): Promise<AgentSessionClientProjection> {
+  const modules = await Promise.all([
+    load('/src/shared/structured-agent-session-reducer.ts'),
+    load('/src/shared/structured-agent-session-projection.ts'),
+    load('/src/shared/agent-session-journal-schemas.ts')
+  ])
+  const client = Object.assign({}, ...modules)
+  if (
+    typeof client.reduceStructuredAgentSession !== 'function' ||
+    typeof client.projectStructuredItemsToNativeChat !== 'function' ||
+    !client.EMPTY_STRUCTURED_AGENT_SESSION ||
+    typeof client.AgentJournalRenderItemSchema?.parse !== 'function'
+  ) {
+    throw new Error('Release does not export the structured transcript reader')
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked release exports; skew tests exercise admission, reducer and transcript signatures against real host frames.
+  return client as AgentSessionClientProjection
 }
 
 type DispatcherModule = {
@@ -104,6 +136,7 @@ type SendAdmissionModules = {
     plan: unknown
     envelope: SentMessage['envelope']
     journal: () => undefined
+    store: { getRecord: () => null }
   }) => Promise<unknown>
 }
 
@@ -112,12 +145,13 @@ async function admitSend(
   admission: Record<string, unknown>,
   sent: SentMessage
 ): Promise<unknown> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's own send plan and admission; with no `prepareSession` it reads only plan, envelope and journal. A drifted export or shape fails this check.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's own send plan and admission; the absent session and journal stop both admission routes after fingerprint validation. A drifted export or shape fails this check.
   const build = { ...plans, ...admission } as unknown as SendAdmissionModules
   return build.admitAndRunAgentSessionMutation({
     plan: build.sendPlan(sent),
     envelope: sent.envelope,
-    journal: () => undefined
+    journal: () => undefined,
+    store: { getRecord: () => null }
   })
 }
 
@@ -143,6 +177,14 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
     capabilities: capabilityStrings(protocol as unknown as Record<string, unknown>),
     protocolVersion: protocol.RUNTIME_PROTOCOL_VERSION,
     methodNames: registeredMethodNames(methods),
+    clientProjection: async () => {
+      const [reducer, projection, schemas] = await Promise.all([
+        import('../../../src/shared/structured-agent-session-reducer'),
+        import('../../../src/shared/structured-agent-session-projection'),
+        import('../../../src/shared/agent-session-journal-schemas')
+      ])
+      return { ...reducer, ...projection, ...schemas }
+    },
     createDispatcher: (runtime) =>
       new module.RpcDispatcher({
         runtime,
@@ -177,6 +219,8 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
     capabilities: capabilityStrings(protocol),
     protocolVersion: protocol.RUNTIME_PROTOCOL_VERSION as number,
     methodNames: registeredMethodNames(methods),
+    clientProjection: () =>
+      loadClientProjection((path) => importReleaseCheckoutModule(checkout, path)),
     createDispatcher: (runtime) =>
       new module.RpcDispatcher({
         runtime,

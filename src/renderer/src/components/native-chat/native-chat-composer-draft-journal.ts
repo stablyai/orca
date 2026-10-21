@@ -17,11 +17,10 @@ import {
 } from './native-chat-composer-draft-storage'
 
 const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
-// Why: localStorage also holds the send outbox, and a send is refused when its entry can't be
-// saved, so the journal stays small: whole drafts together stop at the first cap, and additions,
-// at most one message each with their source deleted right after, at the second, which fits the
-// largest. A removal is never capped: it is tiny, and it is what keeps a sent draft from coming
-// back.
+// Why: localStorage is shared with every other saved setting, so the journal stays small: whole
+// drafts together stop at the first cap, and additions, at most one message each with their source
+// deleted right after, at the second, which fits the largest. A removal is never capped: it is
+// tiny, and it is what keeps a sent draft from coming back.
 export const MAX_JOURNAL_CHARS = 256_000
 export const MAX_JOURNAL_ADDITIONS_CHARS = 800_000
 
@@ -69,7 +68,11 @@ function parseEntry(entry: unknown): JournalEntry[] {
           addition: {
             text: parsed.text,
             images: parsed.images,
-            ...(addition.fromUser === true ? { fromUser: true } : {})
+            ...(addition.fromUser === true ? { fromUser: true } : {}),
+            ...(typeof addition.before === 'string' ? { before: addition.before } : {}),
+            ...(Array.isArray(addition.fills)
+              ? { fills: addition.fills.filter((id) => typeof id === 'string') }
+              : {})
           }
         }
       ]
@@ -142,11 +145,10 @@ export function replayNativeChatComposerDraftJournal(
       continue
     }
     const from = base ?? { text: '', images: [], savedAt: 0 }
-    const next = withNativeChatComposerDraftAddition(from, addition, { once: true })
+    const next = withNativeChatComposerDraftAddition(from, addition)
     drafts.set(scopeKey, {
       ...from,
       ...next,
-      ...(next.text === from.text ? {} : { document: undefined }),
       savedAt: at
     })
     changed.add(scopeKey)

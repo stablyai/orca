@@ -14,9 +14,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_DEFAULT = {
-  experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true
+  experimentalNativeChat: true
 }
 
 function decide(
@@ -42,8 +40,8 @@ describe('worker start mode from the user default', () => {
 
   it.each([
     ['native chat off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
-    ['chat-by-default off', { ...STRUCTURED_DEFAULT, openAgentTabsInChatByDefault: false }],
-    ['structured off', { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false }],
+    ['chat-by-default off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
+    ['structured off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
     ['no settings at all', null]
   ])('starts a terminal worker when %s', (_name, settings) => {
     expect(decide({ settings })).toMatchObject({
@@ -87,7 +85,7 @@ describe('a structured default this dispatch cannot honour', () => {
     expect(decide({ params: { agent: 'codex', worktree: 'current' } }).mode).toBe('structured')
   })
 
-  // A custom launch command applies to terminal launches only; native chat ignores it.
+  // A custom launch command never decides the surface; native chat runs it as the program.
   it.each([
     ['claude', 'claude-wrapper'],
     ['codex', 'codex-nightly']

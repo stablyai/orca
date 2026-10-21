@@ -58,9 +58,30 @@ describe('parseClaudeModelList', () => {
       label: 'Opus (1M context)',
       description: 'Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
-      supportsFastMode: true
+      supportsFastMode: true,
+      isDefault: true
     })
     expect(parsed[2]).toMatchObject({ effortLevels: [], supportsFastMode: false })
+    expect(parsed.filter((model) => model.isDefault).map(({ id }) => id)).toEqual(['opus[1m]'])
+  })
+
+  // `claude` 2.1.280: the default row and the row it resolves to carry the same flag; haiku none.
+  it('keeps auto support per row and marks the row the default resolves to', () => {
+    const parsed = parseClaudeModelList(
+      `${controlResponseLine([
+        { value: 'default', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+        { value: 'opus[1m]', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+        { value: 'sonnet', resolvedModel: 'claude-sonnet-5', supportsAutoMode: true },
+        { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', supportsAutoMode: null }
+      ])}\n`
+    )
+    expect(
+      parsed.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
+    ).toEqual([
+      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'sonnet', isDefault: undefined, supportsAutoMode: true },
+      { id: 'haiku', isDefault: undefined, supportsAutoMode: undefined }
+    ])
   })
 
   it('skips init noise, CRLF endings, and duplicate values', () => {

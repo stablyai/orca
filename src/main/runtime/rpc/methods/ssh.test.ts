@@ -17,7 +17,7 @@ const {
   listRegisteredRemovedSshTargetLabelsMock: vi.fn()
 }))
 
-vi.mock('../../../ssh/ssh-target-registry', () => ({
+vi.mock('../../../ssh/targets/ssh-target-registry', () => ({
   connectRegisteredSshTarget: connectRegisteredSshTargetMock,
   getRegisteredSshState: getRegisteredSshStateMock,
   listRegisteredSshTargets: listRegisteredSshTargetsMock,
@@ -59,8 +59,18 @@ describe('ssh RPC methods', () => {
 
     const response = await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1' }))
 
-    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1')
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', { automatic: false })
     expect(response).toMatchObject({ ok: true, result: { state } })
+  })
+
+  it("keeps a paired client's automatic connect from lifting a cancelled sign-in", async () => {
+    connectRegisteredSshTargetMock.mockResolvedValueOnce(null)
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    await dispatcher.dispatch(makeRequest('ssh.connect', { targetId: 'ssh-1', automatic: true }))
+
+    expect(connectRegisteredSshTargetMock).toHaveBeenCalledWith('ssh-1', { automatic: true })
   })
 
   it('returns null when the target has no registered state yet', async () => {

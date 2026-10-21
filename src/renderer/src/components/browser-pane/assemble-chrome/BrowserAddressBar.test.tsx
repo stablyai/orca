@@ -248,4 +248,40 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onNavigate).not.toHaveBeenCalled()
     expect(onSubmit).not.toHaveBeenCalled()
   })
+
+  it('lets the second press of a double-click select a word instead of the whole URL', async () => {
+    const url = 'https://github.com/stablyai/orca/pull/27021'
+    await act(async () => {
+      root.render(<AddressBarHarness initialValue={url} onNavigate={vi.fn()} onSubmit={vi.fn()} />)
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+
+    act(() => {
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, detail: 1 }))
+      input.setSelectionRange(url.length, url.length)
+      input.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, detail: 1 }))
+    })
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, url.length])
+
+    act(() => {
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, detail: 2 }))
+    })
+    // Collapsed, so Chromium's native double-click word selection is not suppressed.
+    expect(input.selectionStart).toBe(input.selectionEnd)
+  })
+
+  it('clears a selection kept from before blur when a press refocuses the bar', async () => {
+    const url = 'https://github.com/stablyai/orca/pull/27021'
+    await act(async () => {
+      root.render(<AddressBarHarness initialValue={url} onNavigate={vi.fn()} onSubmit={vi.fn()} />)
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')!
+    input.setSelectionRange(0, url.length)
+
+    act(() => {
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, detail: 1 }))
+    })
+    // Collapsed, so the press places a caret and the click can expand it to the whole URL.
+    expect(input.selectionStart).toBe(input.selectionEnd)
+  })
 })

@@ -1,6 +1,7 @@
 // How much of a session's journal a client keeps in memory.
 
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 
 // Well above the renderer's initial read window (300) plus a page, so only genuinely
@@ -36,4 +37,29 @@ export function trimRetainedItems(
     }
   }
   return start === 0 ? items : items.slice(start)
+}
+
+const MAX_RETAINED_SUBMISSIONS = 256
+
+export function mergeSubmissions(
+  current: readonly AgentJournalSubmission[],
+  incoming: readonly AgentJournalSubmission[],
+  items: readonly AgentJournalRenderItem[]
+): AgentJournalSubmission[] {
+  const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
+  for (const submission of incoming) {
+    byId.set(submission.clientMessageId, submission)
+  }
+  const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
+  const itemIds = new Set(
+    items
+      .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
+      .map((item) => item.itemId)
+  )
+  // Loaded user messages need their provider alias for durable turn attribution.
+  return sorted.filter(
+    (submission, index) =>
+      index >= sorted.length - MAX_RETAINED_SUBMISSIONS ||
+      itemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
+  )
 }

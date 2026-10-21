@@ -9,17 +9,6 @@ import type {
 } from './parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
 
-export type {
-  WatcherProcessCallback,
-  WatcherProcessHooks,
-  WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
-export type {
-  WatcherProcessDeliveryOptions,
-  WatcherProcessEvent,
-  WatcherProcessSubscribeOptions
-} from './parcel-watcher-process-protocol'
-
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
 // Why: healthy roots share one child; only fault quarantine scales to four,
 // containing a failed shard without paying that RSS cost during normal use.
@@ -59,6 +48,20 @@ export function disposeWatcherProcess(): void {
     // Why: the runtime pool owns independent children that otherwise outlive a
     // shutdown sequence that does not immediately exit the main process.
     runtimeWatcherProcessPool.dispose()
+  }
+}
+
+/** Dispose both watcher hosts and wait for every child they own to exit. */
+export async function disposeWatcherProcessAndWait(): Promise<void> {
+  const results = await Promise.allSettled([
+    sharedWatcherProcessSupervisor.disposeAndWait(),
+    runtimeWatcherProcessPool.disposeAndWait()
+  ])
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : []
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'watcher_process_shutdown_incomplete')
   }
 }
 

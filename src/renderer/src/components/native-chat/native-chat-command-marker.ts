@@ -4,7 +4,7 @@
 // optimistic-send pruning in native-chat-pending.ts, which is a separate rule.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
 
 /** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
  *  the agent's TUI and are not chat turns, so we surface a small system line as

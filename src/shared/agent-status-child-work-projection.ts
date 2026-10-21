@@ -1,5 +1,5 @@
 import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
-import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
+import type { AgentSubagentSnapshot } from './agent-status-types'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
 import type { AgentChildWorkOutcome, AgentChildWorkState } from './agent-status-child-work'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
@@ -115,9 +115,6 @@ export function projectAgentChildWorkLegacySubagents(
       ...(candidate.model !== undefined ? { model: candidate.model } : {}),
       ...(candidate.description !== undefined ? { description: candidate.description } : {})
     })
-    if (projected.length === AGENT_STATUS_MAX_SUBAGENTS) {
-      break
-    }
   }
   return projected.length > 0 ? projected : undefined
 }

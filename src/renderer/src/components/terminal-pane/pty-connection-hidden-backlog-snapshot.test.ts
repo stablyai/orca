@@ -202,7 +202,10 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({
+      scrollbackRows: 5000,
+      repaintsPane: true
+    })
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
     expect(pane.terminal.write).toHaveBeenCalledWith(
       expect.stringContaining('remote snapshot with hidden remote output'),

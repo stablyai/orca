@@ -734,7 +734,7 @@ describe('cell drain endpoint pacing', () => {
   })
 
   it('refuses a window that is negative, fractional, or past the cap', async () => {
-    for (const paceWindowMs of [-1, 1.5, 300_001]) {
+    for (const paceWindowMs of [-1, 1.5, 1_200_001]) {
       const { app, drain } = appWithDrain()
       const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
         v: 1,
@@ -751,10 +751,10 @@ describe('cell drain endpoint pacing', () => {
     const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
       v: 1,
       graceMs: 0,
-      paceWindowMs: 300_000
+      paceWindowMs: 1_200_000
     })
     expect(response.status).toBe(200)
-    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 300_000 })
+    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 1_200_000 })
   })
 
   it('still rejects an unauthenticated pacing request', async () => {

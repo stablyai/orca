@@ -7,7 +7,10 @@ import type {
 } from './file-explorer-types'
 import type { InlineInput } from './file-explorer-inline-input-row'
 import { useAppStore } from '@/store'
-import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import {
+  isWorktreeCatchUpPayload,
+  ORCA_WORKTREE_FILE_CHANGE_EVENT
+} from '@/hooks/worktree-file-change-event'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
@@ -17,6 +20,7 @@ import {
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
 import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
 import { processFileExplorerFsPayload } from './file-explorer-watch-reconcile'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export {
   canonicalizeFileExplorerWatchPath,
@@ -51,9 +55,11 @@ export function getFileExplorerWatchRuntimeEnvironmentId(
   expectedOwner?: FileExplorerOperationOwner
 ): string | null | undefined {
   const ownerState: FileExplorerOwnerState = {
+    activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     settings: state.settings,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(state),
     detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? {},
     folderWorkspaces: state.folderWorkspaces ?? [],
     projectGroups: state.projectGroups ?? [],
@@ -159,13 +165,7 @@ export function useFileExplorerWatch({
         normalizeRuntimePathForComparison(dirPath) ===
           normalizeRuntimePathForComparison(currentWorktreePath) ||
         expandedRef.current.has(dirPath),
-      dirConcurrency: fileExplorerRefreshConcurrency(owner),
-      // Why 0ms for every transport: each producer already flushes on the shared
-      // WATCH_BATCH_* window — local/SSH via filesystem-watcher, runtime files.watch via
-      // createFileWatchEventBatcher — so a second 150ms here only adds latency, not coalescing.
-      // A new transport must batch at the producer before joining this path.
-      trailingMs: 0,
-      maxWaitMs: 0
+      dirConcurrency: fileExplorerRefreshConcurrency(owner)
     })
     activeResyncByWatchKey.set(currentWatchKey, scheduler.requestFullRefresh)
 
@@ -209,6 +209,12 @@ export function useFileExplorerWatch({
         }
         return
       }
+      if (
+        normalizeRuntimePathForComparison(payload.worktreePath) !==
+        normalizeRuntimePathForComparison(currentWorktreePath)
+      ) {
+        return
+      }
       // Why: defer refreshes during inline input/drag so rows don't shift; native drags only set isNativeDragOver (design §6.2).
       if (
         inlineInputRef.current !== null ||
@@ -222,45 +228,35 @@ export function useFileExplorerWatch({
       processPayload(payload)
     }
 
+    const handleRuntimeChange = (
+      event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]
+    ): void => {
+      if (event.detail.runtimeEnvironmentId === activeRuntimeEnvironmentId) {
+        handleFsChanged(event.detail.payload)
+      }
+    }
+    // Why: IPC-bus trees otherwise miss the renderer-synthesized catch-up after a workspace is watched again.
+    const handleCatchUp = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
+      if (
+        event.detail.runtimeEnvironmentId === null &&
+        isWorktreeCatchUpPayload(event.detail.payload)
+      ) {
+        handleFsChanged(event.detail.payload)
+      }
+    }
     let unsubscribeListener: (() => void) | null = null
     if (activeRuntimeEnvironmentId?.trim() && activeWorktreeId) {
-      // Why: remote runtime watch events don't enter the local Electron fs:changed bus, so subscribe directly.
-      void subscribeRuntimeFileChanges(
-        {
-          settings: { activeRuntimeEnvironmentId },
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId: undefined
-        },
-        handleFsChanged,
-        (err) => {
-          console.warn('[filesystem-watch] failed to subscribe to runtime file changes', {
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            error: err.message
-          })
-        }
-      )
-        .then((unsubscribe) => {
-          if (disposed) {
-            unsubscribe()
-            return
-          }
-          unsubscribeListener = unsubscribe
-        })
-        .catch((err) => {
-          console.warn('[filesystem-watch] failed to subscribe to runtime file changes', {
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            error: err instanceof Error ? err.message : String(err)
-          })
-        })
+      // The app watcher owns recovery; a separate stream would strand this consumer after reconnect.
+      window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
     } else {
       unsubscribeListener = window.api.fs.onFsChanged(handleFsChanged)
+      window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleCatchUp)
     }
 
     return () => {
       disposed = true
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleRuntimeChange)
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleCatchUp)
       unsubscribeListener?.()
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)

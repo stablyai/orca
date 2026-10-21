@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
+import type * as RunProcess from '@orca/process-host'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 
 const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => ({
@@ -12,7 +12,13 @@ const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => (
 }))
 
 // Runs the node stub in place of the resolved CLI, through the real chokepoint.
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
+vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   return {
     ...actual,

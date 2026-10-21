@@ -11,7 +11,6 @@ import {
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
@@ -509,7 +508,7 @@ describe('shared agent-hook-listener', () => {
       ])
     })
 
-    it('keeps a live child omitted by the background task snapshot cap', () => {
+    it('keeps a live child omitted by an inventory with an unreadable entry', () => {
       claudeEvent({
         hook_event_name: 'SubagentStart',
         agent_id: 'alive-after-cap',
@@ -517,15 +516,14 @@ describe('shared agent-hook-listener', () => {
       })
       const stop = claudeEvent({
         hook_event_name: 'Stop',
-        background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
-          id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,
-          type: 'subagent',
-          status: 'running'
-        }))
+        background_tasks: [
+          { id: 'a0', type: 'subagent', status: 'running' },
+          { id: 'unreadable', status: 'running' }
+        ]
       })
 
-      // Why: the inventory was capped before this id, so omission cannot
-      // prove the lifecycle-tracked child finished or was killed.
+      // Why: an unreadable entry may be this id, so omission cannot prove
+      // the lifecycle-tracked child finished or was killed.
       expect(stop?.payload.subagents).toContainEqual(
         expect.objectContaining({ id: 'alive-after-cap', state: 'working' })
       )

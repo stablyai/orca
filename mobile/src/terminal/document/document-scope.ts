@@ -181,6 +181,8 @@ export type TerminalDocumentState = {
   uninstallErrorReporter: (() => void) | null
   /** `message-bridge`: undoes the host transport's install, or null before one. */
   uninstallHostTransport: (() => void) | null
+  /** `message-bridge`: cancels the bounded font wait and late repaint after disposal. */
+  cancelFontReadiness: (() => void) | null
   /** `fit-scale`: takes the viewport refit's listener off again, or null before one. */
   removeViewportRefit: (() => void) | null
   /** `tap-dispatch`: takes its four document listeners off again, or null before them. */
@@ -317,6 +319,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     nonFatalErrorNotifies: 0,
     uninstallErrorReporter: null,
     uninstallHostTransport: null,
+    cancelFontReadiness: null,
     removeViewportRefit: null,
     removeTapDispatch: null,
     removeWebglRecovery: null,

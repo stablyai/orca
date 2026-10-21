@@ -4,14 +4,21 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SoftKeyboardState } from '../platform/keyboard-occlusion'
 import type { RouteHandoff } from '../navigation/route-handoff'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 
 const harness = vi.hoisted(() => {
   const keyboard: SoftKeyboardState = { height: 0, visible: false }
+  const deleteCustomKey: { current: ((key: CustomKey) => Promise<void>) | null } = {
+    current: null
+  }
   return {
     keyboard,
+    deleteCustomKey,
     notifyKeyboardVisibility: vi.fn<(visible: boolean) => void>(),
     notifyTerminalFrameHeight: vi.fn<(height: number) => void>(),
-    setKeyboardHeight: vi.fn<Dispatch<SetStateAction<number>>>()
+    setKeyboardHeight: vi.fn<Dispatch<SetStateAction<number>>>(),
+    setCustomKeys: vi.fn<Dispatch<SetStateAction<CustomKey[]>>>(),
+    removeCustomKey: vi.fn<(id: string) => Promise<CustomKey[]>>()
   }
 })
 
@@ -26,8 +33,10 @@ vi.mock('../terminal/terminal-viewport-refit', () => ({
     notifyTerminalFrameHeight: harness.notifyTerminalFrameHeight
   })
 }))
-vi.mock('../components/CustomKeyModal', () => ({ saveCustomKeys: () => Promise.resolve() }))
-vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorktree: () => {} }))
+vi.mock('../terminal/terminal-custom-keys', () => ({ removeCustomKey: harness.removeCustomKey }))
+vi.mock('../worktree/last-visited-worktree-by-host', () => ({
+  writeLastVisitedWorktree: async () => {}
+}))
 
 import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'
 
@@ -49,7 +58,7 @@ const router: RouteHandoff = {
 }
 
 function Harness(): null {
-  useMobileSessionKeyboardState({
+  const { handleDeleteCustomKey } = useMobileSessionKeyboardState({
     hostId: 'host-1',
     worktreeId: 'wt-1',
     router,
@@ -62,15 +71,13 @@ function Harness(): null {
     tabStripOffsetRef: { current: 0 },
     tabStripViewportWidthRef: { current: 0 },
     tabStripContentWidthRef: { current: 0 },
-    customKeys: [],
-    setCustomKeys: () => {},
+    setCustomKeys: harness.setCustomKeys,
     setShowCustomKeyModal: () => {},
     setKeyboardHeight: harness.setKeyboardHeight,
     // Read only by the viewport refit, which is mocked above; present because the scope names them.
     activeHandleRef: { current: null },
     clientRef: { current: null },
     deviceTokenRef: { current: null },
-    initializedHandlesRef: { current: new Set() },
     showNativeChatRef: { current: false },
     subscribeToTerminal: () => {},
     terminalFrameRef: { current: null },
@@ -79,6 +86,7 @@ function Harness(): null {
     viewportMeasuredRef: { current: false },
     viewportRef: { current: null }
   })
+  harness.deleteCustomKey.current = handleDeleteCustomKey
   return null
 }
 
@@ -129,5 +137,34 @@ describe('what the session screen hears about the keyboard', () => {
     await rerender(tree)
     expect(harness.notifyKeyboardVisibility).toHaveBeenLastCalledWith(true)
     expect(harness.setKeyboardHeight.mock.calls.every(([height]) => height === 0)).toBe(true)
+  })
+})
+
+describe('removing a custom shortcut from the session sheet', () => {
+  const key: CustomKey = { id: 'custom-1', label: 'Ctrl+C', bytes: '\u0003', enter: false }
+
+  beforeEach(() => {
+    harness.setCustomKeys.mockClear()
+    harness.removeCustomKey.mockReset()
+  })
+
+  it('keeps the key on screen when the store refuses the removal', async () => {
+    harness.removeCustomKey.mockRejectedValue(new Error('refused'))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await mount()
+    await act(async () => {
+      await harness.deleteCustomKey.current?.(key)
+    })
+    expect(harness.setCustomKeys).not.toHaveBeenCalled()
+  })
+
+  it('shows the list the store took once the removal lands', async () => {
+    harness.removeCustomKey.mockResolvedValue([])
+    await mount()
+    await act(async () => {
+      await harness.deleteCustomKey.current?.(key)
+    })
+    expect(harness.removeCustomKey).toHaveBeenCalledWith('custom-1')
+    expect(harness.setCustomKeys).toHaveBeenCalledWith([])
   })
 })

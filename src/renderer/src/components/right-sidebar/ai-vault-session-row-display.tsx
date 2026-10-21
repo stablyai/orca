@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/antigravity-session-origin'
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
+import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -36,13 +37,15 @@ export function SessionMetadata({
   liveState,
   updatedAt,
   worktreeInfo,
-  vaultScope
+  vaultScope,
+  sourceHostLabel
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
   updatedAt: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope
+  sourceHostLabel?: string
 }) {
   const modelLabel = sessionModelLabel(session)
   const origin = antigravitySessionOrigin(session.filePath)
@@ -59,6 +62,15 @@ export function SessionMetadata({
             would mark most rows; only live attention states earn a dot. */}
         {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
         <span className="min-w-0 shrink-[2] truncate">{agentLabel(session.agent)}</span>
+        {sourceHostLabel ? (
+          <WorktreeHostContextBadge
+            label={sourceHostLabel}
+            className="min-w-0 shrink"
+            title={translate('aiVault.searchHitSourceHost', 'Found on {{value0}}', {
+              value0: sourceHostLabel
+            })}
+          />
+        ) : null}
         {isAntigravityReferenceSession(session) ? (
           <Badge
             variant="outline"
@@ -143,7 +155,7 @@ function SessionWorktreeLine({
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status, { vaultScope }) ? (
         <span className="shrink-0 rounded-sm border border-sidebar-border bg-sidebar-accent/45 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
-          {worktreeStatusLabel(worktreeInfo.status)}
+          {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId)}
         </span>
       ) : null}
       <Badge
@@ -160,10 +172,6 @@ function SessionWorktreeLine({
       </Badge>
     </div>
   )
-}
-
-function worktreeStatusLabel(status: AiVaultSessionWorktreeInfo['status']): string {
-  return aiVaultWorktreeStatusLabel(status)
 }
 
 export function conversationRoleLabel(

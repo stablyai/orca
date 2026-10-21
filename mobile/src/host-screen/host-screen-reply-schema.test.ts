@@ -83,6 +83,20 @@ describe('host screen reply schemas', () => {
     ).toEqual([{ id: 't', label: 'T' }])
   })
 
+  it('keeps SSH lifecycle fields raw and drops a malformed one without losing the target', () => {
+    expect(
+      hostSshTargetSummariesSchema.parse({
+        targets: [
+          { id: 't', label: 'T', connected: false, connectionStatus: 'hibernating' },
+          { id: 'u', label: 'U', connected: 'no', connectionStatus: 7 }
+        ]
+      })
+    ).toEqual([
+      { id: 't', label: 'T', connected: false, connectionStatus: 'hibernating' },
+      { id: 'u', label: 'U' }
+    ])
+  })
+
   it('answers the empty target list for a reply that is no object at all', () => {
     // Why: the label write runs before the platform write in the same sequence, so a throw here
     // would take the platform down with it. readSshTargets answered [] for every one of these.
@@ -130,6 +144,26 @@ describe('host screen reply schemas', () => {
     expect(parsed.sortBy).toBe('recent')
     expect(parsed.filterRepoIds).toEqual(['r1'])
     expect(parsed.workspaceStatuses).toEqual([{ id: 'active', label: 'Active' }])
+  })
+
+  it('reads every Workspace options value the desktop mirrors to its phone', () => {
+    const ui = {
+      hideAutomationGeneratedWorkspaces: true,
+      hideCliCreatedWorkspaces: false,
+      hideDetachedHeadWorkspaces: true,
+      hideWorkspacesFromOtherDevices: true,
+      projectOrderBy: 'recent',
+      worktreeCardProperties: ['status', 'a-property-from-a-newer-desktop'],
+      agentActivityDisplayMode: 'full'
+    }
+    expect(hostViewSettingsSchema.parse({ ui })).toEqual(ui)
+  })
+
+  it('reads a desktop that predates them as absent, which keeps the local value', () => {
+    const parsed = hostViewSettingsSchema.parse({
+      ui: { groupBy: 'repo', projectOrderBy: 'alphabetical', agentActivityDisplayMode: 7 }
+    })
+    expect(parsed).toEqual({ groupBy: 'repo' })
   })
 
   it('salvages a non-array status catalog rather than handing a string to the group lookups', () => {

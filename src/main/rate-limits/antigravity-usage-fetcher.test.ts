@@ -4,7 +4,7 @@ import {
   resetAntigravityUsageSupportForTests
 } from './antigravity-usage-fetcher'
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
-import type { ProcessResult } from '../../shared/child-process/process-spec'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
@@ -94,6 +94,8 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.buckets).toEqual([
       {
         name: 'Gemini Models',
+        group: 'Gemini Models',
+        windowName: 'Weekly Limit Remaining',
         usedPercent: 60,
         windowMinutes: 10_080,
         resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
@@ -115,21 +117,24 @@ describe('fetchAntigravityRateLimits', () => {
   })
 
   it('probes the version, then runs the quota read with the resolved path and login-shell env', async () => {
-    const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }) })
+    const loginShellEnv = { PATH: '/Users/x/.local/bin:/usr/bin' }
+    const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }), env: loginShellEnv })
     await h.fetch()
 
-    expect(h.runCommand).toHaveBeenCalledTimes(2)
-    expect(h.runCommand.mock.calls[0]![0].args).toEqual(ANTIGRAVITY_VERSION_ARGS)
-    const spec = h.runCommand.mock.calls[1]![0]
-    expect(spec.program).toBe('/Users/x/.local/bin/agy')
-    expect(spec.args).toEqual(ANTIGRAVITY_USAGE_ARGS)
     // Why the login-shell PATH: agy installs to ~/.local/bin, which Electron's inherited PATH omits.
-    expect(spec.env).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
-    expect(spec.timeoutMs).toBeGreaterThan(0)
-    expect(h.resolveCommand).toHaveBeenCalledWith('agy', {
-      platform: 'darwin',
-      env: { PATH: '/Users/x/.local/bin:/usr/bin' }
-    })
+    // Why auto-update off: a due check spawns agy's updater, whose child flashes a Windows console.
+    const probeEnv = { PATH: '/Users/x/.local/bin:/usr/bin', AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+    expect(h.runCommand).toHaveBeenCalledTimes(2)
+    const [versionSpec, usageSpec] = h.runCommand.mock.calls.map(([spec]) => spec)
+    expect(versionSpec.args).toEqual(ANTIGRAVITY_VERSION_ARGS)
+    expect(versionSpec.env).toEqual(probeEnv)
+    expect(usageSpec.program).toBe('/Users/x/.local/bin/agy')
+    expect(usageSpec.args).toEqual(ANTIGRAVITY_USAGE_ARGS)
+    expect(usageSpec.env).toEqual(probeEnv)
+    expect(usageSpec.timeoutMs).toBeGreaterThan(0)
+    expect(h.resolveCommand).toHaveBeenCalledWith('agy', { platform: 'darwin', env: probeEnv })
+    // The login-shell env is a shared cache entry; the probe must not write into it.
+    expect(loginShellEnv).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
   })
 
   it('reports an absent CLI as unavailable and never spawns', async () => {

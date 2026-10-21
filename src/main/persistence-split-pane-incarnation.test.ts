@@ -1,8 +1,9 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -21,7 +22,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -290,6 +291,7 @@ describe('Store', () => {
     'preserves a reconciled incarnation across a renderer snapshot ($label)',
     async ({ hostId }) => {
       const store = await createStore()
+      registerWorkspaceRepos(store, 'wt1')
       const paneKey = `tab1:${TEST_LEAF_1}`
       store.setWorkspaceSession(
         {

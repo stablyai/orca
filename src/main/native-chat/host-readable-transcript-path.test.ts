@@ -16,7 +16,7 @@ import {
   needsWslHostTranslation,
   resetHostReadableTranscriptPathCacheForTests,
   toHostReadableTranscriptPath,
-  wslCodexSessionsDirs
+  wslAgentSessionsDirs
 } from './host-readable-transcript-path'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
@@ -262,7 +262,7 @@ describe('toHostReadableTranscriptPath', () => {
         listWslHomeDirs
       })
     }
-    await wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs })
+    await wslAgentSessionsDirs('codex', { platform: 'win32', listWslHomeDirs })
     expect(listWslHomeDirs).toHaveBeenCalledTimes(1)
   })
 
@@ -312,16 +312,22 @@ describe('toHostReadableTranscriptPath', () => {
   })
 })
 
-describe('wslCodexSessionsDirs', () => {
+describe('wslAgentSessionsDirs', () => {
   it('returns nothing off Windows', async () => {
     await expect(
-      wslCodexSessionsDirs({ platform: 'darwin', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'darwin',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toEqual([])
   })
 
   it('lists the managed and system Codex roots per distro home', async () => {
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toEqual([
       `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`,
       `${UBUNTU_HOME}\\.codex\\sessions`
@@ -335,7 +341,10 @@ describe('wslCodexSessionsDirs', () => {
     })
 
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+      wslAgentSessionsDirs('codex', {
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME]
+      })
     ).resolves.toContain(`${accountHome}\\sessions`)
   })
 
@@ -346,7 +355,7 @@ describe('wslCodexSessionsDirs', () => {
     wslMocks.filterPathsToRunningWslDistrosAsync.mockResolvedValue([])
 
     await expect(
-      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [] })
+      wslAgentSessionsDirs('codex', { platform: 'win32', listWslHomeDirs: async () => [] })
     ).resolves.toEqual([])
   })
 })

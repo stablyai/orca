@@ -22,12 +22,3 @@ export function reviewRefreshIntervalMs(input: {
   }
   return input.selected ? 60_000 : 120_000
 }
-
-export function finishedReviewRefreshIntervalMs(
-  state: HostedReviewState | null | undefined,
-  status: CheckStatus | null | undefined
-): number | null {
-  return state === 'merged' || state === 'closed'
-    ? reviewRefreshIntervalMs({ state, checksStatus: status })
-    : null
-}

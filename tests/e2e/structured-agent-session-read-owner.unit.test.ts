@@ -122,7 +122,7 @@ describe('structured session cursor/body regression', () => {
   })
 
   it.each([40, 401])(
-    'replays an off-page dispatch after %i missed rows without stranding pending state',
+    'catches up an off-page dispatch after %i missed rows without stranding pending state',
     async (missedRows) => {
       const { journal, appendOutput, accept } = await fixture()
       let hostSummary: AgentSessionStatusSummary | undefined
@@ -234,12 +234,18 @@ describe('structured session cursor/body regression', () => {
       expect(
         projectStructuredAgentSessionStatus(settled.items, settled.submissions, settled.fence)
       ).toBe(hostSummary?.status)
-      expect(settled.submissions).toEqual(journal.snapshot().submissions)
+      expect(settled.submissions).toEqual(
+        missedRows > 200 ? tail.submissions : journal.snapshot().submissions
+      )
       expect({
         cursor: caughtUp.cursor?.sequence,
         dispatch: caughtUp.submissions[0]?.dispatchState,
         unansweredDispatch: hasUnansweredStructuredAgentSessionDispatch(caughtUp.submissions, 1)
-      }).toEqual({ cursor: 100 + missedRows, dispatch: 'accepted', unansweredDispatch: false })
+      }).toEqual({
+        cursor: 100 + missedRows,
+        dispatch: missedRows > 200 ? undefined : 'accepted',
+        unansweredDispatch: false
+      })
       expect(mocks.call).toHaveBeenCalledTimes(1)
       expect(mocks.subscribe).toHaveBeenCalledTimes(2)
       expect(mocks.subscribe.mock.calls[1]?.[1]).toEqual({

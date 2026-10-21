@@ -61,6 +61,12 @@ export function useFileExplorerTreeLoadEffects({
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
+  useEffect(
+    () => () => {
+      lastResetWorktreePathRef.current = null
+    },
+    []
+  )
   useEffect(() => {
     if (!visibleFilesWorktreePath) {
       return

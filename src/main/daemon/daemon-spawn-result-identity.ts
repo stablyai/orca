@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../providers/types'
+import type { PtySpawnResult } from '../providers/pty-provider-contract'
 import type { CreateOrAttachResult } from './types'
 
 /** The daemon's identity and launch facts every spawn result carries forward from its reply. */

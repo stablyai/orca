@@ -4,7 +4,10 @@ import {
 } from '@/runtime/runtime-environment-revision'
 import type { AppState } from '../types'
 import { callRuntimeRpc, ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import {
+  resolveTerminalPtyOwner,
+  resolveTerminalWorktreeRoute
+} from '@/lib/terminal-worktree-route'
 import {
   classifyTerminalRetirementWorktree,
   type TerminalTabRetirementPlan
@@ -25,16 +28,22 @@ export function startTerminalTabProviderRetirement({
   tabId: string
   canRetireRuntimeTerminal?: () => boolean
 }): void {
-  const fallbackWorktreeRoute = retirementPlan.worktreeId
-    ? resolveTerminalWorktreeRoute(state, retirementPlan.worktreeId)
-    : { runtimeEnvironmentId: null }
+  const { worktreeId } = retirementPlan
+  // Why: an unscoped `remote:` id of an unattributable twin must not be closed on this app.
+  const fallbackWorktreeRoute = !worktreeId
+    ? { runtimeEnvironmentId: null }
+    : resolveTerminalPtyOwner(state, worktreeId, 'spawn').kind === 'ambiguous'
+      ? null
+      : resolveTerminalWorktreeRoute(state, worktreeId)
   const retirementTasks: Promise<unknown>[] = localPtyTeardownOwnedExternally
     ? []
     : retirementPlan.localOrSshPtyIds.map(async (ptyId) => window.api.pty.kill(ptyId))
   const localOrSshTaskCount = retirementTasks.length
+  let unroutableRuntimeTerminalCount = 0
   if (!remoteCloseOwnedByHost) {
     for (const terminal of retirementPlan.runtimeTerminals) {
       if (!terminal.environmentId && !fallbackWorktreeRoute) {
+        unroutableRuntimeTerminalCount += 1
         continue
       }
       const environmentId = terminal.environmentId ?? fallbackWorktreeRoute?.runtimeEnvironmentId
@@ -43,12 +52,13 @@ export function startTerminalTabProviderRetirement({
       )
     }
   }
-  if (retirementPlan.unroutablePtyIds.length > 0) {
+  const unroutableCount = retirementPlan.unroutablePtyIds.length + unroutableRuntimeTerminalCount
+  if (unroutableCount > 0) {
     // Log the worktree shape, never its id, because worktree ids embed absolute paths.
     console.warn('[terminal-retirement] skipped PTYs with no resolvable owner', {
       tabId,
       worktreeKind: classifyTerminalRetirementWorktree(retirementPlan.worktreeId),
-      count: retirementPlan.unroutablePtyIds.length
+      count: unroutableCount
     })
   }
   // Close remains synchronous; provider failures cannot block ownership revocation.

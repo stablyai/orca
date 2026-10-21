@@ -12,17 +12,32 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
+import type { StructuredAgentSessionEndedChild } from './structured-agent-session-host-types'
+import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
 
-export function isResumableStructuredAgentSessionRecord(record: AgentSessionRecord): boolean {
-  return agentSessionLeaseIsReleased(record.lease)
+/** Released, or still held by a child this host saw end at the lease's own fence (`ended`, its
+ *  `lastEndedChild`), whose release write did not land: the acquisition probes that owner and
+ *  replaces it only once proven dead. Nobody else's exit widens this, so an SSH or unverifiable
+ *  owner is refused as before. */
+export function isResumableStructuredAgentSessionRecord(
+  record: AgentSessionRecord,
+  ended?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
+): boolean {
+  return (
+    agentSessionLeaseIsReleased(record.lease) ||
+    (ended?.rootGone === true &&
+      ended.fence === record.lease.runtimeFence &&
+      isSurfaceReleasableAgentSessionRecord(record))
+  )
 }
 
 /** Attach params for a resume, or null when this record's lease is somebody else's problem. */
 export function structuredAgentSessionResumeParams(
   record: AgentSessionRecord,
-  clientOperationId: string
+  clientOperationId: string,
+  ended?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
 ): AgentSessionAttachParams | null {
-  if (!isResumableStructuredAgentSessionRecord(record)) {
+  if (!isResumableStructuredAgentSessionRecord(record, ended)) {
     return null
   }
   return attachParamsForRecord(record, {

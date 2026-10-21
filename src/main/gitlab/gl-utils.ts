@@ -18,6 +18,7 @@ export {
   getIssueProjectRef,
   getProjectRef,
   getProjectRefForRemote,
+  glabHostEnvOptions,
   glabHostnameArgs,
   glabRepoExecOptions,
   parseGlabAuthStatusHosts,

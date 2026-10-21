@@ -730,6 +730,22 @@ describe('xterm IME composition de-duplication', () => {
     terminal.dispose()
   })
 
+  // vim: commit a word, then leave insert mode at once; the accepted commit must precede the ESC.
+  it('sends an accepted commit before a plain Escape that lands before finalization', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    startComposition(textarea, '日本語')
+    await nextEventLoop()
+
+    textarea.dispatchEvent(
+      new CompositionEvent('compositionend', { data: '日本語', bubbles: true })
+    )
+    dispatchKeydown(textarea, 'Escape', 'Escape', 27)
+    await nextEventLoop()
+
+    expect(emitted).toEqual(['日本語', '\x1b'])
+    terminal.dispose()
+  })
+
   it('cancels a pending completion when Escape follows compositionend', async () => {
     const { emitted, terminal, textarea } = openTerminal()
     startComposition(textarea, '한')

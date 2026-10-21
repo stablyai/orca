@@ -4,7 +4,12 @@ import type { CodexAppServerConnection } from './codex-app-server-connection'
 // Why short: config/read is a local file read; a slow answer must not hold the listing.
 const CONFIG_READ_TIMEOUT_MS = 3_000
 
-type CodexConfiguredLaunchDefaults = { model: string | null; effort: string | null }
+type CodexConfiguredLaunchDefaults = {
+  model: string | null
+  effort: string | null
+  personality?: string
+  serviceTier?: string
+}
 
 function configuredText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -12,13 +17,14 @@ function configuredText(value: unknown): string | null {
 
 /** The model and effort the user's Codex config selects, or null when Codex can't say. */
 export async function readCodexConfiguredLaunchDefaults(
-  connection: Pick<CodexAppServerConnection, 'request'>
+  connection: Pick<CodexAppServerConnection, 'request'>,
+  timeoutMs = CONFIG_READ_TIMEOUT_MS
 ): Promise<CodexConfiguredLaunchDefaults | null> {
   try {
     const response = await connection.request(
       'config/read',
       {},
-      { timeoutMs: CONFIG_READ_TIMEOUT_MS }
+      { timeoutMs: Math.min(timeoutMs, CONFIG_READ_TIMEOUT_MS) }
     )
     const config =
       typeof response === 'object' && response !== null && 'config' in response
@@ -27,7 +33,11 @@ export async function readCodexConfiguredLaunchDefaults(
     if (typeof config !== 'object' || config === null) {
       return null
     }
+    const personality = 'personality' in config ? configuredText(config.personality) : null
+    const serviceTier = 'service_tier' in config ? configuredText(config.service_tier) : null
     return {
+      ...(personality ? { personality } : {}),
+      ...(serviceTier ? { serviceTier } : {}),
       model: 'model' in config ? configuredText(config.model) : null,
       effort:
         'model_reasoning_effort' in config ? configuredText(config.model_reasoning_effort) : null

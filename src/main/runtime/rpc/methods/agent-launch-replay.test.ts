@@ -31,8 +31,6 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from '../../agent-session-record-store-test-harness'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -40,6 +38,7 @@ import {
   methodNamed,
   rpcContext,
   runtimeStub,
+  setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -126,14 +125,12 @@ beforeEach(async () => {
   createStructuredSession.mockClear()
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-replay-'))
   store = await openTestAgentSessionRecordStore(directory)
-  // The launch reaches the ledger through the installed host; nothing else on the host is used,
-  // because the structured create below it is mocked out.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
-  setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+  // The ledger alone, as admission opens it: no chat host is installed.
+  setAgentLaunchRecordStore(store)
 })
 
 afterEach(async () => {
-  setStructuredAgentSessionHost(null)
+  setAgentLaunchRecordStore(null)
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -270,9 +267,7 @@ describe('a replay answers from the record', () => {
     // now say the user prefers a terminal; the recorded one still says what actually ran.
     const movedSettings = runtimeStub({
       settings: {
-        experimentalNativeChat: false,
-        experimentalStructuredNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        experimentalNativeChat: false
       }
     })
     const replayed = await launch(params, movedSettings, PAIRED_CLIENT)
@@ -290,10 +285,7 @@ describe('a replay answers from the record', () => {
     const first = await launch(params, runtime)
 
     const reopened = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see the setup above.
-    setStructuredAgentSessionHost({
-      deps: { store: reopened }
-    } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(reopened)
     const afterRestart = runtimeStub()
 
     expect(await launch(params, afterRestart)).toEqual(first)
@@ -504,10 +496,7 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
     await rewriteRecordedLaunch({ outcome: { kind: 'structured' }, worktreeId: 'wt-1' })
 
     const reopened = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see the setup above.
-    setStructuredAgentSessionHost({
-      deps: { store: reopened }
-    } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(reopened)
 
     expect(reopened.listOperationRows()).toHaveLength(1)
     const retry = runtimeStub()

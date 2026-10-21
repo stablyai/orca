@@ -1,10 +1,7 @@
 import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/filesystem-entry-types'
-import {
-  WATCH_BATCH_MAX_WAIT_MS,
-  WATCH_BATCH_TRAILING_MS
-} from '../../shared/filesystem-watch-batch-window'
+import { watchBatchFlushDelayMs } from '../../shared/filesystem-watch-batch-window'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 // Why: suppress high-churn dirs at the watcher level (separate from the File Explorer display filter, which only hides rows).
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
@@ -18,6 +15,10 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush, createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import {
+  notifyLocalWatcherEvents,
+  notifyLocalWatcherInterrupted
+} from './local-watcher-event-observers'
 
 // Why: matches the watcher subprocess budget in parcel-watcher-event-delivery.ts.
 const DIRECTORY_STAT_CONCURRENCY = 8
@@ -115,7 +116,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
-  root.batch.firstEventAt = 0
+  root.batch.lastFlushAt = Date.now()
 
   try {
     if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
@@ -172,7 +173,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       root.batch.flushQueued = false
       if (
         !root.batch.cancelled &&
-        // Why: an armed timer still owns its debounce window; draining here would split related events across payloads.
+        // Why: an armed timer still owns its flush window; draining here would split related events across payloads.
         !root.batch.timer &&
         (root.batch.events.length > 0 || root.batch.overflowed)
       ) {
@@ -192,32 +193,18 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
     root.batch.flushQueued = true
   }
 
-  const now = Date.now()
-
-  if (root.batch.firstEventAt === 0) {
-    root.batch.firstEventAt = now
-  }
-
-  // If we've exceeded the max wait, flush immediately
-  if (now - root.batch.firstEventAt >= WATCH_BATCH_MAX_WAIT_MS) {
-    if (root.batch.timer) {
-      clearTimeout(root.batch.timer)
-      root.batch.timer = null
-    }
-    void flushBatch(root)
-    return
-  }
-
-  // Trailing-edge debounce: reset timer on each new event
+  // Why: never push an armed flush back; resetting on each event starved delivery under continuous writes.
   if (root.batch.timer) {
-    root.batch.timer.refresh()
     return
   }
-  // Why: clear the handle as it fires so `batch.timer` means "a debounce window is still open", which gates the queued drain.
-  root.batch.timer = setTimeout(() => {
-    root.batch.timer = null
-    void flushBatch(root)
-  }, WATCH_BATCH_TRAILING_MS)
+  // Why: clear the handle as it fires so `batch.timer` means "a flush window is still open", which gates the queued drain.
+  root.batch.timer = setTimeout(
+    () => {
+      root.batch.timer = null
+      void flushBatch(root)
+    },
+    watchBatchFlushDelayMs(Date.now(), root.batch.lastFlushAt)
+  )
 }
 
 // ── Watcher creation ─────────────────────────────────────────────────
@@ -245,6 +232,7 @@ export async function createLocalWatcher(
     }
 
     const markWatcherInterrupted = (): void => {
+      notifyLocalWatcherInterrupted(root)
       root.batch.overflowed = true
       scheduleLocalBatchFlush(root)
     }
@@ -256,6 +244,7 @@ export async function createLocalWatcher(
         if (err) {
           // Why: treat watcher errors as overflow so the renderer conservatively refreshes rather than trusting possibly-invalid caches (§7.2, §7.3).
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
+          notifyLocalWatcherInterrupted(root)
           emitOverflowPayload(root)
           // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
           cancelLocalBatchFlush(root)
@@ -272,6 +261,7 @@ export async function createLocalWatcher(
         if (root.batch.cancelled) {
           return
         }
+        notifyLocalWatcherEvents(root, events)
         queueWatcherEvents(root.batch, events)
         scheduleLocalBatchFlush(root)
       },

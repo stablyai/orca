@@ -7,7 +7,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { RpcClient } from '../transport/rpc-client'
-import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import {
   CAPABLE,
@@ -98,7 +97,7 @@ async function sentDelivery(items: AgentJournalRenderItem[]): Promise<unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetMobileStructuredSendOperationJournalForTests()
+
   sendRequest.mockImplementation(async (method) =>
     method === 'agentSession.send'
       ? mutationOk({ clientMessageId: 'client-1' })
@@ -126,4 +125,44 @@ it('still queues beside a prompt this build can answer', async () => {
       approval({ kind: 'plan', text: 'do it' })
     ])
   ).toBe('queue-if-active')
+})
+
+const RUNNING_TURN: AgentJournalRenderItem = {
+  itemId: 'turn-1',
+  revision: 1,
+  sequence: 2,
+  observedAt: 1,
+  body: { kind: 'turn', turnId: 'provider-turn', state: 'running' }
+}
+
+/** What the composer says a send does while this phone's Stop is still in flight. */
+async function afterStop(items: AgentJournalRenderItem[]): Promise<unknown> {
+  // The Stop's request stays in flight, so the phone keeps reading Stopping.
+  sendRequest.mockImplementation(async (method) =>
+    method === 'agentSession.cancel'
+      ? new Promise(() => undefined)
+      : method === 'agentSession.options'
+        ? ok({ models: [], current: {} })
+        : ok({})
+  )
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
+  await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+  const event = snapshotEvent()
+  if (event.type === 'snapshot') {
+    event.page.items = [RUNNING_TURN, ...items]
+  }
+  act(() => listener?.(event))
+  act(() => hook?.cancel())
+  expect(hook?.turnIndicator.stopping).toBe(true)
+  return hook?.turnIndicator.afterStop
+}
+
+it('says a send after a Stop is sent, not queued, while every pending prompt is one this build cannot answer', async () => {
+  expect(await afterStop([approval({ kind: 'diff', path: 'a.ts' })])).toBe('send')
+})
+
+it('says a send after a Stop is queued beside a prompt this build can answer', async () => {
+  expect(await afterStop([approval({ kind: 'plan', text: 'do it' })])).toBe('queue')
 })

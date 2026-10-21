@@ -11,6 +11,7 @@
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
+import type { NativeChatProviderSettings } from './native-chat-providers'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -20,18 +21,15 @@ import {
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
-export type NativeChatDefaultSettings = Pick<
-  GlobalSettings,
-  'experimentalNativeChat' | 'experimentalStructuredNativeChat' | 'openAgentTabsInChatByDefault'
->
+export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNativeChat'> &
+  Partial<NativeChatProviderSettings>
 
 /** Why a launch that the user's default asked to be structured cannot be. */
 export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
-  | 'floating-workspace'
   /** The launch names a start directory outside its workspace, which only a PTY can apply. The
-   *  configured launch command and arguments are not read: they apply to terminal launches only. */
+   *  configured launch command and arguments never decide the surface. */
   | 'custom-start-directory'
   | 'remote-execution-host'
   | 'project-runtime'
@@ -65,22 +63,19 @@ export type StructuredNativeChatSupportInput = {
   hostStructuredAgents?: readonly string[]
 }
 
-/** The user's default for a new agent tab: native chat rather than the raw TUI. */
-export function agentTabsDefaultToNativeChat(
+/** The single Chat UI switch selects structured chat for supported new launches. */
+export function isNativeChatEnabled(
   settings: Partial<NativeChatDefaultSettings> | null | undefined
 ): boolean {
-  return (
-    settings?.experimentalNativeChat === true && settings?.openAgentTabsInChatByDefault === true
-  )
+  return settings?.experimentalNativeChat === true
 }
 
-/** ...and specifically a structured native chat session rather than a terminal rendered as chat. */
-export function prefersStructuredNativeChatByDefault(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
+/** Unchosen agents retain the chat default, independently of installation inventory. */
+export function isNativeChatDefaultFor(
+  settings: Partial<NativeChatDefaultSettings> | null | undefined,
+  agent: TuiAgent
 ): boolean {
-  return (
-    agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
-  )
+  return isNativeChatEnabled(settings) && (settings?.nativeChatProviders?.[agent] ?? true)
 }
 
 function clientChoosesStructuredLaunches(capabilities: readonly string[] | undefined): boolean {
@@ -105,9 +100,6 @@ export function resolveStructuredNativeChatSupport(
   const builtInAgent = isAgentSessionHandleProvider(input.agent)
   if (!builtInAgent && !input.hostStructuredAgents?.includes(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
-  }
-  if (input.workspaceKind === 'floating') {
-    return { supported: false, blocker: 'floating-workspace' }
   }
   if (input.startsOutsideWorkspaceRoot === true) {
     return { supported: false, blocker: 'custom-start-directory' }

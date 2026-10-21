@@ -12,14 +12,16 @@ import type { PtyConnectResult, PtyTransport } from './pty-transport-types'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+
 const store = vi.hoisted((): { current: AppState | null } => ({ current: null }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => store.current } }))
 vi.mock('react', () => ({
   useCallback: (fn: unknown) => fn,
+  useEffect: () => {},
   useImperativeHandle: () => {},
   useRef: (current: unknown) => ({ current })
 }))
-vi.mock('../../runtime/web-runtime-session', () => ({ closeWebRuntimeTerminal: vi.fn() }))
 vi.mock('../../runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal/terminal-close-copy-kind', () => ({ resolveLeafCloseCopyKind: vi.fn() }))
 vi.mock('../terminal/running-terminal-close-guard', () => ({ RUNNING_CLOSE_PROBE_TIMEOUT_MS: 100 }))
@@ -109,6 +111,15 @@ export async function preparePendingSplitClose(
     retireAgentPaneAuthority: vi.fn(),
     suppressPtyExit: vi.fn()
   }) as unknown as AppState
+  // Main answers the window's layout commands (a layout-owner build): the only local runtime call
+  // these closes make. The transport refuses anything that carries no command.
+  const { layoutApplyTestTransport: main } =
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  const runtimeCall = async ({ params }: { params?: unknown }) => ({
+    ok: true,
+    result: await main.call(params)
+  })
+  Object.assign(window.api, { runtime: { ...window.api.runtime, call: vi.fn(runtimeCall) } })
   const spawn = Promise.withResolvers<PtyConnectResult>()
   vi.mocked(window.api.pty.spawn).mockReturnValueOnce(spawn.promise)
   const transport = createIpcPtyTransport({})
@@ -120,7 +131,7 @@ export async function preparePendingSplitClose(
   ]
   const managerFixture = {
     getPanes: () => panes,
-    getLeafId: () => leafId,
+    getLeafId: (id: number) => panes.find((pane) => pane.id === id)?.leafId ?? null,
     getActivePane: () => null,
     closePane(id: number) {
       panes = panes.filter((pane) => pane.id !== id)
@@ -147,7 +158,6 @@ export async function preparePendingSplitClose(
     expandedStyleSnapshotRef: { current: new Map() },
     containerRef: { current: null },
     pendingPaneSizeRefreshFrameIdsRef: { current: [] },
-    ref: { current: null },
     clearSessionRestoredBannerForPane: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     setPendingCloseConfirmation: vi.fn(),
@@ -193,6 +203,9 @@ export async function preparePendingSplitClose(
   // oxlint-disable-next-line react-hooks/rules-of-hooks -- React registration is mocked; exercise the real close callbacks without mounting UI.
   const actions = useTerminalPaneCloseActions(controller)
   return {
+    /** Lets main answer the window's closes (a layout-owner build); nothing to wait for otherwise. */
+    mainAnswered: () => main.settle(),
+    sentPaneCloses: () => main.sentOfType('closePane'),
     transport,
     transports,
     connecting,

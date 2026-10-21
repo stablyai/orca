@@ -5,6 +5,9 @@ export function normalizeJiraSiteUrl(siteUrl: string): string {
   const trimmed = siteUrl.trim()
   const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   const url = new URL(withProtocol)
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error('Enter an HTTP or HTTPS Jira site URL without credentials.')
+  }
   url.pathname = url.pathname.replace(/\/+$/, '')
   url.search = ''
   url.hash = ''

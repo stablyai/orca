@@ -19,7 +19,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionQuietRepeatedStop: mocks.hostAnswersRepeatedStops
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
+vi.mock('./structured-agent-session-operation-id', () => ({
   structuredSessionOperationId: () => `operation-${++mocks.operations}`
 }))
 

@@ -37,7 +37,7 @@ async function addTestRepo(page: Page, repoPath: string): Promise<void> {
         if (!store) {
           return false
         }
-        await store.getState().fetchRepos()
+        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
         await store.getState().fetchWorktrees(id)
         const worktree = store
           .getState()

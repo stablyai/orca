@@ -86,6 +86,8 @@ jobs:
           service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:

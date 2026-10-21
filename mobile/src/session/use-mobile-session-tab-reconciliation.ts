@@ -1,6 +1,9 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import { supportsMobileQuickCommands } from '../terminal/quick-commands'
+import {
+  supportsMobileQuickCommands,
+  terminalQuickCommandAgentPromptMaxLength
+} from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -12,6 +15,7 @@ import { PendingTerminalHandleRecoveryContextCache } from './pending-terminal-ha
 import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-records'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
+import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
@@ -19,6 +23,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     client,
     connState,
     sessionTabsRef,
+    setSessionTabs,
     activeSessionTabIdRef,
     terminalsRef,
     appliedSessionTabsRevisionRef,
@@ -34,6 +39,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported,
     setAgentSessionHostSupport,
     setQuickCommandsSupported,
+    setQuickCommandAgentPromptMaxLength,
     nativeChatStream,
     fetchTerminals,
     applySessionTabs,
@@ -144,6 +150,17 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     terminalGestureInputInFlightRef.current.clear()
   }, [connState])
 
+  useEffect(() => {
+    if (connState === 'connected') {
+      return
+    }
+    const revoked = withoutSessionTabHostOwnership(sessionTabsRef.current)
+    if (revoked !== sessionTabsRef.current) {
+      sessionTabsRef.current = revoked
+      setSessionTabs(revoked)
+    }
+  }, [connState, sessionTabsRef, setSessionTabs])
+
   const hostQueryReplyInputSupportedRef = useRef(false)
 
   useEffect(() => {
@@ -152,6 +169,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHistorySupported(null)
       setAgentSessionHostSupport(null)
       setQuickCommandsSupported(null)
+      setQuickCommandAgentPromptMaxLength(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
       return
@@ -162,6 +180,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported(null)
     setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
+    setQuickCommandAgentPromptMaxLength(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
@@ -171,6 +190,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
+      setQuickCommandAgentPromptMaxLength(terminalQuickCommandAgentPromptMaxLength(capabilities))
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(

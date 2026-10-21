@@ -1,3 +1,4 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { once } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -6,13 +7,13 @@ import {
   decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame
 } from '../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks,
-  RemoteRuntimeSubscriptionOptions
+  RemoteRuntimeSubscriptionCallbacks
 } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
@@ -58,7 +59,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
       })
     )
     const route = new PairedRuntimeBrowserNetworkRoute({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       lease,
       executionHostRevision: 1
     })
@@ -334,7 +335,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     const attempts = mockSubscriptionAttempts()
     const commandLease = { ...lease, pageCommandProtocolVersion: 1 }
     const route = new PairedRuntimeBrowserNetworkRoute({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       lease: commandLease,
       executionHostRevision: 1
     })
@@ -649,7 +650,7 @@ function createRoute(
   } = {}
 ): PairedRuntimeBrowserNetworkRoute {
   return new PairedRuntimeBrowserNetworkRoute({
-    pairing,
+    connection: pairedRuntimeConnectionFromOffer(pairing),
     lease,
     executionHostRevision: 1,
     ...overrides

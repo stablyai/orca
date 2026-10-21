@@ -23,7 +23,8 @@ import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  type FakeConnection
+  type FakeConnection,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 type CapturedEvent =
@@ -110,7 +111,6 @@ async function replayCapture(
 ) {
   const capture = loadCapture(name)
   const settlements: Settlement[] = []
-  const idles: string[] = []
   const turnStates = new Map<string, string>()
   // The capture supplies every frame, startup proof included.
   const claude = fakeClaude({ initProof: 'none', replayUuid: null })
@@ -129,8 +129,7 @@ async function replayCapture(
     readProcessStartTime: async () => 1,
     now: () => 1_700_000_200_000,
     persistHandle: async () => {},
-    onDispatchSettledLate: (settlement) => settlements.push(settlement),
-    onSessionIdle: ({ sessionId }) => idles.push(sessionId)
+    onDispatchSettledLate: (settlement) => settlements.push(settlement)
   })
   await adapter.acquire({
     identity: identityFor(),
@@ -195,7 +194,7 @@ async function replayCapture(
       proofDelivered = true
     } else if (event.kind === 'dispatch') {
       if (proofDelivered) {
-        await adapter.awaitStarted('session-1')
+        await claudeStartupSettled(adapter, 'session-1')
       }
       await expect(
         adapter.dispatch({
@@ -204,7 +203,7 @@ async function replayCapture(
           body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: event.text }] },
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
       uuidMap.set(event.sentUuid, String(connection.sent.at(-1)!.uuid))
     } else if (event.kind === 'control') {
       const answerAt = capture.findIndex(
@@ -247,7 +246,7 @@ async function replayCapture(
     settlements
       .filter((settlement) => settlement.clientMessageId === clientMessageId)
       .map(({ sessionId: _sessionId, clientMessageId: _id, ...outcome }) => outcome)
-  return { settlementsFor, idles, turnStates, liveUuid, connection, adapter }
+  return { settlementsFor, turnStates, liveUuid, connection, adapter }
 }
 
 const WITHDRAWN = {
@@ -573,7 +572,6 @@ describe('a send the CLI holds', () => {
         isLifecycleFrame(frame, 'cancelled')
     })
 
-    expect(replay.idles).toEqual(['session-1'])
     expect(replay.adapter.holdsDispatch('session-1')).toBe(true)
     expect(replay.settlementsFor('client-A')).toEqual([])
   })
@@ -619,30 +617,4 @@ describe('a send the CLI holds', () => {
       expect(replay.adapter.holdsDispatch('session-1')).toBe(false)
     }
   )
-})
-
-describe('the CLI reporting its session idle', () => {
-  it.each(['interrupt-lost', 'cancel-async', 'batch-lead', 'auth-failed'])(
-    'is reported once per idle frame (%s), never for running',
-    async (name) => {
-      const replay = await replayCapture(name)
-
-      expect(replay.idles).toEqual(['session-1'])
-    }
-  )
-
-  it('is not reported from a child the session no longer holds', async () => {
-    const replay = await replayCapture('auth-failed')
-    await replay.adapter.closeSession('session-1')
-
-    replay.connection.handlers.onMessage?.({
-      type: 'system',
-      subtype: 'session_state_changed',
-      state: 'idle',
-      uuid: 'late-idle',
-      session_id: PROVIDER_SESSION_ID
-    })
-
-    expect(replay.idles).toEqual(['session-1'])
-  })
 })

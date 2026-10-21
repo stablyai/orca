@@ -48,6 +48,32 @@ function antigravityLimits(overrides: Partial<ProviderRateLimits> = {}): Provide
   }
 }
 
+const FIVE_HOUR_MINUTES = 300
+
+/** A tier with a 5h and a weekly pool per group, from a host that publishes `group`/`windowName`. */
+function groupedLimits(): ProviderRateLimits {
+  const pool = (group: string, windowMinutes: number, usedPercent: number) => {
+    const windowName =
+      windowMinutes === FIVE_HOUR_MINUTES ? '5h Limit Remaining' : 'Weekly Limit Remaining'
+    return {
+      name: `${group} · ${windowName}`,
+      group,
+      windowName,
+      ...weeklyWindow(usedPercent),
+      windowMinutes
+    }
+  }
+  return antigravityLimits({
+    weekly: weeklyWindow(4),
+    buckets: [
+      pool('Gemini Models', WEEKLY_MINUTES, 4),
+      pool('Gemini Models', FIVE_HOUR_MINUTES, 0),
+      pool('Claude and GPT models', WEEKLY_MINUTES, 0),
+      pool('Claude and GPT models', FIVE_HOUR_MINUTES, 0)
+    ]
+  })
+}
+
 describe('Antigravity status-bar segment', () => {
   it('renders both model-group pools by name', async () => {
     // Why: the verbose bucket allowlist was written for Gemini's experimental models, so
@@ -61,6 +87,44 @@ describe('Antigravity status-bar segment', () => {
     expect(markup).toContain('Gemini Models')
     expect(markup).toContain('Claude and GPT models')
     expect(markup).toContain('100%')
+  })
+
+  it('labels grouped pools by short group and window length', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={groupedLimits()} compact={false} display="used" mode="verbose" />
+    )
+
+    // Why '>Gemini<': the group's `title` still holds the full name, so a bare match is vacuous.
+    expect(markup).toContain('>Gemini<')
+    expect(markup).toContain('>Claude/GPT<')
+    expect(markup).toContain('5h')
+    expect(markup).toContain('4%')
+    expect(markup).not.toContain('Gemini Models ·')
+    expect(markup).not.toContain('Limit Remaining')
+    // 5h sorts before wk within a group.
+    expect(markup.indexOf('5h')).toBeLessThan(markup.indexOf('wk'))
+  })
+
+  it('uses the short pool label in compact mode', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={groupedLimits()} compact={false} display="used" mode="compact" />
+    )
+
+    expect(markup).toContain('4%')
+    expect(markup).toContain('Gemini wk')
+    expect(markup).not.toContain('Limit Remaining')
+  })
+
+  it('renders no pool label when the compact bar hides labels', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={groupedLimits()} compact display="used" mode="compact" />
+    )
+
+    expect(markup).toContain('4%')
+    expect(markup).not.toContain('Gemini')
   })
 
   it('shows the weekly window when a tier reports no session pool', async () => {

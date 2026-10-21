@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { CODEX_SHARED_SERVER_ARGS } from '../../shared/codex-shell-function'
+import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../shared/codex-shell-function'
 
 // Why: Orca's codex shell wrapper puts --no-daemon first for every subcommand but
 // agents/queue (src/shared/codex-shell-function.ts). Its tests use a fake codex, so
@@ -13,7 +13,7 @@ import { CODEX_SHARED_SERVER_ARGS } from '../../shared/codex-shell-function'
 const execFileAsync = promisify(execFile)
 const binary = process.env.ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY
 const expectedVersion = process.env.ORCA_CODEX_NO_DAEMON_CONTRACT_VERSION
-const WRAPPER_SKIPPED_SUBCOMMANDS: ReadonlySet<string> = new Set(CODEX_SHARED_SERVER_ARGS)
+const WRAPPER_SKIPPED_SUBCOMMANDS: ReadonlySet<string> = new Set(CODEX_NO_DAEMON_SKIP_ARGS)
 const TIMEOUT_MS = 30_000
 
 describe.runIf(process.env.ORCA_CODEX_NO_DAEMON_CONTRACT_REQUIRED === '1' && !binary)(

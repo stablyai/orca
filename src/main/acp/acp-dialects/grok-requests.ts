@@ -5,7 +5,7 @@ import {
 } from '../../../shared/agent-session-question-answer'
 import { AcpRpcError } from '../acp-errors'
 import { pendingAcpResolution } from '../acp-timeline-requests'
-import type { AcpRequestPresentation } from './acp-dialect'
+import type { AcpRequestPresentation, AcpRequestSettlement } from './acp-dialect'
 
 const questionRequestSchema = z.object({
   sessionId: z.string(),
@@ -98,47 +98,35 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   }
 }
 
-function planRequest(params: unknown): AcpRequestPresentation {
+/** What Grok hears once Orca has shown its plan: no approval is given for the person. */
+const PLAN_SHOWN_FEEDBACK =
+  'Orca showed your plan to the user. Stop here and wait for their feedback or a request to implement it in a later turn.'
+
+/** Grok's plan-mode exit: its plan goes to the chat's plan row and the gate is answered at once
+ *  (`abandoned`), so the turn ends instead of waiting on an approval card. */
+function settlePlanRequest(params: unknown): AcpRequestSettlement {
   const parsed = planRequestSchema.safeParse(params)
   if (!parsed.success) {
-    throw new AcpRpcError(-32602, 'Invalid agent plan approval request')
+    throw new AcpRpcError(-32602, 'Invalid agent plan request')
   }
   return {
-    body: {
-      kind: 'approval',
-      title: 'Approve plan',
-      detail: null,
-      subject: {
-        kind: 'plan',
-        text: parsed.data.planContent ?? 'The agent exited plan mode without writing a plan.'
-      },
-      options: [
-        { id: 'approved', label: 'Approve plan' },
-        { id: 'request_changes', label: 'Request changes' }
-      ],
-      resolution: pendingAcpResolution
-    },
-    reply: (response) => {
-      if (response === null) {
-        return { outcome: 'abandoned' }
-      }
-      if (
-        response.kind !== 'option' ||
-        !['approved', 'request_changes'].includes(response.optionId)
-      ) {
-        throw new AcpRpcError(-32602, 'Plan answer must select an offered option')
-      }
-      return { outcome: response.optionId }
-    }
+    reply: { outcome: 'abandoned', feedback: PLAN_SHOWN_FEEDBACK },
+    plan: parsed.data.planContent?.trim() || 'The agent exited plan mode without writing a plan.'
   }
+}
+
+export function grokSettleRequest(
+  method: string,
+  params: unknown
+): AcpRequestSettlement | undefined {
+  return ['_x.ai/exit_plan_mode', 'x.ai/exit_plan_mode'].includes(method)
+    ? settlePlanRequest(params)
+    : undefined
 }
 
 export function grokRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
   if (['_x.ai/ask_user_question', 'x.ai/ask_user_question'].includes(method)) {
     return questionRequest(params)
-  }
-  if (['_x.ai/exit_plan_mode', 'x.ai/exit_plan_mode'].includes(method)) {
-    return planRequest(params)
   }
   return undefined
 }

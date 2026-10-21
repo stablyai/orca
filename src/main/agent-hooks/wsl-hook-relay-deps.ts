@@ -14,16 +14,16 @@ import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/h
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import { codexHookService } from '../codex/hook-service'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { PluginSources } from '../../relay/plugin-overlay'
+import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 import {
-  isWslDistroRunning,
   resolveWslHookRelayBundle,
   runWslInstallProcess,
   spawnWslRelayProcess
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
 import { listWslDistrosAsync } from '../wsl'
-import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
+import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
 
 // Why: fresh WSL intermittently throws "Catastrophic failure (E_UNEXPECTED)"
 // under concurrent wsl.exe spawn load; the retry pause is a dep so tests can
@@ -60,6 +60,7 @@ export type WslHookRelayManagerDeps = {
   resolveBundle: typeof resolveWslHookRelayBundle
   readBundle: (jsPath: string) => Buffer
   listDistros: () => Promise<string[]>
+  /** Restart timers check this so relay recovery never resurrects a VM the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
@@ -91,7 +92,7 @@ export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
 
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
-  remoteHooksEnabled: () => isRemoteAgentHooksEnabled(),
+  remoteHooksEnabled: () => isWslAgentHookRelayEnabled(),
   hookCoordsEnv: () => agentHookServer.buildPtyEnv(),
   // Why: the Windows endpoint file path (userData + namespace) is stable
   // across app restarts and distinct per instance — exactly the identity the

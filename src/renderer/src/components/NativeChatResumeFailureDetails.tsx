@@ -66,7 +66,8 @@ export function ResumeFailureStatus({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6} className="max-w-72">
           {status}
-          {/* The code verbatim, so it can be quoted in a report. */}
+          {/* The code verbatim, so it can be quoted in a report. A lost resume request carries this
+              side's own code; its real error is in the renderer log. */}
           <span className="mt-0.5 block font-mono text-[10px] opacity-75">{failure.reason}</span>
         </TooltipContent>
       </Tooltip>
@@ -98,7 +99,7 @@ export function ResumeFailureGuidanceLine({
 }): React.JSX.Element {
   const guidance = resumeFailureGuidance(failure)
   return (
-    <div className="ml-6 mb-1 flex items-center gap-2 rounded-md border border-status-warning-border bg-status-warning-background px-2 py-1.5 text-[11px]">
+    <div className="mb-1 flex items-center gap-2 rounded-md border border-status-warning-border bg-status-warning-background px-2 py-1.5 text-[11px]">
       <span className="min-w-0 flex-1">
         <span className="font-semibold">
           {translate('auto.components.NativeChatResumeOutcomeRow.toResume', 'To resume:')}

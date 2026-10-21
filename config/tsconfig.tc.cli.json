@@ -1,5 +1,11 @@
 {
   "extends": "./tsconfig.cli.json",
+  "exclude": [
+    "../src/shared/**/*.test.ts",
+    "../src/shared/**/*.test.tsx",
+    "../src/shared/**/*.spec.ts",
+    "../src/shared/**/*.spec.tsx"
+  ],
   "compilerOptions": {
     "module": "Node20",
     "moduleResolution": "node16"

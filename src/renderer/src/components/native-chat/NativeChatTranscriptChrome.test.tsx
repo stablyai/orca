@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   invalidateLocalImageSrcCacheForTests,
   loadLocalImageSrc,
@@ -12,11 +13,22 @@ import {
 import { chatImageAccess } from '@/lib/local-file-access'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
+// Chat images carry their runtime owner without resolving an editor connection.
+const mocks = vi.hoisted(() => ({
+  getConnectionIdForFile: vi.fn(() => {
+    throw new Error('Chat image fixtures must not resolve editor file connections')
+  })
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: mocks.getConnectionIdForFile
+}))
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 function runtimeContext(worktreeId: string): RuntimeFileOperationArgs {
   return {
-    settings: { activeRuntimeEnvironmentId: null },
+    target: { kind: 'local' as const },
     worktreeId,
     worktreePath: `/repo/${worktreeId}`,
     expectedExecutionHostId: 'local'
@@ -48,7 +60,12 @@ beforeEach(() => {
 afterEach(() => {
   resetLocalImageSrcStateForTests()
   vi.unstubAllGlobals()
-  vi.restoreAllMocks()
+  try {
+    expect(mocks.getConnectionIdForFile).not.toHaveBeenCalled()
+  } finally {
+    mocks.getConnectionIdForFile.mockClear()
+    vi.restoreAllMocks()
+  }
 })
 
 describe('NativeChatImageAttachments', () => {
@@ -88,6 +105,66 @@ describe('NativeChatImageAttachments', () => {
     expect(FakeIntersectionObserver.instances[0]?.unobserve).toHaveBeenCalledTimes(3)
     expect(FakeIntersectionObserver.instances[0]?.disconnect).toHaveBeenCalledOnce()
   })
+
+  it('offers the full-size file of a sent image to the chat copy menu', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, {
+          blocks: [{ type: 'image-ref' as const, path: '/repo/image.png' }],
+          runtimeContext: runtimeContext('wt-1')
+        })
+      )
+      await flushPromises()
+    })
+
+    expect(container.querySelector('button')?.getAttribute('data-native-chat-copy-image-src')).toBe(
+      'blob:owner-1'
+    )
+
+    root.unmount()
+  })
+
+  it.each([
+    'data:image/png;base64,AA==',
+    'blob:sent-original',
+    'http://example.test/original.png',
+    'https://example.test/original.svg'
+  ])(
+    'offers the original displayed source %s in the thumbnail and full-size preview',
+    async (src) => {
+      const container = document.body.appendChild(document.createElement('div'))
+      const root = createRoot(container)
+      try {
+        await act(async () => {
+          root.render(
+            createElement(NativeChatImageAttachments, {
+              blocks: [{ type: 'image-ref', url: src, alt: 'Sent image' }],
+              runtimeContext: runtimeContext('wt-1')
+            })
+          )
+          await flushPromises()
+        })
+        const thumbnail = within(container).getByRole('button', { name: 'View image: Sent image' })
+        expect(thumbnail.getAttribute('data-native-chat-copy-image-src')).toBe(src)
+        fireEvent.click(thumbnail)
+        const preview = screen.getByRole('dialog', { name: 'Sent image' })
+        expect(
+          within(preview)
+            .getByTestId('pan-zoom-image-canvas')
+            .closest('[data-native-chat-copy-image-src]')
+            ?.getAttribute('data-native-chat-copy-image-src')
+        ).toBe(src)
+        expect(window.api.fs.readFile).not.toHaveBeenCalled()
+        fireEvent.click(within(preview).getByRole('button', { name: 'Close' }))
+        expect(screen.queryByRole('dialog')).toBeNull()
+      } finally {
+        await act(async () => root.unmount())
+        container.remove()
+      }
+    }
+  )
 
   it('preserves same-image errors but retries when the runtime owner changes', async () => {
     const container = document.createElement('div')

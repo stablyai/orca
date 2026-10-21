@@ -4,7 +4,7 @@ import {
   readNativeChatDraftCache,
   writeNativeChatDraftCache
 } from './native-chat-draft-cache'
-import { NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX } from './native-chat-composer-scope-cache'
+import { NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX } from '../../../../shared/native-chat-scope-cache'
 
 afterEach(() => {
   clearNativeChatDraftCacheForTests()

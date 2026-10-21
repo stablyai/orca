@@ -10,22 +10,24 @@ import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
 import { useNow } from '@/hooks/use-now'
-import { translate } from '@/i18n/i18n'
-import { backgroundTasksHeaderContent } from './background-task-header-content'
 import {
-  backgroundTaskGroupLabel,
-  backgroundTaskRowElapsedLabel,
-  backgroundTaskRowTicks,
-  buildBackgroundTaskGroups,
+  backgroundTasksHeaderText,
+  NARROW_BACKGROUND_TASKS_STRIP_REM
+} from '../../../../shared/background-task-header-content'
+import {
+  backgroundTaskRowMeta,
+  backgroundTaskRowStopId,
+  backgroundTasksStripTicks,
   buildBackgroundTaskGroupsFromViews,
-  formatBackgroundTaskTokens,
   type BackgroundTaskGroup
-} from './background-task-roster'
+} from '../../../../shared/background-task-roster'
+import { backgroundTasksHeaderContent } from './background-task-header-content'
+import { backgroundTaskGroupLabel, buildBackgroundTaskGroups } from './background-task-roster'
+import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
 
-/** Below this strip width (border-box, live root font size) the header drops
- *  its per-kind breakdown for an honest total. A narrow split pane on a wide
- *  monitor must behave like a narrow window, so no viewport media query. */
-const NARROW_STRIP_REM = 24
+/** Border-box width at the live root font size; no viewport media query, so a
+ *  narrow split pane on a wide monitor behaves like a narrow window. */
+const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
 
 function rootFontSizePx(): number {
   const parsed = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
@@ -80,19 +82,11 @@ function BackgroundTaskRow(props: {
 }): React.JSX.Element {
   const { row, now } = props
   const Icon = KIND_ICONS[row.kind]
-  const meta = [
-    row.totalTokens !== undefined ? formatBackgroundTaskTokens(row.totalTokens) : null,
-    backgroundTaskRowElapsedLabel(row, now)
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' · ')
-  // Only an explicit `false` withholds the button: a Stop on a row the host cannot target
-  // resolves to an empty list and silently reports nothing cancelled.
-  const stopId =
-    !row.settled && props.supportsTaskStop && row.canStop ? (row.providerId ?? null) : null
+  const meta = backgroundTaskRowMeta(row, now)
+  const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   return (
     <>
-      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground/80">
+      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
         <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
         {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
         <AgentChildRowContent
@@ -104,7 +98,7 @@ function BackgroundTaskRow(props: {
           dotTitle={null}
         />
         {meta ? (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
             {meta}
           </span>
         ) : null}
@@ -113,17 +107,11 @@ function BackgroundTaskRow(props: {
             type="button"
             variant="ghost"
             size="xs"
-            aria-label={translate(
-              'components.native-chat.backgroundTasks.stopTask',
-              'Stop {{value0}}',
-              {
-                value0: agentChildRowName(row)
-              }
-            )}
+            aria-label={say('stopTask', { value0: agentChildRowName(row) })}
             disabled={props.stoppingTaskIds.has(stopId)}
             onClick={() => props.onStop(stopId)}
           >
-            {translate('components.native-chat.backgroundTasks.stop', 'Stop')}
+            {say('stop')}
           </Button>
         ) : null}
       </li>
@@ -148,10 +136,6 @@ function BackgroundTaskRow(props: {
   )
 }
 
-function rowsTick(rows: readonly AgentChildRowModel[]): boolean {
-  return rows.some((row) => backgroundTaskRowTicks(row) || rowsTick(row.owned))
-}
-
 export function NativeChatBackgroundTasksStatus(props: {
   tasks: readonly AgentSessionBackgroundTask[]
   settledTasks: readonly AgentSessionBackgroundTask[]
@@ -161,9 +145,11 @@ export function NativeChatBackgroundTasksStatus(props: {
    *  it every live claim stands as reported. */
   childRowContext?: AgentChildRowContext
   supportsTaskStop: boolean
-  /** False when the provider exposes no honest stop at all; the fallback
-   *  control is hidden rather than offering a button that cannot act. */
-  supportsStopAll: boolean
+  /** The shared view's rule for the untargeted Stop; hidden when the provider exposes no honest
+   *  stop at all, rather than offering a button that cannot act. */
+  offersStopAll: boolean
+  /** Some running work is not listed, so the rows are not the whole roster. */
+  incomplete?: boolean
   stoppingTaskIds: ReadonlySet<string>
   stoppingAll: boolean
   /** True while the session is idle: only then may the strip speak as the
@@ -191,13 +177,9 @@ export function NativeChatBackgroundTasksStatus(props: {
         : buildBackgroundTaskGroups(props.tasks, props.settledTasks),
     [props.childViews, props.childRowContext, props.tasks, props.settledTasks]
   )
-  const singleLiveCommand =
-    groups.length === 1 && groups[0].kind === 'command' && groups[0].tasks.length === 1
-  // Settled rows are frozen, so a strip of only finished work never wakes the 1 Hz tick.
-  const ticks = groups.some((group) => rowsTick(group.tasks.map((entry) => entry.row)))
-  const now = useNow(1_000, props.isVisible && ticks && (expanded || singleLiveCommand))
+  const now = useNow(1_000, props.isVisible && backgroundTasksStripTicks(groups, expanded))
   const header = backgroundTasksHeaderContent(groups, { narrow, now })
-  const headerText = `${header.segments.map((segment) => segment.text).join(' · ')}${header.detail ? `${header.segments.length > 0 ? ' — ' : ''}${header.detail}` : ''}`
+  const headerText = backgroundTasksHeaderText(header)
   return (
     <div
       data-native-chat-background-tasks="true"
@@ -212,7 +194,7 @@ export function NativeChatBackgroundTasksStatus(props: {
           <div className="flex h-8 items-center px-1.5">
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={expanded}
               aria-controls={taskListId}
               aria-label={headerText}
@@ -251,7 +233,7 @@ export function NativeChatBackgroundTasksStatus(props: {
               </span>
               <ChevronDown
                 aria-hidden="true"
-                className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                className={`size-3 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`}
               />
             </button>
           </div>
@@ -266,7 +248,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                     key={group.kind}
                     className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
                   >
-                    <p className="px-0.5 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="px-0.5 pb-1 font-mono text-3xs uppercase tracking-wider text-muted-foreground">
                       {backgroundTaskGroupLabel(group.kind)}
                     </p>
                     <ul
@@ -288,27 +270,22 @@ export function NativeChatBackgroundTasksStatus(props: {
                   </div>
                 ))
               ) : (
-                <p>
-                  {translate(
-                    'components.native-chat.backgroundTasks.detailsUnavailable',
-                    'Task details are unavailable for this session.'
-                  )}
-                </p>
+                <p>{say('detailsUnavailable')}</p>
               )}
-              {!props.supportsTaskStop && props.supportsStopAll ? (
+              {props.incomplete && groups.length > 0 ? (
+                <p className="mt-1.5">{say('detailsUnavailable')}</p>
+              ) : null}
+              {props.offersStopAll ? (
                 <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
                   <Button
                     type="button"
                     variant="ghost"
                     size="xs"
-                    aria-label={translate(
-                      'components.native-chat.backgroundTasks.stopAll',
-                      'Stop background tasks'
-                    )}
+                    aria-label={say('stopAll')}
                     disabled={props.stoppingAll}
                     onClick={() => props.onStop()}
                   >
-                    {translate('components.native-chat.backgroundTasks.stop', 'Stop')}
+                    {say('stop')}
                   </Button>
                 </div>
               ) : null}

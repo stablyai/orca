@@ -30,10 +30,11 @@ import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -119,12 +120,13 @@ export function FileExplorerRowContextMenu({
     supportsFolderDownload
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, s.activeWorktreeId, {
       connectionId,
-      runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(s, s.activeWorktreeId)
+      runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, s.activeWorktreeId)
     })
   )
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -275,7 +277,7 @@ export function FileExplorerRowContextMenu({
       )}
       <ContextMenuItem
         disabled={revealBlocked}
-        onSelect={() => void revealInFileManager(node.path)}
+        onSelect={() => void revealInFileManager(node.path, revealOwner)}
       >
         <ExternalLink />
         {getRevealInFileManagerLabel()}

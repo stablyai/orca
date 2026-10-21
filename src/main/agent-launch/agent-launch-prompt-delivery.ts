@@ -9,6 +9,7 @@
  *   terminal, line fits  ->  folded into the command that execs the agent        ->  handed-to-terminal
  *   terminal, otherwise  ->  bracketed paste into the live PTY once it is ready  ->  handed-to-terminal
  *   anything unproven    ->                                                      ->  not-delivered
+ *   host stopped mid-delivery (a replayed record only)                         ->  unconfirmed
  *
  * argv has no readiness race, so it is offered wherever the agent's CLI takes a prompt argument
  * (`agentPromptRidesLaunchCommand`). But that command is TYPED into the user's shell, and a long or
@@ -23,15 +24,33 @@ import type {
 } from '../../shared/agent-launch-intent'
 import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
 import type { AgentLaunchModeReceipt } from './agent-launch-mode'
-import type { AgentLaunchExecution, CreatedSurface } from './agent-launch-executor'
+import type { CreatedSurface } from './agent-launch-executor'
+import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 export const HANDED_TO_TERMINAL: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
 const NOT_DELIVERED: AgentLaunchPromptDisposal = { outcome: 'not-delivered' }
+const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
+
+/**
+ * What the record may say before any delivery runs: only what creating the surface already settled.
+ * A launch command that carried the text has handed it over, and a draft is never delivered by the
+ * host. A submit still owed is `unconfirmed`: a host that stops mid-delivery cannot say whether the
+ * paste or the commit landed, and "not delivered" would invite a duplicate turn.
+ */
+export function settledAtCreation(
+  intent: Pick<AgentLaunchIntent, 'prompt'>,
+  created: { promptRodeLaunchCommand?: boolean }
+): AgentLaunchPromptDisposal {
+  if (created.promptRodeLaunchCommand) {
+    return HANDED_TO_TERMINAL
+  }
+  return intent.prompt?.delivery === 'submit' ? UNCONFIRMED : NOT_DELIVERED
+}
 
 /** Each surface delivers its own way, so the disposal is decided where the surface is known. */
 export async function settleLaunchPromptDisposal(
-  execution: AgentLaunchExecution,
+  execution: AgentLaunchSurfaceExecution,
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
   if (created.structured) {
@@ -51,7 +70,7 @@ export async function settleLaunchPromptDisposal(
  * `draft` is excluded: a structured draft belongs in the composer, and the host has none.
  */
 async function deliverStructuredLaunchPrompt(
-  execution: AgentLaunchExecution,
+  execution: AgentLaunchSurfaceExecution,
   structured: AgentLaunchStructuredSurface
 ): Promise<string | null> {
   const { intent, surfaces } = execution
@@ -80,7 +99,7 @@ async function deliverStructuredLaunchPrompt(
  * composer accepted it, so a receipt claiming delivery would be a guess.
  */
 export async function deliverTerminalLaunchPrompt(
-  execution: AgentLaunchExecution,
+  execution: AgentLaunchSurfaceExecution,
   handle: string,
   { freshLaunch }: { freshLaunch: boolean }
 ): Promise<AgentLaunchPromptDisposal> {
@@ -127,8 +146,10 @@ export function launchCommandPrompt(
  * Each arm is a consequence of the act it names, never a write-ahead of it: `journaled` is
  * reachable only from a committed message id, `handed-to-terminal` only from a launch command that
  * carried the text or a PTY write that returned, and everything else under-claims as
- * `not-delivered`. There is deliberately no arm for "maybe" — a caller holding one could neither
- * resend nor drop the text. Dispatch doubt is not this tier's to report: the submission row
+ * `not-delivered`. A live answer has no "maybe": `unconfirmed` is written only into the record
+ * before delivery runs (`settledAtCreation`), and is read back only by a replay. The one live
+ * exception never reaches the wire: a `legacy-host` create's unawaited post-start send
+ * (agent-launch-legacy-host.ts). Dispatch doubt is not this tier's to report: the submission row
  * carries it.
  */
 export function promptReceipt(

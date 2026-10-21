@@ -19,7 +19,7 @@ import {
   readMutationReplayNudge,
   readWorkerDoneReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
+} from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import { sendRemoteMessage } from './send-remote'
 import { mayNameSession } from './session-recipient'
@@ -32,6 +32,7 @@ import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
+    permission: 'workspace',
     params: SendParams,
     handler: async (
       params,

@@ -308,8 +308,10 @@ describe('GitHub provider request upgrade coalescing', () => {
       .mockReturnValueOnce(replacementWeak.promise)
       .mockReturnValue(forcedResult.promise)
 
-    const first = store.getState().fetchProjectViewTable(projectViewRequest)
-    const forcedFetch = store.getState().fetchProjectViewTable(projectViewRequest, { force: true })
+    const first = store.getState().fetchProjectViewTable({ kind: 'local' }, projectViewRequest)
+    const forcedFetch = store
+      .getState()
+      .fetchProjectViewTable({ kind: 'local' }, projectViewRequest, { force: true })
     // Why: only a non-forced entry can be superseded mid-flight, and it has to appear in the
     // microtask after the first request clears the key — before the forced waiter re-checks it.
     const pending = inflightProjectViewRequests.get(
@@ -318,7 +320,9 @@ describe('GitHub provider request upgrade coalescing', () => {
     expect(pending).toBeDefined()
     let replacementFetch: Promise<GetProjectViewTableResult> | undefined
     void pending?.promise.then(() => {
-      replacementFetch = store.getState().fetchProjectViewTable(projectViewRequest)
+      replacementFetch = store
+        .getState()
+        .fetchProjectViewTable({ kind: 'local' }, projectViewRequest)
     })
 
     const staleError = { type: 'network_error' as const, message: 'first attempt offline' }

@@ -1,10 +1,11 @@
 import {
-  parseAutomationRrule,
   parseCronExpression,
   parseSchedule,
+  tryParseAutomationRrule,
   type ParsedCron
 } from './automation-schedule-parsing'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import { escapeTerminalControlCharacters } from './terminal-control-character-escape'
 
 export type AutomationCronScheduleClassification =
   | { kind: 'hourly'; minute: number; label: string }
@@ -20,7 +21,8 @@ export type AutomationScheduleDescriptor =
   | { kind: 'daily'; hour: number; minute: number }
   | { kind: 'weekdays'; hour: number; minute: number }
   | { kind: 'weekly'; hour: number; minute: number; dayOfWeek: number }
-  | { kind: 'custom' }
+  // `expression` carries a scheduler-valid RRULE no preset sentence can name (#24985).
+  | { kind: 'custom'; expression?: string }
   | { kind: 'invalid' }
 
 // Why: shared labels feed the CLI, which must stay English regardless of OS or UI locale.
@@ -74,7 +76,9 @@ function setContainsRange(values: Set<number>, min: number, max: number): boolea
   return true
 }
 
-function formatParsedRruleSchedule(schedule: ReturnType<typeof parseAutomationRrule>): string {
+function formatParsedRruleSchedule(
+  schedule: NonNullable<ReturnType<typeof tryParseAutomationRrule>>
+): string {
   if (schedule.preset === 'hourly') {
     return `Hourly at :${String(schedule.minute).padStart(2, '0')}`
   }
@@ -151,7 +155,11 @@ export function formatAutomationSchedule(scheduleExpression: string): string {
     if (schedule.kind === 'cron') {
       return classifyParsedCronSchedule(schedule).label
     }
-    return formatParsedRruleSchedule(parseAutomationRrule(trimmed))
+    const rrule = tryParseAutomationRrule(trimmed)
+    if (rrule === null) {
+      return escapeTerminalControlCharacters(trimmed, true)
+    }
+    return formatParsedRruleSchedule(rrule)
   } catch {
     return 'Invalid schedule'
   }
@@ -177,7 +185,10 @@ export function describeAutomationSchedule(
     if (schedule.kind === 'cron') {
       return toScheduleDescriptor(classifyParsedCronSchedule(schedule))
     }
-    const rrule = parseAutomationRrule(trimmed)
+    const rrule = tryParseAutomationRrule(trimmed)
+    if (rrule === null) {
+      return { kind: 'custom', expression: escapeTerminalControlCharacters(trimmed, true) }
+    }
     if (rrule.preset === 'hourly') {
       return { kind: 'hourly', minute: rrule.minute }
     }

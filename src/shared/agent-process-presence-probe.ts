@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { AgentProcessIdentity, AgentProcessVerdict } from './agent-process-presence'
 
 export type AgentProcessObservation =
@@ -79,7 +79,8 @@ export async function readAgentProcess(pid: number): Promise<AgentProcessObserva
 export async function probeAgentProcessPresence(
   identity: AgentProcessIdentity | undefined,
   read: (pid: number) => Promise<AgentProcessObservation> = readAgentProcess,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  onSuspensionObserved?: (suspended: boolean) => void
 ): Promise<AgentProcessVerdict> {
   if (!identity || identity.platform !== platform) {
     return 'unverifiable'
@@ -91,6 +92,7 @@ export async function probeAgentProcessPresence(
   if (observed.zombie || observed.startTime !== identity.startTime) {
     return 'exited'
   }
+  onSuspensionObserved?.(observed.stopped === true)
   // Why: a suspended (Ctrl-Z) agent still exists but is not running in its terminal.
   return observed.stopped ? 'unverifiable' : 'live'
 }

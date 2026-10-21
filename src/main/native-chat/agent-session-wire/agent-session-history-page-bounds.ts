@@ -7,7 +7,9 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
+import { subagentFoldKey, subagentItemBlock } from '../../../shared/native-chat-subagent-items'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -15,6 +17,14 @@ const HISTORY_PAGE_ENVELOPE_RESERVE_BYTES = 64 * 1024
 
 export const HISTORY_PAGE_CONTENT_BUDGET_BYTES =
   AGENT_SESSION_HISTORY_MAX_PAGE_BYTES - HISTORY_PAGE_ENVELOPE_RESERVE_BYTES
+
+/** Everything a bounded frame carries beside its rows: the bridge envelope, ids and cursors, the
+ *  subagent roster, the latest turn and the activity line, each held to its own bound. */
+const FRAME_METADATA_CEILING_BYTES = 64 * 1024
+
+/** The rows' share of a phone's bridge frame, which its app ends a stream over. */
+export const BOUNDED_FRAME_CONTENT_BUDGET_BYTES =
+  MOBILE_BRIDGE_MAX_FRAME_BYTES - FRAME_METADATA_CEILING_BYTES
 
 export function historyEntryBytes(
   item: AgentJournalRenderItem,
@@ -55,17 +65,40 @@ export function oversizedHistoryItem(item: AgentJournalRenderItem): AgentJournal
   }
 }
 
+export type HistoryItemForm = {
+  item: AgentJournalRenderItem
+  bytes: number
+}
+
+export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemForm {
+  return { item, bytes: Buffer.byteLength(JSON.stringify(item), 'utf8') }
+}
+
+/** How a reader receives each item, and the bytes its page may hold of them. A page is measured
+ *  in that form, so it carries what it will actually send. */
+export type HistoryReader = {
+  form: (item: AgentJournalRenderItem) => HistoryItemForm
+  budgetBytes: number
+}
+
+/** Rows are put in `form` only as the page takes them. */
 export function boundHistoryItemsByBytes(
   items: AgentJournalRenderItem[],
   keep: 'newest' | 'oldest',
   submissionBytes: ReadonlyMap<string, number>,
-  maxBytes: number
+  maxBytes: number,
+  form: HistoryReader['form'] = measureHistoryItem
 ): { items: AgentJournalRenderItem[]; dropped: number } {
   const ordered = groupItemsBySequence(items, keep)
   const kept: AgentJournalRenderItem[][] = []
   let total = 0
-  for (const group of ordered) {
-    const bytes = group.reduce((sum, item) => sum + historyEntryBytes(item, submissionBytes), 0)
+  for (const stored of ordered) {
+    const formed = stored.map(form)
+    const group = formed.map(({ item }) => item)
+    const bytes = formed.reduce(
+      (sum, { item, bytes }) => sum + bytes + (submissionBytes.get(item.itemId) ?? 0),
+      0
+    )
     if (kept.length === 0 && bytes > maxBytes) {
       kept.push(group.map((item) => oversizedHistoryItem(item)))
       break
@@ -125,4 +158,30 @@ export function newestWholeSequenceGroups(
     count += group.length
   }
   return selected.toReversed().flat()
+}
+
+/** `start` moved back to the first sibling of every subagent group the window holds part of, but
+ *  never past `floor`: a group spread over a long turn, or helpers outside any turn, may still
+ *  split rather than grow the page without bound. */
+export function wholeSubagentGroupsStart(
+  items: readonly AgentJournalRenderItem[],
+  start: number,
+  floor: number
+): number {
+  const firstOf = new Map<string, number>()
+  for (const item of items) {
+    const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
+    if (block !== null && !firstOf.has(subagentFoldKey(block))) {
+      firstOf.set(subagentFoldKey(block), item.sequence)
+    }
+  }
+  let whole = start
+  for (let index = items.length - 1; index >= 0 && items[index]!.sequence >= whole; index--) {
+    const item = items[index]!
+    const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
+    if (block !== null) {
+      whole = Math.max(floor, Math.min(whole, firstOf.get(subagentFoldKey(block))!))
+    }
+  }
+  return whole
 }

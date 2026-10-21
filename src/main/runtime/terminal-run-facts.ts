@@ -2,7 +2,7 @@ import {
   spawnCommitBindingOrigin,
   type PtySpawnCommitOrigin
 } from '../persistence/loading-store/pty-binding-span'
-import { isTerminalQueryReply } from '../../shared/terminal-query-reply'
+import { isUntypedTerminalInput } from '../../shared/terminal-untyped-input'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type TerminalRunFacts = {
@@ -10,16 +10,6 @@ export type TerminalRunFacts = {
   freshSpawn: boolean
   /** When input first drove this process, from any client or driver; null if none has. */
   firstUserInputAt: number | null
-}
-
-// Why: a paired client's xterm answers focus changes (CSI I / CSI O) through input that carries no
-// provenance; the desktop renderer already excludes them via xterm's user-input signal.
-// oxlint-disable-next-line no-control-regex -- focus reports are ESC-framed sequences by definition.
-const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
-
-/** Input with no provenance that no person typed: a whole terminal reply or only focus reports. */
-function isUntypedTerminalInput(payload: string): boolean {
-  return isTerminalQueryReply(payload) || TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
 }
 
 export type TerminalSpawnCommit = Parameters<typeof spawnCommitBindingOrigin>[0] & {
@@ -46,6 +36,13 @@ export class TerminalRunFactsRegister {
     string,
     { incarnationId: string | null; firstInputAt: number | null }
   >()
+  private readonly inputListeners = new Set<(ptyId: string, now: number) => void>()
+
+  /** Called on driving input from any client (not launch writes or replies); keep it cheap. */
+  onInput(listener: (ptyId: string, now: number) => void): () => void {
+    this.inputListeners.add(listener)
+    return () => this.inputListeners.delete(listener)
+  }
 
   reserveSpawnCommit(commit: TerminalSpawnCommit): void {
     if (!commit.incarnationId) {
@@ -104,6 +101,9 @@ export class TerminalRunFactsRegister {
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
     if (inputKind === 'driving') {
+      for (const listener of this.inputListeners) {
+        listener(ptyId, now)
+      }
       const pending = this.pendingByPtyId.get(ptyId)
       if (pending) {
         pending.firstInputAt ??= now

@@ -32,10 +32,23 @@ async function wiredSession() {
   const journal = {
     cursor: () => ({ epoch: 'epoch-1', sequence: ++sequence }),
     lastActivityAt: () => 1,
+    submissions: (): ReturnType<Journal['submissions']> =>
+      submissions.map((submission) => ({ ...submission })),
+    item: (itemId: string): ReturnType<Journal['item']> => {
+      const item = run.journalItems.get(itemId)
+      return item ? { ...item, revision: 1, observedAt: run.now() } : null
+    },
+    // No Stop was ever pressed here.
+    stopMarks: { latest: () => null, revision: () => 0 },
+    // One generation produced everything here, and every send was accepted by this process.
+    itemFence: () => undefined,
+    wroteBeforeOpen: () => false,
+    // The live generation's own turns are never a died turn, so this is never consulted for one.
+    runningTurn: () => null,
     snapshot: () => ({
       items: [...run.journalItems.values()]
         .sort((a, b) => a.sequence - b.sequence)
-        .map((item) => ({ ...item, revision: 1 })),
+        .map((item) => ({ ...item, revision: 1, observedAt: run.now() })),
       submissions: submissions.map((submission) => ({ ...submission }))
     })
   }
@@ -45,7 +58,7 @@ async function wiredSession() {
       [
         parent.sessionId,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the feed reads only the cursor, activity clock and snapshot served here.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the feed's cursor, clock, Stop marks, snapshot, submissions, item and provenance reads.
           journal: journal as unknown as Journal,
           params: {
             location: {

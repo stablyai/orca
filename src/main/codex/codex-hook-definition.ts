@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { join } from 'node:path'
 import {
   buildManagedCommandHook,
@@ -13,7 +14,8 @@ import { buildCodexHookCommand } from './codex-hook-command-form'
 import { CODEX_HOOK_EVENT_LABEL, getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexEventLabel } from './config-toml-trust'
-import { normalizeCodexHookTimeoutSec } from './codex-trust-identity'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
+import { computeCodexTrustedHash, normalizeCodexHookTimeoutSec } from './codex-trust-identity'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
 // Interrupt (Codex 0.150+) is the only hook an Esc-cancelled turn fires; older Codex ignores the unknown key.
@@ -75,6 +77,31 @@ export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
   CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
 )
 
+/**
+ * Orca's own hash of its entry in every managed event, as main wrote before
+ * asking Codex: the stopgap while Codex has not answered.
+ */
+export function computeOrcaCodexHookHashes(
+  command: string = getManagedCommand(getManagedScriptPath())
+): CodexHookHashes {
+  return Object.fromEntries(
+    CODEX_EVENTS.map((eventName) => {
+      const eventLabel = CODEX_EVENT_LABEL[eventName]
+      return [
+        eventLabel,
+        computeCodexTrustedHash({
+          sourcePath: '',
+          eventLabel,
+          groupIndex: 0,
+          handlerIndex: 0,
+          command,
+          timeoutSec: buildCodexManagedHook(command, eventName).timeout
+        })
+      ]
+    })
+  )
+}
+
 export const CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS = [
   '${CLAUDE_PLUGIN_ROOT}',
   '${CLAUDE_PLUGIN_DATA}',
@@ -112,7 +139,7 @@ export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMat
 }
 
 export function wrapReadablePosixHookCommand(scriptPath: string): string {
-  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  const quoted = quotePosixShell(scriptPath)
   // Why: WSL hooks are written from Windows over UNC where the exec bit is unreliable; a missing script must still own stdin.
   return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
