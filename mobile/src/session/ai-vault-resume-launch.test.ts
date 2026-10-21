@@ -241,7 +241,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     expect(omp.resumeProviderSession).toEqual({ key: 'session_id', id: 'omp-1' })
   })
 
-  it('sends only an explicit custom title and omits the scanned session title', () => {
+  it('sends the custom title ahead of the scanned session title', () => {
     expect(
       buildMobileAiVaultResumeLaunch({
         session: session({ customTitle: 'Pinned alias', title: 'Resume me' }),
@@ -253,7 +253,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
         session: session({ title: 'Resume me' }),
         hostPlatform: 'darwin'
       }).title
-    ).toBeNull()
+    ).toBe('Resume me')
   })
 
   it('keeps managed-home Codex resumes free of env deletion', () => {

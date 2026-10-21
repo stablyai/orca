@@ -1,8 +1,10 @@
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeSyncedLeaf
+} from '../../../shared/runtime-types'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import type { RuntimeSyncedLeaf } from '../runtime-leaf-state-records'
 
 export function parseTabIdFromPaneKey(paneKey: string | null | undefined): string | null {
   if (!paneKey) {
@@ -136,13 +138,12 @@ export function resolvePersistedSessionIdForTab(
 export function resolveRealTabIdFromRuntimeState(args: {
   ptyId: string
   worktreeId?: string
-  handle?: string
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   leaves: ReadonlyMap<string, RuntimeSyncedLeaf>
   mobileSessionTabsByWorktree: ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   session: WorkspaceSessionState | null | undefined
 }): string | null {
-  const { ptyId, worktreeId, handle, ptysById, leaves, mobileSessionTabsByWorktree, session } = args
+  const { ptyId, worktreeId, ptysById, leaves, mobileSessionTabsByWorktree, session } = args
   const pty = ptysById.get(ptyId)
   if (pty?.tabId && !pty.tabId.startsWith('pty:')) {
     return pty.tabId
@@ -163,7 +164,7 @@ export function resolveRealTabIdFromRuntimeState(args: {
     for (const tab of snapshot.tabs) {
       if (
         tab.type === 'terminal' &&
-        (tab.ptyId === ptyId || (Boolean(handle) && tab.terminal === handle)) &&
+        tab.ptyId === ptyId &&
         tab.parentTabId &&
         !tab.parentTabId.startsWith('pty:')
       ) {

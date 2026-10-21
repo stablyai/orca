@@ -19,7 +19,7 @@ import {
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
-import { getLatestLeafTitle } from '../runtime-worktree-status-projection'
+import { getLatestLeafTitle, getLeafDisplayRecord } from '../runtime-worktree-status-projection'
 export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeWorkspaceSessionCustomTitles {
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract resolveMobileMarkdownWorktreeId(
@@ -62,8 +62,7 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
       for (const leaf of this.leaves.values()) {
         if (leaf.tabId === tabId) {
           const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-          fallbackTitle =
-            getLatestLeafTitle(this.getLeafDisplayRecord(leaf), null) ?? pty?.title ?? null
+          fallbackTitle = getLatestLeafTitle(getLeafDisplayRecord(leaf), null) ?? pty?.title ?? null
           break
         }
       }
@@ -81,6 +80,13 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
             ...tab,
             customTitle: normalizedTitle,
             title: normalizedTitle ?? fallbackTitle ?? 'Terminal'
+          }
+        }
+        if (tab.type === 'agent-session' && tab.id === tabId) {
+          return {
+            ...tab,
+            customTitle: normalizedTitle,
+            ...(normalizedTitle ? { title: normalizedTitle } : {})
           }
         }
         return tab
@@ -108,6 +114,10 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
           }
         })
       }
+    }
+    const sessionId = this.resolveSessionIdForTab(tabId)
+    if (sessionId) {
+      this.setSessionCustomTitle(sessionId, normalizedTitle)
     }
   }
 

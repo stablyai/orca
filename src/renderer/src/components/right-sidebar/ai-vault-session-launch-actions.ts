@@ -117,7 +117,7 @@ export function useAiVaultSessionLaunchActions({
             {
               agent: session.agent,
               worktreeId: targetId.worktreeId,
-              customTitle: session.customTitle?.trim() || null,
+              customTitle: session.customTitle ?? session.title ?? null,
               ...startup
             },
             describeFailure

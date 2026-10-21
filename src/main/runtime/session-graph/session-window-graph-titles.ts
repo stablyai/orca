@@ -6,9 +6,6 @@ export function syncTabCustomTitles(
   rememberTitle: (tabId: string, title: string | null) => void
 ): void {
   for (const tab of tabs) {
-    if (tab.customTitle === undefined) {
-      continue
-    }
     const customTitle = tab.customTitle?.trim() || null
     const previousCustomTitle = previousTabs.get(tab.tabId)?.customTitle?.trim() || null
     if (customTitle) {

@@ -154,11 +154,10 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
     }
   }
 
-  resolveRealTabIdForPty(ptyId: string, worktreeId?: string, handle?: string): string | null {
+  resolveRealTabIdForPty(ptyId: string, worktreeId?: string, _handle?: string): string | null {
     return resolveRealTabIdFromRuntimeState({
       ptyId,
       worktreeId,
-      handle,
       ptysById: this.ptysById,
       leaves: this.leaves,
       mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
@@ -248,12 +247,15 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
         }
       }
     }
+    const handlePtyId = handle
+      ? (this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.handles.get(handle)?.ptyId)
+      : undefined
     for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
       for (const tab of snapshot.tabs) {
         const matchesTab =
           (Boolean(tabId) &&
             (tab.id === tabId || (tab.type === 'terminal' && tab.parentTabId === tabId))) ||
-          (Boolean(handle) && tab.type === 'terminal' && tab.terminal === handle)
+          (Boolean(handlePtyId) && tab.type === 'terminal' && tab.ptyId === handlePtyId)
         if (matchesTab) {
           if (tab.type === 'agent-session' && tab.sessionId) {
             return tab.sessionId

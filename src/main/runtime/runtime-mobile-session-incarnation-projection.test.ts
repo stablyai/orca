@@ -64,3 +64,61 @@ it.each(['pty', 'leaf', 'unknown', 'disconnected'] as const)(
     }
   }
 )
+
+it('preserves title-derived launchAgent when a session custom title masks the live agent title', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection reads only ptyId, connected, incarnationId, providerSessionId, and title fields from the record.
+  const pty = {
+    ptyId: 'live-pty',
+    connected: true,
+    incarnationId: 'live-incarnation',
+    providerSessionId: 'session-123',
+    title: '✳ Claude Code',
+    titleUpdatedAt: 100
+  } as RuntimePtyWorktreeRecord
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements every host member this projection path calls.
+  const host = {
+    tabs: new Map(),
+    leaves: new Map(),
+    ptysById: new Map([[pty.ptyId, pty]]),
+    getLiveBrowserTabs: () => new Map(),
+    getProviderSessionRows: () => [],
+    getProviderSessionSnapshot: () => [],
+    getLeafKey: () => 'leaf',
+    findPty: () => pty,
+    getRetainedStatus: () => null,
+    getTrackedTitle: () => null,
+    getTitleDisplayClear: () => null,
+    getSessionCustomTitle: (id: string) => (id === 'session-123' ? 'My Renamed Session' : null),
+    issuePtyHandle: vi.fn(() => 'handle'),
+    recordPty: vi.fn(() => pty),
+    buildPtyStatus: () => ({}),
+    sanitizeGroups: () => [],
+    pruneGroupLayout: () => null,
+    collectTabIds: () => new Set()
+  } as unknown as RuntimeMobileSessionProjectionHost
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one terminal tab is the only snapshot field this projection path reads.
+  const snapshot = {
+    worktree: 'workspace',
+    publicationEpoch: 'headless:epoch',
+    tabs: [
+      {
+        type: 'terminal',
+        id: 'tab::leaf',
+        parentTabId: 'tab',
+        leafId: 'leaf',
+        ptyId: 'live-pty',
+        incarnationId: 'live-incarnation',
+        title: '✳ Claude Code',
+        isActive: true
+      }
+    ]
+  } as RuntimeMobileSessionTabsSnapshot
+
+  const tab = projectRuntimeMobileSessionTabs(snapshot, host).tabs[0]
+  expect(tab).toMatchObject({
+    type: 'terminal',
+    title: 'My Renamed Session',
+    customTitle: 'My Renamed Session',
+    launchAgent: 'claude'
+  })
+})
