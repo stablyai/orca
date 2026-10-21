@@ -49,6 +49,7 @@ rl.on('line', async line => {
 
 const EOF_SCRIPT = `
 let stopping = false;
+const output = process.argv[2] === 'stdout' ? process.stdout : process.stderr;
 process.stdin.resume();
 process.stdin.on('end', () => stopping = true);
 process.stdin.once('data', async () => {
@@ -56,13 +57,39 @@ process.stdin.once('data', async () => {
     process.stdout.write(JSON.stringify({id: 1, result: {}}) + '\\n');
   }
   while (!stopping) {
-    await new Promise(resolve => process.stderr.write(Buffer.alloc(65536, 97), resolve));
+    await new Promise(resolve => output.write(Buffer.alloc(65536, 97), resolve));
     await new Promise(setImmediate);
   }
 });
 `
 
 describe('Codex RPC over backpressured worker output', () => {
+  it('rejects an oversized stdout line and gracefully exits after detaching listeners', async () => {
+    const host = createHost()
+    const child = host.spawn({
+      program: process.execPath,
+      args: ['-e', EOF_SCRIPT, 'no-init', 'stdout']
+    })
+    host.releaseOutput()
+    const terminate = vi.fn(() => terminateCodexProbeChild(child, { platform: 'win32' }))
+    const result = readCodexRateLimitsViaRpc({
+      child,
+      codexCommand: 'fixture',
+      initTimeoutMs: 30_000,
+      rpcTimeoutMs: 10_000,
+      terminate
+    })
+
+    await expect(result).resolves.toMatchObject({
+      status: 'error',
+      error: 'Codex usage response was too large'
+    })
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.exitCode).toBe(0)
+  })
+
   it('delivers valid replies after noisy stderr drains without extending the RPC deadlines', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const host = createHost()

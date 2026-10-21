@@ -1,4 +1,6 @@
+import { StringDecoder } from 'node:string_decoder'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import { createIncrementalNdjsonFramer } from '../../shared/main-process-ndjson-framer'
 import { extractCodexAuthError } from '../../shared/codex-auth-errors'
 import {
   excerptAgentFailureOutput,
@@ -9,31 +11,17 @@ import { redactString } from '../observability/redactor'
 import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
-  CODEX_WEEKLY_WINDOW_MINUTES,
-  type CodexRateLimitWindowsSnapshot
+  CODEX_WEEKLY_WINDOW_MINUTES
 } from './codex-rate-limit-window-classification'
 import { mapCodexCredits } from './codex-credit-balance'
 import { classifyCodexRpcErrorFailureKind } from './codex-rpc-failure-kind'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
 import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
-import {
-  mapRpcRateLimitResetCredits,
-  type RpcRateLimitResetCredits
-} from './codex-reset-credit-client'
+import { mapRpcRateLimitResetCredits } from './codex-reset-credit-client'
+import { parseCodexRateLimitRpcResponse } from './codex-rpc-rate-limit-response'
 
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
-
-type RpcResponse = {
-  id: number
-  result?: unknown
-  error?: { code: number; message: string }
-}
-
-type RpcRateLimitsResponse = {
-  rateLimits?: CodexRateLimitWindowsSnapshot | null
-  rateLimitResetCredits?: RpcRateLimitResetCredits
-}
 
 type RpcDataStream = {
   on(event: 'data', listener: (chunk: Buffer) => void): unknown
@@ -77,13 +65,33 @@ export function readCodexRateLimitsViaRpc(
 ): Promise<ProviderRateLimits> {
   return new Promise<ProviderRateLimits>((resolve) => {
     const { child, codexCommand, fetchOptions } = options
-    let buffer = ''
+    const decoder = new StringDecoder('utf8')
     let stderr = ''
     let resolved = false
     let rpcId = 0
     let timeout: ReturnType<typeof setTimeout> | null = null
+    const framer = createIncrementalNdjsonFramer(
+      onRpcRecord,
+      (rejected) => {
+        if (rejected.kind === 'line-too-long') {
+          settle(
+            {
+              provider: 'codex',
+              session: null,
+              weekly: null,
+              updatedAt: Date.now(),
+              error: 'Codex usage response was too large',
+              status: 'error'
+            },
+            { kill: true }
+          )
+        }
+      },
+      { shouldPause: () => resolved }
+    )
 
     function cleanupListeners(): void {
+      framer.reset()
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
@@ -161,7 +169,7 @@ export function readCodexRateLimitsViaRpc(
     }
 
     function onError(error: Error): void {
-      const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
+      const isEnoent = 'code' in error && error.code === 'ENOENT'
       const isBareCommand = codexCommand === 'codex'
       settle(
         {
@@ -203,68 +211,70 @@ export function readCodexRateLimitsViaRpc(
     let initId: number
 
     function onStdoutData(chunk: Buffer): void {
-      buffer += chunk.toString()
-      let newlineIdx: number
-      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, newlineIdx).trim()
-        buffer = buffer.slice(newlineIdx + 1)
-        if (!line) {
-          continue
+      if (resolved) {
+        return
+      }
+      framer.feed(decoder.write(chunk))
+      // Settlement inside feed can precede it queuing the rest of this chunk.
+      if (resolved) {
+        framer.reset()
+      }
+    }
+
+    function onRpcRecord(record: unknown): void {
+      const message = parseCodexRateLimitRpcResponse(record)
+      if (!message || resolved) {
+        return
+      }
+      try {
+        if (message.id === initId) {
+          armRpcDeadline(options.rpcTimeoutMs)
+          try {
+            sendNotification('initialized')
+            rateLimitsId = sendRpc('account/rateLimits/read')
+          } catch (error) {
+            onError(error instanceof Error ? error : new Error(String(error)))
+          }
+          return
         }
-        try {
-          const message = JSON.parse(line) as RpcResponse
-          if (message.id == null) {
-            continue
-          }
-          if (message.id === initId) {
-            armRpcDeadline(options.rpcTimeoutMs)
-            try {
-              sendNotification('initialized')
-              rateLimitsId = sendRpc('account/rateLimits/read')
-            } catch (error) {
-              onError(error instanceof Error ? error : new Error(String(error)))
-            }
-            continue
-          }
-          if (rateLimitsId === null || message.id !== rateLimitsId || resolved) {
-            continue
-          }
-          if (message.error) {
-            const failureKind = classifyCodexRpcErrorFailureKind(message.error.message)
-            settle(
-              {
-                provider: 'codex',
-                session: null,
-                weekly: null,
-                updatedAt: Date.now(),
-                error: withMacTailscaleDnsHint(message.error.message, stderr),
-                status: 'error',
-                ...(failureKind ? { usageMetadata: { failureKind } } : {})
-              },
-              { kill: true }
-            )
-            return
-          }
-          const wrapper = message.result as RpcRateLimitsResponse | undefined
-          const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
-          const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
-          const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
+        if (rateLimitsId === null || message.id !== rateLimitsId || resolved) {
+          return
+        }
+        if (message.error) {
+          const failureKind = classifyCodexRpcErrorFailureKind(message.error.message)
           settle(
             {
               provider: 'codex',
-              session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-              weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
-              ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
-              ...(extraUsage ? { extraUsage } : {}),
+              session: null,
+              weekly: null,
               updatedAt: Date.now(),
-              error: null,
-              status: 'ok'
+              error: withMacTailscaleDnsHint(message.error.message, stderr),
+              status: 'error',
+              ...(failureKind ? { usageMetadata: { failureKind } } : {})
             },
             { kill: true }
           )
-        } catch {
-          // Non-JSON output from the RPC server is not part of the protocol stream.
+          return
         }
+        const wrapper = message.result
+        const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
+        const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
+        const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
+        settle(
+          {
+            provider: 'codex',
+            session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
+            weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
+            ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
+            ...(extraUsage ? { extraUsage } : {}),
+            updatedAt: Date.now(),
+            error: null,
+            status: 'ok'
+          },
+          { kill: true }
+        )
+      } catch {
+        // Malformed responses do not settle the pending request.
       }
     }
 
