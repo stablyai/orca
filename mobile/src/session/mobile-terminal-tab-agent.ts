@@ -68,8 +68,11 @@ export function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   // Why: strip the leading agent status glyph (✳ etc.) once the tab shows the
   // provider icon. Mobile falls back for glyph-only titles because iOS can
   // render the bare status glyph as a stray colored box beside the icon.
-  if (resolveMobileTerminalTabAgentId(tab)) {
-    return stripLeadingAgentTitleDecorationOrEmpty(tab.title) || 'Terminal'
+  const agent = resolveMobileTerminalTabAgentId(tab)
+  if (agent) {
+    const title = stripLeadingAgentTitleDecorationOrEmpty(tab.title) || 'Terminal'
+    // Why: Cursor CLI animates ` - ⏳ Working ...` after the task name; it is status, not the name.
+    return agent === 'cursor' ? title.replace(/ - ⏳ Working(?: [.·]{1,3})?$/u, '') : title
   }
   return tab.title || 'Terminal'
 }

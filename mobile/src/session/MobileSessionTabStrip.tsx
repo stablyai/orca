@@ -16,10 +16,12 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionTabStrip({
   controller,
-  inTopBar
+  inTopBar,
+  tabTitles
 }: {
   controller: MobileSessionController
   inTopBar: boolean
+  tabTitles: ReadonlyMap<string, string>
 }) {
   const {
     connState,
@@ -136,7 +138,7 @@ export function MobileSessionTabStrip({
                 style={[styles.tabText, t.id === activeSessionTabId && styles.tabTextActive]}
                 numberOfLines={1}
               >
-                {getMobileSessionTabTitle(t)}
+                {tabTitles.get(t.id) ?? getMobileSessionTabTitle(t)}
               </Text>
             </View>
           </Pressable>

@@ -8,10 +8,13 @@ import { styles } from './mobile-session-styles'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileSessionTabTitles } from './use-mobile-session-tab-titles'
 
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
   const {
     hostId,
+    worktreeId,
+    desktopTabTitles,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     connState,
@@ -30,8 +33,14 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = useResponsiveLayout().isLandscapePhone && hasTabs
+  // Why: the strip remounts when it moves into or out of the top bar; names held here survive that.
+  const tabTitles = useMobileSessionTabTitles(
+    visibleTabs,
+    JSON.stringify([hostId, worktreeId]),
+    desktopTabTitles
+  )
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip controller={controller} inTopBar={tabsInTopBar} />
+    <MobileSessionTabStrip controller={controller} inTopBar={tabsInTopBar} tabTitles={tabTitles} />
   ) : null
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>

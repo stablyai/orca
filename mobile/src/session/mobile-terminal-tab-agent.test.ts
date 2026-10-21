@@ -86,6 +86,23 @@ describe('resolveMobileTerminalTabOwnedAgentId', () => {
 })
 
 describe('getMobileSessionTabTitle', () => {
+  it("strips Cursor CLI's animated working dots from the task name", () => {
+    for (const dots of ['...', '..·', '.··', '···']) {
+      expect(
+        getMobileSessionTabTitle(
+          terminalTab(`Fix tab titles - ⏳ Working ${dots}`, { agentType: 'cursor' })
+        )
+      ).toBe('Fix tab titles')
+    }
+  })
+
+  it('leaves the same suffix alone for every other agent', () => {
+    for (const agentType of ['dsb', 'claude', 'codex', 'grok']) {
+      const title = 'Task name - ⏳ Working ...'
+      expect(getMobileSessionTabTitle(terminalTab(title, { agentType }))).toBe(title)
+    }
+  })
+
   it('strips leading agent decorations when an icon is shown', () => {
     expect(getMobileSessionTabTitle(terminalTab('✦ Gemini CLI'))).toBe('Gemini CLI')
   })

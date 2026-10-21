@@ -4,12 +4,27 @@
   "family": "session.terminal-inventory",
   "namedDeltas": [],
   "values": {
-    "34f7b35ae07c": {
-      "name": "terminal.list#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}"
+    "580c77c4c1df": {
+      "known": [
+        {
+          "handle": "terminal-1",
+          "terminalTheme": {
+            "$rpc": "undefined"
+          },
+          "title": "one"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "terminalTheme": {
+            "$rpc": "undefined"
+          },
+          "title": "one"
+        }
+      ]
     },
-    "43914be59abe": {
+    "755f614a3fe5": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -20,7 +35,7 @@
         {
           "name": "params",
           "value": {
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -53,26 +68,6 @@
         }
       }
     },
-    "580c77c4c1df": {
-      "known": [
-        {
-          "handle": "terminal-1",
-          "terminalTheme": {
-            "$rpc": "undefined"
-          },
-          "title": "one"
-        }
-      ],
-      "terminals": [
-        {
-          "handle": "terminal-1",
-          "terminalTheme": {
-            "$rpc": "undefined"
-          },
-          "title": "one"
-        }
-      ]
-    },
     "84e5ca07cb7a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -88,6 +83,11 @@
       "name": "prune-live-input",
       "ordinal": 3,
       "value": ["terminal-1"]
+    },
+    "f3f4dfba2bc0": {
+      "name": "terminal.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":true}}"
     }
   },
   "recording": {
@@ -96,8 +96,8 @@
       {
         "id": "deduped",
         "observation": {
-          "sender": ["43914be59abe"],
-          "payloads": ["34f7b35ae07c"],
+          "sender": ["755f614a3fe5"],
+          "payloads": ["f3f4dfba2bc0"],
           "settlements": {
             "fetch": "84e5ca07cb7a"
           },
