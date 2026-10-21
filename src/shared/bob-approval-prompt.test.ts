@@ -70,6 +70,19 @@ describe('Bob approval prompt detection', () => {
     expect(textShowsBobApprovalPrompt(SUBAGENT_SPAWN_APPROVAL)).toBe(true)
   })
 
+  // Why: Bob 2.0.5+ renders the TUI in the user's locale; the modal must still be recognised.
+  it('matches the modals and composer in a translated locale', () => {
+    const detector = createBobApprovalPromptDetector({ startupCommand: null })
+    const germanComposer = '  ❯   Baue Alles, @ für Kontext, / für Befehle, $ für Skills\n'
+    const germanCommandApproval = '  Approve commands:\n  → Einmalig genehmigen\n    Ablehnen\n'
+    const japaneseSpawnApproval =
+      '  Subagent (general)\n  → 一度だけ承認\n    タスク用にsubagent個のツールを承認\n    拒否\n'
+    expect(textShowsBobApprovalPrompt(germanCommandApproval)).toBe(true)
+    expect(textShowsBobApprovalPrompt(japaneseSpawnApproval)).toBe(true)
+    expect(textShowsBobApprovalPrompt('    タスク用にsubagent個のツールを承認\n')).toBe(true)
+    expect(countFirings(detector, [germanComposer, germanCommandApproval])).toBe(1)
+  })
+
   it('ignores an idle composer and ordinary output', () => {
     expect(textShowsBobApprovalPrompt(IDLE_COMPOSER)).toBe(false)
     expect(textShowsBobApprovalPrompt('$ git commit -m "approve the change"')).toBe(false)

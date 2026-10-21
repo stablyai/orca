@@ -1,12 +1,18 @@
-import { BOB_COMPOSER_PLACEHOLDER_PREFIX } from './bob-composer-placeholder'
+import {
+  BOB_APPROVE_GROUP_TOOLS_TEMPLATES,
+  BOB_APPROVE_ONCE_LABELS,
+  BOB_COMPOSER_PLACEHOLDER_PREFIXES
+} from './bob-tui-strings'
+import { escapeRegex } from './string-utils'
 import { stripTerminalControl } from './terminal-control-stripping'
 
 /**
  * Detects IBM Bob's approval modals in rendered PTY output.
  *
- * Why a screen rule at all: Bob 2.0.2 has no hook for a pending approval. `PreToolUse` fires
- * *before* the modal and then Bob emits nothing until the user answers, so a hook-only pane sits
- * on `working` while it is actually blocked — no attention row, no bell, no notification.
+ * Why a screen rule at all: Bob (2.0.2 through 2.0.6) has no hook for a pending approval.
+ * `PreToolUse` fires *before* the modal and then Bob emits nothing until the user answers, so a
+ * hook-only pane sits on `working` while it is actually blocked — no attention row, no bell, no
+ * notification.
  *
  * Written against committed transcripts (`src/main/runtime/__fixtures__/bob-approval-*.txt`,
  * Bob 2.0.2, 120x40), which show two different modals:
@@ -20,18 +26,29 @@ import { stripTerminalControl } from './terminal-control-stripping'
  *
  * `→ Approve Once` is the only line both shapes share, so it is the primary signal; the
  * shape-specific lines are kept so a future Bob that relabels the menu item still matches one.
+ * Bob 2.0.6 adds `Approve for task` and `Modify with external editor` rows under the same
+ * first row (bundle strings; no 2.0.6 transcript yet). Every label is matched in all of Bob's
+ * locales (see bob-tui-strings.ts).
  */
+const LINE_START = '(?:^|[\\r\\n])[^\\S\\r\\n]*'
+
+function anyOf(labels: readonly string[]): string {
+  return `(?:${labels.map(escapeRegex).join('|')})`
+}
+
 const BOB_APPROVAL_RES = [
-  /(?:^|[\r\n])[^\S\r\n]*→[^\S\r\n]*Approve Once\b/,
+  new RegExp(`${LINE_START}→[^\\S\\r\\n]*${anyOf(BOB_APPROVE_ONCE_LABELS)}(?!\\S)`),
   /(?:^|[\r\n])[^\S\r\n]*Approve commands:/,
-  /(?:^|[\r\n])[^\S\r\n]*Approve subagent tools for task\b/
+  new RegExp(
+    `${LINE_START}${anyOf(BOB_APPROVE_GROUP_TOOLS_TEMPLATES).replaceAll('\\{\\{group\\}\\}', '\\S+')}(?!\\S)`
+  )
 ] as const
 
-// Why: the composer placeholder is Bob-only chrome (captured on 2.0.2), so seeing it once proves
-// the pane is really running Bob before the approval regexes — which say nothing about identity
-// on their own — are allowed to fire. Mirrors command-code's own banner self-arm.
+// Why: the composer placeholder is Bob-only chrome, so seeing it once proves the pane is really
+// running Bob before the approval regexes — which say nothing about identity on their own — are
+// allowed to fire. Mirrors command-code's own banner self-arm.
 const BOB_BANNER_RE = new RegExp(
-  `(?:^|[\\r\\n])[^\\S\\r\\n]*❯[^\\S\\r\\n]*${BOB_COMPOSER_PLACEHOLDER_PREFIX}`
+  `${LINE_START}❯[^\\S\\r\\n]*${anyOf(BOB_COMPOSER_PLACEHOLDER_PREFIXES)}`
 )
 
 // Why: a modal line (or the banner) can straddle several PTY writes, so each write is judged
@@ -102,8 +119,9 @@ export function createBobApprovalPromptDetector(args: {
       const frame = `${previous}${data}`
       carryOver = frame.slice(-CARRY_OVER_LIMIT)
       // Why the cheap prefilters before stripping: every PTY write on a Bob pane reaches here.
-      const mayShowModal = frame.includes('Approve')
-      const mayShowComposer = frame.includes('Anything')
+      // The glyphs are the locale-independent part of each line.
+      const mayShowModal = frame.includes('→') || frame.includes('Approve')
+      const mayShowComposer = frame.includes('❯')
       if (!mayShowModal && !mayShowComposer) {
         return false
       }

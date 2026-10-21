@@ -476,6 +476,15 @@ describe('createDraftPasteReadyScanner', () => {
       })
     })
 
+    // Why: Bob 2.0.5+ translates the placeholder per the user's locale.
+    it('resolves on a translated composer prefix', () => {
+      const scanner = createDraftPasteReadyScanner('bob-composer-prompt')
+      expect(scanner.observe('❯ 何でも作成、@ でコンテキスト、/ でコマンド、$ で Skill')).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+
     it('does not treat a Powerlevel10k prompt as Bob readiness', () => {
       const scanner = createDraftPasteReadyScanner('bob-composer-prompt')
       expect(scanner.observe(POWERLEVEL10K_PROMPT)).toEqual({
