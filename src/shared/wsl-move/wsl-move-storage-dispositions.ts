@@ -162,21 +162,37 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'Native chat journal: chats stay local on the desktop (owner decision C), never moved.'
       )
     ),
+    ...tables('orchestration', ['worker_dispatches', 'worker_terminal_resources'], {
+      disposition: 'rewrite-desktop',
+      item: 53,
+      note: "worktree_id of a settled local dispatch becomes the host's id (D1b-7e); a live one holds the store until it settles. Chat and federated workers and JSON receipts stay as written."
+    }),
+    ...tables(
+      'orchestration',
+      ['remote_dispatch_attachments'],
+      notApplicableDisposition(
+        53,
+        'What this computer told a remote home as its worker; that home reaches this runtime, which does not serve the host ids.'
+      )
+    ),
+    ...tables(
+      'orchestration',
+      ['federated_dispatches', 'federation_relay_items'],
+      notApplicableDisposition(53, "Another host's worktree ids and relayed messages.")
+    ),
+    ...tables(
+      'orchestration',
+      ['dispatch_contexts', 'runs', 'tasks', 'run_coordinator_handles', 'coordinator_runs'],
+      notApplicableDisposition(
+        53,
+        'Handles, pane keys (tab and leaf ids are kept) and the host scope a process ran in, which stays true of it.'
+      )
+    ),
     ...tables(
       'orchestration',
       [
-        'worker_dispatches',
-        'worker_terminal_resources',
         'worker_terminal_archives',
         'worker_terminal_archives_v39',
-        'remote_dispatch_attachments',
-        'federated_dispatches',
-        'federation_relay_items',
-        'dispatch_contexts',
-        'coordinator_runs',
-        'run_coordinator_handles',
-        'runs',
-        'tasks',
         'decision_gates',
         'deliveries',
         'deliveries_new',
@@ -185,22 +201,31 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'messages_new',
         'question_threads',
         'remote_questions',
+        'attempt_observation_facts',
+        'structured_pointer_operations'
+      ],
+      notApplicableDisposition(53, 'Keyed by run, task, dispatch, message or handle ids.')
+    ),
+    ...tables(
+      'orchestration',
+      [
         'mutation_receipts',
         'mutation_receipt_ledger',
         'mutation_caller_identities',
         'legacy_adoptions',
         'legacy_compatibility_principals',
         'legacy_mail_receipts',
-        'legacy_operation_receipts',
-        'attempt_observation_facts',
-        'structured_pointer_operations',
-        'won'
+        'legacy_operation_receipts'
       ],
-      {
-        disposition: 'rewrite-desktop',
-        item: 53,
-        note: 'History is rewritten in place; an active run or dispatch in scope blocks the move.'
-      }
+      notApplicableDisposition(
+        53,
+        'Idempotency receipts: a replay returns the bytes first answered.'
+      )
+    ),
+    ...tables(
+      'orchestration',
+      ['won'],
+      notApplicableDisposition(53, "Not a table: the census reads it from migrate.ts's comment.")
     ),
     ...tables('profile-state', ['profile_state_documents'], {
       disposition: 'per-field',

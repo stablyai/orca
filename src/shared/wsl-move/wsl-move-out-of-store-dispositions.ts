@@ -31,7 +31,12 @@ export const OUT_OF_STORE_DISPOSITIONS: readonly (WslMoveFieldDisposition & {
     item: 52,
     note: 'Chats stay local on the desktop (owner decision C); the journal is not moved.'
   },
-  { store: 'orchestration.db', disposition: 'rewrite-desktop', item: 53 },
+  {
+    store: 'orchestration.db',
+    disposition: 'rewrite-desktop',
+    item: 53,
+    note: 'Per table in SQLITE_TABLE_DISPOSITIONS (D1b-7e).'
+  },
   {
     store: 'codex-pane-accounts.json',
     disposition: 'not-applicable',

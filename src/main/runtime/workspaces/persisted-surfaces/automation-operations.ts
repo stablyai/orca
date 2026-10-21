@@ -16,7 +16,7 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
-import { join } from 'node:path'
+import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
 import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
@@ -164,7 +164,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   }
 
   private orchestrationDbPath(): string {
-    return join(getAppEnvironment().getPath('userData'), 'orchestration.db')
+    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {

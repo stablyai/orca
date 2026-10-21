@@ -87,9 +87,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   sshPtyConsumerRecoveries: notApplicableDisposition(60),
   migrationUnsupportedPtyEntries: { disposition: 'gate', item: 20 },
   legacyPaneKeyAliasEntries: { disposition: 'gate', item: 20 },
-  automations: moveDisposition(18),
+  automations: moveDisposition(18, {
+    note: "The host runs the moved copy; the desktop's stays unchanged, and its scheduler only advances it (no rewrite in D1b-7e)."
+  }),
   automationRuns: moveDisposition(19, {
-    note: 'An in-flight run in scope blocks the move.'
+    note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
