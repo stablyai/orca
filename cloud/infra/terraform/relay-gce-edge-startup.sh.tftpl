@@ -1,0 +1,178 @@
+#!/bin/bash
+set -euo pipefail
+
+readonly state_dir="/var/lib/orca-relay-edge"
+readonly envoy_uid=65532 # the Envoy image's nonroot user
+
+mkdir -p "$${state_dir}/envoy" "$${state_dir}/sds" "$${state_dir}/eds" "$${state_dir}/lego" "$${state_dir}/bin"
+chmod 0711 "$${state_dir}"
+chown "$${envoy_uid}:$${envoy_uid}" "$${state_dir}/envoy" "$${state_dir}/sds" "$${state_dir}/eds"
+chmod 0700 "$${state_dir}/sds"
+
+systemctl start docker
+for _ in $(seq 1 60); do
+  if docker info >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+docker info >/dev/null
+
+cat > "$${state_dir}/envoy/envoy.yaml" <<'ORCA_EDGE_ENVOY'
+${envoy_config}
+ORCA_EDGE_ENVOY
+chown "$${envoy_uid}:$${envoy_uid}" "$${state_dir}/envoy/envoy.yaml"
+
+# Writes Envoy's secret as one rename; Envoy keeps serving the previous pair until it lands.
+cat > "$${state_dir}/bin/publish.sh" <<'ORCA_EDGE_PUBLISH'
+#!/bin/sh
+set -eu
+cert="/acme/certificates/${fqdn}.crt"
+key="/acme/certificates/${fqdn}.key"
+[ -s "$cert" ] && [ -s "$key" ] || exit 0
+umask 077
+tmp=/sds/.tls.yaml.next
+{
+  printf 'resources:\n'
+  printf -- '- "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.Secret\n'
+  printf '  name: cell\n  tls_certificate:\n    certificate_chain:\n      inline_string: |\n'
+  sed 's/^/        /' "$cert"
+  printf '    private_key:\n      inline_string: |\n'
+  sed 's/^/        /' "$key"
+} > "$tmp"
+if [ -f /sds/tls.yaml ] && cmp -s "$tmp" /sds/tls.yaml; then
+  rm -f "$tmp"
+  exit 0
+fi
+chown "$${ENVOY_UID}:$${ENVOY_UID}" "$tmp"
+mv -f "$tmp" /sds/tls.yaml
+echo "[orca-relay-edge] certificate published"
+ORCA_EDGE_PUBLISH
+
+# lego run issues when no certificate exists and renews only when one is due, so twice a day is
+# cheap. A failure here is the renewal alert's signal; the current certificate keeps serving.
+cat > "$${state_dir}/bin/renew-loop.sh" <<'ORCA_EDGE_RENEW'
+#!/bin/sh
+set -u
+while :; do
+  # Without the CNAME, lego would write the answer under the cell's own name, which this zone
+  # cannot hold; say what is missing instead of spending an ACME order on it.
+  if ! nslookup -type=CNAME '_acme-challenge.${fqdn}' 2>/dev/null | grep -q 'canonical name'; then
+    echo "[orca-relay-edge] certificate check failed: _acme-challenge.${fqdn} has no CNAME"
+  elif /lego run --path /acme --server '${acme_server}' --accept-tos --dns gcloud --domains '${fqdn}'; then
+    sh /edge-bin/publish.sh || echo "[orca-relay-edge] certificate publish failed"
+    echo "[orca-relay-edge] certificate check ok"
+  else
+    echo "[orca-relay-edge] certificate check failed exit=$?"
+  fi
+  # Retry a missing first certificate within the CA's five-failures-an-hour limit.
+  if grep -q tls_certificate /sds/tls.yaml 2>/dev/null; then sleep 43200; else sleep 900; fi
+done
+ORCA_EDGE_RENEW
+
+# The cell VM keeps its name across a MIG recreate but not its address, so follow it by label.
+# A failed lookup keeps the last address; a cell with no running VM gets no endpoint (503). Each
+# minute it also logs Envoy's live stream counts, the denominator for drops through this edge.
+cat > "$${state_dir}/bin/discover.sh" <<'ORCA_EDGE_DISCOVER'
+#!/bin/sh
+set -u
+token_url='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'
+list_url='${cell_list_url}'
+current=unset
+tick=0
+while :; do
+  token="$(wget -q -T 5 -O - --header 'Metadata-Flavor: Google' "$token_url" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')"
+  if [ -n "$token" ] && body="$(wget -q -T 10 -O - --header "Authorization: Bearer $token" "$list_url")"; then
+    addresses="$(printf '%s' "$body" | grep -o '"networkIP": *"[0-9.]*"' | grep -o '[0-9.]*' | sort | tr '\n' ' ' | sed 's/ $//')"
+    if [ "$addresses" != "$current" ]; then
+      {
+        printf 'resources:\n'
+        printf -- '- "@type": type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment\n'
+        printf '  cluster_name: cell\n  endpoints:\n  - lb_endpoints:\n'
+        for address in $addresses; do
+          printf '    - endpoint: { address: { socket_address: { address: %s, port_value: 8080 } } }\n' "$address"
+        done
+        [ -n "$addresses" ] || printf '    []\n'
+      } > /eds/.cell.yaml.next
+      chmod 0644 /eds/.cell.yaml.next
+      mv -f /eds/.cell.yaml.next /eds/cell.yaml
+      echo "[orca-relay-edge] cell endpoints now: $${addresses:-none}"
+      current="$addresses"
+    fi
+  else
+    echo "[orca-relay-edge] cell lookup failed; keeping: $${current:-none}"
+  fi
+  if [ $((tick % 12)) -eq 0 ] && stats="$(wget -q -T 3 -O - 'http://orca-relay-edge:9901/stats')"; then
+    stat() { v="$(printf '%s\n' "$stats" | sed -n "s/^$1: \([0-9]*\)$/\1/p" | head -n 1)"; printf '%s' "$${v:-0}"; }
+    printf '{"event":"orca_relay_edge_stats","downstreamActive":%s,"upgradesActive":%s,"upstreamActive":%s,"upstreamConnectFailures":%s,"tlsHandshakeErrors":%s}\n' \
+      "$(stat 'http\.cell\.downstream_cx_active')" "$(stat 'http\.cell\.downstream_cx_upgrades_active')" \
+      "$(stat 'cluster\.cell\.upstream_cx_active')" "$(stat 'cluster\.cell\.upstream_cx_connect_fail')" \
+      "$(stat 'listener\.0\.0\.0\.0_8443\.ssl\.connection_error')"
+  fi
+  tick=$((tick + 1))
+  sleep 5
+done
+ORCA_EDGE_DISCOVER
+
+chmod 0755 "$${state_dir}/bin/publish.sh" "$${state_dir}/bin/renew-loop.sh" "$${state_dir}/bin/discover.sh"
+
+docker pull '${lego_image}'
+docker pull '${envoy_image}'
+docker rm --force orca-relay-edge-acme orca-relay-edge-discovery orca-relay-edge >/dev/null 2>&1 || true
+# A named network lets the discovery loop reach Envoy's admin port, which is never published.
+docker network inspect orca-relay-edge >/dev/null 2>&1 || docker network create orca-relay-edge >/dev/null
+
+docker run --detach \
+  --name orca-relay-edge-acme \
+  --network orca-relay-edge \
+  --restart always \
+  --security-opt no-new-privileges \
+  --cap-drop ALL \
+  --cap-add CHOWN \
+  --cap-add DAC_OVERRIDE \
+  --env GCE_PROJECT='${project_id}' \
+  --env GCE_ZONE_ID='${acme_zone}' \
+  --env ENVOY_UID="$${envoy_uid}" \
+  --volume "$${state_dir}/lego:/acme" \
+  --volume "$${state_dir}/sds:/sds" \
+  --volume "$${state_dir}/bin:/edge-bin:ro" \
+  --entrypoint /bin/sh \
+  '${lego_image}' \
+  /edge-bin/renew-loop.sh
+
+# The lego image is reused for its shell and wget; nothing here runs lego.
+docker run --detach \
+  --name orca-relay-edge-discovery \
+  --network orca-relay-edge \
+  --restart always \
+  --security-opt no-new-privileges \
+  --cap-drop ALL \
+  --user "$${envoy_uid}:$${envoy_uid}" \
+  --volume "$${state_dir}/eds:/eds" \
+  --volume "$${state_dir}/bin:/edge-bin:ro" \
+  --entrypoint /bin/sh \
+  '${lego_image}' \
+  /edge-bin/discover.sh
+
+# Envoy needs the file to exist; with no secret in it a fresh edge refuses TLS rather than
+# serve a wrong certificate, and picks up the first one when the renewer publishes it.
+if [ ! -s "$${state_dir}/sds/tls.yaml" ]; then
+  printf 'resources: []\n' > "$${state_dir}/sds/tls.yaml"
+  chown "$${envoy_uid}:$${envoy_uid}" "$${state_dir}/sds/tls.yaml"
+fi
+docker run --detach \
+  --name orca-relay-edge \
+  --network orca-relay-edge \
+  --restart always \
+  --security-opt no-new-privileges \
+  --cap-drop ALL \
+  --user "$${envoy_uid}:$${envoy_uid}" \
+  --ulimit nofile=1048576:1048576 \
+  --publish 443:8443 \
+  --volume "$${state_dir}/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro" \
+  --volume "$${state_dir}/sds:/etc/envoy/sds:ro" \
+  --volume "$${state_dir}/eds:/etc/envoy/eds:ro" \
+  '${envoy_image}' \
+  -c /etc/envoy/envoy.yaml --log-level warn
+
+systemctl start logging-agent.target

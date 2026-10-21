@@ -485,6 +485,11 @@ relay_gce_cells = {
   }
 }
 
+# c35 is the no-Google-proxy experiment: an Orca-run TLS edge answers c35.relay.onorca.dev once
+# Cloudflare points that name at it (research/relay-redesign/DESIGN-asia-passthrough-c35-2026-10-16.md).
+relay_gce_passthrough_edge_cells = ["production-gce-c35"]
+relay_gce_edge_acme_domain       = "relay-acme.onorca.dev"
+
 relay_region_rehome_source_cell_ids = [
   "production-gce-c7",
   "production-gce-c8",

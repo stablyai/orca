@@ -214,3 +214,21 @@ output "push_dns_record" {
   } : null
   description = "Record the stablyai/orca-cloud apps root must publish in the onorca.dev zone."
 }
+
+output "relay_gce_passthrough_edges" {
+  value = {
+    for cell_id, edge in local.relay_gce_edges : cell_id => {
+      fqdn       = edge.fqdn
+      edge_ip    = google_compute_address.relay_edge[cell_id].address
+      instance   = google_compute_instance.relay_edge[cell_id].name
+      zone       = edge.zone
+      acme_cname = "_acme-challenge.${edge.fqdn} CNAME ${edge.hostname}.${var.relay_gce_edge_acme_domain}"
+    }
+  }
+  description = "Passthrough edge addresses and the Cloudflare records each needs before and at cutover."
+}
+
+output "relay_gce_edge_acme_name_servers" {
+  value       = try(google_dns_managed_zone.relay_edge_acme[0].name_servers, [])
+  description = "Name servers Cloudflare delegates relay_gce_edge_acme_domain to."
+}
