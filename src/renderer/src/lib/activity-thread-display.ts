@@ -105,6 +105,9 @@ export function getActivityThreadTaskTitle(args: {
   >
   tab: ConversationNameTab
   generatedTitlesEnabled: boolean
+  /** This row's own pane title in a split tab (`null` when unresolved); `undefined` for a
+   *  single-pane tab, whose tab title is already the pane's title. */
+  paneLiveTitle?: string | null
 }): string {
   const customTitle = args.tab.customTitle?.trim()
   if (customTitle) {
@@ -123,7 +126,7 @@ export function getActivityThreadTaskTitle(args: {
     args.tab,
     args.entry.agentType,
     args.generatedTitlesEnabled,
-    undefined,
+    args.paneLiveTitle,
     args.entry.providerSession?.id
   )
   if (conversationName) {
