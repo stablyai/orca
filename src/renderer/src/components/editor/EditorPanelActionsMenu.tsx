@@ -21,6 +21,10 @@ type EditorPanelActionsMenuProps = {
   diffShowWhitespace: boolean
   /** File editor wrap preference (`settings.editorWordWrap`). */
   editorWordWrap: boolean
+  /** Whether the active file is a git-backed Monaco text surface. */
+  canShowGitBlameToggle?: boolean
+  /** Current-line blame preference (`settings.editorGitBlame`). */
+  editorGitBlame?: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
@@ -28,6 +32,7 @@ type EditorPanelActionsMenuProps = {
   onToggleDiffWordWrap: () => void
   onToggleDiffWhitespace: () => void
   onToggleEditorWordWrap: () => void
+  onToggleEditorGitBlame?: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
@@ -38,6 +43,8 @@ export function EditorPanelActionsMenu({
   diffWordWrap,
   diffShowWhitespace,
   editorWordWrap,
+  canShowGitBlameToggle = false,
+  editorGitBlame = false,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
@@ -45,6 +52,7 @@ export function EditorPanelActionsMenu({
   onToggleDiffWordWrap,
   onToggleDiffWhitespace,
   onToggleEditorWordWrap,
+  onToggleEditorGitBlame,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelActionsMenuProps): React.JSX.Element {
@@ -82,6 +90,14 @@ export function EditorPanelActionsMenu({
             'Word Wrap'
           )}
         </DropdownMenuCheckboxItem>
+        {canShowGitBlameToggle && onToggleEditorGitBlame ? (
+          <DropdownMenuCheckboxItem
+            checked={editorGitBlame}
+            onCheckedChange={onToggleEditorGitBlame}
+          >
+            {translate('auto.components.editor.EditorPanelActionsMenu.ffd3b6e79d', 'Git Blame')}
+          </DropdownMenuCheckboxItem>
+        ) : null}
         {isDiffSurface ? (
           <DropdownMenuCheckboxItem
             checked={diffShowWhitespace}

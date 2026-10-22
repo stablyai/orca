@@ -34,6 +34,7 @@ type RuntimeGitCommandName =
   | 'bulkUnstageRuntimeGitPaths'
   | 'bulkDiscardRuntimeGitPaths'
   | 'discardRuntimeGitPath'
+  | 'getRuntimeGitFileBlame'
   | 'getRuntimeGitRemoteFileUrl'
   | 'getRuntimeGitRemoteCommitUrl'
 
@@ -78,6 +79,7 @@ export function installRuntimeGitCommandSurface(
     bulkUnstageRuntimeGitPaths: commands.bulkUnstageRuntimeGitPaths.bind(commands),
     bulkDiscardRuntimeGitPaths: commands.bulkDiscardRuntimeGitPaths.bind(commands),
     discardRuntimeGitPath: commands.discardRuntimeGitPath.bind(commands),
+    getRuntimeGitFileBlame: commands.getRuntimeGitFileBlame.bind(commands),
     getRuntimeGitRemoteFileUrl: commands.getRuntimeGitRemoteFileUrl.bind(commands),
     getRuntimeGitRemoteCommitUrl: commands.getRuntimeGitRemoteCommitUrl.bind(commands)
   } satisfies RuntimeGitCommandSurface)

@@ -117,6 +117,12 @@ export const gitApi = {
     oldPath?: string
     connectionId?: string
   }) => ipcRenderer.invoke('git:commitDiff', args),
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    contents?: string
+    connectionId?: string
+  }) => ipcRenderer.invoke('git:blame', args),
   commit: (args: {
     worktreePath: string
     message: string

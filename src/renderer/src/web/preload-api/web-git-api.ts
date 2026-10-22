@@ -3,6 +3,7 @@ import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
+import { createGitFileDiffApi } from './web-git-file-diff-api'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -42,6 +43,7 @@ export async function callAbortableRuntimeStatus<TResult>(
 
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
+    ...createGitFileDiffApi(),
     status: async ({
       worktreePath,
       includeIgnored,
@@ -114,15 +116,6 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
-    diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
-      const file = await resolveRuntimeFilePath(filePath, worktreePath)
-      return callRuntimeResult('git.diff', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        filePath: file.relativePath,
-        staged,
-        compareAgainstHead
-      })
-    },
     branchCompare: async ({ worktreePath, baseRef, admissionTier }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', {
@@ -190,25 +183,6 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       await callRuntimeResult('git.rebaseFromBase', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         baseRef
-      })
-    },
-    branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
-      const file = await resolveRuntimeFilePath(filePath, worktreePath)
-      return callRuntimeResult('git.branchDiff', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        filePath: file.relativePath,
-        compare,
-        oldPath
-      })
-    },
-    commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
-      const file = await resolveRuntimeFilePath(filePath, worktreePath)
-      return callRuntimeResult('git.commitDiff', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        filePath: file.relativePath,
-        commitOid,
-        parentOid,
-        oldPath
       })
     },
     commit: async ({ worktreePath, message }) => {

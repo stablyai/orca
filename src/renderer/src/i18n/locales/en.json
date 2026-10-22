@@ -16138,7 +16138,8 @@
           "631dab0df3": "Next change"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "File actions"
+          "fileActions": "File actions",
+          "ffd3b6e79d": "Git Blame"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -16747,6 +16748,16 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "git": {
+          "blame": {
+            "annotation": {
+              "format": {
+                "8a0cf790c5": "Uncommitted changes",
+                "6e419cb250": "You • Uncommitted changes"
+              }
+            }
+          }
         }
       },
       "diff": {

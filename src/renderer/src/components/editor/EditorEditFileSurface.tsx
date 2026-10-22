@@ -231,6 +231,7 @@ export function EditorEditFileSurface({
         worktreeId={activeFile.worktreeId}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
         conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
+        gitBlameSurface
         revealLine={
           matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.line

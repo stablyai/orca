@@ -24,6 +24,7 @@ const { git } = vi.hoisted(() => ({
     getBranchCompare: vi.fn(),
     getCommitCompare: vi.fn(),
     getCommitDiff: vi.fn(),
+    getFileBlame: vi.fn(),
     getUpstreamStatus: vi.fn(),
     gitPush: vi.fn(),
     gitPull: vi.fn(),
@@ -162,6 +163,12 @@ const cases: ParityCase[] = [
     (p) => p.getCommitDiff(WT, { commitOid: 'abc', filePath: 'a' }),
     'getCommitDiff',
     [WT, { commitOid: 'abc', filePath: 'a' }, interactive]
+  ],
+  [
+    'getFileBlame',
+    (p) => p.getFileBlame(WT, { filePath: 'a', contents: 'x' }),
+    'getFileBlame',
+    [WT, { filePath: 'a', contents: 'x' }, interactive]
   ],
   [
     'getUpstreamStatus',

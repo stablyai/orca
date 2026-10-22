@@ -96,6 +96,11 @@ export const GitCommitDiff = GitFilePath.extend({
   oldPath: z.string().optional()
 })
 
+export const GitBlame = GitFilePath.extend({
+  // Unsaved editor buffer; omitted to blame the file on disk.
+  contents: z.string().optional()
+})
+
 export const GitCommit = WorktreeSelector.extend({
   message: z
     .unknown()

@@ -39,6 +39,7 @@ import { gitChangeListArgs, parseGitChangeList } from './git-change-list'
 import { encodeGitPathspecs } from './git-pathspec-stdin'
 import { GitBinaryTestFixture } from './git-binary.test-fixture'
 import { registerGitRepositoryRegistrationBinaryCompatibilityCase } from './git-repository-registration-binary-compatibility.test-cases'
+import { registerGitBlameBinaryCompatibilityCase } from './git-blame-binary-compatibility.test-cases'
 import { registerGitLocalBaseBranchBinaryCompatibilityCase } from './git-local-base-branch-binary-compatibility.test-cases'
 import { registerGitResolutionBinaryCompatibilityCases } from './git-resolution-binary-compatibility.test-cases'
 import { registerGitWorktreeBinaryCompatibilityCases } from './git-worktree-binary-compatibility.test-cases'
@@ -665,6 +666,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   registerGitLocalBaseBranchBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
+  registerGitBlameBinaryCompatibilityCase(runGit, () => repoPath)
   registerGitResolutionBinaryCompatibilityCases(runGit, (name) =>
     image ? `/repo/${name}.git` : join(repoPath, `${name}.git`)
   )

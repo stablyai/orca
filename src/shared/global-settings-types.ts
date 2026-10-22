@@ -90,6 +90,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /** Opt-in current-line git blame in the file editor; off by default since each file spawns `git blame`. */
+  editorGitBlame?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */

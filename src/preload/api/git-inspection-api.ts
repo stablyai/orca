@@ -10,6 +10,7 @@ import type {
   GitUpstreamStatus
 } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { GitBlameResult } from '../../shared/git-blame-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type {
   CommitMessageAgentCapability,
@@ -100,6 +101,12 @@ export type GitInspectionApi = {
     oldPath?: string
     connectionId?: string
   }) => Promise<GitDiffResult>
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    contents?: string
+    connectionId?: string
+  }) => Promise<GitBlameResult | null>
   discoverCommitMessageModels: (args: {
     agentId: string
     worktreePath?: string

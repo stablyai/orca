@@ -19,6 +19,7 @@ import {
   getCommitCompare,
   getCommitDiff,
   getDiff,
+  getFileBlame,
   getStagedCommitContext,
   getStatus,
   getSubmoduleStatus,
@@ -124,6 +125,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     syncForkDefaultBranch: (worktreePath, expectedUpstream) =>
       gitSyncForkDefaultBranch(worktreePath, expectedUpstream, interactive),
     getCommitDiff: (worktreePath, args) => getCommitDiff(worktreePath, args, interactive),
+    getFileBlame: (worktreePath, args) => getFileBlame(worktreePath, args, interactive),
     listWorktrees: (repoPath, listOptions) =>
       listWorktrees(repoPath, listOptions?.signal ? { ...base, signal: listOptions.signal } : base),
     isGitRepo: (path) => isGitRepo(path),

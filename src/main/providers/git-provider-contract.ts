@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
+import type { GitBlameResult } from '../../shared/git-blame-types'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type {
   GitConflictOperation,
@@ -82,6 +83,10 @@ export type IGitProvider = {
     worktreePath: string,
     args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
   ): Promise<GitDiffResult>
+  getFileBlame(
+    worktreePath: string,
+    args: { filePath: string; contents?: string }
+  ): Promise<GitBlameResult | null>
   listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
   addWorktree(
     repoPath: string,

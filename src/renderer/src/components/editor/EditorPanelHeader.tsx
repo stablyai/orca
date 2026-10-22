@@ -21,6 +21,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from './editor-artifact-upload'
+import { canUseGitBlameForFile } from './editor-panel-file-mode'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -95,6 +96,14 @@ export function EditorPanelHeader({
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   // Why: undefined/true mean wrap on; only explicit false turns wrap off (#9974).
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
+  const editorGitBlame = useAppStore((s) => s.settings?.editorGitBlame === true)
+  // Why: blame renders only in the Monaco text surface, not rich Markdown, previews, or Changes.
+  const canShowGitBlameToggle = useAppStore(
+    (s) =>
+      !isDiffSurface &&
+      (effectiveToggleValue === 'edit' || effectiveToggleValue === 'source') &&
+      canUseGitBlameForFile(s, activeFile)
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
@@ -332,6 +341,8 @@ export function EditorPanelHeader({
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}
         editorWordWrap={editorWordWrap}
+        canShowGitBlameToggle={canShowGitBlameToggle}
+        editorGitBlame={editorGitBlame}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
@@ -341,6 +352,7 @@ export function EditorPanelHeader({
           void updateSettings({ diffShowWhitespace: !diffShowWhitespace })
         }
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
+        onToggleEditorGitBlame={() => void updateSettings({ editorGitBlame: !editorGitBlame })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

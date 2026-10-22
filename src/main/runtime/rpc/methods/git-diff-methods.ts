@@ -1,6 +1,11 @@
 import { defineMethod } from '../core'
 import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
-import { GitBranchDiff, GitCommitDiff, GitDiff } from '../../../../shared/rpc-contract/git-params'
+import {
+  GitBlame,
+  GitBranchDiff,
+  GitCommitDiff,
+  GitDiff
+} from '../../../../shared/rpc-contract/git-params'
 
 // Why: clientKind is set only for WebSocket-transported requests, so desktop-local and in-process
 // callers keep uncapped full-fidelity diffs.
@@ -53,5 +58,12 @@ export const GIT_DIFF_METHODS = [
         },
         remoteDiffContentBudget(clientKind, requestId)
       )
+  }),
+  defineMethod({
+    name: 'git.blame',
+    permission: 'workspace',
+    params: GitBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitFileBlame(params.worktree, params.filePath, params.contents)
   })
 ]

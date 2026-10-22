@@ -32,6 +32,7 @@ export { getBranchCompare } from './source-control/branch-compare'
 export { getBranchDiff } from './source-control/branch-diff'
 export { getCommitCompare } from './source-control/commit-compare'
 export { getCommitDiff } from './source-control/commit-diff'
+export { getFileBlame } from './source-control/file-blame'
 export {
   bulkStageFiles,
   bulkUnstageFiles,

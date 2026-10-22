@@ -10,7 +10,8 @@ vi.mock('../git/status', () => ({
   getBranchDiff: vi.fn(),
   getCommitCompare: vi.fn(),
   getCommitDiff: vi.fn(),
-  getDiff: vi.fn()
+  getDiff: vi.fn(),
+  getFileBlame: vi.fn()
 }))
 vi.mock('../git/repo', () => ({ getRemoteCommitUrl: vi.fn(), getRemoteFileUrl: vi.fn() }))
 vi.mock('../git/runner', () => ({ awaitWindowsHostGitEnvironmentReady: vi.fn() }))
