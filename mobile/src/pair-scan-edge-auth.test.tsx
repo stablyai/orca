@@ -2,7 +2,12 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import PairScanScreen from '../app/pair-scan'
-const mocks = vi.hoisted(() => ({ start: vi.fn(), replace: vi.fn(), platform: { OS: 'ios' } }))
+const mocks = vi.hoisted(() => ({
+  start: vi.fn(),
+  replace: vi.fn(),
+  platform: { OS: 'ios' },
+  cameraGranted: true
+}))
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
@@ -15,7 +20,7 @@ vi.mock('react-native', () => ({
 vi.mock('expo-router', () => ({ useRouter: () => ({ replace: mocks.replace, back: vi.fn() }) }))
 vi.mock('expo-camera', () => ({
   CameraView: 'CameraView',
-  useCameraPermissions: () => [{ granted: true }, vi.fn()]
+  useCameraPermissions: () => [{ granted: mocks.cameraGranted }, vi.fn()]
 }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
@@ -57,6 +62,7 @@ async function render() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.platform.OS = 'ios'
+  mocks.cameraGranted = true
   mocks.start.mockImplementation(() => ({
     result: Promise.reject(new Error('Access required')),
     dispose: vi.fn(),
@@ -125,4 +131,24 @@ it('keeps successful LAN scanning automatic', async () => {
   )
   expect(mocks.start).toHaveBeenCalledTimes(1)
   expect(mocks.replace).toHaveBeenCalledWith('/')
+})
+
+it('offers secure paste recovery even when camera permission is denied', async () => {
+  mocks.cameraGranted = false
+  const screen = await render()
+  const original = code('wss://orca.example')
+  await act(async () =>
+    screen.root
+      .findAll((node) => String(node.type) === 'TextInputModal')[0]
+      ?.props.onSubmit(original)
+  )
+  const recovery = screen.root
+    .findAllByProps({ accessibilityLabel: 'Configure edge authentication' })
+    .find((node) => String(node.type) === 'Pressable')
+  expect(recovery).toBeDefined()
+  act(() => recovery?.props.onPress())
+  expect(mocks.replace).toHaveBeenCalledWith({
+    pathname: '/pair-confirm',
+    params: { code: original }
+  })
 })
