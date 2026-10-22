@@ -91,6 +91,23 @@ describe('automation run view state', () => {
     })
   })
 
+  it.each([
+    { terminalOnPairedServer: true, actionLabel: 'View run' },
+    { terminalOnPairedServer: false, actionLabel: 'Open workspace' }
+  ])(
+    'offers $actionLabel for an unresolved sleeping pane, paired=$terminalOnPairedServer',
+    ({ terminalOnPairedServer, actionLabel }) => {
+      expect(
+        getAutomationRunViewState({
+          run: makeRun({ terminalPtyId: null }),
+          workspaceExists: true,
+          terminalTargetExists: false,
+          terminalOnPairedServer
+        })
+      ).toMatchObject({ actionLabel, canOpen: true })
+    }
+  )
+
   it('resumes the workspace only when there is no exact terminal identity', () => {
     expect(
       getAutomationRunViewState({

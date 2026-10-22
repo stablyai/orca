@@ -105,14 +105,17 @@ export function resolveAutomationRunTerminalTarget(
   const mirroredTabId = toWebTerminalSurfaceTabId(tabId)
   const layout = terminals.terminalLayoutsByTabId[mirroredTabId]
   const mirroredPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+  const mirroredPtyLive =
+    mirroredPtyId !== undefined &&
+    (terminals.ptyIdsByTabId[mirroredTabId] ?? []).includes(mirroredPtyId)
   if (
-    !run.terminalPtyId ||
     !terminals.hasTerminalTab(mirroredTabId) ||
     !layout?.root ||
     !mirroredPtyId ||
     !terminalLayoutContainsLeaf(layout.root, parsed.leafId) ||
     parseRemoteRuntimePtyId(mirroredPtyId)?.environmentId !== ownerEnvironmentId ||
-    !(terminals.ptyIdsByTabId[mirroredTabId] ?? []).includes(mirroredPtyId)
+    // Why: a run slept on its server (#28838) drops its PTY id; its pane waits to wake.
+    (run.terminalPtyId && !mirroredPtyLive)
   ) {
     return null
   }
@@ -120,7 +123,7 @@ export function resolveAutomationRunTerminalTarget(
     tabId: mirroredTabId,
     paneKey: makePaneKey(mirroredTabId, parsed.leafId),
     leafId: parsed.leafId,
-    ptyId: mirroredPtyId
+    ptyId: mirroredPtyLive ? mirroredPtyId : null
   }
 }
 

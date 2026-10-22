@@ -95,13 +95,13 @@ function storeState(mirrored: boolean): Record<string, unknown> {
   }
 }
 
-function openRun(): void {
+function openRun(selectedRun: AutomationRun = run): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action reads only these members.
   const context = {
     store: { repoForRow: () => undefined, worktreeForRow: () => worktree },
     list: { selectedRow: { key: 'row' } }
   } as unknown as AutomationsPageActionContext
-  createAutomationRunWorkspaceAction(context)(run)
+  createAutomationRunWorkspaceAction(context)(selectedRun)
 }
 
 describe('opening a paired-server automation run', () => {
@@ -132,14 +132,46 @@ describe('opening a paired-server automation run', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
-  it('says the terminal is unavailable only when the server has no such pane', async () => {
-    mocks.state = storeState(false)
-    mocks.activateWebRuntimeSessionTab.mockResolvedValueOnce(false)
+  it.each([true, false])('opens a sleeping run with mirror loaded=%s', async (loaded) => {
+    mocks.state = storeState(loaded)
+    mocks.state.ptyIdsByTabId = {}
 
-    openRun()
+    openRun({ ...run, terminalPtyId: null })
 
-    await vi.waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith('Run terminal is unavailable.')
-    )
+    if (loaded) {
+      expect(mocks.state.setActiveTab).toHaveBeenCalledWith(MIRRORED_TAB)
+      expect(mocks.state.setTabLayout).toHaveBeenCalledWith(
+        MIRRORED_TAB,
+        expect.objectContaining({ ptyIdsByLeafId: { [LEAF]: MIRRORED_PTY } })
+      )
+      expect(mocks.activateTerminalTabOnOwner).toHaveBeenCalledWith(WT, MIRRORED_TAB, LEAF)
+    } else {
+      await vi.waitFor(() =>
+        expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalledWith(
+          expect.objectContaining({
+            worktreeId: WT,
+            tabId: HOST_TAB,
+            environmentId: ENV,
+            leafId: LEAF
+          })
+        )
+      )
+    }
+    expect(mocks.toastMessage).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
+
+  it.each([run.terminalPtyId, null])(
+    'reports a missing owner pane with PTY %s',
+    async (terminalPtyId) => {
+      mocks.state = storeState(false)
+      mocks.activateWebRuntimeSessionTab.mockResolvedValueOnce(false)
+
+      openRun({ ...run, terminalPtyId })
+
+      await vi.waitFor(() =>
+        expect(mocks.toastError).toHaveBeenCalledWith('Run terminal is unavailable.')
+      )
+    }
+  )
 })

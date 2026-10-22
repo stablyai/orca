@@ -70,7 +70,8 @@ export function getAutomationRunViewState({
     }
   }
 
-  if (run.workspaceId && workspaceExists && hasTerminalIdentity && terminalOnPairedServer) {
+  // Why: a run its server slept (#28838) keeps its pane key, not its PTY id.
+  if (run.workspaceId && workspaceExists && run.terminalPaneKey && terminalOnPairedServer) {
     return {
       availability: 'terminal',
       actionLabel: 'View run',

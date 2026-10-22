@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import {
   automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
-  resolveAutomationRunOpenTarget
+  resolveAutomationRunOpenTarget,
+  resolveAutomationRunTerminalTarget
 } from './automation-run-open-target'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
@@ -230,5 +233,85 @@ describe('automation run open target', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { [leafId]: 'pty-run', [otherLeafId]: 'pty-other' }
     })
+  })
+})
+
+describe('paired run pane ownership', () => {
+  const mirroredTabId = toWebTerminalSurfaceTabId('tab-1')
+  const binding = toRemoteRuntimePtyId('handle-1', 'env-a')
+
+  it.each([
+    { name: 'sleeping', ptyId: binding, live: [], present: true, expected: null },
+    { name: 'awake', ptyId: binding, live: [binding], present: true, expected: binding },
+    { name: 'dead running', runPtyId: 'pty-run', ptyId: binding, live: [], present: true },
+    {
+      name: 'wrong host',
+      ptyId: toRemoteRuntimePtyId('handle-1', 'env-b'),
+      live: [],
+      present: true
+    },
+    { name: 'local binding', ptyId: 'local-pty', live: [], present: true },
+    { name: 'missing leaf', ptyId: binding, live: [], present: false },
+    { name: 'missing binding', ptyId: undefined, live: [], present: true }
+  ])('validates a $name mirror', ({ runPtyId, ptyId, live, present, expected }) => {
+    const target = resolveAutomationRunTerminalTarget(
+      run({ terminalPtyId: runPtyId ?? null }),
+      {
+        hasTerminalTab: (tabId) => tabId === mirroredTabId,
+        terminalLayoutsByTabId: {
+          [mirroredTabId]: {
+            ...runLeafLayout,
+            root: { type: 'leaf', leafId: present ? leafId : otherLeafId },
+            ptyIdsByLeafId: ptyId ? { [leafId]: ptyId } : {}
+          }
+        },
+        ptyIdsByTabId: { [mirroredTabId]: live }
+      },
+      'env-a'
+    )
+    expect(target).toEqual(
+      expected === undefined
+        ? null
+        : {
+            tabId: mirroredTabId,
+            paneKey: `${mirroredTabId}:${leafId}`,
+            leafId,
+            ptyId: expected
+          }
+    )
+  })
+
+  it('opens a run that already names its mirrored pane', () => {
+    const mirroredPaneKey = `${mirroredTabId}:${leafId}`
+    expect(
+      resolveAutomationRunTerminalTarget(
+        run({ terminalPaneKey: mirroredPaneKey, terminalPtyId: binding }),
+        {
+          hasTerminalTab: (tabId) => tabId === mirroredTabId,
+          terminalLayoutsByTabId: {
+            [mirroredTabId]: { ...runLeafLayout, ptyIdsByLeafId: { [leafId]: binding } }
+          },
+          ptyIdsByTabId: { [mirroredTabId]: [binding] }
+        },
+        'env-a'
+      )
+    ).toEqual({ tabId: mirroredTabId, paneKey: mirroredPaneKey, leafId, ptyId: binding })
+  })
+
+  it('keeps the local tab of a run this client launched in a paired workspace', () => {
+    // Why: this client's own launch on the server keeps its own tab id, not a mirrored one.
+    expect(
+      resolveAutomationRunTerminalTarget(
+        run({ terminalPtyId: null }),
+        {
+          hasTerminalTab: (tabId) => tabId === 'tab-1',
+          terminalLayoutsByTabId: {
+            'tab-1': { ...runLeafLayout, ptyIdsByLeafId: { [leafId]: binding } }
+          },
+          ptyIdsByTabId: {}
+        },
+        'env-a'
+      )
+    ).toEqual({ tabId: 'tab-1', paneKey, leafId, ptyId: null })
   })
 })
