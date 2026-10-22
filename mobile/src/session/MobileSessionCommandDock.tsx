@@ -295,27 +295,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               onDictationPressOut={handleDictationPressOut}
               onDictationCancel={cancelDictation}
             />
-            <TextInput
-              ref={bindLiveInputField}
-              style={styles.liveInputCapture}
-              value={liveInputCapture}
-              onChange={handleLiveInputChange}
-              onKeyPress={handleLiveInputKeyPress}
-              onSubmitEditing={submitLiveInput}
-              placeholder=""
-              showSoftInputOnFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-              autoComplete="off"
-              keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
-              returnKeyType="default"
-              blurOnSubmit={false}
-              editable={canSend}
-              importantForAutofill="no"
-            />
           </View>
         ) : (
           <View style={styles.inputBar}>
@@ -374,6 +353,29 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             </Pressable>
           </View>
         )}
+        {/* Why: stays mounted so a live-input toggle can move focus before the command field unmounts. */}
+        <TextInput
+          ref={bindLiveInputField}
+          style={styles.liveInputCapture}
+          pointerEvents="none"
+          value={liveInputCapture}
+          onChange={handleLiveInputChange}
+          onKeyPress={handleLiveInputKeyPress}
+          onSubmitEditing={submitLiveInput}
+          placeholder=""
+          showSoftInputOnFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          spellCheck={false}
+          smartInsertDelete={false}
+          // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
+          autoComplete="off"
+          keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
+          returnKeyType="default"
+          blurOnSubmit={false}
+          editable={canSend}
+          importantForAutofill="no"
+        />
       </View>
     )
   )
