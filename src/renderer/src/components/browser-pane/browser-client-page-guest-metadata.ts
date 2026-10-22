@@ -65,3 +65,26 @@ export function createBrowserClientPageLoadFailureHandler(
     }
   }
 }
+
+/** Binds the guest events a client-hosted pane mirrors and returns the matching unbind. */
+export function bindBrowserClientPageGuestEvents(
+  webview: Electron.WebviewTag,
+  onStart: (event: Electron.DidStartNavigationEvent) => void,
+  syncNavigation: (event?: Event) => void,
+  onFailLoad: (event: Event) => void
+): () => void {
+  webview.addEventListener('did-start-navigation', onStart)
+  webview.addEventListener('did-stop-loading', syncNavigation)
+  webview.addEventListener('did-navigate', syncNavigation)
+  webview.addEventListener('did-navigate-in-page', syncNavigation)
+  webview.addEventListener('page-title-updated', syncNavigation)
+  webview.addEventListener('did-fail-load', onFailLoad)
+  return () => {
+    webview.removeEventListener('did-start-navigation', onStart)
+    webview.removeEventListener('did-stop-loading', syncNavigation)
+    webview.removeEventListener('did-navigate', syncNavigation)
+    webview.removeEventListener('did-navigate-in-page', syncNavigation)
+    webview.removeEventListener('page-title-updated', syncNavigation)
+    webview.removeEventListener('did-fail-load', onFailLoad)
+  }
+}

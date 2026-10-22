@@ -9,7 +9,8 @@ import { toHttpsRecoveryUrl } from '../../../../shared/browser-url'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
 import {
   readBrowserClientPageGuestMetadataIfLive,
-  createBrowserClientPageLoadFailureHandler
+  createBrowserClientPageLoadFailureHandler,
+  bindBrowserClientPageGuestEvents
 } from './browser-client-page-guest-metadata'
 import {
   forgetBrowserClientPageMetadataReports,
@@ -278,25 +279,15 @@ export function ClientHostedBrowserPagePane({
         updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
       }
     )
+    const unbind = bindBrowserClientPageGuestEvents(webview, onStart, syncNavigation, onFailLoad)
     const cleanupGuest = (): void => {
-      webview.removeEventListener('did-start-navigation', onStart)
-      webview.removeEventListener('did-stop-loading', syncNavigation)
-      webview.removeEventListener('did-navigate', syncNavigation)
-      webview.removeEventListener('did-navigate-in-page', syncNavigation)
-      webview.removeEventListener('page-title-updated', syncNavigation)
-      webview.removeEventListener('did-fail-load', onFailLoad)
+      unbind()
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
       attachment.detach()
     }
     releaseGuest = cleanupGuest
-    webview.addEventListener('did-start-navigation', onStart)
-    webview.addEventListener('did-stop-loading', syncNavigation)
-    webview.addEventListener('did-navigate', syncNavigation)
-    webview.addEventListener('did-navigate-in-page', syncNavigation)
-    webview.addEventListener('page-title-updated', syncNavigation)
-    webview.addEventListener('did-fail-load', onFailLoad)
     syncNavigation()
     // Resume navigation submitted before host adoption.
     const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
