@@ -103,7 +103,24 @@ export function findOriginalAiVaultSessionPaneInIndex(
   index: AiVaultOriginalPaneIndex,
   session: AiVaultSession
 ): AiVaultOriginalPaneTarget | null {
+  return findOriginalPaneTargets(index, session, false)[0] ?? null
+}
+
+/** Exact identities may be open in several tabs; prompt-only identities must remain unique. */
+export function findOriginalAiVaultSessionPanesInIndex(
+  index: AiVaultOriginalPaneIndex,
+  session: AiVaultSession
+): readonly AiVaultOriginalPaneTarget[] {
+  return findOriginalPaneTargets(index, session, true)
+}
+
+function findOriginalPaneTargets(
+  index: AiVaultOriginalPaneIndex,
+  session: AiVaultSession,
+  allExactProviders: boolean
+): AiVaultOriginalPaneTarget[] {
   const key = providerKey(session.agent, session.sessionId)
+  const providerMatchedTargets: AiVaultOriginalPaneTarget[] = []
   const promptMatchedTargets: AiVaultOriginalPaneTarget[] = []
 
   for (const entry of index.liveByProvider.get(key) ?? []) {
@@ -114,8 +131,43 @@ export function findOriginalAiVaultSessionPaneInIndex(
       tabIdHint: entry.tabId
     })
     if (target) {
-      return target
+      if (!allExactProviders) {
+        return [target]
+      }
+      providerMatchedTargets.push(target)
     }
+  }
+  for (const retained of index.retainedByProvider.get(key) ?? []) {
+    const target = resolveOriginalPaneTarget({
+      state: index.state,
+      paneKey: retained.entry.paneKey,
+      worktreeIdHint: retained.worktreeId,
+      tabIdHint: retained.entry.tabId ?? retained.tab.id
+    })
+    if (target) {
+      if (!allExactProviders) {
+        return [target]
+      }
+      providerMatchedTargets.push(target)
+    }
+  }
+  for (const record of index.sleepingByProvider.get(key) ?? []) {
+    const target = resolveOriginalPaneTarget({
+      state: index.state,
+      paneKey: record.paneKey,
+      worktreeIdHint: record.worktreeId,
+      tabIdHint: record.tabId
+    })
+    if (target) {
+      if (!allExactProviders) {
+        return [target]
+      }
+      providerMatchedTargets.push(target)
+    }
+  }
+
+  if (providerMatchedTargets.length > 0) {
+    return providerMatchedTargets
   }
   for (const entry of index.liveWithoutProviderByAgent.get(session.agent) ?? []) {
     if (!promptsMatchSession(session, entry)) {
@@ -129,17 +181,6 @@ export function findOriginalAiVaultSessionPaneInIndex(
     })
     if (target) {
       promptMatchedTargets.push(target)
-    }
-  }
-  for (const retained of index.retainedByProvider.get(key) ?? []) {
-    const target = resolveOriginalPaneTarget({
-      state: index.state,
-      paneKey: retained.entry.paneKey,
-      worktreeIdHint: retained.worktreeId,
-      tabIdHint: retained.entry.tabId ?? retained.tab.id
-    })
-    if (target) {
-      return target
     }
   }
   for (const retained of index.retainedWithoutProviderByAgent.get(session.agent) ?? []) {
@@ -156,19 +197,7 @@ export function findOriginalAiVaultSessionPaneInIndex(
       promptMatchedTargets.push(target)
     }
   }
-  for (const record of index.sleepingByProvider.get(key) ?? []) {
-    const target = resolveOriginalPaneTarget({
-      state: index.state,
-      paneKey: record.paneKey,
-      worktreeIdHint: record.worktreeId,
-      tabIdHint: record.tabId
-    })
-    if (target) {
-      return target
-    }
-  }
-
-  return promptMatchedTargets.length === 1 ? promptMatchedTargets[0] : null
+  return promptMatchedTargets.length === 1 ? promptMatchedTargets : []
 }
 
 export function findAiVaultSessionLiveStateInIndex(

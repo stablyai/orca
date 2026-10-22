@@ -23,6 +23,9 @@ import {
   getPaletteWorktreeIdentity
 } from '@/lib/palette-repo-resolution'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteOpenTabs &
@@ -88,6 +91,15 @@ export function useWorktreeJumpPaletteRecentTabs({
       return `recent-tab:${base}:${ordinal}`
     })
   }, [openTabItems])
+  const ambiguousNativeTabIds = useMemo(() => {
+    const owners = new Map<string, Set<string>>()
+    for (const { tab, worktree } of workspaceTabEntries) {
+      const identities = owners.get(tab.id) ?? new Set<string>()
+      identities.add(getPaletteWorktreeIdentity(worktree))
+      owners.set(tab.id, identities)
+    }
+    return new Set([...owners].filter(([, identities]) => identities.size > 1).map(([id]) => id))
+  }, [workspaceTabEntries])
   const terminalTabsByWorktree = useMemo(() => {
     const byWorktree = new Map<string, Map<string, TerminalTab | null>>()
     for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
@@ -125,6 +137,14 @@ export function useWorktreeJumpPaletteRecentTabs({
         continue
       }
       const occurrenceId = occurrenceIds[index]!
+      const nativeChatHostId =
+        getPaletteWorktreeExecutionHostId(worktree) ??
+        item.result.executionHostId ??
+        LOCAL_EXECUTION_HOST_ID
+      const nativeChatTarget =
+        item.type === 'workspace-tab' && item.result.contentType === 'agent-session'
+          ? structuredAgentSessionTargetForHost(nativeChatHostId)
+          : null
       entries.push({
         item,
         occurrenceId,
@@ -146,12 +166,33 @@ export function useWorktreeJumpPaletteRecentTabs({
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
               ? (terminalTabsByWorktree.get(worktree.id)?.get(item.result.entityId) ?? null)
               : null,
+          ...(item.type === 'workspace-tab' && item.result.contentType === 'agent-session'
+            ? {
+                nativeChat: {
+                  sessionId: item.result.entityId,
+                  executionHostId: nativeChatHostId,
+                  ambiguousTabId: ambiguousNativeTabIds.has(item.result.tabId),
+                  summary: nativeChatTarget
+                    ? getStructuredAgentSessionStatusFeed(nativeChatTarget)
+                        .getSnapshot()
+                        .get(item.result.entityId)
+                    : undefined
+                }
+              }
+            : {}),
           worktreeLastActivityAt: worktree.lastActivityAt
         }
       })
     }
     return entries
-  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsByWorktree, tabFocusTimes])
+  }, [
+    ambiguousNativeTabIds,
+    occurrenceIds,
+    openTabItems,
+    resolveWorktree,
+    terminalTabsByWorktree,
+    tabFocusTimes
+  ])
   const recentTabRowByItem = useMemo(
     () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]

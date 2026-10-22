@@ -39,6 +39,7 @@ export function WorktreeJumpPaletteEntry({
       <CommandItem
         value={renderKey}
         onSelect={() => {
+          controller.selectionMovedByUserRef.current = true
           const previousIndex = controller.selectionItemIds.indexOf(renderKey)
           flushSync(() => entry.onSeeMore?.())
           const expandedItemId = Array.from(

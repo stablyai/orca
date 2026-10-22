@@ -12,6 +12,8 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { WorktreeJumpPaletteEntry } from './worktree-jump-palette-entry'
 import { FooterKey, PaletteState } from './worktree-jump-palette-primitives'
+import { PaletteTranscriptMeasurement } from './cmd-j/palette-transcript-measurement'
+import { isPaletteNavigationKeyDown } from './cmd-j/palette-keyboard-navigation'
 import {
   getWorktreeJumpPaletteEmptyState,
   getWorktreeJumpPaletteResultCount
@@ -56,12 +58,11 @@ export function WorktreeJumpPaletteSurface({
             event.preventDefault()
             event.stopPropagation()
             controller.handleSelectTask(selectedTask.result, true)
-            return
           }
-          if (
-            controller.selectionMovedByUserRef &&
-            ['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'].includes(event.key)
-          ) {
+        },
+        onKeyDown: (event: React.KeyboardEvent) => {
+          if (isPaletteNavigationKeyDown(event)) {
+            controller.handlePresentationKeyDown()
             controller.selectionMovedByUserRef.current = true
           }
         }
@@ -113,11 +114,30 @@ export function WorktreeJumpPaletteSurface({
       />
       <CommandList
         ref={controller.listRef}
-        onPointerDownCapture={() => {
-          controller.selectionMovedByUserRef.current = true
+        onPointerDownCapture={(event) => {
+          if (event.target instanceof Element && event.target.closest('[cmdk-item]')) {
+            controller.selectionMovedByUserRef.current = true
+          }
+          controller.handlePresentationPointer(event.target)
+          controller.handlePresentationWheel()
+        }}
+        onPointerMoveCapture={(event) => {
+          if (event.target instanceof Element && event.target.closest('[cmdk-item]')) {
+            controller.selectionMovedByUserRef.current = true
+          }
+          controller.handlePresentationPointer(event.target)
+        }}
+        onWheelCapture={controller.handlePresentationWheel}
+        onScroll={controller.handlePresentationScroll}
+        onScrollEnd={controller.handlePresentationScrollEnd}
+        style={{
+          position: 'relative',
+          scrollbarGutter: 'stable',
+          height: controller.presentationHeight || undefined
         }}
         className="max-h-[min(600px,calc(100vh-14rem))] px-2.5 pb-2.5 pt-2"
       >
+        <PaletteTranscriptMeasurement {...controller.transcriptMeasurement} />
         {controller.isLoading &&
         controller.selectableItems.length === 0 &&
         !controller.showCreateAction ? (
@@ -138,15 +158,28 @@ export function WorktreeJumpPaletteSurface({
         ) : (
           <>
             {controller.listEntries.map((entry, index) => (
-              <WorktreeJumpPaletteEntry
+              <div
                 key={controller.listEntryRenderKeys[index] ?? entry.id}
-                entry={entry}
-                renderKey={controller.listEntryRenderKeys[index] ?? entry.id}
-                controller={controller}
-              />
+                data-palette-occurrence={controller.listEntryRenderKeys[index] ?? entry.id}
+                className="flow-root"
+              >
+                <WorktreeJumpPaletteEntry
+                  entry={entry}
+                  renderKey={controller.listEntryRenderKeys[index] ?? entry.id}
+                  controller={controller}
+                />
+              </div>
             ))}
           </>
         )}
+        {controller.transcriptSearchIncomplete ? (
+          <div role="status" className="px-3 py-2 text-center text-xs text-muted-foreground">
+            {translate(
+              'quickOpen.moreMatchesAvailable',
+              'More matches may be available. Refine your search to narrow the results.'
+            )}
+          </div>
+        ) : null}
         <WorktreeJumpPaletteTaskSearchStatus
           loading={controller.taskSearchLoading}
           failures={controller.taskSearchFailures}

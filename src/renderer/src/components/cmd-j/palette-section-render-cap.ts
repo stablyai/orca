@@ -1,3 +1,5 @@
+import { buildPaletteListEntryRenderKeys } from './palette-list-entry-render-keys'
+
 /**
  * Typed queries used to render every match as a DOM row — a one-character query
  * against a few hundred workspaces built hundreds of `CommandItem`s (each with
@@ -26,10 +28,15 @@ export type CappedPaletteSection<T> = {
   overflowCount: number
 }
 
+function sectionSize<T>(items: readonly T[], identity?: (item: T) => string): number {
+  return identity ? new Set(items.map(identity)).size : items.length
+}
+
 export function capPaletteSection<T>(
   items: readonly T[],
   cap: number = PALETTE_SECTION_RENDER_CAP,
-  retain?: (item: T) => boolean
+  retain?: (item: T) => boolean,
+  identity?: (item: T) => string
 ): CappedPaletteSection<T> {
   if (!Number.isFinite(cap) || cap < 0 || items.length <= cap) {
     return { visible: items, overflowCount: 0 }
@@ -48,7 +55,10 @@ export function capPaletteSection<T>(
   if (retained !== undefined && cap > 0) {
     visible.splice(cap - 1, 1, retained)
   }
-  return { visible, overflowCount: items.length - visible.length }
+  return {
+    visible,
+    overflowCount: Math.max(0, sectionSize(items, identity) - sectionSize(visible, identity))
+  }
 }
 
 /**
@@ -60,20 +70,24 @@ type SoftSplitSection<T> = {
   preview: readonly T[]
   rest: readonly T[]
   moreCount: number
+  hardOverflowCount: number
 }
 
 function softSplitPaletteSection<T>(
   items: readonly T[],
   previewCount: number,
   hardCap: number = PALETTE_SECTION_RENDER_CAP,
-  retain?: (item: T) => boolean
+  retain?: (item: T) => boolean,
+  identity?: (item: T) => string
 ): SoftSplitSection<T> {
-  const capped = capPaletteSection(items, hardCap, retain)
+  const capped = capPaletteSection(items, hardCap, retain, identity)
   const previewSize = Math.max(0, Math.min(previewCount, capped.visible.length))
+  const preview = capped.visible.slice(0, previewSize)
   return {
-    preview: capped.visible.slice(0, previewSize),
+    preview,
     rest: capped.visible.slice(previewSize),
-    moreCount: Math.max(0, items.length - previewSize)
+    moreCount: Math.max(0, sectionSize(items, identity) - sectionSize(preview, identity)),
+    hardOverflowCount: capped.overflowCount
   }
 }
 
@@ -113,7 +127,8 @@ export function layoutMultiPrimaryPaletteSections<T>({
   leadingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP,
   trailingHardCap = hardCap ?? PALETTE_SECTION_RENDER_CAP,
   leadingRetain,
-  trailingRetain
+  trailingRetain,
+  identity
 }: {
   leadingItems: readonly T[]
   trailingItems: readonly T[]
@@ -124,30 +139,33 @@ export function layoutMultiPrimaryPaletteSections<T>({
   trailingHardCap?: number
   leadingRetain?: (item: T) => boolean
   trailingRetain?: (item: T) => boolean
+  identity?: (item: T) => string
 }): MultiPrimarySectionLayout<T> {
   const leading = softSplitPaletteSection(
     leadingItems,
     leadingPreviewCount,
     leadingHardCap,
-    leadingRetain
+    leadingRetain,
+    identity
   )
   const trailing = softSplitPaletteSection(
     trailingItems,
     trailingFloorCount,
     trailingHardCap,
-    trailingRetain
+    trailingRetain,
+    identity
   )
   return {
     leadingPreview: leading.preview,
     leadingRest: leading.rest,
     leadingMoreCount: leading.moreCount,
-    leadingHardOverflowCount: Math.max(0, leading.moreCount - leading.rest.length),
+    leadingHardOverflowCount: leading.hardOverflowCount,
     trailingFloor: trailing.preview,
     trailingRest: trailing.rest,
     trailingMoreCount: trailing.moreCount,
     // Why: floor + rest already cover every rendered trailing row; only the
     // hard-capped tail needs a “keep typing” hint after the section.
-    trailingHardOverflowCount: Math.max(0, trailing.moreCount - trailing.rest.length)
+    trailingHardOverflowCount: trailing.hardOverflowCount
   }
 }
 
@@ -160,5 +178,25 @@ export function orderMultiPrimaryPaletteItems<T>(
     ...layout.trailingFloor,
     ...layout.leadingRest,
     ...layout.trailingRest
+  ]
+}
+
+/** Resolve live candidates before caps; only observed occurrences consume reserved slots. */
+export function reserveObservedPaletteSection<T extends { id: string }>(
+  items: readonly T[],
+  keys: readonly string[]
+): readonly T[] {
+  if (!keys.length) {
+    return items
+  }
+  const itemKeys = buildPaletteListEntryRenderKeys(items.map((item) => item.id))
+  const byKey = new Map(itemKeys.map((key, index) => [key, items[index]]))
+  const protectedKeys = new Set(keys)
+  return [
+    ...keys.flatMap((key) => {
+      const item = byKey.get(key)
+      return item ? [item] : []
+    }),
+    ...items.filter((_item, index) => !protectedKeys.has(itemKeys[index]))
   ]
 }

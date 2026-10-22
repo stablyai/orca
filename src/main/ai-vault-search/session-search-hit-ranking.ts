@@ -40,7 +40,7 @@ export type RankedSession = {
 
 /**
  * Everything between "these sessions matched" and "this is the ranked list":
- * the length prior, fork folding and the caller's order. Retrieval stays in SQL
+ * the length prior, optional fork folding and the caller's order. Retrieval stays in SQL
  * and nothing here touches the database.
  *
  * The whole list is returned, not a page: a cursor indexes into it, and slicing
@@ -50,19 +50,19 @@ export type RankedSession = {
 export function rankSessionHits(
   sessions: readonly SessionRow[],
   matches: ReadonlyMap<number, MessageRow>,
-  sort: SessionSearchSort
+  sort: SessionSearchSort,
+  preserveForks = false
 ): RankedSession[] {
-  const scored = collapseForks(
-    sessions.map((session) => {
-      const message = matches.get(session.id) ?? null
-      return {
-        session,
-        message,
-        score: (message?.score ?? 0) - LENGTH_PRIOR * Math.log(1 + session.message_count),
-        duplicateCount: 1
-      }
-    })
-  )
+  const entries = sessions.map((session) => {
+    const message = matches.get(session.id) ?? null
+    return {
+      session,
+      message,
+      score: (message?.score ?? 0) - LENGTH_PRIOR * Math.log(1 + session.message_count),
+      duplicateCount: 1
+    }
+  })
+  const scored = preserveForks ? entries : collapseForks(entries)
   // Why a total order and not just the key: a cursor is an offset into this
   // list, so two entries that tie must not be free to swap between pages.
   // Newer first among equal scores, so relevance never hands ties to whichever id is lower.

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { PaletteObservedOccurrence } from './cmd-j/palette-observed-prefix'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import { searchBrowserPages, type SearchableBrowserPage } from '@/lib/browser-palette-search'
 import {
@@ -11,29 +12,24 @@ import {
   searchWorkspaceTabs,
   type SearchableWorkspaceTab
 } from '@/lib/workspace-tab-palette-search'
-import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
-import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
 import type {
   BrowserPaletteItem,
-  OpenTabPaletteItem,
   SimulatorPaletteItem,
-  WorkspaceTabPaletteItem,
-  WorktreePaletteItem
+  WorkspaceTabPaletteItem
 } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
-import {
-  encodePaletteIdentity,
-  type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+import type { PaletteSearchContext } from '@/lib/palette-match/palette-ranking'
+import { useWorkspaceTabTranscriptMerge } from './use-worktree-jump-palette-transcript-tab-merge'
+import type { WorktreeJumpPaletteTranscriptMatches } from './use-worktree-jump-palette-transcript-matches'
 import {
   buildBrowserPaletteItems,
-  buildOpenTabPaletteItems,
   buildSimulatorPaletteItems,
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
+import { buildWorktreePaletteItems } from './worktree-jump-palette-worktree-items'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
@@ -41,17 +37,27 @@ const EMPTY_WORKSPACE_TAB_ENTRIES: SearchableWorkspaceTab[] = []
 
 type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteWorktrees &
-  Pick<WorktreeJumpPaletteFilter, 'repoMap' | 'repoByHostIdentity'> &
-  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> & {
+  Pick<WorktreeJumpPaletteFilter, 'repoMap' | 'repoByHostIdentity' | 'filterModel'> &
+  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> &
+  Pick<
+    WorktreeJumpPaletteTranscriptMatches,
+    'transcriptMatches' | 'transcriptEligibleTabs' | 'transcriptGenerationKey'
+  > & {
+    protectedOccurrences?: readonly PaletteObservedOccurrence[]
     paletteSearchContext: PaletteSearchContext
   }
 
 export function useWorktreeJumpPaletteOpenTabs({
+  protectedOccurrences,
   paletteStatusInputsActive,
   browserSortedWorktrees,
   workspaces,
   repoMap,
   repoByHostIdentity,
+  filterModel,
+  transcriptMatches,
+  transcriptEligibleTabs,
+  transcriptGenerationKey,
   worktreeOrder,
   browserTabsByWorktree,
   browserPagesByWorkspace,
@@ -223,43 +229,10 @@ export function useWorktreeJumpPaletteOpenTabs({
       }),
     [workspaceTabEntries, deferredQuery, paletteSearchContext]
   )
-  const worktreeItems = useMemo<WorktreePaletteItem[]>(() => {
-    const items = worktreeMatches
-      .map((match) => {
-        const worktree = resolveWorktree(match.worktreeId, match.worktreeHostId)
-        return worktree
-          ? {
-              id: encodePaletteIdentity(['worktree', getPaletteWorktreeIdentity(worktree)]),
-              type: 'worktree' as const,
-              match,
-              worktree
-            }
-          : null
-      })
-      .filter((item): item is WorktreePaletteItem => item !== null)
-    if (!hasQuery) {
-      return items
-    }
-    const orderByIdentity = new Map(
-      items.map((item, index) => [getPaletteWorktreeIdentity(item.worktree), index])
-    )
-    return items.sort((left, right) =>
-      comparePaletteRankedItems(
-        {
-          rank: left.match.rank,
-          order: orderByIdentity.get(getPaletteWorktreeIdentity(left.worktree)) ?? 0,
-          identity: left.id,
-          activity: left.match.activity
-        },
-        {
-          rank: right.match.rank,
-          order: orderByIdentity.get(getPaletteWorktreeIdentity(right.worktree)) ?? 0,
-          identity: right.id,
-          activity: right.match.activity
-        }
-      )
-    )
-  }, [hasQuery, resolveWorktree, worktreeMatches])
+  const worktreeItems = useMemo(
+    () => buildWorktreePaletteItems({ hasQuery, resolveWorktree, worktreeMatches }),
+    [hasQuery, resolveWorktree, worktreeMatches]
+  )
   const browserItems = useMemo<BrowserPaletteItem[]>(
     () => buildBrowserPaletteItems(browserMatches),
     [browserMatches]
@@ -268,14 +241,22 @@ export function useWorktreeJumpPaletteOpenTabs({
     () => buildSimulatorPaletteItems(simulatorMatches),
     [simulatorMatches]
   )
-  const workspaceTabItems = useMemo<WorkspaceTabPaletteItem[]>(
+  const titleWorkspaceTabItems = useMemo<WorkspaceTabPaletteItem[]>(
     () => buildWorkspaceTabPaletteItems(workspaceTabMatches),
     [workspaceTabMatches]
   )
-  const openTabItems = useMemo<OpenTabPaletteItem[]>(
-    () => buildOpenTabPaletteItems({ browserItems, simulatorItems, workspaceTabItems }),
-    [browserItems, simulatorItems, workspaceTabItems]
-  )
+  const { workspaceTabItems, openTabItems } = useWorkspaceTabTranscriptMerge({
+    protectedOccurrences,
+    filterModel,
+    transcriptMatches,
+    transcriptEligibleTabs,
+    transcriptGenerationKey,
+    titleWorkspaceTabItems,
+    workspaceTabEntries,
+    browserItems,
+    simulatorItems,
+    paletteSearchContext
+  })
 
   return {
     browserPageEntries,

@@ -60,6 +60,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     store,
+    activateStructuredAgentSessionTab: vi.fn(),
     activateAndRevealWorkspace: vi.fn(),
     activateWebRuntimeSessionTab: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
@@ -72,6 +73,10 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => mocks.store
   }
+}))
+
+vi.mock('./structured-agent-session-tab-activation', () => ({
+  activateStructuredAgentSessionTab: mocks.activateStructuredAgentSessionTab
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -422,6 +427,28 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(activateWorkspaceTabPaletteResult(makeResult())).toEqual({
       status: 'failed',
       reason: 'missing-worktree'
+    })
+  })
+
+  it('activates a native chat through its structured session owner without requiring an editor file', () => {
+    const tab = mocks.store.unifiedTabsByWorktree['wt-1'][0]
+    tab.contentType = 'agent-session'
+    tab.entityId = 'native-session'
+    mocks.activateAndRevealWorkspace.mockReturnValue(true)
+    mocks.activateStructuredAgentSessionTab.mockReturnValue(true)
+    mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
+    const result = makeResult({ contentType: 'agent-session', entityId: 'native-session' })
+    expect(activateWorkspaceTabPaletteResult(result)).toEqual({ status: 'activated' })
+    expect(mocks.activateStructuredAgentSessionTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: tab.id,
+      target: { kind: 'local' }
+    })
+    expect(mocks.store.setActiveFile).not.toHaveBeenCalled()
+    mocks.store.unifiedTabsByWorktree['wt-1'] = []
+    expect(activateWorkspaceTabPaletteResult(result)).toEqual({
+      status: 'failed',
+      reason: 'missing-tab'
     })
   })
 })

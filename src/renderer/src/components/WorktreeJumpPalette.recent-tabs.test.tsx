@@ -82,11 +82,21 @@ vi.mock('@/components/ui/command', async () => {
     }: {
       children: React.ReactNode
       open?: boolean
-      commandProps?: { value?: string; onValueChange?: (next: string) => void }
+      commandProps?: {
+        value?: string
+        onValueChange?: (next: string) => void
+        onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>
+        onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
+      }
     }) => {
       setCommandSelection = commandProps?.onValueChange ?? null
       return open ? (
-        <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
+        <div
+          data-command-dialog="true"
+          data-command-value={commandProps?.value ?? ''}
+          onKeyDownCapture={commandProps?.onKeyDownCapture}
+          onKeyDown={commandProps?.onKeyDown}
+        >
           {children}
         </div>
       ) : null
@@ -94,10 +104,12 @@ vi.mock('@/components/ui/command', async () => {
     CommandInput: ({
       value,
       onValueChange,
+      onKeyDown,
       placeholder
     }: {
       value?: string
       onValueChange?: (next: string) => void
+      onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
       placeholder?: string
     }) => {
       setCommandQuery = onValueChange ?? null
@@ -107,15 +119,16 @@ vi.mock('@/components/ui/command', async () => {
           placeholder={placeholder}
           value={value}
           onChange={(event) => onValueChange?.(event.currentTarget.value)}
+          onKeyDown={onKeyDown}
         />
       )
     },
     CommandList: React.forwardRef(function CommandList(
-      { children }: { children: React.ReactNode },
+      { children, ...props }: React.HTMLAttributes<HTMLDivElement>,
       ref: React.ForwardedRef<HTMLDivElement>
     ) {
       return (
-        <div ref={ref} data-command-list="true">
+        <div {...props} ref={ref} data-command-list="true">
           {children}
         </div>
       )
@@ -132,7 +145,12 @@ vi.mock('@/components/ui/command', async () => {
       onSelect?: (value: string) => void
       value?: string
     }) => (
-      <button data-command-item={value ?? ''} onClick={() => onSelect?.(value ?? '')} type="button">
+      <button
+        cmdk-item=""
+        data-command-item={value ?? ''}
+        onClick={() => onSelect?.(value ?? '')}
+        type="button"
+      >
         {children}
       </button>
     )
@@ -197,6 +215,13 @@ function getCommandValue(): string {
   )
 }
 
+function navigateCommandTo(value: string): void {
+  testContainer
+    .querySelector('[data-command-input]')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  setCommandSelection?.(value)
+}
+
 function getTabRowIds(): string[] {
   return [
     ...testContainer.querySelectorAll<HTMLElement>(
@@ -258,6 +283,27 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(rows.some((id) => id.startsWith(encodePaletteIdentity(['worktree'])))).toBe(true)
     expect(testContainer.textContent).toContain('Recent Chats & Terminals')
     expect(testContainer.textContent).toContain('Recent Workspaces')
+  })
+
+  it('keeps empty-query hover selection at the destination Enter will activate', async () => {
+    await renderPalette(makeRecentTabState())
+    const second = [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')][1]
+    const value = second.dataset.commandItem ?? ''
+    await act(async () => {
+      second.dispatchEvent(new MouseEvent('pointermove', { bubbles: true }))
+      setCommandSelection?.(value)
+    })
+    await flushEffects()
+    expect(getCommandValue()).toBe(value)
+    await act(async () => {
+      const selected = [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].find(
+        (row) => row.dataset.commandItem === getCommandValue()
+      )
+      selected?.click()
+    })
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-beta', worktreeId: 'wt-beta' })
+    )
   })
 
   it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
@@ -422,7 +468,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(rows.length).toBeGreaterThan(1)
 
     await act(async () => {
-      setCommandSelection?.(rows[1])
+      navigateCommandTo(rows[1])
     })
     await flushEffects()
 
@@ -556,7 +602,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     // Why the second row: only a selection that differs from the auto-picked head proves the user moved it.
     const movedTo = worktreeIds[1]
     await act(async () => {
-      setCommandSelection?.(movedTo)
+      navigateCommandTo(movedTo)
     })
     await flushEffects()
 
@@ -598,7 +644,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       id.startsWith(encodePaletteIdentity(['workspace-tab']))
     )[1]
     await act(async () => {
-      setCommandSelection?.(movedTo)
+      navigateCommandTo(movedTo)
     })
     await flushEffects()
     await act(async () => {

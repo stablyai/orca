@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -18,11 +18,11 @@ import {
 } from '@/lib/worktree-status'
 import {
   resolveRecentWorkspaceTabStatus,
+  recentWorkspaceTabHasUnreadActivity,
   type RecentWorkspaceTabRow
 } from '@/lib/recent-workspace-tab-rows'
 import {
   resolveTerminalTabAttentionBadge,
-  terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
@@ -36,9 +36,14 @@ import type { BrowserWorkspace } from '../../../../shared/browser-workspace-type
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useNow } from '@/hooks/use-now'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+
+const noSubscription = () => () => {}
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
+  active: boolean
   liveAgentStatusByWorktreeId: ReadonlyMap<string, LiveAgentWorktreeStatus>
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -101,6 +106,7 @@ export function PaletteLiveStatusProvider({
     )
     const livePaneIds = buildLiveAgentStatusPaneIdsByTabId(entriesByTabId, now)
     return {
+      active,
       liveAgentStatusByWorktreeId: getLiveAgentStatusByWorktreeId(
         agentStatusByPaneKey,
         tabsByWorktree,
@@ -122,6 +128,7 @@ export function PaletteLiveStatusProvider({
       now
     }
   }, [
+    active,
     agentStatusByPaneKey,
     browserTabsByWorktree,
     migrationUnsupportedByPtyId,
@@ -238,16 +245,30 @@ export function PaletteRecentTabStatusDot({
   fallback: React.ReactNode
 }): React.JSX.Element {
   const live = useLiveStatus()
-  const terminalTabId = row?.terminalTab?.id
+  const nativeChatHostId = row?.nativeChat?.executionHostId
+  const nativeChatSessionId = row?.nativeChat?.sessionId
+  const active = live?.active === true
+  const nativeFeed = useMemo(() => {
+    const target =
+      active && nativeChatHostId ? structuredAgentSessionTargetForHost(nativeChatHostId) : null
+    return target ? getStructuredAgentSessionStatusFeed(target) : null
+  }, [active, nativeChatHostId])
+  useEffect(() => nativeFeed?.activate(), [nativeFeed])
+  const nativeSummary = useSyncExternalStore(
+    nativeFeed?.subscribe ?? noSubscription,
+    () =>
+      nativeChatSessionId ? (nativeFeed?.getSnapshot().get(nativeChatSessionId) ?? null) : null,
+    () => null
+  )
   const status: WorktreeStatus | null =
-    live && row?.terminalTab
-      ? resolveRecentWorkspaceTabStatus(row, live.paneSources, live.now)
+    live && row
+      ? resolveRecentWorkspaceTabStatus(row, live.paneSources, live.now, nativeSummary)
       : null
   const hasUnread =
     live != null &&
-    terminalTabId != null &&
-    terminalTabHasUnreadActivity({
-      terminalTabId,
+    row != null &&
+    recentWorkspaceTabHasUnreadActivity({
+      row,
       unreadTerminalTabs: live.unreadTerminalTabs,
       unreadAgentCompletionPanes: live.unreadAgentCompletionPanes
     })

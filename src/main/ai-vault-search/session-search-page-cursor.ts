@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { SessionSearchRequest } from './session-search-engine-types'
+import { eligibleSessionsKey } from '../../shared/ai-vault-search-eligible-sessions'
 
 export type SessionSearchCursorRejection = 'stale-generation' | 'different-query' | 'malformed'
 
@@ -47,7 +48,11 @@ export function sessionSearchPageKey(request: SessionSearchRequest): string {
     filters.sort ?? 'relevance',
     filters.since ?? null,
     [...(filters.agents ?? [])].sort(),
-    [...(filters.scopePaths ?? [])].sort()
+    [...(filters.scopePaths ?? [])].sort(),
+    ...(request.eligibleSessions === undefined
+      ? []
+      : [eligibleSessionsKey(request.eligibleSessions)]),
+    ...(request.preserveForks ? ['preserve-forks'] : [])
   ])
   return createHash('sha256').update(identity).digest('base64url').slice(0, 16)
 }

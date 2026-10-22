@@ -3,6 +3,7 @@ import { useWorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-lo
 import { useWorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import { useWorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import { useWorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
+import { useWorktreeJumpPaletteTranscriptMatches } from './use-worktree-jump-palette-transcript-matches'
 import { useWorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
 import { useWorktreeJumpPaletteProjectTargets } from './use-worktree-jump-palette-project-targets'
 import { useWorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
@@ -17,6 +18,7 @@ import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/us
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
 import { useMemo } from 'react'
+import { useWorktreeJumpPaletteObservedPrefix } from './use-worktree-jump-palette-observed-prefix'
 
 export function useWorktreeJumpPaletteController({
   visible,
@@ -27,8 +29,12 @@ export function useWorktreeJumpPaletteController({
   lingering: boolean
   createLookupGuard: WorktreePaletteRequestGuard
 }) {
-  const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering })
   const localState = useWorktreeJumpPaletteLocalState({ createLookupGuard, visible })
+  const storeState = useWorktreeJumpPaletteStoreState({
+    visible,
+    lingering,
+    query: localState.query
+  })
   const paletteEvaluationSnapshot = useMemo(
     () => ({
       query: localState.paletteSearchQuery,
@@ -71,12 +77,28 @@ export function useWorktreeJumpPaletteController({
     ...filter,
     ...evaluation
   })
+  const transcriptMatches = useWorktreeJumpPaletteTranscriptMatches({
+    ...storeState,
+    agentStatusByPaneKey: storeState.transcriptAgentStatusByPaneKey,
+    ...localState,
+    ...filter
+  })
+  const observedPrefix = useWorktreeJumpPaletteObservedPrefix({
+    generationKey: JSON.stringify([
+      transcriptMatches.transcriptGenerationKey,
+      transcriptMatches.transcriptDisplayKey
+    ]),
+    listRef: localState.listRef,
+    active: storeState.visible && localState.query.trim().length > 0
+  })
   const openTabs = useWorktreeJumpPaletteOpenTabs({
     ...storeState,
     ...localState,
     ...filter,
     ...worktrees,
-    ...evaluation
+    ...evaluation,
+    ...transcriptMatches,
+    ...observedPrefix
   })
   const recentTabs = useWorktreeJumpPaletteRecentTabs({
     ...storeState,
@@ -99,6 +121,7 @@ export function useWorktreeJumpPaletteController({
     ...projectTargets
   })
   const sections = useWorktreeJumpPaletteSections({
+    ...observedPrefix,
     ...localState,
     ...filter,
     ...worktrees,
@@ -109,6 +132,7 @@ export function useWorktreeJumpPaletteController({
     ...taskUrl
   })
   const listEntries = useWorktreeJumpPaletteListEntries({
+    ...observedPrefix,
     ...localState,
     ...worktrees,
     ...openTabs,
@@ -117,6 +141,7 @@ export function useWorktreeJumpPaletteController({
     ...taskUrl
   })
   const selectionLifecycle = useWorktreeJumpPaletteSelectionLifecycle({
+    ...observedPrefix,
     ...storeState,
     ...localState,
     ...filter,
@@ -155,6 +180,8 @@ export function useWorktreeJumpPaletteController({
   })
 
   return {
+    ...observedPrefix,
+    ...transcriptMatches,
     ...storeState,
     ...localState,
     ...taskUrl,

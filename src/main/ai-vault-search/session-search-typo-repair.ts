@@ -1,6 +1,7 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchScope } from './session-search-engine-types'
 import { quoteFtsTerm, scopedExpression } from './session-search-query-planner'
+import { matchedSessionEligibilityCte, type SessionRowFilter } from './session-search-row-filter'
 
 // Why: a query term with zero postings is usually a typo. The index's own
 // vocabulary (fts5vocab) is the dictionary, so repair needs no model and can
@@ -67,7 +68,7 @@ export class SessionSearchTypoRepair {
   private readonly liveRows: ReturnType<SyncDatabase['prepare']>
   private readonly candidatesByPrefix: ReturnType<SyncDatabase['prepare']>
 
-  constructor(db: SyncDatabase) {
+  constructor(private readonly db: SyncDatabase) {
     this.liveRows = db.prepare(
       `SELECT count(*) AS rows FROM (
          SELECT m.id FROM messages_fts
@@ -87,30 +88,51 @@ export class SessionSearchTypoRepair {
   }
 
   /** Live rows carrying this term inside `scope`, counted no further than it matters. */
-  private countRows(term: string, scope: SessionSearchScope): number {
-    const row = this.liveRows.get(scopedExpression(scope, quoteFtsTerm(term))) as { rows: number }
-    return row.rows
+  private countRows(term: string, scope: SessionSearchScope, filter?: SessionRowFilter): number {
+    const eligibility = filter?.matchedRowsOnly
+      ? 'm.session_row_id IN (SELECT id FROM eligible_sessions)'
+      : `m.session_row_id IN (SELECT id FROM sessions WHERE ${filter?.conditions.join(' AND ')})`
+    const eligibilityCte = filter?.matchedRowsOnly
+      ? `WITH ${matchedSessionEligibilityCte(filter)} `
+      : ''
+    const scoped = filter?.conditions.length
+      ? this.db.prepare(
+          `${eligibilityCte}SELECT count(*) AS rows FROM (
+         SELECT m.id FROM messages_fts
+         JOIN messages m ON m.id = messages_fts.rowid
+         JOIN sessions s ON s.id = m.session_row_id
+         WHERE messages_fts MATCH ? AND ${eligibility}
+         LIMIT ${MAX_COUNTED_ROWS})`
+        )
+      : this.liveRows
+    const match = scopedExpression(scope, quoteFtsTerm(term))
+    const row = scoped.get(
+      ...(filter?.matchedRowsOnly
+        ? [match, ...filter.values, match]
+        : [match, ...(filter?.values ?? [])])
+    )
+    return typeof row?.rows === 'number' ? row.rows : 0
   }
 
   /** Whether a live row inside `scope` holds this term. */
-  hasPostings(term: string, scope: SessionSearchScope): boolean {
-    return this.countRows(term, scope) > 0
+  hasPostings(term: string, scope: SessionSearchScope, filter?: SessionRowFilter): boolean {
+    return this.countRows(term, scope, filter) > 0
   }
 
   /** Returns the closest indexed term, or null when `term` exists or nothing is close enough. */
-  correct(term: string, scope: SessionSearchScope): string | null {
+  correct(term: string, scope: SessionSearchScope, filter?: SessionRowFilter): string | null {
     const lowered = term.toLowerCase()
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
-    if (this.hasPostings(lowered, scope)) {
+    if (this.hasPostings(lowered, scope, filter)) {
       return null
     }
     // Two-letter prefix first (a typo rarely hits both), then the transposed
     // pair, then the bare first letter as the wide fallback.
     const prefixes = [lowered.slice(0, 2), lowered[1] + lowered[0], lowered[0]]
     for (const prefix of prefixes) {
-      const best = this.bestVisible(lowered, prefix, scope)
+      const best = this.bestVisible(lowered, prefix, scope, filter)
       if (best) {
         return best
       }
@@ -128,10 +150,15 @@ export class SessionSearchTypoRepair {
    * vocabulary's `doc` used to supply — counted live here so the answer does
    * not move when a purge reclaims rows nothing could reach.
    */
-  private bestVisible(lowered: string, prefix: string, scope: SessionSearchScope): string | null {
+  private bestVisible(
+    lowered: string,
+    prefix: string,
+    scope: SessionSearchScope,
+    filter?: SessionRowFilter
+  ): string | null {
     const counted = this.ranked(lowered, prefix)
       .slice(0, MAX_VISIBILITY_PROBES)
-      .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope) }))
+      .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope, filter) }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
     if (counted.length === 0) {
       return null

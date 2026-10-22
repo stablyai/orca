@@ -39,6 +39,8 @@ import { sessionRowFilter } from './session-search-row-filter'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import { sessionSourcePresence } from './session-search-source-presence'
+import { sessionSearchOriginalExcerpt } from './session-search-original-excerpt'
+import { registerSessionSearchPromptEligibility } from './session-search-eligible-sessions'
 
 /**
  * Sessions retrieved before ranking cuts the page.
@@ -76,6 +78,9 @@ export type SessionSearchEngineOptions = {
 export class SessionSearchEngine {
   private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
+  private readonly preparePromptEligibility: ReturnType<
+    typeof registerSessionSearchPromptEligibility
+  >
 
   constructor(
     private readonly db: SyncDatabase,
@@ -86,6 +91,7 @@ export class SessionSearchEngine {
     // watching before anything this engine will be asked to page over is
     // written, and so retrieval below prepares against tables that exist.
     ensureSessionSearchQuerySchema(this.db)
+    this.preparePromptEligibility = registerSessionSearchPromptEligibility(this.db)
     this.retrieval = new SessionSearchRetrieval(this.db)
   }
 
@@ -104,12 +110,26 @@ export class SessionSearchEngine {
     // that no tokenizer can match and that a caller cannot echo back.
     const capped = sliceAtCodeUnitLimit(request.query, SESSION_SEARCH_QUERY_MAX_LENGTH)
     const split = splitAiVaultSearchQuery(capped)
+    this.preparePromptEligibility(request.eligibleSessions)
+    const filter = sessionRowFilter(
+      request.filters ?? {},
+      this.options.retentionCutoffMs ?? null,
+      request.eligibleSessions
+    )
     const retrievalScope: RetrievalScope = {
       scope,
+      preserveForks: request.preserveForks,
       sort,
-      filter: sessionRowFilter(request.filters ?? {}, this.options.retentionCutoffMs ?? null),
+      filter,
+      ...(request.eligibleSessions ? { repairFilter: filter } : {}),
       matchesOperators: operatorPredicate(split),
-      candidateLimit: this.candidateLimit
+      candidateLimit:
+        request.eligibleSessions && this.options.sessionCandidateLimit === undefined
+          ? Math.max(
+              this.candidateLimit,
+              request.eligibleSessions.providers.length + request.eligibleSessions.prompts.length
+            )
+          : this.candidateLimit
     }
     // Decoded before any retrieval: a cursor the engine will refuse must not
     // cost a query, and the caller has to hear about it either way.
@@ -126,7 +146,7 @@ export class SessionSearchEngine {
 
     const limit = resolveSessionSearchLimit(request.limit)
     const page = ranked.slice(offset, offset + limit)
-    const hits = this.hits(page, scope, retrieved)
+    const hits = this.hits(page, scope, retrieved, split.text, request.includeOriginalExcerpt)
     const actualGeneration = readIndexGeneration(this.db)
     if (actualGeneration !== generation) {
       throw new SessionSearchCursorError('stale-generation', actualGeneration, generation)
@@ -163,7 +183,7 @@ export class SessionSearchEngine {
   /**
    * Operators with no free text still name a scope, so the answer is the newest
    * sessions inside it. Ranked through the same path as a text query, because
-   * forks must fold here exactly as they do there or the same sessions answer
+   * fork preservation must agree here and there or the same sessions answer
    * `repo:x` and `word repo:x` differently. There is no relevance signal
    * without text, so the order is always newest.
    */
@@ -172,7 +192,11 @@ export class SessionSearchEngine {
       return { ranked: [], retrieved: null, incomplete: false }
     }
     const { sessions, incomplete } = this.retrieval.recent(scope)
-    return { ranked: rankSessionHits(sessions, new Map(), 'newest'), retrieved: null, incomplete }
+    return {
+      ranked: rankSessionHits(sessions, new Map(), 'newest', scope.preserveForks),
+      retrieved: null,
+      incomplete
+    }
   }
 
   private text(
@@ -184,7 +208,7 @@ export class SessionSearchEngine {
     // `match` already grouped to one best row per session.
     const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
     return {
-      ranked: rankSessionHits(retrieved.sessions, best, sort),
+      ranked: rankSessionHits(retrieved.sessions, best, sort, scope.preserveForks),
       retrieved,
       incomplete: retrieved.incomplete
     }
@@ -194,26 +218,42 @@ export class SessionSearchEngine {
   private hits(
     page: readonly RankedSession[],
     scope: SessionSearchScope,
-    retrieved: Retrieved | null
+    retrieved: Retrieved | null,
+    query: string,
+    includeOriginalExcerpt = false
   ): SessionSearchHit[] {
     const presence = sessionSourcePresence(
       this.db,
       page.map((entry) => entry.session.id)
     )
-    return page.map((entry) => this.hit(entry, scope, retrieved, presence))
+    return page.map((entry) =>
+      this.hit(entry, scope, retrieved, presence, query, includeOriginalExcerpt)
+    )
   }
 
   private hit(
     entry: RankedSession,
     scope: SessionSearchScope,
     retrieved: Retrieved | null,
-    presence: ReadonlyMap<number, SessionSearchSourcePresence>
+    presence: ReadonlyMap<number, SessionSearchSourcePresence>,
+    query: string,
+    includeOriginalExcerpt: boolean
   ): SessionSearchHit {
     const { session, message } = entry
     const snippet =
       message && retrieved
         ? sessionSearchSnippet(this.db, scope, message.rowid, retrieved.plan, retrieved.route)
         : EMPTY_SNIPPET
+    const originalExcerpt =
+      includeOriginalExcerpt && message && retrieved
+        ? sessionSearchOriginalExcerpt(
+            this.db,
+            scope,
+            message.rowid,
+            query,
+            this.options.retentionCutoffMs ?? null
+          )
+        : undefined
     return {
       ...sessionFields(session),
       score: entry.score,
@@ -224,6 +264,7 @@ export class SessionSearchEngine {
             role: message.role as TranscriptMessageRole,
             timestamp: message.ts,
             snippet: snippet.text,
+            ...(originalExcerpt ? { originalExcerpt } : {}),
             ...(snippet.truncated ? { snippetTruncated: true } : {})
           }
         : null

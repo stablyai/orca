@@ -15,6 +15,7 @@ export {
 
 export type WorkspaceTabContentType =
   | 'terminal'
+  | 'agent-session'
   | 'editor'
   | 'diff'
   | 'conflict-review'

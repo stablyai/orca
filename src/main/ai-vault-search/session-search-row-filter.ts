@@ -1,10 +1,12 @@
 import { cwdKey } from './session-search-file-records'
 import type { SessionSearchFilters } from './session-search-engine-types'
+import type { AiVaultSearchEligibleSessions } from '../../shared/ai-vault-search-eligible-sessions'
 
 /** SQL fragments for the `sessions` WHERE clause; every condition is ANDed. */
 export type SessionRowFilter = {
   conditions: string[]
   values: (string | number)[]
+  matchedRowsOnly?: true
 }
 
 // Stored identity: `cwdKey` is the sidebar's `folderGroupKey` without its prefix,
@@ -33,7 +35,8 @@ const CWD = 'cwd_key'
  */
 export function sessionRowFilter(
   filters: SessionSearchFilters,
-  cutoffMs: number | null = null
+  cutoffMs: number | null = null,
+  eligibleSessions?: AiVaultSearchEligibleSessions
 ): SessionRowFilter {
   const filter: SessionRowFilter = { conditions: [], values: [] }
   if (cutoffMs !== null) {
@@ -57,6 +60,23 @@ export function sessionRowFilter(
       filter.conditions.push(SCOPE_CONDITION)
       filter.values.push(JSON.stringify(keys.map(scopeRange)))
     }
+  }
+  if (eligibleSessions) {
+    const alternatives: string[] = []
+    if (eligibleSessions.providers.length) {
+      alternatives.push(`(agent, session_id) IN
+        (SELECT json_extract(value, '$.agent'), json_extract(value, '$.sessionId') FROM json_each(?))`)
+      filter.values.push(JSON.stringify(eligibleSessions.providers))
+    }
+    if (eligibleSessions.prompts.length) {
+      filter.matchedRowsOnly = true
+      alternatives.push(`(agent IN (SELECT value FROM json_each(?))
+        AND orca_session_prompt_eligible(agent, title) = 1)`)
+      filter.values.push(
+        JSON.stringify([...new Set(eligibleSessions.prompts.map((entry) => entry.agent))])
+      )
+    }
+    filter.conditions.push(alternatives.length ? `(${alternatives.join(' OR ')})` : '0 = 1')
   }
   return filter
 }
@@ -92,4 +112,14 @@ function scopeRange(scopeKey: string): [string, string, string] {
 /** The first string that sorts after every string starting with `prefix`. */
 function nextAfterPrefix(prefix: string): string {
   return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1)
+}
+
+/** Match postings first, then evaluate legacy eligibility once per distinct session before any cap. */
+export function matchedSessionEligibilityCte(filter: SessionRowFilter): string {
+  return `eligible_sessions AS MATERIALIZED (
+    SELECT id FROM sessions WHERE id IN (
+      SELECT DISTINCT m.session_row_id FROM messages_fts
+      JOIN messages m ON m.id = messages_fts.rowid WHERE messages_fts MATCH ?
+    ) AND ${filter.conditions.join(' AND ')}
+  )`
 }

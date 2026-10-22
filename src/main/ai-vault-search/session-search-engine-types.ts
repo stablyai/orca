@@ -1,5 +1,6 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { AiVaultSearchEligibleSessions } from '../../shared/ai-vault-search-eligible-sessions'
 
 // ENGINE types, deliberately not in src/shared: nothing here is a wire type.
 // PR 5 owns the public contract and lifts what a caller may actually receive;
@@ -47,6 +48,9 @@ export type SessionSearchFilters = {
 
 export type SessionSearchRequest = {
   query: string
+  eligibleSessions?: AiVaultSearchEligibleSessions
+  preserveForks?: boolean
+  includeOriginalExcerpt?: boolean
   /** Default `all`. */
   scope?: SessionSearchScope
   limit?: number
@@ -89,6 +93,8 @@ export type SessionSearchEvidence = {
   timestamp: string | null
   /** FTS5 snippet with the matched terms wrapped in `[[` `]]`. */
   snippet: string
+  /** One contiguous, unmarked slice of an original indexed message column. */
+  originalExcerpt?: { text: string; startsMessage?: boolean; endsMessage?: boolean }
   /** The snippet hit the engine's per-hit ceiling and was cut. */
   snippetTruncated?: boolean
 }

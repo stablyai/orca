@@ -1,5 +1,11 @@
 import { existsSync } from 'node:fs'
-import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
+import type {
+  backup,
+  BackupOptions,
+  DatabaseSync,
+  SQLInputValue,
+  SQLOutputValue
+} from 'node:sqlite'
 import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
 import { NodeSqliteStatement } from './node-sqlite-statement'
 import type { SqliteStatement } from './sqlite-statement'
@@ -110,6 +116,10 @@ class SyncDatabase {
       this.statementCache.set(sql, statement)
     }
     return statement
+  }
+
+  function(name: string, callback: (...values: SQLOutputValue[]) => SQLInputValue): void {
+    this.db.function(name, callback)
   }
 
   pragma(sql: string, options?: PragmaOptions): unknown {

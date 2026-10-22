@@ -1,5 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { cmdJEffectiveQualityRank } from '@/lib/cmd-j-transcript-ranking'
+import { observedPaletteSectionKeys } from './cmd-j/palette-observed-prefix'
+import type { WorktreeJumpPaletteObservedPrefix } from './use-worktree-jump-palette-observed-prefix'
 import { bestCmdJPaletteSectionQualityClass } from '@/components/cmd-j/palette-results'
 import {
   bestPaletteQualityRank,
@@ -9,6 +12,7 @@ import {
 } from '@/lib/cmd-j-section-leadership'
 import {
   capPaletteSection,
+  reserveObservedPaletteSection,
   layoutMultiPrimaryPaletteSections,
   PALETTE_SECTION_EXPAND_STEP,
   PALETTE_SECTION_RENDER_CAP,
@@ -31,107 +35,119 @@ import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palett
 import type { WorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 
+const paletteItemIdentity = (item: { id: string }): string => item.id
+
 type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
+  Pick<WorktreeJumpPaletteObservedPrefix, 'protectedOccurrences' | 'resetPresentation'> &
   WorktreeJumpPaletteRecentTabs &
   WorktreeJumpPaletteProjectTargets &
   Pick<WorktreeJumpPaletteQuickActions, 'middleItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<
     WorktreeJumpPaletteLocalState,
-    | 'createWorktreeName'
-    | 'showCreateAction'
-    | 'expandedSectionCaps'
-    | 'setExpandedSectionCaps'
-    | 'selectedItemId'
+    'createWorktreeName' | 'showCreateAction' | 'expandedSectionCaps' | 'setExpandedSectionCaps'
   >
 
 export function useWorktreeJumpPaletteSections({
   hasQuery,
-  worktreeItems,
-  openTabItems,
+  worktreeItems: rankedWorktreeItems,
+  openTabItems: rankedOpenTabItems,
   recentTabItems,
-  projectTargetItems,
-  middleItems,
+  projectTargetItems: rankedProjectTargetItems,
+  middleItems: rankedMiddleItems,
   createWorktreeName,
   showCreateAction,
   expandedSectionCaps,
   setExpandedSectionCaps,
-  selectedItemId
+  protectedOccurrences,
+  resetPresentation
 }: WorktreeJumpPaletteSectionsInput) {
-  const openTabsLeadSections = useMemo(() => {
-    if (!hasQuery) {
-      return true
-    }
-    return shouldOpenTabsLeadPaletteSections({
-      bestWorktreeQualityRank: bestPaletteQualityRank(
-        worktreeItems.map((item) => item.match.qualityClass)
+  const worktreeItems = useMemo(
+    () =>
+      reserveObservedPaletteSection(
+        rankedWorktreeItems,
+        observedPaletteSectionKeys(protectedOccurrences, 'worktrees')
       ),
-      bestOpenTabQualityRank: bestPaletteQualityRank(
-        openTabItems.map((item) => item.result.qualityClass)
-      )
-    })
-  }, [hasQuery, openTabItems, worktreeItems])
-
-  const middleLeadsSections = useMemo(() => {
+    [rankedWorktreeItems, protectedOccurrences]
+  )
+  const openTabItems = useMemo(
+    () =>
+      reserveObservedPaletteSection(
+        rankedOpenTabItems,
+        observedPaletteSectionKeys(protectedOccurrences, 'open-tabs')
+      ),
+    [rankedOpenTabItems, protectedOccurrences]
+  )
+  const projectTargetItems = useMemo(
+    () =>
+      reserveObservedPaletteSection(
+        rankedProjectTargetItems,
+        observedPaletteSectionKeys(protectedOccurrences, 'projects')
+      ),
+    [rankedProjectTargetItems, protectedOccurrences]
+  )
+  const middleItems = useMemo(
+    () =>
+      reserveObservedPaletteSection(
+        rankedMiddleItems,
+        observedPaletteSectionKeys(protectedOccurrences, 'middle')
+      ),
+    [rankedMiddleItems, protectedOccurrences]
+  )
+  const { openTabsLeadSections, middleLeadsSections } = useMemo(() => {
     if (!hasQuery) {
-      return false
+      return { openTabsLeadSections: true, middleLeadsSections: false }
     }
-    const bestEntityQualityRank = Math.min(
-      worktreeItems.length
-        ? bestPaletteQualityRank(worktreeItems.map((item) => item.match.qualityClass))
-        : NO_PALETTE_QUALITY_RANK,
-      openTabItems.length
-        ? bestPaletteQualityRank(openTabItems.map((item) => item.result.qualityClass))
-        : NO_PALETTE_QUALITY_RANK
+    const bestWorktreeQualityRank = bestPaletteQualityRank(
+      worktreeItems.map((item) => item.match.qualityClass)
     )
-    return shouldIntentSectionLeadPaletteSections({
-      bestEntityQualityRank,
-      bestIntentQualityRank: bestPaletteQualityRank([
-        bestCmdJPaletteSectionQualityClass(middleItems.map((item) => item.result)),
-        bestCmdJPaletteSectionQualityClass(projectTargetItems.map((item) => item.result))
-      ])
-    })
+    const bestOpenTabQualityRank = openTabItems.reduce(
+      (best, item) =>
+        Math.min(
+          best,
+          cmdJEffectiveQualityRank(
+            item.result.qualityClass,
+            item.type === 'workspace-tab' && item.transcript?.complete
+          )
+        ),
+      NO_PALETTE_QUALITY_RANK
+    )
+    return {
+      openTabsLeadSections: shouldOpenTabsLeadPaletteSections({
+        bestWorktreeQualityRank,
+        bestOpenTabQualityRank
+      }),
+      middleLeadsSections: shouldIntentSectionLeadPaletteSections({
+        bestEntityQualityRank: Math.min(bestWorktreeQualityRank, bestOpenTabQualityRank),
+        bestIntentQualityRank: bestPaletteQualityRank([
+          bestCmdJPaletteSectionQualityClass(middleItems.map((item) => item.result)),
+          bestCmdJPaletteSectionQualityClass(projectTargetItems.map((item) => item.result))
+        ])
+      })
+    }
   }, [hasQuery, middleItems, openTabItems, projectTargetItems, worktreeItems])
 
   const handleExpandSection = useCallback(
     (sectionKey: string) => {
+      resetPresentation()
       setExpandedSectionCaps((previous) => ({
         ...previous,
         [sectionKey]: (previous[sectionKey] ?? 0) + PALETTE_SECTION_EXPAND_STEP
       }))
     },
-    [setExpandedSectionCaps]
+    [resetPresentation, setExpandedSectionCaps]
   )
 
   const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
   const typedWorktreeCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.worktrees ?? 0)
-  const openTabIndexById = useMemo(
-    () => new Map(openTabItems.map((item, index) => [item.id, index])),
-    [openTabItems]
-  )
-  const worktreeIndexById = useMemo(
-    () => new Map(worktreeItems.map((item, index) => [item.id, index])),
-    [worktreeItems]
-  )
-  const retainedOpenTabId =
-    hasQuery && (openTabIndexById.get(selectedItemId ?? '') ?? -1) >= openTabsCap
-      ? selectedItemId
-      : null
-  const retainedWorktreeId =
-    hasQuery && (worktreeIndexById.get(selectedItemId ?? '') ?? -1) >= typedWorktreeCap
-      ? selectedItemId
-      : null
-
   const paletteSections = useMemo(() => {
-    const retainOpenTab = (item: { id: string }): boolean => item.id === retainedOpenTabId
-    const retainWorktree = (item: { id: string }): boolean => item.id === retainedWorktreeId
     // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
     // click reveals the whole recent history the shared render cap allows.
     const recentTabsCap = expandedSectionCaps['open-tabs']
       ? openTabsCap
       : EMPTY_QUERY_RECENT_TAB_CAP
     const openTabs = hasQuery
-      ? capPaletteSection(openTabItems, openTabsCap, retainOpenTab)
+      ? capPaletteSection(openTabItems, openTabsCap, undefined, paletteItemIdentity)
       : capPaletteSection(recentTabItems, recentTabsCap)
     const baseWorktreeCap = hasQuery
       ? Infinity
@@ -143,18 +159,22 @@ export function useWorktreeJumpPaletteSections({
       ? typedWorktreeCap
       : baseWorktreeCap + (expandedSectionCaps.worktrees ?? 0)
     const worktrees = hasQuery
-      ? capPaletteSection(worktreeItems, worktreeCap, retainWorktree)
+      ? capPaletteSection(worktreeItems, worktreeCap, undefined, paletteItemIdentity)
       : {
           visible: worktreeItems.slice(0, worktreeCap),
           overflowCount: Math.max(0, worktreeItems.length - worktreeCap)
         }
     const projectTargets = capPaletteSection(
       hasQuery ? projectTargetItems : [],
-      PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.projects ?? 0)
+      PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.projects ?? 0),
+      undefined,
+      paletteItemIdentity
     )
     const middle = capPaletteSection(
       hasQuery ? middleItems : [],
-      PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.middle ?? 0)
+      PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.middle ?? 0),
+      undefined,
+      paletteItemIdentity
     )
     const multiPrimaryFirstScreen =
       hasQuery && openTabs.visible.length > 0 && worktrees.visible.length > 0
@@ -167,11 +187,11 @@ export function useWorktreeJumpPaletteSections({
             (expandedSectionCaps[openTabsLeadSections ? 'open-tabs' : 'worktrees'] ?? 0),
           leadingHardCap: openTabsLeadSections ? openTabsCap : worktreeCap,
           trailingHardCap: openTabsLeadSections ? worktreeCap : openTabsCap,
-          leadingRetain: openTabsLeadSections ? retainOpenTab : retainWorktree,
-          trailingRetain: openTabsLeadSections ? retainWorktree : retainOpenTab
+          identity: paletteItemIdentity
         })
       : null
     return {
+      availableItems: [...openTabItems, ...worktreeItems, ...projectTargetItems, ...middleItems],
       // Whole-field equality outranks website navigation; exact words alone do not.
       hasExactEntityDestination:
         worktreeItems.some((item) => (item.match.rank?.destination ?? 3) <= 1) ||
@@ -196,8 +216,6 @@ export function useWorktreeJumpPaletteSections({
     openTabsCap,
     projectTargetItems,
     recentTabItems,
-    retainedOpenTabId,
-    retainedWorktreeId,
     typedWorktreeCap,
     worktreeItems
   ])

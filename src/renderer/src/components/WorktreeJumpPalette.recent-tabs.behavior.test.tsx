@@ -10,6 +10,7 @@ import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
 import {
   LEAF_ID,
   makeAgentEntry,
@@ -211,6 +212,81 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
+  })
+
+  it.each([
+    ['working', false, true, 'Working'],
+    ['waiting', false, true, 'Needs permission'],
+    ['done', true, true, 'Unread agent completion'],
+    ['done', false, false, '']
+  ] as const)(
+    'keeps the current native %s chat in recents when actionable (unread=%s)',
+    async (state, unread, included, label) => {
+      const tab = {
+        ...makeUnifiedTab('native-tab', 'wt-alpha', 'native-session', 'Native chat'),
+        contentType: 'agent-session' as const,
+        agentSessionAgent: 'codex'
+      }
+      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      await renderPalette(
+        makeRecentTabState({
+          activeWorktreeId: 'wt-alpha',
+          activeTabType: 'agent-session',
+          activeTabId: tab.entityId,
+          activeTabIdByWorktree: { 'wt-alpha': tab.entityId },
+          activeTabTypeByWorktree: { 'wt-alpha': 'agent-session' },
+          tabsByWorktree: {},
+          ptyIdsByTabId: {},
+          unifiedTabsByWorktree: { 'wt-alpha': [tab] },
+          groupsByWorktree: { 'wt-alpha': [makeGroup('wt-alpha', [tab.id])] },
+          agentStatusByPaneKey: {
+            [paneKey]: makeAgentEntry(tab.id, state, Date.now(), { paneKey })
+          },
+          unreadAgentCompletionPanes: unread ? { [paneKey]: true } : {}
+        })
+      )
+      expect(getTabRowIds().includes(tab.id)).toBe(included)
+      if (included) {
+        expect(testContainer.textContent).toContain(label)
+        expect(testContainer.textContent).toContain('Current Tab')
+      }
+    }
+  )
+
+  it('updates a native row badge while preserving frozen current membership', async () => {
+    const tab = {
+      ...makeUnifiedTab('native-tab', 'wt-alpha', 'native-session', 'Native chat'),
+      contentType: 'agent-session' as const,
+      agentSessionAgent: 'codex'
+    }
+    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    await renderPalette(
+      makeRecentTabState({
+        activeWorktreeId: 'wt-alpha',
+        activeTabType: 'agent-session',
+        activeTabId: tab.entityId,
+        activeTabIdByWorktree: { 'wt-alpha': tab.entityId },
+        activeTabTypeByWorktree: { 'wt-alpha': 'agent-session' },
+        tabsByWorktree: {},
+        ptyIdsByTabId: {},
+        unifiedTabsByWorktree: { 'wt-alpha': [tab] },
+        groupsByWorktree: { 'wt-alpha': [makeGroup('wt-alpha', [tab.id])] },
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentEntry(tab.id, 'working', Date.now(), { paneKey })
+        }
+      })
+    )
+    expect(getTabRowIds()).toEqual([tab.id])
+    expect(testContainer.textContent).toContain('Working')
+    await act(async () => {
+      useAppStore.setState({
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentEntry(tab.id, 'done', Date.now(), { paneKey })
+        }
+      })
+    })
+    expect(getTabRowIds()).toEqual([tab.id])
+    expect(testContainer.textContent).toContain('Done')
   })
 
   it('excludes the current editor tab — no agent ladder can lift it out of "you are here"', async () => {

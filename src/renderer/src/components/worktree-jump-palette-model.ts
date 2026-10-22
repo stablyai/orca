@@ -1,5 +1,5 @@
 import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
-import type { PaletteSearchResult } from '@/lib/worktree-palette-search'
+import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-search'
 import type {
@@ -39,10 +39,21 @@ export type SimulatorPaletteItem = {
   result: SimulatorPaletteSearchResult
 }
 
+export type PaletteTranscriptSnippet = {
+  text: string
+  ranges: readonly MatchRange[]
+  leadingEllipsis?: boolean
+  trailingEllipsis?: boolean
+}
+
 export type WorkspaceTabPaletteItem = {
   id: string
   type: 'workspace-tab'
   result: WorkspaceTabPaletteSearchResult
+  /** Evidence from the session index when this chat's transcript matched the query. */
+  transcriptSnippet?: PaletteTranscriptSnippet
+  transcript?: { complete: boolean; ordinal: number }
+  transcriptReserved?: boolean
 }
 
 export type SettingsPaletteItem = {
@@ -63,10 +74,18 @@ export type ProjectTargetPaletteItem = {
   result: CmdJProjectSearchResult & Pick<CmdJRankedProjectSearchResult, 'qualityClass'>
 }
 
-export type SectionHeader = { id: string; type: 'section-header'; label: string }
+export type PaletteSectionKey = 'open-tabs' | 'worktrees' | 'projects' | 'middle' | 'tasks'
+
+export type SectionHeader = {
+  id: string
+  type: 'section-header'
+  section: PaletteSectionKey
+  label: string
+}
 export type HintRow = {
   id: string
   type: 'hint'
+  section: PaletteSectionKey
   label: string
   onSeeMore?: () => void
 }

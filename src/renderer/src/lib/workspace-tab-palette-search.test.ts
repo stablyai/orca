@@ -645,3 +645,46 @@ describe('workspace-tab-palette-search', () => {
     expect(hyphenated[0]?.occupantAgent).toBeNull()
   })
 })
+
+it('includes native chat titles, provider icons, and current group selection without a terminal or file', () => {
+  const tab = makeUnifiedTab({
+    contentType: 'agent-session',
+    entityId: 'native-session',
+    label: 'Browser annotation',
+    agentSessionAgent: 'codex'
+  })
+  const entries = buildEntries({
+    unifiedTabsByWorktree: { 'wt-1': [tab] },
+    tabsByWorktree: {},
+    activeTabType: 'agent-session',
+    activeTabTypeByWorktree: { 'wt-1': 'agent-session' }
+  })
+  const results = searchWorkspaceTabs(entries, 'Browser annotation')
+  expect(results).toMatchObject([
+    {
+      tabId: tab.id,
+      contentType: 'agent-session',
+      occupantAgent: 'codex',
+      isCurrentTab: true
+    }
+  ])
+})
+
+it('routes a hostless native tab from a paired catalog through its owning runtime', () => {
+  const worktree = makeWorktree({ hostId: 'local', runtimeOwnerEnvironmentId: 'paired-server' })
+  const entries = buildEntries({
+    worktrees: [worktree],
+    unifiedTabsByWorktree: {
+      [worktree.id]: [makeUnifiedTab({ contentType: 'agent-session', label: 'Release discussion' })]
+    },
+    tabsByWorktree: {}
+  })
+  const results = searchWorkspaceTabs(entries, 'Release discussion')
+  expect(results).toMatchObject([
+    {
+      contentType: 'agent-session',
+      executionHostId: 'runtime:paired-server'
+    }
+  ])
+  expect(results[0].paletteIdentity).toContain('runtime:paired-server')
+})

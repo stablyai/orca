@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   orderRecentWorkspaceTabs,
+  recentWorkspaceTabHasUnreadActivity,
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
@@ -10,6 +11,8 @@ import {
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../shared/agent-status-types'
+import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'
@@ -110,6 +113,139 @@ describe('orderRecentWorkspaceTabs', () => {
 })
 
 describe('resolveRecentWorkspaceTabStatus', () => {
+  function nativeRow(overrides: Partial<RecentWorkspaceTabRow> = {}): RecentWorkspaceTabRow {
+    return row('native', {
+      worktreeId: 'folder:design',
+      unifiedTabId: 'native-tab',
+      terminalTab: null,
+      nativeChat: { sessionId: 'session-1', executionHostId: 'local' },
+      ...overrides
+    })
+  }
+
+  function nativeSummary(
+    overrides: Partial<AgentSessionStatusSummary> = {}
+  ): AgentSessionStatusSummary {
+    return {
+      sessionId: 'session-1',
+      workspaceId: 'folder:design',
+      agent: 'codex',
+      status: 'working',
+      latestPrompt: '',
+      updatedAt: NOW,
+      ...overrides
+    }
+  }
+
+  it.each([
+    ['working', 'working'],
+    ['attention', 'permission'],
+    ['idle', 'done'],
+    [null, 'inactive']
+  ] as const)('resolves native %s without terminal records', (status, expected) => {
+    expect(
+      resolveRecentWorkspaceTabStatus(nativeRow(), sources([]), NOW, nativeSummary({ status }))
+    ).toBe(expected)
+  })
+
+  it('decays stale native evidence while respecting live host execution ownership', () => {
+    const stale = nativeSummary({ updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1 })
+    expect(resolveRecentWorkspaceTabStatus(nativeRow(), sources([]), NOW, stale)).toBe('inactive')
+    expect(
+      resolveRecentWorkspaceTabStatus(nativeRow(), sources([]), NOW, {
+        ...stale,
+        hostExecutionOwned: true
+      })
+    ).toBe('working')
+  })
+
+  it('rejects summaries for another native session or workspace', () => {
+    for (const summary of [
+      nativeSummary({ sessionId: 'old-session' }),
+      nativeSummary({ workspaceId: 'other-workspace' })
+    ]) {
+      expect(resolveRecentWorkspaceTabStatus(nativeRow(), sources([]), NOW, summary)).toBe(
+        'inactive'
+      )
+    }
+  })
+
+  it('reads exact local synthetic status keys and optional old-host attribution', () => {
+    const paneKey = structuredAgentSessionPaneKey('native-tab', 'session-1')
+    const nativeEntry = entry('native-tab', 'blocked', NOW, { paneKey })
+    expect(resolveRecentWorkspaceTabStatus(nativeRow(), sources([nativeEntry]), NOW)).toBe(
+      'permission'
+    )
+    for (const invalid of [
+      { ...nativeEntry, paneKey: structuredAgentSessionPaneKey('native-tab', 'old-session') },
+      { ...nativeEntry, worktreeId: 'other-workspace' },
+      { ...nativeEntry, tabId: 'other-tab' },
+      { ...nativeEntry, connectionId: 'other-host' },
+      { ...nativeEntry, updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1 },
+      { ...nativeEntry, restoredUnconfirmed: true }
+    ]) {
+      expect(resolveRecentWorkspaceTabStatus(nativeRow(), sources([invalid]), NOW)).toBe('inactive')
+    }
+  })
+
+  it('requires a host-qualified summary for remote or ambiguous native tabs', () => {
+    const local = entry('native-tab', 'blocked', NOW, {
+      paneKey: structuredAgentSessionPaneKey('native-tab', 'session-1')
+    })
+    for (const nativeChat of [
+      { sessionId: 'session-1', executionHostId: 'runtime:remote' as const },
+      { sessionId: 'session-1', executionHostId: 'local' as const, ambiguousTabId: true }
+    ]) {
+      const native = nativeRow({ nativeChat })
+      expect(resolveRecentWorkspaceTabStatus(native, sources([local]), NOW)).toBe('inactive')
+      expect(resolveRecentWorkspaceTabStatus(native, sources([local]), NOW, nativeSummary())).toBe(
+        'working'
+      )
+    }
+  })
+
+  it('uses the newer local feed or synthetic projection instead of replaying an older state', () => {
+    const projected = entry('native-tab', 'blocked', NOW - 1, {
+      paneKey: structuredAgentSessionPaneKey('native-tab', 'session-1')
+    })
+    expect(
+      resolveRecentWorkspaceTabStatus(nativeRow(), sources([projected]), NOW, nativeSummary())
+    ).toBe('working')
+    expect(
+      resolveRecentWorkspaceTabStatus(
+        nativeRow(),
+        sources([{ ...projected, updatedAt: NOW }]),
+        NOW,
+        nativeSummary()
+      )
+    ).toBe('permission')
+  })
+
+  it('reads only the current native session unread edge and rejects ambiguous tab markers', () => {
+    const native = nativeRow()
+    const unread = (unreadAgentCompletionPanes: Record<string, true>) =>
+      recentWorkspaceTabHasUnreadActivity({
+        row: native,
+        unreadTerminalTabs: {},
+        unreadAgentCompletionPanes
+      })
+    expect(unread({ [structuredAgentSessionPaneKey('native-tab', 'old-session')]: true })).toBe(
+      false
+    )
+    expect(unread({ [structuredAgentSessionPaneKey('native-tab', 'session-1')]: true })).toBe(true)
+    expect(
+      recentWorkspaceTabHasUnreadActivity({
+        row: nativeRow({
+          nativeChat: { sessionId: 'session-1', executionHostId: 'local', ambiguousTabId: true }
+        }),
+        unreadTerminalTabs: { 'native-tab': true },
+        unreadAgentCompletionPanes: {
+          [structuredAgentSessionPaneKey('native-tab', 'session-1')]: true
+        }
+      })
+    ).toBe(false)
+  })
+
   it.each(['tab', 'pane'] as const)(
     'suppresses a stale done pane permission %s title',
     (surface) => {

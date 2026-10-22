@@ -2,6 +2,11 @@ import type { AppState } from '@/store/types'
 import { resolveRuntimePaneTitleLeafId } from '../../../../shared/runtime-pane-title-leaf-id'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  agentEntryPromptCandidates,
+  normalizeSessionPrompt,
+  sessionPromptsMatch
+} from '../../../../shared/ai-vault-session-prompt-match'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
@@ -32,31 +37,9 @@ function providerSessionMatches(session: AiVaultSession, providerSessionId: stri
   return providerSessionId === session.sessionId
 }
 
-function normalizeMatchText(value: string | null | undefined): string {
-  return value?.trim().replace(/\s+/g, ' ').toLowerCase() ?? ''
-}
-
-function longEnoughForPrefixMatch(value: string): boolean {
-  return value.length >= 24
-}
-
-function textMatchesSessionPrompt(sessionText: string, candidateText: string): boolean {
-  if (!sessionText || !candidateText) {
-    return false
-  }
-  if (sessionText === candidateText) {
-    return true
-  }
-  return (
-    longEnoughForPrefixMatch(sessionText) &&
-    longEnoughForPrefixMatch(candidateText) &&
-    (sessionText.startsWith(candidateText) || candidateText.startsWith(sessionText))
-  )
-}
-
 function sessionPromptCandidates(session: AiVaultSession): string[] {
   const candidates = new Set<string>()
-  const title = normalizeMatchText(session.title)
+  const title = normalizeSessionPrompt(session.title)
   if (title) {
     candidates.add(title)
   }
@@ -64,25 +47,7 @@ function sessionPromptCandidates(session: AiVaultSession): string[] {
     if (message.role !== 'user') {
       continue
     }
-    const text = normalizeMatchText(message.text)
-    if (text) {
-      candidates.add(text)
-    }
-  }
-  return [...candidates]
-}
-
-function entryPromptCandidates(entry: {
-  prompt?: string
-  stateHistory?: readonly { prompt: string }[]
-}): string[] {
-  const candidates = new Set<string>()
-  const prompt = normalizeMatchText(entry.prompt)
-  if (prompt) {
-    candidates.add(prompt)
-  }
-  for (const historyEntry of entry.stateHistory ?? []) {
-    const text = normalizeMatchText(historyEntry.prompt)
+    const text = normalizeSessionPrompt(message.text)
     if (text) {
       candidates.add(text)
     }
@@ -92,15 +57,15 @@ function entryPromptCandidates(entry: {
 
 export function promptsMatchSession(
   session: AiVaultSession,
-  entry: Parameters<typeof entryPromptCandidates>[0]
+  entry: Parameters<typeof agentEntryPromptCandidates>[0]
 ): boolean {
   const sessionCandidates = sessionPromptCandidates(session)
   if (sessionCandidates.length === 0) {
     return false
   }
-  const entryCandidates = entryPromptCandidates(entry)
+  const entryCandidates = agentEntryPromptCandidates(entry)
   return sessionCandidates.some((sessionText) =>
-    entryCandidates.some((entryText) => textMatchesSessionPrompt(sessionText, entryText))
+    entryCandidates.some((entryText) => sessionPromptsMatch(sessionText, entryText))
   )
 }
 

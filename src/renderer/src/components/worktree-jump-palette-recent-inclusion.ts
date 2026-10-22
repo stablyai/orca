@@ -1,9 +1,9 @@
 import type { ReadableAgentAttentionUnread } from '@/attention/agent-attention-contract'
+import { resolveTerminalTabAttentionBadge } from '@/components/tab-bar/terminal-tab-activity-status'
 import {
-  resolveTerminalTabAttentionBadge,
-  terminalTabHasUnreadActivity
-} from '@/components/tab-bar/terminal-tab-activity-status'
-import { resolveRecentWorkspaceTabStatus } from '@/lib/recent-workspace-tab-rows'
+  recentWorkspaceTabHasUnreadActivity,
+  resolveRecentWorkspaceTabStatus
+} from '@/lib/recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
 import type { OpenTabPaletteItem, OpenTabRecentRow } from './worktree-jump-palette-model'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -35,13 +35,13 @@ export function shouldIncludeOpenTabInRecentSection({
   if (!isCurrentOpenTabItem(item)) {
     return true
   }
-  if (!row.terminalTab) {
+  if (!row.terminalTab && !row.nativeChat) {
     return false
   }
   const badge = resolveTerminalTabAttentionBadge({
     status: resolveRecentWorkspaceTabStatus(row, paneSources, now),
-    hasUnread: terminalTabHasUnreadActivity({
-      terminalTabId: row.terminalTab.id,
+    hasUnread: recentWorkspaceTabHasUnreadActivity({
+      row,
       unreadTerminalTabs,
       unreadAgentCompletionPanes
     })

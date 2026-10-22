@@ -13,8 +13,8 @@ it('keeps exact text, timestamps, and order across spills and closes its tempora
   const buffer = new SessionSearchWriteBuffer(1)
   const rows = [
     { role: 'user' as const, text: '😀\u0000\nfirst', timestamp: '2026-10-19T00:00:00.000Z' },
-    { role: 'tool' as const, text: '工具\r\nsecond', timestamp: null },
-    { role: 'assistant' as const, text: 'last', timestamp: null }
+    { role: 'tool' as const, text: '工具\r\nsecond', timestamp: null, sourceBoundaries: 1 },
+    { role: 'assistant' as const, text: 'last', timestamp: null, sourceBoundaries: 2 }
   ]
   try {
     buffer.add(rows[0])

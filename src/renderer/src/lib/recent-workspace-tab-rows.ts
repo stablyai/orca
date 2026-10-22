@@ -7,10 +7,23 @@ import {
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
-import type { WorktreeStatus } from './worktree-status'
+import { resolveWorktreeStatus, type WorktreeStatus } from './worktree-status'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import { decodeAgentChildWorkViews } from '../../../shared/agent-status-child-work-view-wire'
+import {
+  applyAgentPaneActivityFlags,
+  type AgentPaneActivityFlags
+} from './agent-pane-activity-flags'
+import {
+  readAgentAttentionUnreadReason,
+  type ReadableAgentAttentionUnread
+} from '@/attention/agent-attention-contract'
+import { terminalTabHasUnreadActivity } from '@/components/tab-bar/terminal-tab-activity-status'
 
 /** Row model for Cmd+J's empty-query recent tabs section. */
 export type RecentWorkspaceTabRow = {
@@ -29,6 +42,12 @@ export type RecentWorkspaceTabRow = {
   unifiedTabId: string | null
   /** Terminal tab whose panes carry agent state. Null for editor, browser and simulator rows. */
   terminalTab: Pick<TerminalTab, 'id' | 'title'> | null
+  nativeChat?: {
+    sessionId: string
+    executionHostId: ExecutionHostId
+    ambiguousTabId?: boolean
+    summary?: AgentSessionStatusSummary | null
+  }
   worktreeLastActivityAt: number
   lastFocusedAt?: number | null
 }
@@ -51,8 +70,12 @@ const STATUS_BY_ATTENTION_CLASS: Record<SmartClass, WorktreeStatus | null> = {
 export function resolveRecentWorkspaceTabStatus(
   row: RecentWorkspaceTabRow,
   paneSources: TabPaneInputSources,
-  now: number
+  now: number,
+  nativeChatSummary = row.nativeChat?.summary
 ): WorktreeStatus {
+  if (row.nativeChat) {
+    return resolveRecentNativeChatStatus(row, paneSources, now, nativeChatSummary)
+  }
   if (!row.terminalTab) {
     return 'inactive'
   }
@@ -93,6 +116,108 @@ export function resolveRecentWorkspaceTabStatus(
     return explicit
   }
   return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'
+}
+
+function resolveRecentNativeChatStatus(
+  row: RecentWorkspaceTabRow,
+  paneSources: TabPaneInputSources,
+  now: number,
+  summary: AgentSessionStatusSummary | null | undefined
+): WorktreeStatus {
+  const nativeChat = row.nativeChat
+  if (!nativeChat || !row.unifiedTabId) {
+    return 'inactive'
+  }
+  const flags: AgentPaneActivityFlags = {
+    hasPermission: false,
+    hasLiveWorking: false,
+    hasLiveMonitoring: false,
+    hasFailed: false,
+    hasInterrupted: false,
+    hasUnconfirmed: false,
+    hasLiveDone: false
+  }
+  const paneKey = structuredAgentSessionPaneKey(row.unifiedTabId, nativeChat.sessionId)
+  const entry =
+    nativeChat.executionHostId === 'local' && !nativeChat.ambiguousTabId
+      ? paneSources.entriesByTabId
+          .get(row.unifiedTabId)
+          ?.find((candidate) => candidate.paneKey === paneKey)
+      : undefined
+  if (
+    entry &&
+    !entry.connectionId &&
+    (!entry.tabId || entry.tabId === row.unifiedTabId) &&
+    (!entry.worktreeId || entry.worktreeId === row.worktreeId) &&
+    entry.updatedAt >= (summary?.updatedAt ?? -Infinity) &&
+    isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+  ) {
+    applyAgentPaneActivityFlags(flags, entry)
+  } else if (summary !== undefined && summary !== null) {
+    if (
+      summary.sessionId !== nativeChat.sessionId ||
+      summary.workspaceId !== row.worktreeId ||
+      !summary.status ||
+      !isExplicitAgentStatusFresh(
+        { updatedAt: summary.updatedAt, structuredHostOwned: summary.hostExecutionOwned },
+        now,
+        AGENT_STATUS_STALE_AFTER_MS
+      )
+    ) {
+      return 'inactive'
+    }
+    const status = structuredAgentSessionAgentStatus({
+      ...summary,
+      status: summary.status,
+      childWork: decodeAgentChildWorkViews(summary.children) ?? summary.backgroundTasks
+    })
+    applyAgentPaneActivityFlags(flags, {
+      ...status,
+      mainAgent: {
+        ...status.mainAgent,
+        stateStartedAt: summary.statusStartedAt ?? summary.updatedAt
+      }
+    })
+  }
+  return resolveWorktreeStatus({
+    tabs: [],
+    browserTabs: [],
+    ptyIdsByTabId: {},
+    ...flags,
+    hasRetainedDone: false
+  })
+}
+
+export function recentWorkspaceTabHasUnreadActivity({
+  row,
+  unreadTerminalTabs,
+  unreadAgentCompletionPanes
+}: {
+  row: RecentWorkspaceTabRow
+  unreadTerminalTabs: Record<string, ReadableAgentAttentionUnread>
+  unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread>
+}): boolean {
+  if (row.nativeChat && row.unifiedTabId) {
+    if (row.nativeChat.ambiguousTabId) {
+      return false
+    }
+    return (
+      readAgentAttentionUnreadReason(unreadTerminalTabs[row.unifiedTabId]) !== null ||
+      readAgentAttentionUnreadReason(
+        unreadAgentCompletionPanes[
+          structuredAgentSessionPaneKey(row.unifiedTabId, row.nativeChat.sessionId)
+        ]
+      ) !== null
+    )
+  }
+  return (
+    row.terminalTab != null &&
+    terminalTabHasUnreadActivity({
+      terminalTabId: row.terminalTab.id,
+      unreadTerminalTabs,
+      unreadAgentCompletionPanes
+    })
+  )
 }
 
 /** Unknown visit times stay at the bottom in their existing order. */

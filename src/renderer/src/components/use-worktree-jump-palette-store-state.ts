@@ -1,4 +1,10 @@
+import { resolveAiVaultSearchSettings } from '../../../shared/ai-vault-search-settings'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { aiVaultSearchNeedsLocalConsent } from './right-sidebar/use-ai-vault-search'
 import { useMemo } from 'react'
+import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
+import type { AppState } from '@/store/types'
+import { agentEntryPromptCandidates } from '../../../shared/ai-vault-session-prompt-match'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -19,10 +25,12 @@ import {
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
-  lingering
+  lingering,
+  query
 }: {
   visible: boolean
   lingering: boolean
+  query: string
 }) {
   useTranslation()
   // Freeze age labels for one palette session; live status dots own their clock separately.
@@ -88,6 +96,63 @@ export function useWorktreeJumpPaletteStoreState({
     unreadTerminalTabs,
     unreadAgentCompletionPanes
   } = paletteIndexStatus
+  const settings = useAppStore((state) => state.settings)
+  const hasRemoteTranscriptOwner = useMemo(
+    () =>
+      workspaces.some(
+        (workspace) =>
+          workspace.runtimeOwnerEnvironmentId ||
+          (workspace.hostId && workspace.hostId !== LOCAL_EXECUTION_HOST_ID)
+      ) || repos.some((repo) => getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID),
+    [workspaces, repos]
+  )
+  const transcriptIdentityActive =
+    visible &&
+    query.trim().length > 0 &&
+    !isWorktreePaletteQueryTooLarge(query) &&
+    (hasRemoteTranscriptOwner ||
+      !aiVaultSearchNeedsLocalConsent(
+        LOCAL_EXECUTION_HOST_ID,
+        resolveAiVaultSearchSettings(settings).enabled
+      ))
+  const selectTranscriptIdentity = useMemo(() => {
+    let previousMap: AppState['agentStatusByPaneKey'] | undefined
+    let previous: unknown[] = []
+    const entries = new WeakMap<AppState['agentStatusByPaneKey'][string], unknown[]>()
+    return (state: AppState): unknown[] => {
+      if (!transcriptIdentityActive) {
+        return previous
+      }
+      if (previousMap === state.agentStatusByPaneKey) {
+        return previous
+      }
+      previousMap = state.agentStatusByPaneKey
+      previous = Object.entries(previousMap).flatMap(([key, entry]) => {
+        let identity = entries.get(entry)
+        if (!identity) {
+          identity = [
+            entry.paneKey,
+            entry.worktreeId,
+            entry.tabId,
+            entry.agentType,
+            entry.providerSession?.id,
+            entry.providerSession === undefined
+              ? JSON.stringify(agentEntryPromptCandidates(entry))
+              : null
+          ]
+          entries.set(entry, identity)
+        }
+        return [key, ...identity]
+      })
+      return previous
+    }
+  }, [transcriptIdentityActive])
+  const transcriptPaneIdentity = useAppStore(useShallow(selectTranscriptIdentity))
+  const transcriptAgentStatusByPaneKey = useMemo(
+    () => (transcriptIdentityActive ? useAppStore.getState().agentStatusByPaneKey : {}),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- only pane identity changes refresh transcript lookup.
+    [transcriptIdentityActive, transcriptPaneIdentity]
+  )
   const openFiles = useAppStore((state) => state.openFiles)
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
@@ -96,7 +161,6 @@ export function useWorktreeJumpPaletteStoreState({
     (state) => state.sleepingAgentSessionsByPaneKey
   )
   const paneForegroundAgentByPaneKey = useAppStore((state) => state.paneForegroundAgentByPaneKey)
-  const settings = useAppStore((state) => state.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore(
     (state) => state.worktreeVisibilityDefaultsByHost
   )
@@ -171,6 +235,7 @@ export function useWorktreeJumpPaletteStoreState({
     unifiedTabsByWorktree,
     structuredChatSleptAtByPaneKey,
     agentStatusByPaneKey,
+    transcriptAgentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     unreadTerminalTabs,
     unreadAgentCompletionPanes,

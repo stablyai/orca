@@ -1,3 +1,5 @@
+import { activateStructuredAgentSessionTab } from './structured-agent-session-tab-activation'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
@@ -79,7 +81,7 @@ function validateTarget(
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (result.contentType !== 'terminal') {
+  if (result.contentType !== 'terminal' && result.contentType !== 'agent-session') {
     const files = state.openFiles.filter((file) => file.id === result.entityId)
     if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
       return 'missing-file'
@@ -120,6 +122,15 @@ export function activateWorkspaceTabPaletteResult(
   }
 
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, result.worktreeId)
+  if (result.contentType === 'agent-session') {
+    return activateStructuredAgentSessionTab({
+      worktreeId: result.worktreeId,
+      tabId: result.tabId,
+      target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId)
+    })
+      ? { status: 'activated' }
+      : { status: 'failed', reason: 'missing-tab' }
+  }
   state.focusGroup(result.worktreeId, result.groupId)
   state.activateTab(result.tabId, { worktreeId: result.worktreeId })
 

@@ -3,6 +3,10 @@ import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers
 import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import { identifierShadowText } from './session-search-identifier-split'
 
+export type SearchMessageRow = TranscriptMessage & {
+  sourceBoundaries?: number
+}
+
 const CHUNK_TARGET_CHARS = 8000
 
 /**
@@ -76,17 +80,25 @@ function* textChunks(text: string): Generator<string> {
  */
 export function* searchMessageRows(
   messages: Iterable<TranscriptMessage>
-): Generator<TranscriptMessage> {
+): Generator<SearchMessageRow> {
   for (const message of messages) {
     if (message.role === 'tool') {
       yield {
         ...message,
-        text: sliceAtCodeUnitLimit(message.text, TOOL_ROW_CHARS)
+        text: sliceAtCodeUnitLimit(message.text, TOOL_ROW_CHARS),
+        sourceBoundaries: message.text.length <= TOOL_ROW_CHARS ? 3 : 1
       }
       continue
     }
+    let offset = 0
     for (const text of textChunks(message.text)) {
-      yield { ...message, text }
+      const start = offset
+      offset += text.length
+      yield {
+        ...message,
+        text,
+        sourceBoundaries: (start === 0 ? 1 : 0) | (offset === message.text.length ? 2 : 0)
+      }
     }
   }
 }
@@ -100,12 +112,14 @@ export function* searchMessageRows(
 export function insertSearchMessage(
   db: SyncDatabase,
   sessionId: number,
-  message: TranscriptMessage
+  message: SearchMessageRow
 ): void {
   const text = message.text
   const id = db
-    .prepare('INSERT INTO messages(session_row_id, role, ts) VALUES (?, ?, ?)')
-    .run(sessionId, message.role, message.timestamp).lastInsertRowid
+    .prepare(
+      'INSERT INTO messages(session_row_id, role, ts, source_boundaries) VALUES (?, ?, ?, ?)'
+    )
+    .run(sessionId, message.role, message.timestamp, message.sourceBoundaries ?? 0).lastInsertRowid
   const user = message.role === 'user' ? text : ''
   const assistant = message.role === 'assistant' ? text : ''
   const tool = message.role === 'tool' ? text : ''

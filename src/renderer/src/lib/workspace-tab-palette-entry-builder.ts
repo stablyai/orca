@@ -1,7 +1,9 @@
+import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-current-tab'
 import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { Tab } from '../../../shared/tab-types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
@@ -35,66 +37,6 @@ import {
 import type { OpenFile } from '@/store/slices/editor'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
-
-function getActiveUnifiedTabId({
-  worktreeId,
-  isCurrentWorktree,
-  activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'groupsByWorktree'
-> & { worktreeId: string; isCurrentWorktree: boolean }): string | null {
-  if (!isCurrentWorktree) {
-    return null
-  }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
-  const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
-    : undefined
-  const activeUnifiedTabId = activeGroup?.activeTabId ?? null
-  return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
-}
-
-function isCurrentWorkspaceTab({
-  tab,
-  isCurrentWorktree,
-  activeTabType,
-  activeTabId,
-  activeTabIdByWorktree,
-  activeFileId,
-  activeFileIdByWorktree,
-  activeTabTypeByWorktree,
-  activeUnifiedTabId
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-> & {
-  tab: Tab & { contentType: WorkspaceTabContentType }
-  isCurrentWorktree: boolean
-  activeUnifiedTabId: string | null
-}): boolean {
-  if (!isCurrentWorktree) {
-    return false
-  }
-  if (activeUnifiedTabId) {
-    return activeUnifiedTabId === tab.id
-  }
-  const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
-  const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
-  if (storedType !== visibleType) {
-    return false
-  }
-  return visibleType === 'terminal'
-    ? (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
-    : (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
-}
 
 export function buildSearchableWorkspaceTabEntries({
   worktrees,
@@ -210,14 +152,18 @@ export function buildSearchableWorkspaceTabEntries({
         }),
         isCurrentWorktree
       }
-      if (tab.contentType === 'terminal') {
-        const terminalTab = terminalTabs.get(tab.entityId)
+      if (tab.contentType === 'terminal' || tab.contentType === 'agent-session') {
+        const structured = tab.contentType === 'agent-session'
+        const terminalTab = structured ? undefined : terminalTabs.get(tab.entityId)
+        const typeAliases = structured ? ['chat'] : ['terminal tab', 'terminal']
         if (terminalTab === null) {
           continue
         }
         const terminalTitle = terminalTab
           ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
-          : 'Terminal'
+          : structured
+            ? tab.label
+            : 'Terminal'
         const title = resolveUnifiedTabLabel(
           {
             ...tab,
@@ -235,7 +181,7 @@ export function buildSearchableWorkspaceTabEntries({
           secondaryText: '',
           titleSearchText: title,
           secondarySearchTexts: [],
-          typeSearchAliases: ['terminal tab', 'terminal'],
+          typeSearchAliases: typeAliases,
           document: buildPaletteTabDocument({
             id: tab.id,
             title,
@@ -243,25 +189,29 @@ export function buildSearchableWorkspaceTabEntries({
             worktreeName,
             branch,
             repoName,
-            typeAliases: ['terminal tab', 'terminal']
+            typeAliases
           }),
           agentMetadata: collectAgentMetadataFromIndex(
             agentIndex,
-            tab.entityId,
+            structured ? tab.id : tab.entityId,
             worktree,
             ambiguousWorktreeIds
           ),
-          occupantAgent: resolveOpenTabOccupantAgent({
-            tabId: tab.entityId,
-            title,
-            defaultTitle: terminalTab?.defaultTitle,
-            launchAgent: terminalTab?.launchAgent,
-            layout: terminalLayoutsByTabId?.[tab.entityId],
-            agentStatusByPaneKey,
-            retainedAgentsByPaneKey,
-            sleepingAgentSessionsByPaneKey,
-            paneForegroundAgentByPaneKey
-          })
+          occupantAgent: structured
+            ? isTuiAgent(tab.agentSessionAgent)
+              ? tab.agentSessionAgent
+              : null
+            : resolveOpenTabOccupantAgent({
+                tabId: tab.entityId,
+                title,
+                defaultTitle: terminalTab?.defaultTitle,
+                launchAgent: terminalTab?.launchAgent,
+                layout: terminalLayoutsByTabId?.[tab.entityId],
+                agentStatusByPaneKey,
+                retainedAgentsByPaneKey,
+                sleepingAgentSessionsByPaneKey,
+                paneForegroundAgentByPaneKey
+              })
         })
         continue
       }

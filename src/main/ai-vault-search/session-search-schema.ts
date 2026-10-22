@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,
   role TEXT NOT NULL,
-  ts TEXT
+  ts TEXT,
+  source_boundaries INTEGER NOT NULL DEFAULT 0
 );
 -- Both the replace delete and the orphan drain walk a session's rows through this.
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
@@ -99,10 +100,24 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {
     version: SESSION_SEARCH_SCHEMA_VERSION,
     sql: SCHEMA_SQL,
-    afterSchema: (db) =>
-      db
-        .prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)')
-        .run('index_incarnation', randomUUID())
+    afterSchema: (db) => {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        const columns = db.prepare('PRAGMA table_info(messages)').all()
+        if (!columns.some((column) => column.name === 'source_boundaries')) {
+          db.exec('ALTER TABLE messages ADD COLUMN source_boundaries INTEGER NOT NULL DEFAULT 0')
+          db.exec("UPDATE files SET state = 'due' WHERE state = 'current'")
+        }
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+      db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+        'index_incarnation',
+        randomUUID()
+      )
+    }
   })
 }
 

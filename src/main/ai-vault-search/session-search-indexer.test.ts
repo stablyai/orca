@@ -1111,3 +1111,29 @@ it('hands the rest of a pass back when it runs out of wall time', async () => {
   await nextCycle()
   expect(indexer?.status()).toMatchObject({ filesIndexed: 20, filesDue: 0 })
 })
+
+it('refreshes migrated message provenance from unchanged transcripts through the due-file lane', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['refresh'], SESSION_ID)
+  await newIndexer().start()
+  const before = await stat(path)
+  indexer?.close()
+  harness.write((db) => db.exec('ALTER TABLE messages DROP COLUMN source_boundaries'))
+  expect(sessionsMatching('refresh')).toEqual([SESSION_ID])
+
+  const migrated = newIndexer()
+  expect(fileState(path)).toBe('due')
+  expect(
+    harness.read((db) => db.prepare('SELECT DISTINCT source_boundaries FROM messages').all())
+  ).toEqual([{ source_boundaries: 0 }])
+  await migrated.start()
+  expect(fileState(path)).toBe('current')
+  expect(
+    harness.read((db) => db.prepare('SELECT DISTINCT source_boundaries FROM messages').all())
+  ).toEqual([{ source_boundaries: 3 }])
+  expect(sessionsMatching('refresh')).toEqual([SESSION_ID])
+  expect((await stat(path)).mtimeMs).toBe(before.mtimeMs)
+  migrated.close()
+  newIndexer()
+  expect(fileState(path)).toBe('current')
+})

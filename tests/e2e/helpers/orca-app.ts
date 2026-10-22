@@ -21,7 +21,7 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { closeElectronAppForE2E } from './electron-process-shutdown'
@@ -187,7 +187,16 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Establish fixture ordering: registered path cleanup must run only after
     // this Electron fixture has released watchers, terminals, and daemons.
     void registerPostElectronShutdownCleanup
-    const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+    const buildRoot = process.env.ORCA_E2E_BUILD_DIR
+    const mainPath = path.join(
+      buildRoot ? path.resolve(buildRoot) : path.join(process.cwd(), 'out'),
+      'main',
+      'index.js'
+    )
+    const appRoot = path.dirname(path.dirname(path.dirname(mainPath)))
+    if (!existsSync(mainPath) || !existsSync(path.join(appRoot, 'package.json'))) {
+      throw new Error(`E2E requires a built app and package.json: ${mainPath}`)
+    }
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
 
     if (dismissOnboarding) {

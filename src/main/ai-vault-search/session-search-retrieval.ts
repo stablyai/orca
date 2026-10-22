@@ -9,7 +9,7 @@ import {
   scopedExpression,
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
-import type { SessionRowFilter } from './session-search-row-filter'
+import { matchedSessionEligibilityCte, type SessionRowFilter } from './session-search-row-filter'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
 // The operator-only walk: rows per page, and how far past a full candidate set
@@ -48,8 +48,11 @@ const SESSION_COLUMN_LIST = (
 
 export type RetrievalScope = {
   scope: SessionSearchScope
+  preserveForks?: boolean
   sort: 'relevance' | 'newest'
   filter: SessionRowFilter
+  /** Eligibility also governs spelling decisions; absent preserves legacy repair scope. */
+  repairFilter?: SessionRowFilter
   /**
    * `repo:` / `path:`, which SQL cannot express. Applied over retrieved rows;
    * see session-search-row-filter for why it cannot be pushed down.
@@ -119,7 +122,7 @@ export class SessionSearchRetrieval {
     if (exact) {
       return { ...exact, plan, incomplete, sessions }
     }
-    const repaired = this.repair(plan, scope.scope)
+    const repaired = this.repair(plan, scope.scope, scope.repairFilter)
     const effective = repaired ?? plan
     const literal = repaired ? this.phraseThenAnd(repaired, match) : null
     const found = literal ?? {
@@ -197,7 +200,8 @@ export class SessionSearchRetrieval {
 
   private repair(
     plan: SessionSearchQueryPlan,
-    scope: SessionSearchScope
+    scope: SessionSearchScope,
+    filter?: SessionRowFilter
   ): SessionSearchQueryPlan | null {
     const typoRepair = this.typoRepair
     let changed = false
@@ -212,7 +216,7 @@ export class SessionSearchRetrieval {
       }
       // Repaired inside the scope the search will run in, so a spelling only
       // tool output carries neither suppresses a repair nor becomes one.
-      const fix = typoRepair.correct(token, scope)
+      const fix = typoRepair.correct(token, scope, filter)
       if (fix && fix !== token.toLowerCase()) {
         changed = true
         return fix
@@ -260,7 +264,9 @@ export class SessionSearchRetrieval {
   private match(expression: string, scope: RetrievalScope): MessageRow[] {
     const { filter, sort, candidateLimit } = scope
     const eligible = filter.conditions.length
-      ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
+      ? filter.matchedRowsOnly
+        ? ' AND m.session_row_id IN (SELECT id FROM eligible_sessions)'
+        : ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
       : ''
     const matched = `SELECT messages_fts.rowid AS rowid,
       -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score,
@@ -275,11 +281,16 @@ export class SessionSearchRetrieval {
     // temp b-tree over every match. No inner LIMIT can bound it: the CTE has no
     // order, so any cut drops whole sessions rather than their surplus rows.
     const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'
-    const sql = `WITH matched AS MATERIALIZED (${matched})
+    const eligibilityCte = filter.matchedRowsOnly ? `${matchedSessionEligibilityCte(filter)}, ` : ''
+    const sql = `WITH ${eligibilityCte}matched AS MATERIALIZED (${matched})
       SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
       GROUP BY session_row_id ORDER BY ${order} LIMIT ${candidateLimit}`
+    const match = scopedExpression(scope.scope, expression)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private messages schema and explicit SELECT project exactly MessageRow.
     return this.db
       .prepare(sql)
-      .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
+      .all(
+        ...(filter.matchedRowsOnly ? [match, ...filter.values, match] : [match, ...filter.values])
+      ) as MessageRow[]
   }
 }

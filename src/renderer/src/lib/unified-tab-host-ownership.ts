@@ -10,7 +10,10 @@ import {
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { dedupePaletteWorktrees } from './palette-repo-resolution'
+import {
+  dedupePaletteWorktrees,
+  getPaletteWorktreeExecutionHostId
+} from './palette-repo-resolution'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
@@ -116,10 +119,10 @@ export function getUnifiedTabPaletteExecutionHostId(
   worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 ): ExecutionHostId | undefined {
   if (!tab) {
-    return worktree.hostId
+    return getPaletteWorktreeExecutionHostId(worktree)
   }
   if (tab.executionHostId && isExecutionHostAliasForWorktree(tab.executionHostId, worktree)) {
     return tab.executionHostId
   }
-  return worktree.hostId
+  return getPaletteWorktreeExecutionHostId(worktree)
 }

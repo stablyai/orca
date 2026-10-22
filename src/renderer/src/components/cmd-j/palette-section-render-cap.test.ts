@@ -124,3 +124,18 @@ describe('layoutMultiPrimaryPaletteSections', () => {
     expect(layout.leadingHardOverflowCount).toBe(10)
   })
 })
+
+it('counts merged destinations and continuation rows once when computing hard and preview overflow', () => {
+  const items = [{ id: 'a' }, { id: 'a' }, { id: 'b' }, { id: 'b' }]
+  const identity = (item: { id: string }): string => item.id
+  expect(capPaletteSection(items, 3, undefined, identity).overflowCount).toBe(0)
+  const layout = layoutMultiPrimaryPaletteSections({
+    leadingItems: items,
+    trailingItems: [{ id: 'c' }],
+    leadingPreviewCount: 1,
+    leadingHardCap: 3,
+    identity
+  })
+  expect(layout.leadingMoreCount).toBe(1)
+  expect(layout.leadingHardOverflowCount).toBe(0)
+})

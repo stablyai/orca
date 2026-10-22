@@ -82,8 +82,12 @@ describe('session search public contract', () => {
     'enforces the %s exposure policy without mutating the hit',
     (transport) => {
       const hit = searchHit()
+      if (hit.evidence) {
+        hit.evidence.originalExcerpt = { text: 'a needle in original text' }
+      }
       const original = structuredClone(hit)
       const result = redactForTransport(hit, transport)
+      expect(result.evidence?.originalExcerpt).toEqual({ text: 'a needle in original text' })
       expect(hit).toEqual(original)
       expect(result.cwd).toBe('/host/folder')
       if (transport === 'relay') {

@@ -11,7 +11,7 @@ import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias
 type PaletteWorktreeIdentity = Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
 
 export function getPaletteWorktreeExecutionHostId(
-  worktree: PaletteWorktreeIdentity
+  worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 ): ExecutionHostId | undefined {
   const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
   return runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : worktree.hostId

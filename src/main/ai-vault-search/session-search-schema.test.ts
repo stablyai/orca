@@ -328,3 +328,36 @@ it('gives Windows the shared retry options for a late handle release', async () 
     vi.restoreAllMocks()
   }
 })
+
+it('adds conservative boundary provenance to a current index without discarding history', async () => {
+  const path = await tempDatabasePath()
+  const before = openSessionSearchDatabase(path)
+  before.exec('ALTER TABLE messages DROP COLUMN source_boundaries')
+  before.exec(
+    "INSERT INTO files(path,byte_offset,mtime_ms,state,fail_count,failed_mtime_ms) VALUES ('current',1,1,'current',0,NULL), ('failed',1,1,'failed',3,1)"
+  )
+  before.prepare("INSERT INTO messages(session_row_id, role, ts) VALUES (1, 'user', NULL)").run()
+  const incarnation = before.prepare("SELECT value FROM meta WHERE key = 'index_incarnation'").get()
+  before.close()
+  const after = openSessionSearchDatabase(path)
+  try {
+    expect(
+      after.prepare('SELECT path,state,fail_count,failed_mtime_ms FROM files ORDER BY path').all()
+    ).toEqual([
+      { path: 'current', state: 'due', fail_count: 0, failed_mtime_ms: null },
+      { path: 'failed', state: 'failed', fail_count: 3, failed_mtime_ms: 1 }
+    ])
+    expect(after.prepare('SELECT source_boundaries FROM messages').all()).toEqual([
+      { source_boundaries: 0 }
+    ])
+    expect(after.prepare("SELECT value FROM meta WHERE key = 'index_incarnation'").get()).toEqual(
+      incarnation
+    )
+    after.prepare("INSERT INTO messages(session_row_id, role, ts) VALUES (2, 'user', NULL)").run()
+    expect(
+      after.prepare('SELECT source_boundaries FROM messages WHERE session_row_id = 2').get()
+    ).toEqual({ source_boundaries: 0 })
+  } finally {
+    after.close()
+  }
+})

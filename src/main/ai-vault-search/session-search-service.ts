@@ -71,6 +71,9 @@ export function createSessionSearchService({
                   ? null
                   : {
                       snippet: evidence.snippet,
+                      ...(evidence.originalExcerpt
+                        ? { originalExcerpt: evidence.originalExcerpt }
+                        : {}),
                       role: evidence.role,
                       timestamp: evidence.timestamp
                     },
@@ -81,6 +84,8 @@ export function createSessionSearchService({
           generation: result.generation,
           truncated: { ...result.truncated, freshness: false },
           durationMs: result.durationMs,
+          ...(request.eligibleSessions ? { eligibleSessionsApplied: true as const } : {}),
+          ...(request.preserveForks ? { forksPreserved: true as const } : {}),
           ...(request.debug
             ? {
                 debug: {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
@@ -20,8 +20,10 @@ import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palett
 import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
+import type { WorktreeJumpPaletteObservedPrefix } from './use-worktree-jump-palette-observed-prefix'
 
 type WorktreeJumpPaletteSelectionLifecycleInput = WorktreeJumpPaletteStoreState &
+  WorktreeJumpPaletteObservedPrefix &
   WorktreeJumpPaletteLocalState &
   Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   WorktreeJumpPaletteOpenTabs &
@@ -70,7 +72,9 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   prefetchCreateWorkspaceBaseForComposer,
   fallbackFocusOuterFrameRef,
   fallbackFocusInnerFrameRef,
-  closeModal
+  closeModal,
+  presentationInteracted,
+  handlePresentationSelectionChange
 }: WorktreeJumpPaletteSelectionLifecycleInput) {
   const hasAnyWorktrees = visibleWorktreesForState.length > 0
   const hasAnySearchableWorktrees = hasQuery ? searchScopeWorktrees.length > 0 : hasAnyWorktrees
@@ -131,27 +135,59 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     recordFeatureInteraction,
     visible
   ])
+  const [previousSelectionItemIds, setPreviousSelectionItemIds] = useState(selectionItemIds)
+  const membershipChanged =
+    previousSelectionItemIds.length !== selectionItemIds.length ||
+    previousSelectionItemIds.some((id, index) => selectionItemIds[index] !== id)
+  if (membershipChanged) {
+    setPreviousSelectionItemIds(selectionItemIds)
+    if (selectedItemId && !selectionItemIds.includes(selectedItemId)) {
+      // cmdk chooses the first remaining row when its selected item unmounts.
+      setSelectedItemId(selectionItemIds[0] ?? '')
+    }
+  }
+  const currentSelectedItemId =
+    !presentationInteracted && !selectionMovedByUserRef.current ? '' : selectedItemId
   const commandSelectedItemId =
     selectedItemId === CREATE_WORKTREE_ITEM_ID &&
     !selectionMovedByUserRef.current &&
     taskItems.length
       ? (taskItems[0]?.id ?? selectedItemId)
       : getNextWorktreePaletteSelection({
-          currentSelectedItemId: selectedItemId,
+          currentSelectedItemId,
           queryChanged: false,
           selectableItemIds: selectionItemIds,
           showCreateAction,
           autoSelectCreateAction: taskSourceUrl !== null
         })
+  useLayoutEffect(() => {
+    if (
+      !presentationInteracted &&
+      !selectionMovedByUserRef.current &&
+      selectedItemId !== commandSelectedItemId
+    ) {
+      setSelectedItemId(commandSelectedItemId)
+    }
+  }, [
+    commandSelectedItemId,
+    presentationInteracted,
+    selectedItemId,
+    setSelectedItemId,
+    selectionMovedByUserRef
+  ])
   const handleCommandSelectionChange = useCallback(
     (nextItemId: string) => {
+      handlePresentationSelectionChange(nextItemId)
       setSelectedItemId(nextItemId)
     },
-    [setSelectedItemId]
+    [handlePresentationSelectionChange, setSelectedItemId]
   )
   // A late cmdk callback can restore the old cursor after handleQueryChange clears it.
   // Commit the new list head explicitly when the deferred query changes.
   useLayoutEffect(() => {
+    if (presentationInteracted || selectionMovedByUserRef.current) {
+      return
+    }
     setSelectedItemId(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
@@ -175,6 +211,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   const handleQueryChange = useCallback(
     (nextQuery: string) => {
       latestQueryRef.current = nextQuery
+      selectionMovedByUserRef.current = false
       setQuery(nextQuery)
       setSelectedItemId('')
       setExpandedSectionCaps({})

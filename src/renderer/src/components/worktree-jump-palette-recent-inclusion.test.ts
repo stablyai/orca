@@ -5,6 +5,8 @@ import type { AgentJournalTurnOutcome } from '../../../shared/agent-turn-outcome
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { shouldIncludeOpenTabInRecentSection } from './worktree-jump-palette-recent-inclusion'
 import { makeAgentEntry, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 
 const NOW = 1_700_000_000_000
 const TAB_ID = 'terminal-1'
@@ -73,6 +75,59 @@ function doneWith(outcome?: AgentJournalTurnOutcome): AgentStatusEntry {
 }
 
 describe('shouldIncludeOpenTabInRecentSection', () => {
+  it.each([
+    ['working', false, true],
+    ['attention', false, true],
+    ['idle', true, true],
+    ['idle', false, false],
+    [null, false, false]
+  ] as const)(
+    'includes the current native %s chat when actionable (unread=%s)',
+    (status, unread, expected) => {
+      const summary: AgentSessionStatusSummary = {
+        sessionId: 'native-session',
+        workspaceId: 'wt-1',
+        agent: 'codex',
+        status,
+        latestPrompt: '',
+        updatedAt: NOW
+      }
+      expect(
+        shouldIncludeOpenTabInRecentSection({
+          item: {
+            id: 'native-item',
+            type: 'workspace-tab',
+            result: {
+              ...currentTabResult(),
+              tabId: 'native-tab',
+              entityId: 'native-session',
+              contentType: 'agent-session'
+            }
+          },
+          worktree: makeWorktree('wt-1', 'Palette Worktree'),
+          row: {
+            id: 'native-item',
+            worktreeId: 'wt-1',
+            unifiedTabId: 'native-tab',
+            terminalTab: null,
+            nativeChat: { sessionId: 'native-session', executionHostId: 'local', summary },
+            worktreeLastActivityAt: 0
+          },
+          paneSources: {
+            entriesByTabId: new Map(),
+            ptyIdsByTabId: {},
+            runtimePaneTitlesByTabId: {}
+          },
+          unreadTerminalTabs: {},
+          unreadAgentCompletionPanes: unread
+            ? { [structuredAgentSessionPaneKey('native-tab', 'native-session')]: true }
+            : {},
+          now: NOW
+        })
+      ).toBe(expected)
+    }
+  )
+
   it('keeps the current tab out of Recent once its turn settled, a failure like a completion', () => {
     expect(includesCurrentTabWith(doneWith())).toBe(false)
     expect(includesCurrentTabWith(doneWith('cancellation'))).toBe(false)
