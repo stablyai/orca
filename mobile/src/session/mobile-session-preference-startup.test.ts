@@ -36,6 +36,7 @@ vi.mock('expo-router', async () => {
     }
   }
 })
+vi.mock('./use-terminal-font', () => ({ useTerminalFont: () => null }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn() }
 }))

@@ -3,6 +3,7 @@ import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link
 import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalFitDimensions } from './terminal-grid-fit'
 import type { TerminalFrame } from './terminal-webview-messages'
+import type { TerminalCustomFont } from './document/terminal-font'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -98,6 +99,8 @@ export type TerminalWebViewProps = {
   // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
   // xterm fontSize alone cannot drive apparent size because fitting cancels it.
   textScale?: number
+  // The user's imported font; null keeps the default stack.
+  terminalFont?: TerminalCustomFont
   // Why: only a view shown when it mounts builds its terminal before ready (one WebGL context each).
   shownAtMount?: boolean
   onWebReady?: () => void

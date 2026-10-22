@@ -69,6 +69,11 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     return
   }
   scope.term.options.fontSize = px
+  refitGridToHostFrame(scope, 'text-scale')
+}
+
+/** Resizes the grid to the host frame at the cell metrics xterm lays out next frame. */
+export function refitGridToHostFrame(scope: TerminalDocumentScope, reason: string) {
   // Ruling 21: the generation this frame was scheduled under. `scope.term` alone is not enough —
   // a mount that came and went leaves a live terminal here, and this would resize that one.
   const gen = scope.terminalGeneration
@@ -92,19 +97,22 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
       )
       if (!fit) {
         // Why: too narrow to resize the grid, but the fit still tracks the new cell size; hidden hosts hold it.
-        applyFitScale(scope, 'text-scale')
+        applyFitScale(scope, reason)
         return
       }
       scope.term.resize(fit.cols, fit.rows)
     }
-    applyFitScale(scope, 'text-scale')
+    applyFitScale(scope, reason)
   })
+}
+
+export function defaultTerminalFontFamily() {
+  return (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
 }
 
 export function startTextScaling(scope: TerminalDocumentScope) {
   scope.currentTextScale = scope.start().textScale
   scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
   scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
-  scope.terminalFontFamily =
-    (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
+  scope.terminalFontFamily = defaultTerminalFontFamily()
 }

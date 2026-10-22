@@ -1,5 +1,6 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
+import type { TerminalCustomFont } from './document/terminal-font'
 
 /** The frame React Native laid out, sent with each grid so the document fits a text-size change to it. */
 export type TerminalFrame = { width: number; height: number }
@@ -22,6 +23,7 @@ export type TerminalWebViewCommand =
       frame: TerminalFrame | null
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
+  | { type: 'set-font'; id?: number; font: TerminalCustomFont }
   | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'reflow'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'clear'; id?: number }

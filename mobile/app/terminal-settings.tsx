@@ -29,6 +29,11 @@ import {
   saveTerminalAutocompleteEnabled,
   saveTerminalTextScale
 } from '../src/storage/preferences'
+import {
+  TerminalFontPicker,
+  TerminalFontSection,
+  useTerminalFontSetting
+} from '../src/terminal/terminal-font-settings'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -160,6 +165,8 @@ export default function TerminalSettingsScreen() {
     setTextScale(opt.scale)
     void saveTerminalTextScale(opt.scale)
   }, [])
+
+  const fontSetting = useTerminalFontSetting()
 
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   // Why: a fast toggle before the initial load resolves must win — otherwise the
@@ -327,6 +334,8 @@ export default function TerminalSettingsScreen() {
           </Pressable>
         </View>
 
+        <TerminalFontSection setting={fontSetting} />
+
         <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
         <Text style={styles.groupDescription}>
           Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input.
@@ -377,6 +386,8 @@ export default function TerminalSettingsScreen() {
         onSelect={selectTextSize}
         onClose={() => setTextSizePickerOpen(false)}
       />
+
+      <TerminalFontPicker setting={fontSetting} />
     </GestureHandlerRootView>
   )
 }

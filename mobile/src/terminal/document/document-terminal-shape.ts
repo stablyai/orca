@@ -72,6 +72,7 @@ export type TerminalDocumentTerminalOptions = {
   theme: TerminalDocumentTheme
   minimumContrastRatio: number
   fontSize: number
+  fontFamily: string
 }
 
 export type TerminalDocumentTerminal = {

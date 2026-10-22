@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { TerminalWebView } from '../terminal/TerminalWebView'
+import type { TerminalCustomFont } from '../terminal/document/terminal-font'
 import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
@@ -15,6 +16,7 @@ type TerminalPaneViewProps = {
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
   textScale: number
+  terminalFont: TerminalCustomFont
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
@@ -39,6 +41,7 @@ export function TerminalPaneView({
   keyboardLift,
   terminalTheme,
   textScale,
+  terminalFont,
   onRef,
   onWebReady,
   onSelectionMode,
@@ -79,6 +82,7 @@ export function TerminalPaneView({
         style={styles.terminalWebView}
         terminalTheme={terminalTheme}
         textScale={textScale}
+        terminalFont={terminalFont}
         shownAtMount={active}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}
