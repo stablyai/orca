@@ -131,7 +131,12 @@ ORCA orchestration check --ack <delivery_id> --wait --types "worker_done,escalat
 
 Keep waiting until every expected Dispatch settles. A timeout or empty result is
 a checkpoint, not a failure. Do not stop, retry, release, or launch a duplicate
-editor without the positive proof `## Outcome` requires.
+editor without the positive proof `## Outcome` requires. A coordinator that also
+answers a user stays reachable by running the wait where its harness can
+background it, or else by repeating shorter `--timeout-ms` waits, counting each
+900000 ms of empty waiting as one of the three empty waits below; either way
+keep only one wait open at a time, since a Delivery replays its batch until
+acknowledged.
 
 After three consecutive empty waits, stop waiting blindly and enumerate with
 `ORCA orchestration worker-list --include-remote --json` (defaults to the bound

@@ -239,3 +239,31 @@ describe('agent-read text about an Orca session ID', () => {
     }
   })
 })
+
+describe('agent-read text about worker-list scope', () => {
+  const guideDir = join(process.cwd(), 'skill-guides')
+  const referenceDir = join(guideDir, 'orchestration', 'references')
+  const guide = [
+    join(guideDir, 'orchestration.md'),
+    ...readdirSync(referenceDir).map((name) => join(referenceDir, name))
+  ]
+  const readFlat = (file: string): string => readFileSync(file, 'utf8').replace(/\s+/g, ' ')
+
+  // An unscoped list follows the calling terminal's Run binding, as `worker-list --help` says.
+  it('never describes an unscoped worker-list without its bound-Run default', () => {
+    const violations = guide.flatMap((file) =>
+      readFlat(file)
+        .split(/(?<=[.;])\s+/)
+        .filter((sentence) => /\bunscoped\b/i.test(sentence) && !/\bbound\b/i.test(sentence))
+        .map((sentence) => ({ file: file.slice(guideDir.length + 1), sentence }))
+    )
+    expect(violations).toEqual([])
+  })
+
+  it.each(['placement-and-remote.md', 'recovery-and-cleanup.md'])(
+    'names scope.source wherever a reference explains worker-list scope (%s)',
+    (name) => {
+      expect(readFlat(join(referenceDir, name))).toContain('scope.source')
+    }
+  )
+})

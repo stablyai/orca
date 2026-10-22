@@ -3,15 +3,15 @@
 Load this reference only after a failed/stopped/unknown attempt, explicit retry
 decision, stop/abandon request, retention request, or uncertain release.
 
-| Proven state            | Safe action                                                        |
-| ----------------------- | ------------------------------------------------------------------ |
-| `ready` or active       | Keep waiting; optionally read bounded output                       |
-| `failed` or `stopped`   | Start a replacement with `--retry-of`; repeat placement explicitly |
-| `outcome_unknown`       | Inspect, then choose `worker-stop` or explicit `worker-abandon`    |
-| Accepted `worker_done`  | Reuse, retain, or release                                          |
-| Remote contact lost     | Preserve `unverifiable`; do not stop or retry from absence alone   |
-| `unverifiable` liveness | Keep waiting or inspect; never stop, abandon, retry, or release    |
-| Proven `exited` agent   | Enumerate with `worker-list`; follow its `nextAction`              |
+| Proven state            | Safe action                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `ready` or active       | Keep waiting; optionally read bounded output                                                       |
+| `failed` or `stopped`   | Start a replacement with `--retry-of`; repeat placement explicitly (see the stop rule below first) |
+| `outcome_unknown`       | Inspect, then choose `worker-stop` or explicit `worker-abandon`                                    |
+| Accepted `worker_done`  | Reuse, retain, or release                                                                          |
+| Remote contact lost     | Preserve `unverifiable`; do not stop or retry from absence alone                                   |
+| `unverifiable` liveness | Keep waiting or inspect; never stop, abandon, retry, or release                                    |
+| Proven `exited` agent   | Enumerate with `worker-list`; follow its `nextAction`                                              |
 
 ## Inspect before acting
 
@@ -25,8 +25,13 @@ ORCA orchestration worker-read --dispatch <dispatch_id> --limit 50 --json
 `worker-list` is the enumerating command and the authority on agent liveness:
 each row carries `projection.liveness`, `projection.attention.categories`,
 `projection.attention.requiresAction`, and a literal `projection.nextAction`
-argv to run. Always scope it with `--run <run_id>`; an unscoped list reports
-every Dispatch this runtime has ever recorded and buries the live ones.
+argv to run. Always scope it with `--run <run_id>`: an unscoped list covers
+only the bound Run from a bound terminal but every Dispatch this runtime has
+ever recorded when the terminal is unbound or its binding cannot be read,
+where the live ones are buried. Read `scope.source` (`flag`, `bound`, or
+`all`) to tell which list you got; `all` also covers a missing live terminal
+and a runtime that predates `orchestration.runCurrent`, so it does not prove
+the terminal is unbound.
 `worker-show`'s `observation.status` is PTY liveness only, so a `live` terminal
 whose agent died at a trust prompt still reads `live` there.
 
@@ -109,8 +114,15 @@ optional.
 
 ## Retry, stop, and abandon
 
-Retry only a positively proven failed or stopped attempt. Name the failed Task
-with `--task`, since `--spec` creates a new one. Placement is never silently
+Retry only a positively proven failed or stopped attempt. A row whose
+`projection.stage.worker` is `stopped` normally reads `outcome: failed` (and, on
+a local row until release, `projection.liveness.source: worker_stop`), but
+nothing records who or what asked for the stop. Retry it only when this
+coordinator ran `worker-stop` itself to recover the attempt. A stop it ran
+because the user asked to cancel the Task is a cancellation, and a stop it did
+not run is deliberate: do not retry either, and report it to the user or ask.
+Name the failed Task with
+`--task`, since `--spec` creates a new one. Placement is never silently
 inherited:
 
 ```text
