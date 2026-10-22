@@ -122,10 +122,50 @@ describe('useSystemSleepHold', () => {
     installApi(read)
     const { result } = renderHook(() => useSystemSleepHold())
     await flush()
-    expect(result.current.state).toBe('none')
+    expect(result.current.state).toBe('unchecked')
 
     await advance(10_100)
     expect(result.current.state).toBe('unchecked')
+  })
+
+  it('is unchecked on the first render of a Mac with the read pending, then system once it answers yes', async () => {
+    let answer: (value: SystemSleepHold) => void = () => {}
+    const read = vi.fn().mockImplementation(
+      () =>
+        new Promise<SystemSleepHold>((resolve) => {
+          answer = resolve
+        })
+    )
+    installApi(read)
+
+    const { result } = renderHook(() => useSystemSleepHold())
+    await flush()
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(result.current.state).toBe('unchecked')
+
+    await act(async () => {
+      answer(hold('yes'))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(result.current.state).toBe('system')
+  })
+
+  it('is none on the first render for a paired web client, an absent method, or a non-Mac host', () => {
+    installApi()
+    const absent = renderHook(() => useSystemSleepHold())
+    expect(absent.result.current.state).toBe('none')
+    absent.unmount()
+
+    installApi(vi.fn().mockImplementation(() => new Promise(() => {})))
+    chromeMocks.paired = true
+    const paired = renderHook(() => useSystemSleepHold())
+    expect(paired.result.current.state).toBe('none')
+    paired.unmount()
+
+    chromeMocks.paired = false
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(LINUX_UA)
+    const linux = renderHook(() => useSystemSleepHold())
+    expect(linux.result.current.state).toBe('none')
   })
 
   it('means unchecked on macOS for an answer that is not a hold', async () => {

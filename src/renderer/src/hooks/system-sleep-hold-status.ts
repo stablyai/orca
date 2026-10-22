@@ -8,17 +8,23 @@ import {
 import type { SystemSleepHold } from '../../../shared/computer-awake-mode'
 import { startSystemSleepHoldPoller, type SystemSleepHoldPoller } from './system-sleep-hold-poller'
 
+function canCheckSystemSleepHold(): boolean {
+  return (
+    !isPairedWebClientWindow() && typeof window.api?.agentAwake?.getSystemSleepHold === 'function'
+  )
+}
+
 export function useSystemSleepHold(): { state: SystemSleepHoldState; refresh: () => void } {
   const [hold, setHold] = useState<SystemSleepHold | null>(null)
   const pollerRef = useRef<SystemSleepHoldPoller | null>(null)
 
   useEffect(() => {
     const api = window.api?.agentAwake
-    if (isPairedWebClientWindow() || typeof api?.getSystemSleepHold !== 'function') {
+    if (!canCheckSystemSleepHold()) {
       return
     }
     const poller = startSystemSleepHoldPoller({
-      read: () => api.getSystemSleepHold?.() ?? Promise.reject(new Error('no-method')),
+      read: () => api?.getSystemSleepHold?.() ?? Promise.reject(new Error('no-method')),
       onHold: setHold
     })
     pollerRef.current = poller
@@ -29,5 +35,8 @@ export function useSystemSleepHold(): { state: SystemSleepHoldState; refresh: ()
   }, [])
 
   const refresh = useCallback(() => pollerRef.current?.refresh(), [])
-  return { state: resolveSystemSleepHoldState(hold, isMacUserAgent()), refresh }
+  return {
+    state: resolveSystemSleepHoldState(hold, isMacUserAgent(), canCheckSystemSleepHold()),
+    refresh
+  }
 }

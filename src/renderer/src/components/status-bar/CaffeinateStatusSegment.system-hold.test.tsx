@@ -253,6 +253,22 @@ describe('CaffeinateStatusSegment system sleep hold', () => {
     expect(document.body.textContent).not.toContain('closing the lid still puts this Mac to sleep')
   })
 
+  it('claims no lid note on the first render of a Mac while the read is pending', async () => {
+    setStore('off')
+    awakeMocks.status = { mode: 'off', active: false }
+    vi.mocked(window.api.agentAwake.getSystemSleepHold!).mockImplementation(
+      () => new Promise(() => {})
+    )
+
+    render(<CaffeinateStatusSegment iconOnly={false} />)
+
+    expect(document.body.textContent).not.toContain('closing the lid still puts this Mac to sleep')
+    expect(screen.getByRole('tooltip').textContent).toContain(HOLD_UNCHECKED)
+    expect(
+      screen.getByRole('button', { name: `Keep computer awake, ${HOLD_UNCHECKED}, Off · Inactive` })
+    ).toBeTruthy()
+  })
+
   it('shows today strings on a non-Mac host even when the read is unknown', async () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (X11; Linux x86_64)')
     setStore('off')

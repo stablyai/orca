@@ -12,12 +12,14 @@ export function isMacUserAgent(
 
 export function resolveSystemSleepHoldState(
   hold: SystemSleepHold | null,
-  isMac: boolean
+  isMac: boolean,
+  checkPossible = false
 ): SystemSleepHoldState {
   if (hold?.sleepDisabled === 'yes') {
     return 'system'
   }
-  return hold?.sleepDisabled === 'unknown' && isMac ? 'unchecked' : 'none'
+  const unanswered = hold === null && checkPossible
+  return (hold?.sleepDisabled === 'unknown' || unanswered) && isMac ? 'unchecked' : 'none'
 }
 
 export function isSleepHeld(state: SystemSleepHoldState): boolean {
