@@ -202,3 +202,121 @@ describe('OMP runtime session provenance', () => {
     )
   })
 })
+
+describe('Pi terminal session ownership', () => {
+  it.each([false, true])(
+    'ignores a child beforeRoot=%s and keeps the root resume identity',
+    async (beforeRoot) => {
+      const harness = createAgentStatusExtensionHarness({ kind: 'pi', existsSync: () => true })
+      const root = {
+        sessionManager: { getSessionId: () => 'root', getSessionFile: () => '/sessions/root.jsonl' }
+      }
+      const child = {
+        sessionManager: {
+          getSessionId: () => 'child',
+          getSessionFile: () => '/sessions/child.jsonl',
+          getHeader: () => ({ parentSession: '/sessions/root.jsonl' })
+        }
+      }
+      if (!beforeRoot) {
+        await harness.callHook('session_start', {}, root)
+      }
+      for (const name of [
+        'session_start',
+        'agent_start',
+        'tool_execution_start',
+        'message_end',
+        'agent_end'
+      ]) {
+        await harness.callHook(name, {}, child)
+        await settle()
+      }
+      if (beforeRoot) {
+        expect(harness.fetchMock).not.toHaveBeenCalled()
+        await harness.callHook('session_start', {}, root)
+      }
+      await harness.callHook('agent_start', {}, root)
+      await settle()
+      const payloads = harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).payload)
+      expect(payloads.length).toBeGreaterThan(0)
+      expect(payloads.every((payload) => payload.session_id === 'root')).toBe(true)
+    }
+  )
+
+  it.each(['new', 'resume', 'fork'] as const)(
+    'keeps an explicit %s session with parent lineage',
+    async (reason) => {
+      const harness = createAgentStatusExtensionHarness({ kind: 'pi', existsSync: () => true })
+      await harness.callHook(
+        'session_start',
+        {},
+        {
+          sessionManager: {
+            getSessionId: () => 'root',
+            getSessionFile: () => '/sessions/root.jsonl'
+          }
+        }
+      )
+      await harness.replacePiSession(reason, '/sessions/next.jsonl')
+      const next = {
+        sessionManager: {
+          getSessionId: () => 'next',
+          getSessionFile: () => '/sessions/next.jsonl',
+          getHeader: () => ({ parentSession: '/sessions/root.jsonl' })
+        }
+      }
+      await harness.callHook('session_start', { reason }, next)
+      await harness.callHook('agent_start', {}, next)
+      await settle()
+      expect(JSON.parse(harness.fetchMock.mock.calls.at(-1)?.[1].body).payload.session_id).toBe(
+        'next'
+      )
+    }
+  )
+
+  it('keeps a cold-resumed fork as the terminal owner', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi', existsSync: () => true })
+    const root = {
+      hasUI: true,
+      sessionManager: {
+        getSessionId: () => 'fork',
+        getSessionFile: () => '/sessions/fork.jsonl',
+        getHeader: () => ({ parentSession: '/sessions/root.jsonl' })
+      }
+    }
+    await harness.callHook('session_start', { reason: 'startup' }, root)
+    await harness.callHook('agent_start', {}, root)
+    await settle()
+    expect(JSON.parse(harness.fetchMock.mock.calls.at(-1)?.[1].body).payload.session_id).toBe(
+      'fork'
+    )
+  })
+
+  it('rejects nested Windows child transcripts without a parent header', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi', existsSync: () => true })
+    await harness.callHook(
+      'session_start',
+      {},
+      {
+        sessionManager: {
+          getSessionId: () => 'root',
+          getSessionFile: () => 'C:\\Users\\orca\\root.jsonl'
+        }
+      }
+    )
+    await settle()
+    harness.fetchMock.mockClear()
+    await harness.callHook(
+      'agent_start',
+      {},
+      {
+        sessionManager: {
+          getSessionId: () => 'child',
+          getSessionFile: () => 'c:/users/orca/root/child.jsonl'
+        }
+      }
+    )
+    await settle()
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+  })
+})
