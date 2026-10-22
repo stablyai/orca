@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS } from './terminal-live-preedit-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
+import { buildMobileTerminalPasteText } from './mobile-terminal-paste-text'
+import type { TerminalModes } from './terminal-webview-contract'
 
 // The host's report is the seam's subject; here only whether it reports a range at all matters.
 const composingRange = vi.hoisted(() => ({ hostReportsNone: false }))
@@ -37,10 +39,14 @@ type TerminalLiveInputCommitHarness = {
 
 type TerminalLiveInputCommitHarnessOptions = {
   readonly sendResult?: boolean
+  readonly pasteModes?: TerminalModes
+  readonly agent?: string
 }
 
 function createTerminalLiveInputCommitHarness({
-  sendResult = true
+  sendResult = true,
+  pasteModes,
+  agent = 'claude'
 }: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
   const activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
@@ -75,6 +81,7 @@ function createTerminalLiveInputCommitHarness({
       activeSessionTabType: currentActiveSessionTabType,
       activeSessionTabTypeRef,
       connected: currentConnected,
+      buildLivePasteText: (_handle, text) => buildMobileTerminalPasteText(text, pasteModes, agent),
       liveInputRef,
       liveInputTerminalHandles,
       liveInputTerminalHandlesRef,
@@ -126,6 +133,65 @@ function createTerminalLiveInputCommitHarness({
 }
 
 describe('terminal live input commit hook', () => {
+  const pasteModes: TerminalModes = {
+    bracketedPasteMode: true,
+    altScreen: true,
+    mouseTrackingMode: 'none',
+    sgrMouseMode: false,
+    sgrMousePixelsMode: false
+  }
+
+  it('frames a long OS paste into Live input and keeps submit and later typing separate', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pasteModes })
+    const text = 'This sentence is filler text that mimics ordinary dictated prose. '.repeat(25)
+    changeLiveInput(handlers, text, false)
+    await vi.waitFor(() => expect(sent).toEqual([`\x1b[200~${text}\x1b[201~`]))
+    changeLiveInput(handlers, `${text}!`, false)
+    await vi.waitFor(() => expect(sent).toHaveLength(2))
+    await handlers.handleLiveInputSubmit()
+    expect(sent).toEqual([`\x1b[200~${text}\x1b[201~`, '!', '\r'])
+  })
+
+  it('frames held unreported paste before an immediate click and starts the next mirror clean', async () => {
+    vi.useFakeTimers()
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness({
+      pasteModes
+    })
+    const text = 'é'.repeat(600)
+    try {
+      changeLiveInput(handlers, text)
+      expect(sent).toEqual([])
+      await handlers.sendLiveInputClick('terminal-a', 'CLICK')
+      expect(sent).toEqual([`\x1b[200~${text}\x1b[201~`, 'CLICK'])
+      expect(captures.at(-1)).toBe('')
+      changeLiveInput(handlers, 'x', false)
+      await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS * 2)
+      expect(sent).toEqual([`\x1b[200~${text}\x1b[201~`, 'CLICK', 'x'])
+    } finally {
+      unmount()
+    }
+  })
+
+  it('keeps mirror deletion controls outside the pasted replacement frame', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pasteModes })
+    changeLiveInput(handlers, 'abc', false)
+    await vi.waitFor(() => expect(sent).toEqual(['abc']))
+    const pasted = `${'é'.repeat(600)}\x1b[201~unsafe`
+    changeLiveInput(handlers, `a${pasted}`, false)
+    await vi.waitFor(() => expect(sent).toHaveLength(2))
+    expect(sent[1]).toBe(`\x7f\x7f\x1b[200~${'é'.repeat(600)}␛[201~unsafe\x1b[201~`)
+  })
+
+  it.each([
+    { pasteModes: { ...pasteModes, bracketedPasteMode: false }, agent: 'claude' },
+    { pasteModes, agent: 'codex' }
+  ])('preserves unframed Live paste bytes for $agent with modes $pasteModes', async (options) => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness(options)
+    const text = 'prose with spaces '.repeat(100)
+    changeLiveInput(handlers, text, false)
+    await vi.waitFor(() => expect(sent).toEqual([text]))
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     composingRange.hostReportsNone = false

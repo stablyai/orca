@@ -308,4 +308,61 @@ describe('terminal live input around a click', () => {
       unmount()
     }
   })
+  it.each(['external', 'submit', 'accessory'] as const)(
+    'preserves edits and cancels a superseded %s action after a delayed flush',
+    async (action) => {
+      let acknowledge: ((ok: boolean) => void) | undefined
+      const { handlers, captures, sent, unmount } = createClickHarness(async (_handle, bytes) => {
+        if (bytes === 'old') {
+          return new Promise((resolve) => {
+            acknowledge = resolve
+          })
+        }
+        return true
+      })
+      try {
+        change(handlers, 'old')
+        const flushing =
+          action === 'external'
+            ? handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+            : action === 'submit'
+              ? handlers.handleLiveInputSubmit()
+              : handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })
+        change(handlers, 'older')
+        acknowledge?.(true)
+        expect(await flushing).toEqual(action === 'accessory' ? { kind: 'suppress-raw' } : false)
+        await vi.waitFor(() => expect(sent.join('')).toBe('older'))
+        expect(captures.at(-1)).toBe('older')
+        expect(await handlers.handleLiveInputSubmit()).toBe(true)
+        expect(sent.join('')).toBe('older\r')
+        expect(captures.at(-1)).toBe('')
+      } finally {
+        unmount()
+      }
+    }
+  )
+
+  it('does not clear a replacement terminal when the previous terminal flush completes', async () => {
+    let acknowledge: ((ok: boolean) => void) | undefined
+    const harness = createClickHarness(async (handle) => {
+      if (handle === 'terminal-a') {
+        return new Promise((resolve) => {
+          acknowledge = resolve
+        })
+      }
+      return true
+    })
+    try {
+      change(harness.handlers, 'old')
+      const flushing = harness.handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+      harness.changeHandle('terminal-b')
+      change(harness.handlers, 'new')
+      acknowledge?.(true)
+      expect(await flushing).toBe(false)
+      await vi.waitFor(() => expect(harness.sent.join('')).toBe('oldnew'))
+      expect(harness.captures.at(-1)).toBe('new')
+    } finally {
+      harness.unmount()
+    }
+  })
 })

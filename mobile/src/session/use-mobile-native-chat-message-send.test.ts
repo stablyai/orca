@@ -29,6 +29,7 @@ import {
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 
@@ -408,12 +409,45 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
   })
 
+  // #13332: unframed, Claude kept only the final ~1 KiB piece of a long multi-paragraph send.
+  it('sends a long multi-paragraph message as one bracketed paste', async () => {
+    const paragraph = 'This sentence is filler text that mimics ordinary dictated prose. '.repeat(8)
+    const draft = [paragraph, paragraph, paragraph, paragraph].join('\n\n')
+    expect(new TextEncoder().encode(draft).byteLength).toBeGreaterThan(2048)
+    mount(() => null)
+
+    await act(async () => {
+      await api!.send(draft)
+    })
+
+    expect(sentArgs().text).toBe(`\x1b[200~${draft.trimEnd().replace(/\n/g, '\r')}\x1b[201~`)
+    expect(acceptSend.mock.calls[0]![1]).toBe(draft.trimEnd())
+  })
+
+  it('frames long single-line UTF-8 prose without changing the pending message', async () => {
+    const draft = 'A narrated sentence with café and 日本語. '.repeat(50)
+    mount(() => null)
+    await act(async () => {
+      await api!.send(draft)
+    })
+    expect(sentArgs().text).toBe(`\x1b[200~${draft.trimEnd()}\x1b[201~`)
+    expect(acceptSend.mock.calls[0]![1]).toBe(draft.trimEnd())
+  })
+
+  it('keeps a single-line message unframed', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('run the tests')
+    })
+    expect(sentArgs().text).toBe('run the tests')
+  })
+
   it('trims trailing whitespace on a question answer too', async () => {
     mount(() => null)
     await act(async () => {
       await api!.answerQuestion('\n 1 ')
     })
-    expect(sentArgs().text).toBe('\n 1')
+    expect(sentArgs().text).toBe(buildNativeChatPasteBytes('\n 1'))
   })
 
   // #14819: the trim is a wire concern only. A rejected send hands the composer
@@ -427,7 +461,7 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send(draft)
     })
 
-    expect(sentArgs().text).toBe('first line\n\nsecond line')
+    expect(sentArgs().text).toBe(buildNativeChatPasteBytes('first line\n\nsecond line'))
     expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
     expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
   })

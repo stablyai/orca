@@ -53,6 +53,15 @@ describe('buildNativeChatImagePasteBytes', () => {
   })
 })
 
+describe('long single-line chat paste', () => {
+  it('uses a UTF-8 byte boundary without changing short message behavior', () => {
+    const atBoundary = 'é'.repeat(512)
+    const overBoundary = `${atBoundary}x`
+    expect(buildNativeChatPasteBytes(atBoundary)).toBe(atBoundary)
+    expect(buildNativeChatPasteBytes(overBoundary)).toBe(`${BEGIN}${overBoundary}${END}`)
+  })
+})
+
 describe('isMultilineDraft', () => {
   it('is false for single-line', () => {
     expect(isMultilineDraft('one line')).toBe(false)

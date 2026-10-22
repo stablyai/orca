@@ -9,6 +9,7 @@ import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-
 import { useTerminalLiveInputFocus } from '../terminal/use-terminal-live-input-focus'
 import { reopensFocusedInputWhenKeyboardHidden } from '../terminal/terminal-live-input-keyboard-reopen'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
+import { buildMobileTerminalPasteText } from '../terminal/mobile-terminal-paste-text'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-connection-gate'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
@@ -123,6 +124,15 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // overstate the visible area. Null until the frame's first layout.
   const terminalFrameRef = useRef<TerminalFrame | null>(null)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
+  const buildLivePasteText = useCallback(
+    (handle: string, text: string): string => {
+      const tab = sessionTabs.find((item) => item.type === 'terminal' && item.terminal === handle)
+      const agent =
+        tab?.type === 'terminal' ? (tab.agentStatus?.agentType ?? tab.launchAgent) : null
+      return buildMobileTerminalPasteText(text, ptyModesRef.current.get(handle), agent)
+    },
+    [sessionTabs]
+  )
   const {
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,
@@ -139,6 +149,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     activeSessionTabType: activeSessionTab?.type,
     activeSessionTabTypeRef,
     connected: connState === 'connected',
+    buildLivePasteText,
     liveInputRef,
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,

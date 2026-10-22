@@ -8,6 +8,7 @@ import {
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
@@ -189,7 +190,7 @@ export function useMobileNativeChatMessageSend(args: {
         : await sendMobileNativeChatMessageWithOutcome({
             client,
             terminal: handle,
-            text,
+            text: buildNativeChatPasteBytes(text),
             ...(requireWriteSettlement ? { requireWriteSettlement } : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,

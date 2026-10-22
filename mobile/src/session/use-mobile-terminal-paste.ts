@@ -4,6 +4,7 @@ import { useCallback, type RefObject } from 'react'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { useClipboardReader } from '../platform/clipboard'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
+import { buildMobileTerminalPasteText } from '../terminal/mobile-terminal-paste-text'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -12,18 +13,6 @@ import {
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import { resizeMobileClipboardImage } from './mobile-clipboard-image-resize'
-
-function buildMobileTerminalClipboardTextPayload(
-  text: string,
-  modes: TerminalModes | undefined
-): string {
-  const wrap = modes?.bracketedPasteMode === true && !modes.altScreen
-  // Why: strip embedded bracketed-paste markers so copied text cannot terminate
-  // paste mode early and turn trailing bytes into shell commands.
-  // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-  const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-  return wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
-}
 
 type UseMobileTerminalPasteOptions = {
   readonly agent?: string | null
@@ -77,10 +66,7 @@ export function useMobileTerminalPaste({
       const text = await clipboard.readText()
       let payload: string | null = null
       if (text.length > 0) {
-        payload = buildMobileTerminalClipboardTextPayload(
-          text,
-          ptyModesRef.current.get(targetHandle)
-        )
+        payload = buildMobileTerminalPasteText(text, ptyModesRef.current.get(targetHandle), agent)
       } else {
         const image = await clipboard.readImage()
         if (!image) {
