@@ -79,6 +79,7 @@ export class RpcClientSocketFactory {
     )
     return new RpcClientSocketSession({
       endpoint: this.options.endpoint,
+      omitNativeErrorDetails: Boolean(edgeAuthHeaders),
       createSocket: edgeAuthHeaders
         ? (url) => createEndpointAuthSocket(url, edgeAuthHeaders)
         : undefined,

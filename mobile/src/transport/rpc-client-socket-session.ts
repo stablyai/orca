@@ -15,6 +15,7 @@ const UNAUTHORIZED_CLOSE_CODE = 4001
 
 type SocketSessionOptions = {
   endpoint: string
+  omitNativeErrorDetails?: boolean
   createSocket?: (url: string) => WebSocket
   deviceToken: string
   serverPublicKeyB64: string
@@ -128,6 +129,7 @@ export class RpcClientSocketSession {
     this.socket.onclose = (event) => {
       const closeCode = logRpcSocketClose({
         event,
+        omitNativeErrorDetails: this.options.omitNativeErrorDetails,
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),
         intentionallyClosed: this.options.isIntentionallyClosed(),
@@ -140,6 +142,14 @@ export class RpcClientSocketSession {
     }
     this.socket.onerror = (event) => {
       if (this.isStale('error')) {
+        return
+      }
+      if (this.options.omitNativeErrorDetails) {
+        console.log('[net] ws.onerror', {
+          message: 'Secure connection failed',
+          state: this.options.getState(),
+          attempt: this.options.getReconnectAttempt()
+        })
         return
       }
       const error = event as { message?: string } | undefined

@@ -18,6 +18,7 @@ vi.mock('./e2ee', () => ({
 }))
 
 const seenWebSocketArgs: unknown[][] = []
+const sockets: CapturingWebSocket[] = []
 
 class CapturingWebSocket {
   static CONNECTING = 0
@@ -35,6 +36,7 @@ class CapturingWebSocket {
   onerror: (() => void) | null = null
   constructor(...args: unknown[]) {
     seenWebSocketArgs.push(args)
+    sockets.push(this)
   }
   send(): void {}
   close(): void {
@@ -46,6 +48,7 @@ const originalWebSocket = globalThis.WebSocket
 
 beforeEach(() => {
   seenWebSocketArgs.length = 0
+  sockets.length = 0
   vi.stubGlobal('WebSocket', CapturingWebSocket)
 })
 
@@ -72,6 +75,34 @@ describe('direct socket edge-auth headers', () => {
     expect(seenWebSocketArgs).toHaveLength(1)
     expect(seenWebSocketArgs[0]?.[0]).toBe('wss://tunnel.example:443/runtime')
     expect(seenWebSocketArgs[0]?.[2]).toEqual({ headers, followRedirects: false })
+    client.close()
+  })
+
+  it('omits native error and close payloads for authenticated edge connections', () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const logs: ConnectionLogEntry[] = []
+    const client = connect('wss://tunnel.example/runtime', 'device-token', 'server-key', {
+      edgeAuthHeaders: { 'CF-Access-Client-Secret': 'synthetic-secret' },
+      onLog: (entry) => logs.push(entry)
+    })
+    const socket = sockets[0]
+    expect(socket).toBeDefined()
+    // Native network errors may include a response or request details.
+    const error = {
+      message: 'request synthetic-secret failed',
+      headers: { 'CF-Access-Client-Secret': 'synthetic-secret' }
+    }
+    const closed = {
+      code: 1006,
+      reason: 'proxy synthetic-secret failure',
+      wasClean: false,
+      response: error
+    }
+    Reflect.apply(socket?.onerror ?? (() => {}), socket, [error])
+    Reflect.apply(socket?.onclose ?? (() => {}), socket, [closed])
+    expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain('synthetic-secret')
+    expect(JSON.stringify(logs)).not.toContain('synthetic-secret')
+    expect(JSON.stringify(consoleSpy.mock.calls)).toContain('1006')
     client.close()
   })
 
