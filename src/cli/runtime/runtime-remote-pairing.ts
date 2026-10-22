@@ -4,6 +4,7 @@ import {
 } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
 import { resolveEnvironmentPairingOffer } from './environments'
+import { readRemoteEdgeAuthFile } from './remote-edge-auth-file'
 import { RuntimeClientError } from './types'
 
 export function resolveRemoteConnection(
@@ -18,8 +19,10 @@ export function resolveRemoteConnection(
     )
   }
   if (environmentSelector) {
-    return pairedRuntimeConnectionFromOffer(
-      resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
+    return withEdgeAuth(
+      pairedRuntimeConnectionFromOffer(
+        resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
+      )
     )
   }
   if (!pairingCode) {
@@ -32,5 +35,12 @@ export function resolveRemoteConnection(
       'Invalid remote pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
-  return pairedRuntimeConnectionFromOffer(pairing)
+  return withEdgeAuth(pairedRuntimeConnectionFromOffer(pairing))
+}
+
+function withEdgeAuth(connection: PairedRuntimeConnection): PairedRuntimeConnection {
+  const filePath = process.env.ORCA_REMOTE_AUTH_FILE
+  return filePath
+    ? { ...connection, edgeAuth: readRemoteEdgeAuthFile(filePath, connection) }
+    : connection
 }
