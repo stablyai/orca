@@ -76,12 +76,12 @@ export async function collectWslMoveBlobs(
   }
 }
 
+/** Sends every blob; the caller journals `blobs-transferred` once the terminals are proven again. */
 export async function sendWslMoveBlobs(
-  deps: TransferDeps,
   host: WslMoveHost,
   staged: WslMoveCutover,
   blobs: Awaited<ReturnType<typeof collectWslMoveBlobs>>
-): Promise<WslMoveCutover> {
+): Promise<void> {
   await transferOrcadMigrationBlobs({
     source: blobs.source,
     manifest: staged.manifest,
@@ -92,7 +92,6 @@ export async function sendWslMoveBlobs(
       stageChunk: host.blobs.stageChunk
     }
   })
-  return advanceWslMove(deps, staged, 'blobs-transferred')
 }
 
 /**

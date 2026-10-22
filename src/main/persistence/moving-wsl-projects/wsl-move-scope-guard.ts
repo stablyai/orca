@@ -15,6 +15,7 @@ import { isWslUncPath } from '../../../shared/wsl-paths'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { onWslMoveJournalChange } from './wsl-move-cutover-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'
+import { comparableWslPath, isAtOrUnder } from './wsl-move-comparable-path'
 import {
   findProjectHostSetup,
   type ProjectHostSetupTarget
@@ -256,6 +257,22 @@ export function isWslMoveWorkspaceBlocked(
   workspaceId: string | null | undefined
 ): boolean {
   return !!workspaceId && isWslMoveProjectBlocked(store, wslMoveProjectRefForWorkspace(workspaceId))
+}
+
+/**
+ * Whether a new terminal's folder is one a move is taking, whatever workspace it names. A
+ * Linux-spelled folder names no distro, so it matches any moving distro. An unreadable journal lets
+ * no move reach commit, so it fences nothing here.
+ */
+export function isWslMoveCwdFenced(cwd: string): boolean {
+  const fence = loaded?.view
+  if (!fence?.readable) {
+    return false
+  }
+  return fence.state.fencedRoots.some(({ distro, roots }) => {
+    const path = comparableWslPath(cwd, distro)
+    return path !== null && roots.some((root) => isAtOrUnder(path, root))
+  })
 }
 
 /** True once a move has paused the project: its session must stay as the quiesce left it. */
