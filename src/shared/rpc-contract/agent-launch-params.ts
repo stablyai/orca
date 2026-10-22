@@ -1,16 +1,18 @@
 /**
  * The wire shape of `agent.launch`, mirroring `AgentLaunchIntent`.
  *
- * A caller states WHERE the agent lands and WHAT it should say; it never names a mode. There is
- * deliberately no `structured` / `terminal` field and no startup-agent field on the create
- * payload — the host decides, and `withoutReservedAgentCreateFields` strips a stale one out of a
- * payload a caller migrated over from `worktree.create`.
+ * A caller states WHERE the agent lands and WHAT it should say, and may name the surface the user
+ * picked (`surface`); the host honours that pick or refuses it, and otherwise decides from its
+ * settings. There is no startup-agent field on the create payload —
+ * `withoutReservedAgentCreateFields` strips a stale one out of a payload a caller migrated over
+ * from `worktree.create`.
  *
  * Shared rather than main-side because every field resolves to a shared schema: a remote client
  * that sends this method needs `RpcSendParams<'agent.launch'>` to exist, and a method missing from
  * the catalog can only be sent through the raw request port.
  */
 
+import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
 import { z } from 'zod'
 import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
 import { parsePaneKey } from '../stable-pane-id'
@@ -153,9 +155,16 @@ export const AgentLaunchFields = z.object({
    * The launching user's "new agent tabs open as chats" default, sent by a client that owns the
    * user's settings when the host's own setting is not theirs (a desktop relaying its phone to a
    * server). Replaces only the host setting; feasibility still decides. Older hosts strip it and
-   * read their own setting. Outside the replay fingerprint.
+   * read their own setting. Outside the replay fingerprint. An explicit `surface` replaces it.
    */
-  nativeChatDefault: z.boolean().optional()
+  nativeChatDefault: z.boolean().optional(),
+  /**
+   * The surface the user picked for this one launch. `terminal` always runs the CLI; `chat` that
+   * this host can prove it cannot open is refused before anything is created. Strict: an unknown
+   * word changes what runs, so it is refused rather than ignored. Inside the replay fingerprint.
+   * Read by hosts advertising `agent.launch.surface.v1`; older hosts strip it, so clients gate it.
+   */
+  surface: z.enum(AGENT_LAUNCH_SURFACES).optional()
 })
 
 /** A caller-minted session id must be shaped like every id the host mints, so an id still names

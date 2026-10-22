@@ -49,10 +49,11 @@ import { createWslOrcadLivenessSupervisor } from './wsl-orcad-liveness-wiring'
 const RUN = process.env.ORCA_RUN_WSL_ORCAD_LANE === '1'
 const PHASE = process.env.ORCA_WSL_ORCAD_LANE_PHASE ?? 'launch'
 const PLAIN = process.env.ORCA_WSL_ORCAD_LANE_PLAIN_DISTRO ?? 'orca-lane-plain'
+// Empty for distro families whose rootfs ships no systemd; those run the plain distro only.
 const SYSTEMD = process.env.ORCA_WSL_ORCAD_LANE_SYSTEMD_DISTRO ?? 'orca-lane-systemd'
 const DISTROS = [
   { name: PLAIN, systemd: false },
-  { name: SYSTEMD, systemd: true }
+  ...(SYSTEMD ? [{ name: SYSTEMD, systemd: true }] : [])
 ]
 const WORK_DIR = process.env.ORCA_WSL_ORCAD_LANE_DIR ?? join(tmpdir(), 'orca-wsl-orcad-lane')
 const USER_DATA = join(WORK_DIR, 'userData')
@@ -424,7 +425,7 @@ async function updatePhase(distro: string): Promise<Receipt> {
 
   // Force: the new build serves, and the terminal survives on the preserved daemon.
   started = performance.now()
-  const forced = await supervisor.connect(distro, { force: true })
+  const forced = await supervisor.connect(distro, { intent: 'force' })
   result.forceMs = Math.round(performance.now() - started)
   expect(forced.fullVersion).toBe(deferred.deferredUpdate?.candidateVersion)
   expect(forced.deferredUpdate).toBeNull()
@@ -465,10 +466,13 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   if (!supervisor) {
     throw new Error('supervisor missing')
   }
+  // A login bash reads only the first of these that exists; Fedora and Arch ship ~/.bash_profile.
   await guest(
     distro,
-    `grep -q ${LOGIN_ENV_TAG} "$HOME/.profile" 2>/dev/null || ` +
-      `printf 'export SSH_AUTH_SOCK=${LOGIN_ENV_SOCK} # ${LOGIN_ENV_TAG}\\n' >> "$HOME/.profile"`
+    `rc="$HOME/.profile"; for f in "$HOME/.bash_profile" "$HOME/.bash_login"; do ` +
+      `if [ -f "$f" ]; then rc="$f"; break; fi; done; ` +
+      `grep -q ${LOGIN_ENV_TAG} "$rc" 2>/dev/null || ` +
+      `printf 'export SSH_AUTH_SOCK=${LOGIN_ENV_SOCK} # ${LOGIN_ENV_TAG}\\n' >> "$rc"`
   )
   let started = performance.now()
   const connection = await supervisor.connect(distro)
@@ -595,8 +599,10 @@ async function survivePhase(): Promise<void> {
     )
   }
   // The systemd distro stops while the plain one still runs, so the interop entry is shared.
-  expect((await wslExe(['--terminate', SYSTEMD])).code).toBe(0)
-  await assertWslInteropIntact(PLAIN, `after final terminate of ${SYSTEMD}`)
+  if (SYSTEMD) {
+    expect((await wslExe(['--terminate', SYSTEMD])).code).toBe(0)
+    await assertWslInteropIntact(PLAIN, `after final terminate of ${SYSTEMD}`)
+  }
   expect((await wslExe(['--terminate', PLAIN])).code).toBe(0)
   const leftovers = await waitFor(
     'lane wsl.exe processes to exit',
@@ -660,7 +666,7 @@ describe.runIf(RUN && process.platform === 'win32')('WSL orcad on real WSL2 dist
   )
 
   it.runIf(PHASE === 'survive')(
-    'keeps both distros held after the launching process exited, then tears down cleanly',
+    'keeps every distro held after the launching process exited, then tears down cleanly',
     survivePhase,
     DISTRO_TIMEOUT_MS
   )

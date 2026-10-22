@@ -39,10 +39,9 @@ class MobileWebShellCspTest {
     )
     assertTrue(directives.contains("script-src 'self'"))
     assertFalse(MOBILE_WEB_SHELL_CSP.contains("unsafe-eval"))
-    // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
-    // directive that grew one would fail here instead of passing a blanket absence check.
+    // Only images and bundled fonts can use embedded data URLs.
     assertEquals(
-      listOf("img-src 'self' data: blob: https:"),
+      listOf("img-src 'self' data: blob: https:", "font-src 'self' data:"),
       directives.filter { it.contains("data:") }
     )
     assertEquals(

@@ -14,7 +14,7 @@ import { getLocalProjectExecutionRuntimeContext } from './local-preflight-contex
 import { CLIENT_PLATFORM } from './new-workspace'
 import {
   getExecutionHostIdForWorktree,
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
 
 /**
@@ -148,9 +148,7 @@ export function resolveWorktreeExecutionHostPlatform(
     nestedSshTargetId:
       host?.kind === 'runtime' ? (getConnectionIdFromState(state, worktreeId) ?? null) : null,
     sshOwnerEnvironmentId:
-      host?.kind === 'ssh'
-        ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
-        : null,
+      host?.kind === 'ssh' ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId) : null,
     workspacePath,
     projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
   })

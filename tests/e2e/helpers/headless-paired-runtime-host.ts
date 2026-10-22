@@ -96,6 +96,8 @@ export async function launchHeadlessPairedRuntimeHost(
   options: {
     agentBrowserSocketParent?: string
     executablePath?: string
+    /** Host-only env seams (e.g. a forced-unavailable snapshot) the paired client must not inherit. */
+    extraEnv?: Record<string, string>
     /**
      * `mobile` makes `offer` a phone pairing (`orca serve --mobile-pairing`). It is the host's only
      * offer, so no desktop can pair to such a host: a desktop plus a direct phone is unsupported.
@@ -129,7 +131,7 @@ export async function launchHeadlessPairedRuntimeHost(
         ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
         ORCA_E2E_HEADLESS: '1'
       },
-      extraEnv: {},
+      extraEnv: options.extraEnv ?? {},
       userDataDir
     })
     if (agentBrowserSocketDir) {

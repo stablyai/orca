@@ -38,6 +38,7 @@ export function agentHookRuntimeDeps(
       readChildWorkRecords: (subject) => server.getStructuredChildWork(subject),
       readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
+    readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
     checkHookAgentPresence: (paneKey, exitedSince) =>
       exitedSince === undefined
         ? server.checkAgentPresence(paneKey)

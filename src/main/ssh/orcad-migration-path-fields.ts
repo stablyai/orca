@@ -170,6 +170,10 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
     at: 'dormantState.clientState.mobileClientTabSelectionsByDeviceId{}{}.activeTabIdByGroupId{}',
     kind: 'editor-file-id'
   },
+  {
+    at: 'dormantState.clientState.mobileClientTabSelectionsByDeviceId{}{}.recentTabIds[]',
+    kind: 'editor-file-id'
+  },
   { at: 'dormantState.clientState.uiRouting.lastActiveWorktreeId', kind: 'worktree-id' },
   { at: 'dormantState.clientState.uiRouting.showDotfilesByWorktree{key}', kind: 'owner-key' },
   {

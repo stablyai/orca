@@ -1,4 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { expectMainFrameClosesExitedSplitPaneOnce } from './pty-connection-test-exited-split-pane-close'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
@@ -106,7 +108,12 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         await flushAsyncTicks()
 
         expect(hasPty).toHaveBeenCalledWith('pty-pane-2')
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        // Switch on: the host's authoritative absence is a confirmed end; main closes, the frame shows it.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('does not close when targeted liveness is live or unknown', async () => {
@@ -228,7 +235,11 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         binding.reconcileIfSessionMissing(async () => false, afterSpawn + 1)
         await flushAsyncTicks()
 
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('routes the last pane through onPtyExitRef when its session is dead', async () => {
@@ -349,8 +360,12 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         transport.getPtyId.mockReturnValue('pty-pane-2-restarted')
         onPtyExit?.('pty-pane-2-restarted')
 
-        expect(manager.closePane).toHaveBeenCalledTimes(1)
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledTimes(1)
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('closes a split pane exactly once across reconcile + a racing real exit', async () => {
@@ -382,8 +397,14 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         // A racing real/synthetic pty:exit for the SAME id must not close twice.
         onPtyExit?.('pty-pane-2')
 
-        expect(manager.closePane).toHaveBeenCalledTimes(1)
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // The racing exit must not re-run the teardown that registered main's close.
+          expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledTimes(1)
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledTimes(1)
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('closes a genuinely-dead non-suppressed pane once (not misread as suppressed)', async () => {
@@ -416,8 +437,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         onPtyExit?.('pty-pane-2')
 
         // Observable outcome: single close, pane was treated as dead (closed).
-        expect(manager.closePane).toHaveBeenCalledTimes(1)
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledTimes(1)
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledTimes(1)
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
     })
 
@@ -465,6 +491,55 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
       expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
     })
+
+    it.each([false, true])(
+      'preserves an exhausted pane until explicit Retry and clears only the current owner error (fresh: %s)',
+      async (fresh) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport()
+        transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
+          opts.callbacks?.onError?.('terminal_pane_owner_changed')
+          return undefined
+        })
+        transportFactoryQueue.push(transport)
+        const deps = fresh ? createDeps() : seedUnverifiableRestoredPane()
+        const cleared = vi.fn()
+        deps.onPtyErrorClearedRef = { current: cleared }
+
+        connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+        await flushAsyncTicks()
+
+        expect(transport.connect).toHaveBeenCalledTimes(1)
+        expect(deps.onPtyErrorRef.current).toHaveBeenCalledExactlyOnceWith(
+          2,
+          'terminal_pane_owner_changed'
+        )
+        expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+        expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+        if (!fresh) {
+          expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+            [LEAF_2]: 'unverifiable-pty'
+          })
+        }
+        const stale = transport.connect.mock.calls[0]?.[0].callbacks
+        transport.connect.mockImplementation(async ({ callbacks }) => {
+          callbacks?.onError?.('unrelated diagnostic')
+          callbacks?.onConnect?.()
+          return { id: 'unverifiable-pty', isReattach: true }
+        })
+        expect(transport.retryRecovery?.()).toBe(true)
+        await flushAsyncTicks()
+        expect(transport.connect).toHaveBeenCalledTimes(2)
+        expect(transport.disconnect).not.toHaveBeenCalled()
+        expect(cleared).toHaveBeenCalledExactlyOnceWith(2, 'terminal_pane_owner_changed')
+        stale?.onError?.('terminal_pane_owner_changed')
+        expect(
+          deps.onPtyErrorRef.current.mock.calls.filter(
+            ([, message]) => message === 'terminal_pane_owner_changed'
+          )
+        ).toHaveLength(1)
+      }
+    )
 
     describe('terminal input liveness IPC gating (perf)', () => {
       // Why (perf regression guard): listSessions() is a renderer→main→daemon round-trip; terminal input must never trigger it.

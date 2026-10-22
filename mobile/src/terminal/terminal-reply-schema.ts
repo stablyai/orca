@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
-// Terminal input, the in-place viewport update, the worker-takeover report and the buffer clear.
-// Checked against the terminal-send envelope src/main/runtime/rpc/methods/terminal/
-// terminal-send-method.ts answers with, `terminal.updateViewport` in terminal-viewport-methods.ts,
+// Terminal input, the in-place viewport update, the phone-fit restore setting, the worker-takeover
+// report and the buffer clear. Checked against the terminal-send envelope
+// src/main/runtime/rpc/methods/terminal/terminal-send-method.ts answers with,
+// `terminal.updateViewport` and `terminal.{get,set}AutoRestoreFit` in terminal-viewport-methods.ts,
 // and `orchestration.workerTerminalUserInput` in orchestration/worker/worker-release.ts.
 
 /**
@@ -45,6 +46,9 @@ export const terminalViewportUpdatedSchema = z
     applied: salvagedOptional('applied', z.boolean())
   })
   .transform((reply) => ({ updated: reply.updated === true, applied: reply.applied === true }))
+
+/** The host's saved phone-fit restore delay; `null` keeps the terminal at phone size. */
+export const terminalAutoRestoreFitSchema = z.looseObject({ ms: z.number().nullable() })
 
 /**
  * The two terminal writes whose reply body no call site reads.

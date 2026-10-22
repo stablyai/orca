@@ -1,17 +1,35 @@
-import { useEffect, useRef } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { Pencil } from 'lucide-react-native'
+import { useEffect, useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
+import { Check, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { useLargeSystemText } from '../theme/use-large-system-text'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
+import { useTextInputContentHeight } from '../platform/text-input-content-height'
 
-const PENCIL_SIZE = 14
-// The composer's own button height.
-const EDITOR_ACTION_HEIGHT = 40
+const BUTTON_SIZE = 28
+const ICON_SIZE = 16
+const LINE_HEIGHT = 20
+const FIELD_PADDING_VERTICAL = 7
+const FIELD_BORDER = 1
+const FIELD_MIN_HEIGHT = LINE_HEIGHT + 2 * (FIELD_PADDING_VERTICAL + FIELD_BORDER)
+const FIELD_MAX_HEIGHT = 4 * LINE_HEIGHT + 2 * (FIELD_PADDING_VERTICAL + FIELD_BORDER)
+const FIELD_GAP = 6
+const BUTTON_GAP = spacing.xs
+// react-native-web drops hitSlop, so each button's own box is the 44pt-tall touch target.
+const TOUCH_TARGET_HEIGHT = 44
+const TARGET_OVERHANG = (TOUCH_TARGET_HEIGHT - FIELD_MIN_HEIGHT) / 2
 
-/** The editor that replaces a queued card's row: one action line, then the text on the card. Save
- *  sits on that line rather than under the field, as the keyboard leaves little height. */
+/** The editor that replaces a queued card's row: the composer's text field, with an X and a
+ *  checkmark beside it, so it needs no line of its own for Cancel and Save. */
 export function MobileNativeChatQueuedMessageEditor({
   editor,
   attribution
@@ -21,151 +39,191 @@ export function MobileNativeChatQueuedMessageEditor({
   attribution: string | null
 }): React.JSX.Element {
   const input = useRef<TextInput>(null)
+  // Grows from one line to four, then scrolls inside.
+  const contentHeight = useTextInputContentHeight(input, editor.text)
+  const [focused, setFocused] = useState(false)
   useEffect(() => {
     input.current?.focus()
   }, [])
   const saveDisabled = editor.saving || !editor.canSave
-  const largeText = useLargeSystemText()
-  const actions = (
-    <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Cancel editing queued message"
-        accessibilityState={{ disabled: editor.saving }}
-        disabled={editor.saving}
-        style={({ pressed }) => [
-          styles.cancel,
-          pressed && styles.pressed,
-          editor.saving && styles.disabled
-        ]}
-        onPress={editor.cancel}
-      >
-        <Text style={styles.cancelLabel}>Cancel</Text>
-      </Pressable>
-      {/* A 40pt target around a smaller pill, so the line stays one button tall. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Save queued message"
-        accessibilityState={{ disabled: saveDisabled }}
-        disabled={saveDisabled}
-        style={[styles.save, saveDisabled && styles.disabled]}
-        onPress={() => void editor.save()}
-      >
-        {({ pressed }) => (
-          <View style={[styles.savePill, pressed && styles.savePillPressed]}>
-            <Text style={styles.saveLabel}>Save</Text>
-          </View>
-        )}
-      </Pressable>
-    </>
-  )
+  // Saving keeps the light fill behind the spinner; only an unsavable edit dims the checkmark.
+  const saveOff = !editor.canSave && !editor.saving
   return (
     <View style={styles.editor} testID="queued-card-editor">
-      <View style={styles.head}>
-        <Pencil size={PENCIL_SIZE} color={colors.textMuted} strokeWidth={2} />
-        <Text style={styles.label}>Editing message</Text>
-        {largeText ? null : actions}
-      </View>
-      {largeText ? <View style={styles.actionsLine}>{actions}</View> : null}
       {attribution ? (
         <Text style={styles.attribution} numberOfLines={1}>
           {attribution}
         </Text>
       ) : null}
-      <TextInput
-        ref={input}
-        accessibilityLabel="Edit queued message"
-        value={editor.text}
-        editable={!editor.saving}
-        multiline
-        selectionColor={colors.accentBlue}
-        style={styles.input}
-        onChangeText={editor.change}
-      />
+      <View style={styles.line}>
+        <TextInput
+          ref={input}
+          accessibilityLabel="Edit queued message"
+          value={editor.text}
+          editable={!editor.saving}
+          multiline
+          selectionColor={colors.accentBlue}
+          textAlignVertical="top"
+          style={[
+            mobileNativeChatInputStyles.freeInput,
+            styles.field,
+            contentHeight !== undefined && {
+              height: Math.min(FIELD_MAX_HEIGHT, Math.max(FIELD_MIN_HEIGHT, contentHeight))
+            },
+            focused && !editor.saving && styles.fieldFocused,
+            editor.saving && styles.disabled
+          ]}
+          onChangeText={editor.change}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        <EditorButton
+          label="Cancel editing"
+          disabled={editor.saving}
+          targetStyle={styles.cancelTarget}
+          squareStyle={[styles.buttonRaised, editor.saving && styles.disabled]}
+          pressedStyle={styles.cancelPressed}
+          onPress={editor.cancel}
+        >
+          <X size={ICON_SIZE} color={colors.textSecondary} strokeWidth={2} />
+        </EditorButton>
+        <EditorButton
+          label="Save edited message"
+          disabled={saveDisabled}
+          busy={editor.saving}
+          targetStyle={styles.saveTarget}
+          squareStyle={saveOff ? styles.buttonRaised : styles.save}
+          pressedStyle={styles.savePressed}
+          onPress={() => void editor.save()}
+        >
+          {editor.saving ? (
+            <ActivityIndicator size="small" color={colors.bgBase} />
+          ) : (
+            <Check
+              size={ICON_SIZE}
+              color={saveOff ? colors.textMuted : colors.bgBase}
+              strokeWidth={2.6}
+            />
+          )}
+        </EditorButton>
+      </View>
     </View>
   )
 }
 
-// The text column under the pencil, where the card's text was.
-const TEXT_INDENT = PENCIL_SIZE + spacing.sm
+/** A 28pt square drawn inside a taller, invisible touch target. */
+function EditorButton({
+  label,
+  disabled,
+  busy,
+  targetStyle,
+  squareStyle,
+  pressedStyle,
+  onPress,
+  children
+}: {
+  label: string
+  disabled: boolean
+  busy?: boolean
+  targetStyle: StyleProp<ViewStyle>
+  squareStyle: StyleProp<ViewStyle>
+  pressedStyle: StyleProp<ViewStyle>
+  onPress: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  // Pressable only styles its own box, which here is the invisible target, not the square.
+  const [pressed, setPressed] = useState(false)
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      // react-native-web maps aria-busy but not accessibilityState.busy.
+      aria-busy={busy}
+      disabled={disabled}
+      style={[styles.target, targetStyle]}
+      onPress={onPress}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+    >
+      <View style={[styles.button, squareStyle, pressed && !disabled && pressedStyle]}>
+        {children}
+      </View>
+    </Pressable>
+  )
+}
 
 const styles = StyleSheet.create({
+  // No row fill: the field's own fill marks the edit, as the composer's field does in its bar.
   editor: {
-    backgroundColor: colors.bgRaised,
+    paddingVertical: spacing.sm,
     paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  head: {
-    minHeight: EDITOR_ACTION_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  // Large text: Cancel and Save on a line of their own, under the heading.
-  actionsLine: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: spacing.sm
-  },
-  label: {
-    flex: 1,
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + spacing.xs
-  },
-  // minHeight, not height: the action line grows with the system text size instead of clipping.
-  cancel: {
-    minHeight: EDITOR_ACTION_HEIGHT,
-    minWidth: 56,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  cancelLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
-  },
-  save: {
-    minHeight: EDITOR_ACTION_HEIGHT,
-    justifyContent: 'center'
-  },
-  savePill: {
-    minHeight: spacing.xl + spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  savePillPressed: {
-    backgroundColor: colors.textSecondary
-  },
-  saveLabel: {
-    color: colors.bgBase,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+    paddingRight: spacing.sm,
+    gap: spacing.xs
   },
   attribution: {
-    marginLeft: TEXT_INDENT,
     color: colors.textMuted,
     fontSize: typography.metaSize,
     lineHeight: typography.metaSize + spacing.xs
   },
-  // On the card itself: no fill or border, and no padding above or below the text.
-  input: {
-    marginLeft: TEXT_INDENT,
-    padding: 0,
-    paddingRight: spacing.md,
-    maxHeight: 80,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    textAlignVertical: 'top'
+  // Bottom-aligned: the buttons stay beside the cursor's last line as the field grows. The line
+  // overhangs into the editor's padding so the targets fit inside it at full height.
+  line: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginVertical: -TARGET_OVERHANG,
+    marginRight: -spacing.sm
   },
-  pressed: { backgroundColor: colors.bgPanel },
+  // One line, then four before it scrolls; a constant border width so focus never shifts the text.
+  field: {
+    minHeight: FIELD_MIN_HEIGHT,
+    maxHeight: FIELD_MAX_HEIGHT,
+    lineHeight: LINE_HEIGHT,
+    paddingTop: FIELD_PADDING_VERTICAL,
+    paddingBottom: FIELD_PADDING_VERTICAL,
+    paddingHorizontal: 10,
+    borderWidth: FIELD_BORDER,
+    borderColor: colors.borderSubtle,
+    marginVertical: TARGET_OVERHANG
+  },
+  fieldFocused: {
+    borderColor: colors.accentBlue
+  },
+  // As tall as a one-line field plus both overhangs, so the square sits centred on that field.
+  target: {
+    height: TOUCH_TARGET_HEIGHT,
+    justifyContent: 'center'
+  },
+  // Each target reaches its neighbours: the field, the middle of the gap, the editor's edge.
+  cancelTarget: {
+    paddingLeft: FIELD_GAP,
+    paddingRight: BUTTON_GAP / 2
+  },
+  saveTarget: {
+    paddingLeft: BUTTON_GAP / 2,
+    paddingRight: spacing.sm
+  },
+  button: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: radii.input,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  buttonRaised: {
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
+  cancelPressed: {
+    backgroundColor: colors.bgPanel
+  },
+  // The composer's Send and the old Save pill's light fill.
+  save: {
+    backgroundColor: colors.textPrimary
+  },
+  savePressed: {
+    backgroundColor: colors.textSecondary
+  },
   disabled: { opacity: 0.5 }
 })

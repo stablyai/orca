@@ -47,16 +47,15 @@ function harness(worktrees: Worktree[]) {
   }
   const owner = new SidebarRetentionOwner(new SidebarClock(), {
     showSleepingWorkspaces: () => world.showSleeping,
-    listRows: async () => {
+    listRowKeys: async () => {
       const rows = world.worktrees
       if (world.holdNextListing) {
         world.holdNextListing = false
         await new Promise<void>((resolve) => world.releases.push(resolve))
       }
-      return rows
+      return rows.map(getWorktreeHostIdentity)
     },
     retentionCandidates: () => ({
-      ids: world.active,
       isActive: (id) => world.active.has(id),
       isUnverifiableGap: (id) => world.tabsOpen.has(id)
     })
@@ -139,5 +138,36 @@ describe('SidebarRetentionOwner', () => {
     world.releases.forEach((release) => release())
     await flush()
     expect(owner.snapshot().retention?.retainedIds).toEqual([getWorktreeHostIdentity(remote)])
+  })
+
+  it('retains every host’s row of a same-id pair, as this host’s session is by bare id', async () => {
+    const local = worktree('a', { hostId: 'local' })
+    const remote = worktree('a', { hostId: 'ssh:box' })
+    const { world, owner } = harness([local, remote])
+    owner.beginSession('s1')
+    await flush()
+    world.active = new Set(['a'])
+    world.tabsOpen = new Set(['a'])
+    owner.noteActivityChange()
+    world.active = new Set()
+    owner.noteActivityChange()
+    expect(owner.snapshot().retention?.retainedIds).toEqual(['local|a', 'ssh:box|a'])
+  })
+
+  it('gives each host’s row of a same-id pair its own grace window', async () => {
+    const local = worktree('a', { hostId: 'local' })
+    const { world, owner } = harness([local])
+    owner.beginSession('s1')
+    await flush()
+    world.active = new Set(['a'])
+    world.tabsOpen = new Set(['a'])
+    owner.noteActivityChange()
+    world.active = new Set()
+    owner.noteActivityChange()
+    // A twin listed only after the id went idle was never seen live, so it earns no grace.
+    world.worktrees = [local, worktree('a', { hostId: 'ssh:box' })]
+    owner.noteCatalogChange()
+    await flush()
+    expect(owner.snapshot().retention?.retainedIds).toEqual(['local|a'])
   })
 })

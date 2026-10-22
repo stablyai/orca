@@ -214,8 +214,8 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       })
       return result.worktree.lineage ?? null
     },
-    persistSortOrder: async ({ orderedIds }) => {
-      await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
+    persistSortOrder: async ({ orderedIds, hostIds }) => {
+      await callRuntimeResult('worktree.persistSortOrder', { orderedIds, hostIds })
     },
     // Why: the capture lives in desktop main memory, unexposed over pairing; the dialog falls back to the persisted excerpt.
     getBranchRenameFailureOutput: async () => null,

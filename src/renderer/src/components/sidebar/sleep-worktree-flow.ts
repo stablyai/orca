@@ -1,12 +1,25 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import {
   clearWorktreeSleepIntent,
+  hasWorktreeSleepIntent,
   markWorktreeSleepIntent,
   withWorktreeSleepTeardown
 } from '@/lib/worktree-sleep-intent'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
+import { stopWorkspaceChats, type WorkspaceChatStop } from './sleep-workspace-chat-stop'
+
+/** One per host asked to stop the workspace's chats. */
+export type WorkspaceSleepResult = {
+  workspaceId: string
+  executionHostId: ExecutionHostId
+  stoppedSessionIds: string[]
+  /** The whole workspace slept and is still asleep. */
+  completed: boolean
+}
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -21,93 +34,8 @@ import { translate } from '@/i18n/i18n'
  * Centralizing the sequence here keeps that safety invariant in one place so
  * a new caller can't accidentally skip it.
  */
-export async function runSleepWorktree(worktreeId: string): Promise<void> {
-  await runSleepWorktrees([worktreeId])
-}
-
-function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).filter(
-    (element) => element.dataset.worktreeId === worktreeId
-  )
-}
-
-function isPinnedSidebarWorktreeOption(element: HTMLElement): boolean {
-  // Why: duplicated pinned rows share a worktree id; the row-key prefix is the
-  // stable row-scoped signal that distinguishes the pinned copy from natural rows.
-  return element.dataset.worktreeRowKey?.startsWith('pinned:') === true
-}
-
-function findPrimarySidebarWorktreeOption(worktreeId: string): HTMLElement | null {
-  const options = getSidebarWorktreeOptions(worktreeId)
-  return (
-    options.find((element) =>
-      element.querySelector<HTMLElement>('[data-worktree-card-active="primary"]')
-    ) ??
-    options.find((element) => !isPinnedSidebarWorktreeOption(element)) ??
-    options[0] ??
-    null
-  )
-}
-
-function findSidebarWorktreeRow(worktreeId: string, rowKey?: string): HTMLElement | null {
-  const options = getSidebarWorktreeOptions(worktreeId)
-  const option = rowKey
-    ? (options.find((element) => element.dataset.worktreeRowKey === rowKey) ?? null)
-    : (findPrimarySidebarWorktreeOption(worktreeId) ?? null)
-  return option?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
-}
-
-function preserveSidebarWorktreePosition(worktreeId: string): () => void {
-  if (typeof document === 'undefined') {
-    return () => {}
-  }
-  const getScroller = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-  const scroller = getScroller()
-  const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
-  const activeRowKey = activeOption?.dataset.worktreeRowKey
-  const row = activeOption?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
-  if (!scroller || !row) {
-    return () => {}
-  }
-  scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
-  const previousScrollTop = scroller.scrollTop
-  const previousScrollHeight = scroller.scrollHeight
-  const previousTop = row.getBoundingClientRect().top
-
-  return () => {
-    let attempts = 0
-    const restore = (): void => {
-      const currentScroller = getScroller()
-      if (!currentScroller) {
-        attempts += 1
-        if (attempts < 12) {
-          window.requestAnimationFrame(restore)
-        }
-        return
-      }
-      const nextRow = findSidebarWorktreeRow(worktreeId, activeRowKey)
-      if (!nextRow) {
-        // Why: a remount can first render the wrong virtual window. Put the
-        // scroller near the same content after height changes so the row
-        // mounts, then retry and correct by actual DOM position.
-        currentScroller.scrollTop = Math.max(
-          0,
-          previousScrollTop + currentScroller.scrollHeight - previousScrollHeight
-        )
-      } else {
-        const delta = nextRow.getBoundingClientRect().top - previousTop
-        if (Math.abs(delta) > 1) {
-          currentScroller.scrollTop += delta
-        }
-      }
-      attempts += 1
-      if (attempts < 12) {
-        window.requestAnimationFrame(restore)
-      }
-    }
-    window.requestAnimationFrame(restore)
-  }
+export async function runSleepWorktree(worktreeId: string): Promise<WorkspaceSleepResult[]> {
+  return runSleepWorktrees([worktreeId])
 }
 
 function describeSleepFailure(error: unknown): string {
@@ -142,8 +70,19 @@ function describeSleepFailure(error: unknown): string {
   )
 }
 
-export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
-  const { errors } = await sleepWorktreesReportingFailures(worktreeIds)
+function describeChatStopFailure(): string {
+  return translate(
+    'auto.components.sidebar.sleep.worktree.flow.chat.partial',
+    'The host could not confirm the chat stopped. Other panels may have closed; check the connection and try again.'
+  )
+}
+
+export async function runSleepWorktrees(
+  worktreeIds: readonly string[]
+): Promise<WorkspaceSleepResult[]> {
+  const { errors, results } = await sleepWorktreesReportingFailures(worktreeIds, {
+    markChatsAsleep: true
+  })
   if (errors.length > 0) {
     // Why: callers are fire-and-forget; surface actionable teardown failures after restoring retryable UI state.
     toast.error(
@@ -161,18 +100,26 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
       }
     )
   }
+  return results
 }
 
-export type WorktreeSleepOutcome = { failedWorktreeIds: string[]; errors: string[] }
+export type WorktreeSleepOutcome = {
+  /** Every workspace not verifiably slept, including one whose chat stop went unconfirmed. */
+  failedWorktreeIds: string[]
+  errors: string[]
+  results: WorkspaceSleepResult[]
+}
 
 /** The sleep without the toast, for callers that report failures themselves. */
 export async function sleepWorktreesReportingFailures(
-  requestedWorktreeIds: readonly string[]
+  requestedWorktreeIds: readonly string[],
+  // Why: only the user's Sleep hides its chats; a project move pauses through this core too.
+  options: { markChatsAsleep?: boolean } = {}
 ): Promise<WorktreeSleepOutcome> {
   // Why unique: both copies of a twin share one id, and sleeping it sleeps the whole workspace.
   const worktreeIds = [...new Set(requestedWorktreeIds)]
   if (worktreeIds.length === 0) {
-    return { failedWorktreeIds: [], errors: [] }
+    return { failedWorktreeIds: [], errors: [], results: [] }
   }
   const {
     activeWorktreeId,
@@ -182,6 +129,7 @@ export async function sleepWorktreesReportingFailures(
   } = useAppStore.getState()
   const sleptActiveWorktreeId =
     activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
+  const selectionBeforeSleep = captureWorkspaceSelection(useAppStore.getState())
   if (sleptActiveWorktreeId) {
     const restoreSidebarPosition = preserveSidebarWorktreePosition(sleptActiveWorktreeId)
     // Why: clearing the active workspace can unmount TerminalPanes before
@@ -194,60 +142,94 @@ export async function sleepWorktreesReportingFailures(
   }
   const errors: string[] = []
   const failedWorktreeIds = new Set<string>()
-  try {
-    for (const worktreeId of worktreeIds) {
-      // Why: the marker outlives teardown so the panes left mounted stay cold
-      // until an explicit wake (#10205); mark per workspace so an earlier
-      // slow teardown never leaves a later, still-awake one marked.
-      markWorktreeSleepIntent(worktreeId)
-      try {
-        // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
-        // so destroyPersistentWebview unregisters the Chromium guests before any
-        // other teardown runs, terminals second so the PTY kill uses the same
-        // ordering on both paths. Without the browser thunk here, sleep leaks
-        // browserPagesByWorkspace entries and live webviews for the slept worktree.
-        await withWorktreeSleepTeardown(worktreeId, () => shutdownWorktreeBrowsers(worktreeId))
-      } catch (err) {
-        console.error('[sleep-worktree] browser shutdown failed', { worktreeId, error: err })
-        failedWorktreeIds.add(worktreeId)
-        errors.push(describeSleepFailure(err))
-        continue
-      }
-      try {
-        // Why: sleep is reversible — the tab record stays in tabsByWorktree, the
-        // layout stays in terminalLayoutsByTabId, only the live PTY processes are
-        // released. keepIdentifiers preserves tab.ptyId / ptyIdsByLeafId /
-        // lastKnownRelayPtyIdByTabId so wake re-spawns against the same on-disk
-        // history dir (local) or relay session id (SSH); it also captures
-        // serializer buffers into buffersByLeafId for SSH wake to reseed
-        // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
-        await withWorktreeSleepTeardown(worktreeId, async () => {
-          await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
-          if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
-            await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
-          }
-        })
-        // Why: a workspace the user activated during the batch is awake by their choice.
+  // Why apart from failedWorktreeIds: stopped terminals stay stopped when only a chat stop fails.
+  const chatFailedIds = new Set<string>()
+  const attempts = worktreeIds.map((worktreeId) => {
+    markWorktreeSleepIntent(worktreeId)
+    let chats: Promise<WorkspaceChatStop> = Promise.resolve({ receipts: [], failed: false })
+    // Browser cleanup and the authoritative terminal admission run before any batch wait.
+    const panels = withWorktreeSleepTeardown(worktreeId, async () => {
+      shutdownWorktreeBrowsers(worktreeId)
+      await shutdownWorktreeTerminals(worktreeId, {
+        keepIdentifiers: true,
+        onAdmitted: () => {
+          chats = stopWorkspaceChats(
+            useAppStore.getState(),
+            worktreeId,
+            options.markChatsAsleep
+          ).catch((error: unknown) => {
+            console.error('[sleep-worktree] native chat stop failed', { worktreeId, error })
+            return { receipts: [], failed: true }
+          })
+        }
+      })
+    }).then(
+      () => {
         if (useAppStore.getState().activeWorktreeId === worktreeId) {
           clearWorktreeSleepIntent(worktreeId)
         }
-      } catch (err) {
-        console.error('[sleep-worktree] terminal or host suspension failed', {
-          worktreeId,
-          error: err
-        })
+      },
+      (error: unknown) => {
+        console.error('[sleep-worktree] panel shutdown failed', { worktreeId, error })
         failedWorktreeIds.add(worktreeId)
-        errors.push(describeSleepFailure(err))
+        errors.push(describeSleepFailure(error))
       }
+    )
+    return { worktreeId, settled: panels.then(() => chats) }
+  })
+  const results: WorkspaceSleepResult[] = []
+  try {
+    // A VM may carry another workspace's host: settle the entire batch before suspending any.
+    const chatStops = await Promise.all(attempts.map(({ settled }) => settled))
+    for (const [index, { worktreeId }] of attempts.entries()) {
+      const { receipts, failed } = chatStops[index]
+      if (failed) {
+        chatFailedIds.add(worktreeId)
+        errors.push(describeChatStopFailure())
+      }
+      if (!failedWorktreeIds.has(worktreeId) && hasWorktreeSleepIntent(worktreeId)) {
+        try {
+          await withWorktreeSleepTeardown(worktreeId, async () => {
+            if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
+              await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+            }
+          })
+          if (useAppStore.getState().activeWorktreeId === worktreeId) {
+            clearWorktreeSleepIntent(worktreeId)
+          }
+        } catch (error) {
+          console.error('[sleep-worktree] host suspension failed', { worktreeId, error })
+          failedWorktreeIds.add(worktreeId)
+          errors.push(describeSleepFailure(error))
+        }
+      }
+      results.push(
+        ...receipts.map((receipt) => ({ workspaceId: worktreeId, ...receipt, completed: false }))
+      )
     }
   } finally {
     // Why: a failed sleep leaves the workspace awake and retryable.
     for (const worktreeId of failedWorktreeIds) {
       clearWorktreeSleepIntent(worktreeId)
     }
-    if (sleptActiveWorktreeId && failedWorktreeIds.has(sleptActiveWorktreeId)) {
-      setActiveWorktree(sleptActiveWorktreeId)
+    // Why still empty: a workspace the user picked during the sleep is theirs to keep.
+    if (
+      sleptActiveWorktreeId &&
+      failedWorktreeIds.has(sleptActiveWorktreeId) &&
+      useAppStore.getState().activeWorktreeId === null
+    ) {
+      restoreWorkspaceSelection(useAppStore.getState(), selectionBeforeSleep)
     }
   }
-  return { failedWorktreeIds: [...failedWorktreeIds], errors }
+  return {
+    failedWorktreeIds: [...new Set([...failedWorktreeIds, ...chatFailedIds])],
+    errors: [...new Set(errors)],
+    results: results.map((result) => ({
+      ...result,
+      completed:
+        !failedWorktreeIds.has(result.workspaceId) &&
+        !chatFailedIds.has(result.workspaceId) &&
+        hasWorktreeSleepIntent(result.workspaceId)
+    }))
+  }
 }

@@ -219,10 +219,11 @@ function configureProfileStatePragmas(db: Database.Database): void {
   }
   db.pragma(`busy_timeout = ${PROFILE_STATE_BUSY_TIMEOUT_MS}`)
   db.pragma('foreign_keys = ON')
-  // Profile commits are user-visible state. Keep the same power-loss contract
-  // as the current temp-file + fsync writer rather than the orchestration DB's
-  // cache-oriented NORMAL setting.
+  // Profile commits are user-visible state, so FULL rather than the orchestration DB's NORMAL.
+  // On macOS fsync leaves the drive cache unflushed, so a checkpoint cut by power loss can leave
+  // a row's pages from two versions; checkpoint fullfsync uses F_FULLFSYNC (a no-op elsewhere).
   db.pragma('synchronous = FULL')
+  db.pragma('checkpoint_fullfsync = ON')
 }
 
 function migrateProfileStateSchema(

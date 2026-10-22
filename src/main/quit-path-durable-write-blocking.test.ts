@@ -167,7 +167,7 @@ function stallCommit(dir: string) {
 async function createStatsCollector(dir: string): Promise<TestStatsCollector> {
   testState.dir = dir
   const { StatsCollector, initStatsPath } = await import('./stats/collector')
-  initStatsPath()
+  initStatsPath(testState.dir)
   const stats = new StatsCollector()
   statsCollectors.push(stats)
   return stats

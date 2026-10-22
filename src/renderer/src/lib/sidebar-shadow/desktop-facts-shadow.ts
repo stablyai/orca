@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/desktop-sidebar-facts'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type WindowFactsState = Pick<
   AppState,
@@ -28,7 +29,7 @@ export function readWindowDesktopSidebarFacts(state: WindowFactsState): DesktopS
     ...getAllWorktreesFromState(state)
       .filter((worktree) => worktree.isPinned)
       .map((worktree) => worktree.id),
-    ...state.folderWorkspaces
+    ...selectFolderWorkspaces(state)
       .filter((folder) => folder.isPinned)
       .map((folder) => folderWorkspaceKey(folder.id))
   ]

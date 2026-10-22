@@ -19,10 +19,7 @@ import {
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
-import {
-  WORKTREE_REMOVAL_AMBIGUOUS_ERROR,
-  WORKTREE_REMOVAL_HOST_CHANGED_ERROR
-} from '../listing/worktree-slice-constants'
+import { WORKTREE_REMOVAL_HOST_CHANGED_ERROR } from '../listing/worktree-slice-constants'
 import { translate } from '@/i18n/i18n'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
@@ -37,6 +34,7 @@ import {
   preservesSameIdRendererState,
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 
 export { prepareHostScopedRemovalCompletion, preservesSameIdRendererState }
 
@@ -86,7 +84,7 @@ export function beginHostQualifiedRemoval(
     // this the workspace sits on a "Deleting…" spinner forever with no explanation left
     // on screen.
     get().clearWorktreeDeleteState(worktreeId)
-    return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
+    return { ok: false, error: ambiguousWorkspaceOwnerMessage(get(), worktreeId) }
   }
   // Fail closed rather than delete on a host the caller never confirmed.
   if (
@@ -116,11 +114,11 @@ export function beginHostQualifiedRemoval(
             new Error(
               requiredExecutionHostId
                 ? WORKTREE_REMOVAL_HOST_CHANGED_ERROR
-                : WORKTREE_REMOVAL_AMBIGUOUS_ERROR
+                : ambiguousWorkspaceOwnerMessage(get(), worktreeId)
             ),
-          // Why: every mid-flight re-check must re-resolve at the CONFIRMED host,
-          // or the active host's route would read as "ownership changed".
-          requiredExecutionHostId ? resolveRemovalRoute : undefined
+          // Why: every mid-flight re-check re-resolves the same way the route was chosen (at the
+          // CONFIRMED host, or focus-free), or an unchanged owner would read as "changed".
+          resolveRemovalRoute
         )
       : null,
     sameIdSurvivesOnAnotherHost: sameIdSurvivingHostId !== null,

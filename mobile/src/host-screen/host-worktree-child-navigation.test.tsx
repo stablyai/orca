@@ -55,7 +55,7 @@ describe('a workspace child opens its parent pane', () => {
       const row = { ...item, ...(executionHost ? { hostId: executionHost } : {}) }
       const held: { open?: (item: Worktree, paneKey?: string) => void } = {}
       function Probe() {
-        const state = useHostScreenState('host', undefined)
+        const state = useHostScreenState('host')
         held.open = useHostWorktreeActions({
           client,
           hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],

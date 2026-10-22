@@ -11,7 +11,7 @@ import {
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from './normal-buffer-smooth-scroll'
-import { clearLongPress, dispatcherShouldBlockSurface } from './tap-dispatch'
+import { dispatcherShouldBlockSurface } from './tap-dispatch'
 import {
   applyTextScale,
   MAX_TEXT_SCALE,
@@ -22,13 +22,14 @@ import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
 
+/** How long after the last touchmove its velocity still launches momentum, in milliseconds. */
+const RELEASE_VELOCITY_MAX_AGE_MS = 100
+
 /** A surface that has already been wired, so a re-mount does not stack handlers. */
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
 /** The live touch gesture: the last point, the velocity, and the pinch it may be in. */
 export type TerminalTouchState = {
-  startX: number
-  startY: number
   lastX: number
   lastY: number
   lastTime: number
@@ -40,7 +41,6 @@ export type TerminalTouchState = {
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
-  hasMoved: boolean
 }
 
 export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
@@ -103,19 +103,20 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchstart',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (scope.touchGesture.momentumId) {
         cancelAnimationFrame(scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
+        // Why: this touch stopped a coast; lifting it must not also tap.
         scope.tapCandidate = null
-        clearLongPress(scope)
       }
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
+        stopSurfaceTouchGestures(scope)
+        resetSmoothScrollOffset(scope)
         scope.touchGesture.isPinching = true
-        scope.smoothScrollOffsetY = 0
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mid = pinchMidpoint(scope, touches[0], touches[1])
@@ -124,14 +125,11 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.pinchSurfY = (mid.y - scope.panY) / total
       } else if (touches.length === 1) {
         scope.touchGesture.isPinching = false
-        scope.touchGesture.startX = touches[0].clientX
-        scope.touchGesture.startY = touches[0].clientY
         scope.touchGesture.lastX = touches[0].clientX
         scope.touchGesture.lastY = touches[0].clientY
         scope.touchGesture.lastTime = Date.now()
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
-        scope.touchGesture.hasMoved = false
       }
     },
     { capture: true, passive: true }
@@ -140,7 +138,7 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchmove',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -185,19 +183,9 @@ export function attachSurfaceEventHandlers(
           scope.term.element &&
           scope.term.element.scrollWidth * getTotalScale(scope) > scope.viewportRect().width + 1
         ) {
-          const prevPanX = scope.panX
           scope.panX += x - scope.touchGesture.lastX
           clampPan(scope)
           updateTransform(scope)
-          const panSlop = shouldRouteScrollToTerminalInput(scope) ? 4 : 8
-          if (
-            Math.abs(scope.panX - prevPanX) > 0.5 &&
-            Math.abs(x - scope.touchGesture.startX) > panSlop
-          ) {
-            scope.touchGesture.hasMoved = true
-            scope.tapCandidate = null
-            clearLongPress(scope)
-          }
         }
 
         const deltaY = scope.touchGesture.lastY - y
@@ -211,19 +199,12 @@ export function attachSurfaceEventHandlers(
           if (lines !== 0) {
             scope.touchGesture.accumDelta -= lines * effectiveCellH
             routeScrollLines(scope, lines, x, y)
-            scope.touchGesture.hasMoved = true
-          }
-          if (Math.abs(deltaY) > 1 || Math.abs(scope.touchGesture.accumDelta) > 2) {
-            scope.touchGesture.hasMoved = true
+            // Why: a touch that scrolled a row is a scroll, even inside TAP_SLOP.
             scope.tapCandidate = null
-            clearLongPress(scope)
           }
         } else {
           if (enqueueNormalBufferScrollDelta(scope, deltaY)) {
             updateTouchVelocity(scope, deltaY, dt)
-            scope.touchGesture.hasMoved = true
-            scope.tapCandidate = null
-            clearLongPress(scope)
           } else {
             scope.touchGesture.velY = 0
           }
@@ -238,7 +219,7 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchend',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -274,7 +255,9 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
-        let vel = scope.touchGesture.velY
+        // Why: velY is the speed of the last move; a finger that then rested has none to launch.
+        const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
+        let vel = rested ? 0 : scope.touchGesture.velY
         const FRICTION = 0.972
         const MIN_VEL = 0.012
         let lastMomentumTime = performance.now()
@@ -311,6 +294,18 @@ export function attachSurfaceEventHandlers(
     },
     { capture: true, passive: true }
   )
+
+  targetSurface.addEventListener(
+    'touchcancel',
+    function () {
+      if (targetSurface !== scope.surface) {
+        return
+      }
+      stopSurfaceTouchGestures(scope)
+      resetSmoothScrollOffset(scope)
+    },
+    { capture: true, passive: true }
+  )
 }
 
 export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
@@ -323,4 +318,7 @@ export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
     cancelAnimationFrame(scope.touchGesture.momentumId)
     scope.touchGesture.momentumId = null
   }
+  scope.touchGesture.velY = 0
+  scope.touchGesture.accumDelta = 0
+  scope.touchGesture.isPinching = false
 }

@@ -6,6 +6,8 @@
  * after the server restarts. Each step records the phone's and
  * the server's tab lists; the shapes are compared with main's.
  */
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
@@ -42,6 +44,11 @@ const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [
   'session-tabs.split-group-placement.v1',
   'agent.launch.v2'
 ]
+
+// A layout-owner build's main opens the file itself, so the open succeeds and its tab is listed.
+const LAYOUT_OWNER_BUILD = existsSync(
+  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
+)
 
 // Set until the restarted host hears from its paired hosts, or a deadline passes: timing, not shape.
 const TRANSIENT_FIELDS = new Set(['clientHostedPagesUnreconciled'])
@@ -182,8 +189,18 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
     })
     await record('phone closes the pinned tab', closedPinned)
 
-    // Today a headless server refuses: runtime_error "renderer_unavailable" (no window to open in).
+    // A windowless server's main opens the file itself and lists a markdown row; the rebuilt rows
+    // then name tab2 from the saved session ("Terminal 2"). A layout-owner build lists it at once.
     const opened = await reply(phone, 'files.open', { worktree, relativePath: 'README.md' })
+    if (LAYOUT_OWNER_BUILD) {
+      const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        worktree
+      })
+      expect(
+        listed.tabs.some((tab) => 'filePath' in tab && tab.filePath.endsWith('README.md')),
+        'the phone lists the file it just opened'
+      ).toBe(true)
+    }
     await record('phone opens a file', opened)
 
     const selectedBefore = sessionTabsBaseline(await firstSnapshot(phone, worktree), labels)
@@ -217,7 +234,10 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
       : { ok: false, error: 'no terminal.list row for the tab' }
     await record('phone closes the first terminal', closedLast)
 
-    await expectLayoutCompatBaseline(testInfo, 'old-phone-on-new-server', {
+    const scenario = LAYOUT_OWNER_BUILD
+      ? 'old-phone-on-new-server.layout-owner'
+      : 'old-phone-on-new-server'
+    await expectLayoutCompatBaseline(testInfo, scenario, {
       steps,
       // The payload the old phone parses: its snapshot and terminal-row fields.
       snapshotFields: fieldsOf(snapshot),

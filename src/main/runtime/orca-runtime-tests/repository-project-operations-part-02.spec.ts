@@ -43,7 +43,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -123,7 +123,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -379,7 +379,7 @@ describe('OrcaRuntimeService', () => {
     const colorStore = {
       ...store,
       getRepos: () => [existing],
-      updateRepo: (id: string, repoUpdates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, repoUpdates: Record<string, unknown>) => {
         updates.push({ id, updates: repoUpdates })
         return upgraded as never
       }

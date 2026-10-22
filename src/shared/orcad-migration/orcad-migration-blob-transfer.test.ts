@@ -3,6 +3,7 @@ import {
   MAX_ORCAD_MIGRATION_BLOB_TOTAL_BYTES,
   ORCAD_MIGRATION_BLOB_KIND_CONTRACTS,
   OrcadMigrationBlobChunkRequestSchema,
+  OrcadMigrationBlobDescriptorSchema,
   advertisedOrcadMigrationBlobCapabilities,
   assertOrcadMigrationBlobSet,
   findUnsupportedMigrationBlobKind,
@@ -125,6 +126,22 @@ describe('orcad migration blob contract', () => {
       'orcad.migration-blob.terminal-restore-hints.v1',
       'orcad.migration-blob.shell-history.v1'
     ])
+    // A kind with no installer stays unadvertised, so no desktop sends it here.
+    expect(advertisedOrcadMigrationBlobCapabilities()).not.toContain(
+      'orcad.migration-blob.agent-session-records.v1'
+    )
+  })
+
+  // Drafts stay on each desktop; a chunk from a build that once shed them is refused, not stored.
+  it('refuses the retired editor-drafts kind', () => {
+    expect(
+      OrcadMigrationBlobDescriptorSchema.safeParse({
+        blobKind: 'editor-drafts',
+        key: 'drafts',
+        sha256: 'b'.repeat(64),
+        byteLength: 4
+      }).success
+    ).toBe(false)
   })
 
   it('keeps unknown request fields out and checks the acknowledged length', () => {

@@ -7,11 +7,11 @@ import { CapabilityProbeCache } from '../../../shared/capability-probe-cache'
  * than per transfer — a hardened host with `Subsystem sftp` removed must not be re-probed on every
  * file of a multi-file upload.
  */
-export type WindowsRemoteWriteCapability = 'sftp-subsystem' | 'pwsh'
+type WindowsRemoteWriteCapability = 'sftp-subsystem' | 'pwsh'
 
 // Why re-probe at all: an admin can enable the subsystem, or install PowerShell 7, without the
 // user restarting Orca. Long enough that a hardened host costs one failed probe per half hour.
-export const WINDOWS_WRITE_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
+const WINDOWS_WRITE_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
 const MAX_WINDOWS_WRITE_CAPABILITY_HOSTS = 256
 
 const capabilitiesByExecutionHost = new Map<

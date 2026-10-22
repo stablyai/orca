@@ -24,7 +24,7 @@ import type {
   TextGenerationOperation
 } from './source-control-text-generation-types'
 
-const SOURCE_CONTROL_KILL_SITE = 'source-control-text-generation'
+export const SOURCE_CONTROL_KILL_SITE = 'source-control-text-generation'
 
 export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
@@ -126,7 +126,10 @@ export function runLocalSourceControlPlan(input: {
     } catch (error) {
       markProcessClosed()
       if (error instanceof WindowsCmdLineBreakError) {
-        resolve({ success: false, error: userFacingUnsafeWindowsBatchArgs(plan.label) })
+        resolve({
+          success: false,
+          error: userFacingUnsafeWindowsBatchArgs(plan.label)
+        })
         return
       }
       console.error('[commit-message] Failed to spawn local generator:', error)
@@ -170,7 +173,11 @@ export function runLocalSourceControlPlan(input: {
     const cancel = (): void => {
       canceledByUser = true
       startTermination()
-      finalize({ success: false, error: 'Generation canceled.', canceled: true })
+      finalize({
+        success: false,
+        error: 'Generation canceled.',
+        canceled: true
+      })
     }
     setLocalGenerationCancelToken(laneKey, cancel)
     timer = setTimeout(() => {
@@ -219,7 +226,11 @@ export function runLocalSourceControlPlan(input: {
     const onClose = (code: number | null): void => {
       markClosedAfterTermination()
       if (canceledByUser) {
-        finalize({ success: false, error: 'Generation canceled.', canceled: true })
+        finalize({
+          success: false,
+          error: 'Generation canceled.',
+          canceled: true
+        })
         return
       }
       if (outputLimitExceeded) {

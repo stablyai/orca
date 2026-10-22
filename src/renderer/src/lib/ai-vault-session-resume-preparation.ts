@@ -84,7 +84,7 @@ function isMissingPairedResumePreparation(error: unknown): boolean {
 }
 
 /**
- * The conversation "Resume in New CLI" opens. Most agents' fork command makes the copy, so this
+ * The conversation "Switch to Terminal" opens. Most agents' fork command makes the copy, so this
  * only picks the Codex home it runs under, as a resume does (`copied: false`). An agent whose chat
  * makes the copy (`agentForksThroughChat`) has the chat's host make it here; the result is that
  * copy, which a plain resume opens and no chat owns (`copied: true`).

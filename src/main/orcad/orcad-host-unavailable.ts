@@ -1,6 +1,7 @@
 /**
  * Deploy failures that mean managed orcad can't run on this host at all, as opposed to failures
- * a later connect may not hit again. Only these send a host back to the pinned-relay ladder.
+ * a later connect may not hit again. Only these are recorded (per app version, except host-fixable
+ * ones), so later connects skip setup.
  */
 
 /** No orcad build exists for this host's platform or target. */
@@ -36,6 +37,7 @@ export type OrcadHostUnavailableReason =
   | 'artifacts_unavailable'
   | 'libc_unidentified'
   | 'runtime_self_test'
+  | 'runtime_noexec'
   | 'security_software'
   | 'native_preflight'
   | typeof ORCAD_TUNNEL_UNAVAILABLE_REASON
@@ -46,6 +48,7 @@ const UNAVAILABLE_BY_ERROR_NAME: Record<string, OrcadHostUnavailableReason> = {
   OrcadRemoteLaunchUnsupportedError: 'unsupported_host',
   UnidentifiedHostLibcError: 'libc_unidentified',
   RemoteNodeRuntimeSelfTestError: 'runtime_self_test',
+  RemoteNodeRuntimeNoexecError: 'runtime_noexec',
   RemoteNodeRuntimeSecurityModifiedError: 'security_software',
   OrcadStdioBridgeUnavailableError: ORCAD_TUNNEL_UNAVAILABLE_REASON,
   OrcadWindowsLaunchRefusedError: 'unsupported_host',
@@ -59,6 +62,11 @@ const UNAVAILABLE_BY_DEFERRAL_CODE: Record<string, OrcadHostUnavailableReason> =
   orcad_activation_pty_self_test_failed: 'native_preflight',
   [ORCAD_WINDOWS_LAUNCH_REFUSED_CODE]: 'unsupported_host',
   [ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE]: 'unsupported_host'
+}
+
+/** Host settings the user can change, so a later connect checks again instead of remembering it. */
+export function isOrcadHostUnavailableFixableOnHost(reason: string): boolean {
+  return reason === 'runtime_noexec'
 }
 
 /** The deferral code for a candidate launch failure, keeping the permanent Windows refusals. */

@@ -22,7 +22,7 @@ import {
   MEDIA_PICKER_SEAM as SEAM,
   mediaPickerOffenders,
   mediaPickerSites
-} from './mobile-web-app-media-picker-seam.mjs'
+} from './mobile-web-app/platform-seams/mobile-web-app-media-picker-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip

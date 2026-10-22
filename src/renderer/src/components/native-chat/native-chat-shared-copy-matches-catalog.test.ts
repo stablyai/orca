@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat-tool-activity'
-import { NATIVE_CHAT_TURN_STATUS_COPY } from '../../../../shared/native-chat-turn-status'
+import {
+  NATIVE_CHAT_COMPOSER_PLACEHOLDER,
+  NATIVE_CHAT_TURN_STATUS_COPY
+} from '../../../../shared/native-chat-turn-status'
 import {
   NATIVE_CHAT_TOOL_RUN_LIVE_SENTENCE_COPY,
   NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY,
@@ -35,6 +38,10 @@ describe('native-chat shared copy matches the English catalog', () => {
       expect(catalog.components['native-chat'].status[key]).toBe(value)
     }
   )
+
+  it('composer.placeholder matches the shared composer placeholder', () => {
+    expect(en.components['native-chat'].composer.placeholder).toBe(NATIVE_CHAT_COMPOSER_PLACEHOLDER)
+  })
 
   it.each(Object.entries(NATIVE_CHAT_TOOL_ACTIVITY_COPY))(
     'tool.%s matches en.json',

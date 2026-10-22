@@ -1,4 +1,9 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
+import {
+  getConnectionExecutionHostId,
+  normalizeHostPart,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
 import type { Worktree } from './types'
 
 /**
@@ -37,6 +42,19 @@ export function hostWorktreeTarget(row: {
 }): HostWorktreeTarget {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the only constructor of the brand; `hostId` is a concrete host by the parameter type.
   return { id: row.id, hostId: row.hostId } as HostWorktreeTarget
+}
+
+/** A PTY spawn's workspace copy: its `connectionId` is what picks the provider that runs it. */
+export function spawnWorktreeTarget(
+  worktreeId: string | undefined,
+  connectionId: string | null | undefined
+): HostWorktreeTarget | undefined {
+  return worktreeId
+    ? hostWorktreeTarget({
+        id: worktreeId,
+        hostId: getConnectionExecutionHostId(normalizeHostPart(connectionId))
+      })
+    : undefined
 }
 
 /**
@@ -90,6 +108,16 @@ export function getExecutionHostIdFromWorktreeHostIdentity(
  */
 export function getWorktreeIdFromHostIdentity(identity: string): string {
   return identity.slice(identity.indexOf(HOST_SEPARATOR) + 1)
+}
+
+/** A wire key back as a typed identity, or null when it is not one (a bare id). */
+export function parseWorktreeHostIdentity(identity: string): HostScopedWorktreeKey | null {
+  return isWorktreeHostIdentity(identity)
+    ? composeWorktreeHostIdentity(
+        getExecutionHostIdFromWorktreeHostIdentity(identity),
+        getWorktreeIdFromHostIdentity(identity)
+      )
+    : null
 }
 
 /** True only for the canonical host-qualified form, not a legacy id containing `|`. */

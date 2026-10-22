@@ -2,6 +2,7 @@ import type { ToolSnapshot } from '../listener-event'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { deriveToolInputPreview, hasOwnField, readString, toolUpdate } from '../tool-input-preview'
 import { clearActiveToolFieldsUpdate, deriveInteractivePrompt } from '../interactive-tool'
+import { serializeOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
 
 /** OMP's `ask` carries the same questions/options payload as Pi's question tool. */
 function serializeQuestionPrompt(toolInput: unknown): string | undefined {
@@ -13,6 +14,14 @@ function serializeQuestionPrompt(toolInput: unknown): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function serializePlanReviewPrompt(hookPayload: Record<string, unknown>): string | undefined {
+  const reviewId = readString(hookPayload, 'review_id')
+  const plan = hookPayload.plan
+  return reviewId && typeof plan === 'string'
+    ? serializeOmpPlanReviewPrompt(reviewId, plan, hookPayload.options)
+    : undefined
 }
 
 function isPiCompatibleAskTool(
@@ -77,6 +86,20 @@ export function extractPiToolFields(
         toolInput:
           eventName === 'tool_approval_requested' ? readString(hookPayload, 'reason') : undefined,
         interactivePrompt: undefined
+      },
+      { hasToolInputField: true }
+    )
+  }
+  if (
+    agentKind === 'omp' &&
+    (eventName === 'plan_review_requested' || eventName === 'plan_review_resolved')
+  ) {
+    return toolUpdate(
+      {
+        toolName: undefined,
+        toolInput: undefined,
+        interactivePrompt:
+          eventName === 'plan_review_requested' ? serializePlanReviewPrompt(hookPayload) : undefined
       },
       { hasToolInputField: true }
     )

@@ -12,6 +12,7 @@ export type WorkerThreadChildRequest =
   | { type: 'spawn'; id: number; spec: WorkerThreadChildSpec }
   | { type: 'stdin-write'; id: number; data: string }
   | { type: 'stdin-end'; id: number }
+  | { type: 'output-consumed'; id: number; bytes: number }
   | { type: 'kill'; id: number; signal?: NodeJS.Signals }
 
 export type WorkerThreadChildErrorPayload = { message: string; code?: string }

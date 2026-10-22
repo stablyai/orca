@@ -136,6 +136,11 @@ export function forgetFailedAgentLaunches(
   }
 }
 
+/** Workspaces still holding a failed launch, for a project removal that has no other list. */
+export function listFailedAgentLaunchWorktreeIds(): string[] {
+  return [...failedLaunchesByPane.values()].map((failed) => failed.pane.worktreeId)
+}
+
 /** A launch still owns this pane: only its own spawn may put a process there. */
 export function isAgentLaunchRunningIn(
   worktreeId: string,

@@ -12,6 +12,8 @@ import type {
 } from '../../shared/project-types'
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
 import type { RepoKind } from '../../shared/repo-types'
+import type { RuntimeStatus } from '../../shared/runtime-types'
+import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
@@ -90,6 +92,26 @@ async function getRequiredHostId(
     throw new RuntimeClientError('invalid_argument', 'Missing required --host')
   }
   return resolved.id
+}
+
+// Why: a project on two hosts has two setups with the same id; `--host` picks one. An older
+// host strips the field and acts on the first twin, so refuse rather than let it guess.
+async function getOptionalSetupHostId(
+  flags: Map<string, string | boolean>,
+  client: HandlerContext['client']
+): Promise<ExecutionHostId | undefined> {
+  if (!flags.has('host')) {
+    return undefined
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca server cannot pick a project setup by host yet. Update Orca on the server and try again.'
+    )
+  }
+  // Unresolved, like the setup paths: a removed SSH target's stale setup must stay deletable.
+  return await getRequiredHostId(flags, client)
 }
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
@@ -199,6 +221,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const path = getOptionalStringFlag(flags, 'path')
     const args: ProjectHostSetupUpdateArgs = {
       setupId: getRequiredStringFlag(flags, 'setup'),
+      hostId: await getOptionalSetupHostId(flags, client),
       updates: {
         displayName: getOptionalStringFlag(flags, 'display-name'),
         path:
@@ -225,6 +248,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       'projectHostSetup.delete',
       {
         setupId: getRequiredStringFlag(flags, 'setup'),
+        hostId: await getOptionalSetupHostId(flags, client),
         force: flags.get('force') === true
       }
     )

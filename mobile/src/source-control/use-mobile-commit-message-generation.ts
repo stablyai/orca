@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useLayoutEffect,
   useRef,
   type Dispatch,
   type MutableRefObject,
@@ -34,15 +35,26 @@ export function useMobileCommitMessageGeneration(params: Params) {
     setActionError
   } = params
   const runRef = useRef(0)
+  const activeRunRef = useRef<number | null>(null)
+  const scopeRef = useRef({ client, worktreeId })
+  useLayoutEffect(() => {
+    if (scopeRef.current.client !== client || scopeRef.current.worktreeId !== worktreeId) {
+      scopeRef.current = { client, worktreeId }
+      runRef.current += 1
+      activeRunRef.current = null
+      setGeneratingMessage(false)
+    }
+  }, [client, worktreeId, setGeneratingMessage])
 
   // AI-generate a commit message from the staged diff. Matches desktop: the
   // button is always available; a missing model surfaces as a toast.
   const generateCommitMessage = useCallback(async () => {
-    if (!client || generatingMessage || busyActionRef.current) {
+    if (!client || generatingMessage || activeRunRef.current !== null || busyActionRef.current) {
       return
     }
     runRef.current += 1
     const run = runRef.current
+    activeRunRef.current = run
     setGeneratingMessage(true)
     setActionError(null)
     try {
@@ -66,8 +78,11 @@ export function useMobileCommitMessageGeneration(params: Params) {
         setActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
       }
     } finally {
-      if (mountedRef.current) {
-        setGeneratingMessage(false)
+      if (activeRunRef.current === run) {
+        activeRunRef.current = null
+        if (mountedRef.current) {
+          setGeneratingMessage(false)
+        }
       }
     }
   }, [

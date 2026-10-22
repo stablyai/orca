@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { hostPaneTitleUpdates } from './use-host-pane-title-sync'
+
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+afterEach(() => {
+  layoutOwner.isMain = false
+})
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_ID = '22222222-2222-4222-8222-222222222222'
@@ -57,6 +67,16 @@ describe('open panes following host pane names (#30386)', () => {
       shownTitles: {}
     })
     expect(updates.size).toBe(0)
+  })
+
+  it('follows a local tab’s names in a layout-owner build, since main’s frame draws them', () => {
+    layoutOwner.isMain = true
+    const updates = hostPaneTitleUpdates({
+      layout: hostLayout({ [LEAF_ID]: 'renamed' }, 'local-pty'),
+      panes: PANES,
+      shownTitles: {}
+    })
+    expect([...updates]).toEqual([[1, 'renamed']])
   })
 
   it('ignores a pane the host layout does not hold yet', () => {

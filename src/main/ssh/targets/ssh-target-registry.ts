@@ -87,7 +87,7 @@ export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
 }
 
 /** Add/update/remove with the same rules the desktop's SSH settings use. */
-export type SshTargetMutations = {
+type SshTargetMutations = {
   add: (target: SshTargetCreateInput) => SshTargetAddResult
   update: (targetId: string, updates: SshTargetUpdateInput) => SshTarget | null
   remove: (targetId: string) => Promise<void>

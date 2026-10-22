@@ -212,7 +212,8 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
-        session
+        session,
+        this.store?.getSettings?.()?.tabAutoGenerateTitle === true
       ).filter(
         (tab) =>
           !runtimeOwnedOnly ||
@@ -294,7 +295,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               mergeMobileSessionTabGroups(
                 entryWorktreeId,
                 existing.tabGroups,
-                mergedTerminalTabs,
+                mergedTabs,
                 mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
               ),
               mergedBrowserOrder

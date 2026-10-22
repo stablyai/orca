@@ -1,5 +1,5 @@
 import type { SshTarget } from '../../../../shared/ssh-types'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { HostCombobox } from '../host-picker/HostCombobox'
 
 type SshTargetSelectProps = {
   id?: string
@@ -17,17 +17,12 @@ export function SshTargetSelect({
   placeholder
 }: SshTargetSelectProps): React.JSX.Element {
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger id={id} className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {targets.map((target) => (
-          <SelectItem key={target.id} value={target.id}>
-            {target.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <HostCombobox
+      id={id}
+      value={value}
+      onChange={onChange}
+      options={targets}
+      placeholder={placeholder}
+    />
   )
 }

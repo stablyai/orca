@@ -104,4 +104,33 @@ describe('useMarkdownDocumentWatchRefresh', () => {
     }
     expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('lets a slow scan publish while membership changes never stop', async () => {
+    const scans: { startedAt: number; settledAt?: number }[] = []
+    const refresh = vi.fn(() => {
+      const scan: { startedAt: number; settledAt?: number } = {
+        startedAt: Date.now()
+      }
+      scans.push(scan)
+      // Why: a 40 s listing outlives the 30 s watchdog.
+      return new Promise<void>((resolve) =>
+        setTimeout(() => {
+          scan.settledAt = Date.now()
+          resolve()
+        }, 40_000)
+      )
+    })
+    await act(async () => root.render(createElement(Harness, { refresh })))
+    for (let i = 0; i < 60; i++) {
+      change([{ kind: 'create', absolutePath: `/repo/s${i}.md` }])
+      await advance(5_000)
+    }
+    // A scan's result publishes only if no newer scan started before it settled.
+    const published = scans.filter(
+      (scan, index) =>
+        scan.settledAt !== undefined &&
+        scans.slice(index + 1).every((later) => later.startedAt >= scan.settledAt!)
+    )
+    expect(published.length).toBeGreaterThanOrEqual(2)
+  })
 })

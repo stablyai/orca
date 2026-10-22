@@ -1,25 +1,16 @@
-import { useSyncExternalStore } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  buildNativeChatProviderUpdate,
-  isNativeChatProviderDisplayedOn
-} from '../../../../shared/native-chat-providers'
+import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat-providers'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon, getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
-import {
-  hostStructuredAgentsVersion,
-  readHostStructuredAgents,
-  subscribeHostStructuredAgents
-} from '@/runtime/host-structured-agents'
+import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
 import { useAppStore } from '../../store'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
-import { createAgentSettingsUpdateQueue } from './agent-availability-settings'
+import { saveNativeChatProviderChoice } from './native-chat-provider-choice'
 import { Card, CardContent } from '../ui/card'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { SearchableSetting } from './SearchableSetting'
@@ -33,24 +24,10 @@ import {
 } from './AntigravityProviderSignInArea'
 import { getHostRuntimeLabel, getRuntimeSentenceLabel } from './accounts-pane-runtime'
 
-const enqueueProviderUpdate = createAgentSettingsUpdateQueue()
-
 // The agents listed here are this computer's, so their downloaded programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
 const BUILT_IN_CHAT_AGENTS: readonly TuiAgent[] = ['claude', 'codex']
-
-/** Claude and Codex, then the other agents this computer's host registered for chat. */
-function useLocalChatAgents(): TuiAgent[] {
-  useSyncExternalStore(subscribeHostStructuredAgents, hostStructuredAgentsVersion)
-  const registered = readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined) ?? []
-  return [
-    ...new Set([
-      ...BUILT_IN_CHAT_AGENTS,
-      ...registered.map((row) => row.agent).filter((agent) => isTuiAgent(agent))
-    ])
-  ]
-}
 
 function ProviderStatus({
   agent,
@@ -167,7 +144,8 @@ export function NativeChatProvidersSetting({
   forceVisible?: boolean
 }): React.JSX.Element | null {
   const entry = getChatProvidersSearchEntry()
-  const agents = useLocalChatAgents()
+  useHostStructuredAgentsVersion()
+  const agents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   const detectedIds = useAppStore(readNativeDetectedAgents)
   const visibleAgents = agents.filter(
     (agent) =>
@@ -210,16 +188,14 @@ export function NativeChatProvidersSetting({
                         'Open {{value0}} as a chat',
                         { value0: label }
                       )}
-                      onChange={() => {
-                        const next = !on
-                        return enqueueProviderUpdate({
-                          getSettings: () => useAppStore.getState().settings,
+                      onChange={() =>
+                        saveNativeChatProviderChoice({
+                          agent,
+                          on: !on,
                           fallbackSettings: settings,
-                          updateSettings,
-                          buildUpdate: (latest) =>
-                            buildNativeChatProviderUpdate(latest, agent, next)
+                          updateSettings
                         })
-                      }}
+                      }
                     />
                   </div>
                   {/* Chats sign in on the host they run on, under the program that serves them. */}

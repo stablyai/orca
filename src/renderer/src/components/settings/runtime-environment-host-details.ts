@@ -155,12 +155,12 @@ function getHostModelCapabilityLabel(capability: string): string {
 export function getActiveServerModeDescription(allowLocalRuntime: boolean): string {
   return allowLocalRuntime
     ? translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.3f67e8078a',
-        'New projects are created on this computer unless you choose a saved server here. Existing projects, files and terminals stay on their own host.'
+        'auto.components.settings.serverList.defaultHostHelp',
+        'Existing projects stay where they are.'
       )
     : translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.2c85efb3e8',
-        'Selecting a saved server makes this browser use that paired Orca runtime as its default Host.'
+        'auto.components.settings.serverList.defaultHostWebHelp',
+        'This browser opens new projects on the chosen server.'
       )
 }
 
@@ -238,19 +238,5 @@ export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionSt
         'auto.components.settings.RuntimeEnvironmentsPane.serverDisconnected',
         'Disconnected'
       )
-  }
-}
-
-export function getRuntimeServerDotClass(state: RuntimeServerConnectionState): string {
-  switch (state) {
-    case 'connected':
-      return 'bg-emerald-500'
-    case 'runtime-unavailable':
-    case 'checking':
-    case 'workspace-window-closed':
-    case 'reconnecting':
-      return 'bg-yellow-500'
-    case 'disconnected':
-      return 'bg-muted-foreground/40'
   }
 }

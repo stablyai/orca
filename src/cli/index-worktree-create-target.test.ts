@@ -169,6 +169,7 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-gpu',
+      repoHostId: 'runtime:gpu',
       name: 'feature',
       displayName: 'feature',
       displayNameKind: 'user',

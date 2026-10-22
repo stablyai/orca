@@ -40,7 +40,7 @@ it.each(ACP_LAUNCH_SPECS)(
         resolveWorkspacePath: async () => '/repo/worktree',
         resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/test' }),
         resolveCommand: () => `/fixture/${spec.command}`,
-        probeVersion: async () => true,
+        probeVersion: async () => ({ version: null }),
         inheritedEnv: {}
       }
     )

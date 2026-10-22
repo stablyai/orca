@@ -39,7 +39,7 @@ export type OrcadActivationRecoveryResult =
     }
   | OrcadManagedRefusal
 
-export type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
+type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
 export const ORCAD_RECOVERY_UNVERIFIABLE_CODE = 'orcad_recovery_unverifiable'
 
@@ -87,7 +87,7 @@ export async function recoverInterruptedOrcadActivation(
 }
 
 /** Runs under a held fence. Throws when a step is unverifiable. */
-export async function reconcileOrcadTransaction(
+async function reconcileOrcadTransaction(
   options: OrcadActivationRecoveryOptions,
   transaction: OrcadActivationTransaction
 ): Promise<OrcadActivationRecoveryResult> {

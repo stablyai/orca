@@ -21,6 +21,7 @@ import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-la
 import type { WorkspaceLayoutModel } from '../../shared/workspace-layout/workspace-layout-model'
 import { patchStoredSession } from '../../shared/workspace-layout/workspace-layout-record-patch'
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
+import type { ShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
 
 const FIELD_OWNERS: Readonly<Record<string, string>> = SESSION_FIELD_OWNERS
 
@@ -109,7 +110,8 @@ function withMainLayoutFields<T extends WorkspaceSessionPatch>(
 export function windowViewSaveForMain(
   stored: WorkspaceSessionState,
   save: WorkspaceSessionState,
-  hostId: string | null | undefined
+  hostId: string | null | undefined,
+  reconnectFacts?: ReconnectFactsFor
 ): WorkspaceSessionState {
   const partition = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   if (parseExecutionHostId(partition)?.kind === 'runtime') {
@@ -117,7 +119,39 @@ export function windowViewSaveForMain(
   }
   const joined = storedWithWindowView(partition, stored, save)
   const fields = [...new Set([...Object.keys(save), ...Object.keys(joined)])]
-  return withMainLayoutFields(save, joined, fields.filter(isLayoutField))
+  const result = withMainLayoutFields(save, joined, fields.filter(isLayoutField))
+  // Main's own reconnect facts replace the window's (C1a; B2 folds this into its view merge).
+  return reconnectFacts
+    ? withReconnectFacts(result, reconnectFacts(result, partition), RECONNECT_FACT_FIELDS)
+    : result
+}
+
+/** Main's reconnect facts for the session it is about to store. */
+export type ReconnectFactsFor = (
+  session: WorkspaceSessionState,
+  partition: ExecutionHostId
+) => ShutdownReconnectFacts
+
+const RECONNECT_FACT_FIELDS = [
+  'activeWorktreeIdsOnShutdown',
+  'remoteSessionIdsByTabId',
+  'activeConnectionIdsAtShutdown'
+] as const satisfies readonly (keyof ShutdownReconnectFacts)[]
+
+function withReconnectFacts<T extends WorkspaceSessionPatch>(
+  session: T,
+  facts: ShutdownReconnectFacts,
+  fields: readonly (keyof ShutdownReconnectFacts)[]
+): T {
+  const next: T = { ...session }
+  for (const field of fields) {
+    if (facts[field] === undefined) {
+      delete next[field]
+    } else {
+      Object.assign(next, { [field]: facts[field] })
+    }
+  }
+  return next
 }
 
 /**
@@ -128,13 +162,20 @@ export function windowViewSaveForMain(
 export function windowViewPatchForMain(
   stored: WorkspaceSessionState,
   patch: WorkspaceSessionPatch,
-  hostId: string | null | undefined
+  hostId: string | null | undefined,
+  reconnectFacts?: ReconnectFactsFor
 ): WorkspaceSessionPatch {
   const partition = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
-  const fields = Object.keys(patch).filter(isLayoutField)
-  if (parseExecutionHostId(partition)?.kind === 'runtime' || fields.length === 0) {
+  if (parseExecutionHostId(partition)?.kind === 'runtime') {
     return patch
   }
-  const joined = storedWithWindowView(partition, stored, { ...stored, ...patch })
-  return withMainLayoutFields(patch, joined, fields)
+  const fields = Object.keys(patch).filter(isLayoutField)
+  const joined =
+    fields.length === 0 ? null : storedWithWindowView(partition, stored, { ...stored, ...patch })
+  const result = joined ? withMainLayoutFields(patch, joined, fields) : patch
+  // Only the reconnect facts the patch itself carries are replaced with main's.
+  const carried = RECONNECT_FACT_FIELDS.filter((field) => Object.hasOwn(patch, field))
+  return reconnectFacts && carried.length > 0
+    ? withReconnectFacts(result, reconnectFacts({ ...stored, ...result }, partition), carried)
+    : result
 }

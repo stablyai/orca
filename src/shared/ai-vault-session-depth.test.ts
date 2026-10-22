@@ -65,7 +65,7 @@ describe('Agent Session History depth', () => {
     expect(aiVaultScanLimit({ unlimited: true })).toBe(Number.POSITIVE_INFINITY)
   })
 
-  it('keeps the newest global and scoped sessions when truncating', () => {
+  it('keeps every scoped session and the newest out-of-scope ones when truncating', () => {
     const loaded = result([
       session('global-1', '/other', 6),
       session('global-2', '/other', 5),
@@ -79,9 +79,27 @@ describe('Agent Session History depth', () => {
       'global-1',
       'global-2',
       'scoped-1',
-      'scoped-2'
+      'scoped-2',
+      'scoped-3'
+    ])
+    expect(truncateAiVaultListResult(loaded, 2).sessions.map(({ id }) => id)).toEqual([
+      'global-1',
+      'global-2'
     ])
     expect(truncateAiVaultListResult(loaded, 'unlimited')).toBe(loaded)
+  })
+
+  // Repeat opens served from a cache used to drop to `depth` scoped rows (341 -> 250 in QA).
+  it('returns a scan result with more scoped rows than the depth unchanged', () => {
+    const scanned = result([
+      ...Array.from({ length: 3 }, (_, i) => session(`global-${i}`, '/other', 100 - i)),
+      ...Array.from({ length: 5 }, (_, i) => session(`codex-${i}`, '/repo', 50 - i)),
+      ...Array.from({ length: 4 }, (_, i) => session(`claude-${i}`, '/repo/app', 40 - i))
+    ])
+
+    const cachedHit = truncateAiVaultListResult(scanned, 3, ['/repo'])
+    expect(cachedHit.sessions).toEqual(scanned.sessions)
+    expect(truncateAiVaultListResult(cachedHit, 3, ['/repo']).sessions).toEqual(scanned.sessions)
   })
 })
 
@@ -122,5 +140,16 @@ describe('Agent Session History scope truncation', () => {
         kept: isPathInsideOrEqual(scope!, cwd!)
       })
     }
+  })
+})
+
+describe('truncateAiVaultListResult symlinked scope', () => {
+  it('keeps a session whose host alias is in scope when depth drops out-of-scope rows', () => {
+    const linked = { ...session('linked', '/data/src/api', 1), cwdAliases: ['/home/me/work/api'] }
+    const other = session('other', '/elsewhere', 2)
+
+    const truncated = truncateAiVaultListResult(result([other, linked]), 0, ['/home/me/work/api'])
+
+    expect(truncated.sessions.map((entry) => entry.id)).toEqual(['linked'])
   })
 })

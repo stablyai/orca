@@ -209,6 +209,11 @@ export class PluginDevWatcher {
           return
         }
         this.subscriptions.push(created)
+        // Why: the watcher reports only what changes after it is live, and discovery ran before
+        // that, so an edit made in between (a save right after adding the folder) would be lost.
+        if (!parent) {
+          this.scheduleRefresh(refresh)
+        }
       })
       .catch(() => {
         if (isActive()) {

@@ -16,6 +16,7 @@ import {
   LegacyRelayOwnerHeldError
 } from '../../../src/main/ssh/legacy-relay/legacy-relay-client'
 import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay/legacy-relay-target-bridge'
+import { LegacyRelayPaneOwners } from '../../../src/main/ssh/legacy-relay/legacy-relay-pane-owners'
 import type { LegacyRelayEndpoint } from '../../../src/main/ssh/legacy-relay/legacy-relay-endpoints'
 import { getRemoteHostPlatform } from '../../../src/main/ssh/ssh-remote-platform'
 import { materializeReleaseCheckout } from './release-checkout'
@@ -212,7 +213,8 @@ describe.skipIf(process.platform === 'win32')(
           onExit: (id) => exits.push(id),
           onTerminalExited: () => {
             exitedTelemetry += 1
-          }
+          },
+          owners: new LegacyRelayPaneOwners()
         })
         try {
           await bridge.refresh()

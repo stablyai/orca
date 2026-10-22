@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
-import {
-  collectLocalWorktreeBaseChanges,
-  collectRemoteWorktreeBaseChanges
-} from './worktree-base-directory-change-collector'
+import { collectLocalWorktreeBaseChanges } from './worktree-base-directory-change-collector'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import { EMPTY_HEAD_IDENTITY_SCOPE, FULL_HEAD_IDENTITY_SCOPE } from './worktree-head-identity-scope'
 
@@ -19,16 +16,6 @@ function makeTarget(): WorktreeBaseWatchTarget {
 }
 
 describe('worktree base change collector', () => {
-  it('states the full head scope on overflow rather than leaving it absent', () => {
-    // Overflow means every event in the window was lost. Stating FULL here — not
-    // relying on a downstream `?? FULL` for a missing field — is what keeps a
-    // future caller that forwards this object from reading it as "nothing moved".
-    const changes = collectRemoteWorktreeBaseChanges(makeTarget(), [{ kind: 'overflow' }] as never)
-
-    expect(changes.overflow).toBe(true)
-    expect(changes.headIdentityScope).toEqual(FULL_HEAD_IDENTITY_SCOPE)
-  })
-
   it('unions the head scopes of every event in a burst', () => {
     const changes = collectLocalWorktreeBaseChanges(makeTarget(), [
       { type: 'update', path: join(COMMON_DIR, 'worktrees', 'wt-a', 'logs', 'HEAD') },
@@ -64,22 +51,5 @@ describe('worktree base change collector', () => {
 
     expect(changes.headIdentityScope).toEqual(EMPTY_HEAD_IDENTITY_SCOPE)
     expect(changes.structureRepoIds).toEqual(['repo-1'])
-  })
-
-  it('narrows a rename to the entries on both sides', () => {
-    const changes = collectRemoteWorktreeBaseChanges(makeTarget(), [
-      {
-        kind: 'rename',
-        absolutePath: join(COMMON_DIR, 'worktrees', 'wt-new', 'HEAD'),
-        oldAbsolutePath: join(COMMON_DIR, 'worktrees', 'wt-old', 'HEAD')
-      }
-    ] as never)
-
-    expect(changes.headIdentityScope).toEqual({
-      listing: false,
-      primary: false,
-      all: false,
-      entryNames: new Set(['wt-old', 'wt-new'])
-    })
   })
 })

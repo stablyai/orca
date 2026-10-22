@@ -10,6 +10,7 @@ import type {
   LinearProjectSummary
 } from '../../../shared/linear/project-types'
 import type { LinearWorkspaceError } from '../../../shared/linear/workspace-types'
+import { isIntegrationCredentialDecryptionError } from '../../../shared/integration-credential-errors'
 import {
   LinearCustomViewTableContent,
   type LinearCustomViewTableContentProps
@@ -59,7 +60,13 @@ export function LinearCollectionNotice({
         <div className={cn('flex flex-wrap gap-2 px-3', hasMore ? 'pt-2' : 'py-2')}>
           {errors.map((error) => (
             <Badge key={`${error.workspaceId}-${error.type}`} variant="outline">
-              {error.workspaceName ?? error.workspaceId}: {error.message}
+              {error.workspaceName ?? error.workspaceId}:{' '}
+              {isIntegrationCredentialDecryptionError(error.message)
+                ? translate(
+                    'auto.components.linear.project.view.surfaces.linearLoginUnreadable',
+                    'Unable to read saved Linear login. Reconnect it in Settings.'
+                  )
+                : error.message}
             </Badge>
           ))}
         </div>

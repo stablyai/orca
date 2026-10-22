@@ -14,7 +14,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 /**
  * The host stack's push and pop on the page, sampled every animation frame in a real browser.

@@ -17,6 +17,7 @@ import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
 
+import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
 import type { RepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 
 type BuildArgs = {
@@ -37,6 +38,7 @@ type BuildArgs = {
   reveal: SidebarRevealHighlight
   statusDrag: ReturnType<typeof useWorkspaceStatusRowDrag>
   nativeDrag: ReturnType<typeof useWorktreeNativeDrag>
+  projectHeaderHostContexts: ReadonlyMap<string, ProjectHeaderHostContext>
   headerDrag: WorktreeSidebarHeaderDrag
   getCachedFolderWorkspacePathStatus: ReturnType<typeof useFolderWorkspacePathStatusRows>
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
@@ -85,6 +87,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       dragOverStatus: runtime.dragOverStatus,
       pinDragOver: runtime.pinDragOver,
       headerDrag,
+      projectHeaderHostContexts: args.projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
       projectActions: {

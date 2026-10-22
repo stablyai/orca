@@ -1,4 +1,11 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import {
   playNativeChatTextReveal,
   receiveNativeChatText,
@@ -6,6 +13,7 @@ import {
   type NativeChatTextRevealFrames
 } from '../../../src/shared/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
+import { MobileNativeChatGrowthHoldContext } from './mobile-native-chat-growth-hold'
 
 const FRAMES: NativeChatTextRevealFrames = {
   now: () => performance.now(),
@@ -23,6 +31,8 @@ export function useMobileNativeChatPacedText(
   paced: boolean
 ): MobileNativeChatPacedText {
   const chat = useContext(MobileNativeChatReplyRevealsContext)
+  const growth = useContext(MobileNativeChatGrowthHoldContext)
+  const held = useSyncExternalStore(growth.subscribe, growth.held, growth.held)
   const list = paced ? (chat ?? undefined) : undefined
   const immediate = list === undefined || list.reducedMotion
   const [initial] = useState(() =>
@@ -45,7 +55,11 @@ export function useMobileNativeChatPacedText(
   }, [text, streaming, immediate, list, rowKey])
 
   const behind = !immediate && shown < text.length
+  // Held, the reveal waits; its deadlines keep running, so it catches up in one step after.
   useEffect(() => {
+    if (held) {
+      return
+    }
     if (!behind) {
       if (!streaming) {
         list?.drawn.delete(rowKey)
@@ -61,7 +75,7 @@ export function useMobileNativeChatPacedText(
       },
       FRAMES
     )
-  }, [behind, text, list, rowKey, streaming])
+  }, [behind, text, list, rowKey, streaming, held])
 
   return immediate
     ? { text, revealing: false }

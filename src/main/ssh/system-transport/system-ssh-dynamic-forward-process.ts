@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
+import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 import { waitForSystemSshForwardStop } from './system-ssh-forward-process'
 
@@ -29,12 +29,7 @@ export async function startSystemSshDynamicForwardProcess(
   if (signal?.aborted) {
     throw new Error('system_ssh_dynamic_forward_aborted')
   }
-  const args = buildSshArgs(target, {
-    ...options,
-    suppressOrcaControlMaster: true,
-    disableControlMaster: true,
-    nonInteractive: true
-  })
+  const args = buildForwardProcessSshArgs(target, { ...options, nonInteractive: true })
   const destinationIndex = args.lastIndexOf('--')
   // Why `no`: an ssh_config forward the main connection already holds would end this one; the
   // listener probe below is what proves our own -D bound.

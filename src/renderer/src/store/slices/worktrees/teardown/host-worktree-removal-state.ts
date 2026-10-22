@@ -10,6 +10,10 @@ import {
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 export const UNFINISHED_WORKTREE_REMOVAL_ERROR = 'The delete did not finish. Try again.'
 
@@ -91,8 +95,8 @@ export function settleLostWorktreeRemovalReply(
   return waitForHostWorktreeRemoval({
     ...args,
     readRows: () => [
-      ...(get().worktreesByRepo[repoId] ?? []),
-      ...(get().detectedWorktreesByRepo[repoId]?.worktrees ?? [])
+      ...(selectWorktreesByRepo(get())[repoId] ?? []),
+      ...(selectDetectedWorktreesByRepo(get())[repoId]?.worktrees ?? [])
     ],
     refresh: () =>
       args.hostId

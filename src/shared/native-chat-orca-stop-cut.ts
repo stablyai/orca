@@ -8,7 +8,7 @@ import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { STALE_SESSION_ROW_PREFIX } from './agent-session-stop-row-identity'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
-import { agentTurnVerdict } from './agent-turn-outcome'
+import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { structuredAgentSessionCommandTurnItemIds } from './structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from './structured-agent-session-latest-request'
 
@@ -36,19 +36,18 @@ export type NativeChatOrcaStopCut = {
 }
 
 /**
- * The latest root turn, when an Orca stop cut it and nothing was sent since: no request after it,
- * and no send still on its way. A steer into that turn or a conversation command asks for nothing
- * new (`isStructuredAgentSessionNonRequestRow`). Null otherwise.
+ * The latest root turn, when nothing was sent since: no request after it, and no send still on its
+ * way. A steer into that turn or a conversation command asks for nothing new
+ * (`isStructuredAgentSessionNonRequestRow`). Null otherwise.
  */
-export function latestNativeChatOrcaStopCut(
+export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
-): NativeChatOrcaStopCut | null {
+): { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null {
   if (submissions.some((submission) => submission.dispatchState === 'pending')) {
     return null
   }
   const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
-  let turnIndex = -1
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
     if (
@@ -60,29 +59,43 @@ export function latestNativeChatOrcaStopCut(
     if (item.body.kind === 'message' && item.body.role === 'user') {
       return null
     }
-    if (readAgentJournalTurn(item.body)) {
-      turnIndex = index
-      break
-    }
-  }
-  const turnItem = items[turnIndex]
-  const turn = turnItem ? readAgentJournalTurn(turnItem.body) : null
-  if (
-    !turnItem ||
-    !turn ||
-    agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) !==
-      'interruption'
-  ) {
-    return null
-  }
-  for (const item of items) {
-    const cause =
-      item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turnItem.itemId
-        ? orcaStopCauseOfRow(item)
-        : null
-    if (cause) {
-      return { turnItemId: turnItem.itemId, cause }
+    const turn = readAgentJournalTurn(item.body)
+    if (turn) {
+      return {
+        turnItem: item,
+        verdict: agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) })
+      }
     }
   }
   return null
+}
+
+/** The rows inside one turn that answer `read`, first match wins. */
+export function findInNativeChatTurn<T>(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string,
+  read: (item: AgentJournalRenderItem) => T | null
+): T | null {
+  for (const item of items) {
+    const inTurn = item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turnItemId
+    const found = inTurn ? read(item) : null
+    if (found !== null) {
+      return found
+    }
+  }
+  return null
+}
+
+/** The latest root turn, when an Orca stop cut it and nothing was sent since. Null otherwise. */
+export function latestNativeChatOrcaStopCut(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+): NativeChatOrcaStopCut | null {
+  const latest = latestNativeChatTurnSinceRequest(items, submissions)
+  if (!latest || latest.verdict !== 'interruption') {
+    return null
+  }
+  const turnItemId = latest.turnItem.itemId
+  const cause = findInNativeChatTurn(items, turnItemId, orcaStopCauseOfRow)
+  return cause ? { turnItemId, cause } : null
 }

@@ -2,11 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { toast } from 'sonner'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import type {
-  AgentSessionRewindReason,
-  AgentSessionRewindResult,
-  AgentSessionRewindSupport
+import {
+  isAgentSessionRewindTarget,
+  type AgentSessionRewindReason,
+  type AgentSessionRewindResult,
+  type AgentSessionRewindSupport
 } from '../../../../shared/agent-session-rewind'
+import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import {
@@ -19,7 +21,10 @@ import {
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
 import { nativeChatRewindOffered } from './native-chat-rewind-eligibility'
-import { latestAgentSessionContextClearSequence } from '../../../../shared/agent-session-context-clear'
+import {
+  agentSessionContextFloorSequence,
+  latestAgentSessionContextClearSequence
+} from '../../../../shared/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 
 export type NativeChatRewindSurface = {
@@ -73,21 +78,31 @@ function rewindFailureReason(failure: AgentSessionWriteFailure): string | undefi
 
 function isRewindTarget(input: RewindInput, itemId: string): boolean {
   const floor = rewindContextFloor(input)
+  const opener = turnOpeners(input.state.items)
   return input.state.items.some(
     (item) =>
       item.itemId === itemId &&
       item.sequence > floor &&
-      item.body.kind === 'message' &&
-      item.body.role === 'user'
+      isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
   )
+}
+
+/** Each turn record's opening message, by the record's item id. */
+function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, string> {
+  const openers = new Map<string, string>()
+  for (const item of items) {
+    const opener = readAgentJournalTurn(item.body)?.userItemId
+    if (opener) {
+      openers.set(item.itemId, opener)
+    }
+  }
+  return openers
 }
 
 function rewindContextFloor(input: RewindInput): number {
   return Math.max(
     latestAgentSessionContextClearSequence(input.state.items),
-    input.contextFloor && input.contextFloor.epoch === input.state.epoch
-      ? input.contextFloor.sequence
-      : 0
+    agentSessionContextFloorSequence(input.contextFloor, input.state.epoch)
   )
 }
 
@@ -282,15 +297,17 @@ export function useNativeChatRewind(input: RewindInput) {
   )
   const offered = nativeChatRewindOffered(input.support)
   const floor = rewindContextFloor(input)
-  const eligibleItemIds = useMemo(
-    () =>
-      floor > 0
-        ? new Set(
-            input.state.items.filter((item) => item.sequence > floor).map((item) => item.itemId)
-          )
-        : undefined,
-    [floor, input.state.items]
-  )
+  const eligibleItemIds = useMemo(() => {
+    const opener = turnOpeners(input.state.items)
+    return new Set(
+      input.state.items
+        .filter(
+          (item) =>
+            item.sequence > floor && isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
+        )
+        .map((item) => item.itemId)
+    )
+  }, [floor, input.state.items])
   // Rows re-render only when this changes; none get the action where the provider can never rewind.
   const surface = useMemo<NativeChatRewindSurface | undefined>(
     () => (offered ? { disabledReason, request, eligibleItemIds } : undefined),

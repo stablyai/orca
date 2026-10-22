@@ -55,11 +55,13 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import { closeTerminalTab } from './terminal-tab-actions'
+import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
 // A non-pinned terminal tab whose PTY has a live child process (e.g. `sleep 300`).
 function stateWithBusyTerminalTab(closeTab: () => void): Record<string, unknown> {
   return {
     settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+    ...terminalOwnerRows(null),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-busy' }, { id: 'tab-other' }] },
     unifiedTabsByWorktree: {
       'wt-1': [

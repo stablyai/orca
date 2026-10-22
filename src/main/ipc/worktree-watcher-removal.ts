@@ -17,18 +17,12 @@ export type WorktreeWatcherRemoval = {
   closeLocal(worktreePath: string, deadline?: WatcherRemovalDeadline): Promise<void>
   restoreLocal(worktreePath: string): Promise<void>
   forgetLocal(worktreePath: string): void
-  closeRemote(connectionId: string, worktreePath: string): Promise<void>
-  restoreRemote(connectionId: string, worktreePath: string): Promise<void>
-  forgetRemote(connectionId: string, worktreePath: string): void
 }
 
 const inert: WorktreeWatcherRemoval = {
   closeLocal: async () => {},
   restoreLocal: async () => {},
-  forgetLocal: () => {},
-  closeRemote: async () => {},
-  restoreRemote: async () => {},
-  forgetRemote: () => {}
+  forgetLocal: () => {}
 }
 
 let current: WorktreeWatcherRemoval = inert

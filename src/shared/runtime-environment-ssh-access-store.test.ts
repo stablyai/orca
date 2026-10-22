@@ -174,9 +174,13 @@ describe('independent paired runtime SSH access persistence', () => {
 
   it('refuses a second registration of the same execution runtime', () => {
     const original = seed()
+    // Why another key: one key is one server, which the store would refresh instead of adding.
     const duplicate = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Duplicate host',
-      pairingCode: encodePairingOffer(pairing)
+      pairingCode: encodePairingOffer({
+        ...pairing,
+        publicKeyB64: Buffer.alloc(32, 2).toString('base64')
+      })
     })
     markEnvironmentUsed(userDataPath, duplicate.id, { runtimeId: 'host-runtime' })
     const before = listEnvironments(userDataPath)

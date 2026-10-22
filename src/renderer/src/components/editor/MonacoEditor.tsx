@@ -25,6 +25,7 @@ import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
 
 type MonacoEditorProps = {
   fileId: string
@@ -45,6 +46,8 @@ type MonacoEditorProps = {
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
+  // Why: shows another tab's record read-only; never moves its cursor line or takes its reveals.
+  passiveMirror?: boolean
   liveTail?: boolean
   autoHeight?: boolean
 }
@@ -67,6 +70,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
+  passiveMirror = false,
   liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
@@ -108,6 +112,7 @@ export default function MonacoEditor({
     () => toEditorModelUri(filePath, modelOwnerKey),
     [filePath, modelOwnerKey]
   )
+  useEditorModelRekeyCarry(fileId, modelUri)
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -138,6 +143,7 @@ export default function MonacoEditor({
     contentRef,
     contentSyncModeRef,
     modelKey: modelUri,
+    fileId,
     onContentChange
   })
   const annotations = useMonacoMarkdownAnnotations({
@@ -196,6 +202,7 @@ export default function MonacoEditor({
     modelOwnerKey,
     viewStateKey,
     viewStateId,
+    passiveMirror,
     worktreeId,
     autoHeight,
     autoHeightLineHeight,

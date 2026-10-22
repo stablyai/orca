@@ -218,6 +218,7 @@ export function activateLocalPtySession(args: {
     id,
     incarnationId,
     pid,
+    startupCwdSource: 'request',
     ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
   }

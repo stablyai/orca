@@ -11,6 +11,7 @@
     "./scripts/vitest-dom-setup.ts",
     "./scripts/happy-dom-offscreen-canvas.ts",
     "./scripts/happy-dom-mutation-observer-retention.ts",
+    "./scripts/happy-dom-animation-cancel.ts",
     "./scripts/vitest-node-runtime-pool.ts",
     "../src/main/**/*",
     "../src/renderer/src/lib/skill-freshness-display-status.ts",

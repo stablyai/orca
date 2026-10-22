@@ -12,6 +12,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { resolveAddRepoRuntimeTarget, worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
@@ -170,13 +171,11 @@ export function useCreateRepo(
         if (!isCurrent()) {
           return
         }
-        const folderWorktree = useAppStore
-          .getState()
-          .worktreesByRepo[repo.id]?.find(
-            (worktree) =>
-              ownerOptions.executionHostId === undefined ||
-              worktree.hostId === ownerOptions.executionHostId
-          )
+        const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
+          (worktree) =>
+            ownerOptions.executionHostId === undefined ||
+            worktree.hostId === ownerOptions.executionHostId
+        )
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',

@@ -9,7 +9,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { findRepoRowForHostScopedWrite } from '../persistence/tracking-repos/repo-update-operations'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { RepoHostTarget } from '../../shared/repo-host-identity'
 
 export function registerRuntimeRemoveProjectHostScopeTests(): void {
   function makeRepos(): Repo[] {
@@ -35,7 +36,9 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
 
   function createRuntime() {
     const repos = makeRepos()
-    const removeProjectForHost = vi.fn((id: string, hostId: string) => {
+    const removeProjectForHost = vi.fn((target: RepoHostTarget) => {
+      const id = target.id
+      const hostId = getRepoExecutionHostId(target)
       for (let index = repos.length - 1; index >= 0; index -= 1) {
         const repo = repos[index]
         const repoHostId =
@@ -55,9 +58,13 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
       removeWorktreeMeta: vi.fn(),
       getGitHubCache: () => null,
       // Same row lookup the real store's host-scoped write uses.
-      updateRepo: (id: string, updates: Partial<Repo>, hostId?: ExecutionHostId) => {
-        const row = findRepoRowForHostScopedWrite(repos, id, hostId)
+      updateRepo: (target: RepoHostTarget, updates: Partial<Repo>) => {
+        const row = findRepoRowForHostScopedWrite(repos, target.id, getRepoExecutionHostId(target))
         return row ? Object.assign(row, updates) : null
+      },
+      moveProjectToGroup: (target: RepoHostTarget, groupId: string | null) => {
+        const row = findRepoRowForHostScopedWrite(repos, target.id, getRepoExecutionHostId(target))
+        return row ? Object.assign(row, { projectGroupId: groupId }) : null
       },
       removeProjectForHost
     } as never)
@@ -87,6 +94,50 @@ export function registerRuntimeRemoveProjectHostScopeTests(): void {
       await expect(runtime.removeProject('dup')).rejects.toThrow('selector_ambiguous')
       expect(removeProjectForHost).not.toHaveBeenCalled()
       expect(repos).toHaveLength(2)
+    })
+  })
+
+  describe('projectGroup.moveProject with the same repo id on two execution hosts', () => {
+    it('moves the SSH row a path selector picked, not its local sibling', async () => {
+      const { runtime, repos } = createRuntime()
+
+      await runtime.moveProjectToGroup('path:/remote/dup', 'group-1')
+
+      expect(repos.map((repo) => repo.projectGroupId)).toEqual([undefined, 'group-1'])
+    })
+
+    it('moves the local row a name selector picked, not its SSH sibling', async () => {
+      const { runtime, repos } = createRuntime()
+
+      const moved = await runtime.moveProjectToGroup('name:Dup Local', 'group-1')
+
+      expect(moved).toMatchObject({ path: '/laptop/dup', projectGroupId: 'group-1' })
+      expect(repos.map((repo) => repo.projectGroupId)).toEqual(['group-1', undefined])
+    })
+
+    it('refuses a bare duplicated id rather than guessing a host', async () => {
+      const { runtime, repos } = createRuntime()
+
+      await expect(runtime.moveProjectToGroup('dup', 'group-1')).rejects.toThrow(
+        'selector_ambiguous'
+      )
+      expect(repos.map((repo) => repo.projectGroupId)).toEqual([undefined, undefined])
+    })
+
+    it('moves the SSH row a paired client names by its connection', async () => {
+      const { runtime, repos } = createRuntime()
+
+      await runtime.moveProjectToGroup('dup', 'group-1', undefined, 'ssh-1')
+
+      expect(repos.map((repo) => repo.projectGroupId)).toEqual([undefined, 'group-1'])
+    })
+
+    it('moves the local row a paired client names with no connection', async () => {
+      const { runtime, repos } = createRuntime()
+
+      await runtime.moveProjectToGroup('dup', 'group-1', undefined, null)
+
+      expect(repos.map((repo) => repo.projectGroupId)).toEqual(['group-1', undefined])
     })
   })
 

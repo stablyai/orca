@@ -18,6 +18,11 @@ import {
 } from '../provider-process/provider-process-supervisor'
 import { runCodexAppServerSession } from './codex-app-server-session'
 
+// The orphan guard's process reads add timers of their own; the timer audit below is the session's.
+vi.mock('../provider-process/provider-group-orphan-guard', () => ({
+  guardSupervisedProviderGroup: () => false
+}))
+
 // Stub codex app-server speaking the same JSONL protocol: initialize →
 // initialized → hooks/list → config/batchWrite → hooks/list. Scenario-driven
 // via STUB_CONFIG so each test controls listings, errors, and hangs.

@@ -110,6 +110,8 @@ function mount(client: FakeRpcClient): Mounted {
         }
       },
       setDictationMode: () => {},
+      dictationEnabled: true,
+      setDictationEnabled: () => {},
       deviceTokenRef,
       dictationRouteContextRef,
       activeHandleRef,

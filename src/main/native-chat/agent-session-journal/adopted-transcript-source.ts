@@ -36,7 +36,9 @@ export function adoptedTranscriptSourceObserver(input: {
   maxSourceBytes: number
 }) {
   let sessionId: string | null =
-    input.agent === 'claude' || input.agent === 'codex' ? sessionIdFromFileName(input.filePath) : null
+    input.agent === 'claude' || input.agent === 'codex'
+      ? sessionIdFromFileName(input.filePath)
+      : null
   let cwd: string | null = null
   let sawCodexMetadata = false
   return {

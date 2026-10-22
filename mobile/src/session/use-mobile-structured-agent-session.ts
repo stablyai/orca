@@ -6,6 +6,7 @@ import {
   structuredQuestionTranscript
 } from '../../../src/shared/structured-agent-question-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
+import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
@@ -76,7 +77,7 @@ export function useMobileStructuredAgentSession(
   // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
-  const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
+  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
 
   const mutate = useMobileStructuredAgentMutate({
@@ -124,11 +125,11 @@ export function useMobileStructuredAgentSession(
     onSendError
   })
 
-  // What the transcript reads, as desktop does: the journal plus the one notice a cut turn with no
-  // row gets.
+  // What the transcript reads, as desktop does: the journal since the latest /clear, plus the one
+  // notice a cut turn with no row gets.
   const transcriptItems = useMemo(
     () =>
-      withNativeChatCutTurnNotices(state.items, {
+      withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items), {
         agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined
       }),
     [agent, state.items]
@@ -198,7 +199,7 @@ export function useMobileStructuredAgentSession(
     commandPending: commandPendingRef,
     controller: sendController,
     onSendError,
-    carriesOptions: hostSupport?.sendOptions === true
+    sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined
   })
   const turnIndicator = useMemo(
     () => ({
@@ -291,8 +292,10 @@ export function useMobileStructuredAgentSession(
       transcriptLoading: status === 'loading',
       error: state.error,
       readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
-      hasMore: state.hasOlder,
-      loadingEarlier: loadingOlder,
+      // History that can never be read from here ends paging; its line says so.
+      hasMore: state.hasOlder && olderPages !== 'unavailable',
+      loadingEarlier: olderPages === 'loading',
+      olderPages,
       loadEarlier
     },
     isWorking,

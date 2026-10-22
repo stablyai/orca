@@ -82,6 +82,7 @@ beforeEach(async () => {
   registry.installLegacyRelayBridge({
     leases: () => leases,
     retireLease: vi.fn(),
+    recordStop: vi.fn(),
     connection: () => null,
     // Main publishes to the window as legacy-relay-bridge-ipc.ts does.
     onPanesChanged: (panes) => renderer.listeners.forEach((listener) => listener(panes)),
@@ -156,6 +157,7 @@ describe('attaching a bridged pane', () => {
     registry.installLegacyRelayBridge({
       leases: () => leases,
       retireLease: vi.fn(),
+      recordStop: vi.fn(),
       connection: () => connection,
       onPanesChanged: vi.fn(),
       onData: vi.fn(),

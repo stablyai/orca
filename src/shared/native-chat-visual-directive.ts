@@ -35,7 +35,8 @@ export type NativeChatVisualDirective = {
 
 const FILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/
 // Why: Windows maps these base names to devices whatever the extension.
-const WINDOWS_DEVICE_BASE_NAME = /^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$)$/i
+const WINDOWS_DEVICE_BASE_NAME =
+  /^(?:con|prn|aux|nul|com[0-9\u00B9\u00B2\u00B3]|lpt[0-9\u00B9\u00B2\u00B3]|conin\$|conout\$)$/i
 const ATTRIBUTE_PATTERN = /^([a-z]+)="([^"]*)"/
 const LINE_SPACE = /^[ \t]*/
 

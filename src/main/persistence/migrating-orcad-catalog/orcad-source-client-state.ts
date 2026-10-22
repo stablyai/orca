@@ -1,5 +1,3 @@
-import { hostStableKey } from '../../../shared/automation-owner-key'
-import { parsePersistedAutomationHostFilter } from '../../../shared/automation-host-filter'
 import type {
   OrcadMigrationClientStatePayload,
   OrcadMigrationUiRoutingState
@@ -42,7 +40,7 @@ export function collectOrcadMigrationSourceClientState(
   const blockedCounts = { 'saved-port-forward': 0 }
   let blockedCount = 0
   const mobile = collectMobileSelections(state, scope, eligibleSession)
-  const uiRouting = collectUiRouting(state, scope, destinationEnvironmentId, eligibleSession)
+  const uiRouting = collectUiRouting(state, scope, eligibleSession)
   const target = state.sshTargets.find((entry) => entry.id === scope.targetId)
   const savedPortForwards = target?.portForwards ? structuredClone(target.portForwards) : undefined
   if (savedPortForwards) {
@@ -119,7 +117,6 @@ function collectMobileSelections(
 function collectUiRouting(
   state: PersistedState,
   scope: ReturnType<typeof createOrcadMigrationSourceScope>,
-  destinationEnvironmentId: string | undefined,
   session: WorkspaceSessionState | undefined
 ): OrcadMigrationUiRoutingState | undefined {
   const ui = state.ui
@@ -129,10 +126,6 @@ function collectUiRouting(
   }
   if (ui.lastActiveWorktreeId && orcadMigrationOwnerMatchesScope(ui.lastActiveWorktreeId, scope)) {
     result.lastActiveWorktreeId = unqualifyOrcadMigrationOwnerKey(ui.lastActiveWorktreeId)
-  }
-  const filterRepoIds = ui.filterRepoIds.filter((repoId) => orcadMigrationOwnsRepoId(scope, repoId))
-  if (filterRepoIds.length > 0) {
-    result.filterRepoIds = filterRepoIds
   }
   const dotfiles = Object.entries(ui.showDotfilesByWorktree ?? {})
     .filter(([ownerKey]) => orcadMigrationOwnerMatchesScope(ownerKey, scope))
@@ -152,34 +145,7 @@ function collectUiRouting(
   if (manualOrder.length > 0) {
     result.manualRepoOrder = manualOrder
   }
-  if (ui.workspaceHostScope === scope.hostId) {
-    result.workspaceHostScope = 'local'
-  }
-  const visibleHosts = (ui.visibleWorkspaceHostIds ?? []).filter(
-    (hostId) => hostId === scope.hostId
-  )
-  if (visibleHosts.length > 0) {
-    result.visibleWorkspaceHostIds = ['local']
-  }
-  const hostOrder = (ui.workspaceHostOrder ?? []).filter((hostId) => hostId === scope.hostId)
-  if (hostOrder.length > 0) {
-    result.workspaceHostOrder = ['local']
-  }
-  const filter = parsePersistedAutomationHostFilter(ui.automationHostFilter)
-  if (
-    filter.kind === 'host' &&
-    hostStableKey(filter.host) === `host:desktop:ssh:${encodeURIComponent(scope.targetId)}`
-  ) {
-    result.automationHostFilter = destinationEnvironmentId
-      ? {
-          kind: 'host',
-          hostKey: hostStableKey({
-            authority: { kind: 'runtime', environmentId: destinationEnvironmentId },
-            selector: { kind: 'self' }
-          })
-        }
-      : { kind: 'host', hostKey: 'host:desktop:self' }
-  }
+  // Sidebar filters stay behind: they belong to this desktop's window (ORCAD_MIGRATION_UI_ROUTING_MERGE).
   const eligible = session ? collectEligibleSessionIdentity(session, scope) : null
   const sourceTabIds = collectSourceOwnedTabIds(state, scope)
   const acknowledgements = Object.entries(ui.acknowledgedAgentsByPaneKey ?? {}).filter(
@@ -255,6 +221,7 @@ function representableMobileSelection(
 ): PersistedMobileClientTabSelection | null {
   const tabIds = eligible?.tabIds ?? new Set<string>()
   const groupIds = eligible?.groupIds ?? new Set<string>()
+  const recentTabIds = selection.recentTabIds?.filter((tabId) => tabIds.has(tabId)) ?? []
   const next: PersistedMobileClientTabSelection = {
     activeTabId:
       selection.activeTabId !== null && movedMobileTab(selection.activeTabId, tabIds)
@@ -268,7 +235,8 @@ function representableMobileSelection(
       Object.entries(selection.activeTabIdByGroupId).filter(
         ([groupId, tabId]) => groupIds.has(groupId) && tabIds.has(tabId)
       )
-    )
+    ),
+    ...(recentTabIds.length > 0 ? { recentTabIds } : {})
   }
   return next.activeTabId === null &&
     next.activeGroupId === null &&

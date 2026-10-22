@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore, RelayCellInReserveModeError } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'
@@ -223,6 +223,27 @@ describe('reserve-mode census', () => {
       assignmentEpoch: first.assignmentEpoch
     })
     // Not knowing which cells are switched on is treated the same way.
+    const { unknown, restore } = await unknownSet(() => now)
+    expect((await unknown.assign(identity)).assignmentEpoch).toBe(first.assignmentEpoch)
+    await restore()
+  })
+
+  it('keeps a connected host pinned when its reserve cell goes existing-only after a ledger write', async () => {
+    let now = 1_000
+    const store = await setup(() => now)
+    const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
+    const first = await store.assign(identity)
+    await setReserve(store, [first.cellId])
+    // The reserve ledger stamps last_activity_at and the cell keeps no activity rows.
+    now += 5 * 60_000
+    await database!.query('DELETE FROM relay_assignment_activity_leases WHERE user_id = ?', [identity.userId])
+    await database!.query('UPDATE relay_assignments SET last_activity_at = ? WHERE user_id = ?', [now, identity.userId])
+    await store.setCellAdmissionState(first.cellId, 'existing-only')
+    now += 2 * 60_000
+    expect(await store.assign(identity)).toMatchObject({
+      cellId: first.cellId,
+      assignmentEpoch: first.assignmentEpoch
+    })
     const { unknown, restore } = await unknownSet(() => now)
     expect((await unknown.assign(identity)).assignmentEpoch).toBe(first.assignmentEpoch)
     await restore()

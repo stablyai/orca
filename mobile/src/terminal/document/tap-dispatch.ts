@@ -3,7 +3,7 @@ import { cancelSelect, enterSelect } from './selection-mode'
 import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
-import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
+import { queuedNormalBufferScrollReachesRow } from './normal-buffer-smooth-scroll'
 import { notifyTerminalSurfaceTap } from './surface-tap'
 import {
   eventTargetInRoot,
@@ -18,10 +18,10 @@ const LONG_PRESS_MS = 500
 const LONG_PRESS_SLOP = 10
 
 /** The travel that disqualifies a tap, in pixels; the mouse drag path holds itself to the same. */
-export const TAP_SLOP = 18
+export const TAP_SLOP = 24
 
 /** The longest press still counted as a tap, in milliseconds. */
-const TAP_MAX_MS = 350
+const TAP_MAX_MS = 700
 
 // ============================================================
 // LATCHING TOUCH DISPATCHER (document-level)
@@ -74,6 +74,13 @@ export function armLongPress(scope: TerminalDocumentScope, touch: Touch) {
       return
     }
     enterSelect(scope, c.col, c.row)
+    // Keep the long-press finger on the selection instead of scrolling beneath it.
+    if (scope.sel && scope.touchDispatch.mode === 'surface') {
+      scope.sel.activeHandle = 'end'
+      scope.touchDispatch.mode = 'select-drag'
+      scope.touchDispatch.touchId = scope.longPressOrigin.identifier
+      scope.tapCandidate = null
+    }
   }, LONG_PRESS_MS)
 }
 
@@ -169,10 +176,6 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
   if (inSurface) {
     scope.touchDispatch.mode = 'surface'
     scope.touchDispatch.touchId = t.identifier
-    if (scope.touchGesture.momentumId !== null) {
-      // Touching during momentum scroll brakes the scroll; do not treat as a tap or long press.
-      return
-    }
     scope.tapCandidate = { x: t.clientX, y: t.clientY, t: Date.now(), identifier: t.identifier }
     armLongPress(scope, t)
   }
@@ -207,8 +210,7 @@ function onDocumentTouchMove(scope: TerminalDocumentScope, e: TouchEvent) {
       if (mt.identifier === scope.tapCandidate.identifier) {
         const dx = Math.abs(mt.clientX - scope.tapCandidate.x)
         const dy = Math.abs(mt.clientY - scope.tapCandidate.y)
-        const slop = shouldRouteScrollToTerminalInput(scope) ? 4 : TAP_SLOP
-        if (dx + dy > slop) {
+        if (dx + dy > TAP_SLOP) {
           scope.tapCandidate = null
         }
       }
@@ -250,9 +252,10 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
     if (
       touches.length === 0 &&
       scope.tapCandidate &&
-      !scope.touchGesture.hasMoved &&
       scope.selMode !== 'select' &&
-      Date.now() - scope.tapCandidate.t <= TAP_MAX_MS
+      Date.now() - scope.tapCandidate.t <= TAP_MAX_MS &&
+      // Why: a lift can beat the frame that commits the row; movement that cancelled out leaves a tap.
+      !queuedNormalBufferScrollReachesRow(scope)
     ) {
       notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)
     }

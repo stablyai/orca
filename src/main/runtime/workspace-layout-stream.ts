@@ -1,106 +1,176 @@
 // The read-only layout stream behind `layout.subscribe`: each workspace's published layout,
-// re-projected from the Store's sessions after every write while anyone subscribes. A write that
-// names its partition re-projects only that partition. Each pane's live terminal title is laid
-// over the cached projection, so a title change costs no projection. Nothing reads it until a
-// client opts in; with no subscriber it does no work.
+// re-projected from the Store's sessions after writes while anyone subscribes. A write that names
+// its partition re-projects only that partition. Each pane's live terminal title is laid over the
+// cached projection, so a title change costs no projection. With no subscriber it does no work.
+//
+// A layout-owner build publishes once per main operation (one durable mutation: a `layout.apply`,
+// a binding write, a repair), as one records frame of what changed; writes no operation scopes
+// (a window save) publish when their task ends. A window-owned build sends a frame per workspace.
 
+import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
-import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-report'
+import type { LoadedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load-types'
+import type { PublishedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-published'
 import {
-  publishWorkspaceLayout,
-  type PublishedWorkspaceLayout
-} from '../../shared/workspace-layout/workspace-layout-published'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
-import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
+  diffPublishedLayouts,
+  indexPublishedLayout,
+  type IndexedLayoutRecords,
+  type WorkspaceLayoutRecordChange
+} from '../../shared/workspace-layout/workspace-layout-records'
+import type {
+  WorkspaceLayoutEvent,
+  WorkspaceLayoutStreamEvent
+} from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from './runtime-store-contract'
+import { withLiveTitles } from './published-pane-live-titles'
+import { paneStartFactsOf, withPaneStartFacts, type PaneFactSources } from './pane-start-statuses'
+import {
+  workspaceLayoutFrameObserver,
+  workspaceLayoutPartitionReadObserver
+} from './workspace-layout-frame-observer'
+import {
+  WorkspaceLayoutProjection,
+  type DirtyPartitions,
+  type ProjectionStore
+} from './workspace-layout-projection'
 
-type LayoutListener = (event: WorkspaceLayoutEvent) => void
+type LayoutListener = (event: WorkspaceLayoutStreamEvent) => void
 
-type Published = { layout: PublishedWorkspaceLayout; json: string }
+/** A main operation's end, or the end of a task's unscoped writes: the partitions it may have
+ *  written; null when any may have changed. */
+export type LayoutOperationCommit = { hostIds: readonly ExecutionHostId[] | null }
 
 /** What a workspace was last sent as: its projection's JSON and its panes' live titles. */
-type Shown = { json: string; liveTitles: string; layout: PublishedWorkspaceLayout }
+type Shown = {
+  json: string
+  liveTitles: string
+  layout: PublishedWorkspaceLayout
+  /** Its records, indexed when a later layout is first diffed against it; null: it goes whole. */
+  records?: IndexedLayoutRecords | null
+}
 
-type StreamStore = Pick<
-  RuntimeStore,
-  'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'onWorkspaceSessionWritten'
+/** What a reader beside the stream uses instead of a Loader pass of its own. */
+export type WorkspaceLayoutReads = Pick<
+  WorkspaceLayoutStream,
+  'onLayoutOperationCommitted' | 'readPartition'
 >
+
+type StreamStore = ProjectionStore &
+  Pick<RuntimeStore, 'onWorkspaceSessionWritten' | 'onWorkspaceSessionOperationEnded'>
+
+function addDirty(dirty: DirtyPartitions | null, hostId: ExecutionHostId | null): DirtyPartitions {
+  if (hostId === null || dirty === 'all') {
+    return 'all'
+  }
+  return new Set([...(dirty ?? []), hostId])
+}
 
 export class WorkspaceLayoutStream {
   private readonly listeners = new Set<LayoutListener>()
-  /** Workspace key → its published layout, with its JSON for the by-value comparison. */
-  private published = new Map<string, Published>()
+  private readonly commitListeners = new Set<(commit: LayoutOperationCommit) => void>()
+  private readonly projection: WorkspaceLayoutProjection
   /** Workspace key → what listeners last received for it, live titles included. */
   private shown = new Map<string, Shown>()
-  /** Partition → every workspace it holds, its own copy of a workspace it does not own included. */
-  private projectedPartitions = new Map<ExecutionHostId, Map<string, Published>>()
   private stopWatching: (() => void) | null = null
-  /** Partitions to re-project at the next flush; 'all' when a write did not name its partition. */
-  private dirty: Set<ExecutionHostId> | 'all' | null = null
+  /** From the first subscriber to the last: only then is anything projected. */
+  private projecting = false
+  /** A write may have changed what subscribers hold: the next flush re-projects stale partitions. */
+  private dirty = false
+  /** Partitions written since commit listeners last heard. */
+  private touched: DirtyPartitions | null = null
   private liveTitlesDirty = false
+  private flushQueued = false
   private failureLogged = false
-  /** Its own flag, so a routing warning never hides a later projection or listener failure. */
-  private routingFailureLogged = false
   /** The last change frame's position; never reset, so a reply's position outlives resubscribes. */
   private seq = 0
+  /** Names this stream for the process's life: a reader seeing another one missed frames. */
+  private readonly epoch = ORCA_LAYOUT_OWNER_IS_MAIN ? randomUUID() : undefined
 
   constructor(
-    private readonly deps: {
+    private readonly deps: PaneFactSources & {
       store: () => StreamStore | null
       /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
       /** The title a terminal shows now; null when it has none. */
       liveTitle: (ptyId: string) => string | null
     }
-  ) {}
+  ) {
+    this.projection = new WorkspaceLayoutProjection(deps)
+  }
 
   /** Every workspace's layout now, then each change until `unsubscribe`. */
   subscribe(listener: LayoutListener): {
     snapshot: { key: string; layout: PublishedWorkspaceLayout }[]
     /** The position the snapshot holds. */
     seq: number
+    /** A layout-owner build's stream epoch; its records frames carry it. */
+    epoch?: string
     unsubscribe: () => void
   } {
-    if (this.listeners.size === 0) {
-      this.stopWatching =
-        this.deps.store()?.onWorkspaceSessionWritten?.((hostId) => this.markDirty(hostId)) ?? null
-      this.published = new Map()
+    if (!this.projecting) {
+      this.projecting = true
+      this.projection.clear()
       this.shown = new Map()
-      this.projectedPartitions = new Map()
-      this.dirty = 'all'
+      this.dirty = true
     }
     // A change not yet published reaches existing listeners first, so the snapshot is current.
     this.flush()
     this.listeners.add(listener)
+    this.watch()
     const snapshot = [...this.shown].map(([key, { layout }]) => ({ key, layout }))
     return {
       snapshot,
       seq: this.seq,
+      ...(this.epoch ? { epoch: this.epoch } : {}),
       unsubscribe: () => {
         if (!this.listeners.delete(listener) || this.listeners.size > 0) {
           return
         }
-        this.stopWatching?.()
-        this.stopWatching = null
-        // A flush already queued finds nothing to do.
-        this.dirty = null
+        this.projecting = false
+        // A flush already queued finds nothing to project.
+        this.dirty = false
         this.liveTitlesDirty = false
-        this.published.clear()
         this.shown.clear()
-        this.projectedPartitions.clear()
+        this.watch()
       }
     }
   }
 
+  /**
+   * Each main operation's end once its writes are in, with the partitions it may have written,
+   * and each task's unscoped writes. Heard with or without a layout subscriber.
+   */
+  onLayoutOperationCommitted(listener: (commit: LayoutOperationCommit) => void): () => void {
+    this.commitListeners.add(listener)
+    this.watch()
+    return () => {
+      this.commitListeners.delete(listener)
+      this.watch()
+    }
+  }
+
+  /**
+   * One session partition's loaded model (layout, view and facts), the one the stream publishes
+   * from: shared while anyone listens (cached until a write may change it), else loaded per call.
+   * READ-ONLY: the stream and every other reader see the same object; tests freeze it. Null with
+   * no Store.
+   */
+  readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayout | null {
+    const loaded = this.projection.loaded(hostId, this.stopWatching !== null)
+    if (loaded) {
+      workspaceLayoutPartitionReadObserver()?.(loaded)
+    }
+    return loaded
+  }
+
   /** Some terminal's title may have changed; republishes only the panes whose title did. */
   markLiveTitlesDirty(): void {
-    if (this.listeners.size === 0) {
+    if (!this.projecting) {
       return
     }
-    this.schedule()
     this.liveTitlesDirty = true
+    this.schedule()
   }
 
   /** The position holding every write made so far: a pending flush is sent first. */
@@ -109,38 +179,74 @@ export class WorkspaceLayoutStream {
     return this.seq
   }
 
+  private watch(): void {
+    const wanted = this.listeners.size > 0 || this.commitListeners.size > 0
+    if (wanted && !this.stopWatching) {
+      const store = this.deps.store()
+      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId) => this.markDirty(hostId))
+      // Switch point: a window-owned build publishes when the writes' task ends, as before.
+      const stopOperations = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? store?.onWorkspaceSessionOperationEnded?.(() => this.flush())
+        : undefined
+      this.stopWatching =
+        stopWrites || stopOperations
+          ? () => {
+              stopWrites?.()
+              stopOperations?.()
+            }
+          : null
+    } else if (!wanted && this.stopWatching) {
+      this.stopWatching()
+      this.stopWatching = null
+      // Unwatched writes would go unseen: nothing projected may be read again.
+      this.projection.clear()
+    }
+  }
+
   private schedule(): void {
-    if (this.dirty === null && !this.liveTitlesDirty) {
-      // Coalesces a burst of writes and title changes in one task into one flush.
-      queueMicrotask(() => this.flush())
+    if (!this.flushQueued) {
+      this.flushQueued = true
+      // Coalesces a burst of unscoped writes and title changes in one task into one flush.
+      queueMicrotask(() => {
+        this.flushQueued = false
+        this.flush()
+      })
     }
   }
 
   private markDirty(hostId: ExecutionHostId | null): void {
-    this.schedule()
-    if (hostId === null) {
-      this.dirty = 'all'
-    } else if (this.dirty === null) {
-      this.dirty = new Set([hostId])
-    } else if (this.dirty !== 'all') {
-      this.dirty.add(hostId)
+    this.projection.invalidate(hostId)
+    this.dirty ||= this.projecting
+    if (this.commitListeners.size > 0) {
+      this.touched = addDirty(this.touched, hostId)
     }
+    this.schedule()
   }
 
   private flush(): void {
-    const dirty = this.dirty
-    if (dirty === null && !this.liveTitlesDirty) {
-      return
+    const { dirty, touched } = this
+    this.touched = null
+    if (dirty || this.liveTitlesDirty) {
+      this.dirty = false
+      this.liveTitlesDirty = false
+      // A failed projection is logged once; it never reaches the write that notified it.
+      try {
+        this.reconcile(dirty)
+      } catch (error) {
+        // The cache may be part-updated; the next write re-projects every partition.
+        this.projection.forgetPartitions()
+        this.logFailure('projection', error)
+      }
     }
-    this.dirty = null
-    this.liveTitlesDirty = false
-    // A failed projection is logged once; it never reaches the write that notified it.
-    try {
-      this.reconcile(dirty)
-    } catch (error) {
-      // The cache may be part-updated; the next write re-projects every partition.
-      this.projectedPartitions.clear()
-      this.logFailure('projection', error)
+    if (touched !== null) {
+      const commit = { hostIds: touched === 'all' ? null : [...touched] }
+      for (const listener of this.commitListeners) {
+        try {
+          listener(commit)
+        } catch (error) {
+          this.logFailure('commit listener', error)
+        }
+      }
     }
   }
 
@@ -148,70 +254,6 @@ export class WorkspaceLayoutStream {
     if (!this.failureLogged) {
       this.failureLogged = true
       console.warn(`[workspace-layout] layout stream ${what} failed:`, error)
-    }
-  }
-
-  private projectPartition(hostId: ExecutionHostId): Map<string, Published> {
-    const projected = new Map<string, Published>()
-    const session = this.deps.store()?.getWorkspaceSession?.(hostId)
-    if (!session) {
-      return projected
-    }
-    const { layout } = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
-    for (const [key, workspace] of Object.entries(layout.workspaces)) {
-      const published = publishWorkspaceLayout(workspace, hostId)
-      projected.set(key, { layout: published, json: stableJson(published) })
-    }
-    return projected
-  }
-
-  private project(dirty: Set<ExecutionHostId> | 'all'): Map<string, Published> {
-    const hostIds = this.deps.store()?.getWorkspaceSessionHostIds?.() ?? []
-    const partitions = new Map<ExecutionHostId, Map<string, Published>>()
-    for (const hostId of hostIds) {
-      const cached =
-        dirty === 'all' || dirty.has(hostId) ? undefined : this.projectedPartitions.get(hostId)
-      partitions.set(hostId, cached ?? this.projectPartition(hostId))
-    }
-    this.projectedPartitions = partitions
-    const projected = new Map<string, Published>()
-    const unroutable = new Set<string>()
-    for (const [hostId, workspaces] of partitions) {
-      for (const [key, workspace] of workspaces) {
-        // Only the owning partition's copy is published; a stray copy elsewhere is not shown.
-        if (this.homeOf(key, unroutable) === hostId) {
-          projected.set(key, workspace)
-        }
-      }
-    }
-    for (const key of unroutable) {
-      const kept = this.published.get(key)
-      // Kept as last published: a 'removed' frame would make the window drop its tabs.
-      if (kept && !projected.has(key)) {
-        projected.set(key, kept)
-      }
-    }
-    return projected
-  }
-
-  /**
-   * A workspace the router throws on is not guessed (`repoId::path` repeats across hosts, so a
-   * default could publish another host's copy); it is noted in `unroutable`. It never stops the rest.
-   */
-  private homeOf(key: string, unroutable: Set<string>): ExecutionHostId | null {
-    try {
-      return this.deps.homeHostId(key)
-    } catch (error) {
-      // Switch point: a window-owned build keeps failing the whole projection, as today.
-      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-        throw error
-      }
-      unroutable.add(key)
-      if (!this.routingFailureLogged) {
-        this.routingFailureLogged = true
-        console.warn('[workspace-layout] layout stream routing failed:', error)
-      }
-      return null
     }
   }
 
@@ -224,67 +266,108 @@ export class WorkspaceLayoutStream {
     )
   }
 
-  private reconcile(dirty: Set<ExecutionHostId> | 'all' | null): void {
-    const next = dirty === null ? this.published : this.project(dirty)
-    const events: WorkspaceLayoutEvent[] = []
+  private reconcile(reproject: boolean): void {
+    const next = reproject ? this.projection.project() : this.projection.published
+    const removed: string[] = []
     for (const key of this.shown.keys()) {
       if (!next.has(key)) {
-        events.push({ type: 'removed', key })
+        removed.push(key)
       }
     }
+    const before = this.shown
     const shown = new Map<string, Shown>()
+    const changed: string[] = []
     for (const [key, { layout, json }] of next) {
       const titles = this.liveTitlesOf(layout)
-      const liveTitles = JSON.stringify(titles)
-      const previous = this.shown.get(key)
+      // Switch point: a pane's start facts are live state, laid over as its title is.
+      const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
+      const liveTitles = JSON.stringify(starts ? [titles, starts] : titles)
+      const previous = before.get(key)
       if (previous?.json === json && previous.liveTitles === liveTitles) {
         shown.set(key, previous)
         continue
       }
-      const withTitles = withLiveTitles(layout, titles)
-      shown.set(key, { json, liveTitles, layout: withTitles })
-      events.push({ type: 'workspace', key, layout: withTitles })
+      const shownLayout = withLiveTitles(layout, titles)
+      const laid = starts ? withPaneStartFacts(shownLayout, starts) : shownLayout
+      shown.set(key, { json, liveTitles, layout: laid })
+      changed.push(key)
     }
-    this.published = next
     this.shown = shown
+    // Switch point: a window-owned build sends each workspace whole, one frame each.
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !this.epoch) {
+      this.deliverEach([
+        ...removed.map((key): WorkspaceLayoutEvent => ({ type: 'removed', key })),
+        ...changed.map((key): WorkspaceLayoutEvent => ({
+          type: 'workspace',
+          key,
+          layout: shown.get(key)!.layout
+        }))
+      ])
+      return
+    }
+    // The first subscriber's own projection reaches no one: its snapshot holds it.
+    if (this.listeners.size === 0) {
+      return
+    }
+    const workspaces: WorkspaceLayoutRecordChange[] = removed.map((key) => ({
+      key,
+      change: 'removed'
+    }))
+    for (const key of changed) {
+      const previous = before.get(key)
+      const current = shown.get(key)!
+      const change = previous
+        ? diffPublishedLayouts(key, recordsOf(previous), recordsOf(current), current.layout)
+        : { key, change: 'layout' as const, layout: current.layout }
+      if (change) {
+        workspaces.push(change)
+      }
+    }
+    if (workspaces.length === 0) {
+      return
+    }
+    const frame = { type: 'records' as const, epoch: this.epoch, seq: ++this.seq, workspaces }
+    this.deliver(frame)
+    workspaceLayoutFrameObserver()?.({
+      frame,
+      before: new Map([...before].map(([key, { layout }]) => [key, layout])),
+      fresh: () => this.freshLayouts(),
+      titlesOnly: !reproject
+    })
+  }
+
+  private freshLayouts(): Map<string, PublishedWorkspaceLayout> {
+    const fresh = new Map<string, PublishedWorkspaceLayout>()
+    for (const [key, { layout }] of this.projection.projectFresh()) {
+      const titled = withLiveTitles(layout, this.liveTitlesOf(layout))
+      const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
+      fresh.set(key, starts ? withPaneStartFacts(titled, starts) : titled)
+    }
+    return fresh
+  }
+
+  private deliverEach(events: WorkspaceLayoutEvent[]): void {
     for (const unsequenced of events) {
       // Numbered as sent, so a failed projection never skips a position a reply could name.
-      const event = { ...unsequenced, seq: ++this.seq }
-      for (const listener of this.listeners) {
-        // One failing listener must not cost the others an event the stream has now published.
-        try {
-          listener(event)
-        } catch (error) {
-          this.logFailure('listener', error)
-        }
+      this.deliver({ ...unsequenced, seq: ++this.seq })
+    }
+  }
+
+  private deliver(event: WorkspaceLayoutStreamEvent): void {
+    for (const listener of this.listeners) {
+      // One failing listener must not cost the others an event the stream has now published.
+      try {
+        listener(event)
+      } catch (error) {
+        this.logFailure('listener', error)
       }
     }
   }
 }
 
-function withLiveTitles(
-  layout: PublishedWorkspaceLayout,
-  titles: (string | null)[]
-): PublishedWorkspaceLayout {
-  if (titles.every((title) => title === null)) {
-    return layout
+function recordsOf(shown: Shown): IndexedLayoutRecords | null {
+  if (shown.records === undefined) {
+    shown.records = indexPublishedLayout(shown.layout)
   }
-  let index = 0
-  return {
-    ...layout,
-    tabs: layout.tabs.map((tab) =>
-      tab.terminal
-        ? {
-            ...tab,
-            terminal: {
-              ...tab.terminal,
-              panes: tab.terminal.panes.map((pane) => {
-                const liveTitle = titles[index++]
-                return liveTitle === null ? pane : { ...pane, liveTitle }
-              })
-            }
-          }
-        : tab
-    )
-  }
+  return shown.records
 }

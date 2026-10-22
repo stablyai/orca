@@ -94,6 +94,8 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.buckets).toEqual([
       {
         name: 'Gemini Models',
+        group: 'Gemini Models',
+        windowName: 'Weekly Limit Remaining',
         usedPercent: 60,
         windowMinutes: 10_080,
         resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),

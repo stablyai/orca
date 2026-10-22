@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   createProjectGroup: vi.fn(),
   updateProjectGroup: vi.fn(),
   deleteProjectGroupWithContainedProjects: vi.fn(),
+  confirmUnsavedDiscard: vi.fn(),
   toastError: vi.fn()
 }))
 
@@ -22,6 +23,10 @@ vi.mock('@/store', () => ({
       updateProjectGroup: mocks.updateProjectGroup,
       deleteProjectGroupWithContainedProjects: mocks.deleteProjectGroupWithContainedProjects
     })
+}))
+
+vi.mock('@/store/slices/worktrees/teardown/removed-workspace-unsaved-files', () => ({
+  confirmUnsavedDiscard: mocks.confirmUnsavedDiscard
 }))
 
 vi.mock('sonner', () => ({
@@ -132,5 +137,6 @@ describe('project group dialogs carry the owner host', () => {
       removeContainedProjects: false,
       hostId: 'runtime:env-1'
     })
+    expect(mocks.confirmUnsavedDiscard).toHaveBeenCalledTimes(1)
   })
 })

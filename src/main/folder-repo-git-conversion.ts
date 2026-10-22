@@ -14,6 +14,7 @@ import { isFolderRepo } from '../shared/repo-kind'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { getGitRepoRootAsync, isGitRepoAsync } from './git/repo'
 import { findExtraFolderWorkspaceIds } from './folder-workspace-meta-presence'
+import { findProjectHostSetup } from '../shared/project-host-setup-target'
 
 export type FolderToGitConversion = {
   updates: Pick<Repo, 'folderUpgradeGitRootPath'>
@@ -122,7 +123,7 @@ export async function updateProjectHostSetupWithProvenKind(
   if (args.updates.kind !== 'git') {
     return updateSetup(args)
   }
-  const setup = store.getProjectHostSetups?.().find((entry) => entry.id === args.setupId)
+  const setup = findProjectHostSetup(store.getProjectHostSetups?.() ?? [], args)
   const repo = setup?.repoId
     ? store
         .getRepos()
@@ -141,7 +142,7 @@ export async function updateProjectHostSetupWithProvenKind(
       if (!result?.repo || !proven.folderUpgradeGitRootPath) {
         return result
       }
-      const stamped = store.updateRepo(result.repo.id, proven, getRepoExecutionHostId(result.repo))
+      const stamped = store.updateRepo(result.repo, proven)
       return stamped ? { ...result, repo: stamped } : result
     },
     allowRuntimeHost

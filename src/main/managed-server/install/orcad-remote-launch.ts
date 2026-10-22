@@ -100,11 +100,13 @@ export function orcadLaunchCommand(
 ): string {
   assertPosixHost(host)
   const dir = quotePosixShell(spec.remoteInstallDir)
-  const readiness = quotePosixShell(
-    joinRemotePath(host, spec.remoteInstallDir, ORCAD_READINESS_FILENAME)
-  )
-  const log = quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
+  // Relative to the `cd` below, which every use follows in the same shell: the slot path is most
+  // of the sent bytes.
+  const readiness = quotePosixShell(ORCAD_READINESS_FILENAME)
+  const log = quotePosixShell(ORCAD_LOG_FILENAME)
+  // Absolute: a nohup launch backgrounds the whole list, `cd` included, then writes this outside it.
   const pidFile = quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
+  // Absolute: liveness matches the runtime's args against this path.
   const entry = quotePosixShell(
     joinRemotePath(host, spec.remoteInstallDir, ORCAD_LAUNCHER_FILENAME)
   )
@@ -116,11 +118,19 @@ export function orcadLaunchCommand(
   ]
   // Why in the launching shell: the detached list below runs in a subshell whose variables are lost.
   const recordSession = detach === 'nohup' && recordsOrcadLaunchSshSession(host)
+  const launchEnv = [
+    `ORCA_VERSION=${quotePosixShell(spec.fullVersion)}`,
+    `ORCA_USER_DATA=${quotePosixShell(spec.userDataDir)}`,
+    ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${quotePosixShell(value)}`)
+  ]
   return [
     ...(recordSession ? [captureOrcadLaunchSshSessionCommand()] : []),
-    // Why first: the readiness file carries the pairing offer's device token, so every file this
-    // launch creates must be owner-only from birth, not only the ones after the exec.
-    'umask 077 &&',
+    // The daemon gets this back: the git, terminals and agents it spawns create the user's files.
+    'orcad_login_umask=$(umask);',
+    // Why before anything is created: the readiness file carries the pairing offer's device token,
+    // so every file this launch creates must be owner-only from birth. Why `;`: a nohup launch
+    // backgrounds the `&&` list below, and the PID file is written outside it.
+    'umask 077;',
     // Best effort: directories and files an earlier build left 0755/0644 keep their old modes.
     `{ chmod 700 ${privateDirs.map(quotePosixShell).join(' ')} 2>/dev/null || :; } &&`,
     `cd ${dir} &&`,
@@ -132,19 +142,19 @@ export function orcadLaunchCommand(
     `chmod 600 ${readiness} &&`,
     `{ chmod 600 ${pidFile} ${log} 2>/dev/null || :; } &&`,
     // A stop request the previous process never consumed must not stop this one.
-    `rm -f ${quotePosixShell(joinRemotePath(host, spec.remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME))} &&`,
+    `rm -f ${quotePosixShell(ORCAD_STOP_REQUEST_FILENAME)} &&`,
     ...(detach === 'setsid' ? [`rm -f ${pidFile} &&`] : []),
-    `ORCA_VERSION=${quotePosixShell(spec.fullVersion)}`,
-    `ORCA_USER_DATA=${quotePosixShell(spec.userDataDir)}`,
-    ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${quotePosixShell(value)}`),
     ...(detach === 'setsid'
-      ? setsidLaunchTail(entry, spec, readiness, log, pidFile, hostEnv)
+      ? setsidLaunchTail(entry, spec, readiness, log, pidFile, launchEnv, hostEnv)
       : [
+          // Why a group: its redirects open under 077 before the daemon gets the login umask back.
+          '{ umask "$orcad_login_umask" &&',
+          ...launchEnv,
           // Keep $! equal to the runtime PID rather than a waiting shell's PID.
           // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.
           `exec nohup "$orcad_runtime" ${entry}`,
-          `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
-          `> ${readiness} 2>> ${log} < /dev/null &`,
+          `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)};`,
+          `} > ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
           ...(recordSession
             ? [`${writeOrcadLaunchSshSessionCommand(host, spec.userDataDir)} &&`]
@@ -165,15 +175,19 @@ function setsidLaunchTail(
   readiness: string,
   log: string,
   pidFile: string,
+  launchEnv: readonly string[],
   hostEnv: readonly OrcadLaunchEnvEntry[]
 ): string[] {
   return [
+    ...launchEnv,
     // Only a setsid (WSL host) launch marks itself; SSH keeps its byte-for-byte command.
     `${ORCAD_WSL_HOST_ENV}=1`,
     ...hostEnv.map(([name, value]) => `${assertEnvName(name)}=${quotePosixShell(value)}`),
     'sh -c \'orcad_detach() { if setsid -f true >/dev/null 2>&1; then setsid -f "$@"; ' +
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
-    `sh -c 'echo $$ > "$1" && shift && exec "$@"' orcad-launch ${pidFile}`,
+    // The PID file is written under 077 before the daemon gets the login umask back.
+    `sh -c 'echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
+    '"$orcad_login_umask"',
     `"$orcad_runtime" ${entry}`,
     `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &&`,

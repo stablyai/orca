@@ -592,6 +592,7 @@ describe('getPRForBranch', () => {
 
   it('falls back to gh pr view when the remote cannot be resolved to GitHub', async () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         number: 7,

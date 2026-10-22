@@ -1,3 +1,4 @@
+import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
@@ -490,7 +491,12 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('preserves host metadata when terminal.create adopts a stable pane owner', async () => {
-    const adoptStablePane = vi.fn().mockResolvedValue(null)
+    const adoptStablePane = vi.fn(
+      async (args: AdoptStablePaneArgs): Promise<AdoptStablePaneResult | null> => {
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }
+    )
     const spawn = vi.fn(async (opts: { adoptedStablePane?: { owner: { handle?: string } } }) =>
       opts.adoptedStablePane
         ? {
@@ -526,6 +532,7 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'claude'
     })
     adoptStablePane.mockResolvedValueOnce({
+      materialized: true,
       result: { id: 'pty-stable-owner', isReattach: true },
       owner: {
         handle: first.handle,
@@ -557,13 +564,7 @@ describe('OrcaRuntimeService', () => {
         launchAgent: 'claude'
       })
     ])
-    expect(spawn.mock.calls[1]?.[0]).toMatchObject({
-      command: "claude 'replacement'",
-      adoptedStablePane: expect.anything()
-    })
-    expect(spawn.mock.calls[1]?.[0]).not.toMatchObject({
-      command: expect.stringContaining('--teammate-mode')
-    })
+    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('releases a stable-pane claim when creation aborts before provider spawn', async () => {
@@ -602,8 +603,9 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      adoptStablePane: vi.fn(async () => {
+      adoptStablePane: vi.fn(async (args: AdoptStablePaneArgs) => {
         abort.abort()
+        await args.spawnFresh?.({ mustExist: false })
         return null
       }),
       spawn,
@@ -630,7 +632,10 @@ describe('OrcaRuntimeService', () => {
     })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      adoptStablePane: vi.fn(async () => null),
+      adoptStablePane: vi.fn(async (args: AdoptStablePaneArgs) => {
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }),
       spawn,
       write: () => true,
       kill: () => true,

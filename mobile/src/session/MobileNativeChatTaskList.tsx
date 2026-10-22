@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react-native'
 import {
@@ -12,6 +11,7 @@ import {
 import { colors } from '../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 
 const STATUS_WORD: Record<NativeChatTask['status'], string> = {
   completed: NATIVE_CHAT_TASK_LIST_COPY.completed,
@@ -83,13 +83,21 @@ function Checklist({ list, fontScale }: { list: TaskList; fontScale: number }) {
 }
 
 /** The whole list behind a disclosure, under a list of what changed. */
-function FullList({ list, fontScale }: { list: TaskList; fontScale: number }) {
-  const [open, setOpen] = useState(false)
+function FullList({
+  list,
+  fontScale,
+  disclosureKey
+}: {
+  list: TaskList
+  fontScale: number
+  disclosureKey?: string
+}) {
+  const [open, setOpen] = useMobileNativeChatDisclosure(disclosureKey, false)
   return (
     <View>
       <Pressable
         style={styles.taskDisclosure}
-        onPress={() => setOpen((value) => !value)}
+        onPress={() => setOpen(!open)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
       >
@@ -119,11 +127,13 @@ function OpenedChecklist({ list, fontScale }: { list: TaskList; fontScale: numbe
 export function MobileNativeChatTaskList({
   list,
   previous,
-  fontScale
+  fontScale,
+  disclosureKey
 }: {
   list: TaskList
   previous?: TaskList
   fontScale: number
+  disclosureKey?: string
 }): React.JSX.Element {
   const completed = list.tasks.filter((task) => task.status === 'completed').length
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
@@ -163,7 +173,7 @@ export function MobileNativeChatTaskList({
           ) : (
             <Text style={[styles.lineMeta, type.meta]}>{NATIVE_CHAT_TASK_LIST_COPY.unchanged}</Text>
           )}
-          <FullList list={list} fontScale={fontScale} />
+          <FullList list={list} fontScale={fontScale} disclosureKey={disclosureKey} />
         </>
       ) : (
         <Checklist list={list} fontScale={fontScale} />

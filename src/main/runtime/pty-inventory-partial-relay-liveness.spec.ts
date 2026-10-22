@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 export function registerPtyInventoryPartialRelayLivenessTests(): void {
   // STA-517: the worktree.ps liveness refresh is the only thing that retires an exited PTY, and
@@ -58,7 +59,7 @@ export function registerPtyInventoryPartialRelayLivenessTests(): void {
       getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
       getAllWorktreeMeta: () => meta,
       getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
-      setWorktreeMeta: (worktreeId: string, patch: Record<string, unknown>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, patch: Record<string, unknown>) => {
         meta[worktreeId] = { ...meta[worktreeId], ...patch }
         return meta[worktreeId]
       },

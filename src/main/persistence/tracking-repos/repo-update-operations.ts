@@ -1,6 +1,7 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
@@ -30,11 +31,8 @@ export type RepoUpdateMutationOperations = {
 export function findRepoRowForHostScopedWrite(
   repos: readonly Repo[],
   id: string,
-  hostId: ExecutionHostId | undefined
+  hostId: ExecutionHostId
 ): Repo | undefined {
-  if (!hostId) {
-    return repos.find((candidate) => candidate.id === id)
-  }
   const matched = repos.find(
     (candidate) => candidate.id === id && getRepoExecutionHostId(candidate) === hostId
   )
@@ -97,7 +95,7 @@ export class RepoUpdatePersistenceOperations {
   }
 
   updateRepo(
-    id: string,
+    target: RepoHostTarget,
     updates: Partial<
       Pick<
         Repo,
@@ -131,10 +129,13 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
-    },
-    hostId?: ExecutionHostId
+    }
   ): Repo | null {
-    const repo = findRepoRowForHostScopedWrite(this.state.repos, id, hostId)
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
+    )
     if (!repo) {
       return null
     }
@@ -260,7 +261,7 @@ export class RepoUpdatePersistenceOperations {
       }
     }
     Object.assign(repo, sanitizedUpdates)
-    this.bumpLocalWorktreeScanGeneration(id)
+    this.bumpLocalWorktreeScanGeneration(repo.id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)

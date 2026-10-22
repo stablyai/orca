@@ -1,5 +1,8 @@
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 
 const {
   filterPathsToRunningWslDistrosAsync,
@@ -93,8 +96,8 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
     const request = { limit: 1000, scopePaths: ['/project'] }
     const first = await listAiVaultSessions(request)
 
-    // A narrower request reuses the same scan entry and its scan ID.
-    const cached = await listAiVaultSessions({ ...request, limit: 100 })
+    // A repeat request reuses the same scan entry and its scan ID.
+    const cached = await listAiVaultSessions(request)
 
     expect(cached.scannedAt).toBe('scan-A')
     expect(cached.scanId).toBe(first.scanId)
@@ -123,5 +126,70 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
     expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('listAiVaultSessions symlinked scope', () => {
+  let root: string
+  beforeEach(async () => {
+    resetAiVaultSessionListCacheForTests()
+    scanAiVaultSessionsInService.mockReset()
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-cached-scope-')))
+  })
+  afterEach(async () => {
+    resetAiVaultSessionListCacheForTests()
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('scans the real path too and keeps real-path sessions in a symlinked workspace', async () => {
+    const realRepo = join(root, 'data', 'api')
+    const linkedRepo = join(root, 'work-api')
+    await mkdir(realRepo, { recursive: true })
+    await symlink(realRepo, linkedRepo, 'junction')
+    const recorded = {
+      id: 'codex:s1',
+      executionHostId: 'local',
+      agent: 'codex',
+      sessionId: 's1',
+      title: 's1',
+      cwd: realRepo,
+      branch: null,
+      model: null,
+      filePath: join(root, 's1.jsonl'),
+      codexHome: null,
+      createdAt: null,
+      updatedAt: null,
+      modifiedAt: '2026-10-20T00:00:00.000Z',
+      messageCount: 1,
+      totalTokens: 0,
+      previewMessages: [],
+      queuedMessageCount: 0,
+      subagentTranscriptCount: 0,
+      resumeCommand: 's1',
+      subagent: null
+    } satisfies AiVaultSession
+    const outOfScope = (id: string): AiVaultSession => ({
+      ...recorded,
+      id: `codex:${id}`,
+      sessionId: id,
+      cwd: join(root, 'elsewhere'),
+      modifiedAt: '2026-10-21T00:00:00.000Z'
+    })
+    scanAiVaultSessionsInService.mockResolvedValueOnce({
+      ...scanResult('scan-A'),
+      sessions: [outOfScope('newer-1'), outOfScope('newer-2'), recorded]
+    })
+
+    const listed = await listAiVaultSessions({ limit: 1, scopePaths: [linkedRepo] })
+
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
+      scopePaths: [linkedRepo, realRepo]
+    })
+    expect(listed.sessions.find((entry) => entry.id === 'codex:s1')?.cwdAliases).toEqual([
+      linkedRepo
+    ])
+    // A cache hit at depth 1 keeps one out-of-scope row; the aliased row must count as in scope.
+    const cached = await listAiVaultSessions({ limit: 1, scopePaths: [linkedRepo] })
+    expect(cached.sessions.map((entry) => entry.id)).toEqual(['codex:newer-1', 'codex:s1'])
   })
 })

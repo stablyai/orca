@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchResult } from '../../../../shared/code-search-types'
 import { useFileSearchRunner } from './useFileSearchRunner'
+import { localAndSshTwinRows } from '@/lib/workspace-twin-rows.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   getConnectionId: vi.fn(),
@@ -105,16 +106,7 @@ describe('useFileSearchRunner result ownership', () => {
     const worktreeId = 'twin-repo::/repo'
     const state = {
       settings: { activeRuntimeEnvironmentId: 'ambient-runtime-b' },
-      repos: [
-        { id: 'twin-repo', executionHostId: 'local' },
-        { id: 'twin-repo', connectionId: 'box', executionHostId: 'ssh:box' }
-      ],
-      worktreesByRepo: {
-        'twin-repo': [
-          { id: worktreeId, repoId: 'twin-repo', hostId: 'local' },
-          { id: worktreeId, repoId: 'twin-repo', hostId: 'ssh:box' }
-        ]
-      },
+      ...localAndSshTwinRows('twin-repo', worktreeId),
       fileSearchStateByWorktree: { [worktreeId]: {} }
     }
     const { hook, updates } = renderSearchRunner(state, worktreeId)

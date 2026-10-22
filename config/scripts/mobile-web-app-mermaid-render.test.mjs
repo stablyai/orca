@@ -28,7 +28,7 @@ import {
   installCspViolationRecorder,
   installListenerRecorder,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 const diagramDir = join(mobileDir, 'src/components/pr-sidebar')

@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat-turn-grouping'
@@ -158,6 +159,20 @@ async function drawn(): Promise<{ text: string; turn: string | undefined }[]> {
   return [...nativeChatRowsInDrawOrder(keyed, drawOrder)]
 }
 
+it('reads a send as accepted across its echo, never in doubt, so a worker start keeps its worker', async () => {
+  const connection = claude.connections[0]!
+  const first = await send('FIRST prompt')
+  await eventually(() => expect(written(connection, 'FIRST prompt')).toBeDefined())
+  // What `orchestration worker-start` waits on; a doubt here closed the new worker (STA-11160).
+  const answer = host.waitForSendSettlement(SESSION, first, { budgetMs: 5_000 })
+  frame(connection, {
+    ...written(connection, 'FIRST prompt')!,
+    isReplay: true,
+    parent_tool_use_id: null
+  })
+  expect(agentSessionSendSubmission((await answer)?.value)?.dispatchState).toBe('accepted')
+})
+
 it('holds a follow-up until the echo opens the turn, then folds it in, drawn inside that turn', async () => {
   const connection = claude.connections[0]!
   const first = await send('FIRST prompt')
@@ -306,13 +321,27 @@ function stop() {
   })
 }
 
-// Claude's interrupt names no turn, but its Stop ends the CLI, and that end settles the send.
+// Claude's interrupt names no turn, but its Stop ends the CLI, and that end settles the send. Until
+// the close proves it, the CLI still holds the send: never doubt while the child is being stopped.
 it('settles a send a Stop took before its echo, and the next message goes out', async () => {
   const connection = claude.connections[0]!
   const first = await send('FIRST prompt')
   await eventually(() => expect(written(connection, 'FIRST prompt')).toBeDefined())
+  const close = connection.close
+  let finishClose: (() => void) | undefined
+  connection.close = () =>
+    new Promise((resolve) => (finishClose = () => void close().then(resolve)))
 
-  expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+  const stopped = stop()
+  await eventually(() => expect(finishClose).toBeDefined())
+  expect(
+    host
+      .currentWork(SESSION)
+      ?.restatedSubmissions()
+      .find((entry) => entry.clientMessageId === first)?.dispatchState
+  ).toBe('pending')
+  finishClose?.()
+  expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
   await eventually(() => expect(connection.closeCount).toBe(1))
   await eventually(async () =>
     expect(

@@ -19,6 +19,10 @@ import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
 import { rekeyWorktreeVisitHost } from '@/lib/worktree-visit-recency'
 import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ssh-browser-pages'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 type ManagedServerStatus = SshConnectionState['managedServer']
 
@@ -55,7 +59,7 @@ export function applySshManagedServerTransition(
     toast.error(
       translate(
         'auto.hooks.ipcEvents.sshManagedServer.refusedBlocked',
-        'This SSH host could not move to a managed Orca server. SSH Hosts in Settings shows why.'
+        'Orca couldn’t set itself up on this SSH host. SSH Hosts in Settings shows why.'
       )
     )
   }
@@ -217,8 +221,8 @@ function rehomeActiveWorkspaceWhenKnown(
       state.startupWorktreeRefreshCompleted && !previous.startupWorktreeRefreshCompleted
     if (
       !startupScanFinished &&
-      state.worktreesByRepo === previous.worktreesByRepo &&
-      state.detectedWorktreesByRepo === previous.detectedWorktreesByRepo &&
+      selectWorktreesByRepo(state) === selectWorktreesByRepo(previous) &&
+      selectDetectedWorktreesByRepo(state) === selectDetectedWorktreesByRepo(previous) &&
       state.activeWorktreeId === previous.activeWorktreeId &&
       state.activeWorkspaceExecutionHostId === previous.activeWorkspaceExecutionHostId
     ) {
@@ -292,8 +296,8 @@ function serverCopyOfWorkspace(
   const path = normalizeRuntimePathForComparison(source.worktreePath)
   // Why detected too: a checkout the server's visibility settings hide still exists there.
   const row = [
-    ...(state.worktreesByRepo[serverRepoId] ?? []),
-    ...(state.detectedWorktreesByRepo[serverRepoId]?.worktrees ?? [])
+    ...(selectWorktreesByRepo(state)[serverRepoId] ?? []),
+    ...(selectDetectedWorktreesByRepo(state)[serverRepoId]?.worktrees ?? [])
   ].find(
     (worktree) =>
       worktree.hostId === runtimeHostId && normalizeRuntimePathForComparison(worktree.path) === path

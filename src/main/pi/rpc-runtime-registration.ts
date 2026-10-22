@@ -15,11 +15,13 @@ import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
-    resolveLaunch: composeStructuredLaunch(
-      PI_RPC_AGENT,
-      structuredAgentLaunchSources(context),
-      piRpcLaunchPart({})
-    ),
+    resolveLaunch:
+      deps.resolvePiLaunch ??
+      composeStructuredLaunch(
+        PI_RPC_AGENT,
+        structuredAgentLaunchSources(context),
+        piRpcLaunchPart({})
+      ),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     onLifecycle: context.deliverLifecycle,
@@ -33,7 +35,6 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
         ...(outcome.state === 'accepted' ? { providerIdentity: outcome.providerIdentity } : outcome)
       })
     },
-    onIdle: context.followUps.releaseUnansweredDispatches,
     logger: deps.logger
   })
 }

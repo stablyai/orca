@@ -4,6 +4,11 @@ import {
   fixture
 } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
+import { createCodexAtRestSkillCatalog } from '../codex/codex-at-rest-skills-probe'
+import type { CodexAppServerInvocation } from '../codex/codex-app-server-session'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
+import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
 
 const hooks = vi.hoisted(() => ({ apply: vi.fn(async () => {}) }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -19,6 +24,74 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 describe('durable execution-host launch settings', () => {
+  it('withdraws cached plugin skills when saved launch arguments disable plugins', async () => {
+    const { store } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    await controller.mutateAgentLaunch({ type: 'arguments', agent: 'codex', value: '' })
+    const calls: CodexAppServerInvocation[] = []
+    const obsolete = deferred<void>()
+    const catalog = createCodexAtRestSkillCatalog({
+      resolveWorkspacePath: async () => '/fixture/work',
+      resolveCommand: () => '/fixture/codex',
+      resolveLaunchArgs: () => structuredAgentConfiguredArgs('codex', store.getSettings()),
+      resolveEnvironment: async () => ({ PATH: '/fixture/bin' }),
+      sleep: async () => {},
+      runSession: async (invocation, body) => {
+        calls.push(invocation)
+        if (calls.length === 2) {
+          await obsolete.promise
+        }
+        return body({
+          request: async () => ({
+            data: [
+              {
+                cwd: invocation.cwd,
+                skills: invocation.args.includes('plugins')
+                  ? []
+                  : [{ name: 'qa-plugin:mark', path: '/fixture/plugin/SKILL.md' }]
+              }
+            ]
+          }),
+          notify: () => {}
+        })
+      }
+    })
+    const record = agentSessionRecordFixture({
+      sessionId: 'resting-codex',
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/fixture/home' }
+    })
+    const release = bindAtRestCommandContexts([catalog])
+    try {
+      expect(catalog.read(record)).toBeUndefined()
+      await catalog.settled(record, 1000)
+      expect(catalog.read(record)?.some((row) => row.name === 'qa-plugin:mark')).toBe(true)
+      expect(calls).toHaveLength(1)
+      catalog.retireContext()
+      const started = Date.now()
+      const bounded = catalog.settled(record, 1000)
+      await vi.waitFor(() => expect(calls).toHaveLength(2))
+      await controller.mutateAgentLaunch({
+        type: 'arguments',
+        agent: 'codex',
+        value: '--disable plugins'
+      })
+      expect(catalog.read(record)).toBeUndefined()
+      expect((await bounded)?.some((row) => row.name === 'qa-plugin:mark')).toBe(false)
+      expect(Date.now() - started).toBeLessThan(1000)
+      obsolete.resolve()
+      expect(catalog.read(record)?.some((row) => row.name === 'qa-plugin:mark')).toBe(false)
+      expect(calls.map(({ args }) => args)).toEqual([
+        ['app-server'],
+        ['app-server'],
+        ['--disable', 'plugins', 'app-server']
+      ])
+    } finally {
+      obsolete.resolve()
+      release()
+    }
+  })
+
   it('acknowledges a committed availability edit and its queued follow-up while hooks are pending', async () => {
     const { store, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)
@@ -155,6 +228,59 @@ describe('durable execution-host launch settings', () => {
       value: '--retry-marker'
     })
     expect(readState().settings.agentDefaultArgs.claude).toBe('--retry-marker')
+  })
+
+  it('rolls back the new-chat default with a failed permission preset', async () => {
+    const { store, authority, readState } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    const before = store.getSettings().nativeChatPermissionMode
+    authority.failNextWrite()
+    try {
+      await expect(
+        controller.mutateAgentLaunch({ type: 'permissions', syncNativeChat: true, mode: 'auto' })
+      ).rejects.toThrow('profile_state_write_failed')
+    } finally {
+      await store.flushPendingOrThrowAsync().catch(() => {})
+    }
+    expect(store.getSettings().nativeChatPermissionMode).toBe(before)
+    expect(readState().settings.nativeChatPermissionMode).toBe(before)
+    await controller.mutateAgentLaunch({ type: 'permissions', syncNativeChat: true, mode: 'auto' })
+    expect(readState().settings.nativeChatPermissionMode).toBe(before)
+    expect(readState().settings.agentNativeChatPermissionModes).toEqual({
+      claude: 'auto',
+      codex: 'auto'
+    })
+  })
+
+  it('rolls back a scoped chat default after a failed write and persists a retry', async () => {
+    const { store, authority, readState } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    const beforeArgs = store.getSettings().agentDefaultArgs?.codex
+    const beforeNative = store.getSettings().nativeChatPermissionMode
+    authority.failNextWrite()
+    try {
+      await expect(
+        controller.mutateAgentLaunch({
+          type: 'permissions',
+          syncNativeChat: true,
+          agent: 'codex',
+          mode: 'auto'
+        })
+      ).rejects.toThrow('profile_state_write_failed')
+    } finally {
+      await store.flushPendingOrThrowAsync().catch(() => {})
+    }
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe(beforeArgs)
+    expect(store.getSettings().agentNativeChatPermissionModes).toEqual({})
+    await controller.mutateAgentLaunch({
+      type: 'permissions',
+      syncNativeChat: true,
+      agent: 'codex',
+      mode: 'auto'
+    })
+    expect(readState().settings.agentNativeChatPermissionModes).toEqual({ codex: 'auto' })
+    expect(readState().settings.nativeChatPermissionMode).toBe(beforeNative)
+    expect(readState().settings.agentDefaultArgs.codex).toBe('--approve-for-me')
   })
 
   it('recomputes queued intents after a failed write instead of persisting its stale map', async () => {

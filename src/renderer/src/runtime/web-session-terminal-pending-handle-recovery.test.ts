@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply

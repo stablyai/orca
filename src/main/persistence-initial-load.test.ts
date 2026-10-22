@@ -391,13 +391,16 @@ describe('Store', () => {
     const store = await createStore()
 
     // A re-probe that now prefers the `upstream` remote rewrites the derived project id.
-    store.updateRepo('r1', {
-      gitRemoteIdentity: {
-        canonicalKey: 'git.example.com/acme/app-upstream',
-        remoteName: 'upstream',
-        remoteUrl: 'git@git.example.com:acme/app-upstream.git'
+    store.updateRepo(
+      { id: 'r1' },
+      {
+        gitRemoteIdentity: {
+          canonicalKey: 'git.example.com/acme/app-upstream',
+          remoteName: 'upstream',
+          remoteUrl: 'git@git.example.com:acme/app-upstream.git'
+        }
       }
-    })
+    )
 
     const upstreamProjectId = 'git:git.example.com/acme/app-upstream'
     expect(store.getProjects().map((project) => project.id)).toEqual([upstreamProjectId])
