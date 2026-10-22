@@ -1,4 +1,5 @@
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
@@ -61,19 +62,20 @@ export function getRuntimeEnvironmentStatusOwner(
   selector: string
 ): RuntimeHostStatusOwner {
   const environment = resolveEnvironment(userDataPath, selector)
-  const pairedConnection = resolveRuntimeEnvironmentConnection(userDataPath, environment)
+  const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairedConnection)}`
   let cached = statusOwners.get(environment.id)
   if (!cached || cached.key !== key || cached.owner.read().retired) {
     if (cached) {
       closeRemoteRuntimeRequestConnection(environment.id)
     }
+    const connection = () => resolveRuntimeEnvironmentConnection(userDataPath, environment)
     const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
       isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
       request: (signal) =>
         sendRemoteRuntimeSharedControlRequest<RuntimeStatus>(
           environment.id,
-          pairedConnection,
+          connection(),
           'status.get',
           undefined,
           15_000,
@@ -81,7 +83,7 @@ export function getRuntimeEnvironmentStatusOwner(
           signal
         ),
       establish: () => {
-        ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
+        ensureRemoteRuntimeSharedControlConnection(environment.id, connection())
         reconnectRemoteRuntimeSharedControlConnection(environment.id)
       },
       pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)

@@ -3,7 +3,10 @@ import { BrowserWindow } from 'electron'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import {
+  getPreferredPairedRuntimeConnection,
+  type KnownRuntimeEnvironment
+} from '../../../shared/runtime-environments'
 import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
@@ -63,7 +66,7 @@ export function createRuntimeEnvironmentStatusOwner(
     pause: () => void
   }
 ): RuntimeHostStatusOwner {
-  const connection = resolveRuntimeEnvironmentConnection(userDataPath, environment)
+  const connection = getPreferredPairedRuntimeConnection(environment)
   let evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
   return new RuntimeHostStatusOwner({
     environmentId: environment.id,
@@ -94,7 +97,7 @@ export function createRuntimeEnvironmentStatusOwner(
           'supported'
           ? transport.request(signal)
           : sendRemoteRuntimeRequest<RuntimeStatus>(
-              connection,
+              resolveRuntimeEnvironmentConnection(userDataPath, environment),
               'status.get',
               undefined,
               15_000,
