@@ -56,6 +56,11 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     return
   }
   scope.term.options.fontSize = px
+  refitGridToHostFrame(scope, 'text-scale')
+}
+
+/** Resizes the grid to the host frame at the cell metrics xterm lays out next frame. */
+export function refitGridToHostFrame(scope: TerminalDocumentScope, reason: string) {
   // Fence by generation; scope.term can already refer to a replacement engine.
   const gen = scope.terminalGeneration
   scheduleDocumentFrame(scope, function () {
@@ -77,19 +82,22 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
       )
       if (!fit) {
         // Even below minimum grid width, update fit for the new cells; hidden hosts defer it.
-        applyFitScale(scope, 'text-scale')
+        applyFitScale(scope, reason)
         return
       }
       scope.term.resize(fit.cols, fit.rows)
     }
-    applyFitScale(scope, 'text-scale')
+    applyFitScale(scope, reason)
   })
+}
+
+export function defaultTerminalFontFamily() {
+  return (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
 }
 
 export function startTextScaling(scope: TerminalDocumentScope) {
   scope.currentTextScale = scope.start().textScale
   scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
   scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
-  scope.terminalFontFamily =
-    (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
+  scope.terminalFontFamily = defaultTerminalFontFamily()
 }
