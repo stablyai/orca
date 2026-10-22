@@ -7,7 +7,8 @@ import {
 } from '../sftp-namespace-resolution'
 import {
   createLinkedSshFileTransferSignal,
-  raceSftpFileTransferWithAbort
+  raceSftpFileTransferWithAbort,
+  sftpSessionClosedError
 } from '../ssh-file-transfer-abort'
 import type { RemoteHostPlatform } from '../ssh-remote-platform'
 import {
@@ -145,6 +146,13 @@ async function withLinkedSftpTransfer(
       (signal): signal is AbortSignal => signal !== undefined
     )
   )
+  // Why apart from linkedSignal: a dead session is not a cancel, so the abort race must not see it;
+  // only the transfer does, so it stops and releases its local files.
+  const sessionLoss = new AbortController()
+  const transferSignal = createLinkedSshFileTransferSignal([
+    linkedSignal.signal,
+    sessionLoss.signal
+  ])
   try {
     if (host.usesSystemSshTransport()) {
       await transfer.system(linkedSignal.signal)
@@ -161,22 +169,41 @@ async function withLinkedSftpTransfer(
     }
     sftp.on('error', swallowLateSftpError)
     sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+    // Why: when the connection dies ssh2 ends the session, but a request sent or queued after that
+    // is never answered, and a write stream waits on a CLOSE reply, so the transfer would hang.
+    let sessionLost: (error: Error) => void = () => {}
+    const lostSession = new Promise<never>((_resolve, reject) => {
+      sessionLost = reject
+    })
+    const onSessionClose = (): void => {
+      if (!sftpEndRequested) {
+        const error = sftpSessionClosedError()
+        sessionLost(error)
+        sessionLoss.abort(error)
+      }
+    }
+    sftp.once('close', onSessionClose)
     try {
       // Why: resolve on the same session that transfers — a later one is not authoritative for its namespace.
       const run = (async (): Promise<void> => {
         const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
-        linkedSignal.signal.throwIfAborted()
-        await transfer.sftp(sftp, targetPath, linkedSignal.signal)
+        transferSignal.signal.throwIfAborted()
+        await transfer.sftp(sftp, targetPath, transferSignal.signal)
       })()
-      await raceSftpFileTransferWithAbort(run, linkedSignal.signal, (onClose) => {
-        sftp.once('close', onClose)
-        endSftp()
-        return () => sftp.removeListener('close', onClose)
-      })
+      await Promise.race([
+        raceSftpFileTransferWithAbort(run, linkedSignal.signal, (onClose) => {
+          sftp.once('close', onClose)
+          endSftp()
+          return () => sftp.removeListener('close', onClose)
+        }),
+        lostSession
+      ])
     } finally {
+      sftp.removeListener('close', onSessionClose)
       endSftp()
     }
   } finally {
+    transferSignal.dispose()
     linkedSignal.dispose()
   }
 }

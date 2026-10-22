@@ -41,6 +41,7 @@ import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/ssh-types'
+import { findCollidingEnvironmentName } from '../../../shared/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
 import {
   isForceableOrcadDeferral,
@@ -73,8 +74,12 @@ export async function createManagedOrcadEnvironment(
         throw new Error('The SSH target is owned by a server that is not deployed on it.')
       }
     }
-    if (environments.some((entry) => entry.id !== environmentId && entry.name === args.name)) {
-      throw new Error(`A server named "${args.name}" already exists.`)
+    const namesake = findCollidingEnvironmentName(
+      environments.filter((entry) => entry.id !== environmentId),
+      args.name
+    )
+    if (namesake) {
+      throw new Error(`A server named "${namesake.name}" already exists.`)
     }
     const current = targetStore.getTarget(args.sshTargetId)
     if (args.migration) {
@@ -90,10 +95,10 @@ export async function createManagedOrcadEnvironment(
     await claims.flush(args.signal)
     const targetGeneration = claimed.generation
     if (targetGeneration === undefined) {
-      throw new Error('The managed Orca SSH registration has no durable generation.')
+      throw new Error('The SSH registration for this host’s Orca server has no durable generation.')
     }
     if (registered && getOrcadSshDeployment(registered)?.sshTargetGeneration !== targetGeneration) {
-      throw new Error('The saved managed Orca server has a stale SSH target generation.')
+      throw new Error('The saved Orca server for this host has a stale SSH target generation.')
     }
     let environmentRegistered = false
     try {
@@ -113,14 +118,14 @@ export async function createManagedOrcadEnvironment(
       }
       if (registered) {
         environmentRegistered = true
-        await ensureOrcadManagedTunnel(userDataPath, registered.id)
+        const current = await ensureOrcadManagedTunnel(userDataPath, registered.id)
         const activeVersion = context.activationRecord.active
         if (!activeVersion) {
-          throw new Error('The managed Orca server has no active runtime version.')
+          throw new Error('This host’s Orca server has no active runtime version.')
         }
         return {
           outcome: 'already-current',
-          environment: redactRuntimeEnvironment(registered),
+          environment: redactRuntimeEnvironment(current),
           activeVersion
         }
       }
@@ -192,7 +197,7 @@ async function deployOwnOrcad(
     ...slot,
     localOrcadDir,
     target: context.serverTarget,
-    ...managedOrcadDeployPolicy(context, appVersion, args.force),
+    ...managedOrcadDeployPolicy(context, appVersion, args.force ? 'force' : 'connect'),
     force: args.force,
     appVersion
   })

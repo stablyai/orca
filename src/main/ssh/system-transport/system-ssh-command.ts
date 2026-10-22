@@ -7,7 +7,7 @@ import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
-export type SystemSshProcess = {
+type SystemSshProcess = {
   stdin: NodeJS.WritableStream
   stdout: NodeJS.ReadableStream
   stderr: NodeJS.ReadableStream

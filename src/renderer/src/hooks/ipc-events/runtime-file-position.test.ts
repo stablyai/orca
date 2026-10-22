@@ -3,6 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../store/slices/tabs-drawn-from-main.test-fixture'
 
 const { storeRef } = vi.hoisted(() => {
   const storeRef: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -15,12 +19,24 @@ vi.mock('../../store', () => ({
       testStore().subscribe(...args)
   }
 }))
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
 
 const MAIN = 'repo1::/repo1/main'
 const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
 const frames: FrameRequestCallback[] = []
 let unsubs: (() => void)[] = []
+let main: TabsDrawnFromMain | null = null
 
 beforeEach(() => {
   Object.defineProperty(window, 'api', { value: createStoreSessionMockApi(), configurable: true })
@@ -32,6 +48,8 @@ beforeEach(() => {
     '<button id="main">Main</button><div data-floating-terminal-panel><button id="floating">Floating</button></div>'
 })
 afterEach(() => {
+  main?.close()
+  main = null
   unsubs.forEach((unsubscribe) => unsubscribe())
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
@@ -47,7 +65,7 @@ function testStore(): ReturnType<typeof createTestStore> {
   }
   return storeRef.current
 }
-function setup(open = true) {
+async function setup(open = true) {
   const store = createTestStore()
   storeRef.current = store
   seedStore(store, {
@@ -57,6 +75,7 @@ function setup(open = true) {
     worktreesByRepo: { repo1: [makeWorktree({ id: MAIN, repoId: 'repo1', path: '/repo1/main' })] }
   })
   store.getState().setActiveWorktree(MAIN)
+  main = await drawTabsFromMain(store)
   const fileId = store.getState().openFile({
     filePath: '/tmp/floating/app.ts',
     relativePath: 'app.ts',
@@ -65,6 +84,8 @@ function setup(open = true) {
     runtimeEnvironmentId: null,
     mode: 'edit'
   })
+  // A layout-owner build draws the editor tab from main's frame.
+  await main.settle()
   const position = createRuntimeFilePositionQueue(unsubs)
   return { store, fileId, position }
 }
@@ -72,16 +93,16 @@ function focus(surface: 'main' | 'floating'): void {
   document.getElementById(surface)?.focus()
 }
 
-it('reveals the selected floating editor without selecting its workspace in the main window', () => {
-  const { store, fileId, position } = setup()
+it('reveals the selected floating editor without selecting its workspace in the main window', async () => {
+  const { store, fileId, position } = await setup()
   position(fileId, { line: 300, column: 7 }, true)
   flushFrames()
   expect(store.getState().activeWorktreeId).toBe(MAIN)
   expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 300, column: 7 })
 })
 
-it('waits for an asynchronously revealed floating panel', () => {
-  const { store, fileId, position } = setup(false)
+it('waits for an asynchronously revealed floating panel', async () => {
+  const { store, fileId, position } = await setup(false)
   position(fileId, { line: 300, column: 7 }, true)
   flushFrames()
   expect(store.getState().pendingEditorReveal).toBeNull()
@@ -90,8 +111,8 @@ it('waits for an asynchronously revealed floating panel', () => {
   expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 300, column: 7 })
 })
 
-it('keeps a background floating position deferred until the panel owns keyboard input', () => {
-  const { store, fileId, position } = setup()
+it('keeps a background floating position deferred until the panel owns keyboard input', async () => {
+  const { store, fileId, position } = await setup()
   focus('main')
   position(fileId, { line: 17 }, false)
   flushFrames()
@@ -101,8 +122,8 @@ it('keeps a background floating position deferred until the panel owns keyboard 
   expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 17 })
 })
 
-it('does not publish after keyboard input moves from the panel to the main surface', () => {
-  const { store, fileId, position } = setup()
+it('does not publish after keyboard input moves from the panel to the main surface', async () => {
+  const { store, fileId, position } = await setup()
   focus('floating')
   position(fileId, { line: 17 }, true)
   focus('main')
@@ -113,8 +134,8 @@ it('does not publish after keyboard input moves from the panel to the main surfa
   expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 17 })
 })
 
-it('cancels a published reveal after an outside click even if DOM focus does not change', () => {
-  const { store, fileId, position } = setup()
+it('cancels a published reveal after an outside click even if DOM focus does not change', async () => {
+  const { store, fileId, position } = await setup()
   focus('main')
   position(fileId, { line: 17 }, true)
   flushFrames()
@@ -125,8 +146,8 @@ it('cancels a published reveal after an outside click even if DOM focus does not
   expect(document.activeElement?.id).toBe('main')
 })
 
-it('does not reclaim input when an asynchronously revealed panel opens after an outside click', () => {
-  const { store, fileId, position } = setup(false)
+it('does not reclaim input when an asynchronously revealed panel opens after an outside click', async () => {
+  const { store, fileId, position } = await setup(false)
   position(fileId, { line: 17 }, true)
   document.getElementById('main')?.dispatchEvent(new Event('pointerdown', { bubbles: true }))
   store.setState({ floatingWorkspacePanelOpen: true })
@@ -134,8 +155,8 @@ it('does not reclaim input when an asynchronously revealed panel opens after an 
   expect(store.getState().pendingEditorReveal).toBeNull()
 })
 
-it('invalidates a published floating reveal when the panel closes or is disabled', () => {
-  const { store, fileId, position } = setup()
+it('invalidates a published floating reveal when the panel closes or is disabled', async () => {
+  const { store, fileId, position } = await setup()
   position(fileId, { line: 17 }, true)
   flushFrames()
   const reveal = store.getState().pendingEditorReveal
@@ -151,8 +172,8 @@ it('invalidates a published floating reveal when the panel closes or is disabled
   expect(reveal?.canApply?.()).toBe(false)
 })
 
-it('keeps floating input ownership independent of an unrelated main workspace selection', () => {
-  const { store, fileId, position } = setup()
+it('keeps floating input ownership independent of an unrelated main workspace selection', async () => {
+  const { store, fileId, position } = await setup()
   focus('floating')
   position(fileId, { line: 300, column: 7 }, true)
   flushFrames()
@@ -163,8 +184,8 @@ it('keeps floating input ownership independent of an unrelated main workspace se
   expect(reveal?.canApply?.()).toBe(true)
 })
 
-it('scopes the floating reveal to its selected split pane', () => {
-  const { store, fileId, position } = setup()
+it('scopes the floating reveal to its selected split pane', async () => {
+  const { store, fileId, position } = await setup()
   const tab = store.getState().getActiveTab(FLOATING)
   if (!tab) {
     throw new Error('Floating editor missing')
@@ -188,8 +209,8 @@ it('scopes the floating reveal to its selected split pane', () => {
   expect(reveal?.canApply?.()).toBe(false)
 })
 
-it('disposes floating DOM listeners and invalidates an already published reveal', () => {
-  const { store, fileId, position } = setup()
+it('disposes floating DOM listeners and invalidates an already published reveal', async () => {
+  const { store, fileId, position } = await setup()
   position(fileId, { line: 17 }, true)
   flushFrames()
   const reveal = store.getState().pendingEditorReveal

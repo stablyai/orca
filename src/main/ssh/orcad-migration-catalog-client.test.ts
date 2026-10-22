@@ -115,7 +115,12 @@ describe('remote orcad migration catalog client', () => {
                 { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
               ]
             }
-          : { groups: [{ id: 'g', name: 'G', parentGroupId: null }, { id: 'h' }] }
+          : {
+              groups: [
+                { id: 'g', name: 'G', parentGroupId: null },
+                { id: 'h', executionHostId: 'ssh:other' }
+              ]
+            }
     }))
     await expect(listRemoteOrcadFolderCatalog(pairingCode)).resolves.toEqual({
       folderWorkspaces: [
@@ -124,7 +129,7 @@ describe('remote orcad migration catalog client', () => {
       ],
       projectGroups: [
         { id: 'g', parentGroupId: null },
-        { id: 'h', parentGroupId: null }
+        { id: 'h', parentGroupId: null, executionHostId: 'ssh:other' }
       ]
     })
     expect(sendRequest.mock.calls.map((call) => call[1]).sort()).toEqual([

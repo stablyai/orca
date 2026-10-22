@@ -10,7 +10,7 @@ import {
   wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
 // Why: bracketed paste markers let supported TUIs treat generated prompt text

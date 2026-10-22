@@ -19,7 +19,7 @@ import type { Store } from '../persistence'
 
 export type OrcadMigrationSnapshotSource = Pick<Store, 'readOrcadMigrationSourceSnapshotChunk'>
 
-export type OrcadMigrationSnapshotDestination = {
+type OrcadMigrationSnapshotDestination = {
   readState: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest

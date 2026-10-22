@@ -73,7 +73,9 @@ export function clientEventStreamMountAdapters(
               fetchWorktrees: fetching('fetchWorktrees'),
               fetchRepoMetadata: fetching('fetchRepoMetadata'),
               // The view-settings family records its own reads.
-              syncViewSettings: () => Promise.resolve()
+              syncViewSettings: () => Promise.resolve(),
+              // As the native substitutes stand AppState in: foregrounded, no transitions.
+              appState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
             })
             return
           }

@@ -236,7 +236,12 @@ export class BrowserRouteSessionRegistry {
     proxyEndpoint: ProxyEndpoint
   ): void {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
-      throw new Error('browser_route_partition_binding_conflict')
+      // Why: a re-paired server's binding follows its new pairing while its jar is still open;
+      // the persisted binding, not the fingerprint seen at open, decides who owns the jar.
+      if (this.dependencies.bindingStore.get(derived.partition) !== derived.bindingFingerprint) {
+        throw new Error('browser_route_partition_binding_conflict')
+      }
+      state.bindingFingerprint = derived.bindingFingerprint
     }
     if (!sameBrowserRouteProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
       throw new Error('browser_route_partition_proxy_retarget')

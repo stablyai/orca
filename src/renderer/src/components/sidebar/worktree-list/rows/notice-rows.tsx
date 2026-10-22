@@ -120,7 +120,10 @@ export function renderPendingCreationVirtualRow(args: {
       measureVirtualRowElement={args.measureVirtualRowElement}
       className="absolute left-0 right-0 top-0 px-2 pb-1.5"
     >
-      <PendingWorktreeRow creationId={args.row.creationId} />
+      <PendingWorktreeRow
+        creationId={args.row.creationId}
+        repoName={args.row.repo?.displayName ?? null}
+      />
     </NoticeRowFrame>
   )
 }

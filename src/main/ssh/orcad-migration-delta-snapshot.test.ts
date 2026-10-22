@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
@@ -72,7 +72,7 @@ beforeEach(() => {
   sshStore = new SshConnectionStore(store as never)
   mocks.state.targetStore = sshStore
   destination = fakeOrcadMigrationDestination()
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.deploy.mockImplementation(async (path: string, args: { name: string }) => {
     const id = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))!
     if (!listEnvironments(path).some((entry) => entry.id === id)) {
@@ -158,12 +158,11 @@ function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
     claims: sshStore.getOrcadRuntimeClaims(),
     target: store.getSshTarget(TARGET.id)!,
     environment: listEnvironments(userDataPath)[0]!,
-    destination,
+    connectDestination: async () => destination,
     censusHost: async () => {
       whileChecking()
       return { verdict: 'exited', count: 0 }
     },
-    ensureTunnel: async () => {},
     runTargetLifecycle,
     now
   })

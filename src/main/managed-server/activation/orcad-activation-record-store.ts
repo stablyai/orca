@@ -30,7 +30,7 @@ type ActivationRecordTarget = {
   signal?: AbortSignal
 }
 
-export function orcadActivationPath(host: RemoteHostPlatform, remoteHome: string): string {
+function orcadActivationPath(host: RemoteHostPlatform, remoteHome: string): string {
   return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, ORCAD_ACTIVATION_FILENAME)
 }
 

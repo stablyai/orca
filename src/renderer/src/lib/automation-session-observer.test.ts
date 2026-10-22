@@ -175,6 +175,28 @@ describe('observeExistingAutomationSession', () => {
     expect(onExit).toHaveBeenCalledWith(UNVERIFIED_PROCESS_EXIT_CODE)
   })
 
+  it('aborts the remote exit wait and closes the stream on dispose', async () => {
+    const closeStream = vi.fn()
+    mockSubscribeTerminal.mockResolvedValue({ close: closeStream })
+    const { observeExistingAutomationSession } = await import('./automation-session-observer')
+
+    const dispose = await observeExistingAutomationSession({
+      ptyId: 'remote:env-1@@terminal-9',
+      paneKey: PANE_KEY,
+      runId: 'run-1',
+      onData: vi.fn(),
+      onAgentStatus: vi.fn(),
+      onExit: vi.fn()
+    })
+    const waitSignal: AbortSignal | undefined = mockCallRuntimeRpc.mock.calls[0]?.[3]?.signal
+    expect(waitSignal?.aborted).toBe(false)
+
+    dispose()
+
+    expect(waitSignal?.aborted).toBe(true)
+    expect(closeStream).toHaveBeenCalledOnce()
+  })
+
   it('still forwards a status the runtime host did report', async () => {
     state.terminalLayoutsByTabId = {
       'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-9' } }

@@ -1,5 +1,7 @@
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReference,
+  OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
@@ -16,6 +18,8 @@ type OrcadMigrationCatalogCommitStore = OrcadMigrationCatalogFlushStore &
   Partial<Pick<Store, 'commitStagedOrcadMigrationCatalog' | 'installOrcadMigrationReceivedBlobs'>>
 type OrcadMigrationCatalogAbortStore = OrcadMigrationCatalogFlushStore &
   Partial<Pick<Store, 'abortStagedOrcadMigrationCatalog'>>
+type OrcadMigrationCatalogAbortByReferenceStore = OrcadMigrationCatalogFlushStore &
+  Partial<Pick<Store, 'abortStagedOrcadMigrationCatalogByReference'>>
 
 export async function stageOrcadMigrationCatalogDurably(args: {
   store: OrcadMigrationCatalogStageStore
@@ -69,6 +73,20 @@ export async function abortStagedOrcadMigrationCatalogDurably(args: {
   // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
   const result = args.store.abortStagedOrcadMigrationCatalog!(args.manifest)
   // An already-absent retry may follow an in-memory abort whose flush failed.
+  if (result.state === 'absent') {
+    await flushMigrationState(args.store, args.signal)
+    return { ...result, durableAbsent: true }
+  }
+  return result
+}
+
+export async function abortStagedOrcadMigrationCatalogByReferenceDurably(args: {
+  store: OrcadMigrationCatalogAbortByReferenceStore
+  reference: OrcadMigrationCatalogReference
+  signal?: AbortSignal
+}): Promise<OrcadMigrationCatalogReferenceAbortResult> {
+  // SAFETY: Returned or mutable Store slots retain their original native missing-method failure.
+  const result = args.store.abortStagedOrcadMigrationCatalogByReference!(args.reference)
   if (result.state === 'absent') {
     await flushMigrationState(args.store, args.signal)
     return { ...result, durableAbsent: true }

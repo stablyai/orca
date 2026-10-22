@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   move: vi.fn(),
   keep: vi.fn(async () => {}),
   publish: vi.fn(),
+  ensure: vi.fn(),
+  destinationFor: vi.fn((_environment: unknown) => ({})),
   target: {
     id: 'ssh-1',
     label: 'Box',
@@ -30,10 +32,10 @@ vi.mock('../../ssh/orcad-migration-delta-move', () => ({
   keepOrcadServerVersion: mocks.keep
 }))
 vi.mock('../../managed-server/lifecycle/orcad-runtime-conversion-wiring', () => ({
-  orcadMigrationDestinationFor: () => ({})
+  orcadMigrationDestinationFor: mocks.destinationFor
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
-  ensureOrcadManagedTunnel: vi.fn()
+  ensureOrcadManagedTunnel: mocks.ensure
 }))
 vi.mock('../ssh/ssh-session-teardown', () => ({
   disconnectRegisteredSshTarget: vi.fn()
@@ -56,6 +58,22 @@ describe('resolving a host an older build changed', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     registerOrcadDeltaMoveHandlers(() => '/tmp/user-data')
+  })
+
+  it('builds the destination from the pairing the tunnel stands on after opening', async () => {
+    // The tunnel re-paired over SSH while it opened.
+    const repaired = { id: 'env-1', pairingRevision: 2 }
+    mocks.ensure.mockResolvedValue(repaired)
+    const destination = { committed: true }
+    mocks.destinationFor.mockReturnValue(destination)
+    mocks.move.mockImplementation(async (args: { connectDestination: () => Promise<unknown> }) => {
+      await expect(args.connectDestination()).resolves.toBe(destination)
+      return { outcome: 'moved', migrationId: 'm-1' }
+    })
+    await expect(
+      handler('runtimeEnvironments:moveOrcadDelta')(null, { sshTargetId: 'ssh-1' })
+    ).resolves.toMatchObject({ outcome: 'moved' })
+    expect(mocks.destinationFor).toHaveBeenCalledExactlyOnceWith(repaired)
   })
 
   it('refreshes the host status once the move lands, and not when it is refused', async () => {

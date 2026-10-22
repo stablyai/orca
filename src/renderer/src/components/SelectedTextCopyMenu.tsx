@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type SelectedTextCopyMenuProps = {
   children: React.ReactNode
@@ -57,14 +58,14 @@ export function SelectedTextCopyMenu({
     }
 
     window.addEventListener('pointerdown', close)
-    window.addEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('scroll', close, true)
     // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
     // no dimensions — the menu would close on every window restore.
     const removeViewportListener = addViewportSizeChangeListener(close)
     return () => {
       window.removeEventListener('pointerdown', close)
-      window.removeEventListener('keydown', handleKeyDown, true)
+      removeAppKeyListener('keydown', handleKeyDown)
       window.removeEventListener('scroll', close, true)
       removeViewportListener()
     }

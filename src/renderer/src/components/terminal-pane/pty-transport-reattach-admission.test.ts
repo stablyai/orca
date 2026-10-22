@@ -108,13 +108,12 @@ describe('createIpcPtyTransport', () => {
     const discardedId = 'removed-worktree@@discarded-session'
     discardPreHandlerPtyState(discardedId)
 
-    await createIpcPtyTransport({ cwdFallback: 'worktree' }).connect({
+    await createIpcPtyTransport({}).connect({
       url: '',
       sessionId: discardedId,
       callbacks: {}
     })
 
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ cwdFallback: 'worktree' }))
     expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ sessionId: discardedId }))
     clearPreHandlerPtyState(discardedId)
   })

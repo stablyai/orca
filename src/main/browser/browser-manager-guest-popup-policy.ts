@@ -15,6 +15,7 @@ import {
   isNativeBrowserPopupRequest
 } from './browser-popup-native-window'
 import { isBrowserRouteGuestPopup } from './browser-route-guest-popup-ownership'
+import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
@@ -27,7 +28,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       }
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features }) => {
+    guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
       // Why: as in Chrome, every open spends the click, so a popup's click cannot fund a later tab.
       const clicked = gesture.consume()
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
@@ -86,7 +87,6 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         if (isNativeBrowserPopupRequest({ disposition, features, frameName })) {
           return allowNativeBrowserPopup({
             opener: guest,
-            targetUrl: url,
             options: SAFE_POPUP_WINDOW_OPTIONS,
             background: disposition === 'background-tab',
             canPresent: () => Boolean(this.resolvePopupOwnerContext(guest.id)),
@@ -115,7 +115,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           origin: safeOrigin(externalUrl),
           action: 'opened-external'
         })
-      } else {
+      } else if (!this.requestExternalAppLaunch(guest, url, () => referrer.url || null)) {
         // Why: popup URLs can carry auth redirects/one-time tokens; surface only sanitized origin metadata.
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(url),
@@ -133,6 +133,21 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         // guest may already be destroyed
       }
     }
+  }
+
+  /** Every route from a page into another app ends here, so they all share one prompt. */
+  requestExternalAppLaunch(
+    guest: Electron.WebContents,
+    rawUrl: string | undefined,
+    requestingUrl: () => string | null
+  ): boolean {
+    // Why: the top page's URL would credit an embedded frame's request to the site the user trusts.
+    return requestBrowserExternalAppLaunch({
+      requester: guest,
+      target: this.resolvePagePromptTarget(guest),
+      rawUrl,
+      requestingUrl
+    })
   }
 
   /** The tab loads the URL itself, so Chromium's page ends before its first request. */

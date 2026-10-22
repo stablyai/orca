@@ -3,6 +3,9 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import { collectTabGroupLayoutGroupIds } from '../../shared/workspace-layout/tab-group-moves'
+import { isStructuredAgentSessionHostTabId } from '../../shared/structured-agent-session-host-tab-id'
 import {
   collectHeadlessParentTabOrder,
   getHeadlessMobileSessionGroupId
@@ -53,13 +56,62 @@ export function getMobileSessionSnapshotTabIdentityKeys(
   return [tab.id]
 }
 
+/** The ids a group tab order may name this tab by. */
+export function getMobileSessionTabOrderIds(tab: RuntimeMobileSessionSnapshotTab): string[] {
+  if (tab.type === 'terminal') {
+    return [tab.id, tab.parentTabId]
+  }
+  if (tab.type === 'browser') {
+    return [tab.id, tab.browserWorkspaceId]
+  }
+  return [tab.id]
+}
+
+/**
+ * The tab strip in the order a desktop client draws it: groups left to right, each in its tab
+ * order. Stable, so split panes keep their order and tabs no group lists stay last.
+ */
+export function orderMobileSessionTabsByGroups<T extends RuntimeMobileSessionSnapshotTab>(
+  tabs: readonly T[],
+  groups: readonly RuntimeMobileSessionTabGroup[],
+  layout: TabGroupLayoutNode | null | undefined
+): T[] {
+  const groupRank = [...collectTabGroupLayoutGroupIds(layout)]
+  const rankOfGroup = (group: RuntimeMobileSessionTabGroup): number => {
+    const rank = groupRank.indexOf(group.id)
+    return rank === -1 ? Number.POSITIVE_INFINITY : rank
+  }
+  const orderedGroups = groups.toSorted((a, b) => compareRanks(rankOfGroup(a), rankOfGroup(b)))
+  const rankById = new Map<string, number>()
+  for (const tabId of orderedGroups.flatMap((group) => group.tabOrder)) {
+    if (!rankById.has(tabId)) {
+      rankById.set(tabId, rankById.size)
+    }
+  }
+  const rankOf = (tab: T): number =>
+    Math.min(
+      ...getMobileSessionTabOrderIds(tab).map((id) => rankById.get(id) ?? Number.POSITIVE_INFINITY)
+    )
+  return tabs
+    .map((tab) => ({ tab, rank: rankOf(tab) }))
+    .toSorted((a, b) => compareRanks(a.rank, b.rank))
+    .map(({ tab }) => tab)
+}
+
+// Why not subtraction: unranked entries are Infinity, and Infinity - Infinity is NaN.
+function compareRanks(a: number, b: number): number {
+  return a === b ? 0 : a < b ? -1 : 1
+}
+
 export function mergeMobileSessionTabGroups(
   worktreeId: string,
   groups: readonly RuntimeMobileSessionTabGroup[],
-  terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
+  tabs: readonly RuntimeMobileSessionSnapshotTab[],
   activeTab: RuntimeMobileSessionTerminalTab | null
 ): RuntimeMobileSessionTabGroup[] {
-  const parentTabOrder = collectHeadlessParentTabOrder(terminalTabs)
+  const parentTabOrder = collectHeadlessParentTabOrder(
+    tabs.filter((tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal')
+  )
   if (parentTabOrder.length === 0) {
     return [...groups]
   }
@@ -84,7 +136,13 @@ export function mergeMobileSessionTabGroups(
       ownerGroupId.set(tabId, group.id)
     }
   }
-  const liveTabIds = new Set(parentTabOrder)
+  // Why: chats, editors and browsers keep the place the publisher gave them; only terminals are
+  // placed here. A window lists a chat before main restores its row, and closing one removes its
+  // id, so a listed chat id holds its place even without a row.
+  const liveTabIds = new Set([
+    ...tabs.flatMap(getMobileSessionTabOrderIds),
+    ...groups.flatMap((group) => group.tabOrder.filter(isStructuredAgentSessionHostTabId))
+  ])
   const activeParentId = activeTab?.parentTabId ?? null
   const activeGroupId =
     (activeParentId ? ownerGroupId.get(activeParentId) : undefined) ?? nextGroups[0]!.id

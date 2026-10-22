@@ -89,7 +89,7 @@ describe('OrcaRuntimeService', () => {
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.terminalTitle).toBeUndefined()
   })
 
-  it('publishes a renamed tab over the live agent title, and the live title once cleared', async () => {
+  it("publishes the desktop's tab name over the live agent title, and the live title without one", async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'renamed-pty' }),
@@ -100,7 +100,10 @@ describe('OrcaRuntimeService', () => {
     const leafId = HEADLESS_LEAF_ID
     await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { tabId: 'renamed-tab', leafId })
     runtime.attachWindow(1)
-    const publish = (snapshotVersion: number, customTitle: string | null) =>
+    const publish = (
+      snapshotVersion: number,
+      names: { customTitle: string | null; generatedTitle?: string }
+    ) =>
       runtime.syncWindowGraph(1, {
         tabs: [
           {
@@ -127,20 +130,25 @@ describe('OrcaRuntimeService', () => {
                 parentTabId: 'renamed-tab',
                 leafId,
                 title: '✳ Claude Code',
-                customTitle,
+                ...names,
                 isActive: true
               }
             ]
           }
         ]
       })
-    publish(1, 'Build fixer')
+    publish(1, { customTitle: 'Build fixer' })
     runtime.onPtyData('renamed-pty', '\x1b]0;⠂ Claude Code\x07', 124)
 
     const renamed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(renamed.tabs[0]).toEqual(expect.objectContaining({ title: 'Build fixer' }))
 
-    publish(2, null)
+    // #30538: a generated name the desktop shows outranks every OSC frame, as it does there.
+    publish(2, { customTitle: null, generatedTitle: 'Fix tab titles' })
+    const generated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(generated.tabs[0]).toEqual(expect.objectContaining({ title: 'Fix tab titles' }))
+
+    publish(3, { customTitle: null })
     const cleared = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(cleared.tabs[0]).toEqual(expect.objectContaining({ title: '⠂ Claude Code' }))
   })

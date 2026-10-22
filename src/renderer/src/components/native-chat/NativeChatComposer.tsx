@@ -127,6 +127,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       caret,
       recalledFromHistory: recall.active,
       disabled,
+      isComposing: imeEnterGesture.isComposing,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
@@ -199,8 +200,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,
+      isComposing: imeEnterGesture.isComposing,
       caret,
-      draft,
       setDraft,
       setCaret,
       setActiveSuggestion,
@@ -375,7 +376,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         isWorking={isWorking}
         isStopping={isStopping}
         afterStop={afterStop}
-        attachDisabled={disabled}
+        attachDisabled={
+          disabled ||
+          (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
+        }
         dictationDisabled={dictation.dictationDisabled}
         isDictating={dictation.isDictating}
         isDictationHoldMode={dictation.isDictationHoldMode}

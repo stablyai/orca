@@ -20,6 +20,7 @@ import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -139,6 +140,14 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       requireWriteSettlement?: true
     }
   ): Promise<RuntimeTerminalSend> {
+    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
+    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? this.startRestoredHandlePane(handle, { signal: options.signal })
+      : null
+    if (starting) {
+      const target = await starting
+      return { ...(await this.sendTerminal(target, action, options)), handle }
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
@@ -213,6 +222,14 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         prompt,
         agentPromptTakesLeadLine(agent) ? options.leadLine : undefined
       )
+    }
+    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
+    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? this.startRestoredHandlePane(handle, { signal: options.signal })
+      : null
+    if (starting) {
+      const target = await starting
+      return { ...(await this.sendTerminalAgentPrompt(target, prompt, options)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

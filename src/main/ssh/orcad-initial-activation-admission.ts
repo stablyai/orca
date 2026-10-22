@@ -14,7 +14,7 @@ import { orcadWindowsSlotOpCommand } from '../managed-server/install/orcad-remot
 
 const OWNER_RECORD_MAX_BYTES = 64 * 1024
 
-export type OrcadInitialActivationAdmission =
+type OrcadInitialActivationAdmission =
   | { decision: 'proceed' }
   | { decision: 'defer'; code: string; reason: string }
 
@@ -83,7 +83,7 @@ export function parseInitialOrcadActivationAdmission(
       code: 'orcad_initial_runtime_live',
       reason:
         `An unmanaged runtime owner is still live according to ${live[1]} (pid ${live[2]}). ` +
-        'Stop that Orca runtime before converting this data root to managed orcad.'
+        'Stop that Orca runtime before converting this data root to Orca’s server on the host.'
     }
   }
   const record = /^UNVERIFIABLE ([^ ]+)$/u.exec(result)?.[1] ?? 'owner record'

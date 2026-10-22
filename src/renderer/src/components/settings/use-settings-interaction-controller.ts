@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
@@ -50,6 +50,8 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     updateSettingsOrThrow
   } = model
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
+  // Why state as well as the ref: windowed lists need a re-render once the scroller attaches.
+  const [contentScrollElement, setContentScrollElement] = useState<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const installedFontsLoadedRef = useRef(false)
   const installedFontsLoadPromiseRef = useRef<Promise<void> | null>(null)
@@ -110,6 +112,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   const setContentScrollNode = useCallback((node: HTMLDivElement | null): void => {
     contentScrollRef.current = node
+    setContentScrollElement(node)
     if (node !== null) {
       return
     }
@@ -209,6 +212,7 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   return {
     contentScrollRef,
+    contentScrollElement,
     searchInputRef,
     pendingNavSectionRef,
     pendingScrollTargetRef,

@@ -16,9 +16,11 @@ import {
   closeRemoteRuntimeRequestConnection,
   ensureRemoteRuntimeSharedControlConnection,
   getRemoteRuntimeSharedControlDiagnostics,
+  isRemoteRuntimeConnectionReady,
   pauseRemoteRuntimeSharedControlRetry,
   reconnectRemoteRuntimeSharedControlConnection,
   sendRemoteRuntimeSharedControlRequest,
+  sendRemoteRuntimeSharedControlRequestOnRuntime,
   subscribeRemoteRuntimeSharedControlRequest
 } from './runtime-environment-request-connections'
 import { getRemoteRuntimeSharedControlAnsweredAt } from './runtime-environment-shared-control-answers'
@@ -38,7 +40,16 @@ describe('runtime environment shared-control connection cache', () => {
     ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
     ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
     reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
-    await waitFor(() => server.connectionCount() === 1)
+    await waitFor(() => isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, server.pairing))
+    expect(isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, server.pairing)).toBe(true)
+    expect(
+      isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, {
+        ...server.pairing,
+        endpoint: 'ws://127.0.0.1:1'
+      })
+    ).toBe(false)
+    expect(server.connectionCount()).toBe(1)
+    expect(server.requests).toHaveLength(0)
 
     server.closeClients()
     await waitFor(
@@ -145,6 +156,31 @@ describe('runtime environment shared-control connection cache', () => {
     await waitFor(() => server.connectionCount() === 2)
     subscription.close()
   })
+
+  it.each([
+    ['the probed runtime', 'runtime-a', true],
+    ['a replacement runtime behind the same endpoint', 'runtime-b', false]
+  ])(
+    'sends a runtime-pinned call only when its socket reached %s',
+    async (_label, reached, sent) => {
+      const server = await createSharedControlTestServer({
+        resultForRequest: (method) =>
+          method === 'status.get' ? { runtimeId: reached } : { method }
+      })
+
+      const response = await sendRemoteRuntimeSharedControlRequestOnRuntime(
+        ENVIRONMENT_ID,
+        server.pairing,
+        'files.write',
+        { relativePath: 'a.ts' },
+        1000,
+        'runtime-a'
+      )
+
+      expect(response === null).toBe(!sent)
+      expect(server.requests.some((request) => request.method === 'files.write')).toBe(sent)
+    }
+  )
 })
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {

@@ -11,7 +11,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 /**
  * The in-page hop the sidebar makes, in a browser, under the grants the session actually has.

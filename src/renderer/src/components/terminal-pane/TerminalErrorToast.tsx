@@ -34,6 +34,8 @@ const STALE_DAEMON_CWD_MARKERS = [
 ]
 // Thrown by ipc/pty.ts when a persisted pane owner can't be proven alive or dead (STA-3536).
 const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
+// Main lost the pane to another connection twice in one attach, or an older host never retries.
+const PANE_OWNER_CHANGED_MARKER = 'terminal_pane_owner_changed'
 // remote-runtime-pty-transport.ts surfaces this English literal as a wire-level marker, so it is
 // translated here rather than at the source -- otherwise the banner mixes English with the
 // localized chrome around it (#9194).
@@ -108,6 +110,18 @@ export function isPaneOwnerUnverifiedError(error: string): boolean {
   return lines.length > 0 && lines.every((line) => line.includes(PANE_OWNER_UNVERIFIED_MARKER))
 }
 
+/** Owner errors a reattach can recover from: the saved session is kept, and Retry asks again. */
+export function isPaneOwnerRecoveryError(error: string): boolean {
+  const lines = error.split('\n').filter((line) => line.length > 0)
+  return (
+    lines.length > 0 &&
+    lines.every(
+      (line) =>
+        line.includes(PANE_OWNER_UNVERIFIED_MARKER) || line.includes(PANE_OWNER_CHANGED_MARKER)
+    )
+  )
+}
+
 function humanizeUnreattachableSession(error: string): string {
   const explanation = translate(
     'auto.components.terminal.pane.TerminalErrorToast.sessionUnavailable',
@@ -156,6 +170,12 @@ export function humanizeTerminalError(error: string): string {
         )
     humanized = humanized.replaceAll(PANE_OWNER_UNVERIFIED_MARKER, () => explanation)
   }
+  humanized = humanized.replaceAll(PANE_OWNER_CHANGED_MARKER, () =>
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.ownerUnknown',
+      "Orca couldn't verify this terminal's owner."
+    )
+  )
   humanized = humanized.replace(SOURCE_RESTORE_REQUIRED.replaceAll, () =>
     translate(
       'auto.components.terminal.pane.TerminalErrorToast.sourceRestoring',
@@ -218,7 +238,7 @@ export function TerminalErrorToast({
   const ssh = isSshHostStateTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
   const showClientEnvironment = paneOnClient && !ssh
-  const paneOwnerUnverified = isPaneOwnerUnverifiedError(error)
+  const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =

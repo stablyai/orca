@@ -19,16 +19,42 @@ import {
   type WorkspaceLayout
 } from './workspace-layout-model'
 import { tabExecutionHostId } from './workspace-layout-tab-host'
+import type { LayoutEditorView } from './layout-editor-view'
 
 export type PublishedPane = {
   leafId: string
   /** The terminal the pane shows; absent while unbound. */
   ptyId?: string
+  /** Rises on each pty bind, retire and rollback of the pane in this process (a same-id respawn too). */
+  ptyGeneration?: number
   title?: string
   /** The title the pane's terminal shows now. Live state, never saved; the tab's title stays each
    *  view's choice, since it follows that view's focused pane. */
   liveTitle?: string
+  /** Main's start of the pane's terminal, while it has none: live state, never saved. */
+  status?: PaneStartStatus
+  /** Why a start failed or is held, for the pane's card. */
+  statusReason?: string
+  /** Whether main's start of the pane's terminal resumed its agent: live state, never saved, and
+   *  only while the pane keeps that terminal. Absent from older hosts and from plain starts. */
+  resumeOutcome?: PaneResumeOutcome
 }
+
+/** 'restored': main's start resumed the pane's agent. 'resume-unavailable': it could not verify the
+ *  agent's session, so a fresh one runs instead. */
+export type PaneResumeOutcome = 'restored' | 'resume-unavailable'
+
+/**
+ * Why the pane shows no live terminal. A pane with a ptyId and no status shows that live terminal;
+ * with a status, its ptyId is only the terminal it restores from, so no view attaches it yet.
+ * - 'starting': main is starting the pane's terminal.
+ * - 'failed': the start failed; the pane stays.
+ * - 'sleeping': nothing runs; main starts it (resuming its agent, if it had one) on first view or
+ *   the first command that needs it.
+ * - 'resuming': main is starting it from its saved terminal or agent.
+ * - 'held': a newer Orca build's terminal service may still run it, so main will not start it.
+ */
+export type PaneStartStatus = 'starting' | 'failed' | 'sleeping' | 'resuming' | 'held'
 
 export type PublishedTerminal = {
   root: TerminalPaneLayoutNode | null
@@ -59,6 +85,8 @@ export type PublishedTab = {
   isPreview?: boolean
   agentSessionAgent?: AgentType
   terminal?: PublishedTerminal
+  /** What a non-plain editor tab shows, so a window lacking its open file can rebuild it. */
+  editorView?: LayoutEditorView
 }
 
 export type PublishedEditorFile = Pick<
@@ -87,6 +115,35 @@ export type PublishedWorkspaceLayout = {
   browserTabs: PublishedBrowserTab[]
 }
 
+/** An editor tab's view as main publishes it. */
+export function publishEditorView(editorView: LayoutEditorView): LayoutEditorView {
+  const { file } = editorView
+  return {
+    view: editorView.view,
+    file: {
+      filePath: file.filePath,
+      relativePath: file.relativePath,
+      language: file.language,
+      ...pickStoredFields(file, ['runtimeEnvironmentId', 'externalSshTargetId', 'readOnly'])
+    }
+  }
+}
+
+/** An editor file record as main publishes it. */
+export function publishEditorFile(file: LayoutEditorFile): PublishedEditorFile {
+  return {
+    filePath: file.filePath,
+    relativePath: file.relativePath,
+    language: file.language,
+    ...pickStoredFields(file, [
+      'readOnly',
+      'liveTail',
+      'runtimeEnvironmentId',
+      'externalSshTargetId'
+    ])
+  }
+}
+
 function publishTab(
   tab: LayoutTab,
   workspace: WorkspaceLayout,
@@ -110,10 +167,17 @@ function publishTab(
       'agentSessionAgent'
     ])
   }
+  const editorView = workspace.editorViews?.[tab.id]
+  if (editorView) {
+    published.editorView = publishEditorView(editorView)
+  }
   if (tab.kind === 'terminal') {
     const panes = collectLayoutLeafIdsInOrder(tab.panes.root).map((leafId): PublishedPane => {
       const leaf = workspace.leaves?.[leafId]
-      return { leafId, ...(leaf ? pickStoredFields(leaf, ['ptyId', 'title']) : {}) }
+      return {
+        leafId,
+        ...(leaf ? pickStoredFields(leaf, ['ptyId', 'ptyGeneration', 'title']) : {})
+      }
     })
     published.terminal = {
       root: tab.panes.root,
@@ -140,17 +204,7 @@ export function publishWorkspaceLayout(
     groups: workspace.groups.map((group) => ({ id: group.id, tabIds: [...group.tabOrder] })),
     ...(workspace.groupLayout ? { groupLayout: workspace.groupLayout } : {}),
     tabs: tabsInOrder(workspace).map((tab) => publishTab(tab, workspace, partition)),
-    editorFiles: (workspace.editorFiles ?? []).map((file) => ({
-      filePath: file.filePath,
-      relativePath: file.relativePath,
-      language: file.language,
-      ...pickStoredFields(file, [
-        'readOnly',
-        'liveTail',
-        'runtimeEnvironmentId',
-        'externalSshTargetId'
-      ])
-    })),
+    editorFiles: (workspace.editorFiles ?? []).map(publishEditorFile),
     browserTabs: (workspace.browserTabs ?? []).map((tab) => ({
       id: tab.id,
       ...pickStoredFields(tab, [

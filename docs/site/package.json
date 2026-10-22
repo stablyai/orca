@@ -28,7 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/mdx": "^2.0.13",
-    "@types/node": "^22.20.4",
+    "@types/node": "^24.19.2",
     "@types/react": "~19.2.18",
     "@types/react-dom": "~19.2.7",
     "oxlint": "1.88.0",
@@ -37,7 +37,7 @@
     "vercel": "64.0.2"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6"
 }

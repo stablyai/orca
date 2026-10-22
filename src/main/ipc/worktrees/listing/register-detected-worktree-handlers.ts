@@ -5,11 +5,7 @@ import type {
   DirectSshDetectedWorktreeRequest,
   ProviderRequestId
 } from '../../../../shared/detected-worktree-provider-contract'
-import {
-  parseExecutionHostId,
-  getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost
-} from '../../../../shared/execution-host'
+import { parseExecutionHostId, getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import {
   registerSshProviderRequestAbort,
   getSshProviderAuthority,
@@ -106,7 +102,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
           worktrees: []
         }
       }
-      const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+      const connectionId = getRepoDialableSshTargetId(repo)
       const authority = connectionId ? { ...getSshProviderAuthority(connectionId) } : undefined
       const result = await listDetectedWorktreesForCapturedRepo(
         store,

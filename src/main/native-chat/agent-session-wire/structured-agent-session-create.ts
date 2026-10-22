@@ -30,10 +30,13 @@ import { observedReceipt } from './structured-agent-session-operation-settlement
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 
 export type StructuredAgentSessionCreateOptions = {
   firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
   hostLaunchDirectory?: string
+  /** The saved list the chat's options are admitted against, for the folder its picker read. */
+  catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
   /** Called after the durable create, before delivery can start the agent. */
   publishTab?: () => Promise<void>
 }
@@ -55,7 +58,8 @@ export function createStructuredAgentSession(
         }
         throw error
       }
-    })
+    }),
+    { sessionId: params.envelope.sessionId, location: params.location }
   )
 }
 
@@ -105,6 +109,7 @@ async function foundConversation(
   const request = reserveRequestFor({
     sessionId,
     params,
+    models: prior ? undefined : options.catalogModels,
     callerKey,
     fingerprint: params.envelope.payloadFingerprint,
     now: context.now(),
@@ -199,6 +204,7 @@ async function foundConversation(
             agent: params.agent,
             logger: deps.logger,
             resolvedBy: callerKey,
+            persistedOptions: candidate.record.options,
             persistOptions: async () => {},
             publish: () => {},
             operationReceipt: observedReceipt(store, store.founding.receipt(request)),
@@ -296,7 +302,7 @@ export function structuredAgentSessionEntryDelegates(
 /** The model and effort the chat was created with, which its opening message runs on as a send's
  *  carried ones do. */
 function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: Readonly<Record<string, string>>
+  options?: AgentSessionExecutionOptions
 } {
   const { model, effort } = options ?? {}
   return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}

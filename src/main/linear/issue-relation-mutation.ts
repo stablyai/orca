@@ -1,5 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
-import type { RawRelationNode } from './issue-context-raw'
+import type { RawRelationNode } from './issue-context/raw'
 import { isAuthError } from './client'
 import { classifyLinearWriteFailure, LinearWriteFailure } from './linear-issue-write-support'
 

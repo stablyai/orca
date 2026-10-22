@@ -3,6 +3,7 @@ import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots
@@ -337,7 +338,8 @@ describe('applyWebSessionTabsSnapshot', () => {
       '/repo/a.ts',
       '/repo/bystander-2.ts',
       '/repo/a.ts',
-      '/repo/b.ts'
+      // A file the host opens now takes its owned id; a.ts keeps the id it already had.
+      buildOwnedEditorFileId('/repo/b.ts', WT, ENV)
     ])
     expect(
       batched.openFiles.find(
@@ -511,7 +513,9 @@ describe('applyWebSessionTabsSnapshot', () => {
     const batched = { ...state, ...applyWebSessionTabsSnapshots(state, snapshots, ENV, NOW) }
 
     expect(batched.openFiles).toEqual(sequential.openFiles)
-    expect(batched.openFiles.map((file) => file.id)).toEqual(['/repo/a.ts'])
+    expect(batched.openFiles.map((file) => file.id)).toEqual([
+      buildOwnedEditorFileId('/repo/a.ts', WT, ENV)
+    ])
     expect(batched.openFiles[0]?.lastKnownDiskSignature).toBeUndefined()
   })
 

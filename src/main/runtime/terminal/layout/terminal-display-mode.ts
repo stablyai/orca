@@ -122,6 +122,7 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
     // failed viewer reclaim; a later viewer cycle must capture this new truth.
     this.remoteDesktopFloor.clearStaleHostReclaimTarget(ptyId)
     this.resizeHeadlessTerminal(ptyId, cols, rows)
+    this.notePaneGrid(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
 

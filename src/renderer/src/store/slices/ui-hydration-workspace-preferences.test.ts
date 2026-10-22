@@ -375,7 +375,8 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().browserDefaultZoomLevel).toBe(1.5)
+    // 1.26 is about 130%, which snaps to Chrome's 125% preset.
+    expect(1.2 ** store.getState().browserDefaultZoomLevel).toBeCloseTo(1.25)
   })
 
   it('persists normalized default browser zoom changes', () => {
@@ -385,8 +386,10 @@ describe('createUISlice hydratePersistedUI', () => {
 
     store.getState().setBrowserDefaultZoomLevel(10)
 
-    expect(store.getState().browserDefaultZoomLevel).toBe(5)
-    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel: 5 })
+    // Clamped to Chrome's 500% maximum.
+    const { browserDefaultZoomLevel } = store.getState()
+    expect(1.2 ** browserDefaultZoomLevel).toBeCloseTo(5)
+    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel })
   })
 
   it('drops an invalid Kagi session link during hydration', () => {

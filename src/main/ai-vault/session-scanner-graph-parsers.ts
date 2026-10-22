@@ -42,6 +42,20 @@ type ParserSessionOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
+/** The session's cwd; a scope walk reads it from metadata.json without the context file. */
+export function rovoSessionCwd(metadata: Record<string, unknown>): string | null {
+  return firstString(metadata, [
+    'workspace_path',
+    'workspacePath',
+    'workspace',
+    'cwd',
+    'working_directory',
+    'workingDirectory',
+    'project_path',
+    'projectPath'
+  ])
+}
+
 export async function parseRovoSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
@@ -60,16 +74,7 @@ export async function parseRovoSessionFile(
     messages
   })
   accumulator.title = firstString(metadata, ['title', 'name', 'summary'])
-  accumulator.cwd = firstString(metadata, [
-    'workspace_path',
-    'workspacePath',
-    'workspace',
-    'cwd',
-    'working_directory',
-    'workingDirectory',
-    'project_path',
-    'projectPath'
-  ])
+  accumulator.cwd = rovoSessionCwd(metadata)
   updateTimeline(
     accumulator,
     extractString(metadata.created_at) ?? extractString(metadata.createdAt)

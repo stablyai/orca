@@ -16,7 +16,7 @@ export type CodexPendingRequest = {
   method: string
   resolve: (result: unknown) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  timer: ReturnType<typeof setTimeout> | undefined
   /** Called as the reply is read, or as the request times out, before anything awaits it: in
    *  stdout order with every notification read around it. */
   onReply?: () => void

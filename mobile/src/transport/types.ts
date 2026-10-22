@@ -52,6 +52,7 @@ export type ConnectionDiagnosticCode =
   | 'client-session-started'
   | 'app-resumed'
   | 'network-changed'
+  | 'suspended-dial'
   | 'connect-timeout'
   | 'handshake-timeout'
   | 'authentication-rejected'

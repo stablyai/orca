@@ -1,5 +1,4 @@
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import { updateWebRuntimePaneLayout } from '@/runtime/web-runtime-terminal-actions'
 import {
@@ -9,12 +8,7 @@ import {
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 
 export type RemotePaneLayoutPusher = {
-  push: (input: {
-    worktreeId: string
-    tabId: string
-    layout: TerminalLayoutSnapshot
-    intent?: PaneLayoutEditIntent
-  }) => void
+  push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void
 }
 
 /**
@@ -31,7 +25,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   } | null = null
   let nextAttemptId = 0
   return {
-    push: ({ worktreeId, tabId, layout, intent }) => {
+    push: ({ worktreeId, tabId, layout }) => {
       // Why: a resent full title map is not a rename; only these panes were renamed here.
       // A rename is always sent, even back to a title the last push carried.
       const renamedLeafIds = takeUnsentPaneTitleRenames(collectLeafIdsInOrder(layout.root))
@@ -52,8 +46,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
         expandedLeafId: layout.expandedLeafId,
         chatLeafId: layout.chatLeafId ?? null,
         ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {}),
-        ...(renamedLeafIds.length > 0 ? { renamedLeafIds } : {}),
-        ...(intent ? { intent } : {})
+        ...(renamedLeafIds.length > 0 ? { renamedLeafIds } : {})
       }).then((updated) => {
         if (!updated) {
           requeuePendingPaneTitleRenames(renamedLeafIds)

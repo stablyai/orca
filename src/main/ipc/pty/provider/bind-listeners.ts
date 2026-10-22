@@ -12,7 +12,8 @@ import {
 } from './listener-lifecycle'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
-import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { providerSnapshotRequiredPtys, visibleRendererPtys } from '../delivery/visibility-state'
 import type { PtyIpcSession } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
 
@@ -101,6 +102,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
         : undefined
       try {
         if (!isLocalProvider) {
+          // Read before the clean-up below forgets it.
+          const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
           clearProviderPtyState(payload.id)
           ptyOwnership.delete(payload.id)
           if (syntheticExit) {
@@ -108,6 +111,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           }
           session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
             providerExitObserved: true,
+            ...(viewShown ? { viewShown } : {}),
             ...(payload.cause ? { cause: payload.cause } : {})
           })
         }

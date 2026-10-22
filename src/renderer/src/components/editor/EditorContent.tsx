@@ -180,6 +180,7 @@ export function EditorContent({
         key={viewStateScopeId}
         file={activeFile}
         viewStateKey={diffViewStateKey}
+        viewStateScopeId={viewStateScopeId}
       />
     )
   }

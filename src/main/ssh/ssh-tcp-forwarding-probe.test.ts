@@ -117,6 +117,13 @@ describe('forward channel check (system SSH)', () => {
     await expect(checkForwardChannel({ entry: dropped.entry })).resolves.toBe('unverifiable')
   })
 
+  // Why: a forward still waiting on its own login (a key touch, a prompt) never binds its listener.
+  it('reports a listener that never came up as not listening', async () => {
+    const closed = await forwardAnswering(() => {})
+    await new Promise((resolve) => servers.pop()?.close(resolve))
+    await expect(checkForwardChannel(closed, 300)).resolves.toBe('not-listening')
+  })
+
   it('reads the last channel failure OpenSSH logged', () => {
     expect(lastChannelOpenFailure('Warning: Permanently added host\n')).toBeNull()
     expect(

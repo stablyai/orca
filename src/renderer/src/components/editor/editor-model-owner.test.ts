@@ -5,7 +5,9 @@ import type {
   WorktreeOperationRouteState
 } from '@/lib/worktree-operation-route'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { detachedEditorBufferId } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import { toEditorModelUri } from './editor-model-uri'
 
 function file(overrides: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -147,5 +149,34 @@ describe('editor model ownership', () => {
         ]
       })
     ).toBe('["hub-a","runtime:hub-a"]')
+  })
+
+  it('gives a detached record its own model, apart from the file and from other detached records', () => {
+    const shared = { ...localState, editorBufferIdOf: { file: 'file', other: 'file' } }
+    const detached = {
+      ...localState,
+      editorBufferIdOf: { file: detachedEditorBufferId('file'), other: 'file' }
+    }
+    const detachedUri = toEditorModelUri(file().filePath, getEditorModelOwnerKey(file(), detached))
+
+    expect(getEditorModelOwnerKey(file(), shared)).toBe('')
+    expect(getEditorModelOwnerKey(file({ id: 'other' }), detached)).toBe('')
+    expect(detachedUri).not.toBe(toEditorModelUri(file().filePath))
+    expect(getEditorModelOwnerKey(file(), detached)).not.toBe(
+      getEditorModelOwnerKey(file({ id: 'other' }), {
+        ...localState,
+        editorBufferIdOf: { other: detachedEditorBufferId('other') }
+      })
+    )
+    // The host owner stays in the key: one detached record id on two hosts gets two models.
+    const remote = file({ runtimeEnvironmentId: 'env' })
+    expect(getEditorModelOwnerKey(remote, detached)).not.toBe(
+      getEditorModelOwnerKey(file(), detached)
+    )
+    expect(JSON.parse(getEditorModelOwnerKey(remote, detached))).toEqual([
+      'detached',
+      detachedEditorBufferId('file'),
+      getEditorModelOwnerKey(remote, localState)
+    ])
   })
 })

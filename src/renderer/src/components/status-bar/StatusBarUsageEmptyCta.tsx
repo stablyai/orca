@@ -7,12 +7,18 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
+import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
 
 // Why: a brand-new user has no configured provider, so the bottom-left would
 // otherwise be empty but for a refresh icon with nothing to refresh. This CTA
 // names the surface and routes to AI Provider Accounts — connecting an account
 // there is what makes the usage chips (and account switching) appear here.
-export function StatusBarUsageEmptyCta(): React.JSX.Element {
+// A remote owner's empty state names that host: this device's setup cannot fill it.
+export function StatusBarUsageEmptyCta({
+  remoteOwner
+}: {
+  remoteOwner: RemoteUsageOwner | null
+}): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -22,9 +28,24 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
   // section ID — a brand-new user has no "Claude" or "Codex" yet.
   const handleOpenSettings = useCallback(() => {
     recordFeatureInteraction('usage-tracking')
-    openSettingsTarget({ pane: 'accounts', repoId: null })
+    openSettingsTarget({
+      pane: 'accounts',
+      repoId: null,
+      hostScope: getUsageOwnerHostScope(remoteOwner)
+    })
     openSettingsPage()
-  }, [openSettingsPage, openSettingsTarget, recordFeatureInteraction])
+  }, [openSettingsPage, openSettingsTarget, recordFeatureInteraction, remoteOwner])
+
+  const label = remoteOwner
+    ? translate(
+        'auto.components.status.bar.StatusBarUsageEmptyCta.remoteLabel',
+        'No usage on {{host}}',
+        { host: remoteOwner.label }
+      )
+    : translate(
+        'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
+        'Configure usage tracking'
+      )
 
   const handleHide = useCallback(() => {
     dismissUsageEmptyState()
@@ -36,29 +57,27 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
         <button
           type="button"
           onClick={handleOpenSettings}
-          aria-label={translate(
-            'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
-            'Configure usage tracking'
-          )}
+          aria-label={label}
           className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
         >
           <BarChart3 className="size-3.5" />
-          <span>
-            {translate(
-              'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
-              'Configure usage tracking'
-            )}
-          </span>
+          <span>{label}</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
         <div className="space-y-2 text-xs leading-[1.45]">
           <div className="flex items-start justify-between gap-2">
             <div className="font-semibold text-foreground">
-              {translate(
-                'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
-                'Agent usage limits'
-              )}
+              {remoteOwner
+                ? translate(
+                    'auto.components.status.bar.StatusBarUsageEmptyCta.remoteTitle',
+                    'Usage on {{host}}',
+                    { host: remoteOwner.label }
+                  )
+                : translate(
+                    'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
+                    'Agent usage limits'
+                  )}
             </div>
             {/* Why: permanently hide the teaching CTA — styling mirrors the
                 SetupGuideSidebarEntry hover-state icon (muted → foreground). */}
@@ -84,27 +103,39 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
               </TooltipContent>
             </Tooltip>
           </div>
-          <p className="text-muted-foreground">
-            {translate(
-              'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
-              'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
-            )}
-          </p>
-          {/* Why: name the full provider set so the feature doesn't read as
-              support for just one agent. */}
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span>
+          {remoteOwner ? (
+            <p className="text-muted-foreground">
               {translate(
-                'auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811',
-                'Supports:'
+                'auto.components.status.bar.StatusBarUsageEmptyCta.remoteBody',
+                "This workspace runs on {{host}}, so the bar shows that host's usage. Sign in to an agent there, or focus a local workspace to see this computer's usage.",
+                { host: remoteOwner.label }
               )}
-            </span>
-            <ClaudeIcon size={13} />
-            <OpenAIIcon size={13} />
-            <GeminiIcon size={13} />
-            <OpenCodeGoIcon size={13} />
-            <AgentIcon agent="kimi" size={13} />
-          </div>
+            </p>
+          ) : (
+            <>
+              <p className="text-muted-foreground">
+                {translate(
+                  'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
+                  'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
+                )}
+              </p>
+              {/* Why: name the full provider set so the feature doesn't read as
+                  support for just one agent. */}
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span>
+                  {translate(
+                    'auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811',
+                    'Supports:'
+                  )}
+                </span>
+                <ClaudeIcon size={13} />
+                <OpenAIIcon size={13} />
+                <GeminiIcon size={13} />
+                <OpenCodeGoIcon size={13} />
+                <AgentIcon agent="kimi" size={13} />
+              </div>
+            </>
+          )}
           <Button
             type="button"
             variant="default"
@@ -112,10 +143,16 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
             onClick={handleOpenSettings}
             className="mt-0.5 h-7 w-full text-xs"
           >
-            {translate(
-              'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
-              'Connect an account'
-            )}
+            {remoteOwner
+              ? translate(
+                  'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
+                  'Open {{host}} accounts',
+                  { host: remoteOwner.label }
+                )
+              : translate(
+                  'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
+                  'Connect an account'
+                )}
           </Button>
         </div>
       </HoverCardContent>

@@ -11,7 +11,8 @@ import { removeTabsAttention } from './subject-attention-transitions'
 import {
   markWorkspaceUnreadFlag,
   onScreenHostId,
-  settleWorkspaceUnreadFlag
+  settleWorkspaceUnreadFlag,
+  noteWorkspaceRead
 } from './workspace-unread-flag'
 import { workspaceMarkerTabIds } from './workspace-live-markers'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
@@ -119,6 +120,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
     },
     setWorkspaceUnreadByUser: (worktreeId, isUnread, executionHostId) => {
       if (!isUnread) {
+        noteWorkspaceRead(worktreeId)
         removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
       }
       // Why: the toggle writes only the clicked host's row; the markers it removes are

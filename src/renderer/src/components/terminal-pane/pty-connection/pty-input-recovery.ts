@@ -1,5 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch-preferences'
@@ -54,7 +55,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     session.terminalOwnerUnresolved || session.connectionOwnerHydrating
       ? createUnresolvedOwnerPtyTransport(
           session.terminalOwnerUnresolved
-            ? 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+            ? ambiguousWorkspaceOwnerMessage(useAppStore.getState(), session.deps.worktreeId)
             : 'Workspace host is still loading. Retry when the project finishes hydrating.'
         )
       : session.unservedSshTargetId

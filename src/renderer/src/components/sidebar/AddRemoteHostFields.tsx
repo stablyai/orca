@@ -211,8 +211,8 @@ export function RemoteServerFields({
         />
         <p id="add-server-pairing-code-help" className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.sidebar.AddRemoteHostDialog.pairingHelpSuffix',
-            'Create this under Settings → Remote Orca Servers → Share this host on the other computer.'
+            'auto.components.sidebar.AddRemoteHostDialog.pairingHelpShareComputer',
+            'Create this under Settings → Remote Orca Servers → Share this computer on the other computer.'
           )}
         </p>
         {inputError ? (

@@ -60,7 +60,14 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     storeState.openFiles = []
     storeState.unifiedTabsByWorktree = {}
     storeState.groupsByWorktree = {}
-    storeState.worktreesByRepo = {}
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/tmp', hostId: 'local' }]
+    }
+    storeState.repos = [
+      { id: 'repo-1', displayName: 'Repo', connectionId: null, executionHostId: 'local' }
+    ]
+    storeState.browserTabsByWorktree = {}
+    storeState.browserPagesByWorkspace = {}
     registerHttpLinkStoreAccessor(() => storeState)
     vi.stubGlobal('window', {
       dispatchEvent: vi.fn(),

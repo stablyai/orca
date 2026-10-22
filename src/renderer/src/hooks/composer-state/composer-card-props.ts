@@ -2,6 +2,7 @@ import { resolveComposerAttachmentTarget } from './composer-attachment-target'
 import { getAttachmentLabel } from '@/lib/new-workspace'
 import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
+import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
 
 export function buildComposerCardProps(state: ComposerModel) {
@@ -204,6 +205,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     tuiAgent,
     onTuiAgentChange: setTuiAgent,
     detectedAgentIds: isProjectGroupTarget ? folderDetectedAgentIds : detectedAgentIds,
+    agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),

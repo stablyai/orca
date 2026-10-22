@@ -66,7 +66,8 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({ ChevronLeft: hosts.View }))
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 
-import { CustomKeyModal, removeCustomKey, saveCustomKeys } from './CustomKeyModal'
+import { CustomKeyModal } from './CustomKeyModal'
+import { loadCustomKeys, removeCustomKey, saveCustomKeys } from '../terminal/terminal-custom-keys'
 import { readMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_KEYS = 'orca:custom-accessory-keys'
@@ -257,5 +258,41 @@ describe('adding a custom key when the stored list cannot be read', () => {
     expect(store.writes).toBe(0)
     expect(onKeysChanged).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('when the stored value holds no keys', () => {
+  const HOLDS_NO_KEYS = ['{not json', 'null', '{}', '[null]']
+
+  it.each(HOLDS_NO_KEYS)('an add replaces %s with the new key', async (raw) => {
+    store.raw = raw
+    const onKeysChanged = vi.fn()
+    const onClose = vi.fn()
+    let renderer: ReturnType<typeof create> | null = null
+    act(() => {
+      renderer = create(createElement(CustomKeyModal, { visible: true, onClose, onKeysChanged }))
+    })
+    if (renderer === null) {
+      throw new Error('the modal did not render')
+    }
+    addAShortcut(renderer)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(JSON.parse(store.raw ?? '[]')).toHaveLength(1)
+    expect(onKeysChanged).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(HOLDS_NO_KEYS)('a removal replaces %s with an empty list', async (raw) => {
+    store.raw = raw
+    await expect(removeCustomKey('custom-1')).resolves.toEqual([])
+    expect(store.raw).toBe('[]')
+  })
+
+  it.each(HOLDS_NO_KEYS)('loading %s shows no keys', async (raw) => {
+    store.raw = raw
+    await expect(loadCustomKeys()).resolves.toEqual([])
   })
 })

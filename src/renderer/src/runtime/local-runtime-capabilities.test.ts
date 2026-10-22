@@ -5,6 +5,8 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
+  readLocalRuntimeCapabilityObservation,
+  subscribeLocalRuntimeCapabilityObservation,
   refreshLocalRuntimeCapabilities,
   setLocalRuntimeCapabilitiesForTests
 } from './local-runtime-capabilities'
@@ -43,6 +45,7 @@ describe('local runtime capabilities', () => {
   })
 
   it('coalesces concurrent live status reads', async () => {
+    setLocalRuntimeCapabilitiesForTests(null)
     let resolve!: (value: { capabilities: string[] }) => void
     const getStatus = vi.fn(
       () => new Promise<{ capabilities: string[] }>((next) => (resolve = next))
@@ -51,6 +54,7 @@ describe('local runtime capabilities', () => {
 
     const first = refreshLocalRuntimeCapabilities()
     const second = refreshLocalRuntimeCapabilities()
+    expect(readLocalRuntimeCapabilityObservation().state).toBe('pending')
     resolve({ capabilities: ['agent-session.structured.v1'] })
 
     await expect(Promise.all([first, second])).resolves.toEqual([
@@ -62,6 +66,10 @@ describe('local runtime capabilities', () => {
   })
 
   it('clears stale support when live status becomes unavailable', async () => {
+    const outcomes: string[] = []
+    const stop = subscribeLocalRuntimeCapabilityObservation(() =>
+      outcomes.push(readLocalRuntimeCapabilityObservation().state)
+    )
     setLocalRuntimeCapabilitiesForTests(['agent-session.structured.v1'])
     Object.assign(window, {
       api: {
@@ -76,12 +84,17 @@ describe('local runtime capabilities', () => {
     await expect(refreshLocalRuntimeCapabilities()).resolves.toEqual([])
     expect(readLocalRuntimeCapabilities()).toEqual([])
     expect(readLocalRuntimeCapabilitiesOrUnknown()).toBeNull()
+    expect(readLocalRuntimeCapabilityObservation().state).toBe('unavailable')
 
     window.api.runtime.getStatus = vi
       .fn()
       .mockResolvedValue({ capabilities: ['agent-session.structured.v1'] })
-    await refreshLocalRuntimeCapabilities()
+    const retry = refreshLocalRuntimeCapabilities()
+    expect(readLocalRuntimeCapabilityObservation().state).toBe('unavailable')
+    await retry
     expect(readLocalRuntimeCapabilitiesOrUnknown()).toEqual(['agent-session.structured.v1'])
+    expect(outcomes).toEqual(['unavailable', 'known'])
+    stop()
   })
   it('ensure probes the runtime when no answer has landed yet', async () => {
     setLocalRuntimeCapabilitiesForTests(null)

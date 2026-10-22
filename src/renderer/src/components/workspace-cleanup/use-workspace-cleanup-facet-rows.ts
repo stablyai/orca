@@ -36,6 +36,7 @@ import {
   createWorkspaceCleanupFacetListCache,
   createWorkspaceCleanupReviewInfoCache
 } from './workspace-cleanup-facet-row-caches'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type WorkspaceCleanupFacetRows = {
   rows: WorkspaceCleanupFacets[]
@@ -98,7 +99,7 @@ export function useWorkspaceCleanupFacetRows({
 }): WorkspaceCleanupFacetRows {
   const sources = useAppStore(
     useShallow((s) => ({
-      worktreesByRepo: s.worktreesByRepo,
+      worktreesByRepo: selectWorktreesByRepo(s),
       hostedReviewCache: s.hostedReviewCache,
       repos: s.repos,
       settings: s.settings,

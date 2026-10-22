@@ -18,8 +18,24 @@ import { localWorktreePathsExistOrAreUnverifiable } from '../../../local-worktre
 import { worktreeRetentionPathComparisonKey } from '../../../worktree-retention-path-comparison'
 import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 
+type AuthoritativeLocalMetadataPruneStore = Pick<
+  Store,
+  'getRepos' | 'pruneSessionlessMissingLocalWorktreeMetadataForRepo' | 'getProfileStorageDirectory'
+> &
+  Partial<Pick<Store, 'selectProbeableLocalWorktreeMetadataCandidates'>>
+
+export function canPruneAuthoritativeLocalMetadata<
+  T extends Partial<AuthoritativeLocalMetadataPruneStore>
+>(store: T): store is T & AuthoritativeLocalMetadataPruneStore {
+  return (
+    typeof store.getRepos === 'function' &&
+    typeof store.pruneSessionlessMissingLocalWorktreeMetadataForRepo === 'function' &&
+    typeof store.getProfileStorageDirectory === 'function'
+  )
+}
+
 type AuthoritativeLocalMetadataPruneArgs = {
-  store: Store
+  store: AuthoritativeLocalMetadataPruneStore
   repo: Repo
   gitWorktrees: readonly GitWorktreeInfo[]
   scan: NativeLocalWorktreeMetadataScanExpectation

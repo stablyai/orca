@@ -9,6 +9,7 @@ import {
 import { safelyRevealWindow } from '../window/focus-existing-window'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
+import { isWorkspaceSpaceChange } from '../../shared/workspace-space-change'
 import type { Store } from '../persistence'
 
 export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
@@ -46,11 +47,14 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
   })
   ipcMain.handle(
     'workspaceSpace:revealWorktree',
-    (event, worktreeId: unknown, hostId: unknown): void => {
+    (event, worktreeId: unknown, hostId: unknown, change: unknown): void => {
       if (!isWorkspaceSpaceWindowRenderer(event.sender) || typeof worktreeId !== 'string') {
         return
       }
       if (hostId !== undefined && typeof hostId !== 'string') {
+        return
+      }
+      if (change !== undefined && !isWorkspaceSpaceChange(change)) {
         return
       }
       const executionHostId = normalizeExecutionHostId(hostId)
@@ -67,7 +71,7 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
           safelyRevealWindow(window)
         }
       }
-      main.send('workspaceSpace:revealWorktree', worktreeId, executionHostId ?? undefined)
+      main.send('workspaceSpace:revealWorktree', worktreeId, executionHostId ?? undefined, change)
     }
   )
   ipcMain.handle('workspaceSpace:requestWorktreeRefresh', (event): void => {

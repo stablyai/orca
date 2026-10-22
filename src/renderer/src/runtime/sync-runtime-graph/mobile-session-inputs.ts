@@ -23,6 +23,7 @@ import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId
 } from './mobile-session-surfaces'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {
@@ -86,7 +87,7 @@ export function buildMobileSessionAgentStatusByWorktree(
 // single identity is correct, so publish without one and let main fall back to
 // its generation fence rather than blank the mobile session.
 function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
-  const rows = getIndexedWorktreesById(state.worktreesByRepo ?? {}, worktreeId)
+  const rows = getIndexedWorktreesById(selectWorktreesByRepo(state) ?? {}, worktreeId)
   return rows.length === 1 ? rows[0]?.instanceId : undefined
 }
 

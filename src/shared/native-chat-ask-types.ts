@@ -8,7 +8,11 @@ export type AskQuestion = {
   multiSelect: boolean
   options: AskOption[]
 }
-export type AskPrompt = { questions: AskQuestion[] }
+export type AskPrompt = {
+  questions: AskQuestion[]
+  /** The agent kept working after asking, so the answer goes back as an ordinary message. */
+  replyAsMessage?: true
+}
 
 /** A parser turns one agent's interactive-question tool input into the normalized
  *  AskPrompt the card renders. */

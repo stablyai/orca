@@ -37,6 +37,24 @@ describe('TerminalRemoteRuntimeReconnectBanner', () => {
     await user.click(screen.getByRole('button', { name: 'Reconnect' }))
     expect(onReconnect).toHaveBeenCalledOnce()
   })
+
+  it('says the host refused this computer instead of spinning, even mid-recovery', async () => {
+    const onReconnect = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <TerminalRemoteRuntimeReconnectBanner
+        phase="backoff"
+        onReconnect={onReconnect}
+        pairingRefused
+      />
+    )
+
+    expect(screen.getByText('This host no longer accepts this computer')).toBeInTheDocument()
+    expect(screen.getByText(/couldn't pair with it again over SSH/)).toBeInTheDocument()
+    expect(screen.queryByText('Reconnecting to remote runtime')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reconnect' }))
+    expect(onReconnect).toHaveBeenCalledOnce()
+  })
 })
 
 describe('DelayedRemoteRuntimeReconnectBanner', () => {

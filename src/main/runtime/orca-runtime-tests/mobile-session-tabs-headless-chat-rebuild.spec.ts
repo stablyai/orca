@@ -122,4 +122,79 @@ describe('a chat tab on a host with no window', () => {
       CHAT_TAB_ID
     ])
   })
+
+  it('lists tabs to phones in the order desktop clients draw after a rebuild', async () => {
+    const runtime = headlessRuntimeWithChat()
+    await openChat(runtime)
+    const groupId = (await runtime.listMobileSessionTabs(WORKTREE)).tabGroups?.[0]?.id ?? ''
+    await runtime.moveMobileSessionTab(WORKTREE, {
+      kind: 'reorder',
+      tabId: CHAT_TAB_ID,
+      targetGroupId: groupId,
+      tabOrder: [CHAT_TAB_ID, 'serve-tab', 'tab-readme']
+    })
+
+    await runtime.closeMobileSessionTab(WORKTREE, 'tab-readme', { reason: 'user' })
+
+    const listed = await runtime.listMobileSessionTabs(WORKTREE)
+    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual([CHAT_TAB_ID, 'serve-tab'])
+    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual([
+      CHAT_TAB_ID,
+      'serve-tab'
+    ])
+  })
+
+  it('keeps the place a window gave a chat across a graph resend before the chat is restored', async () => {
+    const runtime = headlessRuntimeWithChat()
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:test',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'win-term::leaf-1',
+          activeTabType: 'terminal',
+          tabGroups: [
+            { id: 'group-1', activeTabId: 'win-term', tabOrder: [CHAT_TAB_ID, 'win-term'] }
+          ],
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'win-term::leaf-1',
+              parentTabId: 'win-term',
+              leafId: 'leaf-1',
+              title: 'Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID]
+    })
+    runtime.projectStructuredAgentSessionTab({
+      workspaceId: TEST_WORKTREE_ID,
+      sessionId: 'claude_29968',
+      agent: 'claude',
+      activate: false
+    })
+
+    const listed = await runtime.listMobileSessionTabs(WORKTREE)
+    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual([
+      CHAT_TAB_ID,
+      'win-term',
+      'serve-tab'
+    ])
+    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual([
+      CHAT_TAB_ID,
+      'win-term',
+      'serve-tab'
+    ])
+  })
 })

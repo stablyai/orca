@@ -150,6 +150,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           onSubmit={() => void navigateToAddress()}
           focused={addressFocused}
           disabled={controlsDisabled}
+          loading={tab.loading}
+          loadFailed={tab.loadError != null}
         />
         <MobileBrowserViewModeSwitch
           disabled={controlsDisabled}

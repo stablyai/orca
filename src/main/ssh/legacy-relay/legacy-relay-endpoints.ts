@@ -12,6 +12,7 @@ import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { execCommand } from '../remote-exec/remote-exec-command'
 import { readRelayDaemonRuntimes } from './ssh-relay-endpoint-runtime'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { probeRelayEndpointIncumbent } from './ssh-relay-endpoint-incumbent'
 import { readRemoteHomeCommand } from '../ssh-remote-commands'
 import { resolveRemoteNodePath } from '../ssh-remote-node-resolution'
 import { detectRemoteHostPlatform } from '../ssh-remote-platform-detection'
@@ -208,4 +209,21 @@ async function listWindowsEndpoints(
     })
   }
   return { kind: 'listed', endpoints, exhaustive }
+}
+
+/** A dead socket is the one failed open that proves its relay gone; Windows pipes never are. */
+export async function posixEndpointExited(
+  conn: SshConnection,
+  endpoint: LegacyRelayEndpoint
+): Promise<boolean> {
+  if (isWindowsRemoteHost(endpoint.host) || !endpoint.nodePath) {
+    return false
+  }
+  const incumbent = await probeRelayEndpointIncumbent(
+    conn,
+    endpoint.host,
+    endpoint.nodePath,
+    endpoint.endpoint
+  )
+  return incumbent.verdict === 'exited'
 }

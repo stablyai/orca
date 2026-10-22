@@ -11,10 +11,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRunti
 
 import { recordLayoutApply, sendLayoutApply, type WindowLayoutCommand } from './layout-apply-send'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import {
-  adoptLiveTerminalThroughLayoutOwner,
-  createInitialTerminalThroughLayoutOwner
-} from '@/store/terminals/terminal-tab-create-through-layout-owner'
+import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/terminal-tab-create-through-layout-owner'
 
 const WORKTREE_ID = 'repo-1::/srv/w'
 const FOLDER_ID = 'folder:f1'
@@ -63,7 +60,8 @@ const COMMANDS: WindowLayoutCommand[] = [
   { type: 'closePane', tabId: 't', leafId: 'l' },
   { type: 'closeTabs', tabIds: ['t'] },
   { type: 'renameTab', tabId: 't', kind: 'custom', title: 'x' },
-  { type: 'moveTab', tabId: 't', toGroupId: 'g', index: 0 },
+  // An anchored move too, so no server, old or new, is sent the anchor.
+  { type: 'moveTab', tabId: 't', toGroupId: 'g', index: 0, afterTabId: 's' },
   { type: 'createTerminalTab', tabId: 't', leafId: 'l' },
   { type: 'sleep', tabId: 't', paneKeys: ['t:l'], records: [] },
   { type: 'setDefaultTabsApplied' }
@@ -100,13 +98,6 @@ describe.each(PAIRED_WORKSPACES)('$name', ({ workspaceId, rows }) => {
     expect(createInitialTerminalThroughLayoutOwner(getState, workspaceId, create)).toBe(false)
     expect(layoutApplyCalls()).toEqual([])
   })
-
-  it('the live terminal adoption sends nothing', async () => {
-    await expect(
-      adoptLiveTerminalThroughLayoutOwner(() => rows, workspaceId, { ptyId: 'pty-1' })
-    ).resolves.toBe('as-today')
-    expect(layoutApplyCalls()).toEqual([])
-  })
 })
 
 /** Every renderer source file that names the `layout.apply` method, with its count. */
@@ -137,7 +128,9 @@ describe('layout.apply senders', () => {
   it('are only the guarded paths pinned above', () => {
     expect(layoutApplySenders(path.resolve(__dirname, '..'))).toEqual({
       'runtime/layout-apply-send.ts': 1,
-      'store/terminals/terminal-tab-create-through-layout-owner.ts': 2
+      // Tests' stand-in for main: it answers layout.apply, never sends it.
+      'runtime/layout-apply-test-transport.test-fixture.ts': 1,
+      'store/terminals/terminal-tab-create-through-layout-owner.ts': 1
     })
   })
 })

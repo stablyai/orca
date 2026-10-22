@@ -82,7 +82,7 @@ const NO_COLLAPSED_TREE_DIRS = new Set<string>()
 const NO_EXPANDED_SUBMODULES = new Set<string>()
 const NO_COLLAPSED_SECTIONS = new Set<string>()
 const NO_SUBMODULE_STATUS = {}
-const GROUP_ORDER = ['unstaged', 'staged', 'untracked'] as const
+const GROUP_ORDER = ['unstaged', 'staged'] as const
 
 type ProjectionProps = {
   entries: GitStatusEntry[]
@@ -181,7 +181,35 @@ beforeEach(() => {
   }
 })
 
-describe('useSourceControlFileProjection branch entry ordering', () => {
+describe('useSourceControlFileProjection entry ordering', () => {
+  it('sorts combined working changes once across filter changes', () => {
+    const entries = makeStatusEntries(400)
+    const branchEntries: GitBranchChangeEntry[] = []
+    const { result, rerender } = renderProjection({
+      entries,
+      branchEntries,
+      filterQuery: '',
+      sourceControlViewMode: 'list'
+    })
+    const sections = result.current.displaySections
+    const comparesForInitialSort = counters.compareFileNames
+    expect(comparesForInitialSort).toBeGreaterThan(0)
+
+    for (const filterQuery of ['f', 'file-1', 'no-match', '']) {
+      rerender({ entries, branchEntries, filterQuery, sourceControlViewMode: 'list' })
+      expect(result.current.displaySections).toEqual(
+        sections
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((entry) => entry.path.includes(filterQuery))
+          }))
+          .filter((section) => section.items.length > 0)
+      )
+    }
+
+    expect(counters.compareFileNames).toBe(comparesForInitialSort)
+  })
+
   it('sorts committed branch entries once across many filter changes', () => {
     const branchEntries = makeBranchEntries(400)
     const { rerender } = renderProjection({
@@ -275,6 +303,23 @@ describe('useSourceControlFileProjection view-mode gating', () => {
     expect(counters.injectExpandedSubmoduleEntries).toBeGreaterThan(0)
     expect(result.current.visibleTreeRowsBySection).toEqual({})
     expect(result.current.visibleBranchTreeRows).toEqual([])
+  })
+
+  it('preserves untracked selection keys in the combined Changes tree', () => {
+    const { result } = renderProjection({
+      entries: [
+        { path: 'src/new.ts', area: 'untracked', status: 'untracked' },
+        { path: 'src/tracked.ts', area: 'unstaged', status: 'modified' }
+      ],
+      branchEntries: [],
+      filterQuery: '',
+      sourceControlViewMode: 'tree'
+    })
+    expect(result.current.displaySections.map((section) => section.id)).toEqual(['unstaged'])
+    expect(result.current.visibleSelectionEntries.map(({ key, area }) => ({ key, area }))).toEqual([
+      { key: 'untracked::src/new.ts', area: 'untracked' },
+      { key: 'unstaged::src/tracked.ts', area: 'unstaged' }
+    ])
   })
 
   it('builds no list projection in tree mode', () => {

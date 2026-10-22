@@ -1,4 +1,24 @@
-import type { AgentModelCatalogProbe } from './agent-model-catalog-store'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
+
+export type AgentModelCatalogResolvedProbe = {
+  identity: unknown
+  run: (signal?: AbortSignal) => Promise<AgentModelCatalogSuccess>
+}
+
+export type AgentModelCatalogProbe = ((
+  accountHome: AgentSessionAccountHome,
+  options?: { signal?: AbortSignal; workspacePath?: string; cwd?: string }
+) => Promise<AgentModelCatalogSuccess>) & {
+  resolveLegacy?: (home: AgentSessionAccountHome) => Promise<AgentModelCatalogResolvedProbe>
+  resolve?: (
+    home: AgentSessionAccountHome,
+    cwd: string,
+    savedOnly?: boolean
+  ) => Promise<AgentModelCatalogResolvedProbe>
+}
+
+export { independentAgentModelCatalog } from '../../../shared/agent-model-catalog-ownership'
 
 /**
  * What every agent registration must say about its models: a probe that lists them without

@@ -26,8 +26,8 @@ export function TerminalPaneResumeInChatButton({
   )
   const pending = useCliChatResumePending(source)
   const label = translate(
-    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-    'Resume in New Native Chat'
+    'components.tab.bar.SortableTabContextMenu.switchToChatView',
+    'Continue in Chat UI'
   )
 
   return (

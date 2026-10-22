@@ -12,7 +12,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const HOST_ROUTE = '/h/render-check-host'
 const SHELL_HOST = {

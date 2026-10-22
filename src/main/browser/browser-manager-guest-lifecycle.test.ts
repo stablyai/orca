@@ -240,6 +240,7 @@ describe('browserManager', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => 'https://example.com/'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
@@ -258,6 +259,32 @@ describe('browserManager', () => {
     const preventDefault = vi.fn()
     willNavigateHandler?.({ preventDefault }, 'file:///etc/passwd')
     expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['https://example.com/', true],
+    ['file:///docs/plan.html', false]
+  ])('from %s, a file: link navigation is blocked=%s', (currentUrl, blocked) => {
+    const guest = {
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      getURL: vi.fn(() => currentUrl),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+    const preventDefault = vi.fn()
+    willNavigateHandler?.({ preventDefault }, 'file:///docs/index.html')
+    expect(preventDefault).toHaveBeenCalledTimes(blocked ? 1 : 0)
   })
 
   it('unregisterAll clears tracked guests and context-menu listeners', () => {

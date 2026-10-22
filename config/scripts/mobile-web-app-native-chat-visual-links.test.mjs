@@ -11,7 +11,7 @@ import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, webkit } from 'playwright-core'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import { readShellCsp } from './mobile-web-app-render-harness.mjs'
+import { readShellCsp } from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const bundles = mobileWebAppDependenciesPresent()
 const describeEngines = bundles ? describe : describe.skip

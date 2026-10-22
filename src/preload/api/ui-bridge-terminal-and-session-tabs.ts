@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
@@ -278,5 +281,13 @@ export const uiTerminalAndSessionTabsApi = {
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
+  },
+  onRevealEditorTabFromRuntime: (
+    callback: (data: RuntimeEditorTabReveal) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RuntimeEditorTabReveal) =>
+      callback(data)
+    ipcRenderer.on('ui:revealEditorTabFromRuntime', listener)
+    return () => ipcRenderer.removeListener('ui:revealEditorTabFromRuntime', listener)
   }
 } satisfies Partial<PreloadApi['ui']>

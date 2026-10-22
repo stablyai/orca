@@ -37,6 +37,7 @@ function composerAcceptsImages(reported: boolean | undefined): boolean | undefin
       controller,
       sendThroughLaunch: () => false,
       starting: false,
+      transportEnabled: true,
       worktreeId: undefined,
       optionPickerRequest: null,
       setOptionPickerRequest: () => {},

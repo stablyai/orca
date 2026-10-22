@@ -7,6 +7,19 @@ export function imageReferenceToken(attachmentId: string): string {
   return `[Image](orca-image:${attachmentId})`
 }
 
+/** Spaces keep inserted chips separate from the words on either side of the caret. */
+export function imageReferenceInsertion(
+  before: string,
+  after: string,
+  ids: readonly string[]
+): string {
+  if (ids.length === 0) {
+    return ''
+  }
+  const tokens = ids.map(imageReferenceToken).join(' ')
+  return `${before && !/\s$/.test(before) ? ' ' : ''}${tokens}${/^\s/.test(after) ? '' : ' '}`
+}
+
 /** The text's runs and the images its tokens name, in order; empty runs are left out. */
 export function splitImageReferences(text: string): (string | { attachmentId: string })[] {
   const parts: (string | { attachmentId: string })[] = []

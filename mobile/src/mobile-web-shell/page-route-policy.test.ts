@@ -411,7 +411,7 @@ describe('a grant name this build has never heard of', () => {
  * The route filter behind this view is `grants.every(implementsGrant)`, so one grant this build lacks
  * takes the whole route native rather than degrading the feature that needed it. `haptics` is
  * declared by all five page routes, which makes the whole set conditional on a shell carrying the
- * token; the route list itself is pinned in `config/scripts/mobile-web-app-haptics-seam.test.mjs`,
+ * token; the route list itself is pinned in `config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs`,
  * and this is the mechanism behind it.
  */
 describe('a page route that needs the haptics token', () => {

@@ -4,7 +4,7 @@ import { AlertTriangle, Download, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { ReleaseBuildPicker } from './ReleaseBuildPicker'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
 import { Badge } from '../ui/badge'
 import { translate } from '@/i18n/i18n'
@@ -16,7 +16,6 @@ import {
   getVersionChannel,
   hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
-  parseDevBuildStamp,
   requiresManualDevChannelInstall,
   type DedicatedRepoChannel,
   type ReleaseBuild,
@@ -50,31 +49,6 @@ const DEDICATED_CHANNEL_WARNINGS: Record<DedicatedRepoChannel, { key: string; fa
         'Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.'
     }
   }
-
-function formatBuildLabel(build: ReleaseBuild): string {
-  // Why the release's own title wins: the build workflows compose it (hourly
-  // `1.4.163 • 01 • Jul 31, 1:54PM • e698241`, adhoc `1.4.163 • wasm-terminal • …`),
-  // so this row is the same string the GitHub releases list shows — one thing to
-  // search for in either place, rather than two renderings of the same build that
-  // have to be matched up by eye. For adhoc it is also the only place the branch
-  // is named, which is what tells two concurrent adhoc builds apart.
-  if (build.name) {
-    return build.name
-  }
-  const stamp = parseDevBuildStamp(build.version)
-  if (!stamp) {
-    return build.version
-  }
-  // Fallback for builds cut before that naming, and for any release someone
-  // titled by hand. A dev build's semver tail is an opaque timestamp, so show it
-  // as a date rather than as digits.
-  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })}`
-}
 
 export function ReleaseChannelSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -276,34 +250,24 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Select
-            value={selectedTag ?? undefined}
-            onValueChange={setSelectedTag}
+          <ReleaseBuildPicker
+            key={activeChannel}
+            builds={builds ?? []}
+            selectedTag={selectedTag}
+            onSelect={setSelectedTag}
             disabled={loading || !builds || builds.length === 0}
-          >
-            <SelectTrigger size="sm" className="min-w-64 flex-1">
-              <SelectValue
-                placeholder={
-                  loading || (builds === null && loadError === null)
-                    ? translate(
-                        'auto.components.settings.ReleaseChannelSection.loadingBuilds',
-                        'Loading builds…'
-                      )
-                    : translate(
-                        'auto.components.settings.ReleaseChannelSection.noBuilds',
-                        'No builds found'
-                      )
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {(builds ?? []).map((build) => (
-                <SelectItem key={build.tag} value={build.tag}>
-                  {formatBuildLabel(build)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder={
+              loading || (builds === null && loadError === null)
+                ? translate(
+                    'auto.components.settings.ReleaseChannelSection.loadingBuilds',
+                    'Loading builds…'
+                  )
+                : translate(
+                    'auto.components.settings.ReleaseChannelSection.noBuilds',
+                    'No builds found'
+                  )
+            }
+          />
 
           <Button
             variant="ghost"

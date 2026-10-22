@@ -233,7 +233,7 @@ describe('runtimeEnvironments:remove by host kind', () => {
     useHost('wsl')
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
     expect(() => handler('runtimeEnvironments:remove')(null, { selector: 'wsl:ubuntu' })).toThrow(
-      'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+      'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
     )
   })
 

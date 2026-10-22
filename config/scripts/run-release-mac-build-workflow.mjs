@@ -1,4 +1,5 @@
 import { appendFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 const DEFAULT_API_VERSION = '2026-03-10'
 const DEFAULT_TIMEOUT_MINUTES = 90
@@ -344,7 +345,7 @@ export async function executeReleaseMacBuildMode(mode, env = process.env, deps =
   throw new Error(`Unknown mac release build mode: ${mode}`)
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   executeReleaseMacBuildMode(process.argv[2]).catch((error) => {
     console.error(error)
     process.exitCode = 1

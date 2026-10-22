@@ -110,7 +110,6 @@ export function loadHostStructuredAgents(
   if (pending) {
     return pending
   }
-  failed.delete(key)
   const read = callRuntimeRpc<unknown>(
     host.kind === 'local'
       ? { kind: 'local' }
@@ -121,10 +120,12 @@ export function loadHostStructuredAgents(
   )
     .then((result) => {
       const agents = decodeAgentSessionAgentsResult(result)
-      if (agents) {
-        entries.set(executionHostId, { runtimeId, agents })
-        publish()
+      if (!agents) {
+        throw new Error('Invalid registered-agent response')
       }
+      failed.delete(key)
+      entries.set(executionHostId, { runtimeId, agents })
+      publish()
     })
     .catch((error: unknown) => {
       console.warn('[native-chat] could not read the host structured agents', error)

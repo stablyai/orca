@@ -6,7 +6,7 @@ import { registerQueuedMessageBookkeepingFailureTests } from './queued-message-b
 import { registerQueuedMessageDeliveredEchoTests } from './queued-message-delivered-echo.spec'
 import { registerQueuedMessagePauseTests } from './queued-message-pause.spec'
 import { registerQueuedMessageStoreTests } from './queued-message-store.spec'
-import { registerQueuedMessageTextUpdateTests } from './queued-message-text-update.spec'
+import { registerQueuedMessageUpdateTests } from './queued-message-update.spec'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -17,4 +17,4 @@ describe('queued-message-bookkeeping-failure', registerQueuedMessageBookkeepingF
 describe('queued-message-delivered-echo', registerQueuedMessageDeliveredEchoTests)
 describe('queued-message-pause', registerQueuedMessagePauseTests)
 describe('queued-message-store', registerQueuedMessageStoreTests)
-describe('queued-message-text-update', registerQueuedMessageTextUpdateTests)
+describe('queued-message-update', registerQueuedMessageUpdateTests)

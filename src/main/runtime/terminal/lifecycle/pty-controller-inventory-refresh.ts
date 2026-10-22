@@ -31,6 +31,8 @@ import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/pty-liveness-ve
 import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
@@ -301,7 +303,9 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,
       terminalIdentityByPtyId: controllerIdentityByPtyId,
-      queriedHostIds
+      queriedHostIds,
+      // Switch point: main places live terminals itself and must skip ones being killed.
+      ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { exitingPtyIds: exitingPtyIdsOf(sessions) } : {})
     }
   }
 }

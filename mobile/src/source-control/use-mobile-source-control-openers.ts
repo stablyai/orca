@@ -5,16 +5,7 @@ import { isRendererUnavailableReply } from '../transport/renderer-unavailable-re
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { ConnectionState } from '../transport/types'
 import { triggerError, triggerSelection } from '../platform/haptics'
-import { buildMobileDiffLines } from '../session/mobile-diff-lines'
-import {
-  highlightMobileDiffLines,
-  resolveMobileSyntaxLanguage
-} from '../session/mobile-file-syntax'
-import {
-  canOpenMobileBranchCompareDiff,
-  type MobileGitBranchChangeEntry
-} from './mobile-branch-compare'
-import { gitBranchDiffRead } from './mobile-git-read-operations'
+import { useMobileBranchDiffPreview } from './use-mobile-branch-diff-preview'
 import {
   canOpenMobileGitStatusEntry,
   isMobileGitUnavailableReply,
@@ -23,11 +14,7 @@ import {
 import { sourceFileDiffOpenRun, sourceFileOpenRun } from './mobile-source-file-open-operations'
 import { buildMobileReviewFileRoute, type MobileReviewRouteArea } from './mobile-review-route'
 import { revealMobileSourceControlSessionDiff } from './reveal-mobile-source-control-session-diff'
-import type {
-  MobileBranchCompareState,
-  MobileBranchDiffPreviewState
-} from './mobile-source-control-screen-state'
-import type { MobileGitDiffReply } from './git-compare-reply-schema'
+import type { MobileBranchCompareState } from './mobile-source-control-screen-state'
 
 type Params = {
   client: RpcClient | null
@@ -71,13 +58,8 @@ export function useMobileSourceControlOpeners(params: Params) {
   // The seam, not expo-router's own: inside the shell's page a push to a route the page does not
   // render has to be handed back to the app, and only this knows which targets those are.
   const router = useWorkspaceRouteHandoff()
-  const [branchDiffPreview, setBranchDiffPreview] = useState<MobileBranchDiffPreviewState | null>(
-    null
-  )
   const [openingPath, setOpeningPath] = useState<string | null>(null)
-  const [openingBranchPath, setOpeningBranchPath] = useState<string | null>(null)
   const openingPathRef = useRef<string | null>(null)
-  const openingBranchPathRef = useRef<string | null>(null)
 
   const openReviewScreen = useCallback(
     (filePath: string, area: MobileReviewRouteArea) => {
@@ -219,102 +201,20 @@ export function useMobileSourceControlOpeners(params: Params) {
     ]
   )
 
-  const openBranchDiff = useCallback(
-    async (entry: MobileGitBranchChangeEntry) => {
-      if (openingBranchPathRef.current || openingPathRef.current || busyActionRef.current) {
-        return
-      }
-      if (!client || connState !== 'connected') {
-        if (!mountedRef.current) {
-          return
-        }
-        setActionError('Waiting for desktop...')
-        return
-      }
-      if (branchCompareState.kind !== 'ready') {
-        return
-      }
-      const summary = branchCompareState.result.summary
-      if (!canOpenMobileBranchCompareDiff(summary) || !summary.headOid || !summary.mergeBase) {
-        return
-      }
-
-      openingBranchPathRef.current = entry.path
-      setOpeningBranchPath(entry.path)
-      if (origin !== 'session') {
-        openReviewScreen(entry.path, 'branch')
-        openingBranchPathRef.current = null
-        if (mountedRef.current) {
-          setOpeningBranchPath(null)
-        }
-        return
-      }
-      setBranchDiffPreview({ kind: 'loading', entry })
-      try {
-        const reply = await gitBranchDiffRead.request(client, {
-          worktree: `id:${worktreeId}`,
-          filePath: entry.path,
-          ...(entry.oldPath ? { oldPath: entry.oldPath } : {}),
-          compare: {
-            baseRef: summary.baseRef,
-            ...(summary.baseOid ? { baseOid: summary.baseOid } : {}),
-            headOid: summary.headOid,
-            mergeBase: summary.mergeBase
-          }
-        })
-        let result: MobileGitDiffReply
-        try {
-          result = gitBranchDiffRead.interpret(reply)
-        } catch (error) {
-          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed diff'))
-        }
-        if (result.kind !== 'text') {
-          throw new Error('Binary branch diff preview unavailable on mobile')
-        }
-        const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
-        const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
-        if (!mountedRef.current) {
-          return
-        }
-        setBranchDiffPreview({
-          kind: 'ready',
-          entry,
-          summary,
-          lines: highlightMobileDiffLines(diff.lines, syntaxLanguage),
-          truncated: diff.truncated
-        })
-        triggerSelection()
-      } catch (err) {
-        if (!mountedRef.current) {
-          return
-        }
-        triggerError()
-        setBranchDiffPreview({
-          kind: 'error',
-          entry,
-          message: err instanceof Error ? err.message : 'Unable to load committed diff'
-        })
-      } finally {
-        if (openingBranchPathRef.current === entry.path) {
-          openingBranchPathRef.current = null
-          if (mountedRef.current) {
-            setOpeningBranchPath(null)
-          }
-        }
-      }
-    },
-    [
-      branchCompareState,
-      busyActionRef,
+  const { branchDiffPreview, setBranchDiffPreview, openingBranchPath, openBranchDiff } =
+    useMobileBranchDiffPreview({
       client,
       connState,
-      mountedRef,
-      openReviewScreen,
+      hostId,
+      worktreeId,
       origin,
+      branchCompareState,
+      mountedRef,
+      busyActionRef,
+      openingPathRef,
       setActionError,
-      worktreeId
-    ]
-  )
+      openReviewScreen
+    })
 
   return {
     router,

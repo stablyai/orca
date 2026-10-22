@@ -642,6 +642,7 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
       agent: 'codex',
       adapter: {
         acquire: vi.fn(),
+        open: vi.fn(),
         dispatch: vi.fn(),
         closeSession: vi.fn(),
         cancelTurn: vi.fn(async () => outcome),
@@ -727,6 +728,7 @@ describe('the note a Stop writes', () => {
       agent: 'codex',
       adapter: {
         acquire: vi.fn(),
+        open: vi.fn(),
         dispatch: vi.fn(),
         closeSession: vi.fn(),
         cancelTurn: vi.fn(async () => ({ cancelled: true })),

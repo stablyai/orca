@@ -39,6 +39,8 @@ type ServerOptions = {
   disableAutoPong?: boolean
   delayedMethods?: string[]
   silentMethods?: string[]
+  /** Refuses every auth the way a server that dropped this device does. */
+  rejectAuth?: boolean
 }
 
 const servers: WebSocketServer[] = []
@@ -104,6 +106,10 @@ export async function createSharedControlTestServer(
       }
       if (!authenticated) {
         auths.push(JSON.parse(plaintext))
+        if (options.rejectAuth) {
+          sendEncrypted(ws, sharedKey, { type: 'e2ee_error', error: { code: 'unauthorized' } })
+          return
+        }
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         if (options.sendBinaryAfterAuth) {

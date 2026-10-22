@@ -92,6 +92,10 @@ export function seedRelayEraProfile(
     targetId?: string
     /** COMPAT(legacy-relay-bridge): the terminal tab still runs this PTY in the host's relay. */
     relayPtyId?: string
+    /** An unsaved buffer on the editor tab, as hot exit persists it. */
+    draftContent?: string
+    /** The sidebar shows only this host, which a server's own all-hosts default once refused. */
+    sidebarScopedToHost?: boolean
   } = {}
 ): RelayEraProfile {
   const now = Date.now()
@@ -162,7 +166,8 @@ export function seedRelayEraProfile(
           relativePath: 'README.md',
           worktreeId,
           language: 'markdown',
-          runtimeEnvironmentId: null
+          runtimeEnvironmentId: null,
+          ...(options.draftContent === undefined ? {} : { dirtyDraftContent: options.draftContent })
         }
       ]
     },
@@ -276,6 +281,10 @@ export function seedRelayEraProfile(
         updatedAt: now,
         lastDetachedAt: now
       })
+    }
+    if (options.sidebarScopedToHost) {
+      const ui = state.ui
+      state.ui = { ...(ui && typeof ui === 'object' ? ui : {}), workspaceHostScope: hostId }
     }
     const partitions = state.workspaceSessionsByHostId
     state.workspaceSessionsByHostId = {
