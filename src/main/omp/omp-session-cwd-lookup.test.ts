@@ -13,6 +13,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 import { OMP_TRANSCRIPT_IMPORT } from './omp-transcript-import'
+import { findOmpSessionByCwd } from './omp-session-cwd-lookup'
 
 const ID = '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a'
 const FILE = `2026-10-12T00-00-00-000Z_${ID}.jsonl`
@@ -162,6 +163,57 @@ describe('OMP known-workspace transcript lookup', () => {
     io.open.mockRejectedValue(new Error('EACCES'))
     expect(await lookup()).toBeNull()
     expect(io.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('cannot establish a unique recovery match when a known bucket is unreadable', async () => {
+    await record('--repo-orca--')
+    io.open.mockRejectedValue(new Error('EACCES'))
+    expect(
+      await findOmpSessionByCwd({
+        sessionsDir,
+        sessionId: ID,
+        cwd: '/repo/orca',
+        homeDir: join(root, 'home'),
+        env: {},
+        requireUnique: true
+      })
+    ).toBeNull()
+    expect(io.open).toHaveBeenCalled()
+  })
+
+  it('leaves recovery uncertain when a cwd bucket exceeds the enumeration bound', async () => {
+    const cwd = join(root, 'home', 'project')
+    await record('-project')
+    let yielded = 0
+    let closed = false
+    io.open.mockImplementation(async () => ({
+      async *[Symbol.asyncIterator]() {
+        try {
+          for (let index = 0; index < 100_002; index++) {
+            yielded++
+            yield {
+              name: index === 0 ? FILE : `unrelated-${index}.jsonl`,
+              isFile: () => true,
+              isSymbolicLink: () => false
+            }
+          }
+        } finally {
+          closed = true
+        }
+      }
+    }))
+    expect(
+      await findOmpSessionByCwd({
+        sessionsDir,
+        sessionId: ID,
+        cwd,
+        homeDir: join(root, 'home'),
+        env: { TMPDIR: join(root, 'temp'), TEMP: join(root, 'temp') },
+        requireUnique: true
+      })
+    ).toBeNull()
+    expect(yielded).toBe(100_001)
+    expect(closed).toBe(true)
   })
 
   it.skipIf(process.platform === 'win32')('rejects symlinked groups and files', async () => {

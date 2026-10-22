@@ -11,6 +11,7 @@ import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-b
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
 import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-stored-messages'
+import { ompStoredUserMessagesReader } from '../omp/omp-acp-stored-messages'
 import type { AcpStoredUserMessagesReader } from './acp-recovery-history'
 import { isStableCliVersionFrom, isStableCliVersionOnLine } from '../agent-cli-version-probe'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -284,6 +285,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   installDirectories: () => [],
   // Stable releases from 17.0.5, the release verified to serve `omp acp`.
   supportsVersion: (version) => isStableCliVersionFrom(version, '17.0.5'),
+  readStoredUserMessages: ompStoredUserMessagesReader(),
   // `omp models --json` lists every model without the `enabledModels` filter a chat applies, so it
   // could offer models a chat refuses. A session lists exactly what a chat in that folder offers;
   // `omp acp` cannot delete one, so it is kept out of OMP's store (17.0.5 and 18.12.2 verified).

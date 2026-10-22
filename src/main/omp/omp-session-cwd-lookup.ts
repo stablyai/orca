@@ -4,6 +4,8 @@ import { basename, extname, isAbsolute, join, relative, resolve } from 'node:pat
 import { PI_CWD_BUCKET_LAYOUT } from '../ai-vault/session-cwd-bucket-layouts'
 import { SESSION_FILE_ID_LAYOUTS } from '../native-chat/session-file-id-layouts'
 
+const MAX_RECOVERY_DIRECTORY_ENTRIES = 100_000
+
 async function canonicalPath(path: string): Promise<string> {
   return realpath(path).catch(() => resolve(path))
 }
@@ -47,28 +49,48 @@ async function cwdBuckets(cwd: string, home: string, env: NodeJS.ProcessEnv): Pr
   ].filter((name): name is string => name !== null)
 }
 
-/** Import only a known workspace's direct session files, stopping at its first ID match. */
+/** Import a known workspace's direct session files; recovery additionally requires a unique match. */
 export async function findOmpSessionByCwd(input: {
   sessionsDir: string
   sessionId: string
   cwd: string
   homeDir: string
   env: NodeJS.ProcessEnv
+  requireUnique?: boolean
+  signal?: AbortSignal
   strictErrors?: boolean
 }): Promise<string | null> {
   const sessionId = input.sessionId.trim()
   if (!sessionId || !isAbsolute(input.cwd)) {
     return null
   }
+  let found: string | null = null
+  let scanned = 0
   for (const bucket of await cwdBuckets(input.cwd, input.homeDir, input.env)) {
+    input.signal?.throwIfAborted()
     const dirPath = join(input.sessionsDir, bucket)
     try {
       const stat = await lstat(dirPath)
       if (!stat.isDirectory() || stat.isSymbolicLink()) {
+        if (input.requireUnique) {
+          return null
+        }
         continue
       }
       const directory = await opendir(dirPath)
       for await (const entry of directory) {
+        input.signal?.throwIfAborted()
+        if (input.requireUnique && ++scanned > MAX_RECOVERY_DIRECTORY_ENTRIES) {
+          return null
+        }
+        if (
+          input.requireUnique &&
+          extname(entry.name).toLowerCase() === '.jsonl' &&
+          SESSION_FILE_ID_LAYOUTS.omp.fileMatchesId(entry.name, sessionId) &&
+          (!entry.isFile() || entry.isSymbolicLink())
+        ) {
+          return null
+        }
         if (
           !entry.isFile() ||
           entry.isSymbolicLink() ||
@@ -78,7 +100,13 @@ export async function findOmpSessionByCwd(input: {
         }
         const file = join(dirPath, entry.name)
         if (SESSION_FILE_ID_LAYOUTS.omp.fileMatchesId(file, sessionId)) {
-          return file
+          if (!input.requireUnique) {
+            return file
+          }
+          if (found && found !== file) {
+            return null
+          }
+          found = file
         }
       }
     } catch (error) {
@@ -92,8 +120,14 @@ export async function findOmpSessionByCwd(input: {
       ) {
         throw error
       }
-      // A stale or unreadable bucket must not replace a missing history with a blank chat.
+      // An unreadable bucket cannot establish uniqueness for restart recovery.
+      if (
+        input.requireUnique &&
+        !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      ) {
+        return null
+      }
     }
   }
-  return null
+  return found
 }

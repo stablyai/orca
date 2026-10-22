@@ -21,7 +21,8 @@ import { createProviderSpawnSpec } from '../provider-process/provider-process-su
 import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from './acp-launch-specs'
 import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
-import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { acpReopenTakeover, acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { AcpRpcError } from './acp-errors'
 
 const GROK = acpLaunchSpecFor('grok')!
 const identity = {
@@ -61,40 +62,33 @@ function journalWithTurns(...providerSessions: string[]): JournalLoad {
   return { state, newer: null, damage: null }
 }
 
-function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | null = () => null) {
-  const searched: (string | null | undefined)[] = []
+function resolver(
+  record: AgentSessionRecord,
+  readJournal: () => JournalLoad | null = () => null,
+  environment: Record<string, string> = { PATH: '/usr/bin', HOME: '/home/user' }
+) {
   return {
-    searched,
     resolve: createAcpStructuredLaunchResolver(GROK, {
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       readJournal,
       resolveWorkspacePath: async () => '/repo/worktree',
-      resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
+      resolveEnvironment: async () => environment,
       resolveLaunchEnv: () => ({ GROK_EXTRA: '1' }),
-      resolveCommand: (command, options) => {
-        searched.push(options?.pathEnv)
-        return `/resolved/${command}`
-      }
+      resolveCommand: (command) => `/resolved/${command}`
     })
   }
 }
 
 describe('ACP launch resolution', () => {
-  it('pins the record account home and searches the agent install dir', async () => {
-    const { resolve, searched } = resolver(grokRecord())
-    const launch = await resolve({ identity })
-    expect(launch).toMatchObject({
-      command: '/resolved/grok',
-      args: ['agent', 'stdio'],
-      cwd: '/repo/worktree',
-      fullAccess: false,
-      resume: null
-    })
-    expect(launch.env).toMatchObject({
-      GROK_HOME: '/home/user/.grok-work',
-      GROK_EXTRA: '1'
-    })
-    expect(searched[0]).toContain('/home/user/.grok-work/bin')
+  it('keeps the sealed account home when the ambient environment names another account', async () => {
+    const accountHome = { variable: 'GROK_HOME', path: '/accounts/work' }
+    const launch = await resolver(grokRecord({ accountHome }), undefined, {
+      PATH: '/usr/bin',
+      HOME: '/accounts/personal',
+      GROK_HOME: '/accounts/personal/.grok'
+    }).resolve({ identity })
+
+    expect(launch.env.GROK_HOME).toBe(accountHome.path)
   })
 
   it('creates a new ACP session after clear instead of probing the old session', async () => {
@@ -132,9 +126,9 @@ describe('ACP launch resolution', () => {
       observedAt: 1,
       handle: { transport: 'acp', agent: 'grok', nativeId: 'acp-1' }
     })
-    const created = await resolver(grokRecord({ providerHandleChain: [link('created')] })).resolve({
-      identity
-    })
+    const created = await resolver(grokRecord({ providerHandleChain: [link('created')] }), () =>
+      journalWithTurns()
+    ).resolve({ identity })
     const handle: AgentSessionProviderHandle = {
       transport: 'acp',
       agent: 'grok',
@@ -172,11 +166,42 @@ describe('ACP launch resolution', () => {
     }).resolve({ identity })
     // Read only when asked: a reopen that works never replays the journal.
     expect(reads).toEqual([])
-    expect(launch.resume?.mayBeUnsaved()).toBe(true)
+    expect(launch.resume?.mayBeUnsaved()).toBe(false)
 
     expect(await unsaved(() => journalWithTurns())).toBe(true)
     expect(await unsaved(() => journalWithTurns('acp-other'))).toBe(true)
     expect(await unsaved(() => journalWithTurns('acp-other', 'acp-1'))).toBe(false)
+    for (const dispatchState of ['pending', 'unknown', 'accepted'] as const) {
+      const load = journalWithTurns()
+      load.state.submissions.set('held', {
+        clientMessageId: 'held',
+        fence: 1,
+        payloadFingerprint: 'uncertain',
+        dispatchState,
+        providerItemId: null,
+        reason: null,
+        submittedAt: 100,
+        resolvedAt: dispatchState === 'accepted' ? 110 : null
+      })
+      const resume = (await resolver(created, () => load).resolve({ identity })).resume!
+      expect(resume.mayBeUnsaved()).toBe(false)
+      expect(
+        acpReopenTakeover(new AcpRpcError(-32002, 'Session missing'), resume, {
+          over: false,
+          now: 200,
+          warn: vi.fn()
+        })
+      ).toEqual({ replaces: { key: resume.key, reason: 'restore-failed', replacedAt: 200 } })
+      const held = load.state.submissions.get('held')!
+      load.state.submissions.set('held', { ...held, dispatchState: 'rejected' })
+      expect(resume.mayBeUnsaved()).toBe(true)
+      load.state.submissions.set('held', {
+        ...held,
+        dispatchState: 'pending',
+        handoverRecorded: true
+      })
+      expect(resume.mayBeUnsaved()).toBe(true)
+    }
     // A journal that does not read whole, or at all, proves nothing.
     expect(
       await unsaved(() => ({

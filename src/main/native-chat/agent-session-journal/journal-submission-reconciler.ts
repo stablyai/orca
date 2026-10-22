@@ -30,6 +30,8 @@ export type ProviderHistoryItem = {
   /** Fingerprint of the submitted payload, when the caller can compute one from
    *  provider content. Used only to break an otherwise unique tie. */
   payloadFingerprint: string | null
+  /** Content-only evidence cannot prove a send that happened after this time. */
+  createdAt?: number
   /** Absent when the provider keeps no identity of its own for the item: a submission it matches
    *  keeps Orca's (`orca:<clientMessageId>`), which is the identity its row already has. */
   identity?: AgentJournalItemIdentity
@@ -117,8 +119,15 @@ export function reconcileSubmissions(input: {
     submissionsByFingerprint.set(submission.payloadFingerprint, sameFingerprint)
   }
   for (const [fingerprint, fingerprintSubmissions] of submissionsByFingerprint) {
+    const firstPossibleSend = fingerprintSubmissions.reduce(
+      (earliest, submission) => Math.min(earliest, submission.submittedAt),
+      Number.POSITIVE_INFINITY
+    )
     const candidates = input.history.items.filter(
-      (item) => !claimed.has(item.providerItemId) && item.payloadFingerprint === fingerprint
+      (item) =>
+        !claimed.has(item.providerItemId) &&
+        item.payloadFingerprint === fingerprint &&
+        (item.createdAt === undefined || item.createdAt >= firstPossibleSend)
     )
     if (fingerprintSubmissions.length === 1 && candidates.length === 1) {
       const [submission] = fingerprintSubmissions

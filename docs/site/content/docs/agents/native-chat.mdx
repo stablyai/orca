@@ -29,6 +29,10 @@ When Claude shows an **AskUserQuestion** (or similar structured permission/quest
 
 Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for the same paired sessions.
 
+Orca uses saved native session history on the execution host to reconcile uncertain OMP sends. Only a uniquely owned session in the launch account and workspace can confirm delivery. Missing, unreadable, ambiguous or incomplete history — including a missing journal — leaves delivery uncertain, and Orca never automatically replays the message. A send without a saved turn also prevents Orca from silently treating a session that cannot reopen as unused.
+
+This recovery uses the existing native ACP execution support: local folder and repository workspaces, or the local runtime of a paired remote server. It does not add native ACP execution inside a desktop-managed WSL workspace or read SSH-host history from the desktop filesystem.
+
 <Callout title="Experimental">
   Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw
   TUI when you need every OSC/status detail.

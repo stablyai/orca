@@ -33,6 +33,7 @@ const readInProcess: OpenCodeTranscriptPageReader = async (args) => readOpenCode
 function readFrom(dataHome: string) {
   return openCodeStoredUserMessagesReader(readInProcess)({
     env: { HOME: dataHome, USERPROFILE: dataHome, XDG_DATA_HOME: dataHome },
+    cwd: dataHome,
     providerSessionId: 'ses_1',
     signal: new AbortController().signal
   })
@@ -71,6 +72,7 @@ describe('OpenCode stored user messages', () => {
     await expect(
       read({
         env: { HOME: home, USERPROFILE: home },
+        cwd: home,
         providerSessionId: 'ses_1',
         signal: new AbortController().signal
       })

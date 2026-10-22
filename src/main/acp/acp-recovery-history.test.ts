@@ -96,7 +96,7 @@ describe('ACP restart recovery from the agent store', () => {
       stored('msg_2', 'run the tests', 205)
     ])
     expect(readStoredUserMessages).toHaveBeenCalledWith(
-      expect.objectContaining({ env: launch.env, providerSessionId: 'ses_1' })
+      expect.objectContaining({ env: launch.env, cwd: launch.cwd, providerSessionId: 'ses_1' })
     )
     expect(window).toMatchObject({ boundaryConsistent: false, turnInFlight: true })
     expect(
@@ -182,6 +182,26 @@ describe('ACP restart recovery from the agent store', () => {
       )
     ).resolves.toBeNull()
     expect(readStoredUserMessages).not.toHaveBeenCalled()
+  })
+
+  it('keeps a missing or newer journal uncertain without consulting provider history', async () => {
+    const load = journal(submission('held', 'run tests', 'unknown', 200))
+    for (const unreadable of [null, { ...load, newer: { sequence: 3 } }]) {
+      const { window, readStoredUserMessages } = await windowFor(unreadable, [
+        stored('delivered', 'run tests', 205)
+      ])
+      expect(window).toBeNull()
+      expect(readStoredUserMessages).not.toHaveBeenCalled()
+    }
+  })
+
+  it('never treats an empty provider history as non-delivery', async () => {
+    const load = journal(submission('held', 'run tests', 'unknown', 200))
+    const { window } = await windowFor(load, [])
+    expect(window).toMatchObject({ boundaryConsistent: false, turnInFlight: true, items: [] })
+    expect(
+      reconcileSubmissions({ submissions: [...load.state.submissions.values()], history: window! })
+    ).toMatchObject([{ clientMessageId: 'held', outcome: 'unknown' }])
   })
 
   it('reads nothing for an agent whose store Orca does not read', async () => {

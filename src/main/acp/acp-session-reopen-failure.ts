@@ -10,6 +10,10 @@ import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AcpAuthRequiredError, AcpRpcError } from './acp-errors'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
+import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { isQueuedAgentJournalSubmission } from '../../shared/agent-session-queued-submission'
+import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 
 /** ACP's "resource not found": the agent holds no session under the id this chat proved. */
 const ACP_RESOURCE_NOT_FOUND = -32002
@@ -62,4 +66,37 @@ export function acpSessionNotRestoredRow(
       join: { thread: providerSessionId }
     }
   ]
+}
+
+/** Only a complete journal with no potentially delivered send can prove a session unused. */
+export function acpSessionHasNoExchange(
+  readJournal: (sessionId: string) => JournalLoad | null,
+  sessionId: string,
+  nativeId: string
+): boolean {
+  let load: JournalLoad | null
+  try {
+    load = readJournal(sessionId)
+  } catch {
+    return false
+  }
+  if (!load) {
+    return false
+  }
+  if (load.damage || load.newer) {
+    return false
+  }
+  // A send can reach the provider before its turn row becomes durable.
+  for (const submission of load.state.submissions.values()) {
+    if (submission.dispatchState !== 'rejected' && !isQueuedAgentJournalSubmission(submission)) {
+      return false
+    }
+  }
+  for (const item of load.state.items.values()) {
+    const turn = readAgentJournalTurn(item.body)
+    if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
+      return false
+    }
+  }
+  return true
 }

@@ -33,6 +33,8 @@ export type AcpStoredUserMessage = {
 /** Reads the user messages of one provider session from the agent's own store; null when it cannot. */
 export type AcpStoredUserMessagesReader = (input: {
   env: Record<string, string>
+  /** The workspace on the execution host that owns this launch and its store. */
+  cwd: string
   providerSessionId: string
   signal: AbortSignal
 }) => Promise<AcpStoredUserMessage[] | null>
@@ -90,7 +92,14 @@ function recoveryWindow(
   return stored.flatMap(({ message, fingerprint }, at) =>
     claimed.has(at) || message.createdAt < from
       ? []
-      : [{ providerItemId: message.id, clientMessageId: null, payloadFingerprint: fingerprint }]
+      : [
+          {
+            providerItemId: message.id,
+            clientMessageId: null,
+            payloadFingerprint: fingerprint,
+            createdAt: message.createdAt
+          }
+        ]
   )
 }
 
@@ -120,6 +129,7 @@ export async function readAcpRecoveryHistory(
     const messages = await waitForPromiseWithSignal(
       readStoredUserMessages({
         env: launch.env,
+        cwd: launch.cwd,
         providerSessionId: launch.resume.sessionId,
         signal
       }),

@@ -26,10 +26,8 @@ import {
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import {
-  isProviderTimelineTurnInNamespace,
   providerTimelineKeyPart,
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
@@ -41,7 +39,7 @@ import {
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
-import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { acpSessionHasNoExchange, acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = {
@@ -270,7 +268,7 @@ export function acpStructuredLaunchPart(
               key: agentSessionProviderHandleKey(head.handle),
               mayBeUnsaved: () =>
                 head.origin === 'created' &&
-                nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
+                acpSessionHasNoExchange(deps.readJournal, identity.sessionId, head.handle.nativeId),
               unannouncedLosses: () =>
                 unannouncedLosses(deps.readJournal, identity.sessionId, record.providerHandleChain)
             }
@@ -286,34 +284,6 @@ export function acpStructuredLaunchPart(
       ]
     }
   }
-}
-
-/** Proof the chat holds no turn of provider session `nativeId`; a journal that does not read whole,
- *  or does not read at all, proves nothing. */
-function nothingExchangedOn(
-  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
-  sessionId: string,
-  nativeId: string
-): boolean {
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return false
-  }
-  if (!load) {
-    return true
-  }
-  if (load.damage || load.newer) {
-    return false
-  }
-  for (const item of load.state.items.values()) {
-    const turn = readAgentJournalTurn(item.body)
-    if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
-      return false
-    }
-  }
-  return true
 }
 
 /** Derived on every start, never stored: a row an attach failure dropped is written by the next
