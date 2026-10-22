@@ -86,6 +86,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
   })
 
   it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
+    store.settings.agentDefaultArgs = { claude: '--model "model with spaces"' }
     const activate = mode === true
     const status = mode === 'failed' ? 'failed' : 'created'
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
@@ -120,8 +121,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
       ...(activate ? {} : { selectWorktree: false }),
       agentSessionKind: 'fresh',
       agent: 'claude',
+      legacyStartupPlan: result?.startupPlan,
       viewMode: 'terminal'
     })
+    expect(result?.startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
     expect(mocks.createTab).not.toHaveBeenCalled()
     await expect(result?.terminalCompletion).resolves.toMatchObject({
       outcome: { status },

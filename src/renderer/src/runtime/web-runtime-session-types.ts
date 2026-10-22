@@ -9,6 +9,7 @@ import type {
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentStartupPlan } from '../../../shared/tui-agent-startup'
 
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
@@ -27,6 +28,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   envToDelete?: string[]
   startupCommandDelivery?: StartupCommandDelivery
   launchConfig?: SleepingAgentLaunchConfig
+  /** Captured client plan used only when falling back to legacy creation. */
+  legacyStartupPlan?: AgentStartupPlan
   launchToken?: string
   agent?: TuiAgent
   launchAgent?: TuiAgent

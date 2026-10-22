@@ -234,6 +234,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       groupId,
       cwd: initialCwd,
       startupPlan,
+      ...(!hasPrompt && (resolvedLaunchPlatform === 'linux' || resolvedLaunchPlatform === 'darwin')
+        ? { legacyStartupPlan: startupPlan }
+        : {}),
       prompt: trimmedPrompt,
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,

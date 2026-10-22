@@ -29,6 +29,7 @@ export function launchAgentInWebHostTab(args: {
   groupId?: string
   cwd?: string | null
   startupPlan: AgentStartupPlan
+  legacyStartupPlan?: AgentStartupPlan
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   pastePromptAfterReady: string | null
@@ -67,6 +68,7 @@ export function launchAgentInWebHostTab(args: {
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
+    ...(args.legacyStartupPlan ? { legacyStartupPlan: args.legacyStartupPlan } : {}),
     ...(hasPrompt
       ? {
           launchAgent: agent,
