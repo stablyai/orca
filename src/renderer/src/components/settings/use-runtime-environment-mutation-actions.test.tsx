@@ -93,3 +93,68 @@ it('still discards a brand-new server whose first connect fails', async () => {
 
   expect(remove).toHaveBeenCalledWith({ selector: 'env-new' })
 })
+
+it("lets main judge a saved server's own name, so its code can refresh it", async () => {
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: true,
+    environment: saved,
+    runtimeStatus: { runtimeId: 'runtime-a' },
+    updatedExisting: true
+  })
+  const view = renderActions(async () => true, 'Studio')
+
+  await act(async () => {
+    await view.result.current.addEnvironment(false)
+  })
+
+  expect(verifyAndAddFromPairingCode).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'Studio' })
+  )
+  expect(toastError).not.toHaveBeenCalled()
+})
+
+it('retries credential storage without replaying a verified pairing', async () => {
+  const saveEdgeAuth = vi.fn().mockResolvedValue({ configured: true, unreadable: false })
+  window.api.runtimeEnvironments.saveEdgeAuth = saveEdgeAuth
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: false,
+    kind: 'environment-save-failed',
+    message: 'Paired; credentials not saved',
+    savedEnvironmentId: saved.id,
+    savedEnvironmentPairingRevision: 3
+  })
+  const view = renderActions(async () => true)
+  const headers = [{ name: 'X-Token', value: 'synthetic-secret' }]
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(view.result.current.credentialsPending).toBe(true)
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(verifyAndAddFromPairingCode).toHaveBeenCalledTimes(1)
+  expect(saveEdgeAuth).toHaveBeenCalledWith({
+    environmentId: saved.id,
+    expectedPairingRevision: 3,
+    headers
+  })
+})
+
+it('invalidates a storage-only retry if the access link changes', async () => {
+  const saveEdgeAuth = vi.fn()
+  window.api.runtimeEnvironments.saveEdgeAuth = saveEdgeAuth
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: false,
+    kind: 'environment-save-failed',
+    message: 'Paired; credentials not saved',
+    savedEnvironmentId: saved.id,
+    savedEnvironmentPairingRevision: 3
+  })
+  const view = renderActions(async () => true)
+  await act(async () => {
+    await view.result.current.addEnvironment(false, [{ name: 'X', value: 'synthetic' }])
+  })
+  act(() => view.result.current.setPairingCode('changed-link'))
+  expect(view.result.current.credentialsPending).toBe(false)
+  expect(saveEdgeAuth).not.toHaveBeenCalled()
+})

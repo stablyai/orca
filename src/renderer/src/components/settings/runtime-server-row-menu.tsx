@@ -1,6 +1,7 @@
 import {
   ArrowUpCircle,
   Info,
+  KeyRound,
   RefreshCw,
   Server,
   ServerOff,
@@ -31,6 +32,7 @@ type RuntimeServerRowMenuProps = {
   onDisconnect: () => void
   onMakeDefault: () => void
   onCheckForUpdates?: (options: UpdateCheckOptions) => void
+  onEdgeAuth?: () => void
   onSshAccess: () => void
   onToggleDetails: () => void
   onRemove: () => void
@@ -52,6 +54,7 @@ export function RuntimeServerRowMenuItems({
   onDisconnect,
   onMakeDefault,
   onCheckForUpdates,
+  onEdgeAuth,
   onSshAccess,
   onToggleDetails,
   onRemove
@@ -89,6 +92,12 @@ export function RuntimeServerRowMenuItems({
           {sshAccessLinked
             ? translate('auto.components.settings.serverList.sshAccessLinked', 'SSH route…')
             : translate('auto.components.settings.serverList.sshAccess', 'Connect through SSH…')}
+        </DropdownMenuItem>
+      ) : null}
+      {onEdgeAuth ? (
+        <DropdownMenuItem onSelect={onEdgeAuth} disabled={actionBusy}>
+          <KeyRound />
+          {translate('settings.edgeAuth.menu', 'Edge authentication…')}
         </DropdownMenuItem>
       ) : null}
       {onCheckForUpdates ? (
