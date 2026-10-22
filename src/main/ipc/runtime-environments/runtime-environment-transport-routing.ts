@@ -5,6 +5,7 @@ import {
   runtimeEnvironmentSetupFailure
 } from '../../../shared/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -102,7 +103,10 @@ export async function callRuntimeEnvironment(
         if (revisionFailure) {
           return revisionFailure
         }
-        const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
+        const pairedConnection = resolveRuntimeEnvironmentConnection(
+          userDataPath,
+          currentEnvironment
+        )
         endpoint = pairedConnection.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
@@ -203,7 +207,7 @@ export async function subscribeRuntimeEnvironment(
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
   }
-  const pairedConnection = getPreferredPairedRuntimeConnection(environment)
+  const pairedConnection = resolveRuntimeEnvironmentConnection(userDataPath, environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
   const markUsedOnce = (runtimeId: string): void => {

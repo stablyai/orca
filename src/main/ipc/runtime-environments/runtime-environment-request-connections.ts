@@ -1,7 +1,7 @@
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
@@ -61,7 +61,7 @@ export function getRuntimeEnvironmentStatusOwner(
   selector: string
 ): RuntimeHostStatusOwner {
   const environment = resolveEnvironment(userDataPath, selector)
-  const pairedConnection = getPreferredPairedRuntimeConnection(environment)
+  const pairedConnection = resolveRuntimeEnvironmentConnection(userDataPath, environment)
   const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairedConnection)}`
   let cached = statusOwners.get(environment.id)
   if (!cached || cached.key !== key || cached.owner.read().retired) {
