@@ -11,6 +11,7 @@ import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
+  decodeMuseTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
@@ -50,6 +51,9 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   }
   if (transcriptAgent === 'omp') {
     return decodeOmpTranscriptLine
+  }
+  if (transcriptAgent === 'muse') {
+    return decodeMuseTranscriptLine
   }
   return null
 }

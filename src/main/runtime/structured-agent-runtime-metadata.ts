@@ -5,6 +5,7 @@ import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-defini
 import { resolveAcpLaunchCommand } from '../acp/acp-structured-launch-resolution'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
+import { MUSE_STRUCTURED_RUNTIME_METADATA } from '../muse/muse-structured-runtime-metadata'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../codex/codex-cli-conversations'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
@@ -27,7 +28,7 @@ import type {
 } from './structured-agent-runtime-registration-types'
 
 export type StructuredAgentRuntimeCatalogEntry =
-  | { kind: 'pi' | 'codex' | 'claude'; metadata: StructuredAgentRuntimeMetadata }
+  | { kind: 'pi' | 'codex' | 'claude' | 'muse'; metadata: StructuredAgentRuntimeMetadata }
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
@@ -93,6 +94,10 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
           await resolveCodexAccountHomePath(request, services)
         )
     }
+  },
+  {
+    kind: 'muse',
+    metadata: MUSE_STRUCTURED_RUNTIME_METADATA
   },
   {
     kind: 'claude',

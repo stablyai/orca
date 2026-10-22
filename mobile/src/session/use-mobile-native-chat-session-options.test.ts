@@ -68,9 +68,26 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot).toEqual([])
   })
 
-  it('does not expose catalog-backed agents outside the Claude and Codex scope', () => {
+  it('does not expose catalog-backed agents outside the picker scope', () => {
     mount({ agent: 'gemini' })
     expect(api!.snapshot).toEqual([])
+  })
+
+  it('serves the muse catalog snapshot with its four models', () => {
+    mount({ agent: 'muse', reportedModel: 'muse-spark-1.3' })
+    expect(api!.snapshot[0]).toMatchObject({ id: 'model', category: 'model' })
+    const kind = api!.snapshot[0]!.kind
+    expect(kind.type).toBe('select')
+    if (kind.type !== 'select') {
+      throw new Error('Muse model row must stay a select')
+    }
+    expect(kind.choices.map((choice) => choice.value)).toEqual([
+      'muse-wonder-1.0',
+      'muse-wonder-full-1.0',
+      'muse-spark-1.3',
+      'muse-spark-1.2'
+    ])
+    expect(api!.snapshot.map((descriptor) => descriptor.id)).toContain('permissionProfile')
   })
 
   it('shows an OMP session under the model its hook reported', () => {

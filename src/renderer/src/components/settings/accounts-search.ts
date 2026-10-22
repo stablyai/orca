@@ -196,6 +196,21 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsMuseSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.muse.title', 'Muse (Meta)'),
+    description: translate(
+      'auto.components.settings.accounts.search.muse.description',
+      'Meta account sign-in via Muse CLI (muse login).'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.muse.kw.muse', 'muse'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.muse.kw.meta', 'meta'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login')
+    ]
+  }
+])
+
 export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('accounts.antigravity.searchTitle', 'Antigravity Accounts'),
@@ -284,6 +299,7 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries(),
+  ...getAccountsMuseSearchEntries(),
   ...getAccountsAntigravitySearchEntries(),
   ...getAccountsCursorSearchEntries(),
   ...getAccountsZcodePlanSearchEntries()

@@ -3,7 +3,11 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
+import type {
+  CursorAccountStatus,
+  GrokAccountStatus,
+  MuseAccountStatus
+} from '../../shared/rate-limit-types'
 import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 import type { MiniMaxCredentialsStatus } from '../../shared/minimax-credentials-status'
 
@@ -71,6 +75,10 @@ export type GrokAccountsApi = {
 
 export type CursorAccountsApi = {
   getStatus: () => Promise<CursorAccountStatus>
+}
+
+export type MuseAccountsApi = {
+  getStatus: () => Promise<MuseAccountStatus>
 }
 
 export type MinimaxCredentialsApi = {

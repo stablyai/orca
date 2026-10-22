@@ -20,6 +20,7 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsMuseSearchEntries,
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
@@ -39,6 +40,7 @@ import {
   providerAccountMatchesView
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { MuseAccountsSection } from './MuseAccountsSection'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
@@ -389,6 +391,9 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsMuseSearchEntries()) ? (
+      <MuseAccountsSection key="muse" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />

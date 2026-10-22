@@ -3,6 +3,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { isNativeChatProviderDisplayedOn } from '../../../../shared/native-chat-providers'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { NATIVE_CHAT_SUPPORTED_AGENT_LIST } from '../../../../shared/native-chat-agent-support'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon, getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
@@ -145,8 +146,19 @@ export function NativeChatProvidersSetting({
 }): React.JSX.Element | null {
   const entry = getChatProvidersSearchEntry()
   useHostStructuredAgentsVersion()
-  const agents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   const detectedIds = useAppStore(readNativeDetectedAgents)
+  // Why: transcript-only agents have no structured adapter, so no host ever lists them, yet
+  // their terminals still open as chats. This computer's installation inventory lists them.
+  const agents = [
+    ...new Set([
+      ...chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined),
+      ...NATIVE_CHAT_SUPPORTED_AGENT_LIST.filter(
+        (agent) =>
+          detectedIds?.includes(agent) === true ||
+          settings.nativeChatProviders?.[agent] !== undefined
+      )
+    ])
+  ]
   const visibleAgents = agents.filter(
     (agent) =>
       detectedIds !== null ||

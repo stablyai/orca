@@ -122,6 +122,23 @@ describe('Chat settings page', () => {
     expect(latest.nativeChatProviders).toEqual({ claude: false, grok: true })
   })
 
+  it('lists a detected transcript-only agent the host never registered', async () => {
+    let latest = getDefaultSettings('/tmp')
+    state.settings = latest
+    state.localDetectedAgentIdsByContext = { host: ['muse'] }
+    const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
+      latest = { ...latest, ...updates }
+      state.settings = latest
+    })
+    render(<NativeChatProvidersSetting settings={latest} updateSettings={updateSettings} />)
+    const muse = screen.getByRole('switch', { name: 'Open Muse as a chat' })
+    expect(muse.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Installed')).toBeTruthy()
+    fireEvent.click(muse)
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1))
+    expect(latest.nativeChatProviders).toEqual({ muse: false })
+  })
+
   it.each([false, true])('displays saved provider choice %s when disabled in Agents', (on) => {
     renderChat(true, true, false, {
       nativeChatProviders: { claude: on },

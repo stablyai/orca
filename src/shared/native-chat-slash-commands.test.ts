@@ -31,6 +31,18 @@ describe('getAgentSlashCommands', () => {
     expect(names).toEqual([...getAgentSlashCommands('claude').map((c) => c.name), 'context'])
   })
 
+  it('returns the TUI-documented commands for muse', () => {
+    const commands = getAgentSlashCommands('muse')
+    const names = commands.map((c) => c.name)
+    for (const name of ['model', 'effort', 'permissions', 'status', 'usage', 'resume']) {
+      expect(names).toContain(name)
+    }
+    expect(commands.find((c) => c.name === 'model')?.description).toBe('Choose model')
+    expect(commands.find((c) => c.name === 'effort')?.description).toBe(
+      "Set the model's effort level"
+    )
+  })
+
   it('falls back to a small common set for an unknown agent (never empty)', () => {
     const names = getAgentSlashCommands('some-other-agent').map((c) => c.name)
     expect(names).toEqual(['clear', 'help'])

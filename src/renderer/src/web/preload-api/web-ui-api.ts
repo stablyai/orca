@@ -173,6 +173,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    // Why this notice: the web client has no local paths to upload, so the
+    // failure reads as the same refusal a remote-terminal drop always showed.
+    saveImageFileAsTempFile: () =>
+      Promise.reject(new Error('Local attachments are not available for remote sessions.')),
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],

@@ -96,6 +96,23 @@ describe('pasteMobileNativeChatImagePaths', () => {
     expect(client.calls[3]?.params.text).toBe('\x1b[200~/tmp/c.png\x1b[201~ ')
   })
 
+  it('pastes muse image paths raw so the TUI attaches them like claude', async () => {
+    const client = clientWithResponses([sendResult(true), sendResult(true)])
+    const ok = await pasteMobileNativeChatImagePaths({
+      client,
+      agent: 'muse',
+      terminal: 'term-1',
+      deviceToken: null,
+      imagePaths: ['/tmp/red8.png'],
+      followedByText: true
+    })
+    expect(ok).toBe(true)
+    expect(client.calls[1]?.params).toMatchObject({
+      text: '\x1b[200~/tmp/red8.png\x1b[201~ ',
+      enter: false
+    })
+  })
+
   it('stops and reports failure as soon as a paste is rejected', async () => {
     // Clear accepted, first image paste rejected.
     const client = clientWithResponses([sendResult(true), sendResult(false)])

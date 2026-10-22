@@ -171,6 +171,17 @@ export type CursorAccountStatus = {
   error: string | null
 }
 
+/** Read from the Muse CLI's auth file metadata only; tokens never leave the main process. */
+export type MuseAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  fullName: string | null
+  subscriptionActive: boolean | null
+  /** How the credential was obtained (Meta login vs API key), when the file says. */
+  obtainedVia: string | null
+  error: string | null
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null

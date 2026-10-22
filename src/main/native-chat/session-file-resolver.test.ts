@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -186,6 +186,80 @@ describe('resolveSessionFilePath', () => {
       await expect(resolveSessionFilePath('omp', 'sess-omp-env')).resolves.toBe(target)
     } finally {
       restoreEnv('OMP_CODING_AGENT_DIR', previous)
+    }
+  })
+
+  it('resolves Muse session.jsonl by parent-dir session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-muse-')
+    const museSessionsDir = join(root, 'muse-sessions')
+    const sessionDir = join(museSessionsDir, '2026', '09', '26', 'sess-muse-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'session.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('muse', 'sess-muse-1', { museSessionsDir })
+    expect(resolved).toBe(target)
+  })
+
+  it('never matches a Muse subagent log for the parent session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-muse-subagent-')
+    const museSessionsDir = join(root, 'muse-sessions')
+    const sessionDir = join(museSessionsDir, '2026', '09', '26', 'sess-muse-parent')
+    await mkdir(join(sessionDir, 'subagent', 'sess-muse-child'), { recursive: true })
+    await writeFile(join(sessionDir, 'session.jsonl'), '{}\n')
+    const childLog = join(sessionDir, 'subagent', 'sess-muse-child', 'session.jsonl')
+    await writeFile(childLog, '{}\n')
+
+    // The parent id resolves to the parent file even with a child log present.
+    await expect(
+      resolveSessionFilePath('muse', 'sess-muse-parent', { museSessionsDir })
+    ).resolves.toBe(join(sessionDir, 'session.jsonl'))
+    // A child id resolves to the child log through the same predicate.
+    await expect(
+      resolveSessionFilePath('muse', 'sess-muse-child', { museSessionsDir })
+    ).resolves.toBe(childLog)
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'forwards strictErrors through Muse resolution',
+    async () => {
+      const root = await makeRoot('orca-native-chat-resolve-muse-strict-')
+      const museSessionsDir = join(root, 'muse-sessions')
+      const sessionDir = join(museSessionsDir, '2026', '09', '26', 'sess-muse-blocked')
+      await mkdir(sessionDir, { recursive: true })
+      await writeFile(join(sessionDir, 'session.jsonl'), '{}\n')
+      await chmod(sessionDir, 0o000)
+      try {
+        // Why: strict callers (session adoption) must distinguish an unreadable
+        // tree from a missing session; lenient callers keep the null.
+        await expect(
+          resolveSessionFilePath('muse', 'sess-muse-blocked', {
+            museSessionsDir,
+            strictErrors: true
+          })
+        ).rejects.toThrow()
+        await expect(
+          resolveSessionFilePath('muse', 'sess-muse-blocked', { museSessionsDir })
+        ).resolves.toBeNull()
+      } finally {
+        await chmod(sessionDir, 0o755)
+      }
+    }
+  )
+
+  it('honors XDG_DATA_HOME when resolving Muse transcripts', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-muse-xdg-')
+    const sessionDir = join(root, 'muse', 'sessions', '2026', '09', '26', 'sess-muse-xdg')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'session.jsonl')
+    await writeFile(target, '{}\n')
+
+    const previous = process.env.XDG_DATA_HOME
+    process.env.XDG_DATA_HOME = root
+    try {
+      await expect(resolveSessionFilePath('muse', 'sess-muse-xdg')).resolves.toBe(target)
+    } finally {
+      restoreEnv('XDG_DATA_HOME', previous)
     }
   })
 

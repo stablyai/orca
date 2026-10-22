@@ -670,4 +670,113 @@ describe('useNativeChatExternalAttachments', () => {
       })
     })
   })
+
+  describe('remote terminal image drops', () => {
+    const saveImageFileAsTempFile = vi.fn()
+
+    beforeEach(() => {
+      saveImageFileAsTempFile.mockReset().mockResolvedValue('/remote/orca-paste-1.png')
+      vi.stubGlobal('window', {
+        ...window,
+        api: { ui: { saveImageFileAsTempFile } }
+      })
+    })
+
+    function remoteChips(): NativeChatPendingAttachmentChips & {
+      begin: ReturnType<typeof vi.fn>
+      resolve: ReturnType<typeof vi.fn>
+      drop: ReturnType<typeof vi.fn>
+    } {
+      let id = 0
+      return {
+        begin: vi.fn(() => `chip-${++id}`),
+        resolve: vi.fn(() => true),
+        drop: vi.fn(() => true),
+        attachReferences: vi.fn(() => true)
+      }
+    }
+
+    it('uploads images to the server temp dir and settles the remote paths', async () => {
+      mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
+        kind: 'remote',
+        clipboardImageEnvironmentId: 'env-1'
+      })
+      const chips = remoteChips()
+      const setNotice = vi.fn()
+      const probe = await renderProbe({
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips,
+        setNotice
+      })
+      await act(async () => probe.latest().attachExternalPaths(['/local/shot.png']))
+      expect(saveImageFileAsTempFile).toHaveBeenCalledExactlyOnceWith({
+        filePath: '/local/shot.png',
+        runtimeEnvironmentId: 'env-1'
+      })
+      expect(chips.begin).toHaveBeenCalledExactlyOnceWith(undefined, 'shot.png', true)
+      expect(chips.resolve).toHaveBeenCalledExactlyOnceWith(
+        'chip-1',
+        '/remote/orca-paste-1.png',
+        null,
+        undefined
+      )
+      expect(setNotice).not.toHaveBeenCalled()
+    })
+
+    it('still refuses non-images with the unsupported notice', async () => {
+      mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
+        kind: 'remote',
+        clipboardImageEnvironmentId: 'env-1'
+      })
+      const chips = remoteChips()
+      const setNotice = vi.fn()
+      const probe = await renderProbe({
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips,
+        setNotice
+      })
+      await act(async () => probe.latest().attachExternalPaths(['/local/notes.txt']))
+      expect(setNotice).toHaveBeenCalledExactlyOnceWith(
+        'Local attachments are not available for remote sessions.'
+      )
+      expect(saveImageFileAsTempFile).not.toHaveBeenCalled()
+      expect(chips.begin).not.toHaveBeenCalled()
+    })
+
+    it('still refuses images when the remote owner names no environment', async () => {
+      mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'remote' })
+      const chips = remoteChips()
+      const setNotice = vi.fn()
+      const probe = await renderProbe({
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips,
+        setNotice
+      })
+      await act(async () => probe.latest().attachExternalPaths(['/local/shot.png']))
+      expect(setNotice).toHaveBeenCalledExactlyOnceWith(
+        'Local attachments are not available for remote sessions.'
+      )
+      expect(saveImageFileAsTempFile).not.toHaveBeenCalled()
+      expect(chips.begin).not.toHaveBeenCalled()
+    })
+
+    it('drops the chip and names the failure when an upload fails', async () => {
+      mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
+        kind: 'remote',
+        clipboardImageEnvironmentId: 'env-1'
+      })
+      saveImageFileAsTempFile.mockRejectedValueOnce(new Error('connection lost'))
+      const chips = remoteChips()
+      const notices: (string | null)[] = []
+      const probe = await renderProbe({
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips,
+        setNotice: (notice) => notices.push(notice)
+      })
+      await act(async () => probe.latest().attachExternalPaths(['/local/shot.png']))
+      expect(chips.resolve).not.toHaveBeenCalled()
+      expect(chips.drop).toHaveBeenCalledExactlyOnceWith('chip-1')
+      expect(notices).toEqual(["Couldn't attach shot.png. connection lost."])
+    })
+  })
 })

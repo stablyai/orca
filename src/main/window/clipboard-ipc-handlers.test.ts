@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessHost from '@orca/process-host'
+import type * as LocalFileAccessResolution from '../ipc/local-file-access-resolution'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
@@ -12,6 +13,7 @@ const {
   handleMock,
   runProcessMock,
   resolveAuthorizedPathMock,
+  resolveLocalRequestPathMock,
   fsAccessMock,
   fsLstatMock,
   fsMkdirMock,
@@ -20,6 +22,7 @@ const {
   fsWriteFileMock,
   fsOpenMock,
   fsStatMock,
+  fsReadFileMock,
   clipboardReadTextMock,
   clipboardReadBufferMock,
   clipboardWriteTextMock,
@@ -35,6 +38,7 @@ const {
   handleMock: vi.fn(),
   runProcessMock: vi.fn<typeof ProcessHost.runProcess>(),
   resolveAuthorizedPathMock: vi.fn(),
+  resolveLocalRequestPathMock: vi.fn(),
   fsAccessMock: vi.fn(),
   fsLstatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
@@ -43,6 +47,7 @@ const {
   fsWriteFileMock: vi.fn(),
   fsOpenMock: vi.fn(),
   fsStatMock: vi.fn(),
+  fsReadFileMock: vi.fn(),
   clipboardReadTextMock: vi.fn(),
   clipboardReadBufferMock: vi.fn(),
   clipboardWriteTextMock: vi.fn(),
@@ -68,6 +73,7 @@ vi.mock('node:fs/promises', () => ({
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
+  readFile: fsReadFileMock,
   realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
   writeFile: fsWriteFileMock,
   default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
@@ -77,6 +83,11 @@ vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
   resolveAuthorizedPath: resolveAuthorizedPathMock
+}))
+
+vi.mock('../ipc/local-file-access-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof LocalFileAccessResolution>()),
+  resolveLocalRequestPath: resolveLocalRequestPathMock
 }))
 
 vi.mock('node:crypto', () => ({
@@ -176,6 +187,8 @@ describe('registerClipboardHandlers', () => {
     })
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
+    resolveLocalRequestPathMock.mockReset()
+    resolveLocalRequestPathMock.mockImplementation(async (path: string) => path)
     fsLstatMock.mockReset()
     fsLstatMock.mockResolvedValue({
       isDirectory: () => true,
@@ -197,6 +210,7 @@ describe('registerClipboardHandlers', () => {
     fsOpenMock.mockReset()
     fsStatMock.mockReset()
     fsStatMock.mockResolvedValue({})
+    fsReadFileMock.mockReset()
     clipboardReadTextMock.mockReset()
     clipboardReadBufferMock.mockReset()
     clipboardReadBufferMock.mockReturnValue(Buffer.alloc(0))
@@ -432,6 +446,7 @@ describe('registerClipboardHandlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeImage')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageAsTempFile')
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageFileAsTempFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:hasImage')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readFilePaths')
@@ -594,6 +609,118 @@ describe('registerClipboardHandlers', () => {
       30_000
     )
     expect(fsWriteFileMock).not.toHaveBeenCalled()
+  })
+
+  it('uploads a dropped image file to the remote runtime temp dir', async () => {
+    const bytes = Buffer.from([1, 2, 3, 4])
+    fsStatMock.mockResolvedValue({ size: bytes.byteLength })
+    fsReadFileMock.mockResolvedValue(bytes)
+    callRuntimeEnvironmentMock.mockImplementation(async (_userDataPath, _runtimeId, method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'runtime-1' } }
+      }
+      if (method === 'clipboard.appendImageUploadChunk') {
+        return {
+          ok: true,
+          result: { receivedBase64Length: bytes.toString('base64').length },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'clipboard.commitImageUpload') {
+        return {
+          ok: true,
+          result: '/tmp/orca-paste-remote.png',
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageFileAsTempFile')?.(makeClipboardEvent(), {
+        filePath: '/local/shot.png',
+        runtimeEnvironmentId: 'remote-host-1'
+      })
+    ).resolves.toBe('/tmp/orca-paste-remote.png')
+    expect(resolveLocalRequestPathMock).toHaveBeenCalledWith(
+      '/local/shot.png',
+      { kind: 'chat-image' },
+      expect.anything(),
+      'read'
+    )
+    expect(fsReadFileMock).toHaveBeenCalledWith('/local/shot.png')
+    expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+      '/tmp',
+      'remote-host-1',
+      'clipboard.commitImageUpload',
+      { uploadId: 'upload-1' },
+      30_000
+    )
+  })
+
+  it('uploads a photo from outside the project roots, like a chat image', async () => {
+    const bytes = Buffer.from([9, 8, 7, 6])
+    fsStatMock.mockResolvedValue({ size: bytes.byteLength })
+    fsReadFileMock.mockResolvedValue(bytes)
+    callRuntimeEnvironmentMock.mockImplementation(async (_userDataPath, _runtimeId, method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return { ok: true, result: { uploadId: 'upload-9' }, _meta: { runtimeId: 'runtime-1' } }
+      }
+      if (method === 'clipboard.appendImageUploadChunk') {
+        return {
+          ok: true,
+          result: { receivedBase64Length: bytes.toString('base64').length },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'clipboard.commitImageUpload') {
+        return {
+          ok: true,
+          result: '/tmp/orca-paste-remote.png',
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:saveImageFileAsTempFile')?.(makeClipboardEvent(), {
+        filePath: '/Users/maria/Pictures/photo_55@26-05-2026_21-39-49_thumb.jpg',
+        runtimeEnvironmentId: 'remote-host-1'
+      })
+    ).resolves.toBe('/tmp/orca-paste-remote.png')
+    expect(resolveLocalRequestPathMock).toHaveBeenCalledWith(
+      '/Users/maria/Pictures/photo_55@26-05-2026_21-39-49_thumb.jpg',
+      { kind: 'chat-image' },
+      expect.anything(),
+      'read'
+    )
+    expect(fsReadFileMock).toHaveBeenCalledWith(
+      '/Users/maria/Pictures/photo_55@26-05-2026_21-39-49_thumb.jpg'
+    )
+  })
+
+  it('rejects malformed image file upload requests without touching disk', async () => {
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    const handler = handlers.get('clipboard:saveImageFileAsTempFile')
+    await expect(handler?.(makeClipboardEvent(), undefined)).rejects.toThrow(
+      'Invalid image file upload request'
+    )
+    await expect(handler?.(makeClipboardEvent(), { filePath: '/local/shot.png' })).rejects.toThrow(
+      'Invalid image file upload request'
+    )
+    expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
+    expect(resolveLocalRequestPathMock).not.toHaveBeenCalled()
+    expect(fsReadFileMock).not.toHaveBeenCalled()
+    expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
   })
 
   it('aborts remote runtime clipboard image uploads when a chunk fails', async () => {

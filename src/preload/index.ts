@@ -76,6 +76,7 @@ import { opencodeGoCredentialsApi } from './api/opencode-go-credentials-bridge'
 import { minimaxCredentialsApi } from './api/minimax-credentials-bridge'
 import { zcodePlanCredentialsApi } from './api/zcode-plan-credentials-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
+import { museAccountsApi } from './api/muse-accounts-bridge'
 import { cursorAccountsApi } from './api/cursor-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { plainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
@@ -178,6 +179,7 @@ const api = {
   minimaxCredentials: minimaxCredentialsApi,
   zcodePlanCredentials: zcodePlanCredentialsApi,
   grokAccounts: grokAccountsApi,
+  museAccounts: museAccountsApi,
   cursorAccounts: cursorAccountsApi,
   ssh: sshApi,
   plainSsh: plainSshTerminalApi,

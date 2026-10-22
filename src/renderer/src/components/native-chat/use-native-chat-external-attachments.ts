@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import {
@@ -9,7 +9,6 @@ import {
 import {
   nativeChatAttachmentOwnerChangedNotice,
   nativeChatAttachmentUnreadableNotice,
-  nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatTooManyAttachmentsNotice,
   nativeChatWorktreeNotReadyNotice,
   resolveNativeChatAttachmentOwner,
@@ -19,8 +18,14 @@ import {
   type NativeChatStructuredAttachmentSession
 } from './native-chat-attachment-upload'
 import {
+  attachNativeChatRemoteTerminalImages,
+  refuseRemoteTerminalImageDrop
+} from './native-chat-remote-terminal-image-drop'
+import {
   attachNativeChatSessionAttachmentPaths,
-  reserveNativeChatAttachmentChips,
+  captureNativeChatExternalDrop,
+  captureReservedNativeChatAttachments,
+  type NativeChatExternalAttachmentIntake,
   type NativeChatPendingAttachmentChips,
   type NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
@@ -136,7 +141,10 @@ export function useNativeChatExternalAttachments({
 
   // Captures one intake's owner, destination and chips; its checks and work run against them later.
   const captureIntake = useCallback(
-    (destinationIsCurrent: () => boolean, options?: NativeChatAttachmentFocusOptions) => {
+    (
+      destinationIsCurrent: () => boolean = () => true,
+      options?: NativeChatAttachmentFocusOptions
+    ): NativeChatExternalAttachmentIntake => {
       const owner = resolveAttachmentOwner()
       const chips = pendingChipsRef.current
       const capturedWorkspace = workspaceRef.current
@@ -152,7 +160,7 @@ export function useNativeChatExternalAttachments({
         isSameComposerWorkspace(capturedWorkspace, workspaceRef.current) &&
         capturedWorktreeId === currentWorktreeId() &&
         nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())
-      const refusal = (count: number): string | null => {
+      const refusal = (count: number, paths: readonly string[]): string | null => {
         if (!destinationIsCurrent()) {
           return nativeChatAttachmentOwnerChangedNotice()
         }
@@ -160,7 +168,7 @@ export function useNativeChatExternalAttachments({
           return owner.notice ?? nativeChatWorktreeNotReadyNotice()
         }
         if (owner.kind === 'remote') {
-          return nativeChatLocalAttachmentUnsupportedNotice()
+          return refuseRemoteTerminalImageDrop(owner, count, paths)
         }
         // The picker shares the drop limit without partially attaching a batch.
         if (count > NATIVE_FILE_DROP_MAX_PATHS) {
@@ -173,6 +181,20 @@ export function useNativeChatExternalAttachments({
           await attachNativeChatSessionAttachmentPaths({
             pending: reserved,
             owner,
+            chips,
+            options,
+            isAbandoned: () => disabledRef.current,
+            ownerStillCurrent,
+            setNotice
+          })
+          return
+        }
+        // A sync guard, not an awaited helper: the local file check below must
+        // start in this tick, and any await before it would defer the first stat.
+        if (owner.kind === 'remote' && owner.clipboardImageEnvironmentId !== undefined) {
+          await attachNativeChatRemoteTerminalImages({
+            pending: reserved,
+            runtimeEnvironmentId: owner.clipboardImageEnvironmentId,
             chips,
             options,
             isAbandoned: () => disabledRef.current,
@@ -258,52 +280,25 @@ export function useNativeChatExternalAttachments({
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]
   )
 
-  const captureExternalDrop = useCallback(
-    (
-      destinationIsCurrent: () => boolean = () => true,
-      options?: NativeChatAttachmentFocusOptions
-    ) => {
-      const intake = captureIntake(destinationIsCurrent, options)
-      const deliver: CapturedNativeChatDrop = async (paths: string[]): Promise<void> => {
-        if (paths.length === 0 || disabledRef.current || !mountedRef.current) {
-          return
-        }
-        const notice = intake.refusal(paths.length)
-        if (notice) {
-          setNotice(notice)
-          return
-        }
-        await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths))
-      }
-      deliver.preparationConsumer = intake.preparationConsumer
-      return deliver
-    },
-    [captureIntake, mountedRef, setNotice]
+  const captureExternalDrop = useMemo(
+    () =>
+      captureNativeChatExternalDrop({
+        captureIntake,
+        isAbandoned: () => disabledRef.current,
+        isMounted: () => mountedRef.current,
+        resolveIsRemoteTarget: () => resolveAttachmentOwner().kind === 'remote',
+        setNotice
+      }),
+    [captureIntake, mountedRef, resolveAttachmentOwner, setNotice]
   )
 
-  // Chips a paste reserved before its clipboard said they are files: admitted work, so it may
-  // finish after an unmount; a refusal releases them.
-  const captureReservedAttachments = useCallback(
-    (
-      destinationIsCurrent: () => boolean = () => true,
-      options?: NativeChatAttachmentFocusOptions
-    ) => {
-      const intake = captureIntake(destinationIsCurrent, options)
-      return async (reserved: NativeChatReservedAttachment[]): Promise<void> => {
-        if (reserved.length === 0) {
-          return
-        }
-        const notice = disabledRef.current ? '' : intake.refusal(reserved.length)
-        if (notice === null) {
-          await intake.run(reserved)
-          return
-        }
-        reserved.forEach(({ chipId }) => intake.chips.drop(chipId))
-        if (notice) {
-          setNotice(notice)
-        }
-      }
-    },
+  const captureReservedAttachments = useMemo(
+    () =>
+      captureReservedNativeChatAttachments({
+        captureIntake,
+        isAbandoned: () => disabledRef.current,
+        setNotice
+      }),
     [captureIntake, setNotice]
   )
   const attachExternalPaths = useCallback(

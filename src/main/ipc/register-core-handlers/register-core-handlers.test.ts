@@ -39,6 +39,7 @@ const {
   registerMiniMaxCredentialsHandlersMock,
   registerZcodePlanCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
+  registerMuseAccountHandlersMock,
   registerCursorAccountHandlersMock,
   registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsIdMock,
@@ -110,6 +111,7 @@ const {
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerZcodePlanCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
+  registerMuseAccountHandlersMock: vi.fn(),
   registerCursorAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
@@ -369,6 +371,10 @@ vi.mock('../grok-accounts', () => ({
   registerGrokAccountHandlers: registerGrokAccountHandlersMock
 }))
 
+vi.mock('../muse-accounts', () => ({
+  registerMuseAccountHandlers: registerMuseAccountHandlersMock
+}))
+
 vi.mock('../cursor-accounts', () => ({
   registerCursorAccountHandlers: registerCursorAccountHandlersMock
 }))
@@ -594,6 +600,7 @@ describe('registerCoreHandlers', () => {
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerZcodePlanCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
+    expect(registerMuseAccountHandlersMock).toHaveBeenCalled()
     expect(registerCursorAccountHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)

@@ -94,6 +94,20 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
   }
 }
 
+export function createMuseAccountsApi(): NonNullable<Partial<PreloadApi>['museAccounts']> {
+  const unsigned = {
+    signedIn: false,
+    email: null,
+    fullName: null,
+    subscriptionActive: null,
+    obtainedVia: null,
+    error: null
+  }
+  return {
+    getStatus: () => Promise.resolve(unsigned)
+  }
+}
+
 // Why: select/remove await provider usage refreshes on the server; give an applied switch room.
 const ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
 

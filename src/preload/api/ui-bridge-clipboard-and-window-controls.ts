@@ -92,6 +92,8 @@ export const uiClipboardAndWindowControlsApi = {
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  saveImageFileAsTempFile: (args: { filePath: string; runtimeEnvironmentId: string }) =>
+    ipcRenderer.invoke('clipboard:saveImageFileAsTempFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (

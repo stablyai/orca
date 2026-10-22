@@ -58,6 +58,7 @@ describe('web preload API composition', () => {
       'minimaxCredentials',
       'zcodePlanCredentials',
       'grokAccounts',
+      'museAccounts',
       'cursorAccounts',
       'codexAccounts',
       'claudeAccounts',

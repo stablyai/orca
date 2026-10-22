@@ -1,11 +1,4 @@
-import {
-  app,
-  clipboard,
-  ipcMain,
-  nativeImage,
-  type IpcMainInvokeEvent,
-  type WebContents
-} from 'electron'
+import { app, clipboard, ipcMain, nativeImage, type IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
@@ -50,8 +43,13 @@ import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { agentSessionPastedImageName } from '../../shared/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { isTrustedClipboardRenderer } from './clipboard-trust'
+import {
+  registerDroppedImageFileHandlers,
+  unregisterDroppedImageFileHandlers
+} from './dropped-image-file-ipc'
 
-let trustedClipboardRendererWebContentsId: number | null = null
+export { setTrustedClipboardRendererWebContentsId } from './clipboard-trust'
 
 type ClipboardWriteFileRequest = {
   filePath: string
@@ -101,10 +99,6 @@ async function saveClipboardImageBufferForTarget(
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
-export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
-  trustedClipboardRendererWebContentsId = webContentsId
-}
-
 export function registerClipboardHandlers(
   store: Store,
   handlerOptions: ClipboardHandlerOptions = {}
@@ -121,9 +115,11 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:hasImage')
   ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:restoreNativeChatPastes')
+  unregisterDroppedImageFileHandlers()
 
   void cleanupExpiredRemoteClipboardFiles()
   scheduleLegacyRemoteClipboardFileCleanup()
+  registerDroppedImageFileHandlers(store)
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
@@ -318,24 +314,4 @@ function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
   if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
-}
-
-function isTrustedClipboardRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedClipboardRendererWebContentsId != null) {
-    return sender.id === trustedClipboardRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  return senderUrl.startsWith('file://')
 }

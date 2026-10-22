@@ -834,4 +834,12 @@ describe('web UI preload API', () => {
       'runtime disconnected'
     )
   })
+
+  it('rejects dropped-image runtime uploads with the remote refusal', async () => {
+    const { api } = await installApi('Macintosh')
+
+    await expect(
+      api.ui.saveImageFileAsTempFile({ filePath: '/local/shot.png', runtimeEnvironmentId: 'env-1' })
+    ).rejects.toThrow('Local attachments are not available for remote sessions.')
+  })
 })

@@ -128,11 +128,53 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
 ]
 
+// Why: transcribed from the TUI's own `/help` list, in its order. Entries whose
+// name bytes are absent there (the status-bar, plugin, voice, MCP, subscription,
+// and Vim rows) stay out: a missing row beats a misnamed one.
+const MUSE_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'login', description: 'Log in with Meta account or using an API key' },
+  { name: 'logout', description: 'Log out, forget the saved login, and exit' },
+  { name: 'clear', description: 'Clear terminal and start a fresh session' },
+  { name: 'resume', description: 'Resume an earlier Muse Code session' },
+  { name: 'fork', description: 'Branch this session from the latest message' },
+  { name: 'rewind', description: 'Rewind conversation to an earlier input' },
+  { name: 'side', description: 'Start a side conversation' },
+  { name: 'init', description: 'Explore the workspace and create or improve AGENTS.md' },
+  {
+    name: 'deep-research',
+    description: 'Research a question across sources with cross-checking and citations'
+  },
+  { name: 'subagents', description: 'View running and past subagents' },
+  { name: 'model', description: 'Choose model' },
+  { name: 'settings', description: 'Open local settings/config' },
+  { name: 'keymap', description: 'Show keyboard shortcuts' },
+  { name: 'help', description: 'Show help' },
+  { name: 'theme', description: 'Choose color theme' },
+  { name: 'rules', description: 'Show which md files govern this session' },
+  { name: 'memory', description: 'Summarize the conversation to free up context' },
+  { name: 'export', description: 'Save the conversation, or the full session log' },
+  { name: 'copy', description: 'Copy a response, code block, or ran command to the clipboard' },
+  { name: 'recap', description: 'Show a recap of recent session activity' },
+  { name: 'skills', description: 'Browse and use skills' },
+  { name: 'effort', description: "Set the model's effort level" },
+  { name: 'goal', description: 'Start or manage continuous work toward a goal' },
+  { name: 'feedback', description: 'Send quick feedback to the team' },
+  { name: 'exit', description: 'Quit when idle' },
+  { name: 'stop', description: 'Stop all background tasks' },
+  { name: 'status', description: 'Show current session status' },
+  { name: 'usage', description: 'Show session usage/cost' },
+  { name: 'permissions', description: 'Choose what Muse Code is allowed to do' },
+  { name: 'tasks', description: 'View and manage background tasks and terminals' },
+  { name: 'workflows', description: 'Browse workflow runs' },
+  { name: 'questions', description: 'Answer pending questions' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: OPENCLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,
-  omp: OMP_COMMANDS
+  omp: OMP_COMMANDS,
+  muse: MUSE_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

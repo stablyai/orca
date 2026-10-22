@@ -6,6 +6,7 @@ describe('image paste agent map', () => {
     expect(getAgentImageHandling('claude')).toBe('attachment')
     expect(getAgentImageHandling('codex')).toBe('attachment')
     expect(getAgentImageHandling('grok')).toBe('attachment')
+    expect(getAgentImageHandling('muse')).toBe('attachment')
   })
 
   it('unknown/custom agent is unsupported', () => {

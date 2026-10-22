@@ -41,9 +41,10 @@ export type NativeChatAttachmentOwner =
   /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
   | { kind: 'local'; structuredSessionId?: string }
   | NativeChatRuntimeSessionAttachmentOwner
-  /** Refuses client files: a terminal-backed chat on a paired server (its agent may run on that
-   *  server's SSH or WSL host, which the server's store cannot reach), or an `ssh:` host, which
-   *  only its paired server serves. */
+  /** A terminal-backed chat on a paired server (its agent may run on that server's SSH
+   *  or WSL host, which the server's store cannot reach), or an `ssh:` host, which only its
+   *  paired server serves. Client files are refused, except images bound for the server's
+   *  own host, which upload into its temp dir like a remote clipboard paste. */
   | {
       kind: 'remote'
       /** The paired server whose own host runs this terminal's agent, so a clipboard image

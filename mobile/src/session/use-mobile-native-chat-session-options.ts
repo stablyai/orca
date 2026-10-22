@@ -72,7 +72,7 @@ export function useMobileNativeChatSessionOptions(args: {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker, discoveredModels } = args
   const baseCatalog = useMemo(
     () =>
-      agent === 'claude' || agent === 'codex' || agent === 'omp'
+      agent === 'claude' || agent === 'codex' || agent === 'omp' || agent === 'muse'
         ? getAgentSessionOptionCatalog(agent)
         : null,
     [agent]

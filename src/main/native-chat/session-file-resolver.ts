@@ -8,6 +8,10 @@ import {
 } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import {
+  museSessionIdFromFilePath,
+  resolveMuseSessionsDir
+} from '../ai-vault/session-scanner-muse-paths'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
 import {
   claudeProjectsHostDirs,
@@ -74,6 +78,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Muse sessions root (`~/.local/share/muse/sessions`). */
+  museSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -209,6 +215,16 @@ async function resolveSessionFileById(
       strictErrors: options.strictErrors
     })
   }
+  if (transcriptAgent === 'muse') {
+    // Why no WSL tier: Muse's root derives from XDG_DATA_HOME, which has no
+    // fixed per-home segments for the WSL table to join under a guest home.
+    return resolveMuseSessionFile(
+      trimmedId,
+      resolveMuseSessionsDir(options.museSessionsDir),
+      signal,
+      options.strictErrors
+    )
+  }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
   // the build here instead of resolving silently wrong at runtime.
@@ -313,6 +329,29 @@ async function findHostSessionFile(
     directoryPredicate: directoryPredicate
       ? (name, depth) => directoryPredicate(name, depth, wanted)
       : undefined,
+    signal,
+    strictErrors
+  })
+  return files[0] ?? null
+}
+
+async function resolveMuseSessionFile(
+  sessionId: string,
+  sessionsDir: string,
+  signal?: AbortSignal,
+  strictErrors?: boolean
+): Promise<string | null> {
+  if (!sessionsDir) {
+    return null
+  }
+  const files = await walkSessionFiles(sessionsDir, 'muse', [], {
+    extensions: new Set(['.jsonl']),
+    // Why: the session id is the parent directory name
+    // (<root>/YYYY/MM/DD/<uuid>/session.jsonl), and a subagent log nests one
+    // level deeper, so its parent dir is the child id — the predicate matches
+    // the parent file for a parent id and the child file for a child id, never
+    // crossing between them.
+    filePredicate: (path) => museSessionIdFromFilePath(path) === sessionId,
     signal,
     strictErrors
   })

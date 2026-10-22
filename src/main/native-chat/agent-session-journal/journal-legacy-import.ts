@@ -29,6 +29,7 @@ import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
+  decodeMuseTranscriptLine,
   decodeOmpTranscriptLine
 } from '../transcript-line-decoders'
 import { decodeTranscriptStream } from '../transcript-stream-lines'
@@ -206,6 +207,7 @@ const TRANSCRIPT_DECODERS = {
   claude: decodeClaudeTranscriptLine,
   codex: decodeCodexTranscriptLine,
   grok: decodeGrokTranscriptLine,
+  muse: decodeMuseTranscriptLine,
   omp: decodeOmpTranscriptLine
 } as const
 

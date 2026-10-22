@@ -2,6 +2,8 @@ import { basename } from '@/lib/path'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
+import type { DroppedPathConsumer } from '../../../../shared/native-file-drop-preparation'
 import type { NativeChatAttachmentFocusOptions } from './native-chat-resolved-path-ownership'
 import {
   nativeChatAttachFailedNotice,
@@ -17,7 +19,7 @@ export type NativeChatPendingAttachmentOptions = NativeChatAttachmentFocusOption
 
 /** The composer's pending-chip controls, as an upload drives them. */
 export type NativeChatPendingAttachmentChips = {
-  begin: (previewUrl?: string, pendingName?: string) => string | null
+  begin: (previewUrl?: string, pendingName?: string, serverOwned?: boolean) => string | null
   resolve: (
     id: string,
     path: string,
@@ -37,13 +39,105 @@ export type NativeChatPendingAttachmentChips = {
 /** A file and the pending chip reserved for it, which alone may settle its result. */
 export type NativeChatReservedAttachment = { path: string; chipId: string }
 
+/** What a captured intake offers a delivery: settle chips, refuse paths, run admitted work. */
+export type NativeChatExternalAttachmentIntake = {
+  chips: NativeChatPendingAttachmentChips
+  refusal: (count: number, paths: readonly string[]) => string | null
+  run: (reserved: NativeChatReservedAttachment[]) => Promise<void>
+  preparationConsumer: DroppedPathConsumer
+}
+
+export type CaptureReservedNativeChatAttachmentsArgs = {
+  captureIntake: (
+    destinationIsCurrent?: () => boolean,
+    options?: NativeChatAttachmentFocusOptions
+  ) => NativeChatExternalAttachmentIntake
+  isAbandoned: () => boolean
+  setNotice: (notice: string | null) => void
+}
+
+// Chips a paste reserved before its clipboard said they are files: admitted work, so it may
+// finish after an unmount; a refusal releases them.
+export function captureReservedNativeChatAttachments(
+  args: CaptureReservedNativeChatAttachmentsArgs
+): (
+  destinationIsCurrent?: () => boolean,
+  options?: NativeChatAttachmentFocusOptions
+) => (reserved: NativeChatReservedAttachment[]) => Promise<void> {
+  const { captureIntake, isAbandoned, setNotice } = args
+  return (destinationIsCurrent = () => true, options) => {
+    const intake = captureIntake(destinationIsCurrent, options)
+    return async (reserved: NativeChatReservedAttachment[]): Promise<void> => {
+      if (reserved.length === 0) {
+        return
+      }
+      const notice = isAbandoned()
+        ? ''
+        : intake.refusal(
+            reserved.length,
+            reserved.map(({ path }) => path)
+          )
+      if (notice === null) {
+        await intake.run(reserved)
+        return
+      }
+      reserved.forEach(({ chipId }) => intake.chips.drop(chipId))
+      if (notice) {
+        setNotice(notice)
+      }
+    }
+  }
+}
+
+export type CaptureNativeChatExternalDropArgs = {
+  captureIntake: (
+    destinationIsCurrent?: () => boolean,
+    options?: NativeChatAttachmentFocusOptions
+  ) => NativeChatExternalAttachmentIntake
+  isAbandoned: () => boolean
+  isMounted: () => boolean
+  resolveIsRemoteTarget: () => boolean
+  setNotice: (notice: string | null) => void
+}
+
+/** A drop delivery over one captured intake; refused paths surface its notice. */
+export function captureNativeChatExternalDrop(
+  args: CaptureNativeChatExternalDropArgs
+): (
+  destinationIsCurrent?: () => boolean,
+  options?: NativeChatAttachmentFocusOptions
+) => CapturedNativeChatDrop {
+  const { captureIntake, isAbandoned, isMounted, resolveIsRemoteTarget, setNotice } = args
+  return (destinationIsCurrent = () => true, options) => {
+    const intake = captureIntake(destinationIsCurrent, options)
+    const deliver: CapturedNativeChatDrop = async (paths: string[]): Promise<void> => {
+      if (paths.length === 0 || isAbandoned() || !isMounted()) {
+        return
+      }
+      const notice = intake.refusal(paths.length, paths)
+      if (notice) {
+        setNotice(notice)
+        return
+      }
+      // Why serverOwned for a remote intake: its chips settle server-side
+      // paths, so the target gate must not treat them as client-local ones.
+      await intake.run(
+        reserveNativeChatAttachmentChips(intake.chips, paths, resolveIsRemoteTarget())
+      )
+    }
+    deliver.preparationConsumer = intake.preparationConsumer
+    return deliver
+  }
+}
+
 /** One named pending chip per file; a path without one was refused and the composer said why. */
 export function reserveNativeChatAttachmentChips(
   chips: NativeChatPendingAttachmentChips,
-  paths: string[]
+  paths: string[],
+  serverOwned = false
 ): NativeChatReservedAttachment[] {
   return paths.flatMap((path) => {
-    const chipId = chips.begin(undefined, basename(path))
+    const chipId = chips.begin(undefined, basename(path), serverOwned)
     return chipId ? [{ path, chipId }] : []
   })
 }

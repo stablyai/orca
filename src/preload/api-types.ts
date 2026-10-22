@@ -5,6 +5,7 @@ import type {
   CursorAccountsApi,
   GrokAccountsApi,
   MinimaxCredentialsApi,
+  MuseAccountsApi,
   ZcodePlanCredentialsApi
 } from './api/agent-account-api'
 import type { HooksApi } from './api/agent-hook-api'
@@ -152,6 +153,7 @@ export type PreloadApi = {
   minimaxCredentials: MinimaxCredentialsApi
   zcodePlanCredentials: ZcodePlanCredentialsApi
   grokAccounts: GrokAccountsApi
+  museAccounts: MuseAccountsApi
   cursorAccounts: CursorAccountsApi
   ssh: SshApi
   /** Desktop only: an unmanaged ssh login to a host whose move is blocked. */

@@ -25,6 +25,7 @@ describe('structured agent metadata without adapter implementations', () => {
     expect(STRUCTURED_AGENT_RUNTIME_METADATA.map(({ definition }) => definition.agent)).toEqual([
       'pi',
       'codex',
+      'muse',
       'claude',
       'grok',
       'opencode',

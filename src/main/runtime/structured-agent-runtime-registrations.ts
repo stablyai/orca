@@ -13,6 +13,9 @@ import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtim
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { createAcpAgentConnection } from '../acp/acp-agent-connection'
+import { MuseStructuredSessionAdapter } from '../muse/muse-structured-session-adapter'
+import { MUSE_STRUCTURED_AGENT } from '../muse/muse-structured-agent-definition'
+import { museStructuredLaunchPart } from '../muse/muse-structured-launch-resolution'
 import { acpStructuredLaunchPart } from '../acp/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../pi/rpc-runtime-registration'
@@ -97,6 +100,35 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
   })
 }
 
+function createMuseAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
+  const { deps, followUps } = context
+  const resolveLaunch = composeStructuredLaunch(
+    MUSE_STRUCTURED_AGENT,
+    structuredAgentLaunchSources(context),
+    museStructuredLaunchPart({})
+  )
+  return new MuseStructuredSessionAdapter({
+    resolveLaunch: async (request) => {
+      const launch = await resolveLaunch(request)
+      const env = { ...launch.env }
+      for (const key of launch.envToDelete) {
+        delete env[key]
+      }
+      return {
+        command: launch.command,
+        args: [...launch.args],
+        cwd: launch.cwd,
+        env,
+        resumeSessionId: launch.resumeSessionId ?? null
+      }
+    },
+    logger: deps.logger,
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    onLifecycle: context.deliverLifecycle,
+    onDispatchSettledLate: followUps.onDispatchSettledLate
+  })
+}
+
 function createClaudeAdapter(
   context: StructuredAgentAdapterContext
 ): StructuredAgentRuntimeAdapter {
@@ -174,6 +206,8 @@ function registrationWithAdapter(
       return Object.assign(entry.metadata, { createAdapter: createCodexAdapter })
     case 'claude':
       return Object.assign(entry.metadata, { createAdapter: createClaudeAdapter })
+    case 'muse':
+      return Object.assign(entry.metadata, { createAdapter: createMuseAdapter })
     case 'acp':
       return Object.assign(entry.metadata, { createAdapter: createAcpAdapter(entry.spec) })
   }

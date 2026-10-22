@@ -19,7 +19,12 @@ const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<string> = new Set<string>([
   // Why: Grok CLI pastes images via bracketed path / image chips (see xAI
   // terminal docs + pager paste.rs). Keep it on the same attachment path as
   // Claude/Codex rather than treating path paste as unsupported text.
-  'grok'
+  'grok',
+  // Why: the Muse docs say pasting or dropping an image into the composer
+  // attaches it as an `[Image #N]` label, and the TUI advertises that file
+  // paths work for image paste — a drop is a path insertion, so a pasted
+  // image path attaches the same way it does for Claude/Codex.
+  'muse'
 ])
 
 export function getAgentImageHandling(agent: string | null | undefined): AgentImageHandling {
