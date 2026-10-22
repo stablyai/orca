@@ -184,6 +184,31 @@ describe('installMonacoEmacsMode', () => {
     expect(firstSave).not.toHaveBeenCalled()
   })
 
+  it('leaves a newer install alone when an install cancelled during the import resolves', async () => {
+    const { editorInstance, fake } = createFakeEditor()
+    let cancelled = false
+    const staleSave = vi.fn()
+    const liveSave = vi.fn()
+    const stale = installMonacoEmacsMode(
+      editorInstance,
+      document.createElement('div'),
+      { ...noopHooks, onSave: staleSave },
+      () => cancelled
+    )
+    cancelled = true
+    const staleController = await stale
+    await installMonacoEmacsMode(editorInstance, document.createElement('div'), {
+      ...noopHooks,
+      onSave: liveSave
+    })
+    staleController.dispose()
+
+    registeredCommand('C-x C-s')?.run?.(editorInstance, null, 1, false)
+    expect(liveSave).toHaveBeenCalledTimes(1)
+    expect(staleSave).not.toHaveBeenCalled()
+    expect(fake.contextKey.set).not.toHaveBeenCalledWith(false)
+  })
+
   it('routes the window commands to the hooks of the editor that received the key', async () => {
     const { editorInstance } = createFakeEditor()
     const hooks = {
