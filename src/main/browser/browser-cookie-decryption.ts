@@ -48,15 +48,20 @@ export function buildUndecryptableWarning(counts: {
   decryptFailed: number
   appBoundFailed: number
   keyringUnavailableFailed: number
+  secretToolMissingFailed: number
 }): BrowserCookieImportSummary['warning'] {
   if (counts.decryptFailed === 0) {
     return undefined
   }
   const unknownFailed =
-    counts.decryptFailed - counts.appBoundFailed - counts.keyringUnavailableFailed
+    counts.decryptFailed -
+    counts.appBoundFailed -
+    counts.keyringUnavailableFailed -
+    counts.secretToolMissingFailed
   const rankedCauses = [
     { reason: 'app-bound-encryption' as const, count: counts.appBoundFailed },
     { reason: 'linux-keyring-unavailable' as const, count: counts.keyringUnavailableFailed },
+    { reason: 'linux-secret-tool-missing' as const, count: counts.secretToolMissingFailed },
     { reason: 'unknown' as const, count: unknownFailed }
   ].sort((left, right) => right.count - left.count)
   const [dominant, runnerUp] = rankedCauses
