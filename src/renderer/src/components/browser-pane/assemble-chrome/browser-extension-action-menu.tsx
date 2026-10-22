@@ -104,7 +104,8 @@ export function useBrowserExtensionActionMenuEntries(
       }),
       description: browserExtensionRemovalDescription(action.source),
       confirmLabel: translate('settings.browser.extensions.remove', 'Remove'),
-      confirmVariant: 'destructive'
+      confirmVariant: 'destructive',
+      surface: 'security'
     })
     if (confirmed) {
       await reportFailure(window.api.browser.extensionsRemove({ profileId, extensionId }))

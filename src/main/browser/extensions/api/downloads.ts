@@ -44,10 +44,15 @@ function chromeState(item: Electron.DownloadItem): ChromeDownloadState {
       : 'interrupted'
 }
 
+// Why the chain: getURL is the URL after redirects; Chrome's `url` is the one requested.
+function requestedUrl(item: Electron.DownloadItem): string {
+  return item.getURLChain()[0] ?? item.getURL()
+}
+
 function describeItem(id: number, item: Electron.DownloadItem, extensionId: string) {
   return {
     id,
-    url: item.getURL(),
+    url: requestedUrl(item),
     finalUrl: item.getURL(),
     referrer: '',
     filename: item.getSavePath(),
@@ -156,7 +161,7 @@ function startDownload(
       item: Electron.DownloadItem,
       contents: Electron.WebContents
     ): void {
-      if (contents !== owner || item.getURL() !== url) {
+      if (contents !== owner || requestedUrl(item) !== url) {
         return
       }
       clearTimeout(timer)

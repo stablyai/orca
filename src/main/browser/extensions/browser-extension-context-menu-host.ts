@@ -22,6 +22,7 @@ import {
   visibleContextMenuTree,
   type ContextMenuTarget
 } from './browser-extension-context-menu-target'
+import { grantBrowserExtensionActiveTab } from './browser-extension-active-tab'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
 import { extensionHasPermission } from './browser-extension-namespace-registry'
 import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
@@ -154,6 +155,9 @@ function runClick(snapshot: MenuSnapshot, extensionId: string, key: string): boo
     checked: click.checked
   })
   const entry = snapshot.tabId === null ? null : resolveBrowserExtensionTab(snapshot.tabId)
+  if (entry) {
+    grantBrowserExtensionActiveTab(extension, entry.contents.id)
+  }
   const tab = entry ? describeBrowserExtensionTab(extension, entry) : undefined
   noteBrowserExtensionUserGesture(snapshot.session, extensionId)
   emitBrowserExtensionEvent(

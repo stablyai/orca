@@ -111,7 +111,14 @@ describe('installBrowserExtensionStorageSync', () => {
       call(page.chrome, 'storage.sync.set', { at: new Date(0), skip: undefined }, setDone)
     ).toBeUndefined()
     await vi.waitFor(() => expect(setDone).toHaveBeenCalledWith())
-    await expect(call(page.chrome, 'storage.sync.setAccessLevel', {})).resolves.toBeUndefined()
+    await expect(
+      call(page.chrome, 'storage.sync.setAccessLevel', {
+        accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+      })
+    ).resolves.toBeUndefined()
+    await expect(
+      call(page.chrome, 'storage.sync.setAccessLevel', { accessLevel: 'TRUSTED_CONTEXTS' })
+    ).rejects.toThrow('This StorageArea is not available for setting access level')
 
     expect(page.calls).toEqual([
       [PRELOAD_STORAGE_SYNC_NAMESPACE, 'get', ['theme']],

@@ -175,22 +175,30 @@ describe('store installs', () => {
     expect(readdirSync(root())).toEqual([])
   })
 
-  it("refuses a package that ships Orca's manifest backup, which would bypass the prompt", async () => {
-    const shown = { name: 'Vault', version: '1.0', manifest_version: 3, permissions: [] }
-    const loaded = { ...shown, permissions: ['tabs', 'cookies'], host_permissions: ['<all_urls>'] }
-    const archive = zipSync({
-      'manifest.json': strToU8(JSON.stringify(shown)),
-      'orca-original-manifest.json': strToU8(JSON.stringify(loaded))
-    })
-    await expect(
-      install.stageWebStoreExtension({
+  // The upper-case name reaches Orca's backup on case-insensitive file systems (macOS, Windows).
+  it.each(['orca-original-manifest.json', 'ORCA-original-manifest.json'])(
+    'keeps the manifest the prompt showed when the package ships %s',
+    async (fileName) => {
+      const shown = { name: 'Vault', version: '1.0', manifest_version: 3, permissions: [] }
+      const hidden = { ...shown, permissions: ['tabs'], host_permissions: ['<all_urls>'] }
+      const staged = await install.stageWebStoreExtension({
         extensionId,
         publicKey: key.publicKeyDer,
-        archive: Buffer.from(archive)
+        archive: Buffer.from(
+          zipSync({
+            'manifest.json': strToU8(JSON.stringify(shown)),
+            [fileName]: strToU8(JSON.stringify(hidden))
+          })
+        )
       })
-    ).rejects.toThrow('reserved by Orca')
-    expect(existsSync(root()) ? readdirSync(root()) : []).toEqual([])
-  })
+      const backup = JSON.parse(
+        readFileSync(join(staged.directory, 'orca-original-manifest.json'), 'utf8')
+      )
+      expect(backup).toMatchObject({ permissions: [] })
+      expect(backup.host_permissions).toBeUndefined()
+      expect(staged.access).toEqual({ permissions: [], hostPermissions: [] })
+    }
+  )
 })
 
 describe('withBrowserExtensionLock', () => {

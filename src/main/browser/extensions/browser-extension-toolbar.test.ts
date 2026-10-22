@@ -5,10 +5,13 @@ type FakeContents = { id: number; session: FakeSession; isDestroyed: () => boole
 
 const mocks = vi.hoisted(() => {
   const emitted: { session: unknown; event: string; args: unknown }[] = []
-  const state: { activeTabId: number | null } = { activeTabId: null }
+  const state: { activeTabId: number | null; popup: string } = { activeTabId: null, popup: '' }
+  const sent: unknown[] = []
   return {
     contents: new Map<number, { id: number; session: object; isDestroyed: () => boolean }>(),
     tabIds: new Set<number>(),
+    pageIds: new Map<number, string>(),
+    sent,
     state,
     grant: vi.fn(),
     emitted
@@ -18,7 +21,9 @@ const mocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => mocks.contents.get(id) }
 }))
-vi.mock('../browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser-manager', () => ({
+  browserManager: { getTabIdForWebContentsId: (id: number) => mocks.pageIds.get(id) ?? null }
+}))
 vi.mock('./browser-extension-api-host', () => ({
   getBrowserExtensionProfileIdForSession: () => 'profile',
   emitBrowserExtensionEvent: (
@@ -31,13 +36,19 @@ vi.mock('./browser-extension-api-host', () => ({
 vi.mock('./browser-extension-action-icon', () => ({}))
 vi.mock('./browser-extension-active-tab', () => ({ grantBrowserExtensionActiveTab: mocks.grant }))
 vi.mock('./browser-extension-action-registry', () => ({
-  getBrowserExtensionActionState: () => ({ get: () => ({ enabled: true, popup: '' }) })
+  getBrowserExtensionActionState: () => ({
+    get: () => ({ enabled: true, popup: mocks.state.popup })
+  })
 }))
 vi.mock('./browser-extension-action-state', () => ({}))
 vi.mock('./browser-extension-install-store', () => ({}))
-vi.mock('./browser-extension-popup-host', () => ({}))
+vi.mock('./browser-extension-popup-host', () => ({ getOpenBrowserExtensionPopup: () => null }))
 vi.mock('./browser-extension-toolbar-pins', () => ({}))
-vi.mock('./browser-extension-window-model', () => ({}))
+vi.mock('./browser-extension-window-model', () => ({
+  getBrowserExtensionMainWindow: () => ({
+    webContents: { send: (_channel: string, request: unknown) => mocks.sent.push(request) }
+  })
+}))
 vi.mock('./browser-extension-tab-model', () => ({
   getActiveBrowserTabId: () => mocks.state.activeTabId,
   resolveBrowserExtensionTab: (id: number) =>
@@ -72,6 +83,9 @@ function run(invoking: FakeContents) {
 beforeEach(() => {
   mocks.contents.clear()
   mocks.tabIds.clear()
+  mocks.pageIds.clear()
+  mocks.sent.length = 0
+  mocks.state.popup = ''
   mocks.grant.mockClear()
   mocks.emitted.length = 0
   // Orca's main window shows profile B's tab.
@@ -100,5 +114,20 @@ describe('an extension action run from a keyboard shortcut', () => {
     await run(popup)
     expect(mocks.grant).toHaveBeenCalledWith(extension, 21)
     expect(mocks.emitted.map((entry) => entry.args)).toEqual([[{ id: 21 }], [{ id: 21 }]])
+  })
+
+  it("opens the popup on the invoking tab's toolbar, and refuses in a popout that has none", async () => {
+    vi.useFakeTimers()
+    mocks.state.popup = 'popup.html'
+    const tab = contents(31, profileA, true)
+    mocks.pageIds.set(31, 'page-31')
+    const pending = expect(run(tab)).rejects.toThrow()
+    expect(mocks.sent).toEqual([{ browserPageId: 'page-31', extensionId: extension.id }])
+    await vi.runAllTimersAsync()
+    await pending
+    vi.useRealTimers()
+
+    await expect(run(contents(43, profileA, true))).rejects.toThrow('no toolbar')
+    expect(mocks.sent).toHaveLength(1)
   })
 })

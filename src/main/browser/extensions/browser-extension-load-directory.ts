@@ -84,14 +84,21 @@ function requireInside(directory: string, relativePath: string): string {
   return target
 }
 
-// Why the backup can be trusted: packages never supply Orca's file names (see isOrcaReservedExtensionFile).
+/**
+ * Why the store backup can be trusted: staging writes it from the manifest the install prompt
+ * showed. An unpacked copy is made fresh for every prepare, so its own manifest is the original.
+ */
 async function readOriginalManifest(
-  directory: string
+  directory: string,
+  source: BrowserExtensionLoadSource['source']
 ): Promise<{ originalText: string; original: Record<string, unknown> }> {
-  const originalText =
-    (await readFile(join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE), 'utf8').catch(
-      () => null
-    )) ?? (await readFile(join(directory, 'manifest.json'), 'utf8'))
+  const backup =
+    source === 'webstore'
+      ? await readFile(join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE), 'utf8').catch(
+          () => null
+        )
+      : null
+  const originalText = backup ?? (await readFile(join(directory, 'manifest.json'), 'utf8'))
   return { originalText, original: parseManifest(originalText) }
 }
 
@@ -126,11 +133,6 @@ const ORCA_GENERATED_FILE_NAMES = new Set([
   BROWSER_EXTENSION_WORKER_WRAPPER_FILE
 ])
 
-/** A file only Orca may write; a package that ships one could swap the manifest Orca loads. */
-export function isOrcaReservedExtensionFile(path: string): boolean {
-  return ORCA_GENERATED_FILE_NAMES.has(basename(path))
-}
-
 // Why skip Orca's own files: they appear only after the first load, and listing them would change
 // the manifest on the next launch and needlessly re-register the worker.
 async function listPackageFiles(directory: string): Promise<string[]> {
@@ -152,11 +154,11 @@ async function prepare(
     await cp(extension.path, directory, {
       recursive: true,
       dereference: true,
-      filter: (source) => basename(source) !== '.git' && !isOrcaReservedExtensionFile(source)
+      filter: (source) => basename(source) !== '.git'
     })
   }
   const originalPath = join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE)
-  const { originalText, original } = await readOriginalManifest(directory)
+  const { originalText, original } = await readOriginalManifest(directory, extension.source)
   const key = manifestKey(original, extension)
   const extensionId = chromeExtensionIdFromKey(key)
   const adjusted = withPrivateFilesHiddenFromWebAccessibleResources(

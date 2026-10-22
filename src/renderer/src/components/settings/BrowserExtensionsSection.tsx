@@ -204,7 +204,8 @@ export function BrowserExtensionsSection({
       }),
       description: browserExtensionRemovalDescription(extension.source),
       confirmLabel: translate('settings.browser.extensions.remove', 'Remove'),
-      confirmVariant: 'destructive'
+      confirmVariant: 'destructive',
+      surface: 'security'
     })
     if (confirmed) {
       await run(extension.id, () =>

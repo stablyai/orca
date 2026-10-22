@@ -222,19 +222,23 @@ function resolvePendingPopupRequest(profileId: string, extensionId: string): voi
 
 /**
  * action.openPopup and the _execute_action command: the renderer knows where the button is, so
- * main asks the active page's toolbar to open the popup anchored there.
+ * main asks the toolbar of `tabId`'s page (by default the active one) to open the popup there.
  */
 export function requestBrowserExtensionPopup(
   sess: Electron.Session,
-  extensionId: string
+  extensionId: string,
+  tabId = getActiveBrowserTabId()
 ): Promise<void> {
   const profileId = getBrowserExtensionProfileIdForSession(sess)
-  const tabId = getActiveBrowserTabId()
   const tab = liveContents(tabId)
-  const browserPageId = tabId === null ? null : browserManager.getTabIdForWebContentsId(tabId)
-  const mainWindow = getBrowserExtensionMainWindow()
-  if (!profileId || !tab || tab.session !== sess || !browserPageId || !mainWindow) {
+  if (!profileId || !tab || tab.session !== sess) {
     return Promise.reject(new BrowserExtensionApiError('No active tab to show the popup on'))
+  }
+  const browserPageId = browserManager.getTabIdForWebContentsId(tab.id)
+  const mainWindow = getBrowserExtensionMainWindow()
+  // Why: only Orca's own tabs have a toolbar; a popout, like Chrome's popup windows, has none.
+  if (!browserPageId || !mainWindow) {
+    return Promise.reject(new BrowserExtensionApiError('This window has no toolbar for the popup'))
   }
   const open = getOpenBrowserExtensionPopup()
   if (open?.profileId === profileId && open.extensionId === extensionId) {
@@ -291,7 +295,7 @@ export async function runBrowserExtensionToolbarAction(
   }
   grantBrowserExtensionActiveTab(extension, tabId)
   if (details.popup !== '') {
-    await requestBrowserExtensionPopup(sess, extension.id)
+    await requestBrowserExtensionPopup(sess, extension.id, tabId)
     return
   }
   emitActionClicked(sess, extension, tabId)

@@ -1,4 +1,3 @@
-import type { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
@@ -35,7 +34,7 @@ vi.mock('./browser-extension-api-host', () => ({
   emitBrowserExtensionEvent: (target: { session?: unknown }, _ns: string, event: string) =>
     mocks.emitted.push({ session: target.session, event })
 }))
-vi.mock('./browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
+vi.mock('./browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => false }))
 vi.mock('./browser-extension-main-window-readiness', () => ({
   watchBrowserExtensionMainWindowReadiness: () => {}
 }))
@@ -48,7 +47,15 @@ const profileA = { name: 'a' } as unknown as Electron.Session
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
 const profileB = { name: 'b' } as unknown as Electron.Session
 
+const focus = (window: Electron.BrowserWindow): boolean => window.emit('focus')
+
 describe("a profile's extension windows", () => {
+  it('track the main window while extensions are off, so turning them on finds it', () => {
+    const main = new BrowserWindow()
+    model.trackBrowserExtensionMainWindow(main)
+    expect(model.getBrowserExtensionMainWindow()).toBe(main)
+  })
+
   it("never include another profile's popout, in lookups or events", () => {
     const main = new BrowserWindow()
     model.trackBrowserExtensionMainWindow(main)
@@ -64,8 +71,7 @@ describe("a profile's extension windows", () => {
     expect(model.getBrowserExtensionWindow(popout.id, profileA)).toBeNull()
     expect(model.getBrowserExtensionWindow(popout.id, profileB)?.window).toBe(popout)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake window is an EventEmitter.
-    ;(popout as unknown as EventEmitter).emit('focus')
+    focus(popout)
     expect(model.getLastFocusedBrowserExtensionWindowId(profileA)).toBe(main.id)
     expect(model.getLastFocusedBrowserExtensionWindowId(profileB)).toBe(popout.id)
 
@@ -75,5 +81,20 @@ describe("a profile's extension windows", () => {
       { session: profileB, event: 'onFocusChanged' },
       { session: profileB, event: 'onRemoved' }
     ])
+  })
+
+  it("keep each profile's last-focused popout when another profile's popout takes focus", () => {
+    const main = new BrowserWindow()
+    model.trackBrowserExtensionMainWindow(main)
+    const options = { url: 'https://x.test/', type: 'popup' as const, focused: false }
+    const popoutA = model.createBrowserExtensionPopout(profileA, options)
+    const popoutB = model.createBrowserExtensionPopout(profileB, options)
+    focus(popoutA)
+    focus(popoutB)
+    expect(model.getLastFocusedBrowserExtensionWindowId(profileA)).toBe(popoutA.id)
+    expect(model.getLastFocusedBrowserExtensionWindowId(profileB)).toBe(popoutB.id)
+    focus(main)
+    expect(model.getLastFocusedBrowserExtensionWindowId(profileA)).toBe(main.id)
+    expect(model.getLastFocusedBrowserExtensionWindowId(profileB)).toBe(main.id)
   })
 })

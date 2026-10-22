@@ -85,6 +85,18 @@ export class BrowserExtensionProfileStateStore {
     this.schedulePersist()
   }
 
+  /** Drops one profile's state of every extension not in `extensionIds`. */
+  forgetExtensionsExcept(profileId: string, extensionIds: ReadonlySet<string>): void {
+    const byExtension = this.load()[profileId] ?? {}
+    const forgotten = Object.keys(byExtension).filter((id) => !extensionIds.has(id))
+    for (const extensionId of forgotten) {
+      delete byExtension[extensionId]
+    }
+    if (forgotten.length > 0) {
+      this.schedulePersist()
+    }
+  }
+
   forgetProfile(profileId: string): void {
     delete this.load()[profileId]
     this.schedulePersist()

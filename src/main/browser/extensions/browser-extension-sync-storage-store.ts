@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { isChromeExtensionId } from '../../../shared/browser-extension-url'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
 
@@ -71,6 +72,29 @@ export class BrowserExtensionSyncStorageStore {
       rmSync(join(this.rootDirectory, this.directoryName, directory, this.fileName(extensionId)), {
         force: true
       })
+    }
+  }
+
+  /** Drops one profile's items of every extension not in `extensionIds`. */
+  forgetExtensionsExcept(profileId: string, extensionIds: ReadonlySet<string>): void {
+    const cached = this.cache.get(profileId)
+    for (const extensionId of cached?.keys() ?? []) {
+      if (!extensionIds.has(extensionId)) {
+        cached?.delete(extensionId)
+        this.dirty.get(profileId)?.delete(extensionId)
+      }
+    }
+    let files: string[]
+    try {
+      files = readdirSync(this.profileDirectory(profileId))
+    } catch {
+      return
+    }
+    for (const file of files) {
+      const extensionId = file.replace(/\.json$/, '')
+      if (isChromeExtensionId(extensionId) && !extensionIds.has(extensionId)) {
+        rmSync(join(this.profileDirectory(profileId), file), { force: true })
+      }
     }
   }
 

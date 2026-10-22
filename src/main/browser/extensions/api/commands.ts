@@ -11,6 +11,7 @@ import {
   readBrowserExtensionCommands,
   shortcutMatchesInput
 } from '../browser-extension-commands'
+import { grantBrowserExtensionActiveTab } from '../browser-extension-active-tab'
 import { localizeManifestString } from '../browser-extension-manifest'
 import {
   defineBrowserExtensionMethod,
@@ -64,14 +65,17 @@ export function observeBrowserExtensionCommands(contents: Electron.WebContents):
     event.preventDefault()
     const { extension, name } = match
     noteBrowserExtensionUserGesture(session, extension.id)
-    const entry = resolveBrowserExtensionTab(contents.id)
-    const tab = entry ? describeBrowserExtensionTab(extension, entry) : undefined
     if (EXECUTE_ACTION_COMMANDS.has(name)) {
       runBrowserExtensionToolbarAction(contents, extension).catch((error: unknown) => {
         console.warn('[browser-extensions] Could not run the extension action:', error)
       })
       return
     }
+    const entry = resolveBrowserExtensionTab(contents.id)
+    if (entry) {
+      grantBrowserExtensionActiveTab(extension, entry.contents.id)
+    }
+    const tab = entry ? describeBrowserExtensionTab(extension, entry) : undefined
     emitBrowserExtensionEvent(
       { session, extensionId: extension.id },
       'commands',

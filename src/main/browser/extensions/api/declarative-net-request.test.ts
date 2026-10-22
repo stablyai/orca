@@ -175,6 +175,19 @@ describe('chrome.declarativeNetRequest', () => {
     expect(blocks('https://a.example/x.js')).toBe(true)
   })
 
+  it('drops updates still queued when the extension unloads', async () => {
+    const { session } = await launch(extension('6'))
+    const runtime = getDnrSessionRuntime(session)
+    const rules = runtime?.extensions.get(ID)?.rules
+    const enabling = rules?.updateEnabledRulesets(['b'], [])
+    const disabling = rules?.updateStaticRules('a', [1], [])
+    runtime?.removeExtension(ID)
+    await enabling?.catch(() => undefined)
+    await expect(disabling).rejects.toThrow('Internal error.')
+    const next = await launch(extension('6'))
+    expect(next.blocks('https://a.example/x.js')).toBe(true)
+  })
+
   it('checks regexes and tests a request against its own rules', async () => {
     const { call } = await launch(extension('4'))
     await expect(call('isRegexSupported', { regex: '^https://a\\.example/' })).resolves.toEqual({

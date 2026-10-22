@@ -35,6 +35,13 @@ export class DnrApiError extends Error {}
 
 type ScopedRules = { rules: DnrRule[]; built: DnrBuiltRuleset | null }
 
+function readableRules(json: readonly unknown[]): DnrRule[] {
+  return json.flatMap((value) => {
+    const read = readDnrRuleJson(value)
+    return read.ok ? [read.rule] : []
+  })
+}
+
 export type DnrAttachedRuleset = {
   source: DnrRulesetSource
   built: DnrBuiltRuleset
@@ -66,7 +73,10 @@ export class DnrExtensionRules {
 
   /** Runs API updates one at a time, after the initial load, as Chrome sequences them. */
   enqueue<T>(task: () => Promise<T> | T): Promise<T> {
-    const run = this.queue.then(task)
+    // Why: the engine and saved state are keyed by extension id, so a replacement would take this work.
+    const run = this.queue.then(() =>
+      this.unloaded ? Promise.reject(new DnrApiError(DNR_ERRORS.internal)) : task()
+    )
     this.queue = run.catch(() => undefined)
     return run
   }
@@ -80,10 +90,7 @@ export class DnrExtensionRules {
         ? this.manifestRulesets.filter((ruleset) => state.enabledRulesetIds?.includes(ruleset.id))
         : this.manifestRulesets.filter((ruleset) => ruleset.enabled)
       await this.enableStaticWithinLimits(wanted)
-      const dynamic = state.dynamicRules.flatMap((json) => {
-        const read = readDnrRuleJson(json)
-        return read.ok ? [read.rule] : []
-      })
+      const dynamic = readableRules(state.dynamicRules)
       if (dynamic.length > 0 && !this.unloaded) {
         const result = await buildDnrRules(dynamic, this.extension.id, { kind: 'dynamic' }, 'warn')
         if (result.ok && !this.unloaded) {
@@ -289,13 +296,7 @@ export class DnrExtensionRules {
       const remove = new Set(removeIds)
       const kept = this.scoped[scope].rules.filter((rule) => !remove.has(rule.id))
       const candidates = [...kept, ...addRules]
-      const added: DnrRule[] = []
-      for (const json of addRules) {
-        const read = readDnrRuleJson(json)
-        if (read.ok) {
-          added.push(read.rule)
-        }
-      }
+      const added = readableRules(addRules)
       const result = await buildDnrRules(candidates, this.extension.id, { kind: scope }, 'error')
       if (!result.ok) {
         throw new DnrApiError(result.error)

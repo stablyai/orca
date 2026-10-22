@@ -5,10 +5,24 @@ import {
   getChromeExtensionOrigin,
   isChromeExtensionId
 } from '../../../shared/browser-extension-url'
+import { getBrowserExtensionDnrStore } from './browser-extension-dnr-store'
+import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
+import { getBrowserExtensionSyncStorageStore } from './browser-extension-sync-storage-store'
 
 /** Where Chromium keeps chrome.storage.local, one folder per extension id (checked on disk). */
 const EXTENSION_SETTINGS_FOLDER = 'Local Extension Settings'
 const STORAGE_CLEAR_TIMEOUT_MS = 5_000
+/** Extensions each session loaded this run; Chromium keeps their storage open until quit. */
+const storageOpenedBySession = new WeakMap<Electron.Session, Set<string>>()
+
+export function noteBrowserExtensionStorageOpened(
+  sess: Electron.Session,
+  extensionId: string
+): void {
+  const ids = storageOpenedBySession.get(sess) ?? new Set<string>()
+  ids.add(extensionId)
+  storageOpenedBySession.set(sess, ids)
+}
 
 function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined
@@ -22,14 +36,20 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 
 /**
  * Why through the extension's own API: Chromium keeps each extension's storage database open for
- * the rest of the run, so deleting its folder now would strand a reinstall's writes in unlinked
+ * the rest of the run, so deleting its folder then would strand a reinstall's writes in unlinked
  * files. A hidden page of the still-loaded extension clears chrome.storage.local and .session.
+ * A folder this run never opened is deleted directly; one opened earlier waits for the launch sweep.
  */
-async function clearLoadedExtensionStorage(
-  sess: Electron.Session,
-  extensionId: string
-): Promise<void> {
+async function clearExtensionStorage(sess: Electron.Session, extensionId: string): Promise<void> {
   if (!sess.extensions.getExtension(extensionId)) {
+    const storagePath = sess.getStoragePath()
+    if (storagePath && !storageOpenedBySession.get(sess)?.has(extensionId)) {
+      await rm(join(storagePath, EXTENSION_SETTINGS_FOLDER, extensionId), {
+        recursive: true,
+        force: true,
+        maxRetries: 3
+      })
+    }
     return
   }
   const window = new BrowserWindow({
@@ -54,8 +74,8 @@ async function clearLoadedExtensionStorage(
 
 /**
  * Uninstall wipes what the extension kept in one profile session, as Chrome does: chrome.storage
- * through the extension (call before unloading it), then its origin's IndexedDB, localStorage,
- * caches and worker registration. The emptied storage folder goes at the next launch.
+ * (call before unloading it), then its origin's IndexedDB, localStorage, caches and worker
+ * registration.
  */
 export async function clearBrowserExtensionSessionData(
   sess: Electron.Session,
@@ -65,21 +85,25 @@ export async function clearBrowserExtensionSessionData(
     throw new Error('Invalid extension id')
   }
   try {
-    await clearLoadedExtensionStorage(sess, extensionId)
+    await clearExtensionStorage(sess, extensionId)
   } finally {
     await sess.clearStorageData({ origin: getChromeExtensionOrigin(extensionId) })
   }
 }
 
 /**
- * Launch-time cleanup, like Chrome's extension garbage collector: before anything opens them,
- * delete the chrome.storage folders of extensions no longer installed. Only folders named by an
- * extension id are touched; a disabled extension keeps its data.
+ * Attach-time cleanup, like Chrome's extension garbage collector: before anything opens them,
+ * delete what extensions no longer installed left in this profile. Uninstall reaches only the
+ * profiles open then, so another Orca profile's leftovers go here. A disabled extension keeps its data.
  */
-export async function removeOrphanedBrowserExtensionStorage(
+export async function removeUninstalledBrowserExtensionData(
   storagePath: string | null,
+  profileId: string,
   installedIds: ReadonlySet<string>
 ): Promise<void> {
+  getBrowserExtensionProfileStateStore().forgetExtensionsExcept(profileId, installedIds)
+  getBrowserExtensionSyncStorageStore().forgetExtensionsExcept(profileId, installedIds)
+  getBrowserExtensionDnrStore().forgetExtensionsExcept(profileId, installedIds)
   if (!storagePath) {
     return
   }

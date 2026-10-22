@@ -200,10 +200,19 @@ export function installBrowserExtensionStorageSync(
 
   const area: ApiObject = {
     ...constants,
+    // Why only the default: content scripts' relayed calls and change events are not restricted.
     setAccessLevel: (...input: unknown[]) => {
-      const [, callback] = splitCallback(input)
-      const done = Promise.resolve()
-      return callback ? void done.then(() => callback()) : done
+      const [[options], callback] = splitCallback(input)
+      const supported =
+        isObject(options) && options.accessLevel === 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+      const error = 'This StorageArea is not available for setting access level'
+      if (!callback) {
+        return supported ? Promise.resolve() : Promise.reject(new Error(error))
+      }
+      void Promise.resolve().then(() =>
+        supported ? callback() : callWithLastError(error, () => callback())
+      )
+      return undefined
     },
     onChanged: makeEvent(areaListeners, null)
   }

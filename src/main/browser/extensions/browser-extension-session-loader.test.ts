@@ -283,12 +283,33 @@ describe('profile changes while startup loads are in flight', () => {
     mocks.prepareGate.held = null
   })
 
-  it('a disable that finishes first leaves the late startup load unloaded', async () => {
+  it('a disable that finishes first stops the late startup load before it writes', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.prepared.signature = 'v-disable'
     await attachWithHeldStartupLoad()
     loader.unloadBrowserExtensionFromProfile('default', ID)
     release()
     await loader.whenBrowserExtensionProfileLoaded('default')
-    expect(mocks.session.extensions.loadExtension).toHaveBeenCalled()
+    expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
+    expect(mocks.loaded.size).toBe(0)
+    expect(getBrowserExtensionProfileStateStore().read('default', ID).workerSignature).not.toBe(
+      'v-disable'
+    )
+  })
+
+  it('an explicit load still in flight when extensions turn off fails and leaves nothing loaded', async () => {
+    setBrowserExtensionSupportEnabled(true)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    await loader.whenBrowserExtensionProfileLoaded('default')
+    mocks.prepareGate.held = new Promise<void>((resolve) => (release = resolve))
+    const calls = mocks.prepareCalls
+    const enabling = loader.loadBrowserExtensionIntoProfile('default', installed)
+    await vi.waitFor(() => expect(mocks.prepareCalls).toBe(calls + 1))
+    const detaching = loader.detachBrowserExtensionsFromAllProfileSessions()
+    release()
+    await expect(enabling).rejects.toThrow('turned off')
+    await detaching
     expect(mocks.loaded.size).toBe(0)
   })
 

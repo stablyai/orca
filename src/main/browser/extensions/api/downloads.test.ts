@@ -25,9 +25,10 @@ const { getBrowserExtensionNamespace } = await import('../browser-extension-name
 
 const EXTENSION_ID = 'a'.repeat(32)
 
-function fakeItem(url: string, savePath: string) {
+function fakeItem(url: string, savePath: string, finalUrl = url) {
   return {
-    getURL: () => url,
+    getURL: () => finalUrl,
+    getURLChain: () => (finalUrl === url ? [url] : [url, finalUrl]),
     getState: () => 'progressing',
     getSavePath: () => savePath,
     getMimeType: () => '',
@@ -119,6 +120,22 @@ describe('downloads.download', () => {
 
     expect(mocks.requestDownloadFilename).toHaveBeenCalledWith(item, 'reports/q3.csv')
     expect(order).toEqual(['filename', 'manager'])
+  })
+
+  it('matches a redirected download by the URL it requested', async () => {
+    const { owner, download, willDownload } = setup()
+    const url = 'https://site.test/export'
+    const pending = download({ url, filename: 'export.csv' })
+    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalled())
+    const item = fakeItem(url, '/downloads/export.csv', 'https://cdn.test/a1b2')
+    willDownload(item)
+
+    await expect(pending).resolves.toEqual(expect.any(Number))
+    expect(mocks.requestDownloadFilename).toHaveBeenCalledWith(item, 'export.csv')
+    expect(mocks.emitted).toContainEqual({
+      event: 'onCreated',
+      args: [expect.objectContaining({ url, finalUrl: 'https://cdn.test/a1b2' })]
+    })
   })
 
   it.each([

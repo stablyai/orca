@@ -124,7 +124,8 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
     withBrowserExtensionLock(extensionId, async () => {
       // Why first: chrome.storage can only be cleared through the still-loaded extension.
       await clearBrowserExtensionDataEverywhere(extensionId)
-      unloadBrowserExtensionEverywhere(extensionId)
+      // Why awaited: a load still in flight would write state the lines below forget.
+      await unloadBrowserExtensionEverywhere(extensionId)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withoutExtension(byProfile, extensionId)
       )
@@ -153,25 +154,28 @@ export function reviewBrowserExtensionUpdate(
 export function reloadUnpackedBrowserExtension(
   extensionId: string
 ): Promise<BrowserExtensionActionResult> {
-  return settle(async () => {
-    const store = getBrowserExtensionInstallStore()
-    const installed = store.get(extensionId)
-    if (installed?.source !== 'unpacked') {
-      throw new Error('Only unpacked extensions can be reloaded')
-    }
-    const summary = await readBrowserExtensionManifest(installed.path)
-    const record: InstalledBrowserExtension = {
-      ...installed,
-      name: summary.name,
-      version: summary.version,
-      iconPath: summary.iconPath,
-      permissions: summary.permissions,
-      hostPermissions: summary.hostPermissions,
-      optionsPage: summary.optionsPage
-    }
-    store.save(record)
-    await reloadBrowserExtensionWhereEnabled(record, { refresh: true })
-  })
+  // Why the lock: a removal finishing mid-reload would be undone by the save below.
+  return settle(() =>
+    withBrowserExtensionLock(extensionId, async () => {
+      const store = getBrowserExtensionInstallStore()
+      const installed = store.get(extensionId)
+      if (installed?.source !== 'unpacked') {
+        throw new Error('Only unpacked extensions can be reloaded')
+      }
+      const summary = await readBrowserExtensionManifest(installed.path)
+      const record: InstalledBrowserExtension = {
+        ...installed,
+        name: summary.name,
+        version: summary.version,
+        iconPath: summary.iconPath,
+        permissions: summary.permissions,
+        hostPermissions: summary.hostPermissions,
+        optionsPage: summary.optionsPage
+      }
+      store.save(record)
+      await reloadBrowserExtensionWhereEnabled(record, { refresh: true })
+    })
+  )
 }
 
 /** Developer "Load unpacked…": loaded from Orca's copy, enabled for the profile it was added from. */
@@ -190,7 +194,10 @@ export function addUnpackedBrowserExtension(
     if (existing?.source === 'webstore') {
       throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
     }
-    const loaded = await loadBrowserExtensionFolderIntoProfile(browserProfileId, directory)
+    // Why refresh only a new one: another profile may be running the copy (Reload re-copies it).
+    const loaded = await loadBrowserExtensionFolderIntoProfile(browserProfileId, directory, {
+      refresh: existing === null
+    })
     store.save({
       id: loaded.id,
       name: summary.name,

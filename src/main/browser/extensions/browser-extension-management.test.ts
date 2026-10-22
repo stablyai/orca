@@ -75,7 +75,7 @@ vi.mock('./browser-extension-webstore-events', () => ({
 
 const loader = await import('./browser-extension-session-loader')
 const { clearBrowserExtensionSessionData } = await import('./browser-extension-data-removal')
-const { addUnpackedBrowserExtension, removeBrowserExtension } =
+const { addUnpackedBrowserExtension, reloadUnpackedBrowserExtension, removeBrowserExtension } =
   await import('./browser-extension-management')
 const { withBrowserExtensionLock } = await import('./browser-extension-webstore-install')
 
@@ -139,8 +139,34 @@ describe('addUnpackedBrowserExtension', () => {
     expect(await addUnpackedBrowserExtension('default', '/dev/vault')).toEqual({ ok: true })
     expect(loader.loadBrowserExtensionFolderIntoProfile).toHaveBeenCalledWith(
       'default',
-      '/dev/vault'
+      '/dev/vault',
+      { refresh: true }
     )
     expect(mocks.records.get(ID)).toMatchObject({ source: 'unpacked', path: '/dev/vault' })
+  })
+
+  it('adds an installed folder to another profile without re-copying the copy others run', async () => {
+    mocks.records.set(ID, { id: ID, name: 'Dev copy', source: 'unpacked', path: '/dev/vault' })
+    expect(await addUnpackedBrowserExtension('work', '/dev/vault')).toEqual({ ok: true })
+    expect(loader.loadBrowserExtensionFolderIntoProfile).toHaveBeenCalledWith(
+      'work',
+      '/dev/vault',
+      { refresh: false }
+    )
+  })
+})
+
+describe('reloadUnpackedBrowserExtension', () => {
+  it('refuses while a removal of the same extension is running, so it cannot restore it', async () => {
+    mocks.records.set(ID, { id: ID, name: 'Dev copy', source: 'unpacked', path: '/dev/vault' })
+    let finishRemoval = (): void => {}
+    const removal = withBrowserExtensionLock(
+      ID,
+      () => new Promise<void>((resolve) => (finishRemoval = resolve))
+    )
+    expect(await reloadUnpackedBrowserExtension(ID)).toMatchObject({ ok: false })
+    expect(mocks.store.save).not.toHaveBeenCalled()
+    finishRemoval()
+    await removal
   })
 })

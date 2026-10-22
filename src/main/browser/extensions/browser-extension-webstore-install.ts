@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { InstalledBrowserExtension } from '../../../shared/browser-extension-types'
+import { BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE } from '../../../shared/browser-extension-worker-api'
 import { browserSessionRegistry } from '../browser-session-registry'
 import {
   readBrowserExtensionArchive,
@@ -9,7 +10,6 @@ import {
 } from './browser-extension-archive'
 import type { VerifiedCrx } from './browser-extension-crx'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
-import { isOrcaReservedExtensionFile } from './browser-extension-load-directory'
 import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
@@ -94,10 +94,6 @@ function parseManifest(data: Uint8Array): Record<string, unknown> {
 /** Unpacks a verified CRX into a staging folder and reads what the prompt needs. */
 export async function stageWebStoreExtension(crx: VerifiedCrx): Promise<StagedWebStoreExtension> {
   const entries = readBrowserExtensionArchive(crx.archive)
-  const reserved = entries.find((entry) => isOrcaReservedExtensionFile(entry.path))
-  if (reserved) {
-    throw new Error(`Extension package has a file reserved by Orca: ${reserved.path}`)
-  }
   const manifestEntry = entries.find((entry) => entry.path === 'manifest.json')
   if (!manifestEntry) {
     throw new Error('Extension package has no manifest')
@@ -115,7 +111,11 @@ export async function stageWebStoreExtension(crx: VerifiedCrx): Promise<StagedWe
       entries.filter((entry) => entry !== manifestEntry),
       directory
     )
-    await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2))
+    const manifestText = JSON.stringify(manifest, null, 2)
+    await writeFile(join(directory, 'manifest.json'), manifestText)
+    // Why written here: it replaces any package file at that name, whatever its case, so the
+    // manifest Orca later loads is always the one this prompt shows.
+    await writeFile(join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE), manifestText)
     return {
       extensionId: crx.extensionId,
       version: String(manifest.version),
@@ -196,7 +196,7 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
       await rm(target, { recursive: true, force: true })
     } else if (!previous) {
-      unloadBrowserExtensionEverywhere(extensionId)
+      await unloadBrowserExtensionEverywhere(extensionId)
       await store.remove(extensionId)
     }
     throw error

@@ -7,7 +7,6 @@ import {
   showWindowWithoutStealingFocus
 } from '../../window/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from './browser-extension-api-host'
-import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
 import { watchBrowserExtensionMainWindowReadiness } from './browser-extension-main-window-readiness'
 
 /** chrome.windows constants. */
@@ -24,7 +23,9 @@ export type BrowserExtensionWindowEntry = {
 type PopoutState = { window: BrowserWindow; session: Electron.Session; type: 'normal' | 'popup' }
 
 let mainWindow: BrowserWindow | null = null
-let lastFocusedWindowId: number | null = null
+let focusCount = 0
+/** When each window last took focus, as a running count; picks each profile's last-focused window. */
+const focusOrderByWindowId = new Map<number, number>()
 const popoutsByWindowId = new Map<number, PopoutState>()
 const watchedWindows = new WeakSet<BrowserWindow>()
 const BOUNDS_EVENT_DELAY_MS = 150
@@ -61,7 +62,7 @@ function watchWindowEvents(
     }, BOUNDS_EVENT_DELAY_MS)
   }
   window.on('focus', () => {
-    lastFocusedWindowId = windowId
+    focusOrderByWindowId.set(windowId, ++focusCount)
     emitBrowserExtensionEvent({ session: sess }, 'windows', 'onFocusChanged', [windowId])
   })
   window.on('blur', () => {
@@ -75,15 +76,16 @@ function watchWindowEvents(
   window.on('move', emitBounds)
   window.once('closed', () => {
     clearTimeout(boundsTimer)
+    focusOrderByWindowId.delete(windowId)
     onClosed?.()
   })
 }
 
-/** Called when Orca creates its main window; tabs.* and windows.* answer relative to it. */
+/**
+ * Called when Orca creates its main window; tabs.* and windows.* answer relative to it. Tracked
+ * even with extensions off, since turning them on later does not recreate the window.
+ */
 export function trackBrowserExtensionMainWindow(window: BrowserWindow): void {
-  if (!isBrowserExtensionSupportEnabled()) {
-    return
-  }
   mainWindow = window
   watchBrowserExtensionMainWindowReadiness(window)
   watchWindowEvents(window, undefined, () => {
@@ -143,11 +145,18 @@ export function listPopoutWindowsInSession(sess: Electron.Session): BrowserWindo
     .map((popout) => popout.window)
 }
 
+/** The most recently focused window `sess` may see; another profile's popouts never count. */
 export function getLastFocusedBrowserExtensionWindowId(sess: Electron.Session): number | null {
-  if (lastFocusedWindowId !== null && getBrowserExtensionWindow(lastFocusedWindowId, sess)) {
-    return lastFocusedWindowId
+  let lastFocused: BrowserWindow | null = null
+  let lastOrder = -1
+  for (const { window } of listBrowserExtensionWindows(sess)) {
+    const order = focusOrderByWindowId.get(window.id) ?? 0
+    if (order > lastOrder) {
+      lastFocused = window
+      lastOrder = order
+    }
   }
-  return getBrowserExtensionMainWindow()?.id ?? null
+  return lastFocused?.id ?? null
 }
 
 export function describeBrowserExtensionWindow(
