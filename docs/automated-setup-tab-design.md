@@ -72,3 +72,5 @@ Reviewed source head: `d96ae2ca6afdca919b4d7f8d85308363abe8b28b`, based on the e
 - **Platforms actually executed:** macOS local Electron host plus paired desktop client. Windows/WSL command construction is tested, while live Linux, Windows, WSL and SSH execution were not performed. Existing saved layouts remain intact, and old execution hosts can still publish split layouts until upgraded.
 
 Design/Astra artifacts are intentionally preserved in this PR. One-off probe sources and raw local logs live under ignored `.bench-fixtures/setup-split-removal-proof`; no images, profiles, auth data, or temporary test spec are committed. Merge still requires the exact current head's full PR workflow aggregate and all required checks, then the parent's mandatory blocking merge-gate approval.
+
+<!-- layout-owner-final gate check: this PR is closed, never merged -->
