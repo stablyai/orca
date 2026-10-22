@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -20,6 +20,7 @@ import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
   canReconnectRemoteBrowserStream,
@@ -81,10 +82,17 @@ export function RemoteBrowserPageViewport({
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
-  const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
+  // Why: a host snapshot clears the error while the server re-attempts the URL; keep the failure
+  // page (and its retry state) up until that attempt settles.
+  const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
+  if (browserTab.loadError !== standingFailure && (browserTab.loadError || !browserTab.loading)) {
+    setStandingFailure(browserTab.loadError)
+  }
+  const loadError =
+    browserTab.loadError ?? resolveActiveBrowserLoadFailure(standingFailure, browserTab.url)
+  const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
-  const showRemoteFailureOverlay =
-    Boolean(browserTab.loadError) && !isBlankBrowserUrl(remoteFailureUrl)
+  const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
 
   return (
     <div
@@ -150,9 +158,9 @@ export function RemoteBrowserPageViewport({
       {isBlankBrowserUrl(browserTab.url) ? (
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
-      {showRemoteFailureOverlay && browserTab.loadError ? (
+      {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
-          loadError={browserTab.loadError}
+          loadError={loadError}
           externalUrl={remoteFailureExternalUrl}
           currentUrl={toDisplayUrl(remoteFailureUrl)}
           httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}

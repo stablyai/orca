@@ -11,6 +11,7 @@ import { releaseBrowserPageMount } from './browser-page-mount-admission'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { resolveBrowserWebviewLoadFailure } from '../navigate/browser-webview-load-failure'
+import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import {
   getBrowserDisplayTitle,
   isChromiumErrorPage,
@@ -80,21 +81,23 @@ export function createBrowserPageWebviewLoadingHandlers({
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const activeLoadFailure = activeLoadFailureRef.current
     if (isChromiumErrorPage(currentUrl)) {
-      const synthesizedFailure = {
-        code: -1,
-        description: translate(
-          'auto.components.browser.pane.BrowserPane.e48569ac6d',
-          'This site could not be reached.'
-        ),
-        validatedUrl: redactKagiSessionToken(
-          browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
-        )
-      }
-      activeLoadFailureRef.current = synthesizedFailure
-      onUpdatePageStateRef.current(browserTabId, {
-        loading: false,
-        loadError: synthesizedFailure
-      })
+      const attemptedUrl = redactKagiSessionToken(
+        browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+      )
+      // Why: did-fail-load's own code says what happened (and whether waiting can fix it); only
+      // a failure that never reported one gets the generic message.
+      const failure =
+        resolveActiveBrowserLoadFailure(activeLoadFailure, attemptedUrl) ??
+        ({
+          code: -1,
+          description: translate(
+            'auto.components.browser.pane.BrowserPane.e48569ac6d',
+            'This site could not be reached.'
+          ),
+          validatedUrl: attemptedUrl
+        } satisfies BrowserLoadError)
+      activeLoadFailureRef.current = failure
+      onUpdatePageStateRef.current(browserTabId, { loading: false, loadError: failure })
       return
     }
     if (activeLoadFailure?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {

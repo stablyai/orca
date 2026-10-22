@@ -42,9 +42,8 @@ function useBrowserLoadFailureAutoRetry({
   const enabled = Boolean(autoRetry?.active) && recovery !== null && stoppedKey !== failureKey
   const whileWindowHidden = autoRetry?.whileWindowHidden ?? false
   const loading = autoRetry?.loading ?? false
-  const retryNow = useEffectEvent(retry)
-  const attempt = useEffectEvent((): Promise<void> | null => {
-    if (loading || (!whileWindowHidden && !isWindowVisible())) {
+  const attempt = useEffectEvent((requireVisible: boolean): Promise<void> | null => {
+    if (loading || (requireVisible && !whileWindowHidden && !isWindowVisible())) {
       return null
     }
     return Promise.resolve(retry()).catch(() => {})
@@ -55,7 +54,10 @@ function useBrowserLoadFailureAutoRetry({
       return
     }
     if (recovery === 'online') {
-      const onOnline = (): void => void retryNow()
+      let pending: Promise<void> | null = null
+      const onOnline = (): void => {
+        pending ??= attempt(false)?.finally(() => (pending = null)) ?? null
+      }
       // Why: the network may have come back while this page was off screen and not listening.
       if (navigator.onLine) {
         onOnline()
@@ -77,7 +79,7 @@ function useBrowserLoadFailureAutoRetry({
       }
       timer = setTimeout(
         () => {
-          const pending = attempt()
+          const pending = attempt(true)
           if (!pending) {
             schedule()
             return
