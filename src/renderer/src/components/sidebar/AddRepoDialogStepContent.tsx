@@ -156,7 +156,7 @@ export function AddRepoDialogStepContent({
         hostSelector={hostSelector}
         actionsDisabled={actionsDisabled}
         browseHostKind={browseHostKind}
-        serverSshProjects={serverSsh?.state}
+        offersServerSshHosts={serverSsh !== null}
         onBrowse={onBrowse}
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}

@@ -5,10 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import type { Store } from './persistence'
 
-const { listRepoWorktreesMock, getLocalProjectWorktreeGitOptionsMock } = vi.hoisted(() => ({
-  listRepoWorktreesMock: vi.fn(),
-  getLocalProjectWorktreeGitOptionsMock: vi.fn()
-}))
+const { listRepoWorktreesMock, getLocalProjectWorktreeGitOptionsMock, workerState } = vi.hoisted(
+  () => ({
+    listRepoWorktreesMock: vi.fn(),
+    getLocalProjectWorktreeGitOptionsMock: vi.fn(),
+    workerState: { fail: false }
+  })
+)
 
 vi.mock('./repo-worktrees', () => ({
   createFolderWorktree: (repo: Repo) => ({
@@ -24,6 +27,26 @@ vi.mock('./repo-worktrees', () => ({
 vi.mock('./project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
+
+vi.mock('./worker-thread-child-process/worker-thread-child-process', () => ({
+  spawnProcessOnWorkerThread: () => {
+    throw new Error('Use portable traversal in this test')
+  }
+}))
+
+vi.mock('./workspace-space-scan-worker-client', async () => {
+  const { scanLocalWorkspaceSpaceWorktree } = await import('./workspace-space-local-scan')
+  return {
+    scanLocalWorkspaceSpaceWorktreeViaWorker: (
+      ...args: Parameters<typeof scanLocalWorkspaceSpaceWorktree>
+    ) => {
+      if (workerState.fail) {
+        throw new Error('Scan worker unavailable')
+      }
+      return scanLocalWorkspaceSpaceWorktree(...args)
+    }
+  }
+})
 
 import { analyzeWorkspaceSpace, WorkspaceSpaceScanCancelledError } from './workspace-space-analysis'
 
@@ -52,6 +75,7 @@ describe('analyzeWorkspaceSpace', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'orca-space-'))
     listRepoWorktreesMock.mockReset()
     getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
+    workerState.fail = false
   })
 
   afterEach(async () => {
@@ -330,6 +354,37 @@ describe('analyzeWorkspaceSpace', () => {
     expect(result.unavailableWorktreeCount).toBe(1)
     expect(result.worktrees[0]?.status).toBe('missing')
     expect(result.worktrees[0]?.sizeBytes).toBe(0)
+  })
+
+  it('reports a failed scan worker without traversing the workspace on the main thread', async () => {
+    const repoPath = join(tempDir!, 'repo')
+    await mkdir(repoPath)
+    await writeSizedFile(join(repoPath, 'file.txt'), 128)
+    const repo: Repo = {
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: repoPath,
+        head: 'a',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    workerState.fail = true
+
+    const result = await analyzeWorkspaceSpace(createStore([repo]))
+
+    expect(result.worktrees[0]).toMatchObject({
+      status: 'error',
+      sizeBytes: 0,
+      error: 'Scan worker unavailable'
+    })
   })
 
   it('reports disconnected SSH repos without failing the whole analysis', async () => {

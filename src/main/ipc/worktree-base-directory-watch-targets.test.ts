@@ -200,6 +200,31 @@ describe('worktree base directory watch target resolution', () => {
     expect(new Set(targets.keys()).size).toBe(4)
   })
 
+  it('watches SSH rows by their resolved target, and not a runtime row with a nested connection', async () => {
+    const provider = makeRemoteProvider()
+    getSshFilesystemProviderMock.mockImplementation((connectionId: string) =>
+      connectionId === 'ssh-a' ? provider : undefined
+    )
+    const repos = [
+      makeRepo(0, { path: '/srv/ssh-only', executionHostId: 'ssh:ssh-a' }),
+      makeRepo(1, {
+        path: '/srv/runtime',
+        executionHostId: 'runtime:env-1',
+        connectionId: 'ssh-a'
+      }),
+      makeRepo(2, { path: '/srv/legacy', connectionId: 'ssh-a' })
+    ]
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: target resolution reads only settings and repos.
+    const store = makeStore(repos) as never
+    const targets = [...(await buildWorktreeBaseDirectoryWatchTargets(store)).values()]
+
+    expect(new Set(targets.flatMap((target) => [...target.repos.keys()]))).toEqual(
+      new Set(['repo-0', 'repo-2'])
+    )
+    expect(new Set(targets.map((target) => target.connectionId))).toEqual(new Set(['ssh-a']))
+  })
+
   it('skips folder workspaces, unavailable SSH providers, and WSL UNC roots', async () => {
     const folder = makeRepo(0, { kind: 'folder' })
     const unavailableSsh = makeRepo(1, { connectionId: 'missing', path: '/srv/missing' })

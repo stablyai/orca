@@ -4,6 +4,7 @@ import {
   buildWslExecArgs
 } from '../../shared/wsl-login-shell-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 /**
  * A distro's login-shell environment, probed once and cached.
@@ -91,6 +92,7 @@ async function probeGuestEnvironment(
     // spawns wsl.exe itself, so without it wsl.exe's own errors arrive UTF-16LE
     // and the NUL-separated payload below is read through NUL-riddled text.
     env: { ...process.env, WSL_UTF8: '1' },
+    cwd: resolveWslInteropSpawnCwd(),
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
     maxOutputBytes: PROBE_MAX_OUTPUT_BYTES
   })

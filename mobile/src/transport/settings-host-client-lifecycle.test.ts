@@ -8,11 +8,10 @@ import { useAllHostClients } from './use-all-host-clients'
 import { useFocusedSettingsHostClients } from './settings-host-client-connections'
 import {
   RpcClientProvider,
-  useHostClient,
-  usePrimeHosts,
   useRpcClientContext,
   type RpcClientContextValue
 } from './client-context'
+import { useHostClient, usePrimeHosts } from './host-client-hooks'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, HostProfile } from './types'

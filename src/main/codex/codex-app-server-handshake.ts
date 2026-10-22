@@ -1,9 +1,9 @@
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 
-const HANDSHAKE_TIMEOUT_MS = 15_000
-
+/** The caller owns the bound; null leaves cancellation to its startup signal. */
 export async function initializeCodexAppServerConnection(
-  connection: CodexAppServerConnection
+  connection: CodexAppServerConnection,
+  timeoutMs: number | null
 ): Promise<void> {
   await connection.request(
     'initialize',
@@ -16,7 +16,7 @@ export async function initializeCodexAppServerConnection(
         extensions: {}
       }
     },
-    { timeoutMs: HANDSHAKE_TIMEOUT_MS }
+    { timeoutMs }
   )
   connection.notify('initialized')
 }

@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSubagentSnapshot } from '../../shared/agent-status-types'
+import { isLocalExecutionHost } from '../../shared/execution-host'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { AgentHookServer } from './server'
 import { buildBody, postHookEvent } from './server.test-fixtures'
 import {
   indexPersistedPaneKeyPtyIds,
-  isLocalExecutionHost,
   resolveAgentWorkspaceExecutionHostId,
   retireRestoredStatusesWithDeadTerminals
 } from './restored-status-dead-terminal-sweep'

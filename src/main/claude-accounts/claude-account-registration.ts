@@ -105,7 +105,8 @@ export class ClaudeAccountRegistration {
     } as const
     if (
       !saved &&
-      findDuplicateClaudeAccount(accounts, {
+      // A folder's current login can differ from its saved identity, just as in the account list.
+      findDuplicateClaudeAccount(selection.list().accounts, {
         email: login.email,
         organizationUuid: login.organizationUuid,
         ...scope

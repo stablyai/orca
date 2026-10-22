@@ -124,7 +124,6 @@ export function createSessionWriteSubscriber({
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
-
   const flushPendingWrite = (): void => {
     timer = null
     if (disposed || writing || pendingChangedFields.size === 0) {

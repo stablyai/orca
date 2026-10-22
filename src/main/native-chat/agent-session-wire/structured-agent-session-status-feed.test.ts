@@ -360,6 +360,8 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('carries the record model and the running tool line the sidebar row shows', async () => {
     const journal = await openJournal()
+    // Written by the record's current generation: work an ended one left never reads working.
+    const fence = agentSessionRecordFixture().lease.runtimeFence
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), {
       location: indexed({ journal }).params.location,
       options: { model: 'gpt-5-codex' },
@@ -368,12 +370,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run the tests' }] },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
     expect(events.at(-1)).toEqual({
@@ -384,7 +386,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
     await journal.appendItem(
       { ...USER_IDENTITY, ordinal: 2 },
       { kind: 'tool-call', name: 'shell', input: { command: 'pnpm test' }, state: 'running' },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     feed.publish(SESSION)
 

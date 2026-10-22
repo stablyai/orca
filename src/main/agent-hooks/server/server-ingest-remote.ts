@@ -1,7 +1,11 @@
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
-import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
+import {
+  isTurnEndDisposition,
+  normalizeAgentStatusPayload
+} from '../../../shared/agent-status-types'
+import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
@@ -106,6 +110,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       worktreeId,
       promptInteractionKey,
       toolUseId,
+      claudeSettledRequests,
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -271,12 +276,17 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       compactTrigger,
       toolUseId,
+      ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
       toolAgentId,
       teammateName,
       toolAgentType,
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
+      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
+      ...(isTurnEndDisposition(envelope.turnEndDisposition)
+        ? { turnEndDisposition: envelope.turnEndDisposition }
+        : {}),
       claudeRunningNonAgentTask:
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask

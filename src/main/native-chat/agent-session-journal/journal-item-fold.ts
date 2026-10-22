@@ -28,8 +28,9 @@ export function upsertJournalItem(
   itemId: string,
   revision: number,
   next: AgentJournalRenderItem,
-  /** The creating write's fence: the generation a running turn belongs to. */
-  fence: number
+  /** The write's fence, and the provenance it states (`JournalItemRow.ownerFence`), which only
+   *  creation reads: a revision keeps the item's. A stated `executionOwner` moves on any write. */
+  fences: { fence: number; ownerFence?: number; executionOwner?: number }
 ): void {
   const tombstoned = state.tombstones.get(itemId)
   if (tombstoned !== undefined && revision <= tombstoned) {
@@ -40,9 +41,12 @@ export function upsertJournalItem(
     return
   }
   state.derivedTurnScope.observe(itemId, isRootAgentJournalItem(next), existing?.body, next.body)
+  if (fences.executionOwner !== undefined) {
+    state.itemExecutionOwners.set(itemId, fences.executionOwner)
+  }
   if (!existing) {
     state.items.set(itemId, next)
-    state.itemFences.set(itemId, fence)
+    state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
     return
   }
@@ -99,4 +103,5 @@ export function removeJournalItem(
   state.tombstones.set(itemId, revision)
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
+  state.itemExecutionOwners.delete(itemId)
 }

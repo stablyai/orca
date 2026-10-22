@@ -20,7 +20,7 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
 } from './ipc/worktree-logic'
-import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
+import { worktreePathComparisonKey } from './worktree-path-comparison-key'
 import {
   retirementHostIdentity,
   retirementNamespaceKey,
@@ -51,6 +51,14 @@ type RetirementWriteStore = RetirementRuntimeStore & {
   addRetiredWorktreeName(repoId: string, name: string): void
   mergeRetiredWorktreeNamesForNamespace?(namespaceKey: string, names: Iterable<string>): boolean
   getSshTarget?: SshTargetLookup
+}
+export function hasRetiredNameRegistryStore<
+  T extends RetirementRuntimeStore & Partial<RetirementReadStore & RetirementBackfillStore>
+>(store: T): store is T & RetirementReadStore & RetirementBackfillStore {
+  return (
+    typeof store.getRetiredWorktreeNameRegistry === 'function' &&
+    typeof store.mergeRetiredWorktreeNames === 'function'
+  )
 }
 type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   wslMirrorDistro?: string

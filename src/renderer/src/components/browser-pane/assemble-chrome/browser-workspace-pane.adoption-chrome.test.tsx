@@ -14,6 +14,18 @@ const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(async () => ({ url: 'about:blank', title: 'New Tab' }))
 }))
 
+vi.mock('./browser-page-pane', () => ({
+  BrowserPagePane: () => {
+    throw new Error('Adoption chrome tests must not render the local browser pane')
+  }
+}))
+
+vi.mock('../workspace-doc/workspace-doc-page-pane', () => ({
+  WorkspaceDocPagePane: () => {
+    throw new Error('Adoption chrome tests must not render a workspace document pane')
+  }
+}))
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))
@@ -396,7 +408,7 @@ describe.each([
     expect(document.activeElement).toBe(adopted)
     expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([3, 7])
     expect(adopted.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByText('Example docs')).not.toBeNull()
+    expect(screen.getByRole('option', { name: /Example docs/ })).not.toBeNull()
   })
 
   // Why the draft alone is not enough here: while a suggestion is previewed the input holds that
@@ -486,7 +498,7 @@ describe.each([
     expect(adopted.value).toBe('example.int')
     expect(document.activeElement).toBe(adopted)
     expect(adopted.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('Example docs')).toBeNull()
+    expect(screen.queryByRole('option', { name: /Example docs/ })).toBeNull()
   })
 
   // Why: the swap tears the bar down and puts it back inside one React commit. A pane that goes
@@ -501,7 +513,7 @@ describe.each([
     renderWorkspacePane()
 
     const remounted = addressBar()
-    expect(remounted.value).toBe('about:blank')
+    expect(remounted.value).toBe('')
     expect(document.activeElement).not.toBe(remounted)
   })
 
@@ -514,12 +526,12 @@ describe.each([
     act(() => flushFrames())
 
     const adopted = addressBar()
-    expect(adopted.value).toBe('about:blank')
+    expect(adopted.value).toBe('')
     // Why: a user reading the page must not have focus yanked into chrome, nor a dropdown opened
     // over the page, by a handover they never asked for.
     expect(document.activeElement).not.toBe(adopted)
     expect(adopted.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('Example docs')).toBeNull()
+    expect(screen.queryByRole('option', { name: /Example docs/ })).toBeNull()
   })
 
   // The pane is no longer keyed on the generation, so a bump re-runs the attach rather than

@@ -7,6 +7,7 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { stopReachesUnrecordedWork } from './structured-agent-session-queued-stop'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   structuredAgentSessionStopNamesEndedTurn,
   structuredAgentSessionStoppedTurnId
@@ -44,6 +45,7 @@ export function captureChatStopTarget(
     child: StructuredAgentSessionProviderChild | null
     turnId?: string
     endsSession: boolean
+    stoppedPrePrompt?: boolean
   }
 ): ChatStopTarget | null {
   const { child, turnId } = input
@@ -54,7 +56,10 @@ export function captureChatStopTarget(
   const queued = ctx.journal.submissions().some(isQueuedAgentJournalSubmission)
   const target = {
     child,
-    turnId: structuredAgentSessionStoppedTurnId(ctx.journal, turnId),
+    turnId: structuredAgentSessionStoppedTurnId(
+      contextStructuredAgentSessionCurrentWork(ctx),
+      turnId
+    ),
     named: turnId !== undefined,
     eventTurnId: input.endsSession ? null : (turnId ?? null),
     queued
@@ -68,7 +73,7 @@ export function captureChatStopTarget(
   // A Stop naming no turn ends nothing more unless the session reads working, by the rule every
   // session list and the chat's own Stop read it, over the fold as it stands.
   if (!child || (turnId === undefined && !isMainAgentWorking(ctx))) {
-    return queued ? { ...target, reach: 'withdraw', marks: true } : null
+    return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
   }
   // Repeating the Stop in force with nothing sent since writes no second event, so a card queued
   // between the presses sends normally, as after one Stop.
@@ -92,7 +97,11 @@ export function chatStopTargetStands(
     // As at acceptance: only a named turn with no row yet may still be opening.
     return (
       target.turnId !== null &&
-      !structuredAgentSessionStopNamesEndedTurn(ctx.journal, target.turnId, isMainAgentWorking(ctx))
+      !structuredAgentSessionStopNamesEndedTurn(
+        ctx.journal,
+        contextStructuredAgentSessionCurrentWork(ctx),
+        target.turnId
+      )
     )
   }
   // A Stop naming no turn stops whatever runs: hand-over runs only on the lane this Stop holds, so

@@ -239,8 +239,7 @@ function buildSubDispatchSection(cli: string): string {
   return `
 
 === SUB-DISPATCH ===
-You may dispatch sub-workers for this task. Bind your own Run first, then create
-and start each one:
+You may dispatch sub-workers for this task. Create your own Run first, then:
 
 \`\`\`sh
   ${cli} orchestration run-create --objective "<what the sub-workers are for>" --json
@@ -248,9 +247,8 @@ and start each one:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-You own those sub-workers: wait for their worker_done, and do not report your own
-until they have settled. Nesting is capped, so a sub-worker of yours may not be
-able to dispatch further.
+Wait for every sub-worker's worker_done before reporting your own. Nesting is
+capped; your sub-workers may not be able to dispatch further.
 
 ---`
 }

@@ -8,13 +8,12 @@ import {
 } from '../../../shared/runtime-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(),
+  ownerEnvironmentIdForWorkspace: vi.fn(),
   hostAnswersEmptyWorktree: vi.fn(async () => true),
   recoverSnapshot: vi.fn(),
   runtimeSessionMirrorEnvironmentKey: vi.fn(),
@@ -29,13 +28,10 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
   useRuntimeSessionMirrorEnvironmentKeys: mocks.runtimeSessionMirrorEnvironmentKeys
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
-})
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
 
 vi.mock('./runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
@@ -210,7 +206,7 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset()
     mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
     mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -377,7 +373,7 @@ describe('activating a host-owned workspace before the host has answered', () =>
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset().mockResolvedValue({ status: 'created' })
     mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
     mocks.hostAnswersEmptyWorktree.mockReset().mockResolvedValue(true)
     mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
     Object.defineProperty(window, 'api', {

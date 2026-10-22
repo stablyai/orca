@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -20,6 +20,7 @@ import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
   canReconnectRemoteBrowserStream,
   type RemoteBrowserStreamStatus
@@ -46,6 +47,7 @@ export function RemoteBrowserPageViewport({
   runtimeTarget,
   onReload,
   onGoto,
+  onNavigateToUrl,
   onReconnect,
   handleRemotePointerDown,
   handleRemotePointerUp,
@@ -70,6 +72,8 @@ export function RemoteBrowserPageViewport({
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   onReload: () => void
   onGoto: (url: string) => void
+  /** The address bar's submit path, which also parks a URL typed before the host page exists. */
+  onNavigateToUrl: (url: string) => void
   onReconnect: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
@@ -80,23 +84,25 @@ export function RemoteBrowserPageViewport({
   const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
   const showRemoteFailureOverlay =
-    Boolean(browserTab.loadError) &&
-    remoteFailureUrl !== 'about:blank' &&
-    remoteFailureUrl !== ORCA_BROWSER_BLANK_URL
+    Boolean(browserTab.loadError) && !isBlankBrowserUrl(remoteFailureUrl)
 
   return (
     <div
       ref={remoteViewportRef}
       tabIndex={-1}
-      className="relative min-h-0 flex-1 overflow-hidden bg-background"
+      // Why a size container: the frame letterboxes itself in cq units of this pane.
+      className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
     >
       {markup.isActive && markup.baseImage ? (
-        <MarkupOverlay
-          baseImage={markup.baseImage}
-          busy={markup.state === 'composing'}
-          onComplete={(input) => void markup.complete(input)}
-          onCancel={markup.cancel}
-        />
+        // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
+        <div className="absolute top-0 left-0" style={remoteFrameStyle}>
+          <MarkupOverlay
+            baseImage={markup.baseImage}
+            busy={markup.state === 'composing'}
+            onComplete={(input) => void markup.complete(input)}
+            onCancel={markup.cancel}
+          />
+        </div>
       ) : null}
       {frameUrl ? (
         <img
@@ -141,6 +147,9 @@ export function RemoteBrowserPageViewport({
           </div>
         </div>
       )}
+      {isBlankBrowserUrl(browserTab.url) ? (
+        <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
+      ) : null}
       {showRemoteFailureOverlay && browserTab.loadError ? (
         <BrowserLoadFailureOverlay
           loadError={browserTab.loadError}

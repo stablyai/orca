@@ -1,6 +1,6 @@
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { registerSshHandlers } from '../ipc/ssh'
+import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { mainProcessState as state } from './main-process-state'
 
 /**

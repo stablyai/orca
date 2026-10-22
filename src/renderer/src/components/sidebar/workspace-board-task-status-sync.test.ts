@@ -224,6 +224,29 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     )
   })
 
+  it('skips a worktree whose owner refuses settings, without reading Linear', async () => {
+    const { item, target, getIssue, teamStates, updateIssue } = setup()
+
+    const result = await syncWorkspaceBoardTaskStatuses({
+      worktreeIds: [item.id],
+      targetStatus: target,
+      worktreesById: new Map([[item.id, item]]),
+      getSettingsForWorktree: () => null,
+      getLatestWorkspaceStatus: () => target.id,
+      deps: { getIssue, teamStates, updateIssue }
+    })
+
+    expect(getIssue).not.toHaveBeenCalled()
+    expect(teamStates).not.toHaveBeenCalled()
+    expect(updateIssue).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      updated: 0,
+      skipped: 1,
+      failed: 0,
+      messages: [{ kind: 'owner-ambiguous', issueIdentifier: 'ORC-1' }]
+    })
+  })
+
   it('skips worktrees without linked Linear issues', async () => {
     const { item, target, getIssue, teamStates, updateIssue } = setup({ linkedLinearIssue: null })
 

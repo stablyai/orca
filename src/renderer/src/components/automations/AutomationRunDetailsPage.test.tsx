@@ -2,10 +2,19 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
 import type { AutomationRunViewState } from './automation-run-view-state'
+
+// These fixtures exercise markdown without rendering diagrams.
+const boundaryMocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({ default: boundaryMocks.mermaid }))
 
 const run: AutomationRun = {
   id: 'run-1',
@@ -47,7 +56,14 @@ function renderPage(viewState: AutomationRunViewState): void {
 }
 
 describe('AutomationRunDetailsPage', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    try {
+      expect(boundaryMocks.mermaid).not.toHaveBeenCalled()
+    } finally {
+      boundaryMocks.mermaid.mockClear()
+    }
+  })
 
   it('shows the open action when it can open something', () => {
     renderPage({

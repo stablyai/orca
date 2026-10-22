@@ -18,7 +18,7 @@ import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-depende
 import {
   EXTERNAL_LINK_SEAM as SEAM,
   externalLinkOffenders
-} from './mobile-web-app-external-link-seam.mjs'
+} from './mobile-web-app/platform-seams/mobile-web-app-external-link-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip

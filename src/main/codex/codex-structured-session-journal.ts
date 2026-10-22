@@ -28,17 +28,16 @@ export function createCodexSessionJournalTranslator(input: {
         acquisitionId,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: input.primaryThreadId,
-        onPrimaryThreadStoppedRunning: () => deps.onPrimaryThreadStoppedRunning?.({ sessionId }),
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
         subagentExecutions: input.subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
         clearPromptTurn: (threadId, turnId) => prompts.clearTurn(threadId, turnId),
         onUserMessageEcho: (clientMessageId, providerIdentity) => {
-          // History echoes do not settle a send this session never admitted.
-          if (dispatchEchoes.settle(clientMessageId)) {
-            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
-          }
+          // Codex no longer holds an echoed send. Either exact live echo saves its receipt: the
+          // journal writes it only while the send is unsettled, so the second retries a failed one.
+          dispatchEchoes.settle(clientMessageId)
+          deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
         }
       })
     : null

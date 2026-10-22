@@ -6,7 +6,7 @@ import type {
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionLifecycleIdentityResolver,
+  StructuredAgentSessionIdentityResolver,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
@@ -129,7 +129,7 @@ export function appendCodexLifecycleTransition(
   sink: StructuredAgentSessionEventSink,
   identitySizeBound: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver,
+  resolveIdentity: StructuredAgentSessionIdentityResolver,
   attribution: AgentJournalRowAttribution
 ): CodexJournalTranslationAdmission {
   if (sink.tryAppendLifecycleTransition) {

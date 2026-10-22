@@ -217,6 +217,15 @@ describe('constrained idle regional assignment transaction', () => {
     expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
   })
 
+  // sourceRequestUnits reads a reserve cell's missing phone leases as zero units; selection must drop it.
+  it.each(['source', 'target'])('drops every candidate while the %s cell is recorded as reserve', async (cellId) => {
+    const { store, safety } = await setup()
+    await store.setCellAdmitMode(cellId, 'reserve')
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+    await store.setCellAdmitMode(cellId, 'db')
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+  })
+
   it('leaves the candidate page offset untouched across a closed dispatch budget', async () => {
     const { store, database, safety } = await setup()
     const first = await store.selectIdleRegionalRehomeCandidates(safety)

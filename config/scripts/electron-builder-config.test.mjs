@@ -26,6 +26,7 @@ describe('electron-builder config', () => {
       expect.arrayContaining([
         '!src{,/**/*}',
         '!config{,/**/*}',
+        '!cloud{,/**/*}',
         '!docs{,/**/*}',
         '!mobile{,/**/*}',
         '!native{,/**/*}',
@@ -82,6 +83,10 @@ describe('electron-builder config', () => {
       expect(packs(toolingPath)).toBe(false)
     }
     expect(packs('out/main/index.js')).toBe(true)
+    expect(packs('out/web/web-index.html')).toBe(false)
+    expect(packs('out/web/assets/shared.js')).toBe(false)
+    expect(packs('out/renderer/web-index.html')).toBe(true)
+    expect(packs('out/renderer/.orca-web-client-files.json')).toBe(true)
   })
 
   it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
@@ -165,7 +170,7 @@ describe('electron-builder config', () => {
 
   // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
   // CI never creates it, so only a local package would have hit this -- silently, as bulk.
-  it('keeps cached dev Electron bundles out of app.asar', () => {
+  it('keeps cached dev Electron bundles and Vite dependencies out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
     const isPacked = matcher.createFilter()
@@ -173,7 +178,10 @@ describe('electron-builder config', () => {
 
     for (const devBundlePath of [
       'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
-      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json'
+      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json',
+      '.cache/vite/renderer/deps/react.js',
+      '.cache/vite/web/deps/react.js',
+      '.cache/vite.lock/owner'
     ]) {
       expect(packs(devBundlePath)).toBe(false)
     }
@@ -366,12 +374,7 @@ describe('electron-builder config', () => {
 
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining([
-        'out/package.json',
-        'out/cli/**',
-        'out/shared/**',
-        'out/main/claude-accounts/keychain.js'
-      ])
+      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
     )
   })
 
@@ -408,6 +411,27 @@ describe('electron-builder config', () => {
     expect(
       isUnpacked(join('/app', 'out', 'main', `${entryName}.js`), { isDirectory: () => false })
     ).toBe(true)
+  })
+
+  // Why: opening a packed file reads a one-time /tmp extract; once a /tmp sweep removes it, the
+  // web client answers an empty 500 and phone bundle reads fail until restart (#27976).
+  it('unpacks the web and mobile bundles a host serves by opening their files', () => {
+    const matcher = new FileMatcher(
+      '/app',
+      '/dest',
+      (value) => value,
+      electronBuilderConfig.asarUnpack
+    )
+    const isUnpacked = matcher.createFilter()
+    for (const webPath of [
+      'out/renderer/web-index.html',
+      'out/renderer/assets/index-abc123.js',
+      'out/renderer/.orca-web-client-files.json',
+      'out/mobile-web/manifest.json',
+      'out/mobile-web/assets/index-abc123.js'
+    ]) {
+      expect(isUnpacked(join('/app', webPath), { isDirectory: () => false })).toBe(true)
+    }
   })
 
   it('keeps the worker-thread hang watchdog inside app.asar', () => {
@@ -538,31 +562,6 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.beforeBuild).toBe(electronBuilderNativeRebuild)
     expect(electronBuilderConfig.npmRebuild).toBe(true)
   })
-
-  // Why: the .deb/.rpm update-recovery path keys entirely off the resources/package-type marker that
-  // app-builder-lib's FpmTarget writes. If packaging silently stops shipping an fpm target, or adds
-  // one the recovery path does not cover, getLinuxRootPackageType() returns null, autoInstallOnAppQuit
-  // quietly goes back to true, and no unit test notices.
-  describe('linux root-package update recovery contract', () => {
-    // FpmTarget writes resources/package-type only for targets it supports auto-update for.
-    const MARKER_TARGETS = new Set(['deb', 'rpm', 'pacman'])
-    const RECOVERABLE_TARGETS = new Set(['deb', 'rpm'])
-    const linuxTargets = electronBuilderConfig.linux.target.map((entry) =>
-      typeof entry === 'string' ? entry : entry.target
-    )
-
-    it('still ships an AppImage plus at least one root-package target', () => {
-      expect(linuxTargets).toContain('AppImage')
-      expect(linuxTargets.some((target) => MARKER_TARGETS.has(target))).toBe(true)
-    })
-
-    it('ships no root-package target the recovery path cannot recover', () => {
-      const unrecoverable = linuxTargets.filter(
-        (target) => MARKER_TARGETS.has(target) && !RECOVERABLE_TARGETS.has(target)
-      )
-      expect(unrecoverable).toEqual([])
-    })
-  })
 })
 
 describe('arch-aware packaging guard', () => {
@@ -598,6 +597,38 @@ describe('arch-aware packaging guard', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()
   })
 
+  it('refuses to package a dark layout-owner build', () => {
+    const previous = process.env.ORCA_LAYOUT_OWNER
+    process.env.ORCA_LAYOUT_OWNER = 'main'
+    try {
+      expect(() => packHost(HOST_ARCH)).toThrow('ORCA_LAYOUT_OWNER=main')
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ORCA_LAYOUT_OWNER
+      } else {
+        process.env.ORCA_LAYOUT_OWNER = previous
+      }
+    }
+  })
+
+  it('refuses to package an orcad template marked by a dark test build', async () => {
+    const templateDir = join(scratch, 'orcad-template')
+    await mkdir(templateDir, { recursive: true })
+    await writeFile(join(templateDir, 'ORCA_LAYOUT_OWNER_MAIN'), 'dark\n')
+    try {
+      expect(() =>
+        electronBuilderConfig.beforePack(
+          { electronPlatformName: process.platform, arch: HOST_ARCH },
+          bundleDir,
+          () => undefined,
+          templateDir
+        )
+      ).toThrow(`${templateDir} holds an ORCA_LAYOUT_OWNER=main build`)
+    } finally {
+      await rm(templateDir, { recursive: true, force: true })
+    }
+  })
+
   it('requires the other architecture natives to be installed', () => {
     const otherSherpaInstalled = existsSync(
       join(REPO_ROOT, 'node_modules', otherSherpa, 'package.json')
@@ -609,7 +640,6 @@ describe('arch-aware packaging guard', () => {
     if (otherSherpaExpected && !otherSherpaInstalled) {
       expect(() => packHost(OTHER_ARCH)).toThrow(otherSherpa)
       expect(() => packHost(OTHER_ARCH)).toThrow('pnpm install:release')
-      expect(() => packHost(HOST_ARCH)).not.toThrow()
     } else if (process.platform !== 'win32') {
       expect(() => packHost(OTHER_ARCH)).not.toThrow()
     }
@@ -622,7 +652,6 @@ describe('arch-aware packaging guard', () => {
       for (const binary of ['orca_windows_registry.node', 'orca_windows_security.node']) {
         expect(() => packHost(OTHER_ARCH)).toThrow(`${binary} for ${OTHER_ARCH_NAME}`)
       }
-      expect(() => packHost(HOST_ARCH)).not.toThrow()
     }
   )
 

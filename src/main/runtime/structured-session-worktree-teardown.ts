@@ -34,6 +34,7 @@ import {
 import { closeStructuredAgentSessionChild } from './structured-agent-session-close'
 import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 
@@ -116,6 +117,24 @@ export function listStructuredSessionsForWorktree(
   worktreeId: string,
   fence: StructuredSessionHostFence
 ): StructuredSessionsForWorktree {
+  return listFencedStructuredSessions((workspaceId) => workspaceId === worktreeId, fence)
+}
+
+/** Structured sessions in every workspace of a project, on the fenced host only. */
+export function listStructuredSessionsForProject(
+  repoId: string,
+  fence: StructuredSessionHostFence
+): StructuredSessionsForWorktree {
+  return listFencedStructuredSessions(
+    (workspaceId) => getRepoIdFromWorktreeId(workspaceId) === repoId,
+    fence
+  )
+}
+
+function listFencedStructuredSessions(
+  inScope: (workspaceId: string) => boolean,
+  fence: StructuredSessionHostFence
+): StructuredSessionsForWorktree {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return { members: [], live: [] }
@@ -129,8 +148,7 @@ export function listStructuredSessionsForWorktree(
   const hostId = structuredSessionTeardownHostId(fence)
   const members = records
     .filter(
-      (record) =>
-        record.location.workspaceId === worktreeId && record.location.executionHostId === hostId
+      (record) => inScope(record.location.workspaceId) && record.location.executionHostId === hostId
     )
     .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
   return {

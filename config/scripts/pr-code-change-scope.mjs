@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
+import { LINUX_PACKAGE_TESTS, WINDOWS_PACKAGE_TESTS } from './pr-package-test-paths.mjs'
 
 const DOCS_ONLY_FILES = new Set([
   'README.md',
@@ -32,7 +33,8 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
-  'layout_oracle'
+  'layout_oracle',
+  'dependency_isolation'
 ]
 
 const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
@@ -48,9 +50,11 @@ const MOBILE_CI_TOOL_FILES = new Set([
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/setup-pnpm/',
   '.github/actions/restore-pnpm-verification/',
   '.github/actions/prepare-native-runtime/',
-  'config/scripts/pr-code-change-scope'
+  'config/scripts/pr-code-change-scope',
+  'config/scripts/pr-package-test-paths'
 ]
 
 const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
@@ -156,12 +160,25 @@ const ORCAD_BROWSER_PREFIXES = [
 // The page bundle the desktop packages: the builder and verifier, the manifest writer and the
 // packaging guard they share, the entry, the route tree it mounts, the mobile source those routes
 // import, and the shell policy the render check runs the page under.
+// What decides which deps each package sees; package.json and the lockfile already force every job.
+const DEPENDENCY_ISOLATION_PREFIXES = [
+  'pnpm-workspace.yaml',
+  'config/pnpmfile.cjs',
+  'config/scripts/undeclared-dependency-resolution',
+  'config/build-plugins/markdown-parser-exports',
+  'config/tsconfig',
+  'src/packages/',
+  'native/windows-registry/package.json',
+  'native/windows-security/package.json'
+]
+
 const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build-mobile-web-app',
   'config/scripts/run-mobile-web-app-checks',
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
+  'config/scripts/mobile-web-app/',
   'config/scripts/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
   'config/scripts/mobile-web-source-line-endings',
@@ -184,7 +201,7 @@ function changesMobileWebApp(changedFiles) {
 const CROSS_VERSION_WIRE_PREFIXES = [
   'tests/e2e/cross-version-wire/',
   // COMPAT(legacy-relay-bridge): the bridge is proven against a real 1.4.224 relay here.
-  'src/main/ssh/legacy-relay-bridge/',
+  'src/main/ssh/legacy-relay/',
   'config/scripts/stable-release-tags',
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
@@ -196,6 +213,10 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
+  // The released and current WebSocket transports both accept the web upgrade marker
+  // (cross-version-web-upgrade-marker).
+  'src/main/runtime/rpc/ws-transport.ts',
+  'src/shared/web-origin-security.ts',
   'src/shared/browser-client-host-placement',
   'src/shared/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch-params',
@@ -211,6 +232,14 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
+  // The released phone contract runs the current discovery owner and Claude producer.
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-entry.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-store.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-service.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-lister.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
+  'src/main/claude/claude-model-catalog-probe.ts',
   'src/main/runtime/agent-session-record-store',
   'src/main/runtime/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
@@ -265,6 +294,8 @@ const MANAGED_HOOK_PREFIXES = [
 
 const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/ensure-native-runtime',
+  'config/scripts/initialize-windows-native-toolchain',
+  'config/scripts/capture-windows-native-environment',
   'config/scripts/rebuild-native-deps',
   'config/scripts/node-pty-job-ownership',
   'config/scripts/windows-pe-machine',
@@ -273,6 +304,8 @@ const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/windows-process-tree-creation-time',
   'config/scripts/windows-process-tree-gyp-rebuild',
   'config/scripts/electron-builder-native-rebuild',
+  'config/scripts/native-build-entry',
+  'config/scripts/shared-native-build',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'
 ]
@@ -284,8 +317,10 @@ const NATIVE_CACHE_FILES = new Set([
   '.github/actions/prepare-native-runtime/action.yml',
   'pnpm-workspace.yaml',
   '.npmrc',
-  '.pnpmfile.cjs',
+  'config/pnpmfile.cjs',
   'config/scripts/ensure-native-runtime.mjs',
+  'config/scripts/initialize-windows-native-toolchain.mjs',
+  'config/scripts/capture-windows-native-environment.cmd',
   'config/scripts/rebuild-native-deps.mjs',
   'config/scripts/node-pty-job-ownership.cjs',
   'config/scripts/windows-pe-machine.cjs',
@@ -296,7 +331,11 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/zip-extractor-command.mjs',
   'src/shared/zip-extractor-command.ts',
   'config/scripts/shared-electron-dist-cache.mjs',
-  'config/scripts/space-sharing-copy.mjs'
+  'config/scripts/shared-tree-publish.mjs',
+  'config/scripts/space-sharing-copy.mjs',
+  'config/scripts/native-build-entry.cjs',
+  'config/scripts/native-build-entry-probe.cjs',
+  'config/scripts/shared-native-build.mjs'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
@@ -311,6 +350,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'electron.vite.config.ts',
   'config/electron-builder',
   'config/packaged-runtime',
+  'config/packaged-native-build-entries',
   'config/build-plugins/',
   'config/scripts/build-',
   'config/scripts/smoke-packaged',
@@ -334,6 +374,7 @@ const LINUX_PACKAGE_PREFIXES = [
   'config/scripts/process-failure-message.mjs',
   'config/scripts/space-sharing-copy.mjs',
   '.github/actions/prepare-linux-package-fixture/',
+  '.github/actions/prepare-wayland-clipboard/',
   'config/docker/cli-launch-contract/',
   'config/docker/headless-pairing/',
   'config/docker/headless-serve-shutdown/',
@@ -343,6 +384,7 @@ const LINUX_PACKAGE_PREFIXES = [
   'config/scripts/run-daemon-shutdown-descendants-docker',
   'config/scripts/static-appimage-package-contract',
   'native/computer-use-linux/',
+  'native/wayland-clipboard/',
   'resources/linux/',
   'config/scripts/run-headless-serve'
 ]
@@ -359,82 +401,6 @@ const WINDOWS_PACKAGE_PREFIXES = [
   'config/scripts/verify-packaged-windows-agent-hook',
   'config/scripts/windows-pty-native-capability',
   'tests/tools/windows-pty-native-capability-smoke/'
-]
-
-const LINUX_PACKAGE_TESTS = [
-  'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
-  'src/main/browser/browser-route-tcp-egress.electron.test.ts',
-  'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
-  'src/main/browser/browser-route-h3-egress.electron.test.ts',
-  'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
-  'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts'
-]
-
-const WINDOWS_PACKAGE_TESTS = [
-  'src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts',
-  ...LINUX_PACKAGE_TESTS,
-  'config/scripts/rebuild-native-deps.test.mjs',
-  'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',
-  'config/scripts/rebuild-native-deps-node-pty.test.mjs',
-  'config/scripts/nsis-process-check.test.mjs',
-  'config/scripts/idle-cpu-process-sampling.test.mjs',
-  'config/scripts/ensure-native-runtime-job-ownership.test.mjs',
-  'config/scripts/verify-packaged-node-pty-job-ownership.test.mjs',
-  'config/scripts/windows-pe-machine.test.mjs',
-  'config/scripts/build-windows-cli-launcher.test.mjs',
-  'config/scripts/verify-packaged-windows-agent-hook.test.mjs',
-  'config/scripts/script-module-dependencies.test.mjs',
-  'src/main/windows-registry-addon.test.ts',
-  'src/shared/windows-security-addon.win32.test.ts',
-  'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
-  'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
-  'src/shared/__tests__/process-host/windows-command-line.win32.test.ts',
-  'src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts',
-  'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
-  'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
-  'src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts',
-  'src/main/jcode/hook-gate-script.test.ts',
-  'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
-  'src/main/agent-hooks/windows-native-hook-exe-hosts.test.ts',
-  'src/main/claude/windows-native-hook-registration.test.ts',
-  'src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts',
-  'src/main/agent-hooks/windows-batch-hook-launcher.test.ts',
-  'src/main/agent-hooks/windows-powershell-hook-launcher.test.ts',
-  'src/main/claude/claude-status-line-windows.test.ts',
-  'src/main/codex/windows-hook-command.test.ts',
-  'src/main/codex/windows-hook-upgrade.test.ts',
-  'src/main/codex/hook-service-managed-install.test.ts',
-  'src/main/windows/windows-pty-job.win32.test.ts',
-  'src/main/windows/windows-msys-job.win32.test.ts',
-  'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
-  'src/main/windows/windows-host-job.win32.test.ts',
-  'src/main/windows/windows-process-tree-command-line-patch.test.ts',
-  'src/main/windows/windows-process-table-native-addon.win32.test.ts',
-  'src/main/daemon/daemon-pid-identity-native.win32.test.ts',
-  'src/main/windows/windows-administrator-status.win32.test.ts',
-  'src/main/windows/windows-administrator-restart.win32.test.ts',
-  'src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts',
-  'src/main/windows-live-tree-kill.win32.test.ts',
-  'src/main/wsl/wsl-runner.test.ts',
-  'src/main/wsl/wsl-guest-environment.test.ts',
-  'src/main/wsl/wsl-executable-path.win32.test.ts',
-  'src/main/wsl/wsl-w1-w3-contract.test.ts',
-  'src/shared/source-scan/source-tree-scan.test.ts',
-  'src/main/cli/wsl-cli-powershell-boundary.test.ts',
-  'src/main/computer/desktop-script-runtime-host.win32.test.ts',
-  'src/main/cursor/hook-service.test.ts',
-  'src/main/orca-profiles/profile-index-store.test.ts',
-  'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
-  'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
-  'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
-  'src/shared/secure-file-fsync-flags.test.ts',
-  'src/shared/secure-path-windows-acl.win32.test.ts',
-  'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/ipc/pty-codex-account-attribution.test.ts',
-  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
-  'src/main/ipc/preflight-provider-command-selection.test.ts',
-  'src/main/ipc/preflight-runnable-local-cli.test.ts',
-  'src/main/ssh/remote-node-runtime-store-windows.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [
@@ -488,6 +454,25 @@ function readStaticAnalysisScanRoots() {
 export const STATIC_ANALYSIS_SCAN_ROOTS = readStaticAnalysisScanRoots()
 
 const STATIC_ANALYSIS_SCAN_PREFIXES = STATIC_ANALYSIS_SCAN_ROOTS.map((root) => `${root}/`)
+
+// Over-inclusive on purpose: a type oxfmt skips only costs this PR a static run.
+const FORMAT_CHECKED_EXTENSION =
+  /\.(?:[cm]?[jt]sx?|json[c5]?|css|less|scss|md|mdx|ya?ml|vue|html|graphql|gql|toml)$/i
+
+function readFormatIgnoredPrefixes() {
+  let config
+  try {
+    config = JSON.parse(readFileSync(join(import.meta.dirname, '../../.oxfmtrc.json'), 'utf8'))
+  } catch {
+    // Fail closed: with no ignores known, every formatted type keeps the gate.
+    return []
+  }
+  return (config.ignorePatterns ?? [])
+    .filter((pattern) => pattern.endsWith('/**'))
+    .map((pattern) => pattern.slice(0, -2))
+}
+
+const FORMAT_IGNORED_PREFIXES = readFormatIgnoredPrefixes()
 
 export function isDocsOnlyPath(file) {
   if (DOCS_ONLY_FILES.has(file)) {
@@ -558,7 +543,11 @@ export function classifyPrJobs(
   // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
   // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
   // it then fails this same gate on every later PR's merge ref.
-  jobs.static_analysis = jobs.static_analysis || changedFiles.some(isStaticAnalysisScannedPath)
+  // Why formatted paths too: the formatting check reads the whole tree, so a docs-only diff that
+  // skipped it would land drift that then fails every later PR.
+  jobs.static_analysis =
+    jobs.static_analysis ||
+    changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
   // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
   // that is exactly the diff that changes the page this job builds. Gated on should_run it would
   // skip on every PR that can break it and run on none.
@@ -572,6 +561,11 @@ export function classifyPrJobs(
   return {
     should_run: shouldRun,
     mobile_ci_tools: mobileCiTools,
+    // Relay contracts exercise host/cloud code; any input outside the renderer keeps them.
+    relay_integration:
+      shouldRun &&
+      (forceAll ||
+        changedFiles.some((file) => !file.startsWith('src/renderer/') && !isDocsOnlyPath(file))),
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
     mobile_dependencies:
       (shouldRun || jobs.static_analysis) && needsMobileDependencies(changedFiles),
@@ -610,6 +604,8 @@ function jobDetector(job) {
       return (files) => files.some(isWindowsPackagePath)
     case 'layout_oracle':
       return (files) => files.some(isLayoutOracleSource)
+    case 'dependency_isolation':
+      return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:
       return () => true
   }
@@ -633,6 +629,10 @@ function isProductBundlePath(file, extraPrefixes) {
 // These shared fixtures are consumed only by unit tests.
 export function isUnitTestSupportSource(file) {
   return (
+    file === 'src/renderer/src/store/slices/editor-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/browser-slice-test-harness.ts' ||
+    file === 'src/renderer/src/runtime/web-runtime-session-test-harness.ts' ||
+    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
     file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts' ||
     file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
   )
@@ -657,12 +657,20 @@ function isStaticAnalysisScannedPath(file) {
   )
 }
 
+function isFormatCheckedPath(file) {
+  return FORMAT_CHECKED_EXTENSION.test(file) && !matchesPrefix(file, FORMAT_IGNORED_PREFIXES)
+}
+
 function isNativeCacheInputPath(file) {
   return NATIVE_CACHE_FILES.has(file) || matchesPrefix(file, NATIVE_CACHE_PREFIXES)
 }
 
 function isGlobalForcePath(file) {
-  return GLOBAL_FORCE_FILES.has(file) || matchesPrefix(file, GLOBAL_FORCE_PREFIXES)
+  return (
+    GLOBAL_FORCE_FILES.has(file) ||
+    (matchesPrefix(file, GLOBAL_FORCE_PREFIXES) &&
+      !(file.startsWith('config/scripts/') && isTestFile(file)))
+  )
 }
 
 function matchesPrefix(file, prefixes) {

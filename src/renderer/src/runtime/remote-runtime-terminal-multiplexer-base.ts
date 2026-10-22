@@ -70,6 +70,13 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     return id
   }
 
+  /** Opens the shared stream while the caller's create RPC is in flight, so the two round trips
+   *  overlap. The returned release closes it again if the caller never subscribed. */
+  prewarm(): () => void {
+    void this.ensureConnected().catch(() => {})
+    return () => this.closeIfIdle()
+  }
+
   protected ensureConnected(): Promise<void> {
     if (this.ready && this.subscription) {
       return Promise.resolve()

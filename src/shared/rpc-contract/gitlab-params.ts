@@ -138,7 +138,8 @@ export const RetryJob = RepoSelector.extend({
 export const WorkItemDetails = RepoSelector.extend({
   iid: z.number().int().positive(),
   type: z.enum(['issue', 'mr']),
-  projectRef: GitLabProjectRef
+  projectRef: GitLabProjectRef,
+  includeReviewDetails: z.boolean().optional()
 })
 
 export const WorkItemByPath = RepoSelector.extend({

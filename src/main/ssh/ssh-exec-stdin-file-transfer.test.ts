@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { Duplex } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 import {
   EXEC_STDIN_WRITE_DONE,
   makeExecStdinWriteFileCommand,
@@ -24,7 +24,7 @@ import {
   writeStringViaExecStdin
 } from './ssh-exec-stdin-file-transfer'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { makePosixWriteFileCommand } from './system-ssh-file-binary-transfer'
+import { makePosixWriteFileCommand } from './system-transport/system-ssh-file-binary-transfer'
 
 const directories: string[] = []
 afterEach(() => {

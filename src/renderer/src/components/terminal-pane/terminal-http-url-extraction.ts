@@ -6,8 +6,6 @@ type ParsedTerminalHttpLink = {
   endIndex: number
 }
 
-const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
-
 export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   const links: ParsedTerminalHttpLink[] = []
   for (const candidate of iterateTerminalHttpUrlCandidates(lineText)) {
@@ -60,14 +58,8 @@ function* iterateTerminalHttpUrlCandidates(
 }
 
 function findNextHttpSchemeIndex(lineText: string, searchStart: number): number {
-  let nextIndex = -1
-  for (const prefix of HTTP_SCHEME_PREFIXES) {
-    const candidateIndex = lineText.indexOf(prefix, searchStart)
-    if (candidateIndex !== -1 && (nextIndex === -1 || candidateIndex < nextIndex)) {
-      nextIndex = candidateIndex
-    }
-  }
-  return nextIndex
+  const relativeIndex = lineText.slice(searchStart).search(/https?:\/\//i)
+  return relativeIndex === -1 ? -1 : searchStart + relativeIndex
 }
 
 function hasHttpUrlWordBoundary(lineText: string, startIndex: number): boolean {

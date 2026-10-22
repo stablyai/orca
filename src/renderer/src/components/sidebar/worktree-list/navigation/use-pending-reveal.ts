@@ -166,6 +166,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     args.repoMap,
     args.prCache,
     args.worktreeLineageById,
+    args.occurrencePlan,
     args.worktreeMap,
     renderRows,
     virtualizer,

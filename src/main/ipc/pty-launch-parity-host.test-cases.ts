@@ -94,8 +94,8 @@ const aiButtonSource = (workspace: LaunchWorkspace): string =>
 const QUICK_COMMAND = { agent_kind: 'codex', launch_source: 'quick_command', request_kind: 'new' }
 export const AGENT_PHONE = { title: 'Terminal', launchAgent: 'claude', isActive: true }
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
-// main today: a local POSIX host hands the provider the settings shell untrimmed.
-export const ZSH = { shellOverride: '  /bin/zsh  ', terminalWindowsWslDistro: null }
+// A local POSIX host hands the provider the settings shell as stored, which settings load trims.
+export const ZSH = { shellOverride: '/bin/zsh', terminalWindowsWslDistro: null }
 export const CMD_EXE = { shellOverride: 'cmd.exe', terminalWindowsWslDistro: null }
 export const CMD = { terminalWindowsShell: 'cmd.exe' }
 // A saved default argument with an apostrophe: the byte that tells POSIX and PowerShell quoting apart.
@@ -182,6 +182,8 @@ const FOLDER_ENV_KEYS = ['ORCA_WORKSPACE_ID', 'ORCA_PROJECT_GROUP_ID', 'ORCA_WOR
 
 /** What main hands the provider for a host-lane case. */
 export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown> {
+  // Both lanes send the Windows shell facts only to a Windows main, the one that reads them.
+  const { terminalWindowsWslDistro, ...provider } = c.provider
   return {
     cwd: c.workspace.path.replaceAll('\\', '/'),
     cols: 120,
@@ -189,8 +191,12 @@ export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown>
     commandDelivery: 'provider',
     hidden: true,
     env: {},
-    ...c.provider,
-    // main today: the host lane stamps ORCA_WORKSPACE_ID on folders only.
-    orcaEnv: c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
+    ...provider,
+    ...(c.os === 'win32' ? { terminalWindowsWslDistro } : {}),
+    // Like the window lane, the host lane stamps ORCA_WORKSPACE_ID for every workspace kind.
+    orcaEnv:
+      c.workspace.kind === 'folder'
+        ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS]
+        : ['ORCA_WORKSPACE_ID', ...HOST_ENV_KEYS]
   }
 }

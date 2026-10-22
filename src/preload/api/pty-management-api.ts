@@ -1,4 +1,5 @@
 import type { DaemonPtyCwdClass } from '../../shared/daemon-adoption-telemetry'
+import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 // Mirror of daemon's `DaemonSessionInfo` (src/main/daemon/types.ts); not imported — preload can't depend on main-only protocol types.
 export type PtyManagementSession = {
@@ -54,6 +55,7 @@ export type PtyManagementSeveredDaemonRestartResult =
   | { status: 'refused'; reason: 'not-severed' | 'replaced' | 'unverifiable' }
 
 export type PtyManagementApi = {
+  asyncIoHealth: () => Promise<DaemonAsyncIoStatus>
   // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{

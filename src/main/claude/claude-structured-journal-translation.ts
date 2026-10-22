@@ -11,7 +11,6 @@ import {
   createClaudeProviderFrameFallback,
   isClaudeProgressFrame
 } from './claude-structured-provider-fallback'
-import { taskFrameSentence } from './claude-background-task-frames'
 import { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 import { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
@@ -35,6 +34,9 @@ import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
 import { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import { ClaudeUsageLimits } from './claude-usage-limits'
+import { ClaudeThreadGoal } from './claude-thread-goal'
+import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 
 export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
@@ -47,6 +49,7 @@ export type ClaudeJournalTranslatorDeps = {
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
   account?: () => AgentSessionAccountKind | undefined
+  goalBackgroundWork?: () => ClaudeGoalBackgroundWork
 }
 
 export function createClaudeJournalTranslator(
@@ -167,10 +170,17 @@ export function createClaudeJournalTranslator(
     providerFallback,
     corrections,
     turn,
-    authenticationFailures: new ClaudeAuthenticationFailures(deps.account)
+    authenticationFailures: new ClaudeAuthenticationFailures(deps.account),
+    usageLimits: new ClaudeUsageLimits(),
+    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
   }
 
-  const resultContext: ClaudeResultJournalContext = { ...messageContext, prompts, context }
+  const resultContext: ClaudeResultJournalContext = {
+    ...messageContext,
+    prompts,
+    context,
+    goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable')
+  }
 
   const handleMessage = (
     message: Record<string, unknown>,
@@ -194,6 +204,7 @@ export function createClaudeJournalTranslator(
         turn.suppressReopen()
         return
       }
+      turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
       if (event.type === 'message') {
         context.observe(event.message, event.observedAt ?? Date.now())
         // A root init is the CLI starting a new request cycle (measured per turn,
@@ -239,10 +250,8 @@ export function createClaudeJournalTranslator(
       } else if (event.type === 'message' && event.message.type === 'result') {
         journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
       } else if (event.type === 'message') {
-        const backgroundTaskCovered = backgroundTasks.observe(
-          event.message,
-          event.observedAt ?? Date.now()
-        )
+        backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
+        messageContext.usageLimits.observe(event.message)
         const kind = claudeProviderFrameKind(event.message)
         if (
           !handleMessage(
@@ -255,18 +264,15 @@ export function createClaudeJournalTranslator(
           providerFallback.append(
             kind,
             event.message,
-            taskFrameSentence(event.message),
             undefined,
-            { coveredByTypedTranslator: backgroundTaskCovered },
+            undefined,
+            undefined,
             corrections.stampFor(claudeFrameParentRef(event.message))
           )
         }
         context.observeResponse(event.message, event.observedAt ?? Date.now())
         publishActivity(kind, event.message)
-        // The CLI's own turn-over signal, and the only end a turn stopped by a
-        // fault with no result frame ever gets. Reopen stays allowed: output
-        // after an idle belongs to a turn, and suppressing it would read as
-        // idle while the agent works.
+        // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
           // No verdict: the CLI said the turn is over, not how it ended.

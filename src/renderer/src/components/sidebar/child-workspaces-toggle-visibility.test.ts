@@ -13,8 +13,13 @@ import {
 } from './child-workspaces-toggle-target'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
-import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
-import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from './visible-worktrees'
+import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
+import {
+  computeVisibleWorktrees,
+  setVisibleWorktreeIds,
+  setVisibleWorktreeShortcutTargets
+} from './visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { repo, worktree } from './worktree-list-groups-test-fixtures'
 
 const initialState = useAppStore.getInitialState()
@@ -64,9 +69,14 @@ describe('child workspace shortcut follows canonical rendered chips', () => {
     setVisibleWorktreeShortcutTargets(null)
   })
 
-  it('uses the mounted rows when a temporary reveal overrides a project filter', () => {
-    const state = seed({ filterRepoIds: ['another-project'] })
-    const sectionRows = computeRenderedSidebarRows(state, [parent, child])
+  it('uses the mounted rows when a temporary reveal overrides the sleeping filter', () => {
+    const state = seed({ showSleepingWorkspaces: false })
+    expect(target(state)).toBeNull()
+    const visibleWorktrees = computeVisibleWorktrees(state.worktreesByRepo, [], {
+      ...buildVisibleWorktreeOptionsFromState(state, new Map([[repo.id, repo]])),
+      forcedVisibleWorktreeIds: [child.id]
+    })
+    const sectionRows = computeRenderedSidebarRows(state, visibleWorktrees)
     const hook = renderHook(() =>
       useSidebarWorktreeSelection({
         sectionRows,
@@ -98,7 +108,6 @@ describe('child workspace shortcut follows canonical rendered chips', () => {
   it('keeps the parent chip available when its children are folded', () => {
     const state = seed({ collapsedGroups: new Set(['lineage:parent']), activeWorktreeId: child.id })
     expect(target(state)).toBe('lineage:parent')
-    expect(getRenderedLineageChipKeys(state)).toEqual(new Set(['lineage:parent']))
   })
 
   it('does not toggle a family hidden by a collapsed section', () => {
@@ -118,7 +127,6 @@ describe('child workspace shortcut follows canonical rendered chips', () => {
       alwaysShowDefaultBranchWorkspace: true
     })
     expect(target(state)).toBeNull()
-    expect(getRenderedLineageChipKeys(state)).toEqual(new Set())
   })
 
   it('drops archived children and stale child or parent instances', () => {

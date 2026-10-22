@@ -5,7 +5,7 @@ import {
 } from '../../providers/macos-tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
-import { wrapPtySpawnForCeiling } from '../pty-process-ceiling-runtime'
+import { wrapPtySpawnInTerminalScope } from '../terminal-scopes-runtime'
 
 async function loadNodePty(): Promise<typeof pty> {
   return import('node-pty')
@@ -39,8 +39,8 @@ export async function spawnNativeDaemonPty(args: {
   ): Promise<pty.IPty> => {
     args.signal?.throwIfAborted()
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    // Linux with the opt-in ceiling: exec through systemd-run into the ceiling slice.
-    const wrapped = wrapPtySpawnForCeiling(tcc.file, tcc.args, args.env)
+    // Linux: exec through systemd-run into this terminal's own scope.
+    const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
     const nodePty = await loadNodePty()
     // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
     if (process.platform === 'win32') {

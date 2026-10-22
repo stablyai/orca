@@ -1,5 +1,5 @@
 // The host-side runtime-source fence, paired across two builds over a real socket: current code
-// against the newest published release's host. Release checkouts carry no CLI sources, and an old
+// against the last release host without the fence. Release checkouts carry no CLI sources, and an old
 // CLI's frame is exactly the current one without the field, so the old client is the current
 // transport sending none.
 //
@@ -25,14 +25,12 @@ import { publishHostDescriptor } from '../../../src/main/runtime/host-descriptor
 import type { RuntimeMetadata } from '../../../src/shared/runtime-bootstrap'
 import type { ExpectedRuntimeSource } from '../../../src/shared/runtime-rpc-envelope'
 import { sendRequest } from '../../../src/cli/runtime/transport'
-import {
-  importReleaseCheckoutModule,
-  materializeReleaseCheckout,
-  resolveBaselineReleaseRef
-} from './release-checkout'
+import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
+// The last release without the fence; a newer baseline would refuse like the current host.
+const PRE_FENCE_REF = 'v1.4.224'
 const RUNTIME_ID = 'runtime-a'
 const SOURCE_A = '11111111-1111-4111-8111-111111111111'
 const SOURCE_B = '22222222-2222-4222-8222-222222222222'
@@ -110,7 +108,7 @@ let releasedHost: HostBuild
 let currentHost: HostBuild
 
 beforeAll(async () => {
-  const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
+  const checkout = await materializeReleaseCheckout(PRE_FENCE_REF)
   const load = (path: string) => importReleaseCheckoutModule(checkout, path)
   const [oldDispatcher, oldCore, newDispatcher, newCore] = await Promise.all([
     load('src/main/runtime/rpc/dispatcher.ts'),

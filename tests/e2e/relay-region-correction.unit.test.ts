@@ -14,8 +14,8 @@ import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../../cloud/apps/relay/src/co
 import { RELAY_PROTOCOL_LIMITS } from '../../cloud/packages/relay-contract/src/protocol-limits'
 import type { RelayConfig } from '../../cloud/apps/relay/src/config'
 import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/admin-token-verifier'
-import { RelayOriginPool } from '../../src/main/runtime/relay/relay-origin-pool'
-import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/relay/relay-control-protocol'
+import { RelayOriginPool } from '../../src/main/runtime/mobile-cloud-relay/relay-origin-pool'
+import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/mobile-cloud-relay/relay-control-protocol'
 import type { MobileSocketTransport } from '../../src/main/runtime/rpc/mobile-socket-wiring'
 import { createRelayExecutionProcess } from './helpers/relay-execution-process'
 

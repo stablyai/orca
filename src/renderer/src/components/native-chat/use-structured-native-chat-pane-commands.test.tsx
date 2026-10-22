@@ -4,6 +4,7 @@
 import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18n from '@/i18n/i18n'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 
@@ -30,7 +31,8 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuTrigger: Pass
   }
 })
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))

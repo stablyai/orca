@@ -32,17 +32,6 @@ import type {
   RemoteRuntimeTransportSubscriptionCallbacks
 } from './remote-runtime-subscription-contract'
 
-export type {
-  RemoteRuntimeOutboundMemoryBudget,
-  RemoteRuntimeOutboundSocketMemory
-} from './remote-runtime-subscription-outbound'
-
-export type {
-  RemoteRuntimeSubscriptionOptions,
-  RemoteRuntimeTransportSubscription,
-  RemoteRuntimeTransportSubscriptionCallbacks
-} from './remote-runtime-subscription-contract'
-
 export async function subscribeRemoteRuntimeTransport<TResult>(
   connection: PairedRuntimeConnection,
   method: string,
@@ -282,9 +271,11 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     const monitoredWs = ws
     liveness = startRemoteRuntimeSocketLiveness({
       ping: () => {
-        if (monitoredWs.readyState === WebSocket.OPEN) {
-          monitoredWs.ping()
+        if (monitoredWs.readyState !== WebSocket.OPEN) {
+          return false
         }
+        monitoredWs.ping()
+        return true
       },
       onDead: () => {
         fail(

@@ -1,3 +1,4 @@
+import { OpenCodeCopyServerRouteError } from '../../../../shared/opencode-launch-command'
 import { describe, expect, it } from 'vitest'
 import {
   aiVaultSessionCliForkWorktreeId,
@@ -8,7 +9,7 @@ const OWNED = { sessionId: 'chat-1', workspaceId: 'repo-1::worktree-1' }
 const ROW = { sessionId: 's1', filePath: '/sessions/s1.jsonl' }
 const RESUMABLE = { worktreeId: 'repo-1::worktree-2', disabled: false }
 
-describe('Resume in New CLI eligibility', () => {
+describe('Switch to Terminal eligibility', () => {
   it('offers the fork for Claude and Codex rows native chat owns', () => {
     expect(
       aiVaultSessionCliForkWorktreeId(
@@ -31,11 +32,11 @@ describe('Resume in New CLI eligibility', () => {
   })
 
   it.each(['opencode', 'opencode2', 'omp'] as const)(
-    'withholds it from a %s chat row, whose CLI cannot open a copy',
+    'offers it for a %s chat row, whose chat makes the copy',
     (agent) => {
       expect(
         aiVaultSessionCliForkWorktreeId({ agent, ...ROW, structuredSession: OWNED }, RESUMABLE)
-      ).toBeNull()
+      ).toBe('repo-1::worktree-2')
     }
   )
 
@@ -69,7 +70,7 @@ describe('Resume in New CLI eligibility', () => {
   })
 })
 
-describe('Resume in New CLI failure text', () => {
+describe('Switch to Terminal failure text', () => {
   const UPDATE = 'Update Orca on the host that runs this chat to resume it in a new CLI.'
 
   it.each([
@@ -79,6 +80,15 @@ describe('Resume in New CLI failure text', () => {
     "Error invoking remote method 'aiVault:prepareSessionResume': Error: agent_session_conflict"
   ])('asks for a host update when an older host refuses the fork: %s', (message) => {
     expect(describeAiVaultCliForkFailure(message)).toBe(UPDATE)
+  })
+
+  it('keeps server refusal feedback plain when Electron wraps the host error', () => {
+    const message = new OpenCodeCopyServerRouteError().message
+    expect(
+      describeAiVaultCliForkFailure(
+        `Error invoking remote method 'aiVault:prepareSessionResume': Error: ${message}`
+      )
+    ).toBe(message)
   })
 
   it('passes any other failure through unchanged', () => {

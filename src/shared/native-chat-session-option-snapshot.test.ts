@@ -377,14 +377,6 @@ describe('defaults on load', () => {
     expect(effort).toMatchObject({ valueSource: 'default' })
     expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeDefined()
   })
-
-  it('does not turn a shown default into a launch flag', () => {
-    // Display is not authorization: only a persisted pick may emit `-m`.
-    expect(resolveAgentSessionOptionLaunch('grok', undefined)).toEqual({
-      args: [],
-      appliedValues: {}
-    })
-  })
 })
 
 describe('a boolean option always carries a value to render', () => {

@@ -26,6 +26,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 globalThis.window = { api: {} }
 
 import { createTestStore, seedStore, makeWorktree, makeTab, TEST_REPO } from './store-test-helpers'
+import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 const RUNTIME_NEVER_SAVED = toRuntimeExecutionHostId('env-serving-client')
@@ -282,6 +283,41 @@ describe('purgeStaleRuntimeHostState', () => {
     expect(s.restoredRuntimeHostIdByWorkspaceSessionKey[worktreeId]).toBe(RUNTIME_B)
     expect(s.activeWorktreeId).toBe(worktreeId)
     expect(s.activeWorkspaceKey).toBe(worktreeWorkspaceKey(worktreeId))
+  })
+
+  it('flushes delayed editor text of the removed host before purging its tabs', () => {
+    const store = createTestStore()
+    const worktreeId = 'repoA::/wt-flush'
+    seedStore(store, {
+      repos: [
+        {
+          id: 'repoA',
+          path: '/repoA',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        }
+      ],
+      worktreesByRepo: {
+        repoA: [makeWorktree({ id: worktreeId, repoId: 'repoA', hostId: RUNTIME_A })]
+      }
+    })
+    store.getState().openFile({
+      filePath: '/repoA/wt-flush/a.md',
+      relativePath: 'a.md',
+      worktreeId,
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const fileId = store.getState().openFiles[0].id
+    const flush = vi.fn()
+    const unregister = registerPendingEditorFlush(fileId, flush)
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    expect(flush).toHaveBeenCalledTimes(1)
+    unregister()
   })
 
   it('purges a legacy unhosted row when its sole repo owner was removed', () => {

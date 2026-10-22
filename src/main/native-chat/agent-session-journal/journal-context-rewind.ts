@@ -1,3 +1,4 @@
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -33,14 +34,22 @@ export async function rewindJournalContext(input: {
         state.latestAcceptedTurnSequence,
         input.cards.pauses()
       ).cleared!
+      const queued = new Set(
+        [...state.submissions.values()]
+          .filter(isQueuedAgentJournalSubmission)
+          .map((entry) => agentJournalSubmissionKey(entry.clientMessageId))
+      )
       const removed = new Map<string, boolean>()
       for (const item of state.items.values()) {
-        if (item.sequence > input.floor.sequence) {
+        if (item.sequence > input.floor.sequence && !queued.has(item.itemId)) {
           removed.set(item.itemId, false)
         }
       }
       for (const submission of state.submissions.values()) {
-        if ((submission.acceptedSequence ?? 0) > input.floor.sequence) {
+        if (
+          (submission.acceptedSequence ?? 0) > input.floor.sequence &&
+          !isQueuedAgentJournalSubmission(submission)
+        ) {
           removed.set(agentJournalSubmissionKey(submission.clientMessageId), true)
         }
       }

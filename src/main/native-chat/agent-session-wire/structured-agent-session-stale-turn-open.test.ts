@@ -43,7 +43,7 @@ async function exitWithUnwrittenSettlement(refusedWrites = 2): Promise<void> {
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   await rig.host.flushStreamedEvents(SESSION)
-  const append = vi.spyOn(open.journal, 'appendLifecycleBatch')
+  const append = vi.spyOn(open.journal, 'appendPlannedLifecycleBatch')
   for (let refused = 0; refused < refusedWrites; refused += 1) {
     append.mockRejectedValueOnce(new Error('disk full'))
   }

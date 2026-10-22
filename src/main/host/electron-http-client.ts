@@ -46,5 +46,6 @@ async function fetchFromDefaultSession(url: string, init?: RequestInit): Promise
  */
 export const electronHttpClient: MainHttpClient = {
   fetch: fetchFromDefaultSession,
-  proxySession: () => session.defaultSession
+  proxySession: () => session.defaultSession,
+  partitionSession: (partition) => session.fromPartition(partition)
 }

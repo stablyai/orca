@@ -3,6 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getWorktreeCardDetails } from '../../../../shared/worktree/card-properties'
 import { useAppStore } from '@/store'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -93,9 +94,9 @@ function secondaryDetailsArgs(settings: GlobalSettings) {
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
-    cardProps: [] as never,
     newCardStyle: false,
     compactCards: false,
+    cardDetails: getWorktreeCardDetails([], { compactWorktreeCards: false, newCardStyle: false }),
     agentActivityDisplayMode: 'compact' as const,
     workspacePorts: [],
     openTaskPage: (() => {}) as never,

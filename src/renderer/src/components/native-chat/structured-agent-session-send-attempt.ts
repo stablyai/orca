@@ -1,7 +1,10 @@
 // One `agentSession.send` request and what its answer proves. Everything before the request is
 // local or read-only, so a send stopped there never went out.
 
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
@@ -72,6 +75,7 @@ export type StructuredAgentSessionSendAttempt =
       evidence: StructuredAgentSessionSendEvidence
       /** The host's row, when its answer carried one. */
       submission: AgentJournalSubmission | null
+      cursor: AgentJournalCursor | null
       /** The refusal a thrown answer carried: what the host said, though it proves nothing. */
       thrownRefusal: AgentSessionWriteFailure | null
     }
@@ -126,7 +130,10 @@ export async function attemptStructuredAgentSessionSend(args: {
     expectedRuntimeFence: fence,
     body: entry.body,
     ...(entry.delivery ? { delivery: entry.delivery } : {}),
-    ...(entry.options ? { options: entry.options } : {})
+    ...(entry.options ? { options: entry.options } : {}),
+    ...(entry.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: entry.usageLimitContinuationOfTurnItemId }
+      : {})
   })
   type SendAnswer = AgentSessionMutationResult<AgentSessionSendResult>
   let answer: StructuredAgentSessionSendAnswer
@@ -159,6 +166,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     kind: 'answered',
     evidence: structuredAgentSessionSendEvidence(answer),
     submission: value && 'submission' in value ? value.submission : null,
+    cursor: answer.kind === 'result' && answer.result.ok ? answer.result.cursor : null,
     thrownRefusal:
       answer.kind === 'thrown' && readAgentSessionErrorRefusal(answer.error)
         ? agentSessionThrownFailure(answer.error, answer.rpcCode)

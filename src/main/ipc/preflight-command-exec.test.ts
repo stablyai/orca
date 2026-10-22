@@ -344,6 +344,8 @@ describe('findRunnableLocalCommand', () => {
   })
 
   it('gives an explicit binary the full timeout without trying another copy', async () => {
+    // A frozen clock: the budget is deadline - Date.now(), so a ticking clock reads 4999.
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
     execFileAsyncMock.mockRejectedValue(
       Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' })
     )

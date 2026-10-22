@@ -22,6 +22,7 @@ import {
   makeFolderProjectGroup,
   makeFolderWorkspace,
   makeWorktreeMeta,
+  spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
 
@@ -220,7 +221,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { env?: Record<string, string>; envToDelete?: string[] }
       | undefined
-    expect(spawnCall?.env).toEqual(
+    expect(spawnedPtyEnv(spawnCall)).toEqual(
       expect.objectContaining({
         ORCA_AGENT_HOOK_PORT: '5678',
         ORCA_AGENT_HOOK_TOKEN: 'agent-token',
@@ -268,7 +269,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
-    const spawnedEnv = spawnCall?.env ?? {}
+    const spawnedEnv = spawnedPtyEnv(spawnCall)
     expect(spawnCall).toMatchObject({
       cwd: folderPath,
       worktreeId: TEST_FOLDER_WORKSPACE_KEY
@@ -326,8 +327,9 @@ describe('OrcaRuntimeService', () => {
       connectionId: null,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
-    expect(spawnCall?.env?.ORCA_WORKTREE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
-    expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBeUndefined()
+    expect(spawnedPtyEnv(spawnCall).ORCA_WORKTREE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
+    // The window's floating panes carry the sentinel as their workspace id too.
+    expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(spawnCall?.env?.ORCA_PROJECT_GROUP_ID).toBeUndefined()
     expect(spawnCall?.env?.ORCA_WORKSPACE_ROOT).toBeUndefined()
   })
@@ -468,7 +470,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ launchAgent: 'claude' }))
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
-    const spawnedEnv = spawnCall?.env ?? {}
+    const spawnedEnv = spawnedPtyEnv(spawnCall)
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',

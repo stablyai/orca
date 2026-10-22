@@ -85,9 +85,7 @@ export function canShowMobileNativeChat(
   return resolveMobileNativeChat(tab, nativeChatTranscriptIsLocalReadable) !== null
 }
 
-export function resolveMobileNativeChatFileSessionId(
-  tab: MobileNativeChatTab | null
-): string | null {
+export function resolveMobileNativeChatSessionId(tab: MobileNativeChatTab | null): string | null {
   if (tab?.type === 'agent-session') {
     return tab.sessionId ?? null
   }

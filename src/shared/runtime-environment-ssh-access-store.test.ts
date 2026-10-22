@@ -174,9 +174,13 @@ describe('independent paired runtime SSH access persistence', () => {
 
   it('refuses a second registration of the same execution runtime', () => {
     const original = seed()
+    // Why another key: one key is one server, which the store would refresh instead of adding.
     const duplicate = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Duplicate host',
-      pairingCode: encodePairingOffer(pairing)
+      pairingCode: encodePairingOffer({
+        ...pairing,
+        publicKeyB64: Buffer.alloc(32, 2).toString('base64')
+      })
     })
     markEnvironmentUsed(userDataPath, duplicate.id, { runtimeId: 'host-runtime' })
     const before = listEnvironments(userDataPath)
@@ -220,12 +224,12 @@ describe('independent paired runtime SSH access persistence', () => {
     expect(prepare(original)).toEqual(prepared)
     expect(prepare(prepared)).toEqual(prepared)
     expect(() => prepare(prepared, 'other-request')).toThrow('Another SSH access')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     expect(() =>
       updateEnvironmentFromPairingCode(userDataPath, prepared.id, {
         pairingCode: encodePairingOffer(pairing)
       })
-    ).toThrow('Unlink')
+    ).toThrow('Retry or cancel it')
     expect(() =>
       markEnvironmentUsed(userDataPath, prepared.id, { runtimeId: 'different-runtime' })
     ).toThrow('cannot change')
@@ -288,7 +292,7 @@ describe('independent paired runtime SSH access persistence', () => {
         requestId: 'stale-request'
       })
     ).toThrow('pending unlink intent')
-    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Unlink')
+    expect(() => removeEnvironment(userDataPath, prepared.id)).toThrow('Retry or cancel it')
     const finished = completeRuntimeEnvironmentSshAccessUnlink(userDataPath, {
       expectedEnvironment: prepared,
       requestId: 'release-request'

@@ -44,6 +44,7 @@ describe('remote runtime request connection integration', () => {
           kind: 'git'
         }
       ]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list over the real socket only calls the runtime methods defined below.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
@@ -51,7 +52,7 @@ describe('remote runtime request connection integration', () => {
         cleanupSubscriptionsForConnection: () => {},
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
-        listRepos: () => repos
+        listVisibleRepos: () => repos
       } as unknown as OrcaRuntimeService
       const server = new OrcaRuntimeRpcServer({
         runtime,
@@ -585,7 +586,7 @@ describe('remote runtime request connection integration', () => {
           return () => sessionTabListeners.delete(listener)
         },
         watchFileExplorer: async () => () => {},
-        listRepos: () => [repo],
+        listVisibleRepos: () => [repo],
         showRepo: (selector: string) => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
             throw new Error('repo_not_found')

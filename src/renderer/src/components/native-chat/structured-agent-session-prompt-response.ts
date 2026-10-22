@@ -1,5 +1,8 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { supportsStructuredAgentSessionQuestionAnswers } from '@/runtime/structured-agent-session-client'
+import {
+  supportsStructuredAgentSessionQuestionAnswers,
+  supportsStructuredAgentSessionPromptCancel
+} from '@/runtime/structured-agent-session-client'
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
@@ -43,4 +46,18 @@ export async function respondToStructuredAgentSessionPrompt({
     `agentSession.respondTo:${item.body.kind}`,
     fields
   )
+}
+
+export async function cancelStructuredAgentSessionPrompt(
+  target: RuntimeClientTarget,
+  mutate: StructuredAgentSessionMutate,
+  turnId: string | undefined,
+  prompt?: { itemId: string; expectedRevision: number }
+) {
+  const promptSupported =
+    prompt !== undefined && (await supportsStructuredAgentSessionPromptCancel(target))
+  return mutate('agentSession.cancel', 'agentSession.cancel', {
+    ...(turnId ? { turnId } : {}),
+    ...(promptSupported ? { prompt } : {})
+  })
 }

@@ -4,11 +4,11 @@
  *
  * `catch-all-page-route.test.tsx` mocks both and reads what the switch hands over; this drives the
  * other half — the session reducer is the only thing stubbed, so the screen the user sees for
- * `native-route`, `offline`, `checking` and the wall is the one this app ships.
+ * `route-unavailable`, `offline`, `checking` and the wall is the one this app ships.
  */
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { OrcaMobileWebShellViewProps } from '../../modules/orca-mobile-web-shell/src'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
@@ -26,7 +26,7 @@ const SNAPSHOT = vi.hoisted(() => ({
 const dependencies = vi.hoisted((): Dependencies => {
   Object.assign(globalThis, { __DEV__: true })
   return {
-    state: { kind: 'native-route' },
+    state: { kind: 'route-unavailable' },
     params: {},
     replace: vi.fn(),
     push: vi.fn()
@@ -117,7 +117,7 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
 vi.mock('../app-update/use-wall-app-update', () => ({
   useWallAppUpdate: () => null
 }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => ({ client: null }) }))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => ({ client: null }) }))
 vi.mock('./use-page-host-snapshot', () => ({
   usePageHostSnapshot: () => ({
     snapshot: SNAPSHOT,
@@ -184,24 +184,25 @@ beforeEach(() => {
   dependencies.params = { hostId: 'host-1', page: ['settings'] }
   dependencies.replace.mockClear()
   dependencies.push.mockClear()
-  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
-})
-
-afterEach(() => {
-  vi.unstubAllEnvs()
 })
 
 describe('the screen the catch-all paints for each shell state', () => {
-  it('renders the refusal through the shell fallback, not beside it', async () => {
-    // `native-route` is the only state that reaches `fallback`, so this is what pins that binding:
-    // with `fallback={null}` the shell paints nothing and the control below is gone.
-    const tree = await renderRoute({ kind: 'native-route' })
+  it('shows the refusal when the shell finds the page does not serve the pathname', async () => {
+    const tree = await renderRoute({ kind: 'route-unavailable' })
+    expect(textOf(tree)).toContain('This workspace screen is not available on this host.')
+    expect(textOf(tree)).not.toContain('too old')
+    expect(backControl(tree)).toBeDefined()
+  })
+
+  it('shows the same refusal, with no shell mounted, for a pathname naming no screen', async () => {
+    dependencies.params = { hostId: 'host-1', page: [] }
+    const tree = await renderRoute({ kind: 'checking' })
     expect(textOf(tree)).toContain('This workspace screen is not available on this host.')
     expect(backControl(tree)).toBeDefined()
   })
 
   it('leaves the dead end rather than stacking it, on the encoded host route', async () => {
-    const tree = await renderRoute({ kind: 'native-route' })
+    const tree = await renderRoute({ kind: 'route-unavailable' })
     await act(async () => {
       backControl(tree).props.onPress()
     })
@@ -219,7 +220,7 @@ describe('the screen the catch-all paints for each shell state', () => {
     for (const hostId of ['a?b', 'a#b', 'a b', 'a/b', 'a\\b']) {
       dependencies.params = { hostId, page: ['settings'] }
       dependencies.replace.mockClear()
-      const tree = await renderRoute({ kind: 'native-route' })
+      const tree = await renderRoute({ kind: 'route-unavailable' })
       await act(async () => {
         backControl(tree).props.onPress()
       })
@@ -240,7 +241,7 @@ describe('the screen the catch-all paints for each shell state', () => {
    */
   it('goes to the app root when there is no host to go back to', async () => {
     dependencies.params = { page: ['settings'] }
-    const tree = await renderRoute({ kind: 'native-route' })
+    const tree = await renderRoute({ kind: 'route-unavailable' })
     await act(async () => {
       backControl(tree, ROOT_LABEL).props.onPress()
     })
@@ -268,9 +269,9 @@ describe('the screen the catch-all paints for each shell state', () => {
   /**
    * The presence precondition for every case above: the shell is what rendered them.
    *
-   * Outside an OTA build the switch returns the refusal on its own, with the same text and the same
+   * A route naming no screen gets the refusal without a shell, with the same text and the same
    * control, so the two cases that assert the refusal would pass against a screen no shell ever
-   * saw. `Checking host` is a string only the shell paints, and the switch cannot reach this state
+   * saw. `Checking host` is a string only the shell paints, and the route cannot reach this state
    * without having mounted one.
    */
   it('waits on the shell while the answer is still coming', async () => {

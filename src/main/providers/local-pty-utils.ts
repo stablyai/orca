@@ -1,7 +1,10 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
-import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
+import {
+  nodePtyNativeBuildEntryDir,
+  usesNodePtySpawnHelper
+} from '../../shared/node-pty-spawn-helper'
 import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../shared/terminal-spawn-error-copy'
 import {
   hostReportsChildExitStatus,
@@ -34,6 +37,7 @@ export function getNodePtySpawnHelperCandidates(): string[] {
       : unixTerminalPath
 
   return [
+    join(packageRoot, nodePtyNativeBuildEntryDir(process.platform, process.arch), 'spawn-helper'),
     join(packageRoot, 'build', 'Release', 'spawn-helper'),
     join(packageRoot, 'build', 'Debug', 'spawn-helper'),
     join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
@@ -208,6 +212,24 @@ function spawnWindowsFallbackChain(
   return null
 }
 
+export type PtyExecutableSpawnParams = Pick<
+  ShellSpawnParams,
+  'termName' | 'cols' | 'rows' | 'cwd' | 'env' | 'ptySpawn'
+> & { file: string; args: string[] }
+
+/** One executable with an argv array, no shell and no fallback; throws when it can't start. */
+export function spawnPtyExecutable(params: PtyExecutableSpawnParams): pty.IPty {
+  const { file, args, termName = 'xterm-256color', cols, rows, cwd, env, ptySpawn } = params
+  return ptySpawn(file, args, {
+    name: termName,
+    cols,
+    rows,
+    cwd,
+    env,
+    ...windowsConptyDllOptions()
+  })
+}
+
 /**
  * Attempt to spawn a PTY shell. If the primary shell fails, try fallback shells
  * (Unix: zsh/bash/sh; Windows: the PowerShell -> cmd.exe chain) before giving up.
@@ -235,13 +257,15 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     try {
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(wrapped.file, wrapped.args, {
-          name: termName,
+        process: spawnPtyExecutable({
+          file: wrapped.file,
+          args: wrapped.args,
+          termName,
           cols,
           rows,
           cwd,
           env,
-          ...windowsConptyDllOptions()
+          ptySpawn
         }),
         shellPath,
         reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)

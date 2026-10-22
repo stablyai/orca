@@ -41,8 +41,6 @@ const DRAFT: AutomationDraft = {
 function renderSidebar(onDraftChange: (updater: (d: AutomationDraft) => AutomationDraft) => void) {
   return render(
     <AutomationEditorSettingsSidebar
-      isHermesTarget={false}
-      isHermesCreate={false}
       repos={[]}
       projectHostSetups={[]}
       automationYamlHooksByRepoKey={{}}

@@ -5,6 +5,7 @@ import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 import {
   cancelInFlightRemoteInstallIfUnowned,
+  forgetCancelledInstallWaiter,
   forgetDesiredRemoteWatcher,
   registerWatcherSenderCleanup,
   releaseRemoteWatchListener
@@ -61,7 +62,14 @@ export function registerFilesystemWatcherHandlers(): void {
               `[filesystem-watcher] SSH filesystem provider unavailable; retrying watch for ${args.worktreePath} on connection ${args.connectionId}`
             )
           }
-          scheduleRemoteWatcherRetry(event.sender, args.connectionId, args.worktreePath)
+          // Why: writes before the retry lands were never reported, and editor tabs may be stale from an earlier unwatched spell.
+          scheduleRemoteWatcherRetry(
+            event.sender,
+            args.connectionId,
+            args.worktreePath,
+            undefined,
+            true
+          )
           return
         }
         return
@@ -80,6 +88,11 @@ export function registerFilesystemWatcherHandlers(): void {
         // Why: the caller stopped watching on purpose — drop the intent or a later provider
         // registration would resurrect a watch nobody asked for.
         forgetDesiredRemoteWatcher(key, _event.sender.id)
+        forgetCancelledInstallWaiter(
+          watcherLifecycleState.cancelledRemoteInstallWaiters,
+          key,
+          _event.sender.id
+        )
         const suspended = watcherLifecycleState.suspendedRemoteWatcherListeners.get(key)
         suspended?.listeners.delete(_event.sender.id)
         if (suspended?.listeners.size === 0) {

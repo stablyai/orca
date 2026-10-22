@@ -609,13 +609,14 @@ describe('staged background worktree creation', () => {
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
   })
 
-  it('opens only the setup tab when the composer chose None and setup runs', async () => {
+  it('opens only the setup tab despite templates when the composer choice is cleared', async () => {
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
     const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
     store.createWorktree.mockResolvedValueOnce({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
-      setup
+      setup,
+      defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
     })
     vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: null })
 
@@ -628,6 +629,9 @@ describe('staged background worktree creation', () => {
       )
     )
     expect(store.createWorktree.mock.calls[0]?.at(-1)).toMatchObject({ setupOnly: true })
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
+      'defaultTabs'
+    )
   })
 
   it('falls back to a blank terminal for None when no setup runs', async () => {
@@ -646,12 +650,13 @@ describe('staged background worktree creation', () => {
     )
   })
 
-  it('seeds only the setup tab for None when the user moved on before completion', async () => {
+  it('seeds only setup despite templates when the user moved on before completion', async () => {
     store.activeView = 'tasks'
     const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
     store.createWorktree.mockResolvedValueOnce({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
-      setup
+      setup,
+      defaultTabs: { tabs: [{ title: 'Dev', command: 'pnpm dev' }], runCommands: true }
     })
 
     continueBackgroundWorktreeCreation('creation-1', makeRequest({ setupOnly: true }), {

@@ -16,6 +16,9 @@ import {
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import { dedupeReadySetupRows } from './project-host-setup-row-dedupe'
+
+export type ProjectHostSetupSelection = { id: string; hostId: ExecutionHostId }
 
 export type ProjectHostSetupOption =
   | {
@@ -27,6 +30,8 @@ export type ProjectHostSetupOption =
       label: string
       detail: string
       path: string
+      /** Same-checkout setups on this machine's other host id that this row stands for. */
+      aliasSetups?: readonly ProjectHostSetupSelection[]
     }
   | {
       id: string
@@ -48,6 +53,12 @@ export type ProjectHostSetupOption =
 export type ReadyProjectHostSetupOption = Extract<ProjectHostSetupOption, { kind: 'ready' }>
 
 export type NeedsSetupProjectHostOption = Extract<ProjectHostSetupOption, { kind: 'needs-setup' }>
+
+export function getProjectHostSetupSelectionKey(
+  option: Pick<ProjectHostSetupOption, 'id' | 'hostId'>
+): string {
+  return JSON.stringify([option.id, option.hostId])
+}
 
 type BuildReadySetupOptionsInput = {
   projectId: string
@@ -122,7 +133,7 @@ function buildReadySetupOptions({
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const hostById = new Map(hosts.map((host) => [host.id, host]))
-  return projectHostSetups
+  const options = projectHostSetups
     .filter((setup) => {
       const host = hostById.get(setup.hostId)
       return (
@@ -144,23 +155,7 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
-    .filter(dedupeByHost())
-}
-
-// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
-// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
-// profiles can still hold them (a linked worktree added as its own project projects a second local
-// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
-// the row shown is the one workspace creation actually uses.
-function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
-  const seenHosts = new Set<ExecutionHostId>()
-  return (option) => {
-    if (seenHosts.has(option.hostId)) {
-      return false
-    }
-    seenHosts.add(option.hostId)
-    return true
-  }
+  return dedupeReadySetupRows(options, hostById)
 }
 
 function buildNeedsSetupOptions({

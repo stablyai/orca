@@ -7,6 +7,7 @@ import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqli
 import { readProfileStateDomain } from '../profile-state/profile-state-domain-reader'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import { Store } from './store'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: {
@@ -29,7 +30,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -112,7 +113,7 @@ describe('SQLite durability barriers with another selective write pending', () =
     seed.workspaceSession.activeWorktreeId = oldId
     seed.ui.showDotfilesByWorktree = { [oldId]: true }
     const state = fixture(seed)
-    state.store.migrateWorktreeIdentity(oldId, newId)
+    state.store.migrateWorktreeIdentity(hostWorktreeTarget({ id: oldId, hostId: 'local' }), newId)
     state.store.flushOrThrow()
     expect(state.read('workspaceSession')).toMatchObject({
       kind: 'value',

@@ -5,7 +5,7 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-subscription-contract'
 
 export type PairedRuntimeBrowserHostLeaseOptions = {
   connection: PairedRuntimeConnection

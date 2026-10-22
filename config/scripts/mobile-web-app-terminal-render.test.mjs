@@ -90,8 +90,26 @@ describeRender(
     }, 300_000)
 
     it('opens xterm under the shipped policy and paints a dense stream into its buffer', async () => {
-      const { errors, page } = await openTerminal()
+      const fonts = []
+      const { errors, page } = await openTerminal({
+        beforeNavigate: async (page) => {
+          page.on('response', (response) => {
+            if (response.url().endsWith('.woff2')) {
+              fonts.push(response)
+            }
+          })
+        }
+      })
       await openProbeTerminal(page)
+      expect(fonts).toHaveLength(1)
+      expect(fonts[0].status()).toBe(200)
+      expect(fonts[0].headers()['content-type']).toBe('font/woff2')
+      expect(new URL(fonts[0].url()).pathname).toBe(
+        '/assets/8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467.woff2'
+      )
+      expect(
+        await page.evaluate(() => document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0'))
+      ).toBe(true)
       const applied = await page.evaluate((data) => {
         globalThis.__orcaTerminalProbe.write(data)
         return data.length

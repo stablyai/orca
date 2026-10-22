@@ -19,6 +19,22 @@ export function serverHostHealth(host: MobileRelayHost): ExecutionHostHealth {
   return host.relay === 'update-needed' ? 'blocked' : host.health
 }
 
+/** `desktop`'s per-host values with each server's read from its feed entry. */
+export function withServerHosts<Value>(
+  desktop: ReadonlyMap<ExecutionHostId, Value>,
+  hosts: readonly MobileRelayHost[],
+  read: (host: MobileRelayHost) => Value
+): ReadonlyMap<ExecutionHostId, Value> {
+  if (hosts.length === 0) {
+    return desktop
+  }
+  const merged = new Map(desktop)
+  for (const host of hosts) {
+    merged.set(host.hostId, read(host))
+  }
+  return merged
+}
+
 function serverRowSchema(hostId: ExecutionHostId) {
   return z.custom<Worktree>(
     (row) =>
@@ -83,8 +99,11 @@ export function applyServerWorkspaces(
     (host, index) =>
       fetched.rows[index] ?? previous.worktrees.filter((row) => row.hostId === host.hostId)
   )
-  const unchanged =
-    JSON.stringify(fetched.hosts) === JSON.stringify(previous.hosts) &&
-    areWorktreeListsEqual(worktrees, previous.worktrees)
-  return unchanged ? previous : { hosts: fetched.hosts, worktrees }
+  // Why kept: screens key per-server clients on `hosts`, which rows changing must not rebuild.
+  const hosts =
+    JSON.stringify(fetched.hosts) === JSON.stringify(previous.hosts)
+      ? previous.hosts
+      : fetched.hosts
+  const unchanged = hosts === previous.hosts && areWorktreeListsEqual(worktrees, previous.worktrees)
+  return unchanged ? previous : { hosts, worktrees }
 }

@@ -24,7 +24,7 @@ export type UnopenedSendJournal = {
     | 'handoverRecorded'
     | 'handedOverAt'
     | 'acceptedSequence'
-  > & { reason?: string | null })[]
+  > & { reason?: string | null; fence?: number })[]
   resolveDispatch?: AgentSessionJournal['resolveDispatch']
 }
 

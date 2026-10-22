@@ -6,8 +6,6 @@ import type {
 import { startBasePoller } from './worktree-base-directory-marker-poller'
 import { startGitCommonWatch } from './worktree-git-common-watch'
 
-export { WORKTREE_BASE_BACKSTOP_TICKS } from './worktree-base-directory-marker-poller'
-
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
 export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }

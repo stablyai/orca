@@ -19,7 +19,7 @@ export function adapterSupportsCreate(
   return adapter.supportsLocation?.(location) ?? false
 }
 
-/** Honors declared gates while retaining legacy adapters whose acquire path is authoritative. */
+/** Honors declared gates while retaining adapters whose spawn path is authoritative. */
 export function adapterSupportsCreateIfDeclared(
   adapter: StructuredAgentSessionAdapter,
   location: AgentSessionExecutionLocation,

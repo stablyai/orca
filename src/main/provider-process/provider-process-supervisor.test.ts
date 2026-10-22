@@ -62,7 +62,11 @@ describe('structured provider supervision', () => {
       lifetime: 'one-shot'
     })
 
-    expect(spec).toMatchObject({ program: process.execPath, detached: true, supervised: true })
+    expect(spec).toMatchObject({
+      program: process.execPath,
+      detached: true,
+      supervised: true
+    })
     expect(
       JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
     ).toMatchObject({ lifetime: 'one-shot' })
@@ -72,7 +76,11 @@ describe('structured provider supervision', () => {
     // The launch's override goes through the one env rule, then only the provider gets it.
     const spec = createProviderSpawnSpec(
       { ...command, env: { NODE_OPTIONS: '--require /missing.js' } },
-      { PATH: '/bin', NODE_OPTIONS: '--inherited', NODE_REPL_EXTERNAL_MODULE: '/repl.js' },
+      {
+        PATH: '/bin',
+        NODE_OPTIONS: '--inherited',
+        NODE_REPL_EXTERNAL_MODULE: '/repl.js'
+      },
       'linux'
     )
 
@@ -80,7 +88,10 @@ describe('structured provider supervision', () => {
     expect(spec.env).not.toHaveProperty('NODE_REPL_EXTERNAL_MODULE')
     expect(
       JSON.parse(Buffer.from(spec.env.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString()).nodeEnv
-    ).toEqual({ NODE_OPTIONS: '--require /missing.js', NODE_REPL_EXTERNAL_MODULE: '/repl.js' })
+    ).toEqual({
+      NODE_OPTIONS: '--require /missing.js',
+      NODE_REPL_EXTERNAL_MODULE: '/repl.js'
+    })
   })
 
   it('keeps every argv and env string of a 120 KiB argv prompt under the Linux 128 KiB cap', () => {
@@ -128,22 +139,40 @@ describe('structured provider supervision', () => {
       env: { PATH: '/bin', CODEX_HOME: '/tmp/codex' },
       cwd: '/work/repo',
       detached: false,
-      supervised: false
+      supervised: false,
+      groupReportStdio: []
     })
   })
 
   it.each(['win32', 'darwin', 'linux'] as const)(
     'applies launch environment overrides and deletions on %s',
     (platform) => {
-      const baseEnv = { PATH: '/bin', AGENT_HOME: '/inherited', PARENT_AGENT: 'parent' }
-      const overlay = { AGENT_HOME: '/pinned', LAUNCH_ONLY: 'added', PARENT_AGENT: 'overlay' }
+      const baseEnv = {
+        PATH: '/bin',
+        AGENT_HOME: '/inherited',
+        PARENT_AGENT: 'parent'
+      }
+      const overlay = {
+        AGENT_HOME: '/pinned',
+        LAUNCH_ONLY: 'added',
+        PARENT_AGENT: 'overlay'
+      }
       const spec = createProviderSpawnSpec(
-        { command: 'provider', args: [], env: overlay, envToDelete: ['PARENT_AGENT'] },
+        {
+          command: 'provider',
+          args: [],
+          env: overlay,
+          envToDelete: ['PARENT_AGENT']
+        },
         baseEnv,
         platform
       )
 
-      expect(spec.env).toMatchObject({ PATH: '/bin', AGENT_HOME: '/pinned', LAUNCH_ONLY: 'added' })
+      expect(spec.env).toMatchObject({
+        PATH: '/bin',
+        AGENT_HOME: '/pinned',
+        LAUNCH_ONLY: 'added'
+      })
       expect(spec.env).not.toHaveProperty('PARENT_AGENT')
       expect(baseEnv.PARENT_AGENT).toBe('parent')
       expect(baseEnv.AGENT_HOME).toBe('/inherited')

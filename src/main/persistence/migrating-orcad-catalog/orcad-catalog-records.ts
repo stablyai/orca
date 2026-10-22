@@ -3,10 +3,11 @@ import {
   serializeOrcadMigrationValue,
   type OrcadMigrationImportReceipt,
   type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host'
 import { assertOrcadMigrationStagedCatalogClaims } from './orcad-staged-catalog-claims'
 import {
   toOrcadDestinationFolderWorkspace,
@@ -138,7 +139,8 @@ function assertNoRepositoryPathConflicts(incoming: Repo[], existing: Repo[]): vo
     }
     incomingByPath.set(key, repo.id)
   }
-  for (const repo of existing) {
+  // Incoming rows land on this machine; a same-path row on another host is a different checkout.
+  for (const repo of existing.filter(isRepoOnCatalogHost)) {
     if (
       !incomingIdSet.has(repo.id) &&
       incomingByPath.has(normalizeRuntimePathForComparison(repo.path))

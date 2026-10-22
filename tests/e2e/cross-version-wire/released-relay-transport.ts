@@ -1,14 +1,14 @@
 /**
  * The client half of talking to a released relay: its own bridge transport and what a shipped
  * desktop did over it. Kept free of build tooling so Playwright specs can import it.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
 import { spawn } from 'node:child_process'
 import {
   SshChannelMultiplexer,
   type MultiplexerTransport
 } from '../../../src/main/ssh/ssh-channel-multiplexer'
-import { RELAY_SENTINEL } from '../../../src/main/ssh/relay-protocol'
+import { RELAY_SENTINEL } from '../../../src/main/ssh/remote-exec/remote-frame-protocol'
 
 const SENTINEL = Buffer.from(RELAY_SENTINEL, 'utf-8')
 const OWNER_HELD_DISCONNECTED = -32045

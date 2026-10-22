@@ -17,6 +17,7 @@ import type {
 import type { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session-queued-message-wire'
 import { rejectedDraftSettlement } from './journal-dispatch-settlement'
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 
 export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
 
@@ -61,8 +62,8 @@ export type QueuedMessageRow = {
   /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
    *  it. Null on rows from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null
-  /** The model and effort its send carried, applied to the turn it starts when it goes out. */
-  options?: Readonly<Record<string, string>>
+  /** The choices its send carried, applied to the turn it starts when it goes out. */
+  options?: AgentSessionExecutionOptions
 }
 
 const COLUMNS =
@@ -81,7 +82,7 @@ export function insertQueuedMessage(
     /** Absent: after every other card. */
     position?: number
     holdReason?: QueuedMessageHoldReason
-    options?: Readonly<Record<string, string>>
+    options?: AgentSessionExecutionOptions
   }
 ): QueuedMessageRow {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the statement selects exactly one aliased numeric column; better-sqlite3 types rows as unknown.

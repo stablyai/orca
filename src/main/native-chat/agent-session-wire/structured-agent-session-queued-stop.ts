@@ -11,7 +11,7 @@ import {
   type QueuedMessageRow
 } from '../agent-session-journal/queued-message-table'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   structuredAgentSessionStopNamesEndedTurn,
   structuredAgentSessionStopNamesTurnNotLive
@@ -32,13 +32,14 @@ export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMes
  * over; only a turn with no row yet may still be opening.
  */
 export function stopReachesUnrecordedWork(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>,
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
   namedTurnId: string | undefined
 ): 'unrecorded' | 'repeat' | 'late' {
-  if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, namedTurnId, isMainAgentWorking(ctx))) {
+  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, work, namedTurnId)) {
     return 'late'
   }
-  const live = ctx.journal.activeTurnId()
+  const live = work.activeTurnId()
   const inForce = ctx.journal.queuedMessages.userStopInForce()
   if (inForce === null) {
     return 'unrecorded'

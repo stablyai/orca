@@ -24,8 +24,6 @@ type StartupScope = {
   inputs: AgentStartupPlanInputs
   cwd: string
   isWsl?: boolean
-  /** TEMPORARY parity: the platform main checked this model on, when it differs. */
-  modelCheckPlatform?: NodeJS.Platform
   hostIdentity?: string
   signal?: AbortSignal
 }
@@ -51,20 +49,20 @@ export async function prepareOpenCodeModelStartupInputs(
   if (typeof model !== 'string' || model.trim().length === 0) {
     refuseModel()
   }
-  const platform = options.modelCheckPlatform ?? inputs.platform
   if (
     Object.entries(inputs.sessionOptions ?? {}).some(
       ([key, value]) => key !== 'model' && value !== undefined
     ) ||
     inputs.isRemote ||
     options.isWsl ||
-    platform !== process.platform ||
+    inputs.platform !== process.platform ||
     options.signal?.aborted
   ) {
     refuseModel()
   }
   const command =
-    inputs.cmdOverrides.opencode || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, platform)
+    inputs.cmdOverrides.opencode ||
+    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
     if (value !== undefined) {

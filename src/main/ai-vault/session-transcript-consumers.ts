@@ -20,6 +20,8 @@ export type TranscriptMessageSink = {
   /** False when nobody is listening: parsers skip the extraction entirely. */
   readonly active: boolean
   push(message: TranscriptMessage): void
+  /** A later duplicate JSON array replaces every message emitted from the earlier array. */
+  reset?: () => void
 }
 
 export const NO_TRANSCRIPT_MESSAGES: TranscriptMessageSink = {

@@ -4,7 +4,7 @@ import {
   writeDockerSshHostTargetFile,
   type DockerSshHostTarget
 } from './docker-ssh-host-target'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 /**
  * An HTTP fixture that exists only inside the SSH container, on a hostname only the

@@ -10,6 +10,9 @@ vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock,
   runProcessSync: runProcessSyncMock
 }))
+vi.mock('./wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 
 function exited(stdout: string, code: number | null = 0): ProcessResult {
   return { code, signal: null, stdout, stderr: '', timedOut: false }
@@ -391,7 +394,7 @@ describe('WSL availability cache', () => {
         program: 'wsl.exe',
         args: ['--status'],
         timeoutMs: 5000,
-        cwd: expect.any(String)
+        cwd: 'C:\\Windows'
       })
     )
   })

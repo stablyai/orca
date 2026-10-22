@@ -25,11 +25,11 @@ import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import type { OrcadMigrationEvictedReceipt } from './orcad-migration-evicted-receipts'
+import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
 import type {
   OrcadMigrationImportReceipt,
   OrcadMigrationStagedCatalog
-} from './orcad-migration-manifest'
+} from './orcad-migration/orcad-migration-manifest'
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
@@ -45,6 +45,8 @@ export type PersistedMobileClientTabSelection = {
   activeTabId: string | null
   activeGroupId: string | null
   activeTabIdByGroupId: Readonly<Record<string, string>>
+  /** Top-level tabs the client showed, most recent last. */
+  recentTabIds?: string[]
 }
 
 /** deviceId → worktreeId → selection. */

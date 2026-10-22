@@ -28,3 +28,13 @@ export function nameBasedUuid(name: string): string {
 export function nameBasedLoadContext(): WorkspaceLayoutLoadContext {
   return { mintId: nameBasedUuid, mintLeafId: nameBasedUuid }
 }
+
+/** Seed of the group the Loader mints for a workspace's tabs when none was stored. */
+export function rootGroupSeed(workspaceKey: string): string {
+  return `group:${workspaceKey}`
+}
+
+/** The id the Loader mints for that group, so a window minting a root group picks the same one. */
+export function workspaceRootGroupId(workspaceKey: string): string {
+  return nameBasedUuid(rootGroupSeed(workspaceKey))
+}

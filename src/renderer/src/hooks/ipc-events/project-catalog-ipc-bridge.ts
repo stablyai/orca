@@ -2,6 +2,7 @@ import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
 import { adoptFromEndpoint } from '../../store/adopt-from-endpoint'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -58,7 +59,7 @@ export function registerProjectCatalogIpcBridge(
         }
         const state = useAppStore.getState()
         applyWorktreeHeadIdentities(data, {
-          getWorktreesForRepo: (repoId) => state.worktreesByRepo[repoId],
+          getWorktreesForRepo: (repoId) => selectWorktreesByRepo(state)[repoId],
           updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
         })
       })
@@ -89,7 +90,11 @@ export function registerProjectCatalogIpcBridge(
       if (!data.creationId) {
         return
       }
-      useAppStore.getState().updatePendingWorktreeCreation(data.creationId, { phase: data.phase })
+      // Why: every event without a live meter (a phase change, or null when git finished) clears it.
+      useAppStore.getState().updatePendingWorktreeCreation(data.creationId, {
+        phase: data.phase,
+        checkoutProgress: data.checkout ?? undefined
+      })
     }) ?? (() => {})
   )
 

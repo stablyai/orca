@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
 import type { FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 
-const TRAILING_MS = 150
-const MAX_WAIT_MS = 500
-
 function createDeferred(): {
   promise: Promise<FileExplorerTreeRefreshOutcome>
   resolve: (outcome?: FileExplorerTreeRefreshOutcome) => void
@@ -49,22 +46,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     for (let index = 0; index < 20; index++) {
       scheduler.requestFullRefresh()
     }
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
-
-    expect(refreshTree).toHaveBeenCalledTimes(1)
-  })
-
-  it('flushes at the max wait even when requests keep arriving inside the trailing window', async () => {
-    const { refreshTree, scheduler } = setup()
-
-    scheduler.requestFullRefresh()
-    for (let index = 0; index < 4; index++) {
-      await vi.advanceTimersByTimeAsync(100)
-      scheduler.requestFullRefresh()
-    }
-    expect(refreshTree).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS - 400)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).toHaveBeenCalledTimes(1)
   })
@@ -79,7 +61,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     scheduler.requestDirRefresh('C:/repo/src')
     scheduler.requestDirRefresh('/repo/docs/')
     scheduler.requestDirRefresh('/repo/docs')
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshDir).toHaveBeenCalledTimes(2)
     expect(refreshDir.mock.calls.map(([dirPath]) => dirPath)).toEqual(['C:/repo/src', '/repo/docs'])
@@ -92,7 +74,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     scheduler.requestDirRefresh('/repo/collapsed')
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).toHaveBeenCalledTimes(1)
     expect(refreshDir).toHaveBeenCalledTimes(1)
@@ -106,7 +88,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     scheduler.requestDirRefresh('/repo/src')
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).toHaveBeenCalledTimes(1)
     expect(refreshDir).not.toHaveBeenCalled()
@@ -124,10 +106,10 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     scheduler.requestDirRefresh('/repo/src')
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     gate.resolve('superseded')
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshDir).toHaveBeenCalledTimes(1)
     expect(refreshDir).toHaveBeenCalledWith('/repo/src')
@@ -145,10 +127,10 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     scheduler.requestDirRefresh('/repo/src')
     scheduler.requestDirRefresh('/repo/docs')
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     gate.resolve('root-unreadable')
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshDir).not.toHaveBeenCalled()
   })
@@ -159,7 +141,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     })
 
     scheduler.requestDirRefresh('/repo/src')
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).not.toHaveBeenCalled()
     expect(refreshDir).toHaveBeenCalledTimes(1)
@@ -170,15 +152,15 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     const { refreshTree, scheduler } = setup({ refreshTree: () => gate.promise })
 
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
     expect(refreshTree).toHaveBeenCalledTimes(1)
 
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
     expect(refreshTree).toHaveBeenCalledTimes(1)
 
     gate.resolve()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).toHaveBeenCalledTimes(2)
   })
@@ -188,14 +170,14 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     const { refreshDir, scheduler } = setup({ refreshTree: () => gate.promise })
 
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     scheduler.requestDirRefresh('/repo/late')
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
     expect(refreshDir).not.toHaveBeenCalled()
 
     gate.resolve()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshDir).toHaveBeenCalledTimes(1)
     expect(refreshDir).toHaveBeenCalledWith('/repo/late')
@@ -215,7 +197,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     for (let index = 0; index < 20; index++) {
       scheduler.requestDirRefresh(`/repo/d${index}`)
     }
-    await vi.advanceTimersByTimeAsync(TRAILING_MS + 20 * 10)
+    await vi.advanceTimersByTimeAsync(20 * 10)
 
     expect(refreshDir).toHaveBeenCalledTimes(20)
     expect(peakInFlight).toBeLessThanOrEqual(4)
@@ -227,7 +209,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     scheduler.requestFullRefresh()
     scheduler.requestDirRefresh('/repo/src')
     expect(scheduler.cancel()).toBe(true)
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).not.toHaveBeenCalled()
     expect(refreshDir).not.toHaveBeenCalled()
@@ -244,14 +226,14 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     const { refreshTree, scheduler } = setup({ refreshTree: () => gate.promise })
 
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
     expect(refreshTree).toHaveBeenCalledTimes(1)
 
     // Nothing pending and no timer armed: the in-flight run is the only discarded work.
     expect(scheduler.cancel()).toBe(true)
 
     gate.resolve()
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
   })
 
   it('stops refreshing queued dirs when cancelled mid-run', async () => {
@@ -269,12 +251,12 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     for (let index = 0; index < 4; index++) {
       scheduler.requestDirRefresh(`/repo/d${index}`)
     }
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
     expect(refreshDir).toHaveBeenCalledTimes(1)
 
     scheduler.cancel()
     gate.resolve()
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshDir).toHaveBeenCalledTimes(1)
   })
@@ -289,13 +271,13 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     scheduler.requestDirRefresh('/repo/late')
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     // refreshTree already ran against the old expanded set, so this dir was
     // never re-read and its pending refresh must survive.
     expanded.add('/repo/late')
     gate.resolve()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshDir).toHaveBeenCalledTimes(1)
     expect(refreshDir).toHaveBeenCalledWith('/repo/late')
@@ -306,31 +288,15 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     const { refreshTree, refreshDir, scheduler } = setup({ refreshTree: () => gate.promise })
 
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
     scheduler.requestDirRefresh('/repo/src')
     scheduler.cancel()
 
     gate.resolve()
-    await vi.advanceTimersByTimeAsync(MAX_WAIT_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(refreshTree).toHaveBeenCalledTimes(1)
     expect(refreshDir).not.toHaveBeenCalled()
-  })
-
-  it('uses the injected timer functions', async () => {
-    const schedule = vi.fn((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
-    const clear = vi.fn((timer: ReturnType<typeof setTimeout>) => {
-      clearTimeout(timer)
-    })
-    const { refreshTree, scheduler } = setup({ schedule, clear })
-
-    scheduler.requestFullRefresh()
-    scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
-
-    expect(schedule).toHaveBeenCalledTimes(2)
-    expect(clear).toHaveBeenCalledTimes(1)
-    expect(refreshTree).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a full refresh ahead of the dir refreshes it does not cover', async () => {
@@ -347,57 +313,22 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     scheduler.requestDirRefresh('/repo/collapsed')
     scheduler.requestFullRefresh()
-    await vi.advanceTimersByTimeAsync(TRAILING_MS)
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(order).toEqual(['tree', '/repo/collapsed'])
   })
 
-  // Why: local workspaces pass a zero window because the main process already coalesced the burst
-  // on the same 150/500 timings. Stacking a second debounce there only doubled paint latency.
-  describe('zero window (local transport)', () => {
-    const zeroWindow = { trailingMs: 0, maxWaitMs: 0 }
+  it('flushes on the next tick and coalesces one payload burst into a single refresh', async () => {
+    const { refreshTree, refreshDir, scheduler } = setup()
 
-    it('flushes on the next tick instead of waiting out a trailing window', async () => {
-      const { refreshTree, scheduler } = setup(zeroWindow)
-
+    for (let index = 0; index < 20; index++) {
       scheduler.requestFullRefresh()
-      await vi.advanceTimersByTimeAsync(0)
+      scheduler.requestDirRefresh('/repo/src')
+    }
+    await vi.advanceTimersByTimeAsync(0)
 
-      expect(refreshTree).toHaveBeenCalledTimes(1)
-    })
-
-    it('still coalesces one payload burst into a single refresh', async () => {
-      const { refreshTree, refreshDir, scheduler } = setup(zeroWindow)
-
-      for (let index = 0; index < 20; index++) {
-        scheduler.requestFullRefresh()
-        scheduler.requestDirRefresh('/repo/src')
-      }
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(refreshTree).toHaveBeenCalledTimes(1)
-      expect(refreshDir).toHaveBeenCalledTimes(1)
-      expect(refreshDir).toHaveBeenCalledWith('/repo/src')
-    })
-
-    it('does not start a second run while one is in flight', async () => {
-      const deferred = createDeferred()
-      const { refreshTree, scheduler } = setup({
-        ...zeroWindow,
-        refreshTree: () => deferred.promise
-      })
-
-      scheduler.requestFullRefresh()
-      await vi.advanceTimersByTimeAsync(0)
-      scheduler.requestFullRefresh()
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(refreshTree).toHaveBeenCalledTimes(1)
-
-      deferred.resolve()
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(refreshTree).toHaveBeenCalledTimes(2)
-    })
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledWith('/repo/src')
   })
 })

@@ -38,7 +38,7 @@ describe('parseJiraIssueUrl', () => {
       }
     ],
     [
-      ' HTTPS://JIRA.COMPANY.COM/jira/browse/Team9-7?foo=bar#details ',
+      ' HTTPS://JIRA.COMPANY.COM/jira/BROWSE/Team9-7?foo=bar#details ',
       {
         issueKey: 'TEAM9-7',
         origin: 'https://jira.company.com',

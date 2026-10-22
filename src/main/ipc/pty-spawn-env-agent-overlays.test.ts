@@ -1,3 +1,7 @@
+import { getDefaultSettings } from '../../shared/constants'
+import { buildPtyHostEnv } from './pty/host-env/assembly'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { join } from 'node:path'
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
@@ -59,9 +63,103 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { spawnAndGetEnv } = setupPtyIpcSuite()
+  const { handlers, mainWindow, spawnAndGetEnv } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    describe('Claude terminal image detection', () => {
+      it.each([undefined, true, false])(
+        'enables managed Claude images according to the setting %s',
+        async (terminalInlineImages) => {
+          const env = await spawnAndGetEnv(
+            undefined,
+            { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: undefined },
+            undefined,
+            () => ({ agentStatusHooksEnabled: false, terminalInlineImages }),
+            'wrapped-claude-launch',
+            'claude'
+          )
+          expect(env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(
+            terminalInlineImages === false ? undefined : '1'
+          )
+          expect(env.TERM_PROGRAM).toBe('Orca')
+        }
+      )
+
+      it.each(['0', '1', ''])('preserves the explicit override %j', async (value) => {
+        const env = await spawnAndGetEnv(
+          { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: value },
+          { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: undefined },
+          undefined,
+          undefined,
+          'claude',
+          'claude'
+        )
+        expect(env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(value)
+      })
+
+      it.each([undefined, 'codex', 'pi'] as const)(
+        'does not force images for agent identity %s',
+        async (launchAgent) => {
+          const env = await spawnAndGetEnv(
+            undefined,
+            { CLAUDE_CODE_FORCE_TERMINAL_IMAGES: undefined },
+            undefined,
+            undefined,
+            launchAgent === undefined ? undefined : 'claude is mentioned in this command',
+            launchAgent
+          )
+          expect(env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBeUndefined()
+        }
+      )
+
+      it('respects an inherited opt-out before sparse daemon env is merged', () => {
+        vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', '0')
+        try {
+          const env = buildPtyHostEnv(
+            'claude-opt-out',
+            {},
+            {
+              isPackaged: false,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              agentStatusHooksEnabled: false,
+              launchAgent: 'claude'
+            }
+          )
+          expect(env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBeUndefined()
+          expect(process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe('0')
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      })
+
+      it.each([true, false])('uses the image setting %s in daemon IPC spawns', async (enabled) => {
+        vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
+        try {
+          const { setupDaemonAdapter } = createDaemonActiveProviderFixtures({
+            handlers,
+            mainWindow
+          })
+          const daemonSpawn = setupDaemonAdapter()
+          registerPtyHandlers(mainWindow, undefined, undefined, () => ({
+            ...getDefaultSettings('/tmp'),
+            agentStatusHooksEnabled: false,
+            terminalInlineImages: enabled
+          }))
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            launchAgent: 'claude',
+            command: 'wrapped-claude-launch'
+          })
+          expect(daemonSpawn.mock.calls.at(-1)?.[0].env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(
+            enabled ? '1' : undefined
+          )
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      })
+    })
     it('prepares Codex launch state before spawning an interactive tab', async () => {
       const workspacePath = '/repo/worktrees/new-feature'
       const resolveHome = vi.fn(

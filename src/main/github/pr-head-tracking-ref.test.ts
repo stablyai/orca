@@ -40,6 +40,13 @@ describe('fetchPrHeadTrackingRef', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
+  it('throws for an SSH repo named only by executionHostId', async () => {
+    await expect(
+      fetchPrHeadTrackingRef({ path: '/repo', executionHostId: 'ssh:gpu' }, 'origin', 'feature/x')
+    ).rejects.toThrow('SSH Git provider is not available')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('fetches a GitHub pull head into its remote-scoped Orca ref for local repos', async () => {
     const localRef = await fetchGitHubPullRequestHeadRef(
       { path: '/repo', connectionId: null },

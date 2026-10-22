@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { CacheEntry } from '../github/cache-model'
 import type { JiraSlice, JiraSliceSet } from './jira-slice-contract'
 import type {
@@ -30,11 +31,14 @@ export type SharedJiraSummaryRequest = InflightJiraReadRequest<JiraIssue | null>
   subscribers: number
 }
 
-export type JiraReadScope = {
-  settings: RowLessSource
+export type JiraReadIdentity = {
   contextKey: string
   cachePrefix: string | null
   explicitSource: boolean
+}
+
+export type JiraReadScope = JiraReadIdentity & {
+  settings: RowLessSource
 }
 
 export const inflightIssueRequests = new Map<string, InflightJiraReadRequest<JiraIssue | null>>()
@@ -191,29 +195,37 @@ export function canWriteJiraReadResult(
   )
 }
 
-export function getJiraReadScope(
-  settings: AppState['settings'],
+export function getJiraReadIdentity(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   sourceContext?: TaskSourceContext | null
-): JiraReadScope {
+): JiraReadIdentity {
   if (!sourceContext) {
     return {
-      // Why: no Tasks source chosen yet; the default scope host is the row-less source's host.
-      settings: defaultScopeSource(settings),
       contextKey: getProviderRuntimeContextKey(settings),
       cachePrefix: null,
       explicitSource: false
     }
   }
   const runtimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const cachePrefix = getTaskSourceCacheScope(sourceContext)
   return {
-    settings: sourceContext,
-    contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${getTaskSourceCacheScope(sourceContext)}`,
-    cachePrefix: getTaskSourceCacheScope(sourceContext),
+    contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${cachePrefix}`,
+    cachePrefix,
     explicitSource: true
   }
 }
 
-export function scopedJiraCacheKey(scope: JiraReadScope, key: string): string {
+export function getJiraReadScope(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  sourceContext?: TaskSourceContext | null
+): JiraReadScope {
+  return {
+    ...getJiraReadIdentity(settings, sourceContext),
+    settings: sourceContext ?? defaultScopeSource(settings)
+  }
+}
+
+export function scopedJiraCacheKey(scope: JiraReadIdentity, key: string): string {
   return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
 }
 

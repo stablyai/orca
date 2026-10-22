@@ -13,10 +13,6 @@ vi.mock('./session-scanner-source-discovery', () => ({
 vi.mock('./session-scanner-candidates', () => ({
   sessionCandidatesFromDiscoveries: async () => candidates()
 }))
-vi.mock('./session-parse-cache-persistence', () => ({
-  ensureSessionParseCacheLoaded: async () => {},
-  scheduleSessionParseCachePersist: () => {}
-}))
 vi.mock('./session-scanner-parse-cache', () => ({
   createSessionParseStats: () => ({
     reused: 0,
@@ -25,7 +21,7 @@ vi.mock('./session-scanner-parse-cache', () => ({
     earlyStopped: 0,
     bytesRead: 0
   }),
-  parseAgentSessionFileCached: async (candidate: { session: AiVaultSession }) => candidate.session
+  parseListedSessionFile: async (candidate: { session: AiVaultSession }) => candidate.session
 }))
 vi.mock('./session-root-dedup', async (original) => {
   const actual = await original<typeof SessionDedup>()

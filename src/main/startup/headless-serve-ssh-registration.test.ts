@@ -1,22 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
-  const { createSshIpcMocks } = await import('../ipc/ssh-ipc-module-mocks')
+  const { createSshIpcMocks } = await import('../ipc/ssh/ssh-ipc-module-mocks')
   return createSshIpcMocks()
 })
 
-vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
+vi.mock('../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
-vi.mock('../ipc/ssh-host-server-connect', () => mocks.hostServerConnect)
-vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../ipc/ssh/ssh-host-server-connect', () => mocks.hostServerConnect)
+vi.mock('../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
-vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+vi.mock('../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
-import { resetSshHandlerStateForTests } from '../ipc/ssh'
-import { connectRegisteredSshTarget, listRegisteredSshTargets } from '../ssh/ssh-target-registry'
-import { createSshIpcHarness } from '../ipc/ssh-ipc-test-harness'
+import { resetSshHandlerStateForTests } from '../ipc/ssh/ssh'
+import {
+  connectRegisteredSshTarget,
+  listRegisteredSshTargets,
+  SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE
+} from '../ssh/targets/ssh-target-registry'
+import { createSshIpcHarness } from '../ipc/ssh/ssh-ipc-test-harness'
 import type { SshTarget } from '../../shared/ssh-types'
 import { mainProcessState } from './main-process-state'
 import { registerHeadlessServeSshHandlers } from './headless-serve-ssh-registration'
@@ -42,7 +46,9 @@ describe('SSH registration on a headless `orca serve`', () => {
 
   it('reproduces the unregistered host before bootstrap (#25886, #8489)', async () => {
     expect(listRegisteredSshTargets()).toEqual([])
-    await expect(connectRegisteredSshTarget('ssh-1')).rejects.toThrow('ssh_handlers_not_registered')
+    await expect(connectRegisteredSshTarget('ssh-1')).rejects.toThrow(
+      SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE
+    )
   })
 
   it('lists and connects persisted SSH targets with no window', async () => {

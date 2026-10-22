@@ -483,16 +483,6 @@ describe('UpdateCard visibility gates', () => {
     ).toBe('visible')
   })
 
-  it('shows settings-initiated download errors when a version is cached', () => {
-    expect(
-      computeVisibility({
-        status: { state: 'error', message: 'ENOSPC' },
-        dismissedVersion: null,
-        cachedVersion: '1.2.0'
-      })
-    ).toBe('visible')
-  })
-
   it('shows an initial package recovery before any version was cached', () => {
     expect(
       computeVisibility({

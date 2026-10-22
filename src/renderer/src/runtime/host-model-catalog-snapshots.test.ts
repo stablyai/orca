@@ -77,6 +77,22 @@ describe('host model catalog snapshots', () => {
     expect(readHostModelCatalogSnapshot(PAIRED, 'codex', NEW_CHAT)).toBeUndefined()
   })
 
+  it('serves a list the host says is a workspace’s own to that workspace only', () => {
+    const ownList = { ...list(false), modelsDifferByWorkspace: true as const }
+    recordHostModelCatalogSnapshot(LOCAL, 'opencode', 'wt-1', ownList)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'opencode', NEW_CHAT)).toEqual(ownList)
+    expect(
+      readHostModelCatalogSnapshot(LOCAL, 'opencode', { ...NEW_CHAT, worktree: 'wt-2' })
+    ).toBeUndefined()
+    expect(
+      readHostModelCatalogSnapshot(LOCAL, 'opencode', {
+        ...NEW_CHAT,
+        newLaunch: false,
+        worktree: 'wt-2'
+      })
+    ).toBeUndefined()
+  })
+
   it('drops an agent’s answers when the host says the account has no list', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', list(true))
     recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', { origin: 'unknown' })

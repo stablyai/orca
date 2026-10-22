@@ -131,6 +131,52 @@ describe('project removal on a runtime host', () => {
   })
 })
 
+describe('project removal after its server is gone', () => {
+  it('drops this desktop’s copy without asking a server that was stopped or forgotten', async () => {
+    const call = vi.fn(() => {
+      throw new Error('RuntimeEnvironmentStoreError: Unknown environment: env-1')
+    })
+    vi.stubGlobal('window', {
+      api: {
+        repos: { remove: vi.fn(), removeForHost },
+        pty: { kill: vi.fn() },
+        runtimeEnvironments: { call, list: vi.fn(async () => [{ id: 'env-2' }]) },
+        ui: { set: vi.fn().mockResolvedValue(undefined) }
+      }
+    })
+    const store = seedRemoteProject()
+
+    await store.getState().removeProject('app', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
+
+    expect(call).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([])
+    expect(store.getState().worktreesByRepo.app).toBeUndefined()
+  })
+
+  it('still asks the host when the server list cannot be read', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        repos: { remove: vi.fn(), removeForHost },
+        pty: { kill: vi.fn() },
+        runtimeEnvironments: {
+          call: vi.fn(answerLikeRuntimeHost),
+          list: vi.fn(async () => {
+            throw new Error('profile store unreadable')
+          })
+        },
+        ui: { set: vi.fn().mockResolvedValue(undefined) }
+      }
+    })
+    const store = seedRemoteProject()
+
+    await store.getState().removeProject('app', { hostId: 'runtime:env-1' })
+
+    expect(hostCalls).toContain('repo.rm')
+    expect(store.getState().repos).toEqual([])
+  })
+})
+
 describe('project removal error toast', () => {
   it('shows the host’s message without the IPC wrapper', async () => {
     removeForHost.mockRejectedValue(

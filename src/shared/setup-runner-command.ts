@@ -1,3 +1,4 @@
+import { quoteCmdDoubleQuoted, quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
@@ -48,14 +49,14 @@ export function resolveSetupRunnerCommand(
     if (isWslUncPath(runnerScriptPath)) {
       const linuxPath = wslUncToLinuxPath(runnerScriptPath)
       return {
-        command: `bash ${quotePosixArg(linuxPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(linuxPath)}`,
         runnerScriptPathForShell: linuxPath,
         shell: 'posix'
       }
     }
     if (runnerScriptPath.startsWith('/') && !isWindowsAbsolutePathLike(runnerScriptPath)) {
       return {
-        command: `bash ${quotePosixArg(runnerScriptPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(runnerScriptPath)}`,
         runnerScriptPathForShell: runnerScriptPath,
         shell: 'posix'
       }
@@ -68,7 +69,7 @@ export function resolveSetupRunnerCommand(
       if (isWslExecutable(shell?.executable)) {
         const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
         return {
-          command: `bash ${quotePosixArg(wslPath)}`,
+          command: `bash ${quotePosixShellUnlessPlainNoAt(wslPath)}`,
           runnerScriptPathForShell: wslPath,
           shell: 'posix'
         }
@@ -76,7 +77,7 @@ export function resolveSetupRunnerCommand(
       // Why: queued setup launches can outlive the process that generated them, so convert native paths before handing off to POSIX shells.
       const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
       return {
-        command: `bash ${quotePosixArg(posixPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(posixPath)}`,
         runnerScriptPathForShell: posixPath,
         shell: 'posix'
       }
@@ -90,14 +91,14 @@ export function resolveSetupRunnerCommand(
       command:
         shell?.family === 'posix' || windowsRunnerPathNeedsCmdGuard(runnerScriptPath)
           ? buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath)
-          : `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
+          : `cmd.exe /c ${quoteCmdDoubleQuoted(runnerScriptPath)}`,
       runnerScriptPathForShell: runnerScriptPath,
       shell: 'windows'
     }
   }
 
   return {
-    command: `bash ${quotePosixArg(runnerScriptPath)}`,
+    command: `bash ${quotePosixShellUnlessPlainNoAt(runnerScriptPath)}`,
     runnerScriptPathForShell: runnerScriptPath,
     shell: 'posix'
   }
@@ -117,18 +118,6 @@ export function wslUncToLinuxPath(windowsPath: string): string {
   const normalized = windowsPath.replace(/\\/g, '/')
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/[^/]+(\/.*)?$/i)
   return match?.[2] || '/'
-}
-
-function quotePosixArg(value: string): string {
-  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
-    return value
-  }
-
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
 }
 
 export function nativeWindowsPathToPosixShellPath(value: string): string {

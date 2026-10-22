@@ -47,7 +47,8 @@ export function getE2ECompletedOnboardingProfile() {
       browserImportHintHidden: true,
       // Why: E2E profiles model completed existing users and should not be
       // interrupted by the usage-display change toast covering the UI under test.
-      usagePercentageDisplayChangeNoticeDismissed: true
+      usagePercentageDisplayChangeNoticeDismissed: true,
+      statusBarCompactChangeNoticeDismissed: true
     }
   }
 }

@@ -1,20 +1,33 @@
-import { rejectPaneSpawnReservation, reserveIdlePaneSpawn } from '../pane/spawn-reservation'
-import { ptySizes } from '../delivery/visibility-state'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { codexReattachedHomeRouteField } from '../host-env/codex-home'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
+import {
+  rejectPaneSpawnReservation,
+  reserveIdlePaneSpawn,
+  pendingRuntimePaneCreatesByOwnerKey
+} from '../pane/spawn-reservation'
+import { restoreProvisionalPtySize } from '../spawn-options-assembly'
 import {
   beginPtyIpcSpawn,
   resolveEarlyPaneKey,
   resolveEarlyPaneSpawnReservationKey
 } from './spawn-begin'
 import { releaseStoppedPaneBinding, stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import { keepAbsentBindingForSwap } from './spawn-absent-binding-swap'
+import { planPaneAgentLaunch } from './spawn-agent-launch'
+import { endPaneAgentLaunch } from './spawn-agent-launch-end'
 import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
 import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { executePtyIpcSpawn } from './spawn-execute'
+import { attachOnlyViewOf } from '../pane/attach-only-view'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
 
 function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   if (!ctx.agentTeamsLeaderHandle) {
@@ -22,18 +35,6 @@ function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   }
   ctx.deps.runtime?.releaseClaudeAgentTeamsLeaderForHandle?.(ctx.agentTeamsLeaderHandle)
   ctx.agentTeamsLeaderHandle = null
-}
-
-function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
-  if (ctx.effectiveSessionId === undefined) {
-    return
-  }
-  const key = ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
-  if (ctx.hadSessionSizeBeforeAttach && ctx.sessionSizeBeforeAttach) {
-    ptySizes.set(key, ctx.sessionSizeBeforeAttach)
-  } else {
-    ptySizes.delete(key)
-  }
 }
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
@@ -45,6 +46,91 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     // revealed mid-restart) joins the replacement instead of reattaching the owner being stopped.
     ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacedPaneKey)
     ctx.paneSpawnReservationKey = replacedPaneKey
+  }
+  const fresh = async (operation: PaneSpawnOperation) => {
+    // Retire the previous preparation before replacing its resource slots or reacquiring its lease.
+    releaseAbandonedAgentTeamsLeader(ctx)
+    ctx.finishTerminalInstall()
+    ctx.finishTerminalInstall = () => {}
+    ctx.releaseWorktreeSpawn?.()
+    ctx.releaseWorktreeSpawn = undefined
+    ctx.paneSpawnOperation = operation
+    ctx.paneSpawnReservation = null
+    ctx.earlyStablePaneOwner = null
+    // Awaited only for a launch: an ordinary spawn reaches its provider in the same turn as before.
+    if (ctx.args.agentLaunch !== undefined) {
+      await planPaneAgentLaunch(ctx)
+    }
+    await preparePtyIpcSpawnPreflight(ctx)
+    await assemblePtyIpcSpawnEnv(ctx)
+    await preparePtyIpcQoderCommand(ctx)
+    await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
+      restoreProvisionalPtySize({
+        sessionId: ctx.effectiveSessionId,
+        sessionAppId: ctx.effectiveSessionAppId,
+        hadSessionSizeBeforeAttach: ctx.hadSessionSizeBeforeAttach,
+        sessionSizeBeforeAttach: ctx.sessionSizeBeforeAttach
+      })
+      throw error
+    })
+    const complete = async (scope: PaneSpawnOperation) => {
+      ctx.paneSpawnOperation = scope
+      // Right before the provider spawn, with nothing awaited in between: a closed pane starts nothing.
+      ctx.paneAgentLaunch?.refuseIfClosed()
+      // Switch point: a pane main closed or took back while this spawn waited starts nothing.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        refuseClosedPaneSpawn(deps.store, args.tabId, args.leafId)
+      }
+      try {
+        await executePtyIpcSpawn(ctx)
+        const committed = await commitPtyIpcSpawn(ctx)
+        endPaneAgentLaunch(
+          ctx,
+          ctx.exitedBeforeRegistration ? { exitedDuringStart: true } : { started: true }
+        )
+        return committed
+      } finally {
+        if (ctx.pendingRegistrationPtyId) {
+          deps.runtime?.cancelPendingPtyRegistration?.(
+            ctx.pendingRegistrationPtyId,
+            ctx.rejectedRegistrationCandidate?.incarnationId,
+            ctx.pendingRegistrationClaim
+          )
+          ctx.pendingRegistrationPtyId = null
+        }
+      }
+    }
+    const latePane =
+      !resolveEarlyPaneKey(args) && ctx.reservationPaneKey
+        ? parsePaneKey(ctx.reservationPaneKey)
+        : null
+    if (latePane) {
+      const pendingCreate = ctx.paneSpawnReservationKey
+        ? pendingRuntimePaneCreatesByOwnerKey.get(ctx.paneSpawnReservationKey)
+        : undefined
+      if (pendingCreate) {
+        await pendingCreate.promise
+      }
+      ctx.args = { ...ctx.args, ...latePane }
+      let completed: Awaited<ReturnType<typeof complete>> | undefined
+      const adopted = await deps.adoptStablePane({
+        cols: args.cols,
+        rows: args.rows,
+        cwd: ctx.cwd,
+        worktreeId: args.worktreeId,
+        ...latePane,
+        connectionId: args.connectionId,
+        renderer: true,
+        keepAbsentBinding: keepAbsentBindingForSwap(ctx),
+        attachOnlyView: attachOnlyViewOf(args),
+        spawnFresh: async (scope) => (completed = await complete(scope))
+      })
+      if (adopted) {
+        releaseAbandonedAgentTeamsLeader(ctx)
+      }
+      return adopted?.result ?? completed!
+    }
+    return complete(operation)
   }
   try {
     if (args.replacesPtyId !== undefined) {
@@ -60,24 +146,45 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     if (early) {
       return early
     }
-    await preparePtyIpcSpawnPreflight(ctx)
-    await assemblePtyIpcSpawnEnv(ctx)
-    await preparePtyIpcQoderCommand(ctx)
-    const earlyReserved = await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
-      restoreProvisionalPtySize(ctx)
-      throw error
-    })
-    if (earlyReserved) {
-      // Why: this request lost the pane to the reservation winner, so its
-      // pre-allocated leader handle never binds to a PTY. Nothing else can
-      // evict the team env assembly created for it — exit/close cleanup keys
-      // off handleByPtyId — so every lost race would leak one team forever.
-      releaseAbandonedAgentTeamsLeader(ctx)
-      return earlyReserved
+    const paneKey = resolveEarlyPaneKey(args)
+    if (!paneKey || !args.worktreeId || !args.tabId || !args.leafId) {
+      return await fresh({ mustExist: false })
     }
-    await executePtyIpcSpawn(ctx)
-    return await commitPtyIpcSpawn(ctx)
-  } catch (err) {
+    let freshResult: Awaited<ReturnType<typeof fresh>> | undefined
+    const adopted = await deps.adoptStablePane({
+      cols: args.cols,
+      rows: args.rows,
+      cwd: ctx.cwd,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId,
+      leafId: args.leafId,
+      connectionId: args.connectionId,
+      renderer: true,
+      reservation: ctx.paneSpawnReservation ?? undefined,
+      stoppedPtyId: ctx.replacedPaneOwner?.ptyId,
+      keepAbsentBinding: keepAbsentBindingForSwap(ctx),
+      attachOnlyView: attachOnlyViewOf(args),
+      spawnFresh: async (operation) => (freshResult = await fresh(operation))
+    })
+    if (adopted) {
+      releaseAbandonedAgentTeamsLeader(ctx)
+      if (ctx.preSpawnHiddenMarkId !== null) {
+        deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
+      }
+      deps.options?.onCodexHomePtySpawned?.({
+        id: adopted.result.id,
+        codexHomePath: null,
+        reattached: true,
+        startedAt: ctx.codexHomeLaunchStartedAt,
+        startedSequence: ctx.codexHomeLaunchStartedSequence,
+        ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, adopted.result.id, true)
+      })
+      endPaneAgentLaunch(ctx, { started: true })
+      return adopted.result
+    }
+    return freshResult!
+  } catch (caught) {
+    const err = endPaneAgentLaunch(ctx, { error: caught }) ?? caught
     releaseAbandonedAgentTeamsLeader(ctx)
     if (ctx.preSpawnHiddenMarkId !== null) {
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
@@ -85,7 +192,8 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     if (ctx.pendingRegistrationPtyId) {
       deps.runtime?.cancelPendingPtyRegistration?.(
         ctx.pendingRegistrationPtyId,
-        ctx.rejectedRegistrationCandidate?.incarnationId
+        ctx.rejectedRegistrationCandidate?.incarnationId,
+        ctx.pendingRegistrationClaim
       )
       ctx.pendingRegistrationPtyId = null
     }

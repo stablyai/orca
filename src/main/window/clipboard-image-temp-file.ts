@@ -15,6 +15,9 @@ export type SaveClipboardImageAsTempFileArgs = {
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   /** A native-chat composer paste: kept in Orca's paste folder so its draft can bring it back. */
   forNativeChatDraft?: boolean
+  /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes
+   *  from this machine's chat attachment store. */
+  forStructuredChat?: boolean
 }
 
 export async function saveClipboardImageBufferAsTempFile(

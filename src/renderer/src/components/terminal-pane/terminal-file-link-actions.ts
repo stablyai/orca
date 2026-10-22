@@ -18,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
 import { useAppStore } from '@/store'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import { canOpenLinkInSourceGroup } from '@/store/slices/editor/tabs/editor-open-target-group'
 
 export type TerminalFileLinkActionDeps = {
   worktreeId: string
@@ -27,6 +28,8 @@ export type TerminalFileLinkActionDeps = {
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
   onOpenFailure?: (failure: FileOpenFailure) => void
+  /** The tab that owns the link; editor opens place themselves relative to its group. */
+  sourceTabId?: string | null
 }
 
 export type FileLinkActions = Pick<
@@ -148,6 +151,21 @@ export function buildFileLinkActions(
         run: () => revealInFileManager(mappedPath, revealOwner)
       }
     : null
+  // Why: eligibility is unknown until the path resolves, so the row may still be refused then.
+  const openInGroupRow =
+    !worktreeRoot &&
+    fileContext.sourceHostResolved &&
+    canOpenLinkInSourceGroup(useAppStore.getState(), deps.worktreeId, deps.sourceTabId)
+      ? {
+          label: translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
+            'Open in this group'
+          ),
+          run: () =>
+            openDetectedFilePath(filePath, line, column, { ...deps, openInSourceGroup: true })
+        }
+      : null
+  const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)
   return {
     destination: mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
@@ -164,6 +182,6 @@ export function buildFileLinkActions(
       run: () => openDetectedFilePath(filePath, line, column, deps)
     },
     ...(systemDefaultRow ? { alternate: systemDefaultRow } : {}),
-    ...(revealRow ? { secondaryActions: [revealRow] } : {})
+    ...(secondaryActions.length > 0 ? { secondaryActions } : {})
   }
 }

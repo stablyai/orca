@@ -35,7 +35,6 @@ export async function saveOrcaAutomation(
   const { repos, projectHostSetups } = store
   const {
     draft,
-    createTarget,
     editingAutomationId,
     editingRowKey,
     editingDestination,
@@ -98,7 +97,6 @@ export async function saveOrcaAutomation(
       )
     : projectHostSetups
   let setupDecision = resolveAutomationSetupDecisionForSave({
-    createTarget,
     workspaceMode: draft.workspaceMode,
     repoId: draft.projectId,
     repos: reposForDraft,

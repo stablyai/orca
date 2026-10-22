@@ -6,8 +6,8 @@ import { PassThrough } from 'node:stream'
 import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { uploadBuffer, uploadFile, writeStringViaSftp } from './sftp-upload'
-import { writeRelayFile } from './ssh-relay-install-transfers'
-import type { SshConnection } from './ssh-connection'
+import { writeRemoteInstallFile } from '../managed-server/install/remote-install-transfers'
+import type { SshConnection } from './connection/ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 /** The exact error ssh2 builds from a STATUS reply of SSH_FX_NO_SUCH_FILE. */
@@ -91,7 +91,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
       writeFile: () => Promise.reject(Object.assign(new Error('permission denied'), { code: 3 }))
     } as unknown as SshConnection
 
-    const failure: unknown = await writeRelayFile(
+    const failure: unknown = await writeRemoteInstallFile(
       conn,
       getRemoteHostPlatform('linux-x64'),
       '/home/user/.orca-remote/relay-1/.version',
@@ -112,7 +112,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
 
     // Windows hosts have no exec-stdin fallback; POSIX hosts stream instead (exec-fallback tests).
     await expect(
-      writeRelayFile(
+      writeRemoteInstallFile(
         conn,
         getRemoteHostPlatform('win32-x64'),
         'C:/Users/user/.orca-remote/relay-1/.version',
@@ -127,7 +127,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
     } as unknown as SshConnection
 
     await expect(
-      writeRelayFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
+      writeRemoteInstallFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
     ).rejects.toThrow('Connection lost')
   })
 })

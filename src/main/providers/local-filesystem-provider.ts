@@ -9,14 +9,19 @@ import { assertNotExists, rethrowWithUserMessage } from '../ipc/filesystem-creat
 import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
 import type { IFilesystemProvider } from './filesystem-provider-contract'
+import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../shared/file-write-disk-precondition'
+import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
 
 export type LocalFilesystemProviderOptions = {
   /** Read lazily so a call that fails earlier never touches the store. */
-  requireStore(): Store
+  requireStore(): RuntimeStore
   /** Injected: the auth layer reaches the host router, so importing it here would be a cycle. */
   resolveAuthorizedPath: typeof ResolveAuthorizedPath
 }
@@ -42,7 +47,14 @@ export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMa
     | 'renameNoClobber'
     | 'copy'
     | 'search'
-  >
+  > & {
+    /** `writeFile` that first refuses when disk no longer matches the caller's baseline. */
+    writeFileWithDiskPrecondition(
+      filePath: string,
+      content: string,
+      precondition: FileWriteDiskPrecondition | undefined
+    ): Promise<FileWriteResult>
+  }
 
 /** This machine's file operations behind the store's path authorization; build one per call. */
 export function createLocalFilesystemProvider(
@@ -59,6 +71,23 @@ export function createLocalFilesystemProvider(
     await mkdir(dirname(authorizedPath), { recursive: true })
     await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
   }
+  const writeTextFile = async (
+    filePath: string,
+    content: string,
+    precondition: FileWriteDiskPrecondition | undefined
+  ): Promise<FileWriteResult> => {
+    const authorizedPath = await authorize(filePath)
+    try {
+      if ((await lstat(authorizedPath)).isDirectory()) {
+        throw new Error('Cannot write to a directory')
+      }
+    } catch (error) {
+      if (!isENOENT(error)) {
+        throw error
+      }
+    }
+    return writeLocalTextFileWithDiskPrecondition(authorizedPath, content, precondition)
+  }
   return {
     readDir: async (dirPath, readOptions = {}) => {
       const entries = await readdir(await authorize(dirPath), { withFileTypes: true })
@@ -72,18 +101,9 @@ export function createLocalFilesystemProvider(
     },
     readDocPreviewFile: readAuthorizedDocPreviewFile,
     writeFile: async (filePath, content) => {
-      const authorizedPath = await authorize(filePath)
-      try {
-        if ((await lstat(authorizedPath)).isDirectory()) {
-          throw new Error('Cannot write to a directory')
-        }
-      } catch (error) {
-        if (!isENOENT(error)) {
-          throw error
-        }
-      }
-      await writeFile(authorizedPath, content, 'utf-8')
+      await writeTextFile(filePath, content, undefined)
     },
+    writeFileWithDiskPrecondition: writeTextFile,
     writeFileBase64: (filePath, contentBase64) => writeBase64(filePath, contentBase64, false),
     writeFileBase64Chunk: writeBase64,
     stat: async (filePath) => {

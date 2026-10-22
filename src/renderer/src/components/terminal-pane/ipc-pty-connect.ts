@@ -15,7 +15,7 @@ import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
-import { agentLaunchPaneSpawnHold } from '@/lib/agent-launch-pane-spawn-hold'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -77,14 +77,6 @@ export async function connectIpcPty(
         return
       }
     }
-    // A launch pane this window made spawns only once the host has taken it.
-    const launchPaneHold = agentLaunchPaneSpawnHold(transportOptions.tabId, transportOptions.leafId)
-    if (launchPaneHold) {
-      await launchPaneHold
-      if (context.isDestroyed()) {
-        return
-      }
-    }
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
@@ -93,6 +85,7 @@ export async function connectIpcPty(
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
+    settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     const retireDisposedFreshSpawn = async (): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return
@@ -163,6 +156,7 @@ export async function connectIpcPty(
     }
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
+    settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, null)
     if (context.isDestroyed()) {
       return
     }

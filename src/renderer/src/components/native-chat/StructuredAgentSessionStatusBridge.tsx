@@ -38,6 +38,7 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { useStructuredChatSleepProjection } from './structured-chat-sleep-projection'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
 // Re-exported so the bridge stays the one import site its consumers already know.
@@ -317,6 +318,7 @@ function StructuredAgentSessionStatusProjection({
 }): React.JSX.Element | null {
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  useStructuredChatSleepProjection(tab, target)
   return target ? <StructuredAgentSessionOwnedStatusProjection tab={tab} target={target} /> : null
 }
 

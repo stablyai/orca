@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 
 const PAGE: BrowserClientPageRendererIdentity = {
@@ -81,14 +81,34 @@ describe('browser client page retained registry', () => {
     expect(webview.getAttribute('src')).toBe('about:blank')
     expect(webview.getAttribute('partition')).toBe(PAGE.partition)
     expect(webview.getAttribute('webpreferences')).toBe(
-      ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE
+      ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE
     )
+    expect(webview.getAttribute('webpreferences')).toContain('transparent=false')
     expect(webview.hasAttribute('allowpopups')).toBe(false)
     expect(webview.parentElement?.parentElement?.parentElement).toBe(document.body)
     expect(webview.isConnected).toBe(true)
 
     attach(webview)
     await expect(mounted).resolves.toEqual({ webContentsId: 41 })
+  })
+
+  // The host is a click target painted above the pane, so the New Tab page beneath a blank guest
+  // is only usable while the whole host is hidden, not just the guest.
+  it('hides the retained host while its guest shows a blank page', async () => {
+    const { registry, webviews } = createRig()
+    void registry.mountPage(PAGE)
+    const webview = webviews[0]!
+    const host = webview.parentElement!
+    const commit = (url: string, isMainFrame = true): void => {
+      webview.dispatchEvent(Object.assign(new Event('load-commit'), { url, isMainFrame }))
+    }
+
+    commit('about:blank')
+    expect(host.style.visibility).toBe('hidden')
+    commit('https://example.com/frame', false)
+    expect(host.style.visibility).toBe('hidden')
+    commit('https://example.com/')
+    expect(host.style.visibility).toBe('')
   })
 
   // The guest lives in a fixed-position overlay, never inside its pane, so nothing in the DOM says

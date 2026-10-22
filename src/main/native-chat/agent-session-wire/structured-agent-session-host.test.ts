@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -139,7 +142,8 @@ describe('attach', () => {
           origin: 'created',
           mintedAtFence: fence + 1,
           observedAt: NOW
-        }
+        },
+        acquisitionGeneration: 'generation-stale'
       }))
       .mockImplementation(async ({ fence, spawnToken }) => ({
         process: {
@@ -154,7 +158,8 @@ describe('attach', () => {
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW
-        }
+        },
+        acquisitionGeneration: `generation-${fence}`
       }))
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
@@ -527,7 +532,7 @@ describe('respondToPrompt', () => {
 })
 
 describe('setOption', () => {
-  it('goes to the provider and writes nothing to the journal', async () => {
+  it('saves a next-message pick without changing the provider', async () => {
     await attach()
     setOption.mockResolvedValueOnce({ model: 'gpt-5', effort: 'high' })
     const fields = { key: 'model', value: 'gpt-5' }
@@ -538,20 +543,20 @@ describe('setOption', () => {
     const result = await host.setOption(CALLER, params)
     expect(result).toMatchObject({
       ok: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
+      value: { ...fields, options: { model: 'gpt-5' } }
     })
     expect(await host.setOption(CALLER, params)).toMatchObject({
       ok: true,
       replayed: true,
-      value: { ...fields, options: { model: 'gpt-5', effort: 'high' } }
+      value: { ...fields, options: { model: 'gpt-5' } }
     })
-    expect(setOption).toHaveBeenCalledTimes(1)
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
+    expect(setOption).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5' })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(0)
   })
 
-  it('does not turn an unknown provider outcome into a successful replay', async () => {
+  it('replays the accepted pick without contacting the provider', async () => {
     await attach()
     setOption.mockRejectedValueOnce(new Error('reply lost'))
     const fields = { key: 'model', value: 'gpt-5' }
@@ -560,12 +565,12 @@ describe('setOption', () => {
       ...fields
     }
 
-    await expect(host.setOption(CALLER, params)).rejects.toThrow('reply lost')
+    expect(await host.setOption(CALLER, params)).toMatchObject({ ok: true })
     expect(await host.setOption(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
+      ok: true,
+      replayed: true
     })
-    expect(setOption).toHaveBeenCalledTimes(1)
+    expect(setOption).not.toHaveBeenCalled()
   })
 })
 
@@ -625,8 +630,15 @@ describe('restart', () => {
     await reboot(async () => ({ outcome: 'indeterminate', reason: 'read does not need ownership' }))
     acquire.mockClear()
     const listRecords = vi.spyOn(store, 'listRecords')
+    // A list already on the stream hears of a chat restored without a child only from the restore.
+    const listed: AgentSessionStatusEvent[] = []
+    host.subscribeStatus({ id: 'session-list', emit: (event) => listed.push(event) })
 
     await host.restoreReadableSessions()
+    expect(listed.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
+    })
     const restoreReads = listRecords.mock.calls.length
     await host.restoreReadableSessions()
 
@@ -866,6 +878,7 @@ describe('subscribe', () => {
     if (!replacement.ok) {
       throw new Error(`expected replacement owner, got ${replacement.refusal.code}`)
     }
-    expect(events.at(-1)).toMatchObject({ type: 'snapshot', fence: replacement.fence })
+    expect(events.findLast((event) => event.type === 'snapshot')?.fence).toBe(replacement.fence)
+    expect(events.at(-1)).toMatchObject({ fence: replacement.fence })
   })
 })

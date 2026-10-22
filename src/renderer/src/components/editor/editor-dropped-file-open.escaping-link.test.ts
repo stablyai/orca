@@ -60,7 +60,8 @@ describe('dropping a project file on the tab strip', () => {
       expect.objectContaining({
         filePath: '/repo/docs-link/secret.md',
         relativePath: '/repo/docs-link/secret.md'
-      })
+      }),
+      {}
     )
   })
 
@@ -70,7 +71,8 @@ describe('dropping a project file on the tab strip', () => {
     await dropOnTabStrip('/repo/docs/plain.md')
 
     expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/repo/docs/plain.md', relativePath: 'docs/plain.md' })
+      expect.objectContaining({ filePath: '/repo/docs/plain.md', relativePath: 'docs/plain.md' }),
+      {}
     )
   })
 })

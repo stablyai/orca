@@ -1,4 +1,4 @@
-// `agentSession.readVisual` — one HTML visual from a chat's own visuals folder.
+// `agentSession.readVisual` — one HTML visual from a chat's own scratch folder.
 //
 // Additive: an older host answers `method_not_found` (a phone gets `forbidden` from the mobile
 // allowlist gate on a host without the entry), and the client shows the visual as unavailable.
@@ -10,7 +10,7 @@ import {
   ReadVisualParams,
   type AgentSessionReadVisualResult
 } from '../../../../shared/rpc-contract/agent-session-visual-params'
-import { nativeChatVisualsFolderFor } from '../../../native-chat/native-chat-visuals-folder'
+import { nativeChatScratchFolderFor } from '../../../native-chat/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { readNativeChatVisualFile } from '../../../native-chat/native-chat-visual-file-read'
 import { defineMethod } from '../core'
@@ -28,7 +28,7 @@ export const STRUCTURED_AGENT_SESSION_VISUAL_METHODS = [
         return { ok: false, error: 'session_not_found' }
       }
       // Structured chats run on their owning runtime's own filesystem; any other location has no
-      // visuals folder this process can read.
+      // scratch folder this process can read.
       if (
         record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
         record.location.wslDistro
@@ -36,7 +36,7 @@ export const STRUCTURED_AGENT_SESSION_VISUAL_METHODS = [
         return { ok: false, error: 'unsupported_location' }
       }
       // The same state directory the chat host and its journal are opened in on this process.
-      const folder = nativeChatVisualsFolderFor(getProfileUserDataPath(), params.sessionId)
+      const folder = nativeChatScratchFolderFor(getProfileUserDataPath(), params.sessionId)
       return readNativeChatVisualFile(folder, params.file, params.knownRevision)
     }
   })

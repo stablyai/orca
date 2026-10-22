@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RendererPublicationThrottle,
   type RendererPublicationThrottleTarget
@@ -38,12 +38,18 @@ const REHIDE_CAPTURE = {
 }
 
 describe('RendererPublicationThrottle', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
   it('unthrottles only while a publication lease is active', () => {
     const target = createTarget()
     const throttle = new RendererPublicationThrottle()
 
     const release = throttle.acquire(target)
     release()
+
+    expect(target.calls).toEqual([false])
+    vi.runAllTimers()
 
     expect(target.calls).toEqual([false, true, REHIDE_CAPTURE])
   })
@@ -58,6 +64,7 @@ describe('RendererPublicationThrottle', () => {
     expect(target.calls).toEqual([false])
     releaseSecond()
     releaseSecond()
+    vi.runAllTimers()
 
     expect(target.calls).toEqual([false, true, REHIDE_CAPTURE])
   })
@@ -69,6 +76,7 @@ describe('RendererPublicationThrottle', () => {
     const release = throttle.acquire(target)
     target.focused = true
     release()
+    vi.runAllTimers()
 
     expect(target.calls).toEqual([false, true])
   })
@@ -86,7 +94,7 @@ describe('RendererPublicationThrottle', () => {
       const throttle = new RendererPublicationThrottle()
 
       throttle.acquire(target)()
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await vi.runAllTimersAsync()
 
       expect(target.calls).toEqual([false, true, REHIDE_CAPTURE])
       expect(unhandled).toEqual([])
@@ -102,7 +110,84 @@ describe('RendererPublicationThrottle', () => {
     const release = throttle.acquire(target)
     target.destroyed = true
     release()
+    vi.runAllTimers()
 
     expect(target.calls).toEqual([false])
+  })
+
+  it('contains synchronous native capture errors in the deferred restore', () => {
+    const target = createTarget(() => {
+      throw new Error('Object has been destroyed')
+    })
+    const throttle = new RendererPublicationThrottle()
+    throttle.acquire(target)()
+
+    expect(() => vi.runAllTimers()).not.toThrow()
+    expect(target.calls).toEqual([false, true, REHIDE_CAPTURE])
+  })
+
+  it('waits for native destruction to finish even when isDestroyed is initially false', async () => {
+    const target = createTarget()
+    const throttle = new RendererPublicationThrottle()
+    const release = throttle.acquire(target)
+
+    // Electron drains done.finally() from debugger detach before isDestroyed becomes true.
+    await Promise.resolve().finally(release)
+    expect(target.calls).toEqual([false])
+    target.destroyed = true
+    vi.runAllTimers()
+
+    expect(target.calls).toEqual([false])
+  })
+
+  it('cancels a pending restore when a new publication acquires the target', () => {
+    const target = createTarget()
+    const throttle = new RendererPublicationThrottle()
+    throttle.acquire(target)()
+    const release = throttle.acquire(target)
+
+    vi.runAllTimers()
+    expect(target.calls).toEqual([false, false])
+
+    release()
+    vi.runAllTimers()
+    expect(target.calls).toEqual([false, false, true, REHIDE_CAPTURE])
+  })
+
+  it('restores only once after a publication starts and stops before the pending restore', () => {
+    const target = createTarget()
+    const throttle = new RendererPublicationThrottle()
+    throttle.acquire(target)()
+    throttle.acquire(target)()
+    vi.runAllTimers()
+
+    expect(target.calls).toEqual([false, false, true, REHIDE_CAPTURE])
+  })
+
+  it('checks focus when the deferred restore runs', () => {
+    const target = createTarget()
+    const throttle = new RendererPublicationThrottle()
+    throttle.acquire(target)()
+    target.focused = true
+    vi.runAllTimers()
+
+    expect(target.calls).toEqual([false, true])
+  })
+
+  it("does not cancel another target's pending restore", () => {
+    const first = createTarget()
+    const second = createTarget()
+    const throttle = new RendererPublicationThrottle()
+    throttle.acquire(first)()
+    throttle.acquire(second)()
+    const release = throttle.acquire(first)
+    vi.runAllTimers()
+
+    expect(first.calls).toEqual([false, false])
+    expect(second.calls).toEqual([false, true, REHIDE_CAPTURE])
+
+    release()
+    vi.runAllTimers()
+    expect(first.calls).toEqual([false, false, true, REHIDE_CAPTURE])
   })
 })

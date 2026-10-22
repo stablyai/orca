@@ -49,7 +49,11 @@ export function dispatchTerminalWebViewNotification(
   } else if (msg.type === 'terminal-input') {
     const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
     if (bytes.length > 0) {
-      handlers.onTerminalInput?.(bytes)
+      if (msg.click === true) {
+        handlers.onTerminalInput?.(bytes, { click: true })
+      } else {
+        handlers.onTerminalInput?.(bytes)
+      }
     }
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()

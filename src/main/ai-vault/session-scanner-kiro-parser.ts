@@ -99,13 +99,18 @@ function consumeKiroTranscriptLine(accumulator: SessionAccumulator, line: string
 }
 
 /** null for a subagent's child session: it is reached from its parent, not listed. */
+export function listedKiroMetadata(metadataContent: string): Record<string, unknown> | null {
+  const metadata = parseJsonObject(metadataContent)
+  return metadata && !extractString(metadata.parent_session_id) ? metadata : null
+}
+
 function createKiroAccumulator(
   file: FileWithMtime,
   metadataContent: string,
   messages?: TranscriptMessageSink
 ): SessionAccumulator | null {
-  const metadata = parseJsonObject(metadataContent)
-  if (!metadata || extractString(metadata.parent_session_id)) {
+  const metadata = listedKiroMetadata(metadataContent)
+  if (!metadata) {
     return null
   }
   const accumulator = createAccumulator({

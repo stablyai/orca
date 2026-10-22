@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlGroupOrder } from '../../../../shared/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
+import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
@@ -12,6 +12,12 @@ import { SearchableSetting } from './SearchableSetting'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from './settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
+import {
+  JIRA_ISSUE_KEY_CASING_KEYWORDS,
+  JiraIssueKeyCasingSetting,
+  getJiraIssueKeyCasingDescription,
+  getJiraIssueKeyCasingTitle
+} from './JiraIssueKeyCasingSetting'
 import {
   CompareAgainstUpstreamSetting,
   compareAgainstUpstreamMatchesSearch
@@ -80,14 +86,14 @@ export function SourceControlGroupOrderSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
-  const value = settings.sourceControlGroupOrder ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER
+  const value = normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder)
   const title = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
     'Source Control Group Order'
   )
   const description = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-    'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+    'Choose whether Staged Changes or Changes appear first in Source Control.'
   )
 
   return (
@@ -119,13 +125,6 @@ export function SourceControlGroupOrderSetting({
               {
                 value: 'staged-first',
                 label: translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
-              },
-              {
-                value: 'untracked-first',
-                label: translate(
-                  'auto.components.settings.GitPane.untrackedFirst',
-                  'Untracked first'
-                )
               }
             ]}
           />
@@ -243,6 +242,17 @@ export function GitPane({
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
+      title: getJiraIssueKeyCasingTitle(),
+      description: getJiraIssueKeyCasingDescription(),
+      keywords: JIRA_ISSUE_KEY_CASING_KEYWORDS
+    }) ? (
+      <JiraIssueKeyCasingSetting
+        key="jira-issue-key-casing"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
       title: keepLocalMainUpToDateTitle,
       description: KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION,
       keywords: KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS
@@ -290,7 +300,7 @@ export function GitPane({
       ),
       description: translate(
         'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
-        'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+        'Choose whether Staged Changes or Changes appear first in Source Control.'
       ),
       keywords: SOURCE_CONTROL_GROUP_ORDER_KEYWORDS
     }) ? (

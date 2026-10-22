@@ -1,5 +1,5 @@
 // A background Stop reaches what the host's child records say runs, the same records that draw the
-// strip's Stop and decide whether /clear, /compact and rewind wait. Replayed from a captured frame
+// strip's Stop and word whether /clear, /compact and rewind wait. Replayed from a captured frame
 // order through the real adapter and a real hook server.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import {
   type AgentChildWorkStopAcknowledgement
 } from '../../shared/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
 import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'
@@ -37,11 +38,21 @@ async function droppedFromRoster() {
       {
         sessionId: 'session-1',
         fence: 7,
-        journal: { snapshot: () => ({ items: [] }), submissions: () => [] },
+        journal: {
+          snapshot: () => ({ items: [] }),
+          cursor: () => ({ epoch: 'e', sequence: 0 }),
+          item: () => null,
+          submissions: () => [],
+          runningTurn: () => null,
+          itemFence: () => undefined,
+          visitItems: () => undefined,
+          wroteBeforeOpen: () => false
+        },
         adapter: run.adapter
       },
       RECORD,
-      records()
+      // Every child here is on record, so the host's open work is what the records hold live.
+      { views: records(), open: agentChildWorkLiveness(records()) !== null }
     )
   const stopCalls = () =>
     run.claude.connections[0]!.calls.filter((call) => call.subtype === 'stop_task')

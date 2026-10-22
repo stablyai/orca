@@ -11,13 +11,16 @@ type HeaderIconProps = {
 
 type MobileSessionHeaderIconButtonProps = {
   active?: boolean
+  disabled?: boolean
   accessibilityLabel: string
   icon: ComponentType<HeaderIconProps>
   onPress: () => void
 }
 
+// Why: every header and tab-strip button shares this one look and a 44pt touch area (36pt + 4pt slop each side).
 export function MobileSessionHeaderIconButton({
   active = false,
+  disabled = false,
   accessibilityLabel,
   icon: Icon,
   onPress
@@ -25,12 +28,15 @@ export function MobileSessionHeaderIconButton({
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.filesButton,
-        pressed && styles.filesButtonPressed,
-        active && styles.filesButtonActive
+        styles.headerButton,
+        pressed && styles.headerButtonPressed,
+        active && styles.headerButtonActive,
+        disabled && styles.headerButtonDisabled
       ]}
+      disabled={disabled}
       onPress={onPress}
-      hitSlop={8}
+      hitSlop={4}
+      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
       <Icon size={18} color={colors.textSecondary} strokeWidth={2.1} />

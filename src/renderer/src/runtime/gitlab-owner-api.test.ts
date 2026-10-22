@@ -37,6 +37,55 @@ describe('gitLabApiFor', () => {
     )
   })
 
+  it("loads a server-owned repo's reviewers from that server", async () => {
+    const reviewer = {
+      id: 7,
+      username: 'ana',
+      name: 'Ana',
+      avatarUrl: 'https://gitlab.example.com/ana.png'
+    }
+    rpc.call.mockResolvedValue([reviewer])
+    const selector = {
+      repoPath: '/work/app',
+      repoId: 'server-repo',
+      repoOwnerExecutionHostId: 'runtime:owner-server'
+    }
+
+    await expect(gitLabApiFor(selector).listAssignableUsers(selector)).resolves.toEqual([reviewer])
+    expect(rpc.call).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'owner-server' },
+      'gitlab.listAssignableUsers',
+      expect.objectContaining({ repo: 'id:server-repo' }),
+      { timeoutMs: 30_000 }
+    )
+  })
+
+  it('offers no reviewers from a server older than the reviewer RPC', async () => {
+    rpc.call.mockRejectedValue(
+      Object.assign(new Error('Unknown method'), { code: 'method_not_found' })
+    )
+    const selector = {
+      repoPath: '/work/app',
+      repoId: 'server-repo',
+      repoOwnerExecutionHostId: 'runtime:owner-server'
+    }
+
+    await expect(gitLabApiFor(selector).listAssignableUsers(selector)).resolves.toEqual([])
+  })
+
+  it('surfaces other reviewer lookup failures', async () => {
+    rpc.call.mockRejectedValue(Object.assign(new Error('glab failed'), { code: 'runtime_error' }))
+    const selector = {
+      repoPath: '/work/app',
+      repoId: 'server-repo',
+      repoOwnerExecutionHostId: 'runtime:owner-server'
+    }
+
+    await expect(gitLabApiFor(selector).listAssignableUsers(selector)).rejects.toThrow(
+      'glab failed'
+    )
+  })
+
   it.each(['ssh:devbox', 'local'])(
     'uses this computer for a %s repo',
     async (repoOwnerExecutionHostId) => {

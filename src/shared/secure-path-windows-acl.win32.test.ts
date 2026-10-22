@@ -240,7 +240,8 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
   })
 
   // A relock walks every descendant (~2 s on a 29k-entry userData), so it must never hold up a
-  // write, must run once, and must not run again once the directory verifies.
+  // write, must run once, and must not run again once the directory verifies. The test timeout
+  // sits above the 60 s relock wait plus the 4000 creates; the 30 s default cut that wait short.
   it('relocks a large relocated directory off the write path, exactly once', async () => {
     const dir = join(relocatedRoot, 'large')
     mkdirSync(dir)
@@ -278,7 +279,7 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(nextLaunch.asyncCount + nextLaunch.count).toBe(0)
     expect(readFileSync(join(dir, 'third.json'), 'utf-8')).toBe('{}')
-  })
+  }, 90_000)
 
   /** Installs the real addon behind a proxy that counts DACL rewrites. */
   function countingAddon(): { count: number; asyncCount: number } {

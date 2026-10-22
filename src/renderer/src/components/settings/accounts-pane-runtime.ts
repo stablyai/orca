@@ -40,16 +40,6 @@ export function getCodexSystemDefaultSubtitle(
   )
 }
 
-export function getClaudeAccountLabel(
-  state: ClaudeRateLimitAccountsState,
-  accountId: string | null | undefined
-): string {
-  if (accountId == null) {
-    return 'System default'
-  }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
-}
-
 export function getCodexAccountRuntimeLabel(
   account: CodexRateLimitAccountsState['accounts'][number],
   hostLabel = getHostRuntimeLabel()

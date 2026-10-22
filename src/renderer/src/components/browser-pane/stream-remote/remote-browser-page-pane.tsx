@@ -323,11 +323,11 @@ export function RemoteBrowserPagePane({
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const element = imageRef.current
-      const container = remoteViewportRef.current
-      if (!element || !container) {
+      if (!element || !remoteViewportRef.current) {
         return null
       }
-      const rect = container.getBoundingClientRect()
+      // Why the image's box: the frame is letterboxed, and the pane's shape would distort it.
+      const rect = element.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
@@ -395,6 +395,7 @@ export function RemoteBrowserPagePane({
         addressBarEditSession={addressBarEditSession}
         busy={busy}
         loading={browserTab.loading}
+        loadFailed={browserTab.loadError !== null}
         markup={markup}
         frameUrl={frameUrl}
         isActive={isActive}
@@ -421,6 +422,7 @@ export function RemoteBrowserPagePane({
         runtimeTarget={runtimeTarget}
         onReload={() => void runRemoteNavigation('browser.reload')}
         onGoto={(url) => void runRemoteNavigation('browser.goto', url)}
+        onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}

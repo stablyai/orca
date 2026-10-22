@@ -23,7 +23,7 @@ import {
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
 import { listWslDistrosAsync } from '../wsl'
 import { isWslDistroRunning } from '../wsl-background-distro-gate'
-import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
+import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
 
 // Why: fresh WSL intermittently throws "Catastrophic failure (E_UNEXPECTED)"
 // under concurrent wsl.exe spawn load; the retry pause is a dep so tests can
@@ -92,7 +92,7 @@ export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
 
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
-  remoteHooksEnabled: () => isRemoteAgentHooksEnabled(),
+  remoteHooksEnabled: () => isWslAgentHookRelayEnabled(),
   hookCoordsEnv: () => agentHookServer.buildPtyEnv(),
   // Why: the Windows endpoint file path (userData + namespace) is stable
   // across app restarts and distinct per instance — exactly the identity the

@@ -71,4 +71,6 @@ export type NativeChatApi = {
     args: NativeChatSubscribeArgs,
     onFrame: (frame: NativeChatSubscriptionFrame) => void
   ) => () => void
+  /** A local structured chat's last failed naming output; null when none or not local. */
+  getConversationNameFailureOutput: (sessionId: string) => Promise<string | null>
 }

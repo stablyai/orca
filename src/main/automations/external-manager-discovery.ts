@@ -6,51 +6,16 @@ import type {
   ExternalAutomationManager,
   ExternalAutomationProvider
 } from '../../shared/automations-types'
-import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
-import { readHermesCronOutputRunsPage } from './hermes-cron-output'
+import { mapOpenClawJobs } from './external-job-mappers'
 import { isExternalAutomationCommandOnPath } from './external-manager-local-command'
 
-const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
-const HERMES_CRON_DIR = join(HERMES_HOME, 'cron')
-const HERMES_JOBS_FILE = join(HERMES_CRON_DIR, 'jobs.json')
 const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
 const PROVIDER_LABELS: Record<ExternalAutomationProvider, string> = {
-  hermes: 'Hermes',
   openclaw: 'OpenClaw'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-async function readLocalHermesJobs(): Promise<unknown[]> {
-  if (!existsSync(HERMES_JOBS_FILE)) {
-    return []
-  }
-  const content = await readFile(HERMES_JOBS_FILE, 'utf-8')
-  const parsed = JSON.parse(content) as unknown
-  const jobs = Array.isArray(parsed)
-    ? parsed
-    : isRecord(parsed) && Array.isArray(parsed.jobs)
-      ? parsed.jobs
-      : []
-  return Promise.all(
-    jobs.map(async (job) => {
-      if (!isRecord(job)) {
-        return job
-      }
-      const jobId = typeof job.id === 'string' ? job.id : null
-      if (!jobId) {
-        return job
-      }
-      const runsPage = await readHermesCronOutputRunsPage(jobId, { page: 1, pageSize: 0 })
-      return {
-        ...job,
-        run_count: runsPage.total,
-        runs: []
-      }
-    })
-  )
 }
 
 async function readLocalOpenClawJobs(): Promise<unknown[]> {
@@ -62,20 +27,12 @@ async function readLocalOpenClawJobs(): Promise<unknown[]> {
   return isRecord(parsed) && Array.isArray(parsed.jobs) ? parsed.jobs : []
 }
 
-function mapProviderJobs(
-  provider: ExternalAutomationProvider,
-  managerId: string,
-  jobs: unknown[]
-): ExternalAutomationManager['jobs'] {
-  return provider === 'hermes' ? mapHermesJobs(managerId, jobs) : mapOpenClawJobs(managerId, jobs)
-}
-
 export async function listLocalManager(
   provider: ExternalAutomationProvider
 ): Promise<ExternalAutomationManager | null> {
   const [availableResult, jobsResult] = await Promise.allSettled([
     isExternalAutomationCommandOnPath(provider),
-    provider === 'hermes' ? readLocalHermesJobs() : readLocalOpenClawJobs()
+    readLocalOpenClawJobs()
   ])
   const available = availableResult.status === 'fulfilled' && availableResult.value
   const jobs = jobsResult.status === 'fulfilled' ? jobsResult.value : []
@@ -98,6 +55,6 @@ export async function listLocalManager(
         ? null
         : `${providerLabel} jobs were found, but the ${provider} CLI is not on PATH.`),
     canManage: !readError && available,
-    jobs: mapProviderJobs(provider, managerId, jobs)
+    jobs: mapOpenClawJobs(managerId, jobs)
   }
 }

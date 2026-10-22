@@ -16,8 +16,8 @@ vi.mock('../../../window/clipboard-image-temp-file', () => ({
   saveClipboardImageBufferAsTempFile
 }))
 
+import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard-params'
 import {
-  CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
   CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT,
   CLIPBOARD_METHODS,
   resetClipboardImageUploadsForTest

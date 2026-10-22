@@ -36,10 +36,6 @@ import {
   type ClaudeTaskFacts
 } from './claude-child-work-evidence'
 
-/** Ended ids remembered to recognise a restart. Live children take no bound here: refusing one
- *  would hide a running child; the host's global limits bound them. */
-const MAX_ENDED_TASKS = 256
-
 type DecodedClaudeTask = {
   kind: AgentChildWorkKind
   backgrounded: boolean
@@ -85,7 +81,8 @@ function observation(
 
 export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
-  /** Ended task ids, with the spawn call each ended under and how. */
+  /** Ended task ids, with the spawn call each ended under and how. Kept for the session: a
+   *  forgotten id would read a wake under the same spawn call as a settled child. */
   private readonly ended = new Map<
     string,
     { run: string | undefined; outcome: AgentChildWorkOutcome }
@@ -266,14 +263,7 @@ export class ClaudeChildWorkDecoder {
     const task = this.live.get(id)
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)
-    this.ended.delete(id)
     this.ended.set(id, { run: reported.runId ?? task?.toolUseId, outcome })
-    if (this.ended.size > MAX_ENDED_TASKS) {
-      const [oldest] = this.ended.keys()
-      if (oldest !== undefined) {
-        this.ended.delete(oldest)
-      }
-    }
     this.pending.push((observedAt) => ({
       type: 'ended',
       observedAt,

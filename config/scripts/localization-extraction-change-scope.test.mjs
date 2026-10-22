@@ -29,7 +29,7 @@ it.each([
   'tsconfig.json',
   'config/tsconfig.web.json',
   '.npmrc',
-  '.pnpmfile.cjs',
+  'config/pnpmfile.cjs',
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/action.yml'
 ])('retains extraction when an input changes: %s', (path) => {

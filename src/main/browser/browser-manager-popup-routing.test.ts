@@ -17,6 +17,8 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
+    prependOnceListener: vi.fn(),
+    off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },
   BrowserWindow: {
@@ -78,6 +80,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -85,12 +88,17 @@ describe('browserManager', () => {
 
     browserManager.attachGuestPolicies(guest as never)
 
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
-      url: string
-    }) => { action: 'deny' }
+    const handler: (details: { url: string; postBody?: Electron.PostBody }) => { action: 'deny' } =
+      guestSetWindowOpenHandlerMock.mock.calls[0][0]
 
     expect(handler({ url: 'localhost:3000' })).toEqual({ action: 'deny' })
     expect(handler({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
+    expect(
+      handler({
+        url: 'https://example.com/post',
+        postBody: { contentType: 'application/x-www-form-urlencoded', data: [] }
+      })
+    ).toEqual({ action: 'deny' })
 
     expect(shellOpenExternalMock).toHaveBeenCalledTimes(1)
     expect(shellOpenExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
@@ -105,6 +113,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -184,6 +193,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -196,16 +206,29 @@ describe('browserManager', () => {
       rendererWebContentsId
     })
 
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+    const handler: (details: {
       url: string
       frameName: string
       features: string
       disposition: string
-    }) => { action: 'allow' | 'deny' }
+      postBody?: Electron.PostBody
+    }) => { action: 'allow' | 'deny' } = guestSetWindowOpenHandlerMock.mock.calls[0][0]
     const openerDependentOpens = [
       { url: 'https://sso.example.com/auth', frameName: 'ssoWindow', features: '' },
       { url: 'https://sso.example.com/auth', frameName: 'ssoWindow', features: 'noopener=0' },
-      { url: 'about:blank', frameName: '', features: '' }
+      {
+        url: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=test-client&redirect_uri=https%3A%2F%2Fapi.deel.com%2Flogin%2Fgoogle&response_type=token',
+        frameName: '',
+        features: ''
+      },
+      { url: 'about:blank', frameName: '', features: '' },
+      { url: 'about:blank#state', frameName: '', features: '' },
+      {
+        url: 'https://sso.example.com/form',
+        frameName: '',
+        features: '',
+        postBody: { contentType: 'application/x-www-form-urlencoded', data: [] }
+      }
     ]
     for (const disposition of ['foreground-tab', 'background-tab', 'new-window']) {
       for (const open of openerDependentOpens) {
@@ -236,6 +259,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -311,6 +335,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -369,6 +394,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -480,7 +506,7 @@ describe('browserManager', () => {
       disposition: string
     }) => {
       action: 'allow' | 'deny'
-      createWindow?: (options: Record<string, never>) => unknown
+      createWindow?: (options: Record<string, unknown>) => unknown
     }
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
 
@@ -511,7 +537,8 @@ describe('browserManager', () => {
         disposition: 'new-window'
       })
       expect(result).toMatchObject({ action: 'allow' })
-      result.createWindow?.({})
+      result.createWindow?.({ webContents: child })
+      openPopupWithOriginBarMock.mock.calls.at(-1)?.[2](child)
       return childSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
     }
 
@@ -545,6 +572,7 @@ describe('browserManager', () => {
     const rendererSendMock = vi.fn()
     const guestOnceMock = vi.fn()
     const guest = {
+      session: { marker: 'synthetic-opener-session' },
       id: 150,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
@@ -573,6 +601,7 @@ describe('browserManager', () => {
     })
 
     const popupContents = {
+      session: guest.session,
       id: 151,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'window'),
@@ -590,20 +619,28 @@ describe('browserManager', () => {
       onClosed: popupOnClosedMock
     })
 
-    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
-      url: string
-    }) => {
+    const handler: (details: { url: string }) => {
       action: string
       createWindow: (options: Record<string, unknown>) => unknown
-    }
+    } = guestSetWindowOpenHandlerMock.mock.calls[0][0]
     const response = handler({ url: 'https://sso.example.com/auth?code=SECRET' })
     const preCreatedContents = { id: 152 }
-    const options = { webContents: preCreatedContents, width: 500, height: 600 }
+    const options = {
+      webContents: preCreatedContents,
+      width: 500,
+      height: 600,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+    }
     const returned = response.createWindow(options)
+    openPopupWithOriginBarMock.mock.calls.at(-1)?.[2](popupContents)
 
     expect(openPopupWithOriginBarMock).toHaveBeenCalledWith(
-      options,
-      'https://sso.example.com/auth?code=SECRET'
+      {
+        ...options,
+        webPreferences: { ...options.webPreferences, session: guest.session }
+      },
+      'https://sso.example.com/auth?code=SECRET',
+      expect.any(Function)
     )
     expect(returned).toBe(popupContents)
     // did-create-window does not fire for createWindow-created children, so
@@ -649,6 +686,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -697,6 +735,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
@@ -721,6 +760,7 @@ describe('browserManager', () => {
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       on: guestOnMock,
+      prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock,
       getURL: vi.fn(() => 'https://example.com'),

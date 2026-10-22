@@ -18,6 +18,7 @@ import {
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {
   isMultiplexStreamAttached,
   type MultiplexSnapshotRequest,
@@ -80,10 +81,17 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       }
       stream.outputPaused = payload.paused
       if (stream.outputPaused) {
+        stream.pausedOutputDropNoticeSent = false
+        const discardsQueuedOutput =
+          stream.ackPendingOutput.length > 0 || stream.ackPendingOutputOverflowed
+        // Why: batched bytes flush into the paused gate, which reports them as dropped.
         stream.outputBatcher.flush()
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
+        if (discardsQueuedOutput) {
+          notePausedOutputDropped(state, stream)
+        }
       }
       return
     }

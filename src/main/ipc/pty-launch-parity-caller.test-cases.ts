@@ -68,7 +68,65 @@ const PAIRED_TAB_CASES: [string, Record<string, unknown>, HostProviderFacts][] =
   ]
 ]
 
+// createAgentSession plans with the host planner. main today types every prompt on the line,
+// even one too long for that planner's carry rule, and starts a stdin-prompt agent clean.
+const LONG_PROMPT = 'review the change on this branch and list what breaks. '.repeat(10).trim()
+const POWERSHELL = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
+type PairedPlanCase = {
+  name: string
+  os: NodeJS.Platform
+  agent: string
+  prompt: string
+  provider: HostProviderFacts
+}
+const PAIRED_PLAN_CASES: PairedPlanCase[] = [
+  {
+    name: 'claude long prompt, macOS',
+    os: 'darwin',
+    agent: 'claude',
+    prompt: LONG_PROMPT,
+    provider: { command: `${POSIX_CLAUDE} '${LONG_PROMPT}'`, ...ZSH }
+  },
+  {
+    name: 'aider prompt, starts clean',
+    os: 'linux',
+    agent: 'aider',
+    prompt: 'fix it',
+    provider: { command: "aider '--yes-always'", ...ZSH }
+  },
+  {
+    name: 'claude prompt, Windows PowerShell',
+    os: 'win32',
+    agent: 'claude',
+    prompt: "Bob's fix",
+    provider: { command: `claude '--dangerously-skip-permissions' 'Bob''s fix'`, ...POWERSHELL }
+  }
+]
+
 export const CALLER_LAUNCH_CASES: HostLaunchCase[] = [
+  ...PAIRED_PLAN_CASES.map((c): HostLaunchCase => {
+    const path = c.os === 'win32' ? WIN_PATH : PAIRED_TAB_PATH
+    return {
+      name: `paired agent session: ${c.name}`,
+      row: '7',
+      os: c.os,
+      workspace: repo(path),
+      call: rpc('terminal.createAgentSession', {
+        ...PAIRED_TAB,
+        worktree: `id:repo-1::${path}`,
+        agent: c.agent,
+        prompt: c.prompt,
+        promptDelivery: 'auto-submit'
+      }),
+      provider: c.provider,
+      telemetry: {
+        agent_kind: c.agent === 'claude' ? 'claude-code' : c.agent,
+        launch_source: 'unknown',
+        request_kind: 'new'
+      },
+      phone: { title: 'Terminal', launchAgent: c.agent, isActive: false }
+    }
+  }),
   // C1 changes the host planner; these are its only draft (--prefill) and startupCwd-from-intent rows.
   ...PAIRED_TAB_CASES.map(([name, params, provider]): HostLaunchCase => ({
     name: `paired new tab: ${name}`,

@@ -95,7 +95,9 @@ function implementedBy(
       ...declared,
       compact: declared.compact && Boolean(adapter.compact),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
-      rewind: declared.rewind && Boolean(adapter.rewind && adapter.recoverRewind)
+      rewind:
+        declared.rewind &&
+        Boolean(adapter.forkForRewind || (adapter.rewind && adapter.recoverRewind))
     }
   }
 }

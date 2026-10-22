@@ -1,185 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
-import {
-  AgentSessionAcquisitionRootExitObservedError,
-  type StructuredAgentSessionAcquireInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import {
-  closeProviderTimelineRigs,
-  openProviderTimelineRig
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import type { JsonlRpcAgentConnectionOptions } from '../jsonl-rpc/agent-connection'
-import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
-import type { PiRpcConnection } from './rpc-session'
-import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import {
+  closePiRpcAdapterFixtures,
+  file,
+  sessionId,
+  setup
+} from './rpc-session-adapter.test-fixture'
 import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
-import { PiRpcSessionAdapter } from './rpc-session-adapter'
 
-const sessionId = 'session-timeline'
-const file = '/host/account/sessions/session.jsonl'
-const state = {
-  sessionFile: file,
-  isStreaming: false,
-  isCompacting: false,
-  model: { provider: 'anthropic', id: 'model-1' }
-}
-const cleanups: (() => Promise<void>)[] = []
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0)) {
-    await cleanup()
-  }
-  await closeProviderTimelineRigs()
-})
-
-class FakeConnection implements PiRpcConnection {
-  pid = 4123
-  closed = false
-  rootVerdict: 'live' | 'unverifiable' | 'exited' = 'live'
-  processless = false
-  deferExit = false
-  lastCloseResult: PiRpcConnection['lastCloseResult'] = null
-  closeResult: Awaited<ReturnType<PiRpcConnection['close']>> = { root: 'exited', tree: 'exited' }
-  readonly sent: JsonlRpcRecord[] = []
-  readonly requests: string[] = []
-  private readonly exitListeners: (() => void)[] = []
-  requestOverride?: (command: string) => Promise<unknown> | undefined
-  abortRequest?: () => void
-  constructor(readonly handlers: JsonlRpcAgentConnectionOptions) {}
-  async request(command: string): Promise<unknown> {
-    this.requests.push(command)
-    const override = this.requestOverride?.(command)
-    if (override) {
-      return override
-    }
-    if (command === 'get_state') {
-      return state
-    }
-    if (command === 'get_available_models') {
-      return { models: [state.model] }
-    }
-    if (command === 'get_commands') {
-      return { commands: [{ name: 'help' }] }
-    }
-    if (command === 'set_thinking_level') {
-      throw new Error('saved effort unavailable')
-    }
-    return {}
-  }
-  async send(frame: JsonlRpcRecord): Promise<void> {
-    this.sent.push(frame)
-  }
-  async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {
-    this.abortRequest?.()
-    this.closed = true
-    this.rootVerdict = this.closeResult.root
-    this.lastCloseResult = this.closeResult
-    if (this.closeResult.root === 'exited' && !this.deferExit) {
-      this.exit()
-    }
-    return this.closeResult
-  }
-  pauseReading(): void {}
-  resumeReading(): void {}
-  onExit(listener: () => void): void {
-    if (this.rootVerdict === 'exited') {
-      listener()
-    } else {
-      this.exitListeners.push(listener)
-    }
-  }
-  receive(frame: JsonlRpcRecord): void {
-    this.handlers.onRecord?.(frame)
-  }
-  exit(error = new Error('child exited')): void {
-    this.closed = true
-    this.rootVerdict = 'exited'
-    for (const listener of this.exitListeners.splice(0)) {
-      listener()
-    }
-    this.handlers.onExit?.(error, {
-      expected: false,
-      exit: { code: 1, signal: null, processless: false }
-    })
-  }
-}
-
-async function setup(
-  options: Readonly<Record<string, string>> = {},
-  eventSink?: (sink: StructuredAgentSessionEventSink) => StructuredAgentSessionEventSink
-) {
-  const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
-  const connections: FakeConnection[] = []
-  const lifecycle = vi.fn(),
-    settled = vi.fn(),
-    idle = vi.fn()
-  const onSpawned = vi.fn(async (_process: AgentSessionProcessIdentity) => {
-    expect(connections.at(-1)?.requests).toEqual([])
-  })
-  const input: StructuredAgentSessionAcquireInput = {
-    identity: {
-      sessionId,
-      workspaceId: 'folder-1',
-      hostId: 'local',
-      agent: 'pi',
-      providerHandle: null
-    },
-    fence: 7,
-    spawnToken: 'spawn-token',
-    options,
-    events: eventSink?.(rig.eventSink) ?? rig.eventSink,
-    onSpawned
-  }
-  const resolveLaunch = vi.fn(async () => ({
-    command: '/host/bin/pi',
-    cwd: '/host/folder',
-    fullAccess: true,
-    previous: null
-  }))
-  const openConnection = vi.fn(
-    (_launch: ProviderProcessLaunch, handlers: JsonlRpcAgentConnectionOptions) => {
-      const connection = new FakeConnection(handlers)
-      connections.push(connection)
-      return connection
-    }
-  )
-  const adapter = new PiRpcSessionAdapter({
-    resolveLaunch,
-    readProcessStartTime: async () => 12345,
-    openConnection,
-    onLifecycle: lifecycle,
-    onSettled: settled,
-    onIdle: idle,
-    logger: { warn: vi.fn(), error: vi.fn() }
-  })
-  const acquired = await adapter.acquire(input)
-  const connection = connections[0]
-  if (!connection) {
-    throw new Error('connection missing')
-  }
-  cleanups.push(async () => {
-    await adapter.closeAll().catch(() => {})
-    await adapter.drainObservedExits()
-    adapter.acknowledgeSessionRelease(sessionId)
-  })
-  return {
-    adapter,
-    connection,
-    rig,
-    acquired,
-    onSpawned,
-    lifecycle,
-    settled,
-    idle,
-    input,
-    resolveLaunch,
-    openConnection,
-    connections
-  }
-}
+afterEach(closePiRpcAdapterFixtures)
 
 describe('Pi RPC session ownership and delivery', () => {
   it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
@@ -206,79 +39,66 @@ describe('Pi RPC session ownership and delivery', () => {
     await expect(started).rejects.toThrow('closed while starting')
     expect(h.connections).toHaveLength(1)
     await expect(h.adapter.acquire({ ...h.input, fence: 9 })).resolves.toMatchObject({
-      link: { origin: 'created' }
+      process: { pid: 4123 }
     })
     resolving.resolve(launch!)
     await Promise.resolve()
     expect(h.connections).toHaveLength(2)
   })
 
-  it('kills the child and rejects a stalled startup when the host aborts it', async () => {
+  it('persists final events after exit while journal writes are blocked', async () => {
     const h = await setup()
-    await h.adapter.closeSession(sessionId)
-    const controller = new AbortController()
-    const opened = Promise.withResolvers<FakeConnection>()
-    const reply = Promise.withResolvers<unknown>()
-    h.openConnection.mockImplementationOnce((_launch, handlers) => {
-      const connection = new FakeConnection(handlers)
-      connection.requestOverride = (command) =>
-        command === 'get_state' ? reply.promise : undefined
-      connection.abortRequest = () => reply.reject(new Error('closed while starting'))
-      h.connections.push(connection)
-      opened.resolve(connection)
-      return connection
-    })
-    const started = h.adapter.acquire({ ...h.input, fence: 8, signal: controller.signal })
-    const child = await opened.promise
-    await Promise.resolve()
-    controller.abort(new Error('Pi closed while starting'))
-    await expect(started).rejects.toThrow('closed while starting')
-    expect(child.rootVerdict).toBe('exited')
+    const gate = Promise.withResolvers<void>()
+    try {
+      const blocked = h.rig.journal.readInOrder(() => {
+        expect(
+          h.rig.eventSink.tryAppendItem?.(
+            { provider: 'legacy', agent: 'pi', sessionId, recordId: 'before' },
+            { kind: 'status', tone: 'info', text: 'before' },
+            { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          )
+        ).toEqual({ accepted: true })
+        return gate.promise
+      })
+      vi.useFakeTimers()
+      h.connection.receive({
+        type: 'extension_ui_request',
+        id: 'last-dialog',
+        method: 'input',
+        title: 'Final tail'
+      })
+      h.connection.exit()
+      let completed = false
+      const written = h.rig.eventSink.written?.().then((result) => {
+        completed = true
+        return result
+      })
+      await vi.advanceTimersByTimeAsync(2_001)
+      expect(h.lifecycle).toHaveBeenCalledOnce()
+      h.adapter.acknowledgeSessionRelease(sessionId)
+      await h.adapter.drainObservedExits()
+      expect(completed).toBe(false)
+      gate.resolve()
+      await blocked
+      expect(await written).toEqual({ ok: true })
+      expect(
+        (await h.rig.rows()).some(
+          (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
+        )
+      ).toBe(true)
+    } finally {
+      gate.resolve()
+      vi.useRealTimers()
+    }
   })
 
-  it('retains final events when exit publication times out under journal backpressure', async () => {
-    let blocked = true
-    const h = await setup({}, (sink) => ({
-      ...sink,
-      tryAppendTransition: (transition) =>
-        blocked
-          ? { accepted: false, reason: 'backpressure' }
-          : sink.tryAppendTransition!(transition)
-    }))
-    vi.useFakeTimers()
-    h.connection.receive({
-      type: 'extension_ui_request',
-      id: 'last-dialog',
-      method: 'input',
-      title: 'Final tail'
-    })
-    h.connection.exit()
-    await vi.advanceTimersByTimeAsync(2_001)
-    expect(h.lifecycle).toHaveBeenCalledOnce()
-    h.adapter.acknowledgeSessionRelease(sessionId)
-    let completed = false
-    const drained = h.adapter.drainObservedExits().then(() => {
-      completed = true
-    })
-    await Promise.resolve()
-    expect(completed).toBe(false)
-    blocked = false
-    await vi.advanceTimersByTimeAsync(250)
-    await drained
-    expect(
-      (await h.rig.rows()).some(
-        (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
-      )
-    ).toBe(true)
-    vi.useRealTimers()
-  })
   it('lets a new acquisition proceed while the released child drains final stdout', async () => {
     const h = await setup()
     h.connection.deferExit = true
     await h.adapter.closeSession(sessionId)
     h.adapter.acknowledgeSessionRelease(sessionId)
     await expect(h.adapter.acquire({ ...h.input, fence: 8 })).resolves.toMatchObject({
-      link: { origin: 'created' }
+      process: { pid: 4123 }
     })
     let drained = false
     const delivery = h.adapter.drainObservedExits().then(() => {
@@ -310,13 +130,14 @@ describe('Pi RPC session ownership and delivery', () => {
       spawnToken: 'spawn-token'
     })
     expect(h.acquired.process).toEqual(h.onSpawned.mock.calls[0]?.[0])
-    expect(h.acquired.link).toMatchObject({
+    expect(h.acquired.link).toBeUndefined()
+    expect(h.started.link).toMatchObject({
       handle: { transport: 'jsonl-rpc', agent: 'pi', nativeId: file },
       origin: 'created',
       mintedAtFence: 7
     })
-    expect(h.adapter.readOptionRestoreFailures(sessionId)).toEqual(['effort', 'unknown'])
-    expect(h.connection.requests).toContain('get_commands')
+    expect(h.connection.requests).not.toContain('set_thinking_level')
+    await vi.waitFor(() => expect(h.connection.requests).toContain('get_commands'))
   })
 
   it('admits a send before Pi confirms it and settles only after journal acceptance', async () => {
@@ -340,6 +161,103 @@ describe('Pi RPC session ownership and delivery', () => {
       }
     })
     expect(h.connection.sent[0]).toMatchObject({ type: 'prompt', message: 'hello' })
+  })
+
+  it('holds each send from its handover until it settles, and none whose write failed', async () => {
+    const h = await setup()
+    const send = (clientMessageId: string) =>
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
+      })
+    vi.spyOn(h.connection, 'send').mockRejectedValueOnce(new Error('stdin closed'))
+    await expect(send('lost')).resolves.toMatchObject({ state: 'unknown' })
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set())
+
+    await send('first')
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['first']))
+    h.connection.receive({ type: 'agent_start' })
+    await send('steer')
+    // The first is accepted; the steer waits behind its running turn.
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['steer']))
+  })
+
+  it('applies each sent model before effort and before prompting Pi', async () => {
+    const h = await setup()
+    h.connection.requestOverride = (command) =>
+      command === 'set_thinking_level' ? Promise.resolve({}) : undefined
+    const result = await h.adapter.dispatch({
+      sessionId,
+      fence: 7,
+      clientMessageId: 'choice-send',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'chosen' }] },
+      executionOptions: { model: 'anthropic/model-2', effort: 'low' }
+    })
+    expect(result).toEqual({ state: 'admitted' })
+    expect(h.connection.requests.slice(-2)).toEqual(['set_model', 'set_thinking_level'])
+    expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'chosen' }])
+  })
+
+  it('rejects a known-unsent prompt when an option times out and preserves Stop reason', async () => {
+    const h = await setup()
+    const timeout = new Error('Pi did not answer set_model')
+    h.connection.requestOverride = (command) =>
+      command === 'set_model' ? Promise.reject(timeout) : undefined
+    const input = {
+      sessionId,
+      fence: 7,
+      clientMessageId: 'unsent',
+      body: {
+        kind: 'message' as const,
+        role: 'user' as const,
+        blocks: [{ type: 'text' as const, text: 'go' }]
+      },
+      executionOptions: { model: 'anthropic/model-2' }
+    }
+    await expect(h.adapter.dispatch(input)).rejects.toMatchObject({
+      name: 'AgentSessionOptionRejectedError'
+    })
+    expect(h.connection.sent).toEqual([])
+    const controller = new AbortController()
+    controller.abort(timeout)
+    await expect(h.adapter.dispatch({ ...input, signal: controller.signal })).rejects.toBe(timeout)
+  })
+
+  it('re-establishes opening A after an unanswered unary B and ignores B’s late answer', async () => {
+    const h = await setup()
+    const unanswered = Promise.withResolvers<unknown>()
+    const controller = new AbortController()
+    h.connection.requestOverride = (command) =>
+      command === 'set_model' ? unanswered.promise : undefined
+    const pick = h.adapter.setOption({
+      sessionId,
+      fence: 7,
+      key: 'model',
+      value: 'anthropic/model-2',
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(h.connection.requests).toContain('set_model'))
+    controller.abort(new Error('Stop'))
+    await expect(pick).rejects.toThrow('Stop')
+    h.connection.requestOverride = (command) =>
+      command === 'set_thinking_level' ? Promise.resolve({}) : undefined
+    await expect(
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId: 'restore',
+        executionOptions: { model: 'anthropic/model-1', effort: 'low' },
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'A again' }] }
+      })
+    ).resolves.toEqual({ state: 'admitted' })
+    expect(h.connection.requests.filter((command) => command === 'set_model')).toHaveLength(2)
+    unanswered.resolve({})
+    await Promise.resolve()
+    expect((await h.adapter.readOptions({ sessionId, fence: 7 })).current.model).toBe(
+      'anthropic/model-1'
+    )
   })
 
   it('rejects stale fences and a Stop for a different turn before sending abort', async () => {
@@ -570,31 +488,5 @@ describe('Pi RPC session ownership and delivery', () => {
     const other = await setup()
     other.connection.closeResult = { root: 'unverifiable', tree: null }
     expect(await other.adapter.closeSession(sessionId)).toBe(false)
-  })
-})
-
-describe('Pi RPC start without a model', () => {
-  it('reports a start that listed no model as signed out, for that child only', async () => {
-    const h = await setup()
-    expect(h.adapter.startUnavailable(sessionId)).toBeUndefined()
-    await h.adapter.closeSession(sessionId)
-    h.openConnection.mockImplementationOnce((_launch, handlers) => {
-      const connection = new FakeConnection(handlers)
-      // What a signed-out Pi lists (captured from Pi 1.0.4 in __fixtures__/signed-out.jsonl).
-      connection.requestOverride = (command) =>
-        command === 'get_available_models' ? Promise.resolve({ models: [] }) : undefined
-      h.connections.push(connection)
-      return connection
-    })
-    await h.adapter.acquire({ ...h.input, fence: 8 })
-    expect(h.adapter.startUnavailable(sessionId)).toEqual({ reason: 'notSignedIn' })
-    // Its root gone while its output still drains: that child says nothing more.
-    const child = h.connections.at(-1)!
-    child.rootVerdict = 'exited'
-    expect(child.closed).toBe(false)
-    expect(h.adapter.startUnavailable(sessionId)).toBeUndefined()
-    child.rootVerdict = 'live'
-    await h.adapter.closeSession(sessionId)
-    expect(h.adapter.startUnavailable(sessionId)).toBeUndefined()
   })
 })

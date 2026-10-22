@@ -1,41 +1,118 @@
-// Why: the parent's scan deadline is a no-progress window, so the child has to
-// say when a scan's work advanced. Keyed by the request's cancel signal, which
-// every work site already receives, so the index loop or an interactive read
-// running through the same readers can never extend a scan's deadline.
-const reporters = new WeakMap<AbortSignal, () => void>()
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import { AiVaultScanTally } from './ai-vault-scan-tally'
 
-// Rate-limited because a cold scan consumes thousands of chunks and stats, and
-// the parent only reads the counter as "still moving" inside a 130 s window.
+// Keyed by the request's cancel signal, which every work site already receives,
+// so the index loop or an interactive read through the same readers never counts.
+const reporters = new WeakMap<AbortSignal, { workChanged: () => void; tally: AiVaultScanTally }>()
+
+// Rate-limited because a cold scan lists thousands of folders and files.
 export const AI_VAULT_SCAN_PROGRESS_INTERVAL_MS = 1_000
 
-/**
- * Reports advancing work for the scan that owns `signal`, at most once per
- * interval and only when the counter moved, until the returned stop is called.
- */
+/** Reports this scan's work at most once per interval until stop is called. */
 export function trackAiVaultScanProgress(
   signal: AbortSignal,
-  report: (units: number) => void,
+  report: (work: AiVaultScanWork) => void,
   now: () => number = () => performance.now()
 ): () => void {
-  let units = 0
   let lastReportedAt = Number.NEGATIVE_INFINITY
-  reporters.set(signal, () => {
-    units++
-    const at = now()
-    if (at - lastReportedAt < AI_VAULT_SCAN_PROGRESS_INTERVAL_MS) {
+  let trailing: ReturnType<typeof setTimeout> | null = null
+  const tally = new AiVaultScanTally()
+  const publish = (): void => {
+    lastReportedAt = now()
+    report(tally.snapshot())
+  }
+  const workChanged = (): void => {
+    if (trailing) {
       return
     }
-    lastReportedAt = at
-    report(units)
-  })
+    const wait = Math.max(0, AI_VAULT_SCAN_PROGRESS_INTERVAL_MS - (now() - lastReportedAt))
+    if (wait === 0) {
+      publish()
+      return
+    }
+    trailing = setTimeout(() => {
+      trailing = null
+      publish()
+    }, wait)
+    trailing.unref?.()
+  }
+  reporters.set(signal, { tally, workChanged })
   return () => {
+    if (trailing) {
+      clearTimeout(trailing)
+    }
     reporters.delete(signal)
   }
 }
 
-/** Counts one unit of real work for the scan that owns `signal`; a no-op for any other work. */
-export function noteAiVaultScanProgress(signal: AbortSignal | undefined): void {
+function tallyFor(signal: AbortSignal | undefined): AiVaultScanTally | undefined {
+  return signal ? reporters.get(signal)?.tally : undefined
+}
+
+/** What the scan owning `signal` has found and read; null for untracked work. */
+export function aiVaultScanWork(signal: AbortSignal | undefined): AiVaultScanWork | null {
+  return tallyFor(signal)?.snapshot() ?? null
+}
+
+/** Marks one of an agent's folders or databases as being listed until the returned close. */
+export function openAiVaultScanSource(
+  signal: AbortSignal | undefined,
+  agent: AiVaultAgent
+): () => void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  if (!reporter) {
+    return () => undefined
+  }
+  const close = reporter.tally.openSource(agent)
+  reporter.workChanged()
+  return () => {
+    close()
+    reporter.workChanged()
+  }
+}
+
+export function noteAiVaultScanFileFound(
+  signal: AbortSignal | undefined,
+  agent: AiVaultAgent,
+  file: { path: string; dev?: number; ino?: number }
+): void {
+  tallyFor(signal)?.addFile(agent, file)
+}
+
+export function noteAiVaultScanDatabases(
+  signal: AbortSignal | undefined,
+  agent: AiVaultAgent,
+  count: number
+): void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  reporter?.tally.addDatabases(agent, count)
+  reporter?.workChanged()
+}
+
+/** Discovery is over: the scan now reads `total` more transcripts. */
+export function noteAiVaultScanReading(signal: AbortSignal | undefined, total: number): void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  reporter?.tally.startReading(total)
+  reporter?.workChanged()
+}
+
+/** A pass stopped early: `count` transcripts it announced will not be read. */
+export function noteAiVaultScanUnread(signal: AbortSignal | undefined, count: number): void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  reporter?.tally.dropUnread(count)
+  reporter?.workChanged()
+}
+
+export function noteAiVaultScanFilesRead(signal: AbortSignal | undefined, count: number): void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  reporter?.tally.addRead(count)
+  reporter?.workChanged()
+}
+
+/** Sends the tally after a batch of files was counted. */
+export function noteAiVaultScanWorkChanged(signal: AbortSignal | undefined): void {
   if (signal) {
-    reporters.get(signal)?.()
+    reporters.get(signal)?.workChanged()
   }
 }

@@ -91,8 +91,24 @@ const FORK_ARGV: Partial<
   pi: ({ transcriptPath }) => (transcriptPath ? ['pi', '--fork', transcriptPath] : null)
 }
 
+/** Agents whose CLI cannot copy a conversation but whose chat protocol can (ACP `session/fork`, as
+ *  OpenCode 2.0.14 and OMP 17.0.5 advertise): the chat's host makes the copy, and the terminal opens
+ *  it with a plain resume. A host whose agent does not advertise the copy refuses it. OpenCode 2.x
+ *  lists its chats' conversations as `opencode2` rows. */
+const FORKS_THROUGH_CHAT: ReadonlySet<string> = new Set<ResumableTuiAgent>([
+  'opencode',
+  'opencode2',
+  'omp'
+])
+
+/** Whether "Resume in New CLI" can open a copy of this agent's conversations at all. A row's own
+ *  gate (`aiVaultSessionCliForkWorktreeId`) also checks that its copy can be made. */
 export function agentForksConversations(agent: string): boolean {
-  return Object.hasOwn(FORK_ARGV, agent)
+  return Object.hasOwn(FORK_ARGV, agent) || FORKS_THROUGH_CHAT.has(agent)
+}
+
+export function agentForksThroughChat(agent: string): boolean {
+  return FORKS_THROUGH_CHAT.has(agent)
 }
 
 export function getAgentForkArgv(

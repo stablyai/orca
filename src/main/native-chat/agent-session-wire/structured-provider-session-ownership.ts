@@ -1,6 +1,6 @@
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
+import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
 
 export type StructuredProviderSessionOwnership = {
   sessionId: string
@@ -17,7 +17,7 @@ export function listStructuredProviderSessionOwnership(
   records: readonly AgentSessionRecord[]
 ): StructuredProviderSessionOwnership[] {
   return records.flatMap((record) => {
-    const history = structuredAgentRuntimeRegistration(record.provider)?.sessionHistory
+    const history = structuredAgentRuntimeMetadata(record.provider)?.sessionHistory
     return history
       ? record.providerHandleChain.map((link) => ({
           sessionId: record.sessionId,

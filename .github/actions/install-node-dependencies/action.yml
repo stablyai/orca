@@ -46,7 +46,7 @@ outputs:
     description: The small pnpm-owned verification record, without registry metadata.
     value: ${{ steps.verification-cache.outputs.path }}
   verification-cache-key:
-    description: Exact verification record key, also used by the isolated PR benchmark.
+    description: Exact verification record cache key.
     value: ${{ steps.verification-cache.outputs.key }}
   node-version:
     description: Resolved Node.js version used for the install.
@@ -86,16 +86,14 @@ runs:
         case "$LOOKUP_REQUEST" in
           [aA][uU][tT][oO])
             # Hosted runners have Node for this manifest-only check before toolchain setup.
-            lookup_only="$(node -p 'const p = require("./package.json"); p.engines?.node === "24" && typeof p.packageManager === "string" && p.packageManager.split("+")[0] === "pnpm@12.8.1"')"
+            lookup_only="$(node -p 'const p = require("./package.json"); p.engines?.node === "24" && typeof p.packageManager === "string" && p.packageManager.split("+")[0] === "pnpm@12.14.0"')"
             ;;
         esac
         printf 'lookup-only=%s\n' "$lookup_only" >> "$GITHUB_OUTPUT"
 
     # setup-node needs pnpm on PATH to locate and restore its store.
     - name: Setup pnpm
-      uses: pnpm/setup@v2
-      with:
-        install: false
+      uses: ./.github/actions/setup-pnpm
 
     # Desktop-only jobs should not miss their download cache when mobile dependencies change.
     - name: Setup Node.js
@@ -104,6 +102,7 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version-file: package.json
+        check-latest: true
         cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
         package-manager-cache: false
@@ -114,6 +113,7 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
+        check-latest: true
         cache: ${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
         package-manager-cache: false
@@ -207,6 +207,14 @@ runs:
         # Job containers can run composite steps from a source mirror without .git.
         if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
           git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
+        fi
+
+    # Why: the script-free install leaves node_modules/.bin/bun as a stub that shadows setup-bun under `pnpm run`.
+    - name: Link pinned Bun
+      shell: bash
+      run: |
+        if [ -d node_modules/bun ]; then
+          pnpm rebuild bun
         fi
 
     # Why --if-present: release cuts run main's workflows against older release tags that predate this script.

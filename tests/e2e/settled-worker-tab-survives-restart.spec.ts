@@ -336,17 +336,23 @@ for (const daemonSessionGone of [false, true]) {
 
       // Hidden mount, then click to reveal: reveal runs the missing-session reconciler.
       await backgroundMountTab(second.page, targetWorktreeId, workerTabId)
-      // Poll, don't sample: main's cache learns the session when the pane's deferred reattach lands,
-      // and backgroundMountTab only waits for the pane manager to exist. A restarted main that never
-      // attaches stays false for the whole window, which is the regression this guards.
+      // Poll, don't sample: the hidden pane binds when its deferred reattach lands, and
+      // backgroundMountTab only waits for the pane manager to exist. hasPty reads host liveness, so
+      // only the pane's own binding proves the live session was reattached before reveal.
       if (!daemonSessionGone) {
         await expect
           .configure({ soft: true })
-          .poll(() => second.page.evaluate((ptyId) => window.api.pty.hasPty(ptyId), workerPtyId), {
-            timeout: 20_000,
-            message: 'liveness before reveal'
-          })
-          .toBe(true)
+          .poll(
+            () =>
+              second.page.evaluate(
+                (tabId) =>
+                  window.__paneManagers?.get(tabId)?.getPanes?.()[0]?.container?.dataset?.ptyId ??
+                  null,
+                workerTabId
+              ),
+            { timeout: 20_000, message: 'liveness before reveal' }
+          )
+          .toBe(workerPtyId)
       }
       await second.page.evaluate(
         ({ tabId, worktreeId }) => {

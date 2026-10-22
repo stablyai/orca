@@ -1,41 +1,28 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
-import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
 import { swapReplacedPaneBinding } from '../pane/pane-owner-replacement'
+import { PaneOwnerContentionError } from '../pane/pane-spawn-operation'
+import { persistFreshPaneBinding } from '../runtime/spawn-commit'
 import {
   pendingByPaneKey,
   pendingPtyIdBySerializerGeneration,
   rendererSerializerReadiness
 } from '../pane/serializer-state'
-import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 
 export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<PtyGrid> {
   const args = ctx.args
-  try {
-    ctx.stablePaneBindingPersisted = await persistAdmittedStablePaneBinding({
-      store: ctx.deps.store,
-      owner: ctx.stablePaneOwner,
-      result: ctx.result,
-      worktreeId: args.worktreeId,
-      startupCwd: ctx.cwd
-    })
-  } catch (error) {
-    if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
-      throw error
-    }
-    console.error('[pty] failed to persist PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
-      agentSessionOperationOutcome: 'unknown' as const
-    })
-  }
+  const startupCwd = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
+    ? (ctx.correctStartupCwd ?? ctx.requestedCwd)
+    : ctx.requestedCwd
+
   const committedSize = resolveCommittedPtySize({
     result: ctx.result,
     requested: { cols: args.cols, rows: args.rows },
@@ -46,8 +33,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
     ctx.deps.store &&
     typeof args.worktreeId === 'string' &&
     typeof args.tabId === 'string' &&
-    ctx.validatedLeafId !== null &&
-    !ctx.stablePaneBindingPersisted
+    ctx.validatedLeafId !== null
   ) {
     try {
       const placement = parseTerminalPanePlacement(args.placement)
@@ -57,21 +43,33 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
         leafId: ctx.validatedLeafId,
         ptyId: ctx.result.id,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
+        ...(startupCwd ? { startupCwd } : {}),
         ...(placement ? { placement } : {}),
+        ...(ctx.paneSpawnOperation?.mustExist ? { mayCreate: false } : {}),
         origin: spawnCommitBindingOrigin(ctx.result)
       }
-      const input = ctx.replacedPaneOwner
-        ? swapReplacedPaneBinding(ctx.deps.store, binding, ctx.replacedPaneOwner)
-        : binding
-      const persisted = await ctx.deps.store.persistPtyBinding(input)
+      const persisted = ctx.replacedPaneOwner
+        ? await ctx.deps.store.persistPtyBinding(
+            swapReplacedPaneBinding(ctx.deps.store, binding, ctx.replacedPaneOwner)
+          )
+        : await persistFreshPaneBinding(
+            ctx.deps.store,
+            binding,
+            args.connectionId,
+            ctx.paneSpawnOperation?.absentOwner
+          )
       if (persisted === false) {
         throw new Error('terminal_pane_owner_changed')
       }
+      // The swap holds the live binding now: a later failure must not retire it under the same id.
+      ctx.replacedPaneOwner = null
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)
-      await discardUnpersistedPtySpawn(ctx.provider, ctx.result)
-      if (err instanceof Error && err.message === 'terminal_pane_owner_changed') {
+      await discardUnpersistedPtySpawn(ctx.provider, ctx.result, ctx.deps.runtime)
+      if (
+        err instanceof PaneOwnerContentionError ||
+        (err instanceof Error && err.message === 'terminal_pane_owner_changed')
+      ) {
         throw err
       }
       throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
@@ -98,10 +96,6 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
   })
-  ptyOwnership.set(ctx.result.id, LOCAL_EXECUTION_HOST_ID)
-  if (ctx.result.incarnationId) {
-    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-  }
   if (ctx.initiallyHidden) {
     // Refresh the pre-spawn hidden mark only after this incarnation survives its save.
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.result.id, true)
@@ -109,7 +103,7 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
       // Defense: never strand a mark on an id the provider renamed.
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
     }
-    // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
+    // Why after ownership (recorded at commit start): provider lookup routes by it, and a hidden-spawned agent should be paceable from its first flood.
     ctx.deps.syncPtyBackgroundedDelivery(ctx.result.id, 'spawn')
     closeStartupQueryAuthorityForPty(ctx.result.id)
   }

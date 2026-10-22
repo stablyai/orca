@@ -1,6 +1,6 @@
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
@@ -266,33 +266,13 @@ async function isSameRepoCommonDir(
   candidates: readonly (string | undefined)[]
 ): Promise<boolean> {
   const present = candidates.filter((candidate): candidate is string => Boolean(candidate))
-  if (present.some((candidate) => isSameCommonDirPath(createdCommonDir, candidate))) {
+  if (present.some((candidate) => areWorktreePathsEqual(createdCommonDir, candidate))) {
     return true
   }
   const [canonicalCreated, ...canonicalCandidates] = await Promise.all(
     [createdCommonDir, ...present].map(canonicalizeLocalPath)
   )
-  return canonicalCandidates.some((candidate) => isSameCommonDirPath(canonicalCreated, candidate))
-}
-
-/**
- * Why not areWorktreePathsEqual alone: it folds case for every path once the host is Windows, so on
- * a Windows desktop two WSL repos differing only in case would be accepted as the same object store.
- */
-export function isSameCommonDirPath(
-  left: string,
-  right: string,
-  platform = process.platform
-): boolean {
-  const leftIsPosix = isPosixAbsolutePath(left)
-  if (leftIsPosix || isPosixAbsolutePath(right)) {
-    return leftIsPosix && isPosixAbsolutePath(right) && posix.resolve(left) === posix.resolve(right)
-  }
-  return areWorktreePathsEqual(left, right, platform)
-}
-
-function isPosixAbsolutePath(pathValue: string): boolean {
-  return pathValue.startsWith('/') && !pathValue.startsWith('//')
+  return canonicalCandidates.some((candidate) => areWorktreePathsEqual(canonicalCreated, candidate))
 }
 
 /**

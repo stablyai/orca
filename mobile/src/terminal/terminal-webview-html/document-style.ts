@@ -32,6 +32,13 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     width: 100%;
     height: 100%;
   }
+  #terminal-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--terminal-bottom-row-backdrop, none);
+  }
   #terminal-surface {
     transform-origin: top left;
     display: inline-block;

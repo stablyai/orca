@@ -32,6 +32,7 @@ import {
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const journals = createTrackedJournalOpener()
 
@@ -83,17 +84,23 @@ function accepted(): AgentSessionDispatchOutcome {
 }
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    acquire,
-    releaseAcquisition,
-    dispatch: async (input) => {
-      await input.beforeDispatch?.()
-      return dispatch(input)
+  return startsWhenPublished(
+    {
+      acquire,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
+      releaseAcquisition,
+      dispatch: async (input) => {
+        await input.beforeDispatch?.()
+        return dispatch(input)
+      },
+      cancelTurn,
+      answerPrompt,
+      setOption
     },
-    cancelTurn,
-    answerPrompt,
-    setOption
-  }
+    () => host
+  )
 }
 
 async function attach(): Promise<AgentSessionRecord | null> {
@@ -135,6 +142,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   ordinal = 0
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,

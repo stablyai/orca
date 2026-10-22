@@ -1,6 +1,7 @@
 import { runProcess } from '@orca/process-host'
 import { lstat, readFile } from 'node:fs/promises'
-import { buildWslExecArgs, quotePosixShell } from '../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../shared/shell-argument-quoting'
 import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'

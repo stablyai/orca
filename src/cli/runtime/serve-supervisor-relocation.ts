@@ -5,9 +5,10 @@
  * starts from the app, so it updates as before.
  */
 import { createHash } from 'node:crypto'
-import { constants, readFileSync, statSync } from 'node:fs'
+import { constants, readFileSync, rmSync, statSync } from 'node:fs'
 import { cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { cloneMacTree } from '../../main/macos-tree-clone'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
 
 /** Set on the re-run supervisor: the app root its own `__dirname` no longer points at. */
@@ -62,6 +63,19 @@ async function exists(path: string): Promise<boolean> {
 /** Who runs from each copy, kept beside the copies so it never blocks publishing one. */
 const usersDir = (root: string, id: string): string => join(root, USERS_DIR, id)
 
+async function copyTree(source: string, destination: string): Promise<void> {
+  // Why not fs.cp on macOS: it clones file by file, several times slower than one `cp -c`.
+  if (process.platform === 'darwin') {
+    return cloneMacTree(source, destination)
+  }
+  // Why FICLONE: on reflink filesystems the copy shares blocks with the app.
+  await cp(source, destination, {
+    recursive: true,
+    verbatimSymlinks: true,
+    mode: constants.COPYFILE_FICLONE
+  })
+}
+
 async function buildSnapshot(
   resources: string,
   root: string,
@@ -78,15 +92,11 @@ async function buildSnapshot(
   const temporary = join(root, `${TEMPORARY_PREFIX}${pid}-${id}`)
   await rm(temporary, { recursive: true, force: true })
   try {
+    await mkdir(temporary)
     // Why both: bare requires from out/ walk up into Resources/node_modules.
     for (const name of [PACKAGED_APP_ROOT_NAME, 'node_modules']) {
       if (await exists(join(resources, name))) {
-        // Why FICLONE: on APFS and reflink filesystems the copy shares blocks with the app.
-        await cp(join(resources, name), join(temporary, name), {
-          recursive: true,
-          verbatimSymlinks: true,
-          mode: constants.COPYFILE_FICLONE
-        })
+        await copyTree(join(resources, name), join(temporary, name))
       }
     }
     await writeFile(join(temporary, COMPLETE_MARKER), '')
@@ -193,6 +203,19 @@ export async function relocateServeSupervisor(
   return 'relocated'
 }
 
+/** Releases `pid`'s claim on the copy it runs `cliEntry` from, so cleanup can remove that copy. */
+export function releaseServeSupervisorSnapshot(cliEntry: string, pid: number): void {
+  const snapshotDir = resolve(cliEntry, '..', '..', '..', '..')
+  rmSync(join(usersDir(dirname(snapshotDir), basename(snapshotDir)), String(pid)), { force: true })
+}
+
+export function execveThisProcess(file: string, args: string[], env: NodeJS.ProcessEnv): void {
+  if (!process.execve) {
+    throw new Error('this runtime cannot replace its own process')
+  }
+  process.execve(file, args, env)
+}
+
 export function relocateThisServeSupervisor(
   appRoot: string,
   userDataPath: string
@@ -205,12 +228,7 @@ export function relocateThisServeSupervisor(
     userDataPath,
     pid: process.pid,
     isProcessAlive,
-    execve: (file, args, env) => {
-      if (!process.execve) {
-        throw new Error('this runtime cannot replace its own process')
-      }
-      process.execve(file, args, env)
-    },
+    execve: execveThisProcess,
     log: (line) => process.stderr.write(`${line}\n`)
   })
 }

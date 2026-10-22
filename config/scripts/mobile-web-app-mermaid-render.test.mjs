@@ -1,18 +1,9 @@
 /**
  * Mermaid rendered in the page, in a real browser, under the policy the shell ships.
  *
- * The native component seals an untrusted diagram inside a `WebView` whose document embeds the
- * whole engine as a string. The page has no second content process, so what replaces it is
- * `import('mermaid')` on demand and mermaid's own `securityLevel: 'strict'` output. That makes
- * three claims this file measures rather than asserts: that rendering violates no directive and
- * asks for no JIT, that what the page paints is the diagram the phone already paints, and that a
- * hostile diagram reaches the document inert.
- *
- * The equality oracle is the native `buildHtml` itself, bundled and served as its own document in
- * the same browser. Two differences survive and are normalised away: the diagram id (mermaid's own
- * `mermaid-<epoch>` on the native path, the component's `useId` on the page) and the `xmlns:xlink`
- * declaration the native document's `innerHTML` serialization adds. Everything else — the viewBox,
- * the `max-width`, the injected `<style>`'s rules — is compared byte for byte.
+ * The page renders with `import('mermaid')` on demand and mermaid's own `securityLevel: 'strict'`
+ * output. Two claims this file measures rather than asserts: that rendering violates no directive
+ * and asks for no JIT, and that a hostile diagram reaches the document inert.
  *
  * Both engines, because the shell is WKWebView on one platform and a Chromium WebView on the
  * other, and "does mermaid need eval" is answered by the engine rather than by mermaid.
@@ -23,17 +14,11 @@
  * held in `mobile-web-app-session-terminal-closure.test.mjs`). One chunk rather than the 103 that
  * `import('mermaid')` emitted: mermaid splits along its own lazy diagram-type boundaries, all of
  * which sit inside the generation the phone has already downloaded, so that split moved no bytes
- * and spent 103 of the 256 manifest assets the shell will load. The native document pays 3,705,846
- * bytes of engine string instead, in the closure, on every mount.
- *
- * The SVG itself: 17,143 bytes on the page against 17,504 in the native document (chromium; webkit
- * is 8 longer on each side), equal at 15,447 once normalised. The gap is the id string repeated
- * across 57 selectors, and dropping `xmlns:xlink` is load-bearing rather than cosmetic — the
- * comparison fails without it.
+ * and spent 103 of the 256 manifest assets the shell will load.
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
@@ -58,9 +43,8 @@ const SECOND = 'graph LR\n  One --> Two\n  Two --> Three'
 /**
  * A script in a label, a `</script>` in a label, an `onerror` attribute and a `javascript:` click.
  *
- * The native path escapes `<`, `>` and the line separators because the source is spliced into an
- * inline `<script>`; on the page it is a JS string argument and that escaping has no analogue, so
- * the only fence left is mermaid's own strict-mode sanitiser. This is what measures it.
+ * On the page the source is a JS string argument, so the only fence is mermaid's own strict-mode
+ * sanitiser. This is what measures it.
  */
 const HOSTILE =
   'graph TD\n  A["<img src=x onerror=window.__pwned=1><script>window.__pwned=2<\\/script>"] --> B\n' +
@@ -107,70 +91,12 @@ function Harness() {
 createRoot(document.getElementById('root')).render(createElement(Harness))
 `
 
-/**
- * A stand-in for React, React Native and `react-native-webview`, so the native module can be
- * bundled for Node to get its HTML.
- *
- * `buildHtml` is a pure function of the source and the theme, but it lives beside a component
- * whose other imports are all native. CommonJS with a Proxy rather than a list of named exports:
- * what that component reaches for is its own business, and none of it is called here.
- */
-const IMPORT_STUB = `
-const identity = (value) => value
-module.exports = new Proxy(
-  {
-    StyleSheet: { create: (styles) => styles, hairlineWidth: 1 },
-    memo: identity,
-    default: identity
-  },
-  { get: (target, key) => (key in target ? target[key] : identity) }
-)
-`
-
 const bundles = mobileWebAppDependenciesPresent()
 const describeMermaid = bundles ? describe : describe.skip
 
 let scratch = null
 let server = null
 let origin = null
-
-/** The native document's own render of `FIXTURE`, built from `buildHtml` and served as a page. */
-async function buildNativeDocument(outDir) {
-  const stubPath = join(scratch, 'import-stub.cjs')
-  await writeFile(stubPath, IMPORT_STUB, 'utf8')
-  const nativeHtmlModule = join(scratch, 'native-html.mjs')
-  await esbuild.build({
-    absWorkingDir: mobileDir,
-    stdin: {
-      contents: "export { buildHtml } from './MermaidDiagram'\n",
-      resolveDir: diagramDir,
-      loader: 'ts',
-      sourcefile: 'native-html-entry.ts'
-    },
-    bundle: true,
-    format: 'esm',
-    platform: 'node',
-    outfile: nativeHtmlModule,
-    target: ['node20'],
-    jsx: 'automatic',
-    logLevel: 'silent',
-    nodePaths: [join(mobileDir, 'node_modules')],
-    // `resolveExtensions` is left at its default here, with no `.web.*`, so `./MermaidDiagram`
-    // resolves to the file the phone builds rather than to the sibling under test.
-    alias: {
-      react: stubPath,
-      'react/jsx-runtime': stubPath,
-      'react-native': stubPath,
-      'react-native-webview': stubPath
-    },
-    define: { __DEV__: 'false', 'process.env.NODE_ENV': '"production"' }
-  })
-  const { buildHtml } = await import(pathToFileURL(nativeHtmlModule).href)
-  await writeFile(join(outDir, 'native.html'), buildHtml(FIXTURE), 'utf8')
-  // The same document for a diagram that throws, because the shared config the page introduced
-  // reaches the phone too and one of its keys changes what mermaid does on that path.
-  await writeFile(join(outDir, 'native-broken.html'), buildHtml(BROKEN), 'utf8')
-}
 
 beforeAll(async () => {
   if (!bundles) {
@@ -217,7 +143,6 @@ beforeAll(async () => {
     '<!doctype html><html><head><meta charset="utf-8"></head><body><div id="root"></div>' +
       '<script type="module" src="/mermaid-check.js"></script></body></html>'
   )
-  await buildNativeDocument(outDir)
   const served = await createBundleServer({ outDir, cspHeader: await readShellCsp() })
   server = served.server
   origin = served.origin
@@ -341,52 +266,12 @@ async function unmount(page) {
   )
 }
 
-/**
- * The two strings, with the only two differences the design measured taken out: the diagram id,
- * which each host generates its own way, and the `xmlns:xlink` the native serialization adds.
- *
- * The id is read off the element rather than matched by a pattern, so a host that changes its id
- * scheme normalises correctly instead of comparing an unreplaced string.
- */
+/** The SVG with its host-generated diagram id taken out, so two mounts compare byte for byte. */
 function normaliseSvg(html, id) {
   return html
     .split(id)
     .join('ID')
     .replace(/ xmlns:xlink="[^"]*"/g, '')
-}
-
-/**
- * The native document, loaded in the same browser, with the host it posts to standing in.
- *
- * `window.ReactNativeWebView` is what the WebView injects; the document's `post` is a no-op
- * without it, so the message that drives the component's fallback would be unobservable. Recorded
- * as a list because the two outcomes are told apart by what it posts: a height, or `error`.
- */
-async function readNativeDocument(browser, file) {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
-  try {
-    await page.addInitScript(() => {
-      globalThis.__orcaNativePosts = []
-      globalThis.ReactNativeWebView = {
-        postMessage: (message) => globalThis.__orcaNativePosts.push(String(message))
-      }
-    })
-    await page.goto(`${origin}/${file}`, { waitUntil: 'load' })
-    await page.waitForFunction(() => globalThis.__orcaNativePosts.length > 0, null, {
-      timeout: 120_000
-    })
-    return await page.evaluate(() => {
-      const svg = document.querySelector('#c svg')
-      return {
-        posts: globalThis.__orcaNativePosts,
-        svgs: document.querySelectorAll('svg').length,
-        html: svg?.outerHTML ?? null,
-        id: svg?.id ?? null
-      }
-    })
-  } finally {
-    await page.close()
-  }
 }
 
 describeMermaid(
@@ -404,7 +289,7 @@ describeMermaid(
           await browser?.close()
         })
 
-        it('paints the diagram the native document paints, with no violation and no JIT', async () => {
+        it('paints the diagram with no violation and no JIT', async () => {
           const { page, consoleErrors } = await openPage(browser)
           const fetched = []
           page.on('response', (response) => fetched.push(response.url()))
@@ -426,30 +311,9 @@ describeMermaid(
             // the app bundle, which is what spends the shell's asset budget.
             expect(fetched.filter((url) => url.includes('/chunk-'))).toHaveLength(1)
             expect(fetched.filter((url) => !url.startsWith(origin))).toEqual([])
-
-            const native = await readNativeDocument(browser, 'native.html')
-            expect(normaliseSvg(shown.html, shown.id)).toBe(normaliseSvg(native.html, native.id))
           } finally {
             await page.close()
           }
-        }, 600_000)
-
-        it('leaves the native document reporting a diagram that throws, with nothing drawn', async () => {
-          // The page's shared config reaches the phone as well, and `suppressErrorRendering` is a
-          // key the native path did not have before it. What must not change is that the component
-          // above the WebView still hears about a diagram that throws: `run` rethrows, the
-          // document's own catch posts `error`, and the component swaps in the source box.
-          const broken = await readNativeDocument(browser, 'native-broken.html')
-          expect(broken.posts).toEqual(['error'])
-          // And what the key does change: mermaid draws no error diagram of its own, so the
-          // document is empty behind the fallback rather than showing a diagram for a moment.
-          expect(broken.svgs).toBe(0)
-
-          // The control, the same document for a diagram that parses: a height, not `error`.
-          const rendered = await readNativeDocument(browser, 'native.html')
-          expect(rendered.posts).not.toContain('error')
-          expect(Number(rendered.posts[0])).toBeGreaterThan(0)
-          expect(rendered.svgs).toBe(1)
         }, 600_000)
 
         it('leaves one SVG across a source change, an unmount and a remount', async () => {

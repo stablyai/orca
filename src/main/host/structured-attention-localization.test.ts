@@ -47,6 +47,7 @@ function hostNotifications() {
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: getDefaultNotificationSettings,
     readWorkspaceLabels: () => ({ worktreeLabel: 'Notes' }),
+    isWorkspaceMuted: () => false,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 60_000

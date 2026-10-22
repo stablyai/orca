@@ -14,11 +14,7 @@ import {
   linkOrcaProfileToCloud,
   unlinkOrcaProfileFromCloud
 } from '../orca-profiles/profile-cloud-index'
-import {
-  cloudSessionIdentity,
-  recordSuccessfulCloudSessionLogin,
-  tombstoneCloudSession
-} from '../orca-profiles/profile-cloud-session-mutation'
+import { signOutCloudSession } from '../orca-profiles/profile-cloud-session-owner'
 import { saveOrcaCloudSession } from '../orca-profiles/profile-cloud-session-store'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
@@ -78,7 +74,6 @@ async function setup(sharingEnabled: { value: boolean } = { value: true }): Prom
   createdPaths.push(userDataPath)
   const active = ensureActiveOrcaProfile(userDataPath)
   linkOrcaProfileToCloud(active.profile.id, cloudA, userDataPath)
-  recordSuccessfulCloudSessionLogin(cloudSessionIdentity(active.profile.id, cloudA), userDataPath)
   return {
     userDataPath,
     profileId: active.profile.id,
@@ -366,10 +361,9 @@ describe('ArtifactCloudService record authorization', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createResponse()))
     await service.share(writeRequest)
 
-    tombstoneCloudSession(cloudSessionIdentity(profileId, cloudA), userDataPath)
+    signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-    recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, cloudB), userDataPath)
 
     await expect(service.update({ ...writeRequest, authToken: 'token-b' })).rejects.toThrow(
       /has not been shared/
@@ -394,10 +388,9 @@ describe('ArtifactCloudService record authorization', () => {
     const pending = service.share(writeRequest)
     await vi.waitFor(() => expect(resolvePost).toBeTypeOf('function'))
 
-    tombstoneCloudSession(cloudSessionIdentity(profileId, cloudA), userDataPath)
+    signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
-    recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, cloudB), userDataPath)
     resolvePost?.(createResponse())
 
     await expect(pending).rejects.toThrow(/account changed/)

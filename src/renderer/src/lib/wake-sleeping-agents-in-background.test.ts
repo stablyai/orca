@@ -9,6 +9,7 @@ import {
 } from '@/constants/terminal'
 import { listenForHibernatedAgentWake } from '@/components/terminal-pane/hibernated-agent-wake-listener'
 import type { ResumeSleepingAgentSessionsOptions } from './resume-sleeping-agent-session'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const resumeSpy = vi.fn<
   (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
@@ -55,6 +56,7 @@ import {
   createBackgroundSleepingAgentWakeDispatcher,
   wakeSleepingAgentsForWorktreeInBackground
 } from './wake-sleeping-agents-in-background'
+import { takeSleepingAgentWakeRequest } from './sleeping-agent-wake-requests'
 
 type RecordedEvents = {
   events: string[]
@@ -155,6 +157,31 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
       'wt-1',
       expect.objectContaining({ suppressNavigation: true })
     )
+  })
+
+  it('asks only the mounted tabs to start their agents while hidden', () => {
+    const record = (tabId: string): SleepingAgentSessionRecord => ({
+      paneKey: `${tabId}:leaf-1`,
+      tabId,
+      worktreeId: 'wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: `session-${tabId}` },
+      prompt: '',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1
+    })
+    const passive = record('tab-a')
+    const slept = { ...record('tab-b'), restoreOnTabOpenOnly: true }
+    sleepingRecords = { k1: passive, k2: slept }
+    isPassiveSpy.mockReturnValue(true)
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    // Why: the background-mounted pane lands hidden, where a sleeping resume otherwise waits for a reveal.
+    expect(takeSleepingAgentWakeRequest(passive)).toBe(true)
+    expect(takeSleepingAgentWakeRequest(passive)).toBe(false)
+    expect(takeSleepingAgentWakeRequest(slept)).toBe(false)
   })
 
   it('falls back to a whole-worktree mount when a passive record has no resolvable tab', () => {

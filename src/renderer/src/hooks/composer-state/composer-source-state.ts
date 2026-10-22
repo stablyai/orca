@@ -78,6 +78,8 @@ export function useComposerSourceState(
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
     setSelectedProjectHostSetupOverrideId:
       target.initialTargetState.setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectHostSetupOverrideHostId:
+      target.initialTargetState.setSelectedProjectHostSetupOverrideHostId,
     setSparseDirectories: target.asyncComposerState.setSparseDirectories,
     setSparseEnabled: target.asyncComposerState.setSparseEnabled,
     setSparseSelectedPresetId: target.asyncComposerState.setSparseSelectedPresetId,

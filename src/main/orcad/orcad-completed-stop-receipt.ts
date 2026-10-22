@@ -105,6 +105,9 @@ export function persistOrcadDaemonRetirementRecord(
     schemaVersion: 1,
     kind: 'orcad_managed_stop_retirement',
     request: OrcadManagedStopRequestSchema.parse(request),
-    ...outcome
+    // Named, not spread: an in-process outcome may carry fields the strict record rejects.
+    retirement: outcome.retirement,
+    liveSessions: outcome.liveSessions,
+    reason: outcome.reason
   })
 }

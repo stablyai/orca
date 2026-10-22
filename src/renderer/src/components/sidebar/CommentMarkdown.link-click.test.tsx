@@ -10,6 +10,15 @@ import {
 import CommentMarkdown from './CommentMarkdown'
 import type { FileLinkExists } from './comment-markdown-native-chat-file-links'
 
+// These fixtures exercise prose, links and images without rendering diagrams.
+const mocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('./CommentMermaidBlock', () => ({ default: mocks.mermaid }))
+
 const everyPathExists: FileLinkExists = () => true
 
 /** The host's files, by the path text a reply names them with. */
@@ -29,6 +38,8 @@ describe('CommentMarkdown link click handler', () => {
     container?.remove()
     root = null
     container = null
+    expect(mocks.mermaid).not.toHaveBeenCalled()
+    mocks.mermaid.mockClear()
   })
 
   it('lets callers intercept rendered document links', () => {
@@ -348,7 +359,7 @@ describe('CommentMarkdown link click handler', () => {
     expect(example?.closest('a')).toBeNull()
   })
 
-  it('does not underline a bare file name or a folder, even when it exists', () => {
+  it('does not underline a bare prose name or extensionless folder, even when it exists', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -357,7 +368,7 @@ describe('CommentMarkdown link click handler', () => {
       root?.render(
         <CommentMarkdown
           variant="document"
-          content="Updated package.json and `notes.md`; look in src/components for the button, or `src/renderer`."
+          content="Updated package.json; look in src/components for the button, or `src/renderer`."
           onLinkClick={vi.fn()}
           fileLinkExists={everyPathExists}
         />

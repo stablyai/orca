@@ -5,13 +5,9 @@ import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
 /**
- * The whole of finding 7 on #21503, end to end and against a disk.
- *
- * A route-grant edit on the desktop moves no asset, so the bundle keeps its build id: the phone
- * holds the right bytes under a manifest an edit behind, and that stored manifest is the only
- * evidence an offline entry has. Every other suite here stops at one of the seams — the reducer's
- * effect list, or the store handed a manifest by a test — so none of them can tell whether the
- * effect the reducer emits reaches the file the next cold start reads.
+ * A route-grant edit on the desktop moves no asset, so the bundle keeps its build id. The phone
+ * uses the fresh grants for the online session but never rewrites the stored manifest, so an
+ * offline entry is judged by the grants the assets were downloaded with.
  *
  * So this one mounts the real hook over the real store over an in-memory disk, and the only doubles
  * are the network and the platform modules the runtime cannot load under vitest. What it measures
@@ -46,8 +42,10 @@ vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths:
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
-vi.mock('../components/HostProtocolGate', () => ({ useHostProtocolGates: () => doubles.gates }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => doubles.connection }))
+vi.mock('../components/host-protocol-gates-context', () => ({
+  useHostProtocolGates: () => doubles.gates
+}))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async () => {
@@ -96,15 +94,11 @@ const TOTAL_BYTES = ASSETS.reduce((sum, asset) => sum + asset.byteLength, 0)
 /** The id the assets decide, because the cached manifest is read back through the schema that pins
  *  it to their digest: a literal would be refused before any of this could be measured. */
 const BUILD_ID = computeMobileWebBundleId(ASSETS)
-const MANIFEST_PATH = `${HOST_KEY}/generations/${BUILD_ID}/manifest.json`
 
 /** Through the phone's own reader, not as a literal: that parse is what the manifest the reducer
  *  holds has really been through, and it is the one that pins the build id to the digest of the
  *  assets — so a fixture these tests could not have received is refused here rather than measured. */
-function manifestGranting(
-  grants: readonly string[],
-  overrides: Partial<MobileWebBundleManifestRead> = {}
-): MobileWebBundleManifestRead {
+function manifestGranting(grants: readonly string[]): MobileWebBundleManifestRead {
   return MobileWebBundleManifestReadSchema.parse({
     schemaVersion: MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
     buildId: BUILD_ID,
@@ -114,17 +108,12 @@ function manifestGranting(
     entrypoint: 'index.html',
     totalBytes: TOTAL_BYTES,
     assets: ASSETS,
-    routes: [{ pathname: ROUTE_PATTERN, grants: [...grants] }],
-    ...overrides
+    routes: [{ pathname: ROUTE_PATTERN, grants: [...grants] }]
   })
 }
 
-/** The edit the desktop published, and that same edit written in a manifest schema this shell does
- *  not know. */
+/** The edit the desktop published. */
 const M2 = manifestGranting(GRANTS_A_PLUS_B)
-const M2_WALLED = manifestGranting(GRANTS_A_PLUS_B, {
-  schemaVersion: MOBILE_WEB_BUNDLE_SCHEMA_VERSION + 1
-})
 
 /** Generation G on disk under the manifest its assets arrived with, written by the store's own
  *  stage-and-commit rather than seeded as files: what this suite is about is the manifest a later
@@ -141,11 +130,6 @@ async function cacheGeneration(
     elapsedMs: 1
   }
   await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetched))
-}
-
-function storedRouteGrants(fileSystem: FakeGenerationFileSystem): unknown {
-  const text = fileSystem.text(MANIFEST_PATH)
-  return text === null ? null : JSON.parse(text).routes
 }
 
 type Mounted = {
@@ -191,10 +175,8 @@ async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<Mounted
   if (tree === null) {
     throw new Error('the hook did not mount')
   }
-  // Nothing is awaited after the mount: every effect in this flow is microtask-only — a cache read,
-  // a manifest read and the write-through, none of them on a timer — so the `act` above drains the
-  // whole chain. A write that never reaches disk fails on the stale manifest below rather than on a
-  // wait, which is what makes this measure the write instead of the waiting.
+  // Nothing is awaited after the mount: every effect in this flow is microtask-only (a cache read
+  // and a manifest read, neither on a timer), so the `act` above drains the whole chain.
   return {
     unmount: async () => {
       await act(async () => {
@@ -226,87 +208,36 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     doubles.manifest = null
   })
 
-  it('reads the grants the last online read accepted, not the ones the assets arrived with', async () => {
+  it('opens a same-build hit online without writing to the generation directory', async () => {
+    // The native view reads `manifest.json` while the page opens; a rewrite here raced that read.
     const fileSystem = createFakeGenerationFileSystem()
     await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
+    const generationPaths = () =>
+      fileSystem.paths().filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
+    const paths = generationPaths()
+    const settled = fileSystem.writes.length
     doubles.manifest = M2
 
     const online = await mountRoute(fileSystem)
+
     expect(online.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
     expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
-    // The write-through reached the file, which is the step no other suite covers.
-    expect(storedRouteGrants(fileSystem)).toEqual([
-      { pathname: ROUTE_PATTERN, grants: GRANTS_A_PLUS_B }
-    ])
+    const generationWrites = fileSystem.writes
+      .slice(settled)
+      .filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
+    expect(generationWrites).toEqual([])
+    expect(generationPaths()).toEqual(paths)
     await online.unmount()
-
-    goOffline()
-    const offline = await mountRoute(fileSystem)
-
-    expect(offline.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(offline.pageRoutes()).toEqual([ROUTE_PATTERN])
-    expect(offline.routeGrants()).toEqual(GRANTS_A_PLUS_B)
   })
 
-  it('drops a grant the desktop took away, rather than keeping it for as long as the host is gone', async () => {
-    // The direction that costs something to get wrong: a revoked capability the phone goes on
-    // exercising offline. Same mechanism, read the other way.
+  it('reads the grants the assets arrived with, whatever a later online read accepted', async () => {
+    // The accepted tradeoff: offline verdicts use the routes stored at download time.
     const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A_PLUS_B))
-    doubles.manifest = manifestGranting(GRANTS_A)
-
+    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
+    doubles.manifest = M2
     const online = await mountRoute(fileSystem)
-    expect(online.routeGrants()).toEqual(GRANTS_A)
+    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
     await online.unmount()
-
-    goOffline()
-    const offline = await mountRoute(fileSystem)
-
-    expect(offline.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(offline.routeGrants()).toEqual(GRANTS_A)
-  })
-
-  it('reads the grants the assets arrived with when no online read reached this phone', async () => {
-    // The discriminator, and what every offline verdict answered before the write-through: the same
-    // cold start over a generation the desktop's edit never got to.
-    const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
-
-    goOffline()
-    const offline = await mountRoute(fileSystem)
-
-    expect(offline.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(offline.routeGrants()).toEqual(GRANTS_A)
-  })
-})
-
-/**
- * The arm the write-through deliberately skips.
- *
- * A manifest this shell walled is one it has declared it cannot read, and an offline entry runs no
- * compat check. Writing it would have the next cold start open the page under the grants of a
- * bundle this shell had just refused — so disk keeps the last manifest this shell accepted, and the
- * offline verdict is the one that manifest decides.
- */
-describe('an offline cold start after a grant edit arrived under a wall', () => {
-  beforeEach(() => {
-    doubles.connection = { client: {}, state: 'connected' }
-    doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
-    doubles.manifest = null
-  })
-
-  it('leaves the stored manifest alone and reads the grants it had accepted', async () => {
-    const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
-    doubles.manifest = M2_WALLED
-    const settled = fileSystem.writes.length
-
-    const walled = await mountRoute(fileSystem)
-    expect(walled.state()).toMatchObject({ kind: 'wall' })
-    // Nothing was written at all, so not even the pending half of a swap is on disk.
-    expect(fileSystem.writes).toHaveLength(settled)
-    expect(storedRouteGrants(fileSystem)).toEqual([{ pathname: ROUTE_PATTERN, grants: GRANTS_A }])
-    await walled.unmount()
 
     goOffline()
     const offline = await mountRoute(fileSystem)

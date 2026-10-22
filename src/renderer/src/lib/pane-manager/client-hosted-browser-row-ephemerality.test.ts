@@ -7,27 +7,47 @@
  * driven for real below, and every absence is paired with a presence check through the same
  * oracle so an empty result can never pass for a proof.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { buildWorkspaceSessionPayload } from '../workspace-session'
 import { buildWorkspaceSessionPatch } from '../workspace-session-patch'
-import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph/mobile-session-snapshots'
 import {
   applyClientHostedBrowserRows,
   getClientHostedBrowserRows,
   hydrateClientHostedBrowserRows
 } from './client-hosted-browser-row-state'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+
+// Main answers the window's layout commands; its frames draw the local browser tab.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const WT = 'wt-1'
 const CLIENT_HOSTED_PAGE_ID = 'client-hosted-page-1'
 
 let initialState: AppState
+let main: TabsDrawnFromMain | undefined
 
-function seedLocalBrowserTab(): string {
+/** A layout-owner build draws the tab once main's frame is in. */
+async function seedLocalBrowserTab(): Promise<string> {
+  main = await drawTabsFromMain(useAppStore)
   const workspace = useAppStore.getState().createBrowserTab(WT, 'https://local.test/', {
     title: 'Local page',
     activate: true
   })
+  await main.settle()
   return workspace.id
 }
 
@@ -59,13 +79,15 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  main?.close()
+  main = undefined
   useAppStore.setState(initialState, true)
   hydrateClientHostedBrowserRows([])
 })
 
 describe('client-hosted rows and the persisted workspace session', () => {
-  it('persists a local browser tab but never a client-hosted row', () => {
-    const localWorkspaceId = seedLocalBrowserTab()
+  it('persists a local browser tab but never a client-hosted row', async () => {
+    const localWorkspaceId = await seedLocalBrowserTab()
     pushClientHostedRow()
     // Guard the oracle itself: the row has to be live for its absence downstream to mean anything.
     expect(getClientHostedBrowserRows(WT)).toHaveLength(1)
@@ -77,8 +99,8 @@ describe('client-hosted rows and the persisted workspace session', () => {
     expect(serialize(payload)).not.toContain('https://client-hosted.test/')
   })
 
-  it('keeps a client-hosted row out of incremental session patches too', () => {
-    const localWorkspaceId = seedLocalBrowserTab()
+  it('keeps a client-hosted row out of incremental session patches too', async () => {
+    const localWorkspaceId = await seedLocalBrowserTab()
     pushClientHostedRow()
 
     const patch = buildWorkspaceSessionPatch(useAppStore.getState(), [
@@ -93,8 +115,8 @@ describe('client-hosted rows and the persisted workspace session', () => {
     expect(serialize(patch)).not.toContain(CLIENT_HOSTED_PAGE_ID)
   })
 
-  it('leaves the store tab model untouched when a row arrives', () => {
-    seedLocalBrowserTab()
+  it('leaves the store tab model untouched when a row arrives', async () => {
+    await seedLocalBrowserTab()
     const before = {
       browserTabs: useAppStore.getState().browserTabsByWorktree[WT],
       unifiedTabs: useAppStore.getState().unifiedTabsByWorktree[WT],
@@ -110,8 +132,8 @@ describe('client-hosted rows and the persisted workspace session', () => {
 })
 
 describe('client-hosted rows and the runtime window graph', () => {
-  it('publishes a local browser tab to the host graph but never a client-hosted row', () => {
-    const localWorkspaceId = seedLocalBrowserTab()
+  it('publishes a local browser tab to the host graph but never a client-hosted row', async () => {
+    const localWorkspaceId = await seedLocalBrowserTab()
     pushClientHostedRow()
     expect(getClientHostedBrowserRows(WT)).toHaveLength(1)
 

@@ -30,6 +30,7 @@ import {
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
 } from './setup-guide-progress-readiness'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   readSetupScriptProbeCache,
   setSetupScriptProbeCache,
@@ -45,7 +46,7 @@ export function useSetupGuideProgress(
 ): FeatureWallSetupProgress {
   const settings = useAppStore((s) => s.settings)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)

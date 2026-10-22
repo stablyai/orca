@@ -1,8 +1,8 @@
+import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
-import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
@@ -26,6 +26,7 @@ import { registerTerminalPresentationIpcBridge } from './terminal-presentation-i
 import { registerPtySourceDisownedIpcBridge } from './pty-source-disowned-ipc-bridge'
 import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerAgentLaunchTabIpcBridge } from './agent-launch-tab-ipc-bridge'
+import { registerTerminalPaneRevealIpcBridge } from './terminal-pane-reveal-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-bridge'
 import { registerUpdaterStatusIpcBridge } from './updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
@@ -45,22 +46,10 @@ function remountTerminalTabsAwaitingHostHydration(): void {
   }
 }
 
-export type IpcEventsCleanupPhase =
-  | 'agent.disposeAsyncState'
-  | 'mobile.disposeHydration'
-  | 'runtimeStore.unsubscribe'
-  | 'agentStore.unsubscribe'
-  | 'ipc.dispose'
-  | 'directSsh.stop'
-  | 'notifications.reset'
-
-export function installAppLifetimeIpcEvents(
-  onCleanupPhase?: (phase: IpcEventsCleanupPhase) => void
-): () => void {
+export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = []
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
-  unsubs.push(attachMobileMarkdownBridge())
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
   )
@@ -71,6 +60,7 @@ export function installAppLifetimeIpcEvents(
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
+      observeJiraImageHostStatus(snapshot)
     }
     let stopped = false
     unsubs.push(statusApi.onStatusChanged(apply), () => {
@@ -100,21 +90,24 @@ export function installAppLifetimeIpcEvents(
   registerOsMarkdownFileOpenBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
   unsubs.push(
-    window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
-      void worktreeRuntime
-        .activateNotifiedWorktree(
-          {
-            type: 'activateWorktree',
-            repoId,
-            worktreeId,
-            ...(setup ? { setup } : {}),
-            ...(startup ? { startup } : {}),
-            ...(defaultTabs ? { defaultTabs } : {})
-          },
-          { allowRuntimeEnvironment: false }
-        )
-        .catch((error) => console.error('Failed to activate CLI-created worktree:', error))
-    })
+    window.api.ui.onActivateWorktree(
+      ({ repoId, worktreeId, setup, startup, defaultTabs, providesInitialSurface }) => {
+        void worktreeRuntime
+          .activateNotifiedWorktree(
+            {
+              type: 'activateWorktree',
+              repoId,
+              worktreeId,
+              ...(setup ? { setup } : {}),
+              ...(startup ? { startup } : {}),
+              ...(defaultTabs ? { defaultTabs } : {}),
+              ...(providesInitialSurface ? { providesInitialSurface } : {})
+            },
+            { allowRuntimeEnvironment: false }
+          )
+          .catch((error) => console.error('Failed to activate CLI-created worktree:', error))
+      }
+    )
   )
 
   registerTerminalPresentationIpcBridge(unsubs)
@@ -122,6 +115,7 @@ export function installAppLifetimeIpcEvents(
   registerAgentLaunchTabIpcBridge(unsubs)
   registerPtySourceDisownedIpcBridge(unsubs)
   registerTerminalUiRoutingIpcBridge(unsubs)
+  registerTerminalPaneRevealIpcBridge(unsubs)
   registerSessionTabIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, backgroundWakeDispatcher.request)
   registerUpdaterStatusIpcBridge(unsubs)
@@ -140,18 +134,11 @@ export function installAppLifetimeIpcEvents(
 
   return () => {
     agentStatusBridge.disposeAsyncState()
-    onCleanupPhase?.('agent.disposeAsyncState')
     disposeMobileDriverHydration()
-    onCleanupPhase?.('mobile.disposeHydration')
     unsubscribeRuntimeEnvironmentStore()
-    onCleanupPhase?.('runtimeStore.unsubscribe')
     agentStatusBridge.unsubscribeStore()
-    onCleanupPhase?.('agentStore.unsubscribe')
     unsubs.forEach((unsubscribe) => unsubscribe())
-    onCleanupPhase?.('ipc.dispose')
     stopDirectSshStateBridge()
-    onCleanupPhase?.('directSsh.stop')
     resetAgentHookCompletionNotificationCoordinators()
-    onCleanupPhase?.('notifications.reset')
   }
 }

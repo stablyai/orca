@@ -95,6 +95,7 @@ export type AcpDialect = {
   contextWindow?(models: unknown): number | undefined
   /** A model's own effort menu and default, as the agent advertises them per model. */
   modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  /** A request shown to the person; a permission request it claims is never auto-answered. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   /** Requests answered at once instead of shown to the person. */
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
@@ -105,6 +106,9 @@ export type AcpDialect = {
   failedTurnText?(stopReason: string): string
   /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
+   *  that is only one of them is refused before it reaches the agent. */
+  withheldCommands?: readonly string[]
 }
 
 /** Which of the dialect's stop routes this agent process proved it answers. */

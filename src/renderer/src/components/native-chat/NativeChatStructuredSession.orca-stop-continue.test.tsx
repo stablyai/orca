@@ -36,6 +36,10 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (importOrigi
         : original.useStructuredAgentSessionHostCapabilityState(...args)
   }
 })
+// A host that applies the chat's permission mode; the hold has its own tests.
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  useStructuredChatHostPermissionVerdict: () => ({ kind: 'allowed' })
+}))
 // The transcript's real rows, projected from the journal; only the list's windowing is left out.
 vi.mock('./NativeChatMessageList', async () => {
   const { MessageRow } = await import('./NativeChatMessageRow')

@@ -110,7 +110,9 @@ describe('normalizeAutoSaveDelayMs', () => {
 
 describe('requestEditorSaveQuiesce', () => {
   it('resolves immediately when no editor listener claims the request', async () => {
-    await expect(requestEditorSaveQuiesce({ fileId: 'file-1' })).resolves.toBeUndefined()
+    const release = await requestEditorSaveQuiesce({ fileId: 'file-1' })
+    expect(release).toBeTypeOf('function')
+    expect(release()).toBeUndefined()
   })
 
   it('waits for a claiming listener to finish quiescing', async () => {

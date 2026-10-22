@@ -58,7 +58,8 @@ async function agentLaunchIntent(
     ...(params.accountEnv ? { accountEnv: params.accountEnv } : {}),
     ...(params.nativeChatDefault !== undefined
       ? { nativeChatDefault: params.nativeChatDefault }
-      : {})
+      : {}),
+    ...(params.surface ? { surface: params.surface } : {})
   }
 }
 

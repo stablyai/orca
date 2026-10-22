@@ -1,6 +1,10 @@
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
-import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
+import {
+  isAutomationGeneratedWorkspace,
+  isCliCreatedWorkspace,
+  isDetachedHeadWorkspace
+} from '../../../shared/worktree/workspace-kinds'
 import { revealRepoInProjectFilter } from '@/components/sidebar/project-filter-reveal'
 
 /** Lifts the workspace-list filters hiding an activated worktree; its reveal needs the card rendered, else it silently no-ops. */
@@ -11,13 +15,10 @@ export function liftSidebarFiltersHidingWorktree(wt: Worktree): void {
     return
   }
   revealRepoInProjectFilter(state, wt.repoId)
-  if (
-    state.hideAutomationGeneratedWorkspaces &&
-    wt.automationProvenance?.kind === 'created-by-automation'
-  ) {
+  if (state.hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(wt)) {
     state.setHideAutomationGeneratedWorkspaces(false)
   }
-  if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
+  if (state.hideCliCreatedWorkspaces && isCliCreatedWorkspace(wt)) {
     state.setHideCliCreatedWorkspaces(false)
   }
   if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {

@@ -8,6 +8,7 @@ import type { AutomationService } from '../automations/service'
 import type { Store } from '../persistence'
 import type * as Fs from 'node:fs'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
+import { ExternalAutomationManagerCache } from '../automations/external-automation-manager-cache'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -23,11 +24,13 @@ vi.mock('electron', () => ({
 
 // This computer's `which` lookup is the one process a scoped probe starts, so it counts probes.
 const probeCommand = vi.hoisted(() => vi.fn())
+const fileExists = vi.hoisted(() => vi.fn(() => false))
+const readRegistrations = vi.fn(() => state.targets)
 vi.mock('@orca/process-host', () => ({ runProcess: probeCommand }))
-// Why: keep the local job read off the developer's real ~/.hermes and ~/.openclaw.
+// Why: keep the local job read off the developer's real ~/.openclaw and ~/.openclaw.
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof Fs>()),
-  existsSync: () => false
+  existsSync: fileExists
 }))
 const PROBE_FOUND = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
 
@@ -76,14 +79,18 @@ beforeEach(async () => {
   ipcHandlers.clear()
   probeCommand.mockReset()
   probeCommand.mockResolvedValue(PROBE_FOUND)
+  fileExists.mockClear()
+  readRegistrations.mockClear()
   state.targets = [sshTarget()]
   state.service = { externalProbePriority: null }
   const { registerAutomationHandlers } = await import('./automations')
+  const store = {
+    getSshTargets: readRegistrations,
+    assertAutomationOwnerFence: () => undefined
+  }
   registerAutomationHandlers(
-    {
-      getSshTargets: () => state.targets,
-      assertAutomationOwnerFence: () => undefined
-    } as unknown as Store,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handler registration reads only these store methods.
+    store as unknown as Store,
     state.service as unknown as AutomationService
   )
 })
@@ -93,10 +100,51 @@ afterEach(() => {
 })
 
 describe('scoped external-manager IPC', () => {
+  it.each(['hermes', 'unknown', 'toString'])(
+    'rejects %s before cache, filesystem, process, or host work',
+    async (provider) => {
+      const cacheRead = vi.spyOn(ExternalAutomationManagerCache.prototype, 'resolve')
+      const cacheWrite = vi.spyOn(ExternalAutomationManagerCache.prototype, 'invalidateOwner')
+      try {
+        for (const owner of [desktopSelf, desktopSsh()]) {
+          await expect(
+            invoke('automations:listExternalManagerForOwner', { owner, provider })
+          ).rejects.toThrow(EXTERNAL_AUTOMATION_SCOPE_CODES.providerNotAllowed)
+          await expect(
+            invoke('automations:runExternalActionForOwner', {
+              owner,
+              provider,
+              jobId: 'job-1',
+              action: 'delete'
+            })
+          ).rejects.toThrow(EXTERNAL_AUTOMATION_SCOPE_CODES.providerNotAllowed)
+        }
+        expect(cacheRead).not.toHaveBeenCalled()
+        expect(cacheWrite).not.toHaveBeenCalled()
+        expect(fileExists).not.toHaveBeenCalled()
+        expect(probeCommand).not.toHaveBeenCalled()
+        expect(readRegistrations).not.toHaveBeenCalled()
+      } finally {
+        cacheRead.mockRestore()
+        cacheWrite.mockRestore()
+      }
+    }
+  )
+
+  it('does not register external create, edit, or history handlers', () => {
+    for (const channel of [
+      'automations:createExternalForOwner',
+      'automations:updateExternalForOwner',
+      'automations:listExternalRunsForOwner'
+    ]) {
+      expect(ipcHandlers.has(channel)).toBe(false)
+    }
+  })
+
   it('derives the target from the captured owner rather than the payload', async () => {
     const entry = await invoke('automations:listExternalManagerForOwner', {
       owner: desktopSsh(),
-      provider: 'hermes',
+      provider: 'openclaw',
       target: { type: 'local' }
     })
 
@@ -107,7 +155,7 @@ describe('scoped external-manager IPC', () => {
 
   it('refuses a request with no captured owner without probing', async () => {
     await expect(
-      invoke('automations:listExternalManagerForOwner', { provider: 'hermes' })
+      invoke('automations:listExternalManagerForOwner', { provider: 'openclaw' })
     ).rejects.toThrow(/automation owner is required/i)
     await expect(invoke('automations:runExternalActionForOwner', {})).rejects.toThrow(
       /automation owner is required/i
@@ -122,7 +170,7 @@ describe('scoped external-manager IPC', () => {
           authority: { kind: 'runtime', environmentId: 'env-1', pairingRevision: 2 },
           selector: { kind: 'self' }
         },
-        provider: 'hermes'
+        provider: 'openclaw'
       })
     ).rejects.toThrow(EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported)
     expect(probeCommand).not.toHaveBeenCalled()
@@ -131,7 +179,10 @@ describe('scoped external-manager IPC', () => {
   it('refuses a runtime-owned SSH target as hidden rather than as a probe failure', async () => {
     state.targets = [sshTarget({ owner: { type: 'on-demand-runtime', runtimeId: 'env-1' } })]
     await expect(
-      invoke('automations:listExternalManagerForOwner', { owner: desktopSsh(), provider: 'hermes' })
+      invoke('automations:listExternalManagerForOwner', {
+        owner: desktopSsh(),
+        provider: 'openclaw'
+      })
     ).rejects.toThrow(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
     expect(probeCommand).not.toHaveBeenCalled()
   })
@@ -141,14 +192,14 @@ describe('scoped external-manager IPC', () => {
     await expect(
       invoke('automations:listExternalManagerForOwner', {
         owner: desktopSsh('t1', 3),
-        provider: 'hermes'
+        provider: 'openclaw'
       })
     ).rejects.toThrow(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
     expect(probeCommand).not.toHaveBeenCalled()
   })
 
   it('keeps one cache across requests, so a repeat read costs no second probe', async () => {
-    const request = { owner: desktopSelf, provider: 'hermes' }
+    const request = { owner: desktopSelf, provider: 'openclaw' }
     await invoke('automations:listExternalManagerForOwner', request)
     await invoke('automations:listExternalManagerForOwner', request)
     expect(probeCommand).toHaveBeenCalledTimes(1)
@@ -158,18 +209,16 @@ describe('scoped external-manager IPC', () => {
   })
 
   it('invalidates that host after a mutation through the scoped path', async () => {
-    const request = { owner: desktopSelf, provider: 'hermes' }
+    const request = { owner: desktopSelf, provider: 'openclaw' }
     await invoke('automations:listExternalManagerForOwner', request)
-    await invoke('automations:createExternalForOwner', {
+    await invoke('automations:runExternalActionForOwner', {
       ...request,
-      name: 'Nightly',
-      prompt: 'sweep',
-      schedule: '0 9 * * *',
-      workdir: null
+      jobId: 'job-1',
+      action: 'run'
     })
     await invoke('automations:listExternalManagerForOwner', request)
 
-    // create + the re-probe after invalidation, on top of the first list.
+    // action + the re-probe after invalidation, on top of the first list.
     expect(probeCommand).toHaveBeenCalledTimes(3)
   })
 })
@@ -185,7 +234,7 @@ describe('probe scope retention', () => {
     )
     const pending = invoke('automations:listExternalManagerForOwner', {
       owner: desktopSelf,
-      provider: 'hermes'
+      provider: 'openclaw'
     })
     const settled = pending.catch((error: unknown) => error)
     await Promise.resolve()
@@ -214,7 +263,7 @@ describe('Orca automation traffic priority', () => {
 
     const probe = invoke('automations:listExternalManagerForOwner', {
       owner: desktopSelf,
-      provider: 'hermes'
+      provider: 'openclaw'
     })
     await Promise.resolve()
     // Why: the probe is queued, not started — this is the only thing keeping

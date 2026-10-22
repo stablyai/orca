@@ -6,7 +6,7 @@ import {
   buildAiVaultResumeShellCommand
 } from '../../shared/ai-vault-resume-command'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
-import { agentForksConversations } from '../../shared/agent-resume-argv'
+import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
 import { isResumableTuiAgent } from '../../shared/agent-session-resume'
 import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import {
@@ -220,19 +220,21 @@ describe('resume commands Orca builds for an owned row', () => {
     }
   })
 
-  // "Resume in New CLI" opens a copy, so it is no second writer of the chat's conversation.
-  it.each(everyAgent.filter(({ rowAgent }) => agentForksConversations(rowAgent)))(
-    'allows each copy it opens for the $rowAgent row',
-    async (conversation) => {
-      installOwnership({ handle: conversation.handle })
-      const commands = builtCommands(conversation, true)
-      expect(commands.length).toBe(7)
-      for (const command of commands) {
-        await expect(
-          assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined),
-          command
-        ).resolves.toBeUndefined()
-      }
+  // "Resume in New CLI" opens a copy, so it is no second writer of the chat's conversation. A copy
+  // the chat makes is opened by a plain resume of the copy's own id, which no chat owns.
+  it.each(
+    everyAgent.filter(
+      ({ rowAgent }) => agentForksConversations(rowAgent) && !agentForksThroughChat(rowAgent)
+    )
+  )('allows each copy it opens for the $rowAgent row', async (conversation) => {
+    installOwnership({ handle: conversation.handle })
+    const commands = builtCommands(conversation, true)
+    expect(commands.length).toBe(7)
+    for (const command of commands) {
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined),
+        command
+      ).resolves.toBeUndefined()
     }
-  )
+  })
 })

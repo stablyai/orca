@@ -68,6 +68,9 @@ function persistedTarget(
         persisted.forEach((body, itemId) => visit(itemId, 0, body, {}))
       }) satisfies StructuredAgentSessionLinkageJournal['visitItemsWithLinkage'],
       itemBody: (itemId: string) => persisted.get(itemId) ?? null,
+      threadGoal: () => null,
+      submissions: () => [],
+      threadGoalSource: () => ({ goal: null, row: null }),
       epoch: 'test'
     }) as unknown as AgentSessionJournal
   return { journal, fence: 1, publish: vi.fn() }

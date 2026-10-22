@@ -1,4 +1,5 @@
 import { useEffect, type MutableRefObject } from 'react'
+import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type { OpenFile } from '@/store/slices/editor'
 import { joinPath } from '@/lib/path'
 import type { useAppStore } from '@/store'
@@ -13,6 +14,7 @@ type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByW
 type UseEditorPanelActiveTabContentLoadParams = {
   activeFile: OpenFile | null
   selectedConflictReviewFile: OpenFile | null
+  openFiles: readonly OpenFile[]
   isVisible: boolean
   isChangesMode: boolean
   gitStatusEntries: GitStatusByWorktree[string] | undefined
@@ -41,6 +43,7 @@ function hasLiveRead(
 export function useEditorPanelActiveTabContentLoad({
   activeFile,
   selectedConflictReviewFile,
+  openFiles,
   isVisible,
   isChangesMode,
   gitStatusEntries,
@@ -96,8 +99,9 @@ export function useEditorPanelActiveTabContentLoad({
         }
 
         const absolutePath = joinPath(activeFile.filePath, entry.path)
-        if (needsFileRead(absolutePath)) {
-          void loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path)
+        const fileId = conflictOverviewFileId(openFiles, activeFile.worktreeId, absolutePath)
+        if (needsFileRead(fileId)) {
+          void loadFileContent(absolutePath, fileId, activeFile.worktreeId, entry.path)
         }
       }
       return

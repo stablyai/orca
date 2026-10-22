@@ -1542,7 +1542,7 @@ describe('served relay URL', () => {
       expect(await failed).toMatchObject({
         type: 'control-error',
         reqId: 'fault-install',
-        code: 'injected SQL failure'
+        code: 'control_operation_failed'
       })
       const status = nextMessage(host.socket)
       host.socket.send(
@@ -1642,7 +1642,7 @@ describe('served relay URL', () => {
       expect(await directFailure).toMatchObject({
         type: 'control-error',
         reqId: 'fallback-install',
-        code: 'injected SQL failure'
+        code: 'control_operation_failed'
       })
       const status = nextMessage(host.socket)
       host.socket.send(

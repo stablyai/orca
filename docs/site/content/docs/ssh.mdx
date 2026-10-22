@@ -35,6 +35,8 @@ When creating a worktree, choose an SSH target instead of Local. Orca will:
 - Run agents remotely through the SSH connection.
 - Sync file events so the editor, diff, and browser still feel local.
 
+On the first connect, Orca installs itself on the host over your own SSH connection; Settings lists these under **Orca on your SSH hosts**. Your code and files stay where they are. Only Orca's list of projects, tabs and terminals moves to the host.
+
 ## Advanced connection options
 
 Open **Settings → SSH**, edit a target, and expand **Advanced Connection** when the host needs a proxy, jump host, or SSH multiplexing override. Orca enables **Reuse SSH connection for faster setup** by default, which uses OpenSSH connection reuse on macOS and Linux so setup commands do not each pay a fresh SSH handshake. Turn it off only for hosts whose SSH policy rejects multiplexed sessions.
@@ -98,3 +100,18 @@ Install the tools, then reconnect so the relay can install native modules.
 ## Port forwarding
 
 For remote worktrees, the right sidebar shows a **Ports** tab (toggle with `Cmd+Shift+I`). Orca scans `/proc/net/tcp` on the remote and lists listening ports under **Detected** — one click forwards them to your laptop. You can also add forwards manually, edit them, or remove them. Forwards persist across app restarts and SSH reconnects, and privileged remote ports auto-remap locally (e.g. remote 80 → local 10080).
+
+## macOS hosts: local network access
+
+On macOS 15 and later, a terminal on an SSH host can lose access to devices on the host's local network (for example `kubectl`, Homebrew `node` or `python`, or `.local` names fail with `no route to host`). macOS credits network access to the SSH session that started Orca's server on the host, and when that session ends, programs started from the server's terminals are blocked. Apple's own tools such as `/usr/bin/curl` keep working, and loopback connections are unaffected. Full Disk Access granted through **Allow full disk access for remote users** may stop working the same way.
+
+When Orca sees that this happened, the host's status in **Settings → SSH** says so and offers **Restart Orca’s server…**, which starts the server again from your current connection. Orca restarts it only when no terminals are running on the host, because terminals that are still open keep the lost access. Close them first.
+
+To avoid the problem altogether, an administrator on the host can exempt local address ranges from the Local Network check (macOS 15.5 and later; see Apple's [TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)). The exemption applies to every app on that Mac for the listed ranges:
+
+```sh
+sudo defaults write com.apple.network.local-network AllowedEthernetLocalNetworkAddresses -array "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16"
+sudo defaults write com.apple.network.local-network AllowedWiFiLocalNetworkAddresses -array "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16"
+```
+
+Restart the Mac for the change to take effect. To undo it, run `sudo defaults delete com.apple.network.local-network AllowedEthernetLocalNetworkAddresses` (and the same for the Wi-Fi key), then restart.

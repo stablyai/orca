@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
@@ -32,7 +32,7 @@ vi.mock('react-native', async () => {
         item: unknown
         index: number
         separators: Record<string, never>
-      }) => unknown
+      }) => ReactNode
     }) =>
       React.createElement(
         'FlatList',
@@ -81,7 +81,7 @@ vi.mock('../platform/haptics', () => ({
   triggerSelection: vi.fn()
 }))
 
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => mockTransport.forceReconnect,
   useHostClient: () => ({
     client: mockTransport.client,
@@ -141,7 +141,7 @@ async function pressByLabel(
   accessibilityLabel: string
 ): Promise<void> {
   const pressable = renderer.root
-    .findAllByType('Pressable')
+    .findAll((node) => String(node.type) === 'Pressable')
     .find((node) => node.props.accessibilityLabel === accessibilityLabel)
   if (!pressable) {
     throw new Error(`Unable to find pressable: ${accessibilityLabel}`)
@@ -153,7 +153,7 @@ async function pressByLabel(
 
 function renderedText(renderer: ReactTestRenderer): string {
   return renderer.root
-    .findAllByType('Text')
+    .findAll((node) => String(node.type) === 'Text')
     .flatMap((node) => node.props.children)
     .join(' ')
 }
@@ -248,6 +248,93 @@ describe('MobileFileExplorerPanel', () => {
       resolveReload?.(ok([entry('src', true), entry('README.md'), entry('CHANGELOG.md')]))
     })
     expect(renderedText(renderer)).toContain('CHANGELOG.md')
+  })
+
+  it('refreshes an expanded folder after reconnect instead of keeping deleted children', async () => {
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('deleted-while-offline.ts')]
+    })
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('deleted-while-offline.ts')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('created-while-offline.ts')]
+    })
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+
+    expect(renderedText(renderer)).toContain('created-while-offline.ts')
+    expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('created-while-offline.ts')
+    act(() => renderer.unmount())
+  })
+
+  it('rereads a previously cached collapsed folder when reopened after reconnect', async () => {
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('deleted-while-offline.ts')]
+    })
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+    mockTransport.client = createMockClient({
+      '': [entry('src', true)],
+      src: [entry('created-while-offline.ts')]
+    })
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+    await pressByLabel(renderer, 'Open folder src')
+
+    expect(renderedText(renderer)).toContain('created-while-offline.ts')
+    expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
+    act(() => renderer.unmount())
+  })
+
+  it('lets a superseded folder load retry when the reconnect root refresh fails', async () => {
+    let finishOldChild: (response: RpcResponse) => void = () => {}
+    const oldChild = new Promise<RpcResponse>((resolve) => {
+      finishOldChild = resolve
+    })
+    mockTransport.client = {
+      sendRequest: vi.fn(async (_method: string, params: { relativePath: string }) =>
+        params.relativePath === '' ? ok([entry('src', true)]) : oldChild
+      )
+    }
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    mockTransport.client = null
+    mockTransport.connectionState = 'disconnected'
+    await updateExplorer(renderer)
+    const reconnected = {
+      sendRequest: vi.fn(async (): Promise<RpcResponse> => {
+        throw new Error('root refresh failed')
+      })
+    }
+    mockTransport.client = reconnected
+    mockTransport.connectionState = 'connected'
+    await updateExplorer(renderer)
+    await act(async () => {
+      finishOldChild(ok([entry('obsolete.ts')]))
+      await oldChild
+    })
+
+    reconnected.sendRequest.mockResolvedValue(ok([entry('current.ts')]))
+    await pressByLabel(renderer, 'Retry loading src')
+    expect(renderedText(renderer)).toContain('current.ts')
+    expect(renderedText(renderer)).not.toContain('obsolete.ts')
+    act(() => renderer.unmount())
   })
 
   it('keeps the cached tree when a post-reconnect root refresh fails', async () => {
@@ -411,9 +498,11 @@ describe('MobileFileExplorerPanel', () => {
 
     function retryButtons(renderer: ReactTestRenderer) {
       return renderer.root
-        .findAllByType('Pressable')
+        .findAll((node) => String(node.type) === 'Pressable')
         .filter((node) =>
-          node.findAllByType('Text').some((text) => text.props.children === 'Retry')
+          node
+            .findAll((node) => String(node.type) === 'Text')
+            .some((text) => text.props.children === 'Retry')
         )
     }
 

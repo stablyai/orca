@@ -22,7 +22,7 @@ export const resolveBrowserNetworkExecutionRoute: BrowserNetworkExecutionRouteRe
     return wslRoute.resolveWslBrowserNetworkExecutionRoute(context)
   }
   const [{ getSshConnectionManager }, authority, sshRoute] = await Promise.all([
-    import('../ssh/ssh-target-registry'),
+    import('../ssh/targets/ssh-target-registry'),
     import('../ssh/ssh-provider-authority'),
     import('./ssh-browser-network-execution-route')
   ])

@@ -18,7 +18,8 @@ import {
   spellProviderTimelineKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { acpLaunchSpecFor } from './acp-launch-specs'
+import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from './acp-launch-specs'
+import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 
@@ -60,11 +61,7 @@ function journalWithTurns(...providerSessions: string[]): JournalLoad {
   return { state, newer: null, damage: null }
 }
 
-function resolver(
-  record: AgentSessionRecord,
-  fullAccess = false,
-  readJournal: () => JournalLoad | null = () => null
-) {
+function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | null = () => null) {
   const searched: (string | null | undefined)[] = []
   return {
     searched,
@@ -74,7 +71,6 @@ function resolver(
       resolveWorkspacePath: async () => '/repo/worktree',
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       resolveLaunchEnv: () => ({ GROK_EXTRA: '1' }),
-      resolveFullAccess: () => fullAccess,
       resolveCommand: (command, options) => {
         searched.push(options?.pathEnv)
         return `/resolved/${command}`
@@ -109,14 +105,24 @@ describe('ACP launch resolution', () => {
     const readJournal = () => {
       throw new Error('old history must not be sampled for resume')
     }
-    const launch = await resolver(value, false, readJournal).resolve({ identity })
+    const launch = await resolver(value, readJournal).resolve({ identity })
     expect(launch.resume).toBeNull()
   })
 
-  it('asks the agent to approve everything only under full access', async () => {
-    const launch = await resolver(grokRecord(), true).resolve({ identity })
-    expect(launch.args).toContain('--always-approve')
+  it("asks the agent to approve everything only under the chat's full access", async () => {
+    const start = (permissionMode: 'ask' | 'full-access') =>
+      resolver(grokRecord()).resolve({ identity, spawnToken: 'token', permissionMode })
+    expect((await start('full-access')).args).toContain('--always-approve')
+    expect((await start('ask')).args).not.toContain('--always-approve')
   })
+
+  // A chat's mode is its only full-access path, so an ACP agent with no modes would always ask.
+  it.each(ACP_LAUNCH_SPECS.map((spec) => spec.agent))(
+    'gives %s chats a Full access mode',
+    (agent) => {
+      expect(agentChatPermissionModes(agent)?.modes).toContain('full-access')
+    }
+  )
 
   it('resumes the chain head by its key, possibly unsaved only when this chat created it', async () => {
     const link = (origin: 'created' | 'resumed') => ({
@@ -139,7 +145,6 @@ describe('ACP launch resolution', () => {
     expect(created.resume?.mayBeUnsaved()).toBe(true)
     const resumed = await resolver(
       grokRecord({ providerHandleChain: [link('created'), link('resumed')] }),
-      false,
       () => journalWithTurns()
     ).resolve({ identity })
     expect(resumed.resume).toMatchObject({ sessionId: 'acp-1', key })
@@ -159,9 +164,9 @@ describe('ACP launch resolution', () => {
       ]
     })
     const unsaved = async (readJournal: () => JournalLoad | null) =>
-      (await resolver(created, false, readJournal).resolve({ identity })).resume?.mayBeUnsaved()
+      (await resolver(created, readJournal).resolve({ identity })).resume?.mayBeUnsaved()
     const reads: string[] = []
-    const launch = await resolver(created, false, () => {
+    const launch = await resolver(created, () => {
       reads.push('read')
       return null
     }).resolve({ identity })
@@ -238,7 +243,7 @@ describe('ACP launch resolution', () => {
       return load
     }
     const losses = async (record: AgentSessionRecord, readJournal: () => JournalLoad | null) =>
-      (await resolver(record, false, readJournal).resolve({ identity })).resume?.unannouncedLosses()
+      (await resolver(record, readJournal).resolve({ identity })).resume?.unannouncedLosses()
 
     const reads: string[] = []
     // A chain that lost nothing never reads the journal.

@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename } from '@/lib/path'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isOpenFileOnMoveOwner, type EditorMoveOwner } from '@/lib/open-editor-move-owner'
 import {
   buildDiffEditorFileId,
   buildOwnedEditorFileId,
@@ -192,25 +192,25 @@ export function remapOpenEditorTabsForPathChange({
   toPath,
   worktreePath,
   worktreeId,
+  owner,
   moveOperationId
 }: {
   fromPath: string
   toPath: string
   worktreePath: string
   worktreeId?: string
+  /** The host the rename ran on; only tabs whose own owner it is are retargeted. */
+  owner: EditorMoveOwner
   /** Passed by the move coordinator so dirty destinations get a content-verify
    * gate + provenance installed atomically with the re-home. */
   moveOperationId?: string
 }): RekeyOpenFilesResult {
   const state = useAppStore.getState()
-  // The rename only touched the initiating execution host. The same absolute
-  // path can be open on a DIFFERENT host (a second SSH connection, or local vs
-  // runtime) as a distinct physical file — never retarget those tabs.
-  const initiatingHostId = getExecutionHostIdForWorktree(state, worktreeId)
+  // The rename only touched its own host. The same absolute path can be open on another host (a
+  // second SSH connection, local vs runtime, or a same-id twin) as a distinct file.
   const filesToMove = state.openFiles.filter(
     (file) =>
-      isPathInsideOrEqual(fromPath, file.filePath) &&
-      getExecutionHostIdForWorktree(state, file.worktreeId) === initiatingHostId
+      isPathInsideOrEqual(fromPath, file.filePath) && isOpenFileOnMoveOwner(state, file, owner)
   )
   if (filesToMove.length === 0) {
     return { ok: true }

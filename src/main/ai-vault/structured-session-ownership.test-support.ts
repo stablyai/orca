@@ -1,9 +1,11 @@
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -55,6 +57,35 @@ export function installOwnership(
           }
         ]
       }
+    }
+  } as never)
+}
+
+/** A host whose one chat, `chat-1`, owns `handle`'s conversation, and whose adapter copies a
+ *  conversation through `copy`. */
+export function installCopyingChat(
+  handle: AgentSessionProviderHandle,
+  copy: StructuredAgentSessionAdapter['copyConversation'],
+  otherRecords: AgentSessionRecord[] = []
+): void {
+  const lease = { ...agentSessionLeaseFixture(), sessionId: 'chat-1' }
+  const fixture = agentSessionRecordFixture(lease)
+  const record = {
+    ...fixture,
+    sessionId: 'chat-1',
+    provider: handle.agent,
+    location: { ...fixture.location, workspaceId: 'workspace-1' },
+    providerHandleChain: [{ ...fixture.providerHandleChain[0]!, handle }],
+    lease
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a copy reads only `deps.store` and `deps.adapter.copyConversation`; the rest of the host is never reached.
+  setStructuredAgentSessionHost({
+    deps: {
+      store: {
+        listRecords: () => [record, ...otherRecords],
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null)
+      },
+      adapter: { copyConversation: copy }
     }
   } as never)
 }

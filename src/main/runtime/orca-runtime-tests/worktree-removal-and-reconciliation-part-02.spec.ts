@@ -42,6 +42,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Why: these fixtures register an SSH provider, which models a connected relay session — and a
 // connected session has always read the host's `$HOME`. The removal guards refuse without it.
@@ -394,7 +395,9 @@ describe('OrcaRuntimeService', () => {
       })
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
     } finally {
       gitSpy.mockRestore()
     }

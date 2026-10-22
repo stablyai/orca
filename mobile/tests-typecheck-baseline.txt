@@ -2,7 +2,6 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # an unchecked test is one whose type-level pins prove nothing.
 # Regenerate/prune: node scripts/check-tests-typecheck-ratchet.mjs --prune
-src/accounts-route-reset-credit.test.ts
 src/browser/browser-command-reply-schema.test.ts
 src/browser/mobile-browser-frameless-stream.test.tsx
 src/components/CodexResetCreditAction.test.ts
@@ -11,7 +10,6 @@ src/components/MobileHomeQuickActions.test.ts
 src/components/MobileHostCard-truthful-status.test.tsx
 src/components/MobileHostCard.test.ts
 src/components/MobileMarkdown.file-links.test.ts
-src/components/MobileRichMarkdownEditor.test.tsx
 src/components/NewWorktreeModal.test.tsx
 src/components/PickerModal.accessibility.test.ts
 src/components/WorktreeAgentList.test.tsx
@@ -23,11 +21,9 @@ src/components/mobile-agent-icon-gradient.test.ts
 src/components/pr-sidebar/PRCommentsSection.test.ts
 src/diagnostics/connection-diagnostics-submission.test.ts
 src/dictation/mobile-dictation-setup.test.ts
-src/files/MobileFileExplorerPanel.test.ts
 src/files/MobileFileMarkdownPreview.test.ts
 src/hooks/mobile-dictation-desktop-start.test.ts
 src/host-edit-route-accessibility.test.ts
-src/host-edit-save-flow.test.ts
 src/mock-server-key-pair.test.ts
 src/notifications/notification-consent-ownership.test.ts
 src/notifications/push-dismissal-native-races.test.ts
@@ -47,7 +43,6 @@ src/session/MobileNativeChatQuestion.test.tsx
 src/session/MobileNativeChatSessionOptionPickers.test.ts
 src/session/MobileNativeChatSessionOptionRows.test.ts
 src/session/MobileNativeChatTurnStatus.test.ts
-src/session/MobileNativeChatView.test.ts
 src/session/QuickCommandsList.test.ts
 src/session/QuickCommandsSheet.test.ts
 src/session/ai-vault-resume-launch.test.ts
@@ -70,7 +65,6 @@ src/settings/native-notification-delivery-settings.test.tsx
 src/settings/notification-display-test.test.tsx
 src/settings/settings-screen-state.test.tsx
 src/settings/voice-settings-poller-refresh.test.tsx
-src/source-control/MobileGitHistoryList.test.tsx
 src/source-control/mobile-branch-compare.test.ts
 src/source-control/mobile-create-pr-action.test.ts
 src/source-control/mobile-git-status.test.ts

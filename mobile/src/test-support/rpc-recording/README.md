@@ -104,7 +104,7 @@ A listener that throws on a frame is recorded as a `stream-listener-crash` effec
 failing the suite, the same rule the crash boundary holds for a screen and the unhandled-rejection
 window holds for a detached effect. Only three listeners check the payload is an object before
 reading its `type` — the two `runtime.clientEvents` ones and the structured agent session's, which
-guards with `isSubscribeEvent` in `use-mobile-structured-agent-state.ts` — so without this every
+guards with `isSubscribeEvent` in `mobile-structured-transcript-subscription.ts` — so without this every
 other subscribing family died on the matrix's `result-absent` and `result-null` partitions — the
 two shapes a stream listener is most likely to be wrong about were the only ones the oracle could
 not record. The scenario's own faults
@@ -175,14 +175,6 @@ write, or ahead of a subscribe, moves no list and no golden notices. A subscribe
 of the two, because it publishes synchronously while a request first waits for connected: swapping
 `client.subscribe` and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload
 order byte-identical and moves only the ordinals.
-Scheduling the journal write in `codex-reset-attempt-journal.ts` on a timer instead of awaiting it
-moved none of the 520 goldens before the ordinal existed and moves two now,
-`codex-reset-credit-consumed` and its reply matrix. A request takes its ordinal at the logical
-`sendRequest` call, not when the physical payload is published, so the two stamps differ whenever
-the send waited for connected. What the ordinal cannot see is a defer shorter than the product's own
-await chain: dropping that `await`, or deferring the write by one microtask, still lands it before
-the send, because resolving the journal's promise chain costs more microtask ticks than the defer
-saved.
 
 `ordinal` replaced `sent`, a count of the requests sent at write time. A request count orders
 payloads and effects against sends, never against each other, so it saw nothing at all in a family

@@ -20,7 +20,10 @@ import {
 } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
@@ -484,6 +487,7 @@ describe('deferred structured agent-session event sink', () => {
       agentJournalItemKey(identity(0))
     ])
     await journal.close()
+    closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
 
@@ -577,7 +581,7 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
@@ -601,7 +605,7 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
@@ -637,7 +641,10 @@ describe('producer linkage reaches the journal through every append path', () =>
     // A control, not a pin. Absence is the claim, so the keys must be missing
     // rather than present-and-undefined: a reader holding this options object
     // would read `agentId: undefined` as a key that exists.
-    expect(journalAppendOptions).toEqual([{ fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }])
+    // A provider observation names the generation that produced it: the bound fence.
+    expect(journalAppendOptions).toEqual([
+      { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    ])
     deferred.close()
   })
 })

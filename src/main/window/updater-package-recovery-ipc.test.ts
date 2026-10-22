@@ -67,7 +67,7 @@ vi.mock('../ipc/ui', async (importOriginal) => ({
   isTrustedUIRenderer: (sender: unknown) => isTrustedUIRendererMock(sender)
 }))
 
-import { registerUpdaterHandlers } from './attach-main-window-services'
+import { registerUpdaterHandlers } from './main-window-updater'
 
 const RECOVERY_CHANNELS = [
   'updater:getLinuxPackageInstallInstructions',

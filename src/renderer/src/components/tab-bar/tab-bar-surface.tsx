@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
+import { ProjectedAgentMenuItems } from './QuickLaunchButton'
 import TabBarCreateEntry from './TabBarCreateEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
@@ -67,7 +67,6 @@ export function renderTabBarSurface({
     showMobileEmulatorIntroCallout,
     windowsTerminalCapabilities,
     defaultWindowsPowerShellImplementation,
-    agentLaunchOptions,
     newTerminalShortcut,
     newBrowserShortcut,
     newSimulatorShortcut,
@@ -75,6 +74,9 @@ export function renderTabBarSurface({
     openMarkdownShortcut
   } = runtime
   const {
+    agentMenu,
+    agentLaunchOptions,
+    launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,
     setCreateMenuQuery,
@@ -84,7 +86,6 @@ export function renderTabBarSurface({
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
-    queueTerminalTabFocusAfterNewTabMenuClose,
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
@@ -116,7 +117,7 @@ export function renderTabBarSurface({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              className="mx-0.5 my-auto h-6 w-5 @max-[260px]/tab-strip:hidden"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               aria-label={translate(
                 'auto.components.tab.bar.TabBar.7a9b4af2af',
@@ -183,7 +184,7 @@ export function renderTabBarSurface({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="mx-0.5 my-auto h-6 w-5 text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-35"
+              className="mx-0.5 my-auto h-6 w-5 @max-[260px]/tab-strip:hidden"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               aria-label={translate(
                 'auto.components.tab.bar.TabBar.232e075b07',
@@ -238,7 +239,7 @@ export function renderTabBarSurface({
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
                 agentOptions={agentLaunchOptions}
-                onLaunchAgent={launchAgentFromNewTabEntry}
+                onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
                   onNewTerminalTab()
@@ -277,11 +278,7 @@ export function renderTabBarSurface({
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
-              <QuickLaunchAgentMenuItems
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
-              />
+              <ProjectedAgentMenuItems model={agentMenu} runLaunch={launchAgentRow} />
             </>
           ) : null}
         </DropdownMenuContent>

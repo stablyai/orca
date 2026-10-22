@@ -44,14 +44,14 @@ vi.mock('./connection-log-background-flush', () => ({
   subscribeConnectionLogBackgroundFlush: () => () => {}
 }))
 
+import { RpcClientProvider } from './client-context'
 import {
-  RpcClientProvider,
   useDisconnectHostClient,
   useForceReconnect,
   useHostClient,
   usePrimeHosts,
   useRefreshHostClient
-} from './client-context'
+} from './host-client-hooks'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'

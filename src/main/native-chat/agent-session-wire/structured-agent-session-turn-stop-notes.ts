@@ -5,15 +5,16 @@
 import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 export const STOP_NOTE_CANCELLATION_REQUESTED = 'Cancellation requested.'
 
-/** The turn a Stop is about: the one it named, else the one running when it is read. */
+/** The turn a Stop is about: the one it named, else the live generation's running turn. */
 export function structuredAgentSessionStoppedTurnId(
-  journal: Pick<AgentSessionJournal, 'activeTurnId'>,
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>,
   namedTurnId: string | undefined
 ): string | null {
-  return namedTurnId ?? journal.activeTurnId()
+  return namedTurnId ?? work.activeTurnId()
 }
 
 /** A Stop names a turn the journal does not show running, as a phone does once that turn ended. */
@@ -28,17 +29,17 @@ export function structuredAgentSessionStopNamesTurnNotLive(
  *  that is not the live one. A named turn the journal never had may still be opening, while the
  *  agent works on the send it opens. */
 export function structuredAgentSessionStopNamesEndedTurn(
-  journal: Pick<AgentSessionJournal, 'activeTurnId' | 'snapshot' | 'stops'>,
-  namedTurnId: string | undefined,
-  working: boolean
+  journal: Pick<AgentSessionJournal, 'snapshot' | 'stops'>,
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId' | 'working'>,
+  namedTurnId: string | undefined
 ): boolean {
-  const live = journal.activeTurnId()
+  const live = work.activeTurnId()
   if (namedTurnId === undefined || namedTurnId === live) {
     return false
   }
   return (
     live !== null ||
-    !working ||
+    !work.working() ||
     journal.stops.turnWasRemoved(namedTurnId) ||
     structuredAgentSessionNamedTurnScope(journal, namedTurnId) !== null
   )

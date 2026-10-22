@@ -12,7 +12,12 @@ export type TerminalLeafMoveRequest = {
 
 export type TerminalLeafMoveResult =
   /** Main moved the leaf and every pane-keyed record into the target tab in one durable write. */
-  | { status: 'moved'; ptyId: string | null }
+  | {
+      status: 'moved'
+      ptyId: string | null
+      /** The new tab's id when main named it (layout-owner builds); else the request's. */
+      tabId?: string
+    }
   /** Main's session never held the leaf, so there is nothing to move there. */
   | { status: 'not_held' }
   | {

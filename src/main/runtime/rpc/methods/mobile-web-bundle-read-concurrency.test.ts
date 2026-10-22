@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * The behaviours that only exist while a read is genuinely in flight or genuinely failing: the
  * per-connection cap, an abort that arrives mid-read, and a verify whose open throws. All three go

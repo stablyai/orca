@@ -110,7 +110,7 @@ function statementsFrom(body, start) {
           break
         }
         depth -= 1
-      } else if (char === '\n' && depth === 0) {
+      } else if (depth === 0 && (char === '\n' || (char === ',' && match[0].startsWith('=>')))) {
         break
       }
     }
@@ -355,7 +355,7 @@ const ADVICE =
   "Route by the resource's owner. Only a creation flow with no source row may use defaultCreationHost."
 
 export function isScannedPath(rel) {
-  return /\.(ts|tsx)$/.test(rel) && !/\.(test|spec)\.tsx?$/.test(rel)
+  return /\.(ts|tsx)$/.test(rel) && !/\.(test|spec)(?:-fixture)?\.tsx?$/.test(rel)
 }
 
 // One read and one discovery per root per run; `--prune` then `main` reuse them.

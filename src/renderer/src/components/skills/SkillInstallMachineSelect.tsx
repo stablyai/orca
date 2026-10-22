@@ -1,10 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { HostCombobox } from '../host-picker/HostCombobox'
 
 export function SkillInstallMachineSelect(props: {
   value: string
@@ -16,23 +10,23 @@ export function SkillInstallMachineSelect(props: {
   sshTargets: readonly { id: string; label: string; connected: boolean }[]
 }): React.JSX.Element {
   return (
-    <Select value={props.value} onValueChange={props.onChange}>
-      <SelectTrigger className="w-full sm:w-64">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="local">{props.localLabel}</SelectItem>
-        {props.environments.map((environment) => (
-          <SelectItem key={environment.id} value={environment.id}>
-            {environment.name}
-          </SelectItem>
-        ))}
-        {props.sshTargets.map((target) => (
-          <SelectItem key={target.id} value={target.id} disabled={!target.connected}>
-            {target.label} {target.connected ? props.sshLabel : props.disconnectedLabel}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <HostCombobox
+      value={props.value}
+      onChange={props.onChange}
+      className="sm:w-64"
+      options={[
+        { id: 'local', label: props.localLabel },
+        ...props.environments.map((environment) => ({
+          id: environment.id,
+          label: environment.name
+        })),
+        ...props.sshTargets.map((target) => ({
+          id: target.id,
+          label: target.label,
+          detail: target.connected ? props.sshLabel : props.disconnectedLabel,
+          disabled: !target.connected
+        }))
+      ]}
+    />
   )
 }

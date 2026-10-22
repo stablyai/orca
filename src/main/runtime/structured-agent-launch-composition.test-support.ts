@@ -41,6 +41,7 @@ export type LaunchTestSources = Pick<StructuredAgentLaunchSources, 'store'> & {
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   prepareVisuals?: PrepareNativeChatVisuals
+  refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
 }
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -62,7 +63,10 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
     }),
     ...(deps.resolveLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveLaunchEnv } : {}),
     ...(deps.resolveCommandSettings ? { resolveCommandSettings: deps.resolveCommandSettings } : {}),
-    ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {})
+    ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {}),
+    ...(deps.refreshAfterMissingProgram
+      ? { refreshAfterMissingProgram: deps.refreshAfterMissingProgram }
+      : {})
   }
 }
 
@@ -106,12 +110,14 @@ export function createCodexStructuredLaunchResolver(
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createAcpStructuredLaunchResolver(
   spec: AcpLaunchSpec,
-  deps: LaunchTestSources & AcpStructuredLaunchPartDeps
+  deps: LaunchTestSources &
+    Omit<AcpStructuredLaunchPartDeps, 'dataDirectory'> &
+    Partial<Pick<AcpStructuredLaunchPartDeps, 'dataDirectory'>>
 ) {
   return withTestSpawnToken(
     acpStructuredAgentDefinition(spec),
     launchSources(deps),
-    acpStructuredLaunchPart(spec, deps),
+    acpStructuredLaunchPart(spec, { dataDirectory: '/orca-data', ...deps }),
     null
   )
 }

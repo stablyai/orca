@@ -198,7 +198,8 @@ export class DaemonServer {
       isIdle: () => this.isIdle(),
       disposeResources: () => this.disposeResources(),
       onIdleShutdown: options.onIdleShutdown ?? (() => {}),
-      onRpcShutdown: options.onRpcShutdown ?? (() => {})
+      onRpcShutdown: options.onRpcShutdown ?? (() => {}),
+      onShutdownRequested: options.onShutdownRequested ?? (() => {})
     })
     this.admission = new DaemonTerminalAdmission({
       host: this.host,

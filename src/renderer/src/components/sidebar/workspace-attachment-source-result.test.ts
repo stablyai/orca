@@ -159,6 +159,27 @@ describe('attachment source conversion', () => {
       ).toBe(false)
     }
   )
+  it('detects a duplicate Jira link by site identity, not account label', () => {
+    const jira = (accountLabel: string, siteId: string): WorkspaceAttachment => ({
+      provider: 'jira',
+      type: 'issue',
+      number: 0,
+      jiraIdentifier: 'APP-1',
+      // Board URLs carry no provable issue identity, so source context decides.
+      url: 'https://acme.atlassian.net/jira/software/projects/APP/boards/1?selectedIssue=APP-1',
+      taskSourceContext:
+        normalizeTaskSourceContext({
+          provider: 'jira',
+          projectId: 'account-backed-task-source',
+          hostId: 'local',
+          providerIdentity: { provider: 'jira', siteId, siteUrl: 'https://acme.atlassian.net' },
+          accountLabel
+        }) ?? undefined
+    })
+    const saved = jira('dev@acme.example', 'site-a')
+    expect(isWorkspaceAttachmentLinked([saved], jira('Acme', 'site-a'))).toBe(true)
+    expect(isWorkspaceAttachmentLinked([saved], jira('dev@acme.example', 'site-b'))).toBe(false)
+  })
   it('only enriches the same symbolic identifier and URL source', () => {
     const task: WorkspaceAttachment = {
       provider: 'linear',

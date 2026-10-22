@@ -1,3 +1,8 @@
+import {
+  onboardingLanguagePickerOpenedSchema,
+  onboardingLanguageChangedSchema,
+  onboardingLanguageRequestedSchema
+} from './telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
 import {
   agentErrorSchema,
@@ -79,10 +84,7 @@ import {
   onboardingStepViewedSchema,
   onboardingTaskSourcesSnapshotSchema,
   onboardingTourOutcomeEventSchema,
-  onboardingWindowsTerminalSnapshotSchema,
-  smartSortClass1PromotionSchema,
-  smartSortClassDistributionSchema,
-  smartToRecentSwitchSchema
+  onboardingWindowsTerminalSnapshotSchema
 } from './telemetry-onboarding-event-schemas'
 import {
   addRepoDefaultCheckoutHandoffSchema,
@@ -172,6 +174,9 @@ export const eventSchemas = {
   feature_wall_feature_selected: featureWallFeatureSelectedSchema,
   feature_wall_docs_clicked: featureWallDocsClickedSchema,
 
+  onboarding_language_picker_opened: onboardingLanguagePickerOpenedSchema,
+  onboarding_language_changed: onboardingLanguageChangedSchema,
+  onboarding_language_requested: onboardingLanguageRequestedSchema,
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,
   onboarding_step_completed: onboardingStepCompletedSchema,
@@ -208,9 +213,5 @@ export const eventSchemas = {
   ssh_host_server_conversion: sshHostServerConversionSchema,
   ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
   ssh_host_server_move: sshHostServerMoveSchema,
-  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
-
-  smart_sort_class_distribution: smartSortClassDistributionSchema,
-  smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
-  smart_to_recent_switch: smartToRecentSwitchSchema
+  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema
 } as const

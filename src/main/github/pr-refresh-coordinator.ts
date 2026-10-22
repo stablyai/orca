@@ -18,7 +18,7 @@ import {
 } from './pr-refresh-event-publisher'
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer } from './pr-refresh-queue-drainer'
+import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
@@ -32,6 +32,10 @@ const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, even
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   events.setOutcomeObserver(observer)
+}
+
+export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
+  drainer.setRegistrationCheck(check)
 }
 
 function removeInvisibleVisibleRefreshes(): void {

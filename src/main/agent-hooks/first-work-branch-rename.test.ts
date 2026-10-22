@@ -35,7 +35,7 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: prepareLocalEnvMock
 }))
-vi.mock('../ipc/worktree-logic', () => ({
+vi.mock('../ipc/worktree-branch-name', () => ({
   computeBranchName: computeBranchNameMock,
   getConfiguredBranchPrefix: getConfiguredBranchPrefixMock
 }))
@@ -102,12 +102,15 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // A real journal's sequence only ever advances, so the feed's projection
       // cache must miss on every publish here: this test is about the rename.
       let sequence = 0
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), the provenance reads and runningTurn() of a journal.
       const journal = {
         snapshot: () => ({ items, submissions: [] }),
         stopMarks: { latest: () => null, revision: () => 0 },
         lastActivityAt: () => 1,
-        cursor: () => ({ epoch: 1, sequence: (sequence += 1) })
+        cursor: () => ({ epoch: 1, sequence: (sequence += 1) }),
+        itemFence: () => undefined,
+        wroteBeforeOpen: () => false,
+        runningTurn: () => null
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
       const observe = vi.fn((summary, options) => {
@@ -191,7 +194,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), the provenance reads and runningTurn() of a journal.
     const journal = {
       lastActivityAt: () => 1,
       stopMarks: { latest: () => null, revision: () => 0 },
@@ -208,7 +211,10 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
           }
         ],
         submissions: []
-      })
+      }),
+      itemFence: () => undefined,
+      wroteBeforeOpen: () => false,
+      runningTurn: () => null
     } as unknown as AgentSessionJournal
     const location = {
       executionHostId: 'local' as const,

@@ -6,12 +6,13 @@
  */
 import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
+import { PtyExitProof } from '../pty-exit-proof'
 
 export type OrcadMigrationTerminalVerdict =
   | { verdict: 'exited'; provenPtyIds: string[] }
   /**
    * COMPAT(legacy-relay-bridge, revisit 2027-01-15): relay terminals may still run, and the host
-   * converts anyway. Converting stops nothing; src/main/ssh/legacy-relay-bridge/ keeps serving
+   * converts anyway. Converting stops nothing; src/main/ssh/legacy-relay/ keeps serving
    * these leases' panes from the old relay until each terminal exits.
    */
   | {
@@ -103,9 +104,10 @@ export function terminalsRunElsewhere(proof: OrcadMigrationTerminalVerdict): boo
 }
 
 /**
- * Whoever acts on an exited proof (a conversion or a move) marks the
- * detached and expired leases it covers terminated, so later checks stop reading them as running
- * or unverifiable and the next connect can convert.
+ * Whoever acts on an exited proof (a conversion or a move) marks every lease it covers terminated,
+ * so later checks stop reading them as running or unverifiable and the next connect can convert.
+ * Attached ones too (#29083): only a host-wide census proves exit, and with no relay left on the
+ * host an `attached` row is one an older build never got to detach.
  */
 export function retireProvenExitedLeases(
   store: Pick<Store, 'getSshRemotePtyLeases' | 'markSshRemotePtyLease'>,
@@ -116,9 +118,10 @@ export function retireProvenExitedLeases(
     return
   }
   const proven = new Set(proof.provenPtyIds)
+  const census = PtyExitProof.from('host-census', undefined)
   for (const lease of store.getSshRemotePtyLeases(targetId)) {
-    if ((lease.state === 'detached' || lease.state === 'expired') && proven.has(lease.ptyId)) {
-      store.markSshRemotePtyLease(targetId, lease.ptyId, 'terminated')
+    if (lease.state !== 'terminated' && proven.has(lease.ptyId)) {
+      store.markSshRemotePtyLease(targetId, lease.ptyId, census)
     }
   }
 }

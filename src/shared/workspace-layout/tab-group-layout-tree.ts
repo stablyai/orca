@@ -143,3 +143,49 @@ export function moveGroupLeafBeside(
     buildSplitNode(besideGroupId, groupId, direction, position)
   )
 }
+
+function holdsGroup(node: TabGroupLayoutNode, groupId: string): boolean {
+  return node.type === 'leaf'
+    ? node.groupId === groupId
+    : holdsGroup(node.first, groupId) || holdsGroup(node.second, groupId)
+}
+
+/**
+ * Moves a group's leaf to `side` of the smallest branch holding both `fromGroupId` and
+ * `toGroupId` (one group's leaf when they are the same); null when no branch holds both.
+ */
+export function moveGroupLeafBesideBranch(
+  root: TabGroupLayoutNode,
+  groupId: string,
+  fromGroupId: string,
+  toGroupId: string,
+  side: 'left' | 'right' | 'up' | 'down'
+): TabGroupLayoutNode | null {
+  const leaf: TabGroupLayoutNode = { type: 'leaf', groupId }
+  const direction = side === 'left' || side === 'right' ? 'horizontal' : 'vertical'
+  const leafFirst = side === 'left' || side === 'up'
+  const besideBranch = (node: TabGroupLayoutNode): TabGroupLayoutNode | null => {
+    if (!holdsGroup(node, fromGroupId) || !holdsGroup(node, toGroupId)) {
+      return null
+    }
+    if (node.type === 'split') {
+      const first = besideBranch(node.first)
+      if (first) {
+        return { ...node, first }
+      }
+      const second = besideBranch(node.second)
+      if (second) {
+        return { ...node, second }
+      }
+    }
+    return {
+      type: 'split',
+      direction,
+      first: leafFirst ? leaf : node,
+      second: leafFirst ? node : leaf,
+      ratio: 0.5
+    }
+  }
+  const rest = removeGroupLayoutLeaf(root, groupId)
+  return rest && besideBranch(rest)
+}

@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import type { TaskPageGitHubMutationIntent } from '@/components/task-page-github-work-item-mutation-patches'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { LinearGroupSection } from './task-page-linear-issue-model'
-import { compareNumericLocaleText } from '@/lib/locale-text-collators'
+import { compareNumericLocaleText } from '../../../shared/locale-text-collators'
 export function getLinearPriorityRank(priority: number): number {
   return priority === 0 ? 5 : priority
 }

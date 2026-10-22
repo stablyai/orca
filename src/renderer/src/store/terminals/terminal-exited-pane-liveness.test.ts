@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import { createTestStore, makeTab, makeWorktree } from '../slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../slices/store-session-test-harness'
 

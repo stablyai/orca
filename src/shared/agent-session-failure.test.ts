@@ -88,6 +88,28 @@ describe('reading a failure fact', () => {
     }
   })
 
+  it('keeps a timed-out request through schema admission and drops one it cannot show', () => {
+    const fact = {
+      kind: 'startFailed',
+      requestTimeout: { method: 'thread/start', timeoutMs: 30_000 }
+    }
+    expect(readWholeAgentSessionFailureFact(AgentSessionFailureFactSchema.parse(fact))).toEqual(
+      fact
+    )
+    for (const requestTimeout of [
+      { method: 'thread/start because of <b>', timeoutMs: 30_000 },
+      { method: 'thread/start', timeoutMs: -1 },
+      { method: 'thread/start' }
+    ]) {
+      expect(
+        readWholeAgentSessionFailureFact({ kind: 'startFailed', requestTimeout })
+      ).toBeUndefined()
+      expect(readAgentSessionFailureFact({ kind: 'startFailed', requestTimeout })).toEqual({
+        kind: 'startFailed'
+      })
+    }
+  })
+
   it('keeps what a provider said it is retrying, and only that', () => {
     expect(
       readAgentSessionFailureFact({

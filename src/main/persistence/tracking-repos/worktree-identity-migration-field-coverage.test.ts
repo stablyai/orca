@@ -126,6 +126,11 @@ const REFERENCE_FIXTURES: Partial<Record<SessionField, Partial<WorkspaceSessionS
       'env-1': [{ browserPageId: 'chp', worktreeId: OLD, closedAt: 3 }]
     }
   },
+  pairedTerminalTabCloseIntentsByEnvironment: {
+    pairedTerminalTabCloseIntentsByEnvironment: {
+      'env-1': [{ hostTabIds: ['host-tab'], worktreeId: OLD, closedAt: 3, pairingRevision: 1 }]
+    }
+  },
   activeTabTypeByWorktree: { activeTabTypeByWorktree: { [OLD]: 'terminal' } },
   activeTabIdByWorktree: { activeTabIdByWorktree: { [OLD]: 'tab-1' } },
   unifiedTabs: {

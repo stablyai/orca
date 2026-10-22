@@ -136,7 +136,3 @@ export function resolveAgentWorkspaceExecutionHostId(
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
   return repo ? resolveDeclaredExecutionHost(repo) : null
 }
-
-export function isLocalExecutionHost(hostId: string | null | undefined): boolean {
-  return parseExecutionHostId(hostId)?.kind === 'local'
-}

@@ -32,13 +32,15 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     eligibleRepos,
     hostOptions,
     initialEphemeralVmRecipeId,
+    pendingInitialWorkspaceTarget,
     projectGroups,
     projectHostSetups,
     projects,
-    repoId,
+    repoId: requestedRepoId,
     repos,
     selectedProjectGroup,
     selectedProjectHostSetupOverrideId,
+    selectedProjectHostSetupOverrideHostId,
     settings,
     sshConnectionStates,
     workspaceHostScope,
@@ -104,33 +106,50 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         eligibleRepos,
         projects,
         projectHostSetups,
-        draftRepoId: repoId,
-        projectHostSetupId: selectedProjectHostSetupOverrideId,
+        draftRepoId: requestedRepoId,
+        projectId: pendingInitialWorkspaceTarget?.projectId,
+        hostId: pendingInitialWorkspaceTarget?.hostId,
+        projectHostSetupId:
+          pendingInitialWorkspaceTarget?.projectHostSetupId ?? selectedProjectHostSetupOverrideId,
+        projectHostSetupHostId:
+          pendingInitialWorkspaceTarget?.hostId ??
+          (selectedProjectHostSetupOverrideId ? selectedProjectHostSetupOverrideHostId : null),
         focusedHostScope: workspaceHostScope,
         actionableHostIds
       }),
     [
       actionableHostIds,
       eligibleRepos,
+      pendingInitialWorkspaceTarget,
       projectHostSetups,
       projects,
-      repoId,
+      requestedRepoId,
       selectedProjectHostSetupOverrideId,
+      selectedProjectHostSetupOverrideHostId,
       workspaceHostScope
     ]
   )
 
-  const selectedRepo =
-    selectedWorkspaceTarget.status === 'ready' && selectedWorkspaceTarget.target.repoId === repoId
+  const resolvedRepoId =
+    !isProjectGroupTarget &&
+    pendingInitialWorkspaceTarget &&
+    selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.repoId
+      : requestedRepoId
+
+  const selectedRepo = isProjectGroupTarget
+    ? eligibleRepos.find((repo) => repo.id === resolvedRepoId)
+    : selectedWorkspaceTarget.status === 'ready' &&
+        selectedWorkspaceTarget.target.repoId === resolvedRepoId
       ? selectedWorkspaceTarget.target.repo
-      : eligibleRepos.find((repo) => repo.id === repoId)
+      : undefined
 
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
 
   const selectedRepoExecutionHostId = selectedRepo ? getRepoExecutionHostId(selectedRepo) : null
 
   const selectedRepoHookContextKey = selectedRepo
-    ? JSON.stringify([selectedRepoExecutionHostId ?? 'local', repoId])
+    ? JSON.stringify([selectedRepoExecutionHostId ?? 'local', resolvedRepoId])
     : null
 
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
@@ -266,11 +285,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       status: selectedRepoSshGateInput?.status ?? null
     })
 
-  const repoIdRef = useRef(repoId)
+  const repoIdRef = useRef(resolvedRepoId)
 
   useEffect(() => {
-    repoIdRef.current = repoId
-  }, [repoId])
+    repoIdRef.current = resolvedRepoId
+  }, [resolvedRepoId])
 
   return {
     isProjectGroupTarget,
@@ -289,6 +308,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     folderDetectedIds,
     folderDetectedAgentIds,
     selectedWorkspaceTarget,
+    resolvedRepoId,
     selectedRepo,
     selectedRepoIsGit,
     selectedRepoExecutionHostId,

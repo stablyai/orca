@@ -234,7 +234,8 @@ export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: st
     // Why: persist the UNC root so later Git calls keep routing through the WSL runner.
     return toWindowsWslPath(rootPath, inputWsl.distro)
   }
-  return normalizeRuntimePathSeparators(rootPath)
+  // Why: on POSIX a backslash is a filename character, and git already reports `/` separators.
+  return process.platform === 'win32' ? normalizeRuntimePathSeparators(rootPath) : rootPath
 }
 
 export function isGitRepo(path: string): boolean {

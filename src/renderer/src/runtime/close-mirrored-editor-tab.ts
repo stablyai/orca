@@ -1,11 +1,11 @@
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import type { OpenFile } from '@/store/slices/editor'
 import type { Tab } from '../../../shared/tab-types'
 
-export type MirroredEditorCloseState = WorktreeRuntimeOwnerState & {
+export type MirroredEditorCloseState = WorktreeOperationRouteState & {
   openFiles: readonly OpenFile[]
   unifiedTabsByWorktree: Record<string, Tab[]>
 }
@@ -28,7 +28,8 @@ export function notifyHostOfMirroredEditorClose(
   // Only legacy records need catalog inference; snapshots capture their authoritative runtime owner.
   const runtimeEnvironmentId =
     file.runtimeEnvironmentId === undefined
-      ? getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      ? // Why: closing on a guessed twin would retire the other host's tab; the local close still runs.
+        runtimeEnvironmentIdUnlessTwin(state, worktreeId, 'close a mirrored editor tab on its host')
       : file.runtimeEnvironmentId
   if (!runtimeEnvironmentId?.trim()) {
     return false

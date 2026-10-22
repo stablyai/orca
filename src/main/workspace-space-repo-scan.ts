@@ -1,4 +1,5 @@
 import type { Store } from './persistence'
+import { platform } from 'node:process'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../shared/worktree/types'
@@ -17,7 +18,7 @@ import {
   resolveGitRouteForHost
 } from './providers/execution-host-provider-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
-import { mergeWorktree } from './ipc/worktree-logic'
+import { mergeWorktree } from './ipc/worktree-metadata-merge'
 import { getLocalProjectWorktreeGitOptions } from './project-runtime-git-options'
 import {
   WorkspaceSpaceScanCancelledError,
@@ -26,10 +27,7 @@ import {
   type AsyncLimiter
 } from './workspace-space-scan-control'
 import { createUnavailableWorkspaceSpaceRow } from './workspace-space-worktree-row'
-import {
-  scanLocalWorkspaceSpaceWorktree,
-  type ReadLocalDuDepthOne
-} from './workspace-space-local-scan'
+import { scanLocalWorkspaceSpaceWorktreeViaWorker } from './workspace-space-scan-worker-client'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 
@@ -155,8 +153,7 @@ export async function scanWorkspaceSpaceRepo(args: {
   limiters: WorkspaceSpaceScanLimiters
   progress: WorkspaceSpaceScanProgress
   options: WorkspaceSpaceAnalyzeOptions
-  readLocalDuDepthOne: ReadLocalDuDepthOne
-  normalizeLocalDuPath: (path: string) => string
+  readLocalDuDepthOne: (rootPath: string, signal?: AbortSignal) => Promise<string>
 }): Promise<WorkspaceSpaceRepoScanResult> {
   const { repo, scannedAt, store, limiters, progress, options } = args
   throwIfWorkspaceSpaceScanAborted(options.signal)
@@ -219,16 +216,35 @@ export async function scanWorkspaceSpaceRepo(args: {
               ? `SSH filesystem for "${filesystemRoute.connectionId}" is not connected.`
               : `Host ${filesystemRoute.hostId} is not reachable from this process.`
           )
-        : await limiters.localWorktree(() =>
-            scanLocalWorkspaceSpaceWorktree(
-              repo,
-              worktree,
-              scannedAt,
-              args.readLocalDuDepthOne,
-              args.normalizeLocalDuPath,
-              options.signal
-            )
-          )
+        : await limiters.localWorktree(async () => {
+            let duOutput: string | null = null
+            if (platform !== 'win32') {
+              try {
+                duOutput = await args.readLocalDuDepthOne(worktree.path, options.signal)
+              } catch {
+                throwIfWorkspaceSpaceScanAborted(options.signal)
+              }
+            }
+            try {
+              return await scanLocalWorkspaceSpaceWorktreeViaWorker(
+                repo,
+                worktree,
+                scannedAt,
+                duOutput,
+                options.signal
+              )
+            } catch (error) {
+              throwIfWorkspaceSpaceScanAborted(options.signal)
+              const classified = classifyWorkspaceSpaceError(error)
+              return createUnavailableWorkspaceSpaceRow(
+                repo,
+                worktree,
+                scannedAt,
+                classified.status,
+                classified.message
+              )
+            }
+          })
     reportProgress(
       progress,
       {

@@ -15,7 +15,7 @@ import { recoverPendingSkillTransactions } from '../skills/skill-transaction-sta
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
-import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
+import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -125,12 +125,7 @@ export function initializeMainProcessObservers(): void {
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
-  // Agent-session stats come from hook status transitions, the same truth the
-  // sidebar and dashboard read — never from OSC terminal titles, which miss
-  // hook-only agents and count any spinner TUI as an agent (#10201).
-  const agentSessionRecorder = new AgentSessionTransitionRecorder(state.stats)
-  agentHookServer.subscribeEnrichedStatus((enriched) => agentSessionRecorder.onStatus(enriched))
-  agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
+  feedAgentSessionStats(state.stats, agentHookServer)
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)

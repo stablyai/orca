@@ -10,7 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpVisualsSkillLaunch } from './acp-visuals-skill'
 
 export type AcpLaunchVisualsDeps = {
-  /** Prepares a chat's inline-visuals folder; absent, no chat gets visuals. */
+  /** Prepares a chat's scratch folder for inline visuals; absent, no chat gets visuals. */
   prepareVisuals?: PrepareNativeChatVisuals
   logger?: StructuredAgentSessionLogger
 }

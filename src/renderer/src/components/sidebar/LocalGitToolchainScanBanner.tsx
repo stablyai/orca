@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { findLocalToolchainBlock, type LocalToolchainFailureKind } from './repo-scan-failure'
+import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const FIXES: Record<
   LocalToolchainFailureKind,
@@ -43,14 +44,15 @@ const FIXES: Record<
 /** One sidebar-level notice for local Git toolchain failures that block every local repo at once. */
 export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
   const repos = useAppStore((s) => s.repos)
-  const detectedByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
+  const detectedByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const block = findLocalToolchainBlock(repos, detectedByRepo)
   const [pending, setPending] = React.useState(false)
 
   // Why: reads the store at call time so the focus listener below never needs re-subscribing.
   const rescan = React.useCallback(async () => {
     const state = useAppStore.getState()
-    const blocked = findLocalToolchainBlock(state.repos, state.detectedWorktreesByRepo)?.repos ?? []
+    const blocked =
+      findLocalToolchainBlock(state.repos, selectDetectedWorktreesByRepo(state))?.repos ?? []
     if (blocked.length === 0) {
       return
     }

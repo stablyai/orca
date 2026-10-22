@@ -22,7 +22,7 @@ import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import { useStructuredAgentSessionHostQueuesMessages } from '@/runtime/structured-agent-session-host-capability'
-import type { ProjectGroupingModel } from '@/components/sidebar/worktree-list/grouping/project-grouping'
+import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
 import type { Repo } from '../../../shared/repo-types'
 import {
   buildCapabilitySettingsSections,

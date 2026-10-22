@@ -28,10 +28,10 @@ beforeAll(() => {
 })
 afterEach(() => {
   for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })
-afterAll(() => rmSync(suite, { recursive: true, force: true }))
+afterAll(() => rmSync(suite, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
 
 async function fixture() {
   const root = mkdtempSync(join(suite, 'profile-'))
@@ -144,6 +144,7 @@ describe('large independent recovery copies under process death', () => {
       expect(snapshot(profile.databasePath)).toEqual({ json: selectedJson, revision: 3 })
       expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
     },
-    30_000
+    // Windows CI must copy and flush several 8 MiB databases alongside other persistence suites.
+    process.platform === 'win32' ? 120_000 : 30_000
   )
 })

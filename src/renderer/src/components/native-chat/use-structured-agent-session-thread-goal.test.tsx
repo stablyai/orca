@@ -57,21 +57,40 @@ function mutateWith(answer: MutateCall): {
 function harness(options: {
   journalItems?: readonly AgentJournalRenderItem[]
   support?: { current: AgentJournalThreadGoal | null }
+  reported?: { current: AgentJournalThreadGoal }
   mutate?: StructuredAgentSessionMutate
+  send?: (text: string) => boolean | 'queued'
 }) {
   const mutate = options.mutate ?? mutateWith(async () => null).mutate
   return renderHook(() =>
     useStructuredAgentSessionThreadGoal({
       journalItems: options.journalItems ?? [],
       support: options.support,
-      mutate
+      reported: options.reported,
+      mutate,
+      send: options.send ?? (() => true)
     })
   )
 }
 
 describe('useStructuredAgentSessionThreadGoal', () => {
-  it('is absent until the host reports it can change this session goal', () => {
-    expect(harness({ journalItems: [goalRow(1, GOAL)] }).result.current).toBeNull()
+  it('does not show a persisted goal when the host advertises neither goal field', () => {
+    const fromWindow = harness({ journalItems: [goalRow(1, GOAL)] })
+    expect(fromWindow.result.current).toBeNull()
+  })
+
+  it('shows a goal only the agent changes, which clears by sending it /goal clear', async () => {
+    expect(harness({}).result.current).toBeNull()
+
+    const send = vi.fn(() => true)
+    const { mutate, calls } = mutateWith(async () => null)
+    const { result } = harness({ reported: { current: GOAL }, mutate, send })
+    expect(result.current).toMatchObject({ goal: GOAL, hostChanges: false, pending: false })
+    await act(async () => {
+      await expect(result.current!.change({ kind: 'clear' })).resolves.toBe(true)
+    })
+    expect(send).toHaveBeenCalledWith('/goal clear')
+    expect(calls).not.toHaveBeenCalled()
   })
 
   it('reads the goal off the loaded window, and off the host answer only when the window has none', () => {

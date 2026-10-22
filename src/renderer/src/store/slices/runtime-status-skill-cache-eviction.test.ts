@@ -25,7 +25,7 @@ import {
   resetSkillDiscoveryCacheForTests
 } from '@/hooks/installed-agent-skill-discovery'
 import { getInstalledAgentSkillDiscoveryCacheSizeForTests } from '@/hooks/installed-agent-skill-discovery-cache'
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeStatusTestStore as createTestStore } from './runtime-status.test-fixture'
 
 function environment(id: string, pairingRevision = 1): PublicKnownRuntimeEnvironment {
   return {

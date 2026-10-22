@@ -1,7 +1,6 @@
 // A child the chat outgrew (signed out, or launched with another permission mode) is replaced before
 // the next send: agents read their login and permission mode only when they start.
 
-import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -17,10 +16,7 @@ import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permiss
 
 /** What the check reads of a conversation; every read skips building a snapshot. */
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<
-    AgentSessionJournal,
-    'visitItems' | 'visitItemsWithLinkage' | 'itemFence' | 'activeTurnId' | 'newestTurn'
-  > & {
+  journal: Pick<AgentSessionJournal, 'visitItemsWithLinkage' | 'itemFence' | 'newestTurn'> & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -28,19 +24,14 @@ type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
 const signedOut = (failure: unknown): boolean =>
   readWholeAgentSessionFailureFact(failure)?.kind === 'notSignedIn'
 
-/** The running child itself said it is not signed in: its start, a send it rejected, or a row it
- *  wrote. Each child holds its own fence, so matching it scopes both to this child; a new one has
- *  nothing. `startUnavailable` is the adapter's read of that child's start. */
+/** The running child itself said it is not signed in through a rejected send or a row it wrote.
+ *  Its fence scopes both to this child, so a new one has nothing. */
 export function structuredAgentSessionChildReportedSignedOut(
-  session: OutgrownChildReading,
-  startUnavailable?: AgentSessionUnavailable
+  session: OutgrownChildReading
 ): boolean {
   const { child, journal } = session
   if (!child || child.phase === 'starting' || child.close) {
     return false
-  }
-  if (startUnavailable?.reason === 'notSignedIn') {
-    return true
   }
   if (
     journal
@@ -98,8 +89,10 @@ export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
   session: OutgrownChildReading | undefined,
   deps: {
-    work: StructuredAgentSessionChildWorkReads
-    startUnavailable?: () => AgentSessionUnavailable | undefined
+    /** `childWork`: the records, read only for endings the lead has yet to answer. */
+    work: StructuredAgentSessionChildWorkReads & {
+      childWork: () => readonly AgentChildWorkView[] | undefined
+    }
     /** The mode a start of the chat would launch with now. */
     launchPermission?: () => Promise<AgentChatPermissionMode | null>
     stopAgent: (sessionId: string) => Promise<void>
@@ -109,10 +102,10 @@ export async function retireOutgrownStructuredAgentSessionChild(
   if (
     !session ||
     !(
-      structuredAgentSessionChildReportedSignedOut(session, deps.startUnavailable?.()) ||
+      structuredAgentSessionChildReportedSignedOut(session) ||
       (await launchedWithOtherPermissionMode(session.child, deps.launchPermission))
     ) ||
-    structuredAgentSessionChildHasOpenWork(session.journal, deps.work) ||
+    structuredAgentSessionChildHasOpenWork(deps.work) ||
     owesWakeUp(session.journal, deps.work.childWork())
   ) {
     return

@@ -35,13 +35,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTarget: disconnectRuntimeOwnedSshTargetMock,
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
 }))
 
-vi.mock('./runtime-environments', () => ({
+vi.mock('./runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: invalidateRuntimeEnvironmentTransportMock
 }))
 

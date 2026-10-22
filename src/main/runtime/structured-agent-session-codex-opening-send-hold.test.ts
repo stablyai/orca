@@ -25,7 +25,6 @@ import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wai
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
-import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -43,8 +42,13 @@ import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 // The turns a send or Stop is waiting on to open, so a test knows the wait began.
 const openWaits = vi.hoisted(() => {
-  const turnIds: string[] = []
-  return { turnIds }
+  const state: {
+    turnIds: string[]
+    ended: string[]
+    began: (() => void) | null
+    releaseAll: (() => void) | null
+  } = { turnIds: [], ended: [], began: null, releaseAll: null }
+  return state
 })
 vi.mock('../codex/codex-structured-turn-open-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexTurnOpenWait>()
@@ -52,11 +56,16 @@ vi.mock('../codex/codex-structured-turn-open-wait', async (importOriginal) => {
     ...actual,
     createCodexTurnOpenWaits: () => {
       const waits = actual.createCodexTurnOpenWaits()
+      openWaits.releaseAll = waits.releaseAll
       return {
         ...waits,
         wait: (turnId: string, withinMs: number) => {
           openWaits.turnIds.push(turnId)
-          return waits.wait(turnId, withinMs)
+          const pending = waits.wait(turnId, withinMs)
+          openWaits.began?.()
+          return pending.then(() => {
+            openWaits.ended.push(turnId)
+          })
         }
       }
     }
@@ -124,6 +133,7 @@ async function stop(turnId?: string): Promise<void> {
   if (!stopped.ok) {
     throw new Error(JSON.stringify(stopped.refusal))
   }
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
 }
 
 /** `/compact` as the chat surface runs it; refused while the chat still owes work. */
@@ -137,14 +147,11 @@ async function compact() {
 
 async function settled(): Promise<{
   submissions: readonly AgentJournalSubmission[]
-  owesWork: boolean
 }> {
   await host.flushStreamedEvents(SESSION)
   const snapshot = await host.journalSnapshot(SESSION)
   return {
-    submissions: snapshot.submissions,
-    // The shared rule every surface reads "working" from.
-    owesWork: owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
+    submissions: snapshot.submissions
   }
 }
 
@@ -158,6 +165,9 @@ function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessage
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-opening-send-'))
   openWaits.turnIds.length = 0
+  openWaits.ended.length = 0
+  openWaits.began = null
+  openWaits.releaseAll = null
   answers = 0
   steers = 0
   interrupts = 0
@@ -240,7 +250,10 @@ beforeEach(async () => {
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)
   })
-  const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
+  const attachParams = hostTestAttachParams(null, {
+    providerHandle: undefined,
+    options: { model: MODEL.model }
+  })
   attachParams.envelope.clientOperationId = operationId()
   const attached = await host.attach(CALLER, attachParams)
   if (!attached.ok) {
@@ -250,6 +263,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  openWaits.began = null
+  openWaits.releaseAll?.()
+  vi.useRealTimers()
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
 })
@@ -349,9 +365,10 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect(openWaits.turnIds).toEqual([])
 
     turns.start()
+    expect((await submission(second))?.handedOverAt).toBeUndefined()
+    turns.echo(first)
     await vi.waitFor(async () => expect((await submission(second))?.handedOverAt).toBeDefined())
     await vi.waitFor(() => expect(steers).toBe(1))
-    turns.echo(first)
     says('working on the first', 'reply-1')
     says('more on both', 'reply-2')
 
@@ -385,8 +402,8 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     expect((await submission(b))?.handedOverAt).toBeUndefined()
 
     turns.start()
-    await vi.waitFor(() => expect(steers).toBe(2))
     turns.echo(zero)
+    await vi.waitFor(() => expect(steers).toBe(2))
     says('working on zero', 'reply-0')
 
     expect(await rowScope(a)).toMatchObject({ kind: 'turn' })
@@ -411,7 +428,27 @@ describe("a message queued behind a send whose turn hasn't opened", () => {
     await deliveryAtRest()
     expect((await submission(b))?.handedOverAt).toBeUndefined()
 
-    await stop()
+    const began = Promise.withResolvers<void>()
+    openWaits.began = began.resolve
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    let stopSettled = false
+    const stopping = stop().finally(() => {
+      stopSettled = true
+    })
+    try {
+      await began.promise
+      expect(openWaits.turnIds).toEqual(['turn-2'])
+      await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
+      expect(openWaits.ended).toEqual([])
+      expect(stopSettled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(openWaits.ended).toEqual(['turn-2'])
+    } finally {
+      openWaits.began = null
+      openWaits.releaseAll?.()
+      vi.useRealTimers()
+      await stopping
+    }
 
     await vi.waitFor(async () =>
       expect(verdictOf((await settled()).submissions, b)).toBe('withdrawn')
@@ -496,17 +533,19 @@ describe('a send whose turn Codex answered and never opened', () => {
     expect(verdictOf((await settled()).submissions, first)).toBe('pending')
     expect((await submission(second))?.handedOverAt).toBeUndefined()
     turns.start()
-    await vi.waitFor(() => expect(steers).toBe(1))
     turns.echo(first)
+    await vi.waitFor(() => expect(steers).toBe(1))
     await vi.waitFor(async () =>
       expect(verdictOf((await settled()).submissions, first)).toBe('accepted')
     )
   })
 
-  // Steered in the moment the turn opens, it can be echoed before the send that opened the turn.
-  it('keeps the turn, and its live status, on the send that opened it when the steer echoes first', async () => {
+  // The opener's echo identifies the choices a matching follow-up may steer into.
+  it('keeps the turn and its live status on the opener when a later steer echoes', async () => {
     const { first, second } = await heldBehindAnAnsweredSend()
     turns.start()
+    expect((await submission(second))?.handedOverAt).toBeUndefined()
+    turns.echo(first)
     await vi.waitFor(() => expect(steers).toBe(1))
 
     turns.echo(second)
@@ -514,7 +553,7 @@ describe('a send whose turn Codex answered and never opened', () => {
       expect(verdictOf((await settled()).submissions, second)).toBe('accepted')
     )
 
-    expect(verdictOf((await settled()).submissions, first)).toBe('pending')
+    expect(verdictOf((await settled()).submissions, first)).toBe('accepted')
     const rows = await drawn()
     expect(rows.map((row) => row.text)).toEqual(['look around', 'and check the tests'])
     expect(new Set(rows.map((row) => row.turn))).toEqual(

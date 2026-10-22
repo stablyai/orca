@@ -7,6 +7,7 @@ import type {
 export const CLEAR_PAGE_DOCUMENT_STATE = {
   pageReady: false,
   pagePainted: false,
+  documentLoaded: false,
   pageBackClaimed: false
 } as const
 

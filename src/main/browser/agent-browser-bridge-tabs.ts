@@ -78,6 +78,13 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
 
   // ── Tab management ──
 
+  /** The workspace of every registered tab; the raw tab list carries none. */
+  tabWorktreeIds(): (string | undefined)[] {
+    return [...this.getRegisteredTabs(undefined)].map(([tabId]) =>
+      this.browserManager.getWorktreeIdForTab(tabId)
+    )
+  }
+
   tabList(worktreeId?: string): BrowserTabListResult {
     const tabs = this.getRegisteredTabs(worktreeId)
     // Why: use the per-worktree active tab so listing matches command routing, but read-only — discovery must not mutate active-tab state.

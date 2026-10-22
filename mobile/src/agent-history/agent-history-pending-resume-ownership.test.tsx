@@ -51,7 +51,7 @@ vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null })
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ push: notifications.push, back: vi.fn(), canGoBack: () => false })
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: state.client, state: state.connection }),
   useForceReconnect: () => vi.fn()
 }))

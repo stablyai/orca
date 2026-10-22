@@ -117,7 +117,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
             requestedAt: Date.now(),
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
 
         const started = () =>
           events.flatMap((event) =>

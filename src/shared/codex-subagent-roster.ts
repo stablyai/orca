@@ -1,6 +1,5 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   type AgentSubagentSnapshot
@@ -47,9 +46,6 @@ export function upsertCodexSubagent(
     existing.description = description ?? existing.description
     existing.model = model ?? existing.model
     existing.state = fields.state
-    return
-  }
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
     return
   }
   roster.set(normalizedId, {

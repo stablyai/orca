@@ -17,7 +17,7 @@ import {
   typeInTerminal,
   withManagedHost
 } from './helpers/orcad-managed-workspace'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 skipUnlessManagedDockerHost()
 test.skip(process.platform === 'win32', 'The Docker SSH host uses POSIX tooling')

@@ -66,7 +66,8 @@ describe('structured agent session status feed', () => {
 
   it('never subscribes, and never retries, against a host without the status feed', async () => {
     mocks.supportsCapability.mockResolvedValue(false)
-    getStructuredAgentSessionStatusFeed(REMOTE).activate()
+    const feed = getStructuredAgentSessionStatusFeed(REMOTE)
+    feed.activate()
 
     await vi.advanceTimersByTimeAsync(0)
     expect(mocks.supportsCapability).toHaveBeenCalledWith(
@@ -75,10 +76,11 @@ describe('structured agent session status feed', () => {
     )
     expect(mocks.subscribeStatus).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+    expect(feed.getSessionSleepState('session-1')).toBeNull()
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(mocks.subscribeStatus).not.toHaveBeenCalled()
-    expect(mocks.supportsCapability).toHaveBeenCalledOnce()
+    expect(mocks.supportsCapability).toHaveBeenCalledTimes(2)
   })
 
   it('subscribes once the remote host advertises the status feed', async () => {
@@ -91,14 +93,20 @@ describe('structured agent session status feed', () => {
 
   it('reconnects when the capability probe fails, which is not an answer', async () => {
     mocks.supportsCapability.mockRejectedValue(new Error('relay unreachable'))
-    getStructuredAgentSessionStatusFeed(REMOTE).activate()
+    const feed = getStructuredAgentSessionStatusFeed(REMOTE)
+    feed.activate()
 
     await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.supportsCapability).toHaveBeenCalledOnce()
+    expect(mocks.supportsCapability).toHaveBeenCalledTimes(2)
 
     await vi.advanceTimersByTimeAsync(300)
-    expect(mocks.supportsCapability).toHaveBeenCalledTimes(2)
+    expect(mocks.supportsCapability).toHaveBeenCalledTimes(4)
     expect(mocks.subscribeStatus).not.toHaveBeenCalled()
+    expect(feed.getSessionSleepState('session-1')).toBeUndefined()
+    mocks.supportsCapability.mockResolvedValue(true)
+    await vi.advanceTimersByTimeAsync(500)
+    hostEmit()({ type: 'snapshot', sessions: [{ ...summary('session-1'), sleptAt: 5 }] })
+    expect(feed.getSessionSleepState('session-1')).toBe(5)
   })
 
   it('probes nothing for a local host, which is this build', async () => {
@@ -107,6 +115,26 @@ describe('structured agent session status feed', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
     expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
+  })
+
+  it('keeps Sleep unknown through naming metadata until the full status answer', async () => {
+    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const naming: AgentSessionStatusEvent = {
+      type: 'snapshot',
+      sessions: [],
+      namingActiveSessionIds: []
+    }
+    hostEmit()(naming)
+    expect(feed.getNamingActive('session-1')).toBe(false)
+    expect(feed.getSessionSleepState('session-1')).toBeUndefined()
+    hostEmit()({ type: 'snapshot', sessions: [{ ...summary('session-1'), sleptAt: 5 }] })
+    hostEmit()(naming)
+    expect(feed.getSessionSleepState('session-1')).toBe(5)
+    hostEmit()({ type: 'snapshot', sessions: [] })
+    expect(feed.getSessionSleepState('session-2')).toBeNull()
+    expect(feed.getSessionSleepState('session-1')).toBe(5)
   })
 
   it('merges a snapshot over the cached rows instead of retracting them', async () => {

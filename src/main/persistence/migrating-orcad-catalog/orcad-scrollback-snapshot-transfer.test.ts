@@ -1,17 +1,23 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationTerminalScrollbackSnapshot
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import {
   getTerminalScrollbackSnapshotPath,
   type TerminalScrollbackSnapshotStorage
@@ -59,6 +65,30 @@ describe('orcad scrollback snapshot transfer', () => {
     assertOrcadMigrationSnapshotsReady(manifest, storage)
     commitOrcadMigrationSnapshots(manifest, storage)
     expect(readFinal(descriptor)).toEqual(bytes)
+  })
+
+  it('stages through the shared helper at the pre-blob path and with the snapshot codes', () => {
+    const bytes = Buffer.from('pinned layout', 'utf8')
+    const descriptor = snapshot('8', 'tab-8', 'leaf-8', bytes)
+    const manifest = migrationManifest('pinned-path', [descriptor])
+    const state = stagedState(manifest)
+    stage(state, manifest, descriptor, 0, bytes.subarray(0, 6))
+
+    // A host upgraded mid-move must find the staging it wrote before the shared helper existed.
+    const key = createHash('sha256')
+      .update(`${manifest.migrationId}\0${manifest.manifestSha256}`)
+      .digest('hex')
+      .slice(0, 32)
+    const stagingDirectory = join(storage.snapshotRoot ?? '', '.orcad-migration-staging', key)
+    const stagedName = `${descriptor.ref}.${descriptor.sha256}.part`
+    expect(readdirSync(stagingDirectory)).toEqual([stagedName])
+    expect(readFileSync(join(stagingDirectory, stagedName))).toEqual(bytes.subarray(0, 6))
+    expect(() => stage(state, manifest, descriptor, 0, Buffer.from('other!'))).toThrow(
+      /^orcad_migration_snapshot_retry_mismatch$/
+    )
+    expect(() => stage(state, manifest, descriptor, 7, Buffer.from('x'))).toThrow(
+      /^orcad_migration_snapshot_offset_invalid$/
+    )
   })
 
   it('refuses incomplete and digest-mismatched staged bytes', () => {

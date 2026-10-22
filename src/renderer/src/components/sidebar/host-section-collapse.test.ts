@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { makeRepo, makeWorktree } from './worktree-list-lineage-card-test-fixtures'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { addHostSectionRows } from './host-section-rows'
-import { scopeHostSectionCollapse, deferHostSectionCollapse } from './host-section-collapse'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import { addHostSectionRows } from '../../../../shared/sidebar-list/host-section-rows'
+import {
+  scopeHostSectionCollapse,
+  deferHostSectionCollapse
+} from '../../../../shared/sidebar-list/host-section-collapse'
 
 for (const [groupBy, sectionKey, pinned] of [
   ['none', 'pinned', true],
@@ -45,7 +48,8 @@ for (const [groupBy, sectionKey, pinned] of [
         ],
         workspaceHostScope: 'all',
         visibleWorkspaceHostIds: ['local', hostId],
-        defaultHostId: 'local'
+        defaultHostId: 'local',
+        localHostLabel: 'Local Mac'
       })
 
       it('keeps remote pins visible while local pins are collapsed', () => {

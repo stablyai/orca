@@ -23,10 +23,10 @@ const mocks = vi.hoisted(() => ({
   flush: vi.fn(),
   preflight: vi.fn()
 }))
-vi.mock('./orcad-managed-runtime-context', () => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-runtime-context', () => ({
   requireManagedOrcadInfrastructure: mocks.infrastructure
 }))
-vi.mock('./orcad-managed-tunnel', () => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   startOrcadManagedTunnel: mocks.start,
   closeOrcadManagedTunnel: mocks.close,
   ensureOrcadManagedTunnel: mocks.ensure
@@ -34,11 +34,8 @@ vi.mock('./orcad-managed-tunnel', () => ({
 vi.mock('./runtime-ssh-access-verification', () => ({
   verifyRuntimeEnvironmentSshTunnel: mocks.verify
 }))
-import {
-  fingerprintRuntimeSshTarget,
-  linkRuntimeSshAccess,
-  unlinkRuntimeSshAccess
-} from './runtime-ssh-access'
+import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from './runtime-ssh-access'
+import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
 
 const pairing = {
   v: 2 as const,

@@ -4,7 +4,7 @@ import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeNativeChatLaunchDraftResolution
 } from '../../shared/runtime-types'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 type DraftResolutionTombstone = RuntimeNativeChatLaunchDraftResolution & { worktreeId: string }
 
@@ -70,7 +70,7 @@ export class RuntimeNativeChatDraftResolutions {
       const resolution = this.byTabId.get(tab.parentTabId)
       if (
         !resolution ||
-        !runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
+        !worktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
         tab.launchDraft !== resolution.text ||
         tab.launchDraftCreatedAt !== resolution.createdAt
       ) {
@@ -87,7 +87,7 @@ export class RuntimeNativeChatDraftResolutions {
 
   reconcile(snapshot: RuntimeMobileSessionTabsSnapshot): void {
     for (const [tabId, resolution] of this.byTabId) {
-      if (!runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
+      if (!worktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
         continue
       }
       const surfaces = snapshot.tabs.filter(
@@ -108,7 +108,7 @@ export class RuntimeNativeChatDraftResolutions {
 
   private retireFromMobileSnapshot(resolution: DraftResolutionTombstone): void {
     for (const [worktreeId, snapshot] of this.deps.listMobileSnapshots()) {
-      if (!runtimeWorktreeIdsEqual(worktreeId, resolution.worktreeId)) {
+      if (!worktreeIdsEqual(worktreeId, resolution.worktreeId)) {
         continue
       }
       const next = this.applyFence(snapshot)

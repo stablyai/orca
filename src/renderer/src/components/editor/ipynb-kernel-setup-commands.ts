@@ -1,10 +1,11 @@
+import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { venvInterpreterSegments } from '../../../../shared/notebook-venv-location'
 import { quotePowerShellLiteral } from '../../../../shared/powershell-native-argument'
 
 /** Quotes a path for a shell; single quotes are literal in POSIX shells and PowerShell. */
 function shellQuote(path: string, windows: boolean): string {
-  return windows ? quotePowerShellLiteral(path) : `'${path.replaceAll("'", "'\\''")}'`
+  return windows ? quotePowerShellLiteral(path) : quotePosixShell(path)
 }
 
 /** PowerShell runs a quoted program path only through `&`. */

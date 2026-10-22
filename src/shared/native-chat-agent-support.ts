@@ -2,8 +2,7 @@ import type { TuiAgent } from './tui-agent'
 
 export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
 
-/** Agents whose transcripts the native chat view can parse and render, in the
- *  order the settings pane advertises them. */
+/** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
   'openclaude',
@@ -36,6 +35,11 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   return (
     transcriptAgent === 'claude' || transcriptAgent === 'codex' || transcriptAgent === 'opencode'
   )
+}
+
+/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input. */
+export function nativeChatAskRequiresTerminal(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'omp'
 }
 
 export function resolveNativeChatTranscriptAgent(

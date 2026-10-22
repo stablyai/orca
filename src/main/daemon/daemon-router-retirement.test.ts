@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
 import { createAdapter } from './daemon-pty-router-test-fixture'
-import { PROTOCOL_VERSION } from './types'
+import { PROTOCOL_VERSION, type SessionInfo } from './types'
 
 it.each(['inventory', 'protocol', 'spawn', 'live'] as const)(
   'does not reopen admission on a %s retry after partial retirement',
@@ -61,4 +61,21 @@ it('releases a fence left by an incomplete retirement, but never one that retire
   await expect(retirement.requestIdleRetirement()).resolves.toEqual({ state: 'retiring' })
   retirement.releaseFence()
   expect(retirement.admissionClosed).toBe(true)
+})
+
+it('reports the router fence as closed admission while its census is still pending', async () => {
+  const { DaemonPtyRouter } = await import('./daemon-pty-router')
+  const { installDaemonProvider, isDaemonTerminalAdmissionClosed } =
+    await import('./daemon-provider-state')
+  const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+  const census = Promise.withResolvers<SessionInfo[]>()
+  vi.mocked(current.listSessions).mockReturnValueOnce(census.promise)
+  const router = new DaemonPtyRouter({ current, legacy: [] })
+  installDaemonProvider(null, router)
+
+  const retiring = router.requestIdleRetirement()
+  expect(current.isIdleRetirementAdmissionClosed()).toBe(false)
+  expect(isDaemonTerminalAdmissionClosed()).toBe(true)
+  census.resolve([])
+  await retiring
 })

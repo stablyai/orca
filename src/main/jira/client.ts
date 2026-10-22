@@ -7,10 +7,10 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/jira-types'
-import { clearAttachmentImagesForSite } from './attachment-image-cache'
+import { clearAttachmentImagesForSite } from './attachments/image-cache'
 import { acquire, release } from './request-queue'
 import {
-  credentialErrors,
+  getCredentialError,
   deleteToken,
   getSiteFile,
   hasStoredToken,
@@ -24,10 +24,10 @@ import {
   authHeader,
   JiraApiError,
   jiraRequest,
-  requestWithCredentials,
   type JiraClientForSite
 } from './authenticated-request'
 import { getSiteId, normalizeJiraSiteUrl, siteToViewer, toViewer } from './site-identity'
+import { verifyJiraCredentials } from './credential-verification'
 
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
@@ -61,7 +61,7 @@ export function getStatus(): JiraConnectionStatus {
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSite = sites.find((site) => site.id === file.activeSiteId) ?? sites[0] ?? null
   const credentialError = sites
-    .map((site) => credentialErrors.get(site.id))
+    .map((site) => getCredentialError(site.id))
     .find((message) => message !== undefined)
   // Why any-not-active: sealing is a host-wide property, so a second site stored while
   // the keyring was missing is exposed even when the active one is sealed.
@@ -75,7 +75,8 @@ export function getStatus(): JiraConnectionStatus {
     activeSiteId: activeSite?.id ?? null,
     selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null,
     ...(credentialError ? { credentialError } : {}),
-    credentialProtection
+    credentialProtection,
+    supportsScopedTokens: true
   }
 }
 
@@ -101,24 +102,13 @@ export async function connect(
         error: email ? 'Password is required.' : 'Personal access token is required.'
       }
     }
-  } else if (!email || !apiToken) {
-    return { ok: false, error: 'Email and API token are required.' }
+  } else if (!apiToken) {
+    return { ok: false, error: 'API token is required.' }
   }
 
   await acquire()
   try {
-    const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
-    const viewer = toViewer(
-      (await requestWithCredentials(
-        siteUrl,
-        email,
-        apiToken,
-        myselfPath,
-        undefined,
-        authType
-      )) as Record<string, unknown>,
-      email || siteUrl
-    )
+    const { viewer, apiBaseUrl } = await verifyJiraCredentials(siteUrl, email, apiToken, authType)
     // PAT sites have no email, so keying on it alone would collide every PAT
     // connection to the same host into one id (silently overwriting a prior
     // account + token). Fall back to the verified viewer identity so distinct
@@ -130,8 +120,10 @@ export async function connect(
       email,
       displayName: viewer.displayName,
       accountId: viewer.accountId,
-      authType
+      authType,
+      ...(apiBaseUrl ? { apiBaseUrl } : {})
     }
+    clearAttachmentImagesForSite(id)
     saveToken(id, apiToken)
     const file = getSiteFile()
     writeSiteFile({
@@ -215,5 +207,5 @@ export function clearToken(siteId: string): void {
 export function isAuthError(error: unknown): boolean {
   // Why: Jira returns 403 for project/API permission gaps even when /myself
   // succeeds, so only 401 means the saved credential itself is invalid.
-  return error instanceof JiraApiError && error.status === 401
+  return error instanceof JiraApiError && error.status === 401 && !error.scopeMismatch
 }

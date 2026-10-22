@@ -6,7 +6,11 @@ import {
   remoteFileContentBudget
 } from './files-remote-content-budget'
 import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
-import { FileOpen, WorktreeSelector } from '../../../../shared/rpc-contract/files-target-params'
+import {
+  FileOpen,
+  FileWatch,
+  WorktreeSelector
+} from '../../../../shared/rpc-contract/files-target-params'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
   FilePathsExist,
@@ -66,7 +70,12 @@ export const FILE_METHODS = [
     permission: 'workspace',
     params: FileOpenTab,
     handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
+      runtime.openMobileFile(
+        params.worktree,
+        params.relativePath,
+        params.navigation,
+        ...(params.line === undefined ? [] : [{ line: params.line, column: params.column }])
+      )
   }),
   defineMethod({
     name: 'files.openDiff',
@@ -220,13 +229,14 @@ export const FILE_METHODS = [
   defineStreamingMethod({
     name: 'files.watch',
     permission: 'workspace',
-    params: WorktreeSelector,
+    params: FileWatch,
     handler: async (params, { runtime, connectionId, signal }, emit) => {
       const seq = ++filesWatchSubscriptionSeq
       const subscriptionId = `files-watch-${connectionId ?? 'inproc'}-${seq}`
       await runFileWatchStream({
         runtime,
         worktree: params.worktree,
+        batchCadence: params.batchCadence,
         connectionId,
         signal,
         subscriptionId,

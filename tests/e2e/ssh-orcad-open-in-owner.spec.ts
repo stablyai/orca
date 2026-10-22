@@ -19,7 +19,7 @@ import {
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 skipUnlessManagedDockerHost()
 test.skip(process.platform === 'win32', 'Needs a POSIX recorder')

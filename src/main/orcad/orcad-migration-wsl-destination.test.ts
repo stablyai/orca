@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   assertOrcadMigrationSourceServedHere,
   ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST,

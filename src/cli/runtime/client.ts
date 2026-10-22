@@ -46,10 +46,10 @@ const LONG_POLL_CLIENT_GRACE_MS = 10_000
 const loadWebSocketTransport = async () => await import('./websocket-transport.js')
 
 export class RuntimeClient {
-  private readonly userDataPath: string
+  readonly userDataPath: string
   private readonly requestTimeoutMs: number
   private readonly remote: PairedRuntimeConnection | null
-  private readonly environmentSelector: string | null
+  readonly environmentSelector: string | null
   private readonly cliExecutable: string
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate

@@ -10,7 +10,6 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
@@ -59,17 +58,25 @@ export type PaneExternalDropHandler = (
   target: PaneExternalDropTarget
 ) => boolean
 
+export type PaneDropTaker = (
+  drop: { sourcePaneId: number; targetPaneId: number; zone: DropZone },
+  move: () => void
+) => boolean
+
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
   onActivePaneChange?: (pane: ManagedPane) => void
-  // Why: 'gesture' lets persistence tell a user's layout edit apart from automatic updates.
-  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
+  onLayoutChanged?: () => void
   /** Why: Electron webviews can steal pointer streams from renderer-owned
    *  pane drags unless callers temporarily put them in pointer passthrough. */
   onPaneDragActiveChange?: (active: boolean) => void
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  /** A user's divider drag or reset ended; runs after `onLayoutChanged`. */
+  onDividerRatiosCommitted?: () => void
+  /** Takes an in-tab pane drop instead of moving it now: true means `move` runs later or never. */
+  takePaneDrop?: PaneDropTaker
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalLigaturesEnabled?: () => boolean
   /** Whether inline terminal images (SIXEL / iTerm2 IIP / Kitty graphics) are

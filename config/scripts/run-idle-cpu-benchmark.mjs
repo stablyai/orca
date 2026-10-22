@@ -32,6 +32,16 @@ const DEFAULT_ZUSTAND_PUBLICATION_INTERVAL_MS = 100
 const ONBOARDING_FINAL_STEP = 3
 const ONBOARDING_FLOW_VERSION = 2
 
+function forceKillProcessTree(pid) {
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      process.kill(-pid, 'SIGKILL')
+    }
+  } catch {}
+}
+
 function parseArgs(argv) {
   const options = {
     warmupMs: DEFAULT_WARMUP_MS,
@@ -481,9 +491,18 @@ async function main() {
       )
     )
   } finally {
-    const launchedProcesses = descendantsOf(readProcessRows(), rootPid).filter(
-      (proc) => proc.pid !== rootPid
-    )
+    let launchedProcesses = []
+    try {
+      launchedProcesses = descendantsOf(readProcessRows(), rootPid).filter(
+        (proc) => proc.pid !== rootPid
+      )
+    } catch (error) {
+      // A failed or timed-out read must not skip the app close and fixture cleanup below.
+      console.error('idle CPU benchmark: could not list launched processes', error)
+      // Without the list, kill the tree while its root still anchors it; app.close() alone
+      // leaves detached descendants running over the fixtures removed below.
+      forceKillProcessTree(rootPid)
+    }
     await app.close().catch(() => undefined)
     await sleep(250)
     terminateProcesses(launchedProcesses)

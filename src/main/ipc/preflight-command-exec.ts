@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { homedir } from 'node:os'
@@ -19,10 +20,6 @@ export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
-
-export function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
 
 async function withPreflightTimeout<T>(
   command: string,
@@ -226,7 +223,7 @@ export async function isCommandAvailable(
     return (await findRunnableLocalCommand(command)).status === 'available'
   }
   try {
-    await execCommandInWslOrThrow(wslTarget, `${shellQuote(command)} --version`)
+    await execCommandInWslOrThrow(wslTarget, `${quotePosixShell(command)} --version`)
     return true
   } catch {
     return false

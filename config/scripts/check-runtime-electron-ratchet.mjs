@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Ratchet gate for Electron imports reachable from the Orca runtime and structured chat.
+ * Ratchet gate for Electron imports reachable from the Orca runtime, the CLI and structured chat.
  *
- * The runtime boots on plain Node, where Electron is unavailable. Keep desktop
- * dependencies out of its graph, including structured chat not yet wired into it.
+ * The runtime and the CLI boot on plain Node, where Electron is unavailable. Keep desktop
+ * dependencies out of their graphs, including structured chat not yet wired into the runtime.
  *
  * This bundles the runtime and the structured-chat lanes with esbuild and reads the metafile for
  * every module that imports `electron`. Any such module fails: the migration reached zero.
@@ -26,15 +26,17 @@ import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 // instead of a usable message.
 const ROOT = path.join(import.meta.dirname, '..', '..')
 
-// The two module graphs a Node backend would have to boot: the runtime service
-// itself and the RPC server that fronts it.
+// The module graphs that boot on plain Node: the runtime service, the RPC server that
+// fronts it, orcad, and the CLI.
 const ENTRY_POINTS = [
   path.join(ROOT, 'src', 'main', 'runtime', 'orca-runtime.ts'),
   path.join(ROOT, 'src', 'main', 'runtime', 'runtime-rpc.ts'),
   // Why orcad too: it imports ipc/pty directly to install the PTY controller, so its
   // graph is strictly larger than the two runtime entries. Measuring only those let the
   // two numbers drift — the gate would read zero while the shipped artifact regressed.
-  path.join(ROOT, 'src', 'main', 'orcad', 'main.ts')
+  path.join(ROOT, 'src', 'main', 'orcad', 'main.ts'),
+  // Why the CLI: it runs under ELECTRON_RUN_AS_NODE, and its tsconfig follows imports into src/main.
+  path.join(ROOT, 'src', 'cli', 'index.ts')
 ]
 
 // Code that must run in orcad whether or not a runtime entry reaches it yet. Whole directories,
@@ -173,12 +175,12 @@ export async function main({ plugins = [] } = {}) {
   })
   if (current.length > 0) {
     console.error(
-      `[runtime-electron-ratchet] ${current.length} module(s) reachable from the Orca runtime or structured-chat code import electron:
+      `[runtime-electron-ratchet] ${current.length} module(s) reachable from the Orca runtime, the CLI or structured-chat code import electron:
 ${current.map((file) => `  + ${file}`).join('\n')}
 
-The runtime and structured chat must run in orcad, the headless runtime, where Electron is
-unavailable. That holds for structured-chat code the runtime doesn't load yet, so renaming or
-moving the file is not a fix. Put the Electron facility behind a port in src/main/host/ and
+The runtime and structured chat must run in orcad, the headless runtime, and the CLI runs on
+plain Node; Electron is unavailable in both. That holds for structured-chat code the runtime
+doesn't load yet, so renaming or moving the file is not a fix. Put the Electron facility behind a port in src/main/host/ and
 depend on the port, or drop the import that pulls Electron in.`
     )
     return 1

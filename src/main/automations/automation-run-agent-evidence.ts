@@ -1,11 +1,12 @@
 /**
  * What an idle pane says about a run. A ready shell prompt satisfies `tui-idle` too, so a prompt
  * typed at a shell whose agent is not installed ("command not found") would read as finished.
- * The agent's own status for the run's pane, reported since the run started, completes it as on
- * the desktop. Not every agent reports status (no hooks on the host, no recognised title), so for
- * those an idle pane still means done, but only after the agent had time to start and only when
- * no shell refused its command.
+ * The agent's own `done`, reached since the run was dispatched, completes it as on the desktop; a
+ * reused pane's previous `done` is not this run's. Not every agent reports status (no hooks on the
+ * host, no recognised title), so for a pane that never reported any an idle pane still means done,
+ * but only after the agent had time to start and only when no shell refused its command.
  */
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
 
 /** Covers agent spin-up over SSH before an idle pane without agent status is believed. */
@@ -23,7 +24,12 @@ const MISSING_COMMAND_PATTERNS = [
 
 export type AutomationRunAgentEvidence = {
   /** Agent status rows for a pane, from hooks, OSC and titles alike. */
-  getAgentStatusRowsForPane(paneKey: string): readonly { receivedAt: number }[]
+  getAgentStatusRowsForPane(
+    paneKey: string
+  ): readonly Pick<
+    AgentStatusIpcPayload,
+    'state' | 'stateStartedAt' | 'sessionBoundary' | 'providerSessionOnly'
+  >[]
   /** The names the run's agent command may run under, to tell its refusal from its output. */
   agentCommandsForRun(run: AutomationRun): readonly string[]
 }
@@ -60,10 +66,20 @@ export function judgeIdleRun(
   runStartedAt: number,
   now: number
 ): IdleRunVerdict {
-  const paneKey = run.terminalPaneKey
+  // A reused pane's earlier `done` ended before this run's prompt went in.
+  const since = run.dispatchedAt ?? runStartedAt
+  // Resume identity is no status report.
+  const rows = run.terminalPaneKey
+    ? evidence
+        .getAgentStatusRowsForPane(run.terminalPaneKey)
+        .filter((row) => !row.providerSessionOnly)
+    : []
   if (
-    paneKey &&
-    evidence.getAgentStatusRowsForPane(paneKey).some((row) => row.receivedAt >= runStartedAt)
+    rows.some(
+      (row) =>
+        // A connect-time `done` reports no turn.
+        row.state === 'done' && !row.sessionBoundary && row.stateStartedAt >= since
+    )
   ) {
     return { kind: 'completed' }
   }
@@ -74,5 +90,8 @@ export function judgeIdleRun(
       error: `Automation agent did not start; this host could not run its command (${missing}).`
     }
   }
-  return now - runStartedAt >= AGENT_START_GRACE_MS ? { kind: 'completed' } : { kind: 'wait' }
+  // Only an agent that never reports status is believed done by an idle pane.
+  return rows.length === 0 && now - since >= AGENT_START_GRACE_MS
+    ? { kind: 'completed' }
+    : { kind: 'wait' }
 }

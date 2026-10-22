@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18nModule from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({
   /** What the per-file resolver answers: null local, a string remote, undefined unresolved. */
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   /** What the worktree resolves its runtime owner to, which the grant was minted against. */
   worktreeRuntimeOwnerId: null as string | null,
   activeRuntimeEnvironmentId: undefined as string | undefined,
+  twin: false,
   openFile: vi.fn(),
   openFilePath: vi.fn().mockResolvedValue(true),
   downloadAndOpen: vi.fn(),
@@ -16,7 +18,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string, params?: Record<string, string>) =>
     fallback.replace('{{value0}}', params?.value0 ?? '')
 }))
@@ -25,7 +28,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionIdForFile
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => mocks.worktreeRuntimeOwnerId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => mocks.worktreeRuntimeOwnerId
 }))
 vi.mock('@/lib/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
@@ -62,12 +65,14 @@ vi.mock('@/store', () => ({
       },
       getKnownWorktreeById: () =>
         mocks.worktreePath === null ? undefined : { id: 'wt-1', path: mocks.worktreePath },
+      ...(mocks.twin ? localAndSshTwinRows('repo', 'repo::/srv/repo') : {}),
       openFile: mocks.openFile
     })
   }
 }))
 
 import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
+import { localAndSshTwinRows } from '@/lib/workspace-twin-rows.test-fixture'
 
 const REMOTE_DOCUMENT = {
   filePath: '/root/demo/report/index.html',
@@ -84,6 +89,7 @@ beforeEach(() => {
   mocks.worktreePath = '/srv/repo'
   mocks.worktreeRuntimeOwnerId = null
   mocks.activeRuntimeEnvironmentId = undefined
+  mocks.twin = false
   mocks.openFilePath.mockResolvedValue(true)
   vi.stubGlobal('window', { api: { shell: { openFilePath: mocks.openFilePath } } })
 })
@@ -99,7 +105,8 @@ describe('openDocPreviewSource', () => {
         worktreeId: 'wt-1',
         language: 'html',
         mode: 'edit'
-      })
+      }),
+      undefined
     )
   })
 
@@ -109,7 +116,8 @@ describe('openDocPreviewSource', () => {
     openDocPreviewSource({ ...REMOTE_DOCUMENT, externalSshTargetId: 'ssh-7' })
 
     expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({ externalSshTargetId: 'ssh-7' })
+      expect.objectContaining({ externalSshTargetId: 'ssh-7' }),
+      undefined
     )
   })
 
@@ -161,6 +169,15 @@ describe('openDocPreviewExternally', () => {
   // Why refusing beats downloading here: with no owner at all the download route reads the absolute
   // path on this machine, so a client holding a same-named file would be shown its contents under
   // the remote document's name — the wrong-file outcome, one layer below the OS branch.
+  it("refuses a document of a project two hosts publish instead of opening this machine's copy", () => {
+    mocks.twin = true
+
+    openDocPreviewExternally({ ...REMOTE_DOCUMENT, worktreeId: 'repo::/srv/repo' })
+
+    expect(mocks.openFilePath).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalled()
+  })
+
   it('refuses instead of reading this machine when no owner resolves', () => {
     mocks.connectionIdForFile = undefined
     mocks.connectionIdForWorkspace = undefined

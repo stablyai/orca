@@ -23,8 +23,10 @@ import {
 } from './session-scanner-service-client-state'
 import {
   noteAiVaultServiceScanProgress,
-  sendAiVaultServiceCall
+  sendAiVaultServiceCall,
+  type AiVaultServiceScanListener
 } from './session-scanner-service-request-deadline'
+import { answerAiVaultServiceSessionSearchRoots } from './session-scanner-service-root-answer'
 import { AiVaultServiceRestartPolicy } from './session-scanner-service-restart-policy'
 import {
   isAiVaultServiceChildMessage,
@@ -48,7 +50,11 @@ export class AiVaultScannerServiceClient {
 
   constructor(private readonly options: AiVaultServiceClientOptions) {}
 
-  request<T>(body: AiVaultServiceRequestBody, signal?: AbortSignal): Promise<T> {
+  request<T>(
+    body: AiVaultServiceRequestBody,
+    signal?: AbortSignal,
+    scanListener?: AiVaultServiceScanListener
+  ): Promise<T> {
     if (this.disposed) {
       return Promise.reject(new Error('AI Vault service client was disposed.'))
     }
@@ -66,7 +72,8 @@ export class AiVaultScannerServiceClient {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers choose T as the result value of the operation they send, which is what the child answers with.
         resolve as (value: unknown) => void,
         reject,
-        (aborted) => this.cancel(aborted)
+        (aborted) => this.cancel(aborted),
+        scanListener
       )
       this.queue.push(call)
       this.idleRetirement.clear()
@@ -218,16 +225,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     if (message.type === 'sessionSearchRoots') {
-      const child = this.child
-      const resolve = this.options.resolveSessionSearchRoots
-      void Promise.resolve()
-        .then(() => (resolve ? resolve() : (this.options.init().sessionSearch?.roots ?? null)))
-        .catch(() => null)
-        .then((roots) => {
-          if (child && this.child === child && child.connected) {
-            child.send({ type: 'sessionSearchRoots', id: message.id, roots }, () => undefined)
-          }
-        })
+      answerAiVaultServiceSessionSearchRoots(this.child, message.id, this.options, () => this.child)
       return
     }
     if (message.type === 'ready') {
@@ -251,7 +249,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     if (message.type === 'progress') {
-      noteAiVaultServiceScanProgress(call, message.units, this.onDeadline)
+      noteAiVaultServiceScanProgress(call, message.work)
       return
     }
     this.active.delete(call.lane)

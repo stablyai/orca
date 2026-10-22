@@ -24,7 +24,7 @@ const deps = {
   runtimeEnvironmentId: null
 }
 const createBrowserTab = vi.fn()
-const openFile = vi.fn()
+const openFileForLink = vi.fn(() => null)
 const markWorktreeVisited = vi.fn()
 const recordWorktreeVisit = vi.fn()
 const revealWorktreeInSidebar = vi.fn()
@@ -68,7 +68,7 @@ beforeEach(() => {
     activeBrowserTabId: 'main-browser',
     rightSidebarTab: 'explorer',
     createBrowserTab,
-    openFile,
+    openFileForLink,
     markWorktreeVisited,
     recordWorktreeVisit,
     revealWorktreeInSidebar
@@ -141,9 +141,11 @@ describe('floating file links preserve main-window selection', () => {
     await buildFileLinkActions(filePath, null, null, deps, { kind: 'local' }).primary.run()
     await flushOpen()
 
-    expect(openFile).toHaveBeenCalledWith(
+    expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
-      { forceContentReload: true }
+      { forceContentReload: true },
+      null,
+      expect.any(Function)
     )
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(mainSelection()).toEqual(before)
@@ -153,9 +155,11 @@ describe('floating file links preserve main-window selection', () => {
     const before = mainSelection()
     openDetectedFilePath('/Users/me/floating/app.ts', null, null, deps)
     await flushOpen()
-    expect(openFile).toHaveBeenCalledWith(
+    expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
-      { forceContentReload: true }
+      { forceContentReload: true },
+      null,
+      expect.any(Function)
     )
     expect(mainSelection()).toEqual(before)
   })

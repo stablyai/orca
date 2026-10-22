@@ -22,10 +22,8 @@ import { selectStructuredAgentSettledTurns } from '../../../shared/structured-ag
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from './structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
@@ -128,8 +126,8 @@ async function sessionWithRunningTurn() {
 function settleDeadGeneration(
   journal: AgentSessionJournal,
   verdict: StructuredAgentSessionTurnVerdict
-): ReturnType<typeof settleStructuredAgentSessionDeadGeneration> {
-  return settleStructuredAgentSessionDeadGeneration({
+): ReturnType<typeof settleObservedExitForTest> {
+  return settleObservedExitForTest({
     journal,
     sessionId: SESSION,
     fence: 2,
@@ -159,7 +157,7 @@ describe('a turn recovery settled after its host went away', () => {
     async (_label, verdict, outcome, mark) => {
       const session = await sessionWithRunningTurn()
       session.recoverAt(RECOVERED)
-      expect(await settleDeadGeneration(session.journal, verdict)).toEqual({ ok: true })
+      expect(await settleDeadGeneration(session.journal, verdict)).toMatchObject({ ok: true })
       session.publish()
 
       expect(session.summaries.at(-1)).toMatchObject({

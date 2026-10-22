@@ -10,6 +10,7 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -157,7 +158,7 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).toHaveBeenCalled()
     expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
       expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
   })
@@ -517,7 +518,7 @@ describe('registerWorktreeHandlers', () => {
       }
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/improve-dashboard',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
       expect.objectContaining({ baseRef: 'refs/remotes/origin/main' })
     )
     expect(result.localBaseRefUpdateSuggestion).toEqual({

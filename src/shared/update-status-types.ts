@@ -56,6 +56,16 @@ export type LinuxPackageInstallInstructions =
   | { ok: true; command: string; packageFileName: string }
   | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
 
+export type UpdateInstallBlocker = {
+  pid: number
+  kind: 'window' | 'server' | 'browser' | 'unknown'
+}
+
+export type UpdateInstallBlock = {
+  reason: 'running-instances' | 'busy' | 'unresponsive'
+  instances: UpdateInstallBlocker[]
+}
+
 export type UpdateStatus = (
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
@@ -80,7 +90,14 @@ export type UpdateStatus = (
     }
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
-  | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
+  | {
+      state: 'downloaded'
+      version: string
+      releaseUrl?: string
+      activeNudgeId?: string
+      /** Install preparation is in progress; older clients can still render downloaded. */
+      installing?: boolean
+    }
   | {
       state: 'error'
       message: string
@@ -93,6 +110,8 @@ export type UpdateStatus = (
       userInitiated?: boolean
       activeNudgeId?: string
       recovery?: LinuxPackageInstallRecovery
+      /** Optional so older paired clients retain the diagnostic and install retry. */
+      installBlock?: UpdateInstallBlock
     }
 ) & { source?: UpdateSource }
 

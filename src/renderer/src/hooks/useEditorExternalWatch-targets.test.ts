@@ -75,6 +75,10 @@ describe('getEditorExternalWatchTargets', () => {
     sshConnectionStates: args.sshConnectionStates ?? new Map(),
     folderWorkspaces: [],
     projectGroups: [],
+    // Why: these cases cover target resolution; a recent visit keeps the workspace inside the watch scope.
+    lastVisitedAtByWorktreeId: Object.fromEntries(
+      (args.openFiles ?? []).map((file) => [file.worktreeId, 1])
+    ),
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -104,7 +108,7 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
-  it.each(['chat-visual', 'check-details'] as const)(
+  it.each(['check-details'] as const)(
     'starts no watcher for a %s tab, which has no workspace file',
     (mode) => {
       const repo = makeRepo('repo-virtual')

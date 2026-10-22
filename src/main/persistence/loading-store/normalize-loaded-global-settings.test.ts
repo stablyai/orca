@@ -22,6 +22,20 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
+describe('retired setup placement', () => {
+  it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
+    'drops saved setup location %s without changing terminal preferences',
+    (setupScriptLaunchMode) => {
+      const normalized = normalizeLegacyProfile({
+        setupScriptLaunchMode,
+        terminalFocusFollowsMouse: true
+      })
+      expect(normalized).not.toHaveProperty('setupScriptLaunchMode')
+      expect(normalized.terminalFocusFollowsMouse).toBe(true)
+    }
+  )
+})
+
 describe('retired Agents sidebar setting', () => {
   it('does not mark new profiles as migrated', () => {
     expect(normalizeLegacyProfile({}).agentsSidebarMigratedFromExperimental).toBe(false)
@@ -146,5 +160,25 @@ describe('the new-chat permission setting', () => {
       ...applyAgentPermissionMode({ mode: 'yolo' })
     })
     expect(normalized.nativeChatPermissionMode).toBe('ask')
+  })
+})
+
+describe('scoped new-chat permission defaults', () => {
+  it('preserves an agent override across load while rejecting unsupported stored modes', () => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatPermissionMode: 'full-access',
+      agentNativeChatPermissionModes: { codex: 'auto', claude: 'ask', omp: 'auto', unknown: 'auto' }
+    })
+    expect(normalized.agentNativeChatPermissionModes).toEqual({ codex: 'auto', claude: 'ask' })
+    expect(normalized.nativeChatPermissionMode).toBe('full-access')
+  })
+})
+
+describe('terminal default shell', () => {
+  it('trims a hand-edited value and treats whitespace-only as unset', () => {
+    expect(
+      normalizeLegacyProfile({ terminalDefaultShell: '  /bin/zsh  ' }).terminalDefaultShell
+    ).toBe('/bin/zsh')
+    expect(normalizeLegacyProfile({ terminalDefaultShell: '   ' }).terminalDefaultShell).toBe('')
   })
 })

@@ -1,5 +1,5 @@
+import type { SourceControlAiSettingsInput } from '../../shared/source-control-ai'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
@@ -38,7 +38,7 @@ export type RuntimeGitTarget = {
 
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
-  getRuntimeSettings(): GlobalSettings
+  getRuntimeSettings(): SourceControlAiSettingsInput
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
@@ -47,7 +47,10 @@ export type RuntimeGitCommandHost = {
    *  no store (avoids unrelated ownership-inheritance/refspec-migration side effects), so a
    *  lazily-minted remote still needs a way back into the store's `pushTarget.remoteCreated`
    *  for #17842's orphan sweep. Called only when materialize reports `remoteCreated: true`. */
-  persistMaterializedPushTarget?(worktreeId: string, pushTarget: GitPushTarget): void
+  persistMaterializedPushTarget?(
+    worktree: Pick<Worktree, 'id' | 'hostId'>,
+    pushTarget: GitPushTarget
+  ): void
 }
 
 /**

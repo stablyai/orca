@@ -1,3 +1,5 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getWorkspaceJiraIssueKey } from '../../../../../shared/jira-review-title'
 import { useCallback } from 'react'
 import type { PullRequestGenerationOutcome } from '../create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../pull-request-generation-request-outcome'
@@ -88,6 +90,15 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         worktreeId: activeWorktreeId,
         worktreePath: activeWorktreePath,
         connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        jiraIssueKey:
+          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          activeWorktreeId
+            ? getWorkspaceJiraIssueKey(
+                useAppStore
+                  .getState()
+                  .getKnownWorktreeById(activeWorktreeId, getRepoExecutionHostId(repo))
+              )
+            : null,
         requestId,
         repoId: repo.id,
         branch,

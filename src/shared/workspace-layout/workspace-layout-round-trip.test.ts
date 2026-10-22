@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
@@ -8,10 +7,9 @@ import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import {
   localDesktopSession,
-  relaySshSession,
-  serverRuntimeSession
+  WORKSPACE_LAYOUT_PROFILES
 } from './workspace-layout-profile.test-fixture'
-import { addWorkspace, emptySession, leaf } from './workspace-layout-session.test-fixture'
+import { leaf } from './workspace-layout-session.test-fixture'
 
 /** What reaches disk: the profile documents are JSON, so an undefined field is a missing one. */
 const onDisk = (session: WorkspaceSessionState): unknown => JSON.parse(JSON.stringify(session))
@@ -34,24 +32,9 @@ function roundTrip(hostId: ExecutionHostId, session: WorkspaceSessionState) {
   return { loaded, saved: saveWorkspaceLayout(loaded) }
 }
 
-const PROFILES: [string, ExecutionHostId, () => WorkspaceSessionState][] = [
-  [
-    'local desktop (git worktree, folder workspace, all tab kinds)',
-    LOCAL_EXECUTION_HOST_ID,
-    localDesktopSession
-  ],
-  [
-    'floating terminal',
-    LOCAL_EXECUTION_HOST_ID,
-    () =>
-      addWorkspace(emptySession(), FLOATING_TERMINAL_WORKTREE_ID, [
-        { id: 'group-floating', tabs: [{ id: 'tab-floating', leaves: [[leaf(1), 'floating@@1']] }] }
-      ])
-  ],
-  ['relay SSH host partition', 'ssh:target-1', () => relaySshSession('target-1')],
-  ['remote server partition', 'runtime:env-1', () => serverRuntimeSession('env-1')],
-  ['empty profile', LOCAL_EXECUTION_HOST_ID, emptySession]
-]
+const PROFILES = WORKSPACE_LAYOUT_PROFILES.map(
+  (profile) => [profile.name, profile.hostId, profile.build] as const
+)
 
 describe('workspace layout Loader and Serializer', () => {
   it.each(PROFILES)(
@@ -111,7 +94,8 @@ describe('workspace layout Loader and Serializer', () => {
     // round trip above saved its pane records under the terminal id.
     expect(workspace.leaves?.[leaf(3)]).toMatchObject({
       incarnationId: 'inc-3',
-      sleeping: { agent: 'claude' }
+      // The fixture's record is a quit capture: a running agent's resume record, not a sleep.
+      resume: { agent: 'claude' }
     })
     expect(workspace.groups.map((group) => group.tabOrder)).toEqual([
       ['tab-shell', 'tab-agent', 'editor:src/app.ts'],

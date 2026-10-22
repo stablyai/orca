@@ -88,7 +88,13 @@ export function clearProviderPtyState(
   // Why: clear the hook server's per-paneKey caches (via the spawn-time paneKey mapping, its only ptyId→paneKey correlation) so dead panes don't accumulate over process lifetime.
   if (paneKey) {
     if (stillOwnsPaneKey) {
-      agentHookServer.clearPaneState(paneKey)
+      // Why: a proven exit describes this PTY's agent, so only a real teardown (not a
+      // disconnect that can reconnect) may drop it.
+      if (opts.preserveAgentSessionOwners) {
+        agentHookServer.clearPaneState(paneKey)
+      } else {
+        agentHookServer.clearPaneState(paneKey, { forgetAgentExit: true })
+      }
       paneKeyPtyId.delete(paneKey)
     }
     ptyPaneKey.delete(id)

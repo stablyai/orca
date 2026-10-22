@@ -1,9 +1,16 @@
 import type { JiraIssue, JiraSiteSelection } from '../../shared/jira-types'
+import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
 import { JiraSummaryLookupError } from '../../shared/jira-summary-lookup'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
-import { ISSUE_DETAIL_FIELDS, ISSUE_SUMMARY_FIELDS, mapJiraIssue } from './jira-issue-mapping'
+import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
+import {
+  ISSUE_DETAIL_FIELDS,
+  ISSUE_SUMMARY_FIELDS,
+  mapJiraIssue,
+  type JiraAgileFieldIds
+} from './jira-issue-mapping'
 import {
   collectIssueMediaRequest,
   flushMediaResolutionWarn,
@@ -13,6 +20,7 @@ import {
 import type { JiraRecord } from './jira-record-pages'
 import {
   getErrorStatus,
+  requireStrictJiraSite,
   settleJiraSummaryRead,
   shouldSurfaceSiteFailure,
   withJiraDeadline
@@ -22,18 +30,23 @@ const ISSUE_SUMMARY_TIMEOUT_MS = 30_000
 
 export async function getIssue(
   key: string,
-  siteId?: JiraSiteSelection | null
+  siteId?: JiraSiteSelection | null,
+  strict = false,
+  mediaFormat?: JiraMediaFormat
 ): Promise<JiraIssue | null> {
   const entries = getClients(siteId)
+  requireStrictJiraSite(entries, siteId, strict)
   for (const entry of entries) {
     let mediaRequest: MediaRequest | undefined
     let issue: JiraRecord | undefined
     let held = false
+    let agileFields: JiraAgileFieldIds = {}
     try {
+      agileFields = await getAgileFieldIds(entry)
       await acquire()
       held = true
       const params = new URLSearchParams({
-        fields: ISSUE_DETAIL_FIELDS.join(','),
+        fields: [...ISSUE_DETAIL_FIELDS, ...agileFieldIdList(agileFields)].join(','),
         expand: 'renderedFields'
       })
       issue = await jiraRequest<JiraRecord>(
@@ -41,7 +54,7 @@ export async function getIssue(
         `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${params.toString()}`
       )
       // Why: keep only JSON under the pool; binary downloads fan out after release.
-      mediaRequest = collectIssueMediaRequest(issue)
+      mediaRequest = collectIssueMediaRequest(issue, mediaFormat)
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.site.id)
@@ -50,6 +63,9 @@ export async function getIssue(
         }
       } else {
         console.warn('[jira] getIssue failed:', error)
+      }
+      if (strict) {
+        throw error
       }
       continue
     } finally {
@@ -63,15 +79,17 @@ export async function getIssue(
       if (!issue) {
         continue
       }
-      const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
-      const mapped = mapJiraIssue(entry.site, issue, prepared?.options)
+      const prepared = mediaRequest
+        ? await prepareMediaResolver(entry, mediaRequest, mediaFormat)
+        : undefined
+      const mapped = mapJiraIssue(entry.site, issue, prepared?.options, agileFields)
       if (prepared) {
         flushMediaResolutionWarn(entry, prepared)
       }
       return mapped
     } catch (error) {
       console.warn('[jira] getIssue media load failed:', error)
-      return mapJiraIssue(entry.site, issue)
+      return mapJiraIssue(entry.site, issue, undefined, agileFields)
     }
   }
   return null

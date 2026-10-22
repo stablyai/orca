@@ -170,8 +170,8 @@ export async function executeWorktreeCreation(
   // workspace) is handed it; anyone who moved on (another workspace or an app
   // view) keeps their place and gets a toast instead (#9944).
   const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
-  // Why: "None" leaves setup as the only surface; without a setup run it falls back to a shell.
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
+  const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
   // Why: the worktree exists past this point and nothing awaits this caller, so
   // each follow-up step is best-effort — an escaped throw would strand the
@@ -184,7 +184,7 @@ export async function executeWorktreeCreation(
         sidebarRevealBehavior: 'auto',
         ...(preparedRequest.agent !== null ? { agent: preparedRequest.agent } : {}),
         ...(result.setup ? { setup: result.setup } : {}),
-        ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
         ...(startupOpt ? { startup: startupOpt } : {}),
         ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
         ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {}),
@@ -214,16 +214,12 @@ export async function executeWorktreeCreation(
             startupOpt,
             result.setup,
             preparedRequest.issueCommand,
-            result.defaultTabs,
+            defaultTabs,
             // Activation failed before providing its promised surface, so recovery must seed one.
             backendSpawned ? { backendStartupTerminalSpawned: true } : undefined
           )
         } catch (recoveryError) {
-          console.error(
-            'worktree create: activation recovery seeding failed',
-            worktree.id,
-            recoveryError
-          )
+          console.error('worktree create: recovery seed failed', worktree.id, recoveryError)
         }
       }
       if (!backendSpawned) {
@@ -245,7 +241,7 @@ export async function executeWorktreeCreation(
   } else {
     // Why: backgrounded creates still need explicit setup/issue terminals, but must not activate them.
     const hasExplicitTerminalWork = Boolean(
-      startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
+      startupOpt || result.setup || preparedRequest.issueCommand || defaultTabs
     )
     const callerProvidesSurface = preparedRequest.agent !== null || setupIsOnlySurface
     if (preparedRequest.agent === null || hasExplicitTerminalWork) {
@@ -256,7 +252,7 @@ export async function executeWorktreeCreation(
           startupOpt,
           result.setup,
           preparedRequest.issueCommand,
-          result.defaultTabs,
+          defaultTabs,
           {
             activateCreatedTabs: false,
             ...(callerProvidesSurface ? { callerProvidesSurface: true } : {}),

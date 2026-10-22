@@ -18,6 +18,7 @@ import {
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session-wire'
+import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session-definitive-refusal'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
 
@@ -75,6 +76,11 @@ export async function resolveUncommittedStructuredCreate<TPrepared>(
   try {
     return await prepare()
   } catch (error) {
-    return { refusal: precommitRefusal(error) }
+    const refusal = precommitRefusal(error)
+    return {
+      refusal: isAgentSessionCreateAdmissionRefusal(refusal)
+        ? { ...refusal, createAttemptRefusedBeforeCommit: true }
+        : refusal
+    }
   }
 }

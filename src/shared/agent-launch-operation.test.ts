@@ -64,6 +64,12 @@ describe('fields the launch fingerprint covers', () => {
       computeAgentLaunchFingerprint(BASE)
     )
   })
+
+  it('separates a retry that picked another surface, or none, from the first launch', () => {
+    const terminal = computeAgentLaunchFingerprint({ ...BASE, surface: 'terminal' })
+    expect(terminal).not.toBe(computeAgentLaunchFingerprint({ ...BASE, surface: 'chat' }))
+    expect(terminal).not.toBe(computeAgentLaunchFingerprint(BASE))
+  })
 })
 
 describe('fields the launch fingerprint deliberately ignores', () => {

@@ -3,9 +3,9 @@
  *
  * Runs as a short-lived command on the execution host. It never signals: it writes the
  * instance-bound request the running orcad watches for, then observes until the instance is
- * gone. `exited` needs proof — no process with that PID, or a PID whose kernel identity shows it
- * now belongs to another process. A wall-clock disagreement, or anything the host cannot answer,
- * is `unverifiable`, never exit.
+ * gone. `exited` needs proof — no process with that PID, or a PID whose kernel identity or owner
+ * uid shows it now belongs to another process. A wall-clock disagreement, or anything the host
+ * cannot answer, is `unverifiable`, never exit.
  */
 import { setTimeout as delay } from 'node:timers/promises'
 import { writeDurableSecureJsonFile } from '../../shared/secure-file'
@@ -61,7 +61,7 @@ function observeInstance(
   if (probe !== 'alive') {
     return probe === 'missing' ? 'exited' : 'unverifiable'
   }
-  // Only a kernel identity (or a stored creation time) proves reuse; an unknown one stays live.
+  // Only a kernel identity, stored creation time or owner uid proves reuse; unknown stays live.
   const identity = compareOrcadProcessIdentity(instance.pid, recorded, options)
   return identity === 'differs' ? 'exited' : identity === 'unproven' ? 'unverifiable' : 'live'
 }
@@ -77,8 +77,11 @@ function recordedIdentity(instance: OrcadManagedStopInstance): OrcadRecordedIden
   } catch {
     return instance
   }
-  const incarnation = record ? recordedOrcadProcessIncarnation(record) : null
-  return incarnation ? { ...instance, ...incarnation } : instance
+  if (!record) {
+    return instance
+  }
+  // The lock's identity lets a reused PID be proven by its owner uid.
+  return { ...instance, ...recordedOrcadProcessIncarnation(record), identity: record.identity }
 }
 
 /** Writes the request only while the lock still names this instance, then waits for exit. */

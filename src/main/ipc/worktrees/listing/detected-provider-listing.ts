@@ -3,15 +3,12 @@ import {
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
 } from '../../../worktree-removal-listing'
-import {
-  getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost
-} from '../../../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
 import {
@@ -41,6 +38,7 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
+import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -49,7 +47,7 @@ export async function listDetectedWorktreesForCapturedRepo(
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<DetectedWorktreeListResult | { providerAbortStatus: 'canceled' | 'timed-out' } | null> {
   // An `ssh:` repo is not served here, so it lists from metadata, never from this machine's git.
-  const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+  const connectionId = getRepoDialableSshTargetId(repo)
   const abortedResult = () =>
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
@@ -80,9 +78,10 @@ export async function listDetectedWorktreesForCapturedRepo(
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
-        worktrees: projectResolvedWorktreeLineage(
-          buildFolderDetectedWorktrees(store, repo),
-          store.getAllWorktreeLineage?.() ?? {}
+        worktrees: projectWorktreeLineageWithHostPeers(
+          store,
+          repo,
+          buildFolderDetectedWorktrees(store, repo)
         )
       }
     }
@@ -122,7 +121,10 @@ export async function listDetectedWorktreesForCapturedRepo(
       return abortedResult() ?? null
     }
     const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
-    const localRows = await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
+    const localRows = await withUnregisteredRemovalCheckouts(
+      repo.id,
+      withoutInFlightWorktreeCreates(repo.id, gitWorktrees)
+    )
     const aborted = abortedResult()
     if (aborted) {
       return aborted

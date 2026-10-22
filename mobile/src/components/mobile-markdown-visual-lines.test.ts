@@ -1,16 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE } from '../../../src/shared/native-chat-visual-directive'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
-import { protectMobileMarkdownVisualLines } from './mobile-markdown-visual-lines'
+import { parseMobileMarkdownTree, plainText } from './mobile-markdown-tree'
+import {
+  mobileMarkdownVisualPlaceholderIndex,
+  protectMobileMarkdownVisualLines
+} from './mobile-markdown-visual-lines'
+
+/** The top-level blocks drawn, with a lone placeholder paragraph read as its visual. */
+function topLevelBlocks(text: string, visualCount: number) {
+  return parseMobileMarkdownTree(text, false).children.map((node) => {
+    const visual =
+      node.type === 'paragraph'
+        ? mobileMarkdownVisualPlaceholderIndex(plainText(node), visualCount)
+        : null
+    if (visual !== null) {
+      return { type: 'visual', index: visual }
+    }
+    return node.type === 'code'
+      ? { type: 'code', text: node.value, language: node.lang }
+      : { type: node.type, text: plainText(node) }
+  })
+}
 
 /** The same steps MobileMarkdown runs when a transcript renders visuals. */
 function blocksOf(content: string) {
   const { text, directives } = protectMobileMarkdownVisualLines(content)
-  return {
-    directives,
-    blocks: parseMobileMarkdown(normalizeMobileMarkdownPreviewHtml(text), directives.length)
-  }
+  return { directives, blocks: topLevelBlocks(text, directives.length) }
 }
 
 describe('native-chat visual lines in mobile markdown', () => {
@@ -40,7 +55,7 @@ describe('native-chat visual lines in mobile markdown', () => {
     const fenced = blocksOf('```md\n::orca-visual{file="a.html"}\n```')
     expect(fenced.directives).toEqual([])
     expect(fenced.blocks).toEqual([
-      { type: 'code', text: '::orca-visual{file="a.html"}', language: 'md', closed: true }
+      { type: 'code', text: '::orca-visual{file="a.html"}', language: 'md' }
     ])
     expect(blocksOf('> ::orca-visual{file="a.html"}').directives).toEqual([])
     expect(blocksOf('- ::orca-visual{file="a.html"}').directives).toEqual([])
@@ -83,7 +98,7 @@ describe('native-chat visual lines in mobile markdown', () => {
   })
 
   it('never treats a placeholder-looking line as a visual when none were protected', () => {
-    expect(parseMobileMarkdown('\uE000ORCA_VISUAL_0\uE000')).toEqual([
+    expect(topLevelBlocks('\uE000ORCA_VISUAL_0\uE000', 0)).toEqual([
       { type: 'paragraph', text: '\uE000ORCA_VISUAL_0\uE000' }
     ])
   })

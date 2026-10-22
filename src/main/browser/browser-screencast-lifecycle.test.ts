@@ -144,6 +144,7 @@ describe('browser screencast lifecycle', () => {
       scheduleNavigationFrameCapture: vi.fn(),
       clearNavigationCaptureTimer: vi.fn(),
       bumpSnapshotGeneration: vi.fn(),
+      observeGuestViewSize: () => false,
       setDialogOpen: vi.fn()
     })
 

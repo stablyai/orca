@@ -28,7 +28,7 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
-import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
+import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -94,17 +94,14 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   // Why: acknowledgement writes are app-global; project only this card's rows
   // so unrelated worktree activity does not rerender every agent body.
-  const acknowledgedAgentTimes = useAppStore(
-    useShallow((s) => selectAcknowledgedAgentTimes(s, agents))
-  )
+  const agentRowsUnread = useAppStore(useShallow((s) => selectAgentRowsUnread(s, agents)))
   const unvisitedByPaneKey = useMemo(() => {
     const out: Record<string, boolean> = {}
     for (const [index, agent] of agents.entries()) {
-      const ackAt = acknowledgedAgentTimes[index] ?? 0
-      out[agent.paneKey] = ackAt < agent.entry.stateStartedAt
+      out[agent.paneKey] = agentRowsUnread[index] ?? false
     }
     return out
-  }, [agents, acknowledgedAgentTimes])
+  }, [agents, agentRowsUnread])
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
@@ -267,7 +264,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }
           now={now}
-          // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
+          // Why: bold the row until the user visits its tab (useReadOnScreenAttention auto-acks on focus, muting it).
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
           // Why: inline rows are tight; 'md' reads as a second glyph users confuse with the adjacent identity icon, so use 'sm'.
           stateDotSize="sm"
@@ -316,8 +313,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       : undefined
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
+    // Keep collapsed children from occupying a separate flex-gap slot.
     return (
-      <React.Fragment key={agent.paneKey}>
+      <div key={agent.paneKey} className="min-w-0">
         <CompactAgentRow
           agent={agent}
           now={now}
@@ -349,7 +347,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             </div>
           </CompactAgentExpansion>
         ) : null}
-      </React.Fragment>
+      </div>
     )
   }
 

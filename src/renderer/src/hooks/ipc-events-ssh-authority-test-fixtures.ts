@@ -8,7 +8,6 @@ export function buildSshAuthorityReconciliationHarness(args: {
   partialAuthority: { providerEpoch?: string; connectionGeneration?: number }
   latestAuthority: { providerEpoch: string; connectionGeneration: number }
 }): {
-  clearBindings: ReturnType<typeof vi.fn>
   emitPartialState: () => void
   getState: ReturnType<typeof vi.fn>
   setSshConnectionState: ReturnType<typeof vi.fn>
@@ -27,7 +26,6 @@ export function buildSshAuthorityReconciliationHarness(args: {
   const sshConnectionStates = new Map<string, Record<string, unknown>>()
   let sshStateListener: ((data: { targetId: string; state: unknown }) => void) | undefined
   const getState = vi.fn(() => Promise.resolve(latestState))
-  const clearBindings = vi.fn()
   const setSshConnectionState = vi.fn((nextTargetId: string, state: Record<string, unknown>) => {
     sshConnectionStates.set(nextTargetId, state)
   })
@@ -38,7 +36,6 @@ export function buildSshAuthorityReconciliationHarness(args: {
     setSshTargetsMetadata: vi.fn(),
     setRemovedSshTargetLabels: vi.fn(),
     clearRemoteDetectedAgents: vi.fn(),
-    clearDirectSshTargetPtyBindings: clearBindings,
     clearRemovedSshTargetState: vi.fn()
   })
   vi.stubGlobal(
@@ -56,7 +53,6 @@ export function buildSshAuthorityReconciliationHarness(args: {
   )
 
   return {
-    clearBindings,
     emitPartialState: () => {
       if (!sshStateListener) {
         throw new Error('Expected SSH state listener')

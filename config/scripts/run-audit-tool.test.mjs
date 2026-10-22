@@ -1,0 +1,91 @@
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { parseAllDocuments } from 'yaml'
+import { auditToolEntry, runAuditTool } from './run-audit-tool.mjs'
+import { classifyPrJobs } from './pr-code-change-scope.mjs'
+
+const root = resolve(import.meta.dirname, '../..')
+const success = { code: 0, signal: null, timedOut: false }
+
+describe('locked audit tool execution', () => {
+  it('installs frozen without scripts before forwarding tool arguments directly to Node', () => {
+    const calls = []
+    const args = ['.', '--scope', 'lines', '--base', 'branch with & shell $characters']
+    const failed = { code: 7, signal: null, timedOut: false }
+    const result = runAuditTool('react-doctor', args, {
+      root,
+      run: (spec) => {
+        calls.push(spec)
+        return calls.length === 1 ? success : failed
+      }
+    })
+    expect(calls).toHaveLength(2)
+    expect(calls[0].args.slice(-5)).toEqual([
+      '--dir',
+      join(root, 'config', 'audit-tools'),
+      'install',
+      '--frozen-lockfile',
+      '--ignore-scripts'
+    ])
+    expect(calls[1]).toEqual({
+      program: process.execPath,
+      args: [auditToolEntry('react-doctor', root), ...args],
+      cwd: root,
+      stdio: 'inherit',
+      timeoutMs: null
+    })
+    expect(result).toBe(failed)
+  })
+
+  it.each([
+    { code: 1, signal: null, timedOut: false },
+    { code: null, signal: 'SIGTERM', timedOut: false },
+    { code: null, signal: null, timedOut: true }
+  ])('does not execute a tool after install failure: %j', (failure) => {
+    let count = 0
+    expect(
+      runAuditTool('knip', [], {
+        run: () => {
+          count += 1
+          return failure
+        }
+      })
+    ).toBe(failure)
+    expect(count).toBe(1)
+  })
+
+  it('rejects an unknown executable before installing anything', () => {
+    expect(() => auditToolEntry('../arbitrary-package')).toThrow('Unknown audit tool')
+  })
+
+  it.each(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'])(
+    'selects the real-tool CI smoke for an isolated %s update',
+    (file) => {
+      expect(classifyPrJobs([`config/audit-tools/${file}`]).static_analysis).toBe(true)
+    }
+  )
+
+  it('keeps the tool workspace isolated, exact and integrity-locked', () => {
+    const manifest = JSON.parse(readFileSync(join(root, 'config/audit-tools/package.json'), 'utf8'))
+    const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    expect(manifest.packageManager).toBe(rootManifest.packageManager)
+    const [policy] = parseAllDocuments(
+      readFileSync(join(root, 'config/audit-tools/pnpm-workspace.yaml'), 'utf8')
+    ).map((document) => document.toJS())
+    expect(policy).toMatchObject({ minimumReleaseAge: 4320, ignoreScripts: true, allowBuilds: {} })
+    const documents = parseAllDocuments(
+      readFileSync(join(root, 'config/audit-tools/pnpm-lock.yaml'), 'utf8')
+    ).map((document) => document.toJS())
+    const lock = documents.find((document) => document.importers?.['.']?.dependencies)
+    expect(Object.keys(lock.importers)).toEqual(['.'])
+    for (const [name, version] of Object.entries(manifest.dependencies)) {
+      expect(version).toMatch(/^\d+\.\d+\.\d+$/)
+      expect(lock.importers['.'].dependencies[name].specifier).toBe(version)
+      expect(rootManifest.dependencies[name] ?? rootManifest.devDependencies[name]).toBeUndefined()
+    }
+    for (const entry of Object.values(lock.packages)) {
+      expect(entry.resolution.integrity).toMatch(/^sha512-/)
+    }
+  })
+})

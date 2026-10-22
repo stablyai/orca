@@ -5,7 +5,11 @@ import type { Store } from '../persistence'
 import type { FileStat, IFilesystemProvider } from '../providers/filesystem-provider-contract'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
   isRuntimePathAbsolute,
@@ -198,11 +202,11 @@ async function resolveRepoTargets(
   if (isFolderRepo(repo)) {
     return targets
   }
-  const executionHostId = getRepoExecutionHostId(repo)
-  if (executionHostId === LOCAL_EXECUTION_HOST_ID) {
+  const sshTargetId = getRepoDialableSshTargetId(repo)
+  if (getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID) {
     await maybeAddBaseTarget(targets, repo, settings, mirrorDistro)
-  } else if (repo.connectionId) {
-    await maybeAddBaseTarget(targets, repo, settings, mirrorDistro, repo.connectionId)
+  } else if (sshTargetId) {
+    await maybeAddBaseTarget(targets, repo, settings, mirrorDistro, sshTargetId)
   }
   return targets
 }

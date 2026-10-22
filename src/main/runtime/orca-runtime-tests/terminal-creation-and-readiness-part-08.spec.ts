@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -14,6 +15,7 @@ import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   UUID_RE,
+  makeRuntimeStoreWithWorkspaceSession,
   renderGateCapMs,
   store
 } from '../orca-runtime-test-fixtures.spec'
@@ -538,7 +540,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('renames background terminal handles without requiring a visible tab', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
       write: () => true,

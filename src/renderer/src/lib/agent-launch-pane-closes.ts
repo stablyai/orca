@@ -6,6 +6,8 @@
  * note it without an import cycle.
  */
 
+import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
+
 const MAX_REMEMBERED_CLOSES = 32
 const closedPaneKeys = new Set<string>()
 
@@ -15,6 +17,7 @@ function closeKey(tabId: string, leafId: string): string {
 }
 
 export function noteAgentLaunchPaneClosedByUser(tabId: string, leafId: string): void {
+  settleAgentLaunchPaneStart(tabId, leafId, null)
   const paneKey = closeKey(tabId, leafId)
   closedPaneKeys.delete(paneKey)
   closedPaneKeys.add(paneKey)

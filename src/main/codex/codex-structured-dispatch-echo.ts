@@ -31,6 +31,18 @@ export type CodexDispatchRequestOrigin = {
  * their echoes arrive far apart. Queue position identifies neither.
  */
 export type CodexDispatchEchoes = {
+  /** A point in the order Codex's replies and notifications are read in: `onReply` and
+   *  `observeStatus` stamp from it as they read, so a stamp orders what arrived, not what ran. */
+  tick: () => number
+  /** Codex answered this send (or its request timed out, `at`) without naming a turn. */
+  answered: (clientMessageId: string, at: number) => void
+  /** The primary thread's reported status, as read: only one read after a send's answer decides
+   *  whether Codex still works on a send it answered into no turn. */
+  observeStatus: (active: boolean) => void
+  /** The sends Codex still holds: unanswered, answered into a turn that has not ended, or answered
+   *  into none while the thread reported running since. Execution, never delivery: an ended turn
+   *  releases a send whether or not its echo came. */
+  heldSends: () => ReadonlySet<string>
   /** Arms settlement for a send about to be written; false preserves older waits at capacity. */
   arm: (clientMessageId: string, requestedAt?: number) => boolean
   /** True once, for a send this session armed and has not yet settled. */
@@ -45,7 +57,8 @@ export type CodexDispatchEchoes = {
     clientMessageId: string,
     threadId: string,
     turnId: string,
-    via: AgentJournalTurnJoin
+    via: AgentJournalTurnJoin,
+    answeredAt?: number
   ) => CodexTurnEnd | null
   /** The turn the latest armed send was answered into that is neither in `openTurnIds`, ended, nor
    *  left unopened through a wait: one Codex has picked for the send but not opened. */
@@ -77,15 +90,42 @@ export type CodexDispatchEchoes = {
   readonly size: number
 }
 
-export function createCodexDispatchEchoes(): CodexDispatchEchoes {
+export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispatchEchoes {
   const armed = new Map<
     string,
     {
       requestedAt: number | null
       sequence: number
       turn?: { threadId: string; turnId: string; via: AgentJournalTurnJoin }
+      answeredAt?: number
+      turnEnded?: true
     }
   >()
+  let clock = 0
+  let status: { active: boolean; at: number } | null = null
+  const heldSends = (): Set<string> =>
+    new Set(
+      [...armed].flatMap(([clientMessageId, entry]) =>
+        entry.answeredAt === undefined ||
+        (entry.turn
+          ? entry.turnEnded !== true
+          : status?.active === true && status.at > entry.answeredAt)
+          ? [clientMessageId]
+          : []
+      )
+    )
+  /** Runs a change and reports it when the sends Codex holds changed with it. */
+  const reporting = <T>(change: () => T): T => {
+    if (!onHeldChange) {
+      return change()
+    }
+    const before = [...heldSends()].join('\n')
+    const result = change()
+    if ([...heldSends()].join('\n') !== before) {
+      onHeldChange()
+    }
+    return result
+  }
   const endedTurns = new Map<string, CodexTurnEnd>()
   const unopenedTurns = new Set<string>()
   const openedTurns = new Set<string>()
@@ -115,6 +155,19 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
     return answered.at(-1) ?? null
   }
   return {
+    tick: () => ++clock,
+    answered: (clientMessageId, at) =>
+      reporting(() => {
+        const entry = armed.get(clientMessageId)
+        if (entry) {
+          entry.answeredAt = at
+        }
+      }),
+    observeStatus: (active) =>
+      reporting(() => {
+        status = { active, at: ++clock }
+      }),
+    heldSends,
     arm(clientMessageId, requestedAt) {
       const existing = armed.get(clientMessageId)
       if (existing) {
@@ -129,20 +182,25 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       armed.set(clientMessageId, { requestedAt: requestedAt ?? null, sequence: nextSequence++ })
       return true
     },
-    settle: (clientMessageId) => armed.delete(clientMessageId),
-    disarm: (clientMessageId) => void armed.delete(clientMessageId),
-    bindTurn: (clientMessageId, threadId, turnId, via) => {
-      const entry = armed.get(clientMessageId)
-      if (!entry) {
-        return null
-      }
-      entry.turn = { threadId, turnId, via }
-      const end = endedTurns.get(turnKey(threadId, turnId)) ?? null
-      if (end && settles(end)) {
-        armed.delete(clientMessageId)
-      }
-      return end
-    },
+    settle: (clientMessageId) => reporting(() => armed.delete(clientMessageId)),
+    disarm: (clientMessageId) => reporting(() => void armed.delete(clientMessageId)),
+    bindTurn: (clientMessageId, threadId, turnId, via, answeredAt) =>
+      reporting(() => {
+        const entry = armed.get(clientMessageId)
+        if (!entry) {
+          return null
+        }
+        entry.turn = { threadId, turnId, via }
+        entry.answeredAt = answeredAt ?? ++clock
+        const end = endedTurns.get(turnKey(threadId, turnId)) ?? null
+        if (end) {
+          entry.turnEnded = true
+        }
+        if (end && settles(end)) {
+          armed.delete(clientMessageId)
+        }
+        return end
+      }),
     answeredUnopenedTurn: (threadId, openTurnIds) =>
       answeredTurn(threadId, openTurnIds, (key) => !unopenedTurns.has(key)),
     answeredTurnLeftUnopened: (threadId, openTurnIds) =>
@@ -158,29 +216,34 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       }
     },
     hasOpened: (threadId, turnId) => openedTurns.has(turnKey(threadId, turnId)),
-    endTurn: (threadId, turnId, end) => {
-      const turn = turnKey(threadId, turnId)
-      endedTurns.delete(turn)
-      endedTurns.set(turn, end)
-      for (const oldest of endedTurns.keys()) {
-        if (endedTurns.size <= MAX_CODEX_RECORDED_TURN_ENDS) {
-          break
+    endTurn: (threadId, turnId, end) =>
+      reporting(() => {
+        const turn = turnKey(threadId, turnId)
+        endedTurns.delete(turn)
+        endedTurns.set(turn, end)
+        for (const oldest of endedTurns.keys()) {
+          if (endedTurns.size <= MAX_CODEX_RECORDED_TURN_ENDS) {
+            break
+          }
+          endedTurns.delete(oldest)
         }
-        endedTurns.delete(oldest)
-      }
-      if (!settles(end)) {
-        return []
-      }
-      const settled = [...armed].flatMap(([clientMessageId, entry]) =>
-        entry.turn && turnKey(entry.turn.threadId, entry.turn.turnId) === turn
-          ? [{ clientMessageId, via: entry.turn.via }]
-          : []
-      )
-      for (const { clientMessageId } of settled) {
-        armed.delete(clientMessageId)
-      }
-      return settled
-    },
+        const bound = [...armed].flatMap(([clientMessageId, entry]) =>
+          entry.turn && turnKey(entry.turn.threadId, entry.turn.turnId) === turn
+            ? [{ clientMessageId, via: entry.turn.via, entry }]
+            : []
+        )
+        // A completed turn echoed what it took first, so one it never echoed is no longer Codex's.
+        for (const { entry } of bound) {
+          entry.turnEnded = true
+        }
+        if (!settles(end)) {
+          return []
+        }
+        for (const { clientMessageId } of bound) {
+          armed.delete(clientMessageId)
+        }
+        return bound.map(({ clientMessageId, via }) => ({ clientMessageId, via }))
+      }),
     requestOrigin: (clientMessageId) => {
       const origin = armed.get(clientMessageId)
       return origin?.requestedAt === null || origin === undefined
@@ -189,6 +252,7 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
     },
     latestSequence: () => nextSequence - 1,
     clear: () => {
+      status = null
       armed.clear()
       endedTurns.clear()
       unopenedTurns.clear()

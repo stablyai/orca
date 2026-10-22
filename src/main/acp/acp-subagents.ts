@@ -6,7 +6,6 @@
 // not known here.
 
 import { createHash } from 'node:crypto'
-import { BoundedMap } from '../../shared/bounded-map'
 import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
@@ -15,17 +14,10 @@ import type {
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status-child-work-value-guards'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
 import type { ProviderTimelineJoin } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'
 import type { AcpTimelineEvent } from './acp-timeline-event'
-
-/** Subagents remembered, so a later report about one is still known as a subagent's. */
-const MAX_KNOWN_SUBAGENTS = 2048
 
 type KnownSubagent = {
   /** Where its reply row goes: the turn that spawned it. */
@@ -54,9 +46,8 @@ export function acpSubagentOutcome(
 }
 
 export class AcpSubagents {
-  private readonly known = new BoundedMap<string, KnownSubagent>({
-    maxEntries: MAX_KNOWN_SUBAGENTS
-  })
+  /** Every subagent this provider child reported, so a later report is still known as one's. */
+  private readonly known = new Map<string, KnownSubagent>()
   private readonly pending: AgentChildWorkEvidence[] = []
 
   /** Known children include settled ones, so they cannot become background tasks. */
@@ -110,16 +101,15 @@ export class AcpSubagents {
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): AcpTimelineEvent[] {
-    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-    if (subagent.reply === bounded) {
+    if (subagent.reply === text) {
       return []
     }
-    subagent.reply = bounded
+    subagent.reply = text
     return [
       {
         type: 'item.update',
         item: `subagent-result:${id}`,
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: bounded }] },
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
         producer: { agentId: id, producerKind: 'agent' },
         join: subagent.placement
       }

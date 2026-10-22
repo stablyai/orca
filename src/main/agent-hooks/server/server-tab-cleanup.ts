@@ -2,6 +2,7 @@ import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listene
 import { paneCacheKeyMatchesTab } from './server-status-identity'
 import { AgentHookServerCleanup } from './server-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { releaseAgentExitKey } from './agent-exit-evidence'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   /** Drop every status/cache claim attributable to a closed tab prefix. */
@@ -84,6 +85,16 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.promptSentDedupeByPaneKey.delete(paneKey)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
       this.evidenceObservedAtByPaneKey.delete(paneKey)
+      this.programStatusFacets.delete(paneKey)
+      this.hookSilenceRechecks.cancel(paneKey)
+      this.programStatusFacetRepublishes.cancel(paneKey)
+    }
+    // Why: an exit outlives its row, so it is matched by tab rather than by the keys cleared above.
+    let exitsChanged = false
+    for (const key of this.agentExitedAtByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(key, tabId)) {
+        exitsChanged = releaseAgentExitKey(this.agentExitedAtByPaneKey, key) || exitsChanged
+      }
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
@@ -94,6 +105,8 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     if (statusChanged || authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+    } else if (exitsChanged) {
+      this.scheduleStatusPersist()
     }
     // Why: tab teardown must retire status subscribers' pane-scoped memo state too.
     for (const paneKey of statusPaneKeysToClear) {
@@ -107,9 +120,14 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       emitStatusRowMutation?: boolean
       preserveTmuxInnerSubjects?: boolean
       statusUnavailable?: true
+      /** The pane's PTY is retired, not just its agent. */
+      forgetAgentExit?: true
     }
   ): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (options?.forgetAgentExit) {
+      this.forgetAgentExit(paneKey)
+    }
     if (!options?.preserveTmuxInnerSubjects) {
       this.clearTmuxInnerSubjects(resolvedPaneKey)
     }
@@ -128,6 +146,9 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     this.restartedStatusLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
     // Why: the pane itself is gone, so its observation clock describes nothing a later pane owns.
     this.evidenceObservedAtByPaneKey.delete(resolvedPaneKey)
+    this.programStatusFacets.delete(resolvedPaneKey)
+    this.hookSilenceRechecks.cancel(resolvedPaneKey)
+    this.programStatusFacetRepublishes.cancel(resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, alias] of this.legacyPaneKeyAliases) {
       if (alias.stablePaneKey === resolvedPaneKey) {
@@ -140,6 +161,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         this.restartedStatusLaunchTokenHashByPaneKey.delete(legacyPaneKey)
         this.evidenceObservedAtByPaneKey.delete(legacyPaneKey)
+        this.programStatusFacets.delete(legacyPaneKey)
         clearedAlias = true
       }
     }

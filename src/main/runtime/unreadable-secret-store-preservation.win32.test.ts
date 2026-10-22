@@ -205,7 +205,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
   })
 
   it('does not drop pending relay revocations', async () => {
-    const { RelayRevokeOutbox } = await import('./relay/relay-revoke-outbox')
+    const { RelayRevokeOutbox } = await import('./mobile-cloud-relay/relay-revoke-outbox')
     const dir = join(root, 'relay')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, 'mobile-relay-revoke-outbox.json')

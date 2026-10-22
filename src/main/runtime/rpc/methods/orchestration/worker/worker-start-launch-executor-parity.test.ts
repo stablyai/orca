@@ -15,7 +15,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
 import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
 import type { WorkerEffect } from './worker-topology'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 const sessionCreate = vi.hoisted((): { refusal: { code: string } | null } => ({ refusal: null }))
 
@@ -129,14 +129,14 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.stages).toEqual(['terminal_creating'])
   })
 
-  it('fails a refused structured worker in the worktree it created, with no terminal', async () => {
+  it('fails a refused structured worker in the worktree it created, leaving a shell', async () => {
     const f = fakes()
     sessionCreate.refusal = { code: 'structured_agent_session_unsupported' }
 
     await expect(place(f, { mode: STRUCTURED })).rejects.toMatchObject({
       code: 'agent_unconfigured'
     })
-    expect(f.runtime.createTerminal).not.toHaveBeenCalled()
+    expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', { surfaceOwner: false })
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
   })
 

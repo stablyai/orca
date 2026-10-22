@@ -13,6 +13,7 @@ import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { notSignedInSentence } from '../../../../shared/agent-session-availability-sentences'
+import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 /** Why the chat's latest start failed, unless a turn has run since. */
@@ -109,6 +110,7 @@ export function useNativeChatAvailabilityNotice(input: {
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),
+    content: nativeChatAntigravitySignInContent(unavailable.reason, input.agent),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }
 }

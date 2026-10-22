@@ -1,8 +1,9 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
@@ -11,6 +12,8 @@ import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -18,7 +21,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -66,6 +69,7 @@ describe('Store', () => {
   })
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
     const store = await createStore()
+    registerWorkspaceRepos(store, 'wt1')
     store.setWorkspaceSession({
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -156,7 +160,9 @@ describe('Store', () => {
 
   it('keeps worktree deletion authoritative against stale writes and later same-path reuse', async () => {
     const store = await createStore()
-    store.setWorktreeMeta('wt1', { displayName: 'Worktree' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      displayName: 'Worktree'
+    })
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -177,7 +183,7 @@ describe('Store', () => {
     })
     const stale = structuredClone(store.getWorkspaceSession())
 
-    store.removeWorktreeMeta('wt1')
+    removeWorktreeMetaRow(store, 'wt1', undefined)
 
     expect(store.getWorkspaceSession().tabsByWorktree.wt1).toBeUndefined()
     expect(store.getWorkspaceSession().terminalLayoutsByTabId['old-tab']).toBeUndefined()
@@ -202,7 +208,9 @@ describe('Store', () => {
   it('fences a delayed terminal snapshot after an empty worktree is deleted', async () => {
     const store = await createStore()
     const worktreeId = 'repo::/empty-worktree'
-    store.setWorktreeMeta(worktreeId, { displayName: 'Empty worktree' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
+      displayName: 'Empty worktree'
+    })
     const stale = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -210,7 +218,7 @@ describe('Store', () => {
       }
     }
 
-    store.removeWorktreeMeta(worktreeId)
+    removeWorktreeMetaRow(store, worktreeId, undefined)
     expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(1)
 
     store.setWorkspaceSession(stale)
@@ -221,7 +229,9 @@ describe('Store', () => {
   it('advances deletion authority when only a legacy retirement fence existed', async () => {
     const store = await createStore()
     const worktreeId = 'repo::/legacy-tombstone'
-    store.setWorktreeMeta(worktreeId, { displayName: 'Legacy worktree' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
+      displayName: 'Legacy worktree'
+    })
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       terminalSurfaceTombstonesByPaneKey: {
@@ -238,7 +248,7 @@ describe('Store', () => {
     const revisionBeforeDelete =
       store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo ?? 0
 
-    store.removeWorktreeMeta(worktreeId)
+    removeWorktreeMetaRow(store, worktreeId, undefined)
 
     expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(
       revisionBeforeDelete + 1
@@ -287,14 +297,16 @@ describe('Store', () => {
 
     for (let index = 0; index < 25; index += 1) {
       const worktreeId = `repo::/worktree-${index}`
-      store.setWorktreeMeta(worktreeId, { displayName: `Worktree ${index}` })
+      store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
+        displayName: `Worktree ${index}`
+      })
       await store.persistPtyBinding({
         worktreeId,
         tabId: `tab-${index}`,
         leafId: TEST_LEAF_1,
         ptyId: `pty-${index}`
       })
-      store.removeWorktreeMeta(worktreeId)
+      removeWorktreeMetaRow(store, worktreeId, undefined)
     }
 
     const session = store.getWorkspaceSession()
@@ -305,7 +317,9 @@ describe('Store', () => {
   it('does not remove colliding worktree ids from other execution-host partitions', async () => {
     const store = await createStore()
     const worktreeId = 'repo::/same-path'
-    store.setWorktreeMeta(worktreeId, { displayName: 'Local worktree' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
+      displayName: 'Local worktree'
+    })
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -331,7 +345,7 @@ describe('Store', () => {
       'runtime:env-b'
     )
 
-    store.removeWorktreeMeta(worktreeId)
+    removeWorktreeMetaRow(store, worktreeId, undefined)
 
     expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toBeUndefined()
     expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]?.[0]?.id).toBe(

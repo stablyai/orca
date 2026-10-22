@@ -33,6 +33,7 @@ import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-edi
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
 import type { MobileSessionPublicationInputs } from './types'
 import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export function buildMobileSessionTabSnapshots(
   state: AppState,
@@ -55,7 +56,7 @@ export function buildMobileSessionTabSnapshots(
     terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
   }
   const liveFolderWorkspaceIds = new Set(
-    (state.folderWorkspaces ?? []).map((workspace) => workspace.id)
+    (selectFolderWorkspaces(state) ?? []).map((workspace) => workspace.id)
   )
   const worktreeIds = new Set<string>([
     ...Object.keys(state.tabsByWorktree),

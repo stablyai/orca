@@ -7,6 +7,7 @@ import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function resolveRichMarkdownWorktreeRoot(
   state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
@@ -14,9 +15,10 @@ export function resolveRichMarkdownWorktreeRoot(
 ): string | null {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   return workspaceScope?.type === 'folder'
-    ? (state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
-        ?.folderPath ?? null)
-    : (getIndexedWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null)
+    ? (selectFolderWorkspaces(state).find(
+        (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+      )?.folderPath ?? null)
+    : (getIndexedWorktreeById(selectWorktreesByRepo(state), worktreeId)?.path ?? null)
 }
 
 export function useRichMarkdownSuperscriptLinkSetup({

@@ -2,13 +2,14 @@ import { toast } from 'sonner'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 
 /**
  * Ends the host's terminals and Orca's server in its distro, drops the host's records, then
  * refreshes the host list. Anything main could not end is reported, since it keeps the distro up.
  */
-export async function removeWslHost(environmentId: string): Promise<void> {
+async function removeWslHostImpl(environmentId: string): Promise<void> {
   const api = window.api.runtimeEnvironments?.wslHosts
   if (!api) {
     throw new Error('WSL hosts are not available on this computer.')
@@ -36,4 +37,10 @@ export async function removeWslHost(environmentId: string): Promise<void> {
       { duration: Infinity }
     )
   }
+}
+
+export async function removeWslHost(environmentId: string): Promise<void> {
+  return runEnclosingWorktreeRemoval({ hostId: toRuntimeExecutionHostId(environmentId) }, () =>
+    removeWslHostImpl(environmentId)
+  )
 }

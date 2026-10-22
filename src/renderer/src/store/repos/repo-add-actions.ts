@@ -21,6 +21,7 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -181,7 +182,7 @@ export function createRepoAddActions(
               ? toRuntimeExecutionHostId(options.runtimeEnvironmentId)
               : LOCAL_EXECUTION_HOST_ID
         await get().fetchWorktrees(repo.id, executionHostId ? { executionHostId } : undefined)
-        const folderWorktree = get().worktreesByRepo[repo.id]?.find(
+        const folderWorktree = selectWorktreesByRepo(get())[repo.id]?.find(
           (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
         )
         if (folderWorktree) {
@@ -193,6 +194,7 @@ export function createRepoAddActions(
           } = await import('@/lib/onboarding-folder-agent-launch')
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
           const launch = resolveDismissedOnboardingFolderAgentLaunch({
+            worktreeId: folderWorktree.id,
             store: get(),
             onboarding,
             hasExistingProject: hadProjectBeforeAdd,

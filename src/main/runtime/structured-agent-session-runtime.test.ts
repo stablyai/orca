@@ -1,6 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionClaimStatus,
@@ -24,10 +25,12 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { nativeChatScratchFolderFor } from '../native-chat/native-chat-scratch-folder'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { onStructuredAgentSessionsHeldChanged } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const HOST_ID = 'local'
 
@@ -273,7 +276,7 @@ describe('structured agent-session runtime install', () => {
       }
       const logged = recordingStructuredAgentSessionLogger()
       const host = await installOver(['codex'], logged.logger)
-      expect(host.deps.store.getRecord('old-codex')?.options?.permissionMode).toBe(
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(
         failWrite ? undefined : 'full-access'
       )
       expect((await host.readOptions('old-codex')).current.permissionMode).toBe(
@@ -298,10 +301,34 @@ describe('structured agent-session runtime install', () => {
         records: [oldChat('claude'), oldChat('codex')]
       })
       const host = await installOver(fullAccessAgents)
-      expect(host.deps.store.getRecord('old-claude')?.options?.permissionMode).toBe(claude)
-      expect(host.deps.store.getRecord('old-codex')?.options?.permissionMode).toBe(codex)
+      expect(host.deps.store.getRecord('old-claude')?.permissionMode).toBe(claude)
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(codex)
     }
   )
+
+  it('moves pre-rename chat visuals under the current root before the host is readable', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-visuals-'))
+    await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+    const current = nativeChatScratchFolderFor(stateDirectory, 'old-codex')
+    const legacy = join(stateDirectory, 'native-chat-visuals', basename(current))
+    await mkdir(legacy, { recursive: true })
+    await writeFile(join(legacy, 'chart.html'), '<p>chart</p>')
+
+    let readableAtPublication = false
+    const stopListening = onStructuredAgentSessionsHeldChanged((held) => {
+      if (held) {
+        readableAtPublication = readFileSync(join(current, 'chart.html'), 'utf8') === '<p>chart</p>'
+      }
+    })
+    try {
+      await installOver([])
+    } finally {
+      stopListening()
+    }
+
+    expect(readableAtPublication).toBe(true)
+    expect(await readFile(join(current, 'chart.html'), 'utf8')).toBe('<p>chart</p>')
+  })
 
   it('holds stop until the model catalog has written its coalesced save', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))

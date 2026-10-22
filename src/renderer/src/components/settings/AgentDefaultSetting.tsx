@@ -1,10 +1,16 @@
-import { Ban, Check, Terminal } from 'lucide-react'
+import { Check } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
+
+export type DefaultAgentOpensAs = {
+  agentLabel: string
+  value: 'chat' | 'cli'
+  onChange: (value: 'chat' | 'cli') => void
+}
 
 function DefaultAgentPill({
   active,
@@ -41,19 +47,20 @@ export function AgentDefaultSetting({
   enabledDetectedAgents,
   catalog,
   description,
-  onSetDefault,
-  allowSetupOnly = true
+  opensAs,
+  onSetDefault
 }: {
-  allowSetupOnly?: boolean
-  defaultAgent: TuiAgent | 'blank' | 'setup-only' | null
+  defaultAgent: TuiAgent | 'blank' | null
   detectedIds: Set<string> | null
   enabledDetectedAgents: AgentCatalogEntry[]
   catalog: AgentCatalogEntry[]
   description: string
-  onSetDefault: (agent: TuiAgent | 'blank' | 'setup-only' | null) => void
+  /** Present only when the default agent can open as a chat on this computer. */
+  opensAs?: DefaultAgentOpensAs
+  onSetDefault: (agent: TuiAgent | 'blank' | null) => void
 }): React.JSX.Element {
   const storedDefaultAgent =
-    defaultAgent !== null && defaultAgent !== 'blank' && defaultAgent !== 'setup-only'
+    defaultAgent !== null && defaultAgent !== 'blank'
       ? catalog.find((agent) => agent.id === defaultAgent)
       : undefined
   const defaultAgentPills =
@@ -68,29 +75,13 @@ export function AgentDefaultSetting({
         description={description}
       />
       <div className="flex flex-wrap gap-2">
-        <DefaultAgentPill active={defaultAgent === null} onClick={() => onSetDefault(null)}>
+        <DefaultAgentPill
+          active={defaultAgent === null}
+          onClick={() => onSetDefault(defaultAgent === null ? 'blank' : null)}
+        >
           {defaultAgent === null && <Check className="size-3.5" />}
           {translate('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
         </DefaultAgentPill>
-        <DefaultAgentPill active={defaultAgent === 'blank'} onClick={() => onSetDefault('blank')}>
-          <Terminal className="size-3.5" />
-          {translate('auto.components.settings.AgentsPane.110b74b022', 'No agent (blank terminal)')}
-          {defaultAgent === 'blank' && <Check className="size-3.5" />}
-        </DefaultAgentPill>
-        {allowSetupOnly && (
-          <DefaultAgentPill
-            active={defaultAgent === 'setup-only'}
-            onClick={() => onSetDefault('setup-only')}
-            title={translate(
-              'auto.components.settings.AgentsPane.setupOnlyHint',
-              'Runs setup without an extra blank terminal in new-tab mode. Split mode keeps a shell pane; skipped or missing setup opens a blank terminal.'
-            )}
-          >
-            <Ban className="size-3.5" />
-            {translate('auto.components.settings.AgentsPane.setupOnly', 'None')}
-            {defaultAgent === 'setup-only' && <Check className="size-3.5" />}
-          </DefaultAgentPill>
-        )}
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
           const isUndetected = detectedIds !== null && !detectedIds.has(agent.id)
@@ -98,7 +89,7 @@ export function AgentDefaultSetting({
             <DefaultAgentPill
               key={agent.id}
               active={isActive}
-              onClick={() => onSetDefault(agent.id)}
+              onClick={() => onSetDefault(isActive ? 'blank' : agent.id)}
               title={
                 isUndetected
                   ? translate(
@@ -115,6 +106,29 @@ export function AgentDefaultSetting({
           )
         })}
       </div>
+      {opensAs ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <SettingsSegmentedControl<'chat' | 'cli'>
+            value={opensAs.value}
+            onChange={opensAs.onChange}
+            ariaLabel={translate('settings.agents.defaultOpensAs', 'Open {{value0}} as', {
+              value0: opensAs.agentLabel
+            })}
+            size="sm"
+            options={[
+              { value: 'chat', label: translate('settings.agents.defaultOpensAsChat', 'Chat') },
+              { value: 'cli', label: translate('settings.agents.defaultOpensAsCli', 'CLI') }
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'settings.agents.defaultOpensAsScope',
+              'Applies to new {{value0}} sessions launched from this computer, including on paired hosts. Matches its Providers switch.',
+              { value0: opensAs.agentLabel }
+            )}
+          </p>
+        </div>
+      ) : null}
     </section>
   )
 }

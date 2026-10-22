@@ -86,11 +86,25 @@ export function endProviderChild(
     endedAt?: AgentJournalCursor
   }
 ): boolean {
+  if (!recordProviderChildEnd(session, ended)) {
+    return false
+  }
+  session.child = null
+  return true
+}
+
+/** Records how the child on record ended, leaving it on record for its own teardown: every reader
+ *  projects its generation as ended from now on (`StructuredAgentSessionCurrentWork`). */
+export function recordProviderChildEnd(
+  session: ChildBearer,
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
+    endedAt?: AgentJournalCursor
+  }
+): boolean {
   const child = matchingChild(session, ended)
   if (!child) {
     return false
   }
-  session.child = null
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),

@@ -1,7 +1,19 @@
 import type { AgentProcessPresence } from '../agent-process-presence'
-import type { ParsedAgentStatusPayload } from '../agent-status-types'
+import type { ParsedAgentStatusPayload, TurnEndDisposition } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
+
+/**
+ * The execution host's private record of which turn a pane's agent session is in and which turn
+ * last ended. Saved with the status row; never published (the public fact is `turnEndedAt`).
+ */
+export type HostTurnRecord = {
+  /** The provider session the turn keys belong to; another session starts a new record. */
+  owner: string
+  currentTurnKey: string
+  completed?: { turnKey: string; endedAt: number }
+}
 
 export type AgentHookEventPayload = {
   paneKey: string
@@ -33,6 +45,8 @@ export type AgentHookEventPayload = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
+  /** Requests a relay saw end, sent only beside a replayed row; never stored on a status row. */
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude agent/subagent identifier when the hook source exposes one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */
@@ -45,6 +59,20 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
+  /** When the main agent's latest turn ended, minted only by the execution host's turn-end
+   *  derivation (agent-hook-turn-end-timing.ts); a relay forwards it and a result retry restates it. */
+  turnEndedAt?: number
+  /** How the host identified that end (agent-hook-turn-end-timing.ts); forwarded and restated with it. */
+  turnEndDisposition?: TurnEndDisposition
+  /** The agent's turn-end event re-entered after a blocking Stop hook (`stop_hook_active`), read
+   *  only for agents whose signal is verified. In-process only; never stored or sent. */
+  stopHookActive?: true
+  /** The agent's own turn id (Codex `turn_id`, Command Code's transcript prompt key). In-process
+   *  only: the host folds it into `hostTurn`; never stored or sent. */
+  nativeTurnKey?: string
+  /** The execution host's private turn record (agent-hook-turn-end-timing.ts). Saved with the row,
+   *  never published: snapshots, IPC payloads and relay envelopes are built from allow-lists. */
+  hostTurn?: HostTurnRecord
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
   /** Row projected from a structured session the host holds: `owned` while its provider child

@@ -1,5 +1,5 @@
 import { isAbsolute, resolve } from 'node:path'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 import {
   getWorktreeMirrorDistroForRuntime,
@@ -16,14 +16,14 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { hasRemoteFilesystemOwner } from './remote-filesystem-owner'
 
-type FolderScopeStore = Pick<Store, 'getRepos'> &
-  Partial<Pick<Store, 'getProjectGroups' | 'getFolderWorkspaces'>>
+type FolderScopeStore = Pick<RuntimeStore, 'getRepos'> &
+  Partial<Pick<RuntimeStore, 'getProjectGroups' | 'getFolderWorkspaces'>>
 
 function filterLocalRepos(repos: readonly Repo[]): Repo[] {
   return repos.filter((repo) => !hasRemoteFilesystemOwner(repo))
 }
 
-export function getLocalRepos(store: Store) {
+export function getLocalRepos(store: RuntimeStore) {
   return filterLocalRepos(store.getRepos())
 }
 
@@ -71,9 +71,9 @@ function hasRemoteFolderWorkspaceOwner(
   })
 }
 
-function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[] {
+function getLocalFolderScopeRoots(store: RuntimeStore, repos: readonly Repo[]): string[] {
   const scopeStore = store as FolderScopeStore
-  // Why: many filesystem tests use narrow Store doubles; folder scopes are additive.
+  // Why: many filesystem tests use narrow RuntimeStore doubles; folder scopes are additive.
   const projectGroups = scopeStore.getProjectGroups?.() ?? []
   const childGroupIndex = buildProjectGroupChildIndex(projectGroups)
   const roots: string[] = []
@@ -129,7 +129,7 @@ export function resolveUnanchoredWorkspaceRoot(
   return hostPath.isAbsolute(workspaceDir) ? hostPath.resolve(workspaceDir) : null
 }
 
-export function getAllowedRoots(store: Store): string[] {
+export function getAllowedRoots(store: RuntimeStore): string[] {
   // Why one read: `getRepos` rehydrates every repo, and this runs twice per filesystem IPC.
   const repos = store.getRepos()
   const localRepos = filterLocalRepos(repos)

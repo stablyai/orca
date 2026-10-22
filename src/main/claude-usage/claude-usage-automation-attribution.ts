@@ -1,6 +1,7 @@
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
+import { addBillableTokens, NO_TOKENS, type ClaudeBillableTokens } from './claude-billable-tokens'
 import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
 
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
@@ -95,33 +96,8 @@ export async function resolveAutomationRunUsage(
     (entry) => entry.worktreeId === input.worktreeId
   )
   const locations = scopedLocations.length > 0 ? scopedLocations : session.locationBreakdown
-  const totals = locations.reduce(
-    (acc, entry) => {
-      acc.turns += entry.turnCount
-      acc.inputTokens += entry.inputTokens
-      acc.outputTokens += entry.outputTokens
-      acc.cacheReadTokens += entry.cacheReadTokens
-      acc.cacheWriteTokens += entry.cacheWriteTokens
-      acc.cacheWrite1hTokens += entry.cacheWrite1hTokens
-      return acc
-    },
-    {
-      turns: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      cacheWrite1hTokens: 0
-    }
-  )
-  const estimatedCostUsd = estimateCostUsd(
-    session.model,
-    totals.inputTokens,
-    totals.outputTokens,
-    totals.cacheReadTokens,
-    totals.cacheWriteTokens,
-    totals.cacheWrite1hTokens
-  )
+  const totals = locations.reduce<ClaudeBillableTokens>(addBillableTokens, NO_TOKENS)
+  const estimatedCostUsd = estimateCostUsd(session.model, totals)
 
   return {
     status: 'known',

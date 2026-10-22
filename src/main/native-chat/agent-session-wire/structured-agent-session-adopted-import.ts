@@ -50,14 +50,14 @@ async function readAdoptedTranscript(
   const prepared = await prepareLegacyTranscriptImport({
     agent: params.agent,
     sessionId: adopt.providerHandle.nativeId,
-    options: { filePath: adopt.transcriptPath }
+    options: { filePath: adopt.transcriptPath, source: adopt.source }
   })
   if (!prepared.ok) {
     throw new Error(prepared.error)
   }
   if (prepared.items.length === 0) {
     throw agentSessionRefusalError('agent_session_identity_required', {
-      reason: 'transcriptUnreadable'
+      reason: prepared.sourceEmpty ? 'transcriptNotFound' : 'transcriptUnreadable'
     })
   }
   return prepared.items
@@ -111,7 +111,7 @@ async function applyAdoptedTranscript(
     agent: params.agent,
     sessionId: adopt.providerHandle.nativeId,
     fence: record.lease.runtimeFence,
-    options: { filePath: adopt.transcriptPath }
+    options: { filePath: adopt.transcriptPath, source: adopt.source }
   })
   if (!imported.ok) {
     throw new Error(imported.error)

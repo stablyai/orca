@@ -1,6 +1,7 @@
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, createServer, type Server, type Socket } from 'node:net'
+import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -15,10 +16,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 // time out the 3s startup health check against a daemon that was alive and
 // owning sessions, and the unhealthy path killed it. The fix re-verifies
 // with listSessions, which has far larger budgets (5s hello, 30s request).
-// This test reproduces the production asymmetry against a REAL daemon by
-// inserting a response delay that exceeds the health-check budget but fits
-// the verification budgets, and asserts the guard's two inputs disagree the
-// way the fix depends on.
+// Real sockets preserve the handshake; virtual time crosses both production budgets.
 const RESPONSE_DELAY_MS = 3_500
 
 function createMockSubprocess(): SubprocessHandle {
@@ -52,6 +50,7 @@ function startDelayProxy(listenPath: string, upstreamPath: string): Server {
           clientSocket.write(chunk)
         }
       }, RESPONSE_DELAY_MS)
+      proxy.emit('response-queued')
     })
     const teardown = (): void => {
       clientSocket.destroy()
@@ -88,6 +87,7 @@ describe('slow daemon session verification', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     for (const client of clients.splice(0)) {
       client.disconnect()
     }
@@ -121,17 +121,33 @@ describe('slow daemon session verification', () => {
       })
 
       proxy = startDelayProxy(proxySocketPath, daemonSocketPath)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
       // The exact pre-fix kill trigger: the daemon is alive but too slow for
       // the health-check budget.
-      await expect(healthCheckDaemon(proxySocketPath, tokenPath)).resolves.toBe(false)
+      const healthResponse = once(proxy, 'response-queued')
+      const health = healthCheckDaemon(proxySocketPath, tokenPath)
+      await healthResponse
+      await vi.advanceTimersByTimeAsync(3_000)
+      await expect(health).resolves.toBe(false)
 
       // The fix's re-verification against the SAME slow daemon: the larger
       // client budgets absorb the latency and prove the session is alive.
       const verificationClient = new DaemonClient({ socketPath: proxySocketPath, tokenPath })
       clients.push(verificationClient)
-      await verificationClient.ensureConnected()
-      const result = await verificationClient.request<ListSessionsResult>('listSessions', undefined)
+      const helloResponse = once(proxy, 'response-queued')
+      const connected = verificationClient.ensureConnected()
+      await helloResponse
+      const streamResponse = once(proxy, 'response-queued')
+      await vi.advanceTimersByTimeAsync(RESPONSE_DELAY_MS)
+      await streamResponse
+      await vi.advanceTimersByTimeAsync(RESPONSE_DELAY_MS)
+      await connected
+      const sessionsResponse = once(proxy, 'response-queued')
+      const sessions = verificationClient.request<ListSessionsResult>('listSessions', undefined)
+      await sessionsResponse
+      await vi.advanceTimersByTimeAsync(RESPONSE_DELAY_MS)
+      const result = await sessions
       const liveSessionCount = result.sessions.filter((session) => session.isAlive).length
       expect(liveSessionCount).toBe(1)
     }

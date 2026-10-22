@@ -9,11 +9,11 @@ type TitleObserverOptions = {
   hasAgentEvidence: () => boolean
   establishAgentEvidence: () => void
   recordPaneActivity: () => void
-  recordTitleWorking: () => boolean
+  recordTitleWorking: (title: string) => boolean
   holdTitleCompletionPending: (title: string) => void
   hasPendingTitle: () => boolean
   dropPendingTitle: () => void
-  markTitleCompletionNotified: (title: string) => void
+  claimTitleCompletion: (title: string) => boolean
   dispatchTitleCompletion: (title: string) => void
 }
 
@@ -27,7 +27,7 @@ export function createAgentCompletionTitleObserver({
   holdTitleCompletionPending,
   hasPendingTitle,
   dropPendingTitle,
-  markTitleCompletionNotified,
+  claimTitleCompletion,
   dispatchTitleCompletion
 }: TitleObserverOptions) {
   function titleCompletionAgentIdentity(title: string): string | null {
@@ -63,8 +63,9 @@ export function createAgentCompletionTitleObserver({
   }
 
   function dispatchTitle(title: string): void {
-    markTitleCompletionNotified(title)
-    dispatchTitleCompletion(title)
+    if (claimTitleCompletion(title)) {
+      dispatchTitleCompletion(title)
+    }
   }
 
   function observeTitle(title: string): void {
@@ -79,7 +80,7 @@ export function createAgentCompletionTitleObserver({
 
     if (status === 'working') {
       // Why: a rejected working title is a post-hook-completion replay; leave lastStatus untouched so it can't open a completion branch.
-      if (!recordTitleWorking()) {
+      if (!recordTitleWorking(title)) {
         return
       }
     } else if (getLastStatus() === 'working') {
@@ -116,6 +117,7 @@ export function createAgentCompletionTitleObserver({
   }
 
   return {
+    dispatchTitle,
     observeTitle,
     observeClassifiedTitleCompletion,
     titleCompletionAgentIdentity

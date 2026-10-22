@@ -20,6 +20,7 @@ export type ArtifactPublishPreparationErrorCode =
   | 'empty'
   | 'too-large'
   | 'unreadable'
+  | 'visual-unreadable'
   | 'unsupported'
   | 'binary'
 
@@ -135,6 +136,11 @@ function artifactPreparationErrorDescription(code: ArtifactPublishPreparationErr
       return translate(
         'auto.components.artifacts.artifact-publish-flow.e2ed5acd8c',
         "Orca couldn't read this file. Open it from a workspace and try again."
+      )
+    case 'visual-unreadable':
+      return translate(
+        'auto.components.artifacts.artifact-publish-flow.visualUnreadable',
+        "Couldn't read this visual to share it."
       )
     case 'unsupported':
       return translate(

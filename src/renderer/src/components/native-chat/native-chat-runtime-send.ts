@@ -3,10 +3,8 @@
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import {
-  sendRuntimePtyInput,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
   clearConfirmDurationMs,

@@ -15,13 +15,19 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 
+import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
+
 let rig: QueuedMessageTestRig
+const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
+beforeEach(() => observationClock.start())
 
 beforeEach(async () => {
   rig = await createQueuedMessageTestRig()
 })
 
-afterEach(() => rig.dispose())
+afterEach(async () => {
+  await observationClock.restoreBeforeCleanup(() => rig.dispose())
+})
 
 async function queuedDraft(text: string): Promise<string> {
   const queued = await rig.send(text, 'queue-if-active').result
@@ -166,7 +172,7 @@ it("a Stop whose withdrawal's settlement was skipped still pauses the card it se
   const { a } = await stopWithSkippedSettlement()
   // The drain heals the skipped return; the Stop's row already pauses whatever comes back.
   await eventually(async () => expect(await rig.queuePause()).toEqual({ reason: 'stopped' }))
-  await new Promise((resolve) => setTimeout(resolve, 250))
+  await observationClock.observe(250)
   // Healed back to waiting, but the Stop's pause holds it: it does not send.
   expect(await rig.drafts()).toEqual([{ messageId: a, state: 'waiting' }])
   expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })

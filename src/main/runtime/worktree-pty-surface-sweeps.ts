@@ -17,11 +17,6 @@ import { teardownRpcDeadline } from './worktree-teardown-deadline'
 // or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
 const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
-export type WorktreeTeardownStopPty = (
-  ptyId: string,
-  stop: () => Promise<boolean>
-) => Promise<{ stopped: boolean; owner: boolean }>
-
 export async function sweepProviderByPrefix(
   worktreeId: string,
   provider: IPtyProvider,

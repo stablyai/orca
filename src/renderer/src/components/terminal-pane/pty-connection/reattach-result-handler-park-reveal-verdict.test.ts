@@ -5,6 +5,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HiddenOutputSnapshotResult } from './hidden-output-snapshot-serialize'
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 /**
  * A park-reveal of a remote-runtime pty arrives with `replay: ''`, so the host
@@ -115,6 +116,8 @@ function buildParkRevealSession(overrides: Record<string, unknown> = {}): Bag {
     clearExitedPanePtyLayoutBinding: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
     startFreshColdRestoreAgentResume: vi.fn(),
+    // Layout-owner build: the empty-reattach evidence reads the pane's record through this.
+    buildColdRestoreAgentResumeStartup: vi.fn(() => null),
     setPanePtyFitBinding: vi.fn(),
     reportPanePtyVisibility: vi.fn(),
     registerSideEffectFactConsumerForPty: vi.fn(),
@@ -374,18 +377,51 @@ describe('handleReattachResult empty reattach under a hibernation note', () => {
     expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith(REMOTE_PTY_ID)
   })
 
+  it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'keeps the shell main kept after its start, without asking main again',
+    async () => {
+      const bag = buildParkRevealSession({
+        mountFollowsTerminalPark: false,
+        buildColdRestoreAgentResumeStartup: vi.fn(() => startup),
+        mainStartAttach: {}
+      })
+
+      await expect(
+        bag.session.handleReattachResult({ id: 'local-pty-1', isReattach: true }, null, null)
+      ).resolves.toBe(true)
+
+      expect(bag.transport.disconnect).not.toHaveBeenCalled()
+      expect(bag.session.startFreshColdRestoreAgentResume).not.toHaveBeenCalled()
+      expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith('local-pty-1')
+    }
+  )
+
   it('retires an empty local fresh-spawn adoption and resumes the provider session', async () => {
-    const bag = buildParkRevealSession({ mountFollowsTerminalPark: false })
+    const bag = buildParkRevealSession({
+      mountFollowsTerminalPark: false,
+      // Layout-owner build: main's attach carries no resume, so the evidence reads the record.
+      buildColdRestoreAgentResumeStartup: vi.fn(() => startup)
+    })
 
     await expect(
-      bag.session.handleReattachResult({ id: 'local-pty-1', isReattach: true }, null, startup)
+      bag.session.handleReattachResult(
+        { id: 'local-pty-1', isReattach: true },
+        null,
+        ORCA_LAYOUT_OWNER_IS_MAIN ? null : startup
+      )
     ).resolves.toBe(false)
 
     expect(bag.transport.disconnect).toHaveBeenCalledOnce()
+    expect(bag.session.setPanePtyFitBinding).not.toHaveBeenCalled()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main retires the shell and resumes the agent in its place; the window unbinds nothing.
+      expect(bag.session.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(bag.session.startFreshColdRestoreAgentResume).toHaveBeenCalledExactlyOnceWith(null)
+      return
+    }
     expect(bag.session.syncPanePtyLayoutBinding).toHaveBeenCalledWith(null)
     expect(bag.session.startFreshColdRestoreAgentResume).toHaveBeenCalledExactlyOnceWith(startup, {
       forceBlankRestoredViewport: true
     })
-    expect(bag.session.setPanePtyFitBinding).not.toHaveBeenCalled()
   })
 })

@@ -21,7 +21,7 @@ import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-la
 import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnings'
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
@@ -40,9 +40,14 @@ export function agentLaunchWorkspaceFactory(
 ): AgentLaunchWorkspaceFactory {
   return {
     createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
+    createRecoveryShell: async (worktreeId) => {
+      await context.runtime.createTerminal(`id:${worktreeId}`, { surfaceOwner: false })
+    },
     createWorktree: async ({
       create,
       startupAgent,
+      promisedAgentChat,
+      onWorkspaceCreated,
       startupPrompt,
       agentArgs,
       cwd,
@@ -56,7 +61,7 @@ export function agentLaunchWorkspaceFactory(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
-      const repo = await runtime.showRepo(params.repo)
+      const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
       const automationProvenance = resolveAutomationWorkspaceProvenance({
         authority: runtime,
         repoSelector: params.repo,
@@ -83,7 +88,7 @@ export function agentLaunchWorkspaceFactory(
               }),
               creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
             },
-            context.clientKind ? { clientKind: context.clientKind } : {}
+            context
           ),
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
           ...(startupPrompt
@@ -101,6 +106,8 @@ export function agentLaunchWorkspaceFactory(
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
           createdWithAgent: agent,
+          ...(promisedAgentChat ? { promisedAgentChat } : {}),
+          ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
           // Structured sessions have no startup command to sequence behind setup. Provision the
           // setup terminal synchronously and attach a completion token so the launch can wait
           // before creating the chat surface.
@@ -118,6 +125,7 @@ export function agentLaunchWorkspaceFactory(
           ) ?? result.warning
         return {
           worktreeId: result.worktree.id,
+          workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
           startupTerminalHandle: result.startupTerminal?.handle,
           ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),

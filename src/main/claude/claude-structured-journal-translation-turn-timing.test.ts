@@ -296,14 +296,13 @@ describe('Claude structured turn timing', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
       fence: 7
     })
-    await Promise.resolve()
+    await dispatch
     const connection = claude.connections[0]!
     connection.handlers.onMessage?.({
       ...connection.sent[0],
       uuid: 'turn-1',
       timestamp: '2001-01-01T00:00:00.000Z'
     })
-    await dispatch
     connection.handlers.onMessage?.({
       type: 'assistant',
       uuid: 'assistant-1',

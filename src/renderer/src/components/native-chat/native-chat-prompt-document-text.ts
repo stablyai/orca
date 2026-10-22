@@ -1,13 +1,39 @@
 import type { JSONContent } from '@tiptap/react'
+import { splitImageReferences } from '../../../../shared/native-chat-image-reference'
 
+export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
+
+/** Every path from text to a document goes through here, so each image token becomes its chip. */
 export function promptTextContent(text: string): JSONContent {
   return {
     type: 'doc',
     content: text.split('\n').map((line) => ({
       type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : []
+      content: splitImageReferences(line).map((part) =>
+        typeof part === 'string'
+          ? { type: 'text', text: part }
+          : { type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }
+      )
     }))
   }
+}
+
+/** The document without the chips of one image. */
+export function withoutImageReferenceNodes(
+  document: JSONContent,
+  attachmentId: string
+): JSONContent {
+  return document.content
+    ? {
+        ...document,
+        content: document.content
+          .filter(
+            (node) =>
+              node.type !== IMAGE_REFERENCE_NODE || node.attrs?.attachmentId !== attachmentId
+          )
+          .map((node) => withoutImageReferenceNodes(node, attachmentId))
+      }
+    : document
 }
 
 /** Applies an appended text change without replacing existing picked nodes. */

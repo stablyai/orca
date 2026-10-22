@@ -89,9 +89,12 @@ export function internRecording(recording: Recording): {
 } {
   const pool: ValuePool = {}
   const canonical = new Map<string, string>()
+  // Checkpoints repeat their append-only histories; hash each distinct entry once.
+  const hashes = new Map<string, string>()
   const intern = (entry: RecordedValue, at: string): string => {
     const json = canonicalJson(entry)
-    const hash = canonicalJsonHash(json)
+    const hash = hashes.get(json) ?? canonicalJsonHash(json)
+    hashes.set(json, hash)
     const seen = canonical.get(hash)
     if (seen !== undefined && seen !== json) {
       throw new Error(`Golden value hash collision at ${hash} (${at})`)

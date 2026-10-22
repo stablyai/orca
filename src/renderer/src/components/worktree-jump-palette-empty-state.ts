@@ -8,7 +8,8 @@ export function getWorktreeJumpPaletteResultCount(
     ? controller.worktreeItems.length +
         controller.projectTargetItems.length +
         controller.middleItems.length +
-        controller.openTabItems.length
+        controller.openTabItems.length +
+        controller.taskItems.length
     : controller.selectableItems.length
 }
 

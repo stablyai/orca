@@ -9,8 +9,8 @@ import { openOrcadStdioBridgeChannel, resolveOrcadStdioBridge } from '../ssh/orc
 import {
   OrcadStdioBridgeDecoder,
   type OrcadStdioBridgeSignal
-} from '../ssh/orcad-stdio-bridge-stream'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-stream'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
 export type WslOrcadWatch = {
   /** `ready` holds a live channel; anything else holds nothing. */

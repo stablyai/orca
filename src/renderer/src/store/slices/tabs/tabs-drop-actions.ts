@@ -119,7 +119,12 @@ export function createTabsDropActions(
               activeTabId:
                 group.activeTabId === tabId
                   ? // Why: same MRU-aware fallback as moveUnifiedTabToGroup — the drag keeps the user on their previously-active tab.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    pickNextActiveTab(
+                      dedupedSourceGroupOrder,
+                      sourceGroup.recentTabIds,
+                      tabId,
+                      state.unifiedTabsByWorktree[worktreeId]
+                    )
                   : group.activeTabId,
               tabOrder: sourceOrder,
               recentTabIds: sourceRecentTabIds

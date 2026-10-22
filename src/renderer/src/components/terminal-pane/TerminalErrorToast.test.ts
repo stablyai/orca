@@ -434,6 +434,26 @@ describe('TerminalErrorToast environment footer', () => {
       expect(view.container.textContent).toContain('Retry could not reconnect yet')
     )
   })
+
+  // #30486: Retry was the only action, so a pane whose owner stays unverifiable looped on it.
+  it('offers a new terminal beside Retry and leaves this pane alone', () => {
+    const onRetry = vi.fn().mockResolvedValue(false)
+    const onOpenNewTerminal = vi.fn()
+    const onDismiss = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'terminal_pane_owner_unverified',
+        onDismiss,
+        onRetry,
+        onOpenNewTerminal
+      })
+    )
+
+    fireEvent.click(view.getByRole('button', { name: 'Open new terminal' }))
+    expect(onOpenNewTerminal).toHaveBeenCalledOnce()
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
 })
 
 // The shape a missing folder workspace reaches the toast in when its terminal spawn is rejected.

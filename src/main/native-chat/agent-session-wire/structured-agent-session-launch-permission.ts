@@ -2,7 +2,6 @@
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   agentChatPermissionModes,
   chatModelSupportsAutoMode,
   chatPermissionModeNeedsModelSupport,
@@ -42,7 +41,7 @@ export async function structuredAgentSessionLaunchPermission(
   if (!support || !deps.agents.definition(record.provider)) {
     return null
   }
-  const intent = record.options?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+  const intent = record.permissionMode
   const autoSupported =
     chatPermissionModeNeedsModelSupport(support, intent) &&
     (await listedAutoModeSupport(deps.modelCatalog, record))

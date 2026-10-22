@@ -45,6 +45,11 @@ export const runtimeEnvironmentsApi = {
     allowLoopback?: boolean
   }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
     ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
+  repairFromPairingCode: (args: {
+    selector: string
+    pairingCode: string
+  }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
+    ipcRenderer.invoke('runtimeEnvironments:repairFromPairingCode', args),
   resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
   remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>

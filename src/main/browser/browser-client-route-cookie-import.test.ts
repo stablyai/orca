@@ -54,6 +54,7 @@ const routeIdentity = {
   orcaProfileId: 'orca-profile-a',
   authorityConnectionIdentity: 'paired-runtime:authority-a',
   executionHostIdentity: 'execution-host-a',
+  pairingAuthorityConnectionIdentity: 'paired-runtime:pairing-authority-a',
   legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
   legacyExecutionHostIdentity: 'legacy-execution-host-a',
   storageScope: 'e'.repeat(64)
@@ -99,7 +100,8 @@ describe('importCookiesIntoClientRoutePartition', () => {
     expect(bindingStore.set).toHaveBeenCalledWith(
       partition,
       expect.stringMatching(/^[a-f0-9]{64}$/),
-      routeIdentity.storageScope
+      routeIdentity.storageScope,
+      expect.stringMatching(/^[a-f0-9]{64}$/)
     )
     expect(recordClientRouteImportSourceMock).toHaveBeenCalledWith({
       environmentId: 'env-a',
@@ -187,6 +189,7 @@ describe('importCookiesIntoClientRoutePartition', () => {
   it('still succeeds when only the authority runtime id changed during the import', async () => {
     getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue({
       ...routeIdentity,
+      pairingAuthorityConnectionIdentity: 'paired-runtime:pairing-authority-restarted',
       legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-restarted',
       legacyExecutionHostIdentity: 'legacy-execution-host-restarted'
     })

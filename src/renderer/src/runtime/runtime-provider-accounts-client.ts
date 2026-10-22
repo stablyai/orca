@@ -71,6 +71,8 @@ export function watchProviderAccounts(
   handlers: {
     onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
     onError: (error: unknown) => void
+    /** Remote only: the stream ended after its first snapshot, so later usage is unverifiable. */
+    onClosedAfterSnapshot?: () => void
   }
 ): ProviderAccountsWatcher {
   if (target.kind === 'local') {
@@ -166,8 +168,13 @@ export function watchProviderAccounts(
           }
         },
         onClose: () => {
-          if (!closed && !receivedSnapshot) {
+          if (closed) {
+            return
+          }
+          if (!receivedSnapshot) {
             handlers.onError(new Error('Remote provider account subscription closed.'))
+          } else {
+            handlers.onClosedAfterSnapshot?.()
           }
         }
       }

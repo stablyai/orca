@@ -1,6 +1,6 @@
 // A Claude chat whose first start died before initialize (not signed in, a crash) wrote no
 // transcript, so its next start launches that same provider id fresh. It is still the same
-// conversation: the new child continues the record's chain rather than creating a second root.
+// conversation: only the first child to prove its start creates the record's handle chain.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
@@ -24,6 +24,7 @@ describe('a Claude chat whose first start died before initialize', () => {
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
       ok: true
     })
+    await vi.waitFor(() => expect(claude.child(SESSION).initializing).toBe(true))
     claude.child(SESSION).exit(new Error('claude stream-json exited (code 1): not signed in'))
     await waitForStructuredAgentSessionRecovery()
     const failed = host.deps.store.getRecord(SESSION)
@@ -37,14 +38,17 @@ describe('a Claude chat whose first start died before initialize', () => {
     )
 
     expect(reopened, JSON.stringify(reopened)).toMatchObject({ ok: true })
+    await vi.waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
     const providerSessionId = claudeSessionIdForOrcaSession(SESSION)
     // No transcript exists to `--resume`, so the id is started fresh...
     expect(claude.child(SESSION).launch.options).toMatchObject({ sessionId: providerSessionId })
     expect(claude.child(SESSION).launch.options.resume).toBeUndefined()
-    // ...and the record still holds one conversation under one root.
+    // ...and only this proven start records the conversation's root.
     expect(
       host.deps.store.getRecord(SESSION)?.providerHandleChain.map((link) => link.origin)
-    ).toEqual(['created', 'resumed'])
+    ).toEqual(['created'])
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     )

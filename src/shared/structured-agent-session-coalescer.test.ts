@@ -162,6 +162,27 @@ describe('structured agent session event coalescer', () => {
       null
     ])
   })
+  it('ends a catch-up only when the last page it merged did', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+    const page = (sequence: number, hasNewer: boolean) => ({
+      ...batch(sequence),
+      ...(hasNewer ? { hasNewer: true as const } : {})
+    })
+
+    coalescer.push(page(1, true))
+    coalescer.push(page(2, true))
+    coalescer.flush()
+    coalescer.push(page(3, true))
+    coalescer.push(page(4, false))
+    coalescer.flush()
+
+    expect(events.map((event) => event.type === 'batch' && event.hasNewer === true)).toEqual([
+      true,
+      false
+    ])
+  })
+
   it('drops it when a later frame carries rows without it, as applying both would', () => {
     const events: AgentSessionSubscribeEvent[] = []
     const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))

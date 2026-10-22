@@ -3,8 +3,10 @@ import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixtur
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
+import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -53,7 +55,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('still retires and respawns when the routed provider confirms absence', async () => {
+  it('restores hidden delivery before respawning an absent caller session', async () => {
     const worktreeId = 'repo-1::/tmp/proven-absent-owner'
     const cwd = '/tmp/proven-absent-owner'
     const tabId = 'tab-proven-absent-owner'
@@ -64,7 +66,9 @@ describe('registerPtyHandlers', () => {
         if (options.attachOnly) {
           throw new SessionNotFoundError('pty-proven-absent-owner')
         }
-        return { id: 'pty-fresh-proven', incarnationId: 'inc-fresh-proven' }
+        expect(options.sessionId).toBe('pty-proven-absent-owner')
+        expect(isHiddenRendererPty('pty-proven-absent-owner')).toBe(true)
+        return { id: 'pty-proven-absent-owner', incarnationId: 'inc-fresh-proven' }
       }
     )
     setLocalPtyProvider({
@@ -149,6 +153,8 @@ describe('registerPtyHandlers', () => {
       rows: 24,
       cwd,
       command: 'codex resume proven-absent-session',
+      sessionId: 'pty-proven-absent-owner',
+      initiallyHidden: true,
       worktreeId,
       tabId,
       leafId,
@@ -159,7 +165,7 @@ describe('registerPtyHandlers', () => {
       }
     })
 
-    expect(mounted).toMatchObject({ id: 'pty-fresh-proven' })
+    expect(mounted).toMatchObject({ id: 'pty-proven-absent-owner' })
     expect(providerSpawn).toHaveBeenCalledTimes(2)
     expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
       command: 'codex resume proven-absent-session'
@@ -172,8 +178,17 @@ describe('registerPtyHandlers', () => {
       'inc-proven-absent-owner',
       { hostExitConfirmed: true }
     )
-    expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-    expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The dead binding stays until the fresh spawn's one bind swaps it.
+      expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+      const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
+      expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
+        ptyId: 'pty-proven-absent-owner'
+      })
+    } else {
+      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+      expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    }
   })
   it('does not poll after the routed provider confirms absence', async () => {
     const worktreeId = 'repo-1::/tmp/probe-blip-owner'

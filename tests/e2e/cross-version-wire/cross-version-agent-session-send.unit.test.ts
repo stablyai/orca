@@ -4,6 +4,7 @@
 // operation conflict, loses the user's message.
 
 import { beforeAll, describe, expect, it } from 'vitest'
+import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import { installableHost, structuredHostStub } from './structured-agent-session-host-fixture'
 import {
@@ -19,6 +20,9 @@ import {
   type RpcReply,
   type SentMessage
 } from './versioned-agent-session-wire'
+
+// The first published release whose host advertises `agent-session.send-options.v1` (#27826).
+const SEND_OPTIONS_RELEASE_REF = 'v1.4.228'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
@@ -81,4 +85,38 @@ describe('a current client sending a message', () => {
       }
     }
   })
+})
+
+describe('a current client sending a message with its choices', () => {
+  it(
+    'is accepted, and the choices reach the host, on a host that advertises them',
+    async () => {
+      const release = await loadAgentSessionWireBuild(SEND_OPTIONS_RELEASE_REF)
+      const options = { model: 'sonnet', effort: 'high' }
+      for (const build of [current, release]) {
+        expect(build.capabilities, build.label).toContain(
+          AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
+        )
+        resetOperationIds()
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await send(build, sendParams('hi', 1, undefined, options))
+          expect(replies, `${build.label}: ${JSON.stringify(replies)}`).toMatchObject([
+            { ok: true }
+          ])
+          const sent: SentMessage = hostCalls.send.mock.calls[0]?.[1]
+          expect(sent.options, `${build.label}: choices reached the host`).toEqual(options)
+          // `options` joins the operation fingerprint on both builds, so admission gets past it.
+          expect(await build.admitSend(sent), `${build.label}: send admission`).toMatchObject({
+            ok: false,
+            refusal: { details: { reason: 'sessionNotAttached' } }
+          })
+        } finally {
+          await build.installStructuredHost(null)
+        }
+      }
+    },
+    SUITE_TIMEOUT_MS
+  )
 })

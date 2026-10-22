@@ -1,3 +1,6 @@
+import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
+import { stopSurfaceTouchGestures } from './surface-touch-gestures'
+import { clearLongPress } from './tap-dispatch'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { MOBILE_TERMINAL_CARET_OPTIONS } from '../terminal-webview-html/theme'
 import { ESC } from './escape-introducers'
@@ -14,7 +17,7 @@ import {
 } from './mouse-mode-decset-scan'
 import { captureInitialOscLinkTexts } from './osc-link-tap'
 import { attachTerminalQueryReplyBridge, resetTerminalDataReplyAuthority } from './query-reply'
-import { cancelSelect } from './selection-range'
+import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
 import { beginTerminalSurfaceSwap, commitTerminalSurfaceSwap } from './surface-swap'
 import { attachTermObservers } from './term-observers'
@@ -89,6 +92,11 @@ export function init(
   preserveScroll: boolean,
   nextOscLinks: unknown
 ) {
+  // A replay replaces the scroll target; an old coast or unpainted drag belongs to the old one.
+  stopSurfaceTouchGestures(scope)
+  resetSmoothScrollOffset(scope)
+  clearLongPress(scope)
+  scope.tapCandidate = null
   if (typeof nextFontScale === 'number' && nextFontScale > 0) {
     scope.currentTextScale = nextFontScale
   }

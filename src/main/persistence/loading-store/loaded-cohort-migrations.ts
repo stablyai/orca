@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   createNewProfileNativeChatUpgradeTipAudience,
@@ -86,12 +86,19 @@ export class LoadedCohortMigrationOperations {
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
         : fileExistedOnLoad
+    const onboardingLanguageCohort = !fileExistedOnLoad
+      ? randomInt(2) === 0
+        ? 'control'
+        : 'treatment'
+      : undefined
+    this.runtime.loadNeedsSave = true
     return {
       ...state,
       settings: {
         ...state.settings,
         telemetry: {
           ...existing,
+          ...(onboardingLanguageCohort ? { onboardingLanguageCohort } : {}),
           existedBeforeTelemetryRelease: resolvedExistedBefore,
           // Why: preserve any explicit opt-in/out; fall back to cohort default only when optedIn is undefined, never when false.
           optedIn:

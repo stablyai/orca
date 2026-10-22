@@ -18,7 +18,6 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('lucide-react-native', () => ({ Copy: 'Copy', Check: 'Check' }))
-vi.mock('../components/MobileSelectableText', () => ({ MobileSelectableText: 'Text' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
@@ -69,18 +68,10 @@ describe('iOS whole-message copy', () => {
     }
     return node
   }
-  function tapMessage() {
-    const body = renderer!.root
-      .findByType(MobileNativeChatLongPressContent)
-      .findAll((node) => String(node.type) === 'Pressable')[0]
-    act(() => body?.props.onPress?.())
-  }
-  // Every copy case starts from a tapped message, the only state that shows the button.
   function render(value = message) {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message: value }))
     })
-    tapMessage()
   }
   beforeEach(() => {
     vi.clearAllMocks()
@@ -122,11 +113,8 @@ describe('iOS whole-message copy', () => {
       for (const node of nodes('MobileMarkdown')) {
         expect(node.props.onLongPress).toBeUndefined()
       }
-      // A held press selects text natively: no actions sheet, and no copy toggle.
-      const press = body.findAll((node) => String(node.type) === 'Pressable')[0]
-      act(() => press?.props.onLongPress())
-      expect(nodes('MessageActionsSheet')).toHaveLength(0)
-      expect(copyButton()).toBeDefined()
+      // A held press selects text natively: the body claims no press of its own.
+      expect(body.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
       await act(async () => copy.props.onPress())
       expect(writeText.mock.calls).toEqual([[first + '\n\n' + last]])
       expect(nodes('MessageActionsSheet')).toHaveLength(0)
@@ -141,32 +129,23 @@ describe('iOS whole-message copy', () => {
     }
   )
 
-  it('shows the copy button only after a tap on the message, and hides it on the next', () => {
-    act(() => {
-      renderer = create(createElement(MobileNativeChatMessage, { message }))
-    })
-    const hasCopy = () =>
-      nodes('Pressable').some((node) => node.props.accessibilityLabel === 'Copy message')
-    const body = renderer!.root
-      .findByType(MobileNativeChatLongPressContent)
-      .findAll((node) => String(node.type) === 'Pressable')[0]
-    expect(hasCopy()).toBe(false)
-    expect(body?.props).toMatchObject({ accessible: false })
-    act(() => body?.props.onLongPress())
-    expect(hasCopy()).toBe(false)
-
-    tapMessage()
-    expect(hasCopy()).toBe(true)
-    tapMessage()
-    expect(hasCopy()).toBe(false)
-  })
+  it.each(['user', 'assistant'] as const)(
+    'shows the %s message copy button without a tap',
+    (role) => {
+      render({ ...message, role })
+      expect(copyButton()).toBeDefined()
+    }
+  )
 
   it.each([
     'Please repair this chart:\n::orca-visual{file="usage.html"}\nKeep this text.',
     '::orca-visual{file="usage.html"}'
   ])('copies the entire visible own source %j', async (text) => {
     render({ ...message, role: 'user', blocks: [{ type: 'text', text }] })
-    expect(nodes('Text').some((node) => node.props.children === text)).toBe(true)
+    // Drawn as written: your own message never renders a visual.
+    expect(nodes('MobileMarkdown')).toHaveLength(1)
+    expect(nodes('MobileMarkdown')[0]?.props.content).toBe(text)
+    expect(nodes('MobileMarkdown')[0]?.props.renderVisual).toBeUndefined()
     expect(copyButton().props.accessibilityRole).toBe('button')
     await act(async () => copyButton().props.onPress())
     expect(writeText.mock.calls).toEqual([[text]])

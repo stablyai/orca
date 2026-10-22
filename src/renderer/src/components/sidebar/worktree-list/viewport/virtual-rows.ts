@@ -1,6 +1,9 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
-import { PINNED_GROUP_KEY, getWorktreeLineageGroupKey } from '../grouping/group-keys'
+import {
+  PINNED_GROUP_KEY,
+  getWorktreeLineageGroupKey
+} from '../../../../../../shared/sidebar-list/group-keys'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 

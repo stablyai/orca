@@ -22,10 +22,8 @@ import {
 import { admissionTierForRefreshReason } from '../github/pr-refresh-candidate-policy'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import {
-  getRepoHostedReviewExecutionHostId,
-  hostedReviewSshConnectionId
-} from '../source-control/hosted-review-execution-host'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import {
   createHostedReview,
   getHostedReviewCreationEligibility
@@ -51,7 +49,7 @@ export class RuntimeHostedReviewCommands {
   async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
-    const connectionId = hostedReviewSshConnectionId(getRepoHostedReviewExecutionHostId(repo))
+    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
     return options
       ? getRepoSlug(repo.path, connectionId, options)
       : getRepoSlug(repo.path, connectionId)
@@ -60,7 +58,7 @@ export class RuntimeHostedReviewCommands {
   async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
-    const connectionId = hostedReviewSshConnectionId(getRepoHostedReviewExecutionHostId(repo))
+    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
     return options
       ? getRepoUpstream(repo.path, connectionId, options)
       : getRepoUpstream(repo.path, connectionId)
@@ -94,7 +92,7 @@ export class RuntimeHostedReviewCommands {
       repo.path,
       branch,
       linkedPRNumber ?? null,
-      hostedReviewSshConnectionId(getRepoHostedReviewExecutionHostId(repo)),
+      hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo)),
       linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
       ...lookupOptionArgs
     )
@@ -118,7 +116,7 @@ export class RuntimeHostedReviewCommands {
     const executionOptions = this.deps.getExecutionOptions(repo, args.admissionTier ?? 'background')
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
-      executionHostId: getRepoHostedReviewExecutionHostId(repo),
+      executionHostId: getStoredRepoExecutionHostId(repo),
       branch: args.branch,
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
@@ -144,7 +142,7 @@ export class RuntimeHostedReviewCommands {
     const executionOptions = this.deps.getExecutionOptions(repo, 'interactive')
     return getHostedReviewCreationEligibility({
       repoPath,
-      executionHostId: getRepoHostedReviewExecutionHostId(repo),
+      executionHostId: getStoredRepoExecutionHostId(repo),
       branch: args.branch,
       base: args.base ?? null,
       hasUncommittedChanges: args.hasUncommittedChanges,
@@ -175,7 +173,7 @@ export class RuntimeHostedReviewCommands {
       draft: args.draft,
       ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
     }
-    const executionHostId = getRepoHostedReviewExecutionHostId(repo)
+    const executionHostId = getStoredRepoExecutionHostId(repo)
     const result = executionOptions
       ? await createHostedReview(repoPath, input, executionHostId, executionOptions)
       : await createHostedReview(repoPath, input, executionHostId)
@@ -201,7 +199,7 @@ export class RuntimeHostedReviewCommands {
         draft: args.draft,
         ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
       },
-      getRepoHostedReviewExecutionHostId(repo),
+      getStoredRepoExecutionHostId(repo),
       executionOptions ?? {}
     )
     if (result.ok) {

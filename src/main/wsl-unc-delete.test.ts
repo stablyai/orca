@@ -4,6 +4,9 @@ import type { ProcessResult } from '@orca/process-host/process-spec'
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
+vi.mock('./wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 
 function exited(code: number, stderr = ''): ProcessResult {
   return { code, signal: null, stdout: '', stderr, timedOut: false }
@@ -58,7 +61,7 @@ describe('tryDeleteWslUncPath', () => {
     expect(timeoutMs).toBe(30000)
     // Why a concrete directory (#16463): this deletes worktrees, so the cwd it
     // would otherwise inherit is the very directory about to disappear.
-    expect(cwd).toEqual(expect.any(String))
+    expect(cwd).toEqual('C:\\Windows')
     expect(spawnArgs).toEqual([
       '-d',
       'Ubuntu',

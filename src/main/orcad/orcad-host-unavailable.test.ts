@@ -3,8 +3,8 @@ import {
   classifyOrcadHostUnavailable,
   orcadCandidateLaunchFailureCode
 } from './orcad-host-unavailable'
-import { OrcadWindowsLaunchRefusedError } from '../ssh/orcad-remote-launch-windows'
-import { OrcadWindowsCommandLineError } from '../ssh/orcad-remote-windows-node'
+import { OrcadWindowsLaunchRefusedError } from '../managed-server/install/orcad-remote-launch-windows'
+import { OrcadWindowsCommandLineError } from '../managed-server/install/orcad-remote-windows-node'
 
 describe('classifyOrcadHostUnavailable', () => {
   it('sends a Windows host that cannot launch orcad back to the relay', () => {

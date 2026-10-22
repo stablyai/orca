@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -31,7 +31,7 @@ function resolveLaunchAgentTabId(
   const worktreeTabs = state.tabsByWorktree[args.worktreeId] ?? []
   // Main spawned the agent itself, so its startup tab is authoritative.
   if (args.backendSpawned && args.startupTerminalTabId) {
-    return getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+    return runtimeEnvironmentIdOrLocalUnlessTwin(state, args.worktreeId)
       ? toWebTerminalSurfaceTabId(args.startupTerminalTabId)
       : args.startupTerminalTabId
   }

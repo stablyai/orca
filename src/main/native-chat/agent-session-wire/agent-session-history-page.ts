@@ -28,11 +28,11 @@ import {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
+import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
   boundHistoryItemsByBytes,
-  STORED_HISTORY_READER,
   type HistoryReader,
-  historyEntryBytes,
+  measureHistoryItem,
   newestWholeSequenceGroups,
   wholeSubagentGroupsStart,
   oversizedHistoryItem,
@@ -95,7 +95,7 @@ export function readAgentSessionHistory(
   {
     snapshot = journal.snapshot(),
     scope = 'every-agent',
-    reader = STORED_HISTORY_READER
+    reader = CLIENT_HISTORY_READER
   }: {
     /** Reduced state to read against. A synchronous multi-page catch-up passes one
      *  snapshot for the whole run so each page costs its own rows, not the timeline. */
@@ -152,7 +152,7 @@ export function readAgentSessionHistory(
  */
 export function createAgentSessionCatchUpReader(
   journal: AgentSessionJournal,
-  reader: HistoryReader = STORED_HISTORY_READER
+  reader: HistoryReader = CLIENT_HISTORY_READER
 ): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
   let snapshot = journal.snapshot()
   return (request) => {
@@ -167,7 +167,7 @@ export function createAgentSessionCatchUpReader(
 export function readAgentSessionHydrationPage(
   journal: AgentSessionJournal,
   fence?: number,
-  reader: HistoryReader = STORED_HISTORY_READER
+  reader: HistoryReader = CLIENT_HISTORY_READER
 ): AgentSessionHistoryPage {
   return buildHydrationPage(journal.snapshot(), fence, reader)
 }
@@ -235,10 +235,13 @@ function readForward(
   // submissions AND removal ids — a legal pre-bounding tombstone id can dwarf
   // every item on the page.
   const pageContentBytes = (
-    items: readonly AgentJournalRenderItem[],
+    items: readonly ReturnType<HistoryReader['form']>[],
     removedItemIds: readonly string[]
   ): number =>
-    items.reduce((total, item) => total + historyEntryBytes(item, submissionBytes), 0) +
+    items.reduce(
+      (total, { item, bytes }) => total + bytes + (submissionBytes.get(item.itemId) ?? 0),
+      0
+    ) +
     removedItemIds.reduce(
       (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
       0
@@ -247,7 +250,7 @@ function readForward(
   // clipping projected items: dropping an item while advancing the cursor past
   // the rows that touched it would lose that revision for good.
   let rows = since.rows.slice(0, limit)
-  const project = (window: typeof rows): ReturnType<typeof projectJournalBatch> => {
+  const project = (window: typeof rows) => {
     const result = projectJournalBatch({
       rows: window,
       snapshot,
@@ -275,9 +278,11 @@ function readForward(
   // One row can still touch an over-budget item; degrade it visibly.
   let items = projected.batch.items
   if (contentBytes > reader.budgetBytes) {
-    items = items.map((item) => {
-      const bytes = historyEntryBytes(item, submissionBytes)
-      return bytes > reader.budgetBytes ? oversizedHistoryItem(item) : item
+    items = items.map((formed) => {
+      const bytes = formed.bytes + (submissionBytes.get(formed.item.itemId) ?? 0)
+      return bytes > reader.budgetBytes
+        ? measureHistoryItem(oversizedHistoryItem(formed.item))
+        : formed
     })
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }
@@ -295,7 +300,7 @@ function readForward(
     page: buildPage({
       snapshot,
       direction: 'after',
-      items,
+      items: items.map(({ item }) => item),
       removedItemIds: projected.batch.removedItemIds,
       // Reading after a position means there is something before it.
       hasOlder: cursor.sequence > 0,
@@ -349,7 +354,7 @@ function buildPage(input: {
 // A catch-up run pages one snapshot many times; its scan back to the turn record is paid once.
 const latestTurnBySnapshot = new WeakMap<AgentJournalSnapshot, AgentSessionLatestTurn | null>()
 
-function snapshotLatestTurn(snapshot: AgentJournalSnapshot): AgentSessionLatestTurn | null {
+export function snapshotLatestTurn(snapshot: AgentJournalSnapshot): AgentSessionLatestTurn | null {
   let latest = latestTurnBySnapshot.get(snapshot)
   if (latest === undefined) {
     latest = latestStructuredAgentSessionTurn(snapshot.items)

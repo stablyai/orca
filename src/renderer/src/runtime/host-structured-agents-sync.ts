@@ -25,6 +25,7 @@ async function syncLocalHost(settings: AppState['settings']): Promise<void> {
   if (!(await localStructuredChatsInUse(settings))) {
     return
   }
+  void useAppStore.getState().ensureNativeDetectedAgents()
   await loadHostStructuredAgents(
     LOCAL_EXECUTION_HOST_ID,
     await ensureLocalRuntimeCapabilities(),

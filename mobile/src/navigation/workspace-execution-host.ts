@@ -9,6 +9,16 @@ export function useWorkspaceExecutionHost(): ExecutionHostId | undefined {
   return useContext(WorkspaceExecutionHostContext)
 }
 
+/**
+ * Whether this workspace runs on the paired desktop itself. Gates actions whose only result is an
+ * editor tab; for everything else the host's reply decides where it goes.
+ * A phone paired directly with a headless host still reads true, matching main's behaviour there.
+ */
+export function useWorkspaceOnPairedHost(): boolean {
+  // Why the route, not a host signal: no host advertises a desktop window, and a server workspace's calls go to its own host.
+  return useWorkspaceExecutionHost() === undefined
+}
+
 /** The params a push into another screen of this workspace carries, so it stays on the server. */
 export function workspaceRouteParams(executionHost: ExecutionHostId | undefined): {
   executionHost?: ExecutionHostId

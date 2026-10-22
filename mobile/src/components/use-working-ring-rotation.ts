@@ -12,6 +12,8 @@ export function useWorkingRingRotation(active: boolean): Animated.AnimatedInterp
           toValue: 1,
           duration: 1000,
           easing: Easing.linear,
+          // Decorative loops must not hold up interaction-scheduled list rendering.
+          isInteraction: false,
           // Why: web has no native driver, so a loop over a native-driver timing plays it once.
           useNativeDriver: Platform.OS !== 'web'
         })

@@ -60,11 +60,27 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** One IMMEDIATE transaction; see `runJournalTransaction`. */
-  transaction<T>(run: (db: Database.Database) => T): T {
-    return runJournalTransaction(this.db, run, () => {
-      this.stranded = true
-    })
+  /** One IMMEDIATE transaction; see `runJournalTransaction`. `streamed` commits without the per-commit
+   *  fsync: only for rows an OS crash may lose (`isJournalStreamedTextRevision`); the next FULL
+   *  commit makes them durable, so a crash can only lose a suffix of them. */
+  transaction<T>(run: (db: Database.Database) => T, streamed = false): T {
+    const db = this.db
+    if (!streamed) {
+      return runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+    }
+    // The level can change only outside a transaction; a stranded one restores FULL on recovery.
+    db.pragma('synchronous = NORMAL')
+    try {
+      return runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+    } finally {
+      if (!db.isTransaction) {
+        db.pragma('synchronous = FULL')
+      }
+    }
   }
 
   /** Last, after every store has drained. A close that fails keeps the handle, so the retried
@@ -87,6 +103,7 @@ export class JournalHostDatabase {
         throw journalOpenRefusalError(error)
       }
     }
+    connection.pragma('synchronous = FULL')
     this.stranded = false
   }
 }

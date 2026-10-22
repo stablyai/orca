@@ -7,8 +7,8 @@ import {
   parseAgentChildWorkRecord
 } from './agent-status-child-work-codec'
 import {
-  AGENT_STATUS_STORE_LIMITS,
   AGENT_STATUS_STORE_SNAPSHOT_VERSION,
+  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
   type AgentStatusStoreMutation,
   type AgentStatusStoreSnapshot,
   type AgentStatusTombstoneEntity,
@@ -25,7 +25,6 @@ import {
   parseAgentStatusParentRecord
 } from './agent-status-store-parent'
 import { parseAgentStatusSubject } from './agent-status-subject'
-import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const MAX_EPOCH_LENGTH = 256
 const MAX_TOMBSTONE_KEY_LENGTH = 32_768
@@ -48,16 +47,6 @@ function hasOnlyKeys(
 
 function isRevision(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-}
-
-function isWithinSerializedLimit(value: unknown): boolean {
-  try {
-    return !measureUtf8ByteLength(JSON.stringify(value), {
-      stopAfterBytes: AGENT_STATUS_STORE_LIMITS.serializedBytes
-    }).exceededLimit
-  } catch {
-    return false
-  }
 }
 
 function isBoundedKey(value: unknown, maxLength: number): value is string {
@@ -111,7 +100,7 @@ export function parseAgentStatusTombstoneRecord(value: unknown): AgentStatusTomb
 function parseArray<T>(
   value: unknown,
   parser: (candidate: unknown) => T | null,
-  maxLength: number
+  maxLength = Number.POSITIVE_INFINITY
 ): T[] | null {
   if (!Array.isArray(value) || value.length > maxLength) {
     return null
@@ -127,15 +116,8 @@ function parseArray<T>(
   return parsed
 }
 
-function parseMutationArray<T>(
-  value: unknown,
-  parser: (candidate: unknown) => T | null
-): T[] | null {
-  return parseArray(value, parser, AGENT_STATUS_STORE_LIMITS.mutationEntries)
-}
-
 function parseStringArray(value: unknown): string[] | null {
-  return parseMutationArray(value, (candidate) =>
+  return parseArray(value, (candidate) =>
     isBoundedKey(candidate, MAX_TOMBSTONE_KEY_LENGTH) ? candidate : null
   )
 }
@@ -153,7 +135,6 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
     'tombstones'
   ]
   if (
-    !isWithinSerializedLimit(value) ||
     !isRecord(value) ||
     !hasOnlyKeys(value, [], optionalKeys) ||
     Object.keys(value).length === 0
@@ -164,29 +145,25 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
   const removeParent =
     value.removeParent === undefined ? undefined : parseAgentStatusSubject(value.removeParent)
   const children =
-    value.children === undefined
-      ? undefined
-      : parseMutationArray(value.children, parseAgentChildWorkInput)
+    value.children === undefined ? undefined : parseArray(value.children, parseAgentChildWorkInput)
   const removeChildren =
     value.removeChildren === undefined ? undefined : parseStringArray(value.removeChildren)
   const aliases =
     value.aliases === undefined
       ? undefined
-      : parseMutationArray(value.aliases, parseAgentChildWorkAliasInput)
+      : parseArray(value.aliases, parseAgentChildWorkAliasInput)
   const removeAliases =
     value.removeAliases === undefined ? undefined : parseStringArray(value.removeAliases)
   const facts =
-    value.facts === undefined
-      ? undefined
-      : parseMutationArray(value.facts, parseAgentStatusFactInput)
+    value.facts === undefined ? undefined : parseArray(value.facts, parseAgentStatusFactInput)
   const removeFacts =
     value.removeFacts === undefined
       ? undefined
-      : parseMutationArray(value.removeFacts, parseAgentStatusFactIdentity)
+      : parseArray(value.removeFacts, parseAgentStatusFactIdentity)
   const tombstones =
     value.tombstones === undefined
       ? undefined
-      : parseMutationArray(value.tombstones, parseAgentStatusTombstoneInput)
+      : parseArray(value.tombstones, parseAgentStatusTombstoneInput)
   const parsedValues = [
     parent,
     removeParent,
@@ -200,18 +177,6 @@ export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreM
   ]
   const sourceValues = optionalKeys.map((key) => value[key])
   if (sourceValues.some((item, index) => item !== undefined && !parsedValues[index])) {
-    return null
-  }
-  const mutationEntryCount = [
-    children,
-    removeChildren,
-    aliases,
-    removeAliases,
-    facts,
-    removeFacts,
-    tombstones
-  ].reduce((sum, items) => sum + (items?.length ?? 0), 0)
-  if (mutationEntryCount > AGENT_STATUS_STORE_LIMITS.mutationEntries) {
     return null
   }
   return {
@@ -239,7 +204,6 @@ export function parseAgentStatusStoreSnapshot(value: unknown): AgentStatusStoreS
     'tombstones'
   ]
   if (
-    !isWithinSerializedLimit(value) ||
     !isRecord(value) ||
     !hasOnlyKeys(value, keys) ||
     value.version !== AGENT_STATUS_STORE_SNAPSHOT_VERSION ||
@@ -248,26 +212,14 @@ export function parseAgentStatusStoreSnapshot(value: unknown): AgentStatusStoreS
   ) {
     return null
   }
-  const parents = parseArray(
-    value.parents,
-    parseAgentStatusParentRecord,
-    AGENT_STATUS_STORE_LIMITS.parents
-  )
-  const children = parseArray(
-    value.children,
-    parseAgentChildWorkRecord,
-    AGENT_STATUS_STORE_LIMITS.children
-  )
-  const aliases = parseArray(
-    value.aliases,
-    parseAgentChildWorkAliasRecord,
-    AGENT_STATUS_STORE_LIMITS.aliases
-  )
-  const facts = parseArray(value.facts, parseAgentStatusFactRecord, AGENT_STATUS_STORE_LIMITS.facts)
+  const parents = parseArray(value.parents, parseAgentStatusParentRecord)
+  const children = parseArray(value.children, parseAgentChildWorkRecord)
+  const aliases = parseArray(value.aliases, parseAgentChildWorkAliasRecord)
+  const facts = parseArray(value.facts, parseAgentStatusFactRecord)
   const tombstones = parseArray(
     value.tombstones,
     parseAgentStatusTombstoneRecord,
-    AGENT_STATUS_STORE_LIMITS.tombstones
+    AGENT_STATUS_STORE_TOMBSTONE_LIMIT
   )
   return parents && children && aliases && facts && tombstones
     ? {

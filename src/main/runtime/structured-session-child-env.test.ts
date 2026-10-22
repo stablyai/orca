@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
@@ -76,6 +77,10 @@ describe('sealStructuredSessionChild identity', () => {
       ORCA_CLI_BIN_DIR: SHIM_DIR,
       // The instance that minted the id, so any current CLI dials it rather than the default.
       ORCA_USER_DATA_PATH: USER_DATA,
+      // Empty, which the CLI reads as unset, so a profile's selector cannot send it elsewhere.
+      ORCA_ENVIRONMENT: '',
+      ORCA_PAIRING_CODE: '',
+      ORCA_REMOTE_PAIRING: '',
       ORCA_AGENT_SESSION_SPAWN_TOKEN: SEALED_TEST_SPAWN_TOKEN
     })
     // A chat names itself by its id alone: no handle, no pane key.
@@ -83,6 +88,24 @@ describe('sealStructuredSessionChild identity', () => {
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(childEnv).toEqual({ PATH: '/usr/bin' })
   })
+
+  it.each(['ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING'])(
+    "keeps an inherited %s from sending the agent's CLI to another server",
+    (key) => {
+      installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+      // A profile's export reaches both the shell snapshot a launch builds on and the server's
+      // own env, which the spawn merges under the launch's overlay.
+      const inherited = { PATH: '/usr/bin', [key]: 'other-server' }
+      const launch = { env: sealedChildEnv(SESSION_ID, inherited) }
+      const childEnv = resolveProviderChildEnv(launch, inherited)
+      expect(childEnv).toMatchObject({
+        ORCA_USER_DATA_PATH: USER_DATA,
+        ORCA_ENVIRONMENT: '',
+        ORCA_PAIRING_CODE: '',
+        ORCA_REMOTE_PAIRING: ''
+      })
+    }
+  )
 
   it('replaces an id inherited from an Orca launched inside another session', () => {
     installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
@@ -113,10 +136,18 @@ describe('sealStructuredSessionChild identity', () => {
       })
       const env = sealedChildEnv(SESSION_ID, {
         PATH: '/usr/bin',
-        ORCA_USER_DATA_PATH: '/other/profile'
+        ORCA_USER_DATA_PATH: '/other/profile',
+        ORCA_ENVIRONMENT: 'stale-shell-selection',
+        ORCA_PAIRING_CODE: 'stale-pairing',
+        ORCA_REMOTE_PAIRING: 'stale-remote-pairing'
       })
       expect(env.ORCA_CLI_COMMAND).toBe(launcher)
       expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+      expect(env).toMatchObject({
+        ORCA_ENVIRONMENT: '',
+        ORCA_PAIRING_CODE: '',
+        ORCA_REMOTE_PAIRING: ''
+      })
       expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
       expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
     })

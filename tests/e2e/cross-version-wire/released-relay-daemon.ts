@@ -1,7 +1,7 @@
 /**
  * A released relay, built from its own tagged sources and run as the real detached daemon, so a test
  * can leave live terminals in it exactly as a quit app does and reach them the way a later build must.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'

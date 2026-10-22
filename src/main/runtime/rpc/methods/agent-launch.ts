@@ -38,6 +38,7 @@ import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
+  agentLaunchRefusalError,
   agentLaunchTabClosedAnswer,
   settleLaunchWhoseTabWasClosed,
   settleQuietly,
@@ -165,8 +166,9 @@ function runLegacyAgentLaunch(
       presentation: params.presentation
     })
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
+    const { repo, repoHostId } = params.target.create
     return context.runtime.dedupeWorktreeCreate(
-      params.target.create.repo,
+      repoHostId ? { repo, repoHostId } : repo,
       `agent.launch:${params.target.create.clientMutationId}`,
       execute
     )
@@ -185,12 +187,11 @@ const activeAgentLaunchesByRuntime = new WeakMap<
 >()
 
 function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  const existing = activeAgentLaunchesByRuntime.get(runtime)
-  if (existing) {
-    return existing
+  let active = activeAgentLaunchesByRuntime.get(runtime)
+  if (!active) {
+    active = new Map()
+    activeAgentLaunchesByRuntime.set(runtime, active)
   }
-  const active = new Map<string, ActiveAgentLaunch>()
-  activeAgentLaunchesByRuntime.set(runtime, active)
   return active
 }
 
@@ -218,7 +219,7 @@ async function executeReplaySafeAgentLaunch(
         : undefined
     )
     if (admission.decision === 'refuse') {
-      throw Object.assign(new Error(admission.refusal.code), { code: admission.refusal.code })
+      throw agentLaunchRefusalError(admission.refusal)
     }
     return admission.result
   }
@@ -266,7 +267,7 @@ async function executeAdmittedAgentLaunch(
       terminalSpawn
     )
     if (failedWithoutEffects) {
-      await settleQuietly(admission.fail(failedWithoutEffects))
+      await settleQuietly(admission.fail(failedWithoutEffects, error))
     }
     throw new AgentLaunchExecutionError(error, failedWithoutEffects)
   }

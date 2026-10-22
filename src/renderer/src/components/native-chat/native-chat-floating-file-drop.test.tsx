@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { createUuidV4 } from '../../../../shared/uuid-v4'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 
@@ -39,10 +40,10 @@ function Composer({ attach, notice }: { attach: () => void; notice: () => void }
     disabled: false,
     attachResolvedPaths: attach,
     pendingChips: {
-      begin: () => null,
-      resolve: () => {},
+      begin: createUuidV4,
+      resolve: () => false,
       drop: () => false,
-      attachReferences: () => {}
+      attachReferences: () => false
     },
     setNotice: notice
   })
@@ -117,7 +118,8 @@ describe('floating chat attachments with a different remote runtime focused', ()
         access: { kind: 'user-file' }
       })
       expect(attach).toHaveBeenCalledExactlyOnceWith([path], undefined, {
-        destinationIsCurrent: expect.any(Function)
+        destinationIsCurrent: expect.any(Function),
+        operation: { apply: expect.any(Function), cancel: expect.any(Function) }
       })
       expect(attach.mock.calls[0][2].destinationIsCurrent()).toBe(true)
       expect(upload).not.toHaveBeenCalled()

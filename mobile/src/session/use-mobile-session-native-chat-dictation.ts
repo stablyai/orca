@@ -1,4 +1,5 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
+import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
@@ -8,7 +9,9 @@ import {
 } from '../terminal/terminal-live-dictation-routing'
 import {
   fetchDictationSetup,
-  isDictationSetupRequiredError
+  isDictationSetupRequiredError,
+  isSpeechlessServerError,
+  SPEECHLESS_SERVER_MESSAGE
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
@@ -36,6 +39,8 @@ export function useMobileSessionNativeChatDictation(
     diffCommentsRef,
     setShowDictationSetup,
     setDictationMode,
+    dictationEnabled,
+    setDictationEnabled,
     deviceTokenRef,
     dictationRouteContextRef,
     activeHandleRef,
@@ -107,14 +112,14 @@ export function useMobileSessionNativeChatDictation(
         return
       }
       triggerError()
-      showToast(message)
+      showToast(isSpeechlessServerError(message) ? SPEECHLESS_SERVER_MESSAGE : message)
     },
     [setShowDictationSetup, showToast]
   )
 
   const dictation = useMobileDictation({
     client,
-    enabled: canSend,
+    enabled: canSend && dictationEnabled,
     onTranscript: (text) => {
       // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
       if (showNativeChatRef.current) {
@@ -204,22 +209,36 @@ export function useMobileSessionNativeChatDictation(
     }
   }, [cancelDictation, dictation])
 
+  const dictationSettingsReadRef = useRef(0)
   const refreshDictationMode = useCallback(async () => {
-    if (!client) {
+    const read = ++dictationSettingsReadRef.current
+    if (!client || connState !== 'connected') {
       return
     }
     try {
       const setup = await fetchDictationSetup(client)
-      setDictationMode(setup.dictationMode)
+      if (read === dictationSettingsReadRef.current) {
+        setDictationMode(setup.dictationMode)
+        setDictationEnabled(setup.enabled !== false)
+      }
     } catch {
-      // Non-fatal: fall back to the default toggle behavior.
+      // Keep the last settings when an older host cannot report them.
     }
-  }, [client])
+  }, [client, connState, setDictationEnabled, setDictationMode])
 
-  // Re-read on focus so a Settings ▸ Voice dictation-mode change is reflected on return.
   useFocusEffect(
     useCallback(() => {
       void refreshDictationMode()
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          void refreshDictationMode()
+        }
+      })
+      return () => {
+        // Late replies from a retired connection or focus must not rebind the mic.
+        dictationSettingsReadRef.current += 1
+        subscription.remove()
+      }
     }, [refreshDictationMode])
   )
 

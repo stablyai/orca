@@ -195,11 +195,21 @@ describe('CLI setup choice across durable launch admission', () => {
     if (!row) {
       throw new Error('Missing uncertain launch row')
     }
+    expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(
+      1,
+      'id:wt-new',
+      expect.objectContaining({ startupAgent: 'codex' })
+    )
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(2, 'id:wt-new', {
+      surfaceOwner: false
+    })
     await expect(launch(client, { operationId: row.operationId })).rejects.toMatchObject({
       code: 'agent_session_operation_unknown'
     })
     expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
-    expect(runtime.createTerminal).toHaveBeenCalledOnce()
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
   })
 
   it('does not infer an effect-free refusal from matching text alone', async () => {

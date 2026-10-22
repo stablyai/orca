@@ -45,7 +45,7 @@ export function useSettingsRepoScrollEffects(
   const { neededRepos } = terminal
 
   useEffect(() => {
-    const repoHostIdentitySet = new Set(repos.map(getRepoHostIdentity))
+    const repoHostIdentitySet = new Set<string>(repos.map(getRepoHostIdentity))
     setRepoHooksMap((previous) => {
       const next = Object.fromEntries(
         Object.entries(previous).filter(([identity]) => repoHostIdentitySet.has(identity))

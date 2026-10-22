@@ -44,36 +44,66 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
  */
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
+// Only this licensed desktop-identical asset has its own allowance; code retains the 9 MiB fence.
+export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
+const TERMINAL_FONT_SHA256 = '8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467'
+const TERMINAL_FONT_BYTES = 1_177_916
+
+export function mobileWebAppBundleBudgetBytes(manifest) {
+  const fonts = manifest.assets.filter(
+    (asset) => asset.path.endsWith('.woff2') || asset.contentType.startsWith('font/')
+  )
+  if (fonts.length > 1) {
+    fail('only one licensed terminal font may use the independent font allowance')
+  }
+  const font = fonts[0]
+  if (!font) {
+    return manifest.totalBytes
+  }
+  if (
+    font.path !== `assets/${TERMINAL_FONT_SHA256}.woff2` ||
+    font.sha256 !== TERMINAL_FONT_SHA256 ||
+    font.contentType !== 'font/woff2' ||
+    font.byteLength !== TERMINAL_FONT_BYTES ||
+    font.byteLength > MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES
+  ) {
+    fail(
+      'terminal font allowance requires the approved hash, path, MIME type and bounded byte length'
+    )
+  }
+  return manifest.totalBytes - font.byteLength
+}
+
 /**
  * Scripts emitted at every prefix of the sorted route key list, and the route each prefix added.
  *
  * A chunk is emitted per distinct set of importers, not per route, so a route's marginal cost is
  * what it fails to share rather than what it weighs. Re-measured on this head by building
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
- * fitted to. The spread it shows is 1 to 11: `pr` and `web` add one script each, `tasks` adds eleven.
+ * fitted to. The spread it shows is 1 to 14: `pr` adds one script, `tasks` adds fourteen.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 78 scripts at 16 routes.
+ * swept tree reads 91 scripts at 16 routes, with theme tokens in the entry.
  *
  * This table is the fence's only input, so a route added to the tree stales it and the pins beside
  * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
  */
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 7],
+  ['./h/[hostId]/[...page].tsx', 6],
   ['./h/[hostId]/accounts.tsx', 10],
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
-  ['./h/[hostId]/edit.tsx', 19],
-  ['./h/[hostId]/files/[worktreeId].tsx', 23],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 30],
-  ['./h/[hostId]/history/[worktreeId].tsx', 33],
-  ['./h/[hostId]/index.tsx', 38],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 39],
-  ['./h/[hostId]/review/[worktreeId].tsx', 48],
-  ['./h/[hostId]/session/[worktreeId].tsx', 58],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 63],
-  ['./h/[hostId]/tasks.tsx', 74],
-  ['./h/[hostId]/web.tsx', 75],
-  ['./h/_layout.tsx', 78]
+  ['./h/[hostId]/edit.tsx', 20],
+  ['./h/[hostId]/files/[worktreeId].tsx', 24],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
+  ['./h/[hostId]/history/[worktreeId].tsx', 34],
+  ['./h/[hostId]/index.tsx', 42],
+  ['./h/[hostId]/new-workspace.tsx', 49],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 50],
+  ['./h/[hostId]/review/[worktreeId].tsx', 57],
+  ['./h/[hostId]/session/[worktreeId].tsx', 69],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 73],
+  ['./h/[hostId]/tasks.tsx', 87],
+  ['./h/_layout.tsx', 91]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -223,9 +253,10 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
 
-  if (manifest.totalBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
+  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest)
+  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
-      `bundle is ${String(manifest.totalBytes)} bytes, over the Phase C budget of ` +
+      `bundle excluding the approved font is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
     )
   }
@@ -276,7 +307,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     const manifest = await verifyMobileWebAppBundle()
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
-        `${String(manifest.totalBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes, ` +
+        `${String(manifest.totalBytes)} total bytes, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest))}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
         `reproducible buildId ${manifest.buildId}`
     )
   } catch (error) {

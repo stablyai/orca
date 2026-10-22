@@ -2,11 +2,13 @@ import {
   getLinearAttachmentByUuidForAgent,
   getLinearCommentByUuidForAgent,
   getLinearIssueByUuidForAgent,
-  LinearAgentAccessError,
-  linearError,
-  sanitizeLinearErrorMessage,
   sameStringSet
 } from './runtime-linear-command-dependencies'
+import {
+  LinearAgentAccessError,
+  linearError,
+  sanitizeLinearErrorMessage
+} from '../linear/issue-context/errors'
 import type { LinearCreateFieldIntent } from './runtime-linear-command-dependencies'
 import { RuntimeLinearCommentLookupCommands } from './runtime-linear-comment-lookup-commands'
 

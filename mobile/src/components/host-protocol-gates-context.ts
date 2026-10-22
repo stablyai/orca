@@ -8,3 +8,12 @@ export const HostStatusGatesContext = createContext<HostStatusGates | null>(null
 export function useOptionalHostProtocolGates(): HostStatusGates | null {
   return useContext(HostStatusGatesContext)
 }
+
+/** The gates of the host route this screen sits under. */
+export function useHostProtocolGates(): HostStatusGates {
+  const gates = useOptionalHostProtocolGates()
+  if (!gates) {
+    throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
+  }
+  return gates
+}

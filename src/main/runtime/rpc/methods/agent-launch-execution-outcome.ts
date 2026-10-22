@@ -9,7 +9,7 @@ import {
   AgentLaunchTabClosedError
 } from '../../../../shared/agent-launch-tab-closed'
 import type { RpcContext } from '../core'
-import { readsAgentLaunchTabClosed } from './agent-launch-replay'
+import { readsAgentLaunchTabClosed, type AgentLaunchRefusal } from './agent-launch-replay'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 import { agentLaunchFailureCode } from './agent-launch-failure-code'
 
@@ -26,6 +26,11 @@ export class AgentLaunchExecutionError extends Error {
   get failedWithoutEffects(): boolean {
     return this.failureCode !== null
   }
+}
+
+/** A replayed refusal, in the words it was refused with when its record kept them. */
+export function agentLaunchRefusalError(refusal: AgentLaunchRefusal): Error {
+  return Object.assign(new Error(refusal.said ?? refusal.code), { code: refusal.code })
 }
 
 export function settleQuietly(settlement: Promise<void>): Promise<void> {

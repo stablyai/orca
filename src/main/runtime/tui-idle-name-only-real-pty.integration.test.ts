@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import * as pty from 'node-pty'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, it, type TestContext } from 'vitest'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
@@ -19,26 +19,24 @@ const PTY_ID = 'pty-tui-idle-real'
 
 const waitMethod = TERMINAL_LIFECYCLE_METHODS.find((method) => method.name === 'terminal.wait')!
 
-const running: pty.IPty[] = []
-
-afterEach(() => {
-  while (running.length > 0) {
-    try {
-      running.pop()?.kill()
-    } catch {
-      // The fixture may already be gone.
-    }
-  }
-})
-
-async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: number) {
+async function startRealAgentPane(
+  context: TestContext,
+  mode: 'explicit-idle' | 'quiet',
+  workMs: number
+) {
   const child = pty.spawn(process.execPath, [FIXTURE, mode, String(workMs)], {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
     cwd: '/tmp'
   })
-  running.push(child)
+  context.onTestFinished(() => {
+    try {
+      child.kill()
+    } catch {
+      // The fixture may already be gone.
+    }
+  })
 
   // Real foreground read against the real pty, so corroboration is host-produced here too.
   const runtime = makeTuiIdleRuntime({
@@ -104,9 +102,11 @@ async function terminalWait(
   }
 }
 
+// Each case owns its PTY and runtime; overlap the real idle observation windows.
 describe.skipIf(process.platform === 'win32')('tui-idle against a real agent pty', () => {
-  it('does not satisfy while the real process streams under a name-only title', async () => {
-    const { runtime, transcript, handle } = await startRealAgentPane('quiet', 60_000)
+  it.concurrent('does not satisfy while the real process streams under a name-only title', async (context) => {
+    const { expect } = context
+    const { runtime, transcript, handle } = await startRealAgentPane(context, 'quiet', 60_000)
     // Wait for real control bytes before measuring idle behavior.
     await expect.poll(() => transcript.join(''), { timeout: 5_000 }).toContain(']0;Codex')
 
@@ -115,8 +115,9 @@ describe.skipIf(process.platform === 'win32')('tui-idle against a real agent pty
     expect(outcome.elapsedMs).toBeGreaterThanOrEqual(7_500)
   }, 25_000)
 
-  it('satisfies once the real process emits an explicit idle title', async () => {
-    const { runtime, handle } = await startRealAgentPane('explicit-idle', 3_000)
+  it.concurrent('satisfies once the real process emits an explicit idle title', async (context) => {
+    const { expect } = context
+    const { runtime, handle } = await startRealAgentPane(context, 'explicit-idle', 3_000)
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     const outcome = await terminalWait(runtime, handle, 20_000)
@@ -124,8 +125,9 @@ describe.skipIf(process.platform === 'win32')('tui-idle against a real agent pty
     expect(outcome.elapsedMs).toBeGreaterThanOrEqual(1_500)
   }, 28_000)
 
-  it('satisfies once the real process goes quiet with the agent still in foreground', async () => {
-    const { runtime, handle } = await startRealAgentPane('quiet', 3_000)
+  it.concurrent('satisfies once the real process goes quiet with the agent still in foreground', async (context) => {
+    const { expect } = context
+    const { runtime, handle } = await startRealAgentPane(context, 'quiet', 3_000)
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     const outcome = await terminalWait(runtime, handle, 20_000)

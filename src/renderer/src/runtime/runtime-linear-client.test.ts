@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   linearListIssues,
   linearSearchIssues,
+  linearSearchIssuesForTarget,
   linearSelectWorkspace,
-  linearStatus
+  linearStatus,
+  linearStatusForTarget
 } from './runtime-linear-client'
 import {
   linearCreateIssue,
@@ -301,6 +303,30 @@ describe('runtime linear client', () => {
     expect(linearStatusLocal).not.toHaveBeenCalled()
     expect(linearSearchIssuesLocal).not.toHaveBeenCalled()
     expect(linearListIssuesLocal).not.toHaveBeenCalled()
+  })
+
+  it('routes explicit search targets with the same workspace and query bounds as legacy callers', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      Promise.resolve({
+        id: 'rpc-result',
+        ok: true,
+        result: args.method === 'linear.status' ? { connected: true, viewer: null } : [],
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const target = { kind: 'environment', environmentId: 'source-owner' } as const
+    await expect(linearStatusForTarget(target)).resolves.toEqual({ connected: true, viewer: null })
+    await linearSearchIssuesForTarget(target, 'bug', 12, 'workspace-a')
+    await linearSearchIssuesForTarget(target, 'secret-token-value'.repeat(1024), 12)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
+      selector: 'source-owner',
+      method: 'linear.searchIssues',
+      params: { query: 'bug', limit: 12, workspaceId: 'workspace-a' },
+      timeoutMs: 30_000
+    })
+    expect(linearStatusLocal).not.toHaveBeenCalled()
+    expect(linearSearchIssuesLocal).not.toHaveBeenCalled()
   })
 
   it('wraps legacy remote Linear issue list arrays as collection results', async () => {

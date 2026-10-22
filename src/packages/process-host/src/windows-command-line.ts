@@ -83,11 +83,80 @@ export function quoteWindowsCmdArgument(value: string): string {
   return quoteWindows(value, true)
 }
 
+/**
+ * Decode a command line the way `CommandLineToArgvW` does, e.g. one read back from
+ * the process table. `""` inside a quoted run yields a literal quote.
+ */
+export function parseWindowsCommandLine(line: string): string[] {
+  const argv: string[] = []
+  let current = ''
+  let quoted = false
+  let started = false
+  let index = 0
+  while (index < line.length) {
+    const char = line.charAt(index)
+    if (!started && /[ \t]/.test(char)) {
+      index += 1
+      continue
+    }
+    started = true
+    if (char === '\\') {
+      let backslashes = 0
+      while (line[index] === '\\') {
+        backslashes += 1
+        index += 1
+      }
+      if (line[index] === '"') {
+        current += '\\'.repeat(Math.floor(backslashes / 2))
+        if (backslashes % 2 === 1) {
+          current += '"'
+          index += 1
+        }
+      } else {
+        current += '\\'.repeat(backslashes)
+      }
+      continue
+    }
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"'
+        index += 2
+        continue
+      }
+      quoted = !quoted
+      index += 1
+      continue
+    }
+    if (!quoted && /[ \t]/.test(char)) {
+      argv.push(current)
+      current = ''
+      started = false
+      index += 1
+      continue
+    }
+    current += char
+    index += 1
+  }
+  if (started) {
+    argv.push(current)
+  }
+  return argv
+}
+
+/** Thrown before spawn when a `.cmd`/`.bat` target would receive a line break. Typed so
+ * callers can tell the user the batch file is the limit, not the agent. */
+export class WindowsCmdLineBreakError extends Error {
+  constructor() {
+    super('cmd.exe cannot receive an argument containing a line break')
+    this.name = 'WindowsCmdLineBreakError'
+  }
+}
+
 export function validateWindowsCmdArguments(values: readonly string[]): void {
   for (const value of values) {
     // cmd ends a command at CR/LF regardless of quoting.
     if (/[\r\n]/.test(value)) {
-      throw new Error('cmd.exe cannot receive an argument containing a line break')
+      throw new WindowsCmdLineBreakError()
     }
   }
 }

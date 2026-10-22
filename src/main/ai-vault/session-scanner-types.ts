@@ -57,7 +57,7 @@ export type AiVaultScanOptions = {
   unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeCwdBucketFiles).
+  // the recency cap (see AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
@@ -98,6 +98,8 @@ export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
+  scopeFiles?: FileWithMtime[]
 }
 
 export type SessionParseResult = {

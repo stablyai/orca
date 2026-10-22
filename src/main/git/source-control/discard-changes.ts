@@ -33,7 +33,7 @@ export async function discardChanges(
     let tracked = false
     try {
       await gitExecFileAsync(
-        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
+        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, worktreePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
@@ -44,9 +44,12 @@ export async function discardChanges(
     }
 
     if (tracked) {
-      await gitExecFileAsync(['restore', '--worktree', '--', literalPathspec(filePath, options)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        ['restore', '--worktree', '--', literalPathspec(filePath, worktreePath, options)],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
       await redoWriteForDriveCheckoutSuspects(worktreePath, [filePath], DISCARD_WRITE, options)
       return
     }
@@ -134,7 +137,7 @@ export async function bulkDiscardChanges(
           {
             ...gitOptionsForWorktree(worktreePath, options),
             stdin: encodeGitPathspecs(
-              trackedPaths.map((filePath) => literalPathspec(filePath, options))
+              trackedPaths.map((filePath) => literalPathspec(filePath, worktreePath, options))
             )
           }
         )

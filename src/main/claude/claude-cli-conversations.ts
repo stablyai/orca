@@ -3,24 +3,23 @@ import { join } from 'node:path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import {
+  directoryTranscriptImport,
   resumeInvocationFromOptions,
   type StructuredAgentResumeInvocation,
   type StructuredAgentCliConversations,
-  type StructuredAgentSessionHistory,
-  type StructuredAgentTranscriptImport
+  type StructuredAgentSessionHistory
 } from '../native-chat/structured-agent-cli-conversations'
 
-const CLAUDE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
+const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
+  conversationStore: ({ accountHomePath }) => join(accountHomePath, 'projects'),
   accountHomeCandidates: ({ selectedAccountHomePath }) => [
     selectedAccountHomePath,
     join(homedir(), '.claude'),
     ...(getClaudeProfileRouter()?.accountHomes() ?? [])
   ],
-  findTranscript: ({ providerSessionId, accountHomePath }) =>
-    resolveSessionFilePath('claude', providerSessionId, {
-      claudeProjectsDir: join(accountHomePath, 'projects')
-    })
-}
+  findTranscript: ({ providerSessionId, store, strictErrors }) =>
+    resolveSessionFilePath('claude', providerSessionId, { claudeProjectsDir: store, strictErrors })
+})
 
 const CLAUDE_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['claude'],

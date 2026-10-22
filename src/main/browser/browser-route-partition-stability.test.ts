@@ -2,10 +2,8 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserHostLeaseAuthority,
-  BrowserNetworkExecutionHost
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
 import { browserNetworkExecutionHostKey } from './browser-network-execution-route'
 import { deriveBrowserRoutePartition } from './browser-route-identity'

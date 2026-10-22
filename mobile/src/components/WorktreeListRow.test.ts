@@ -13,10 +13,16 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { WorktreeListRow } from './WorktreeListRow'
+import {
+  DEFAULT_WORKTREE_CARD_PROPERTIES,
+  getWorktreeCardDetails,
+  type WorktreeCardDetails
+} from '../../../src/shared/worktree/card-properties'
 
-const { agentSpinnerRender, agentStateDotRender } = vi.hoisted(() => ({
+const { agentSpinnerRender, agentStateDotRender, metaGlyphsRender } = vi.hoisted(() => ({
   agentSpinnerRender: vi.fn(),
-  agentStateDotRender: vi.fn()
+  agentStateDotRender: vi.fn(),
+  metaGlyphsRender: vi.fn()
 }))
 
 vi.mock('react-native', () => ({
@@ -54,7 +60,10 @@ vi.mock('./MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
 vi.mock('./WorktreeAgentList', () => ({ WorktreeAgentList: () => null }))
 vi.mock('./WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
-  WorktreeMetaGlyphs: () => null
+  WorktreeMetaGlyphs: (props: unknown) => {
+    metaGlyphsRender(props)
+    return null
+  }
 }))
 
 type TestItem = Worktree & { status: NonNullable<Worktree['status']> }
@@ -62,7 +71,23 @@ type TestItem = Worktree & { status: NonNullable<Worktree['status']> }
 const stableRepoIcon = { type: 'emoji', emoji: 'o' } as const
 let updateSibling: Dispatch<SetStateAction<number>> = () => undefined
 
-function ListRowHarness({ item, now }: { item: TestItem; now: number }) {
+const detailsFor = (compactWorktreeCards: boolean, newCardStyle: boolean) =>
+  getWorktreeCardDetails(DEFAULT_WORKTREE_CARD_PROPERTIES, { compactWorktreeCards, newCardStyle })
+const ALL_DETAILS = detailsFor(false, false)
+const COMPACT = detailsFor(true, false)
+const NEW_CARD_STYLE = detailsFor(false, true)
+
+function ListRowHarness({
+  item,
+  now,
+  cardDetails = ALL_DETAILS,
+  hideRepo = false
+}: {
+  item: TestItem
+  now: number
+  cardDetails?: WorktreeCardDetails
+  hideRepo?: boolean
+}) {
   const [sibling, setSibling] = useState(0)
   updateSibling = setSibling
   const onPress = useCallback(() => undefined, [])
@@ -81,7 +106,9 @@ function ListRowHarness({ item, now }: { item: TestItem; now: number }) {
       now,
       repoColor: '#000000',
       repoIcon: stableRepoIcon,
-      hideRepo: false,
+      hideRepo,
+      cardDetails,
+      agentActivityDisplayMode: 'compact',
       status: item.status,
       onPress,
       onLongPress,
@@ -132,11 +159,35 @@ describe('memoized worktree rows', () => {
   beforeEach(() => {
     agentSpinnerRender.mockClear()
     agentStateDotRender.mockClear()
+    metaGlyphsRender.mockClear()
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  it.each([false, true])('names the owner once (Project mode: %s)', async (hideRepo) => {
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeListRow, {
+          item: { ...baseItem, showProjectName: true, lineageDepth: 1 },
+          isReadOnly: false,
+          now: 2_000,
+          repoColor: '#000000',
+          hideRepo,
+          cardDetails: ALL_DETAILS,
+          agentActivityDisplayMode: 'compact',
+          status: 'active',
+          onPress: () => undefined
+        })
+      )
+    })
+    const ownerNames = renderer!.root
+      .findAllByType(Text)
+      .map((node) => node.props.children)
+      .filter((text) => text === baseItem.repo)
+    expect(ownerNames).toEqual([baseItem.repo])
   })
 
   it('skips an unrelated parent render but updates for live item fields and time', async () => {
@@ -181,6 +232,9 @@ describe('memoized worktree rows', () => {
         now: overrides.now ?? 2_000,
         repoColor: '#000000',
         repoIcon: { type: 'emoji', emoji: 'o' },
+        // A fresh but equal details object each render, as a parent re-render makes.
+        cardDetails: { ...ALL_DETAILS },
+        agentActivityDisplayMode: 'compact',
         status: item.status,
         onPress: overrides.onPress ?? onPress
       })
@@ -310,6 +364,26 @@ describe('memoized worktree rows', () => {
     await act(async () =>
       renderer!.update(
         createElement(ListRowHarness, {
+          item: {
+            ...baseItem,
+            hostId: 'ssh:ssh-1',
+            hostContextHealthLabel: 'Disconnected'
+          },
+          now: 2_000
+        })
+      )
+    )
+    expect(textNodes()).toContain('Disconnected')
+    expect(textNodes()).not.toContain('openclaw')
+    expect(textNodes()).not.toContain('· Disconnected')
+    expect(renderer!.root.findAll((node) => String(node.type) === 'Server')).toHaveLength(1)
+    expect(
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Disconnected')
+    ).toHaveLength(1)
+
+    await act(async () =>
+      renderer!.update(
+        createElement(ListRowHarness, {
           item: { ...baseItem, hostContextLabel: 'Local Mac' },
           now: 2_000
         })
@@ -323,5 +397,180 @@ describe('memoized worktree rows', () => {
     )
     expect(textNodes()).not.toContain('Local Mac')
     expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(0)
+  })
+
+  it("leaves out the PR, host and agents the desktop's card properties turn off", async () => {
+    const item: TestItem = {
+      ...baseItem,
+      hostId: 'ssh:ssh-1',
+      hostContextLabel: 'openclaw',
+      linkedPR: { number: 7, state: 'open' }
+    }
+    const shown = () => ({
+      pr: renderer!.root.findAll((node) => String(node.type) === 'GitPullRequest').length,
+      host: renderer!.root.findAll((node) => String(node.type) === 'Server').length
+    })
+    await act(async () => {
+      renderer = create(createElement(ListRowHarness, { item, now: 2_000 }))
+    })
+    expect(shown()).toEqual({ pr: 1, host: 1 })
+
+    await act(async () =>
+      renderer!.update(
+        createElement(ListRowHarness, {
+          item,
+          now: 2_000,
+          cardDetails: getWorktreeCardDetails(['status', 'unread'], {
+            compactWorktreeCards: false,
+            newCardStyle: false
+          })
+        })
+      )
+    )
+    expect(shown()).toEqual({ pr: 0, host: 0 })
+  })
+
+  describe('Compact', () => {
+    const texts = (): string[] =>
+      renderer!.root
+        .findAllByType('Text' as never)
+        .flatMap((node) => node.props.children)
+        .filter((child): child is string => typeof child === 'string')
+    const repoChips = () =>
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Project orca')
+    const render = async (
+      props: Partial<{
+        item: TestItem
+        cardDetails: WorktreeCardDetails
+        hideRepo: boolean
+      }> = {}
+    ) => {
+      const element = createElement(ListRowHarness, { item: baseItem, now: 2_000, ...props })
+      await act(async () => {
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+    }
+
+    it('moves the repo into a title chip and drops the branch line, as the desktop does', async () => {
+      await render()
+      expect(texts()).toEqual(expect.arrayContaining(['orca', 'feature/mobile-list']))
+      expect(repoChips()).toHaveLength(0)
+
+      await render({ cardDetails: COMPACT })
+      expect(texts()).not.toContain('orca')
+      expect(texts()).not.toContain('feature/mobile-list')
+      expect(texts()).toContain('mobile-list')
+      expect(repoChips()).toHaveLength(1)
+    })
+
+    it('drops the host and child badges with the meta row, keeping a remote host glyph', async () => {
+      const item: TestItem = {
+        ...baseItem,
+        hostId: 'ssh:ssh-1',
+        hostContextLabel: 'openclaw',
+        lineageDepth: 1
+      }
+      await render({ item })
+      expect(texts()).toEqual(expect.arrayContaining(['openclaw', 'Child']))
+
+      await render({ item, cardDetails: COMPACT })
+      expect(texts()).not.toContain('openclaw')
+      expect(texts()).not.toContain('Child')
+      const glyphs = () => renderer!.root.findAll((node) => String(node.type) === 'Server')
+      expect(glyphs()).toHaveLength(1)
+      expect(
+        renderer!.root.findAll((node) => node.props.accessibilityLabel === 'openclaw')
+      ).toHaveLength(1)
+
+      // A remote row with no host label still gets the glyph, named generically.
+      await render({ item: { ...item, hostContextLabel: undefined }, cardDetails: COMPACT })
+      expect(glyphs()).toHaveLength(1)
+      expect(
+        renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Remote host')
+      ).toHaveLength(1)
+
+      // An older host's row carries only the resolved host the label pass stamped.
+      await render({
+        item: { ...item, hostId: undefined, hostContextHostId: 'ssh:ssh-1' },
+        cardDetails: COMPACT
+      })
+      expect(glyphs()).toHaveLength(1)
+
+      // The new card style keeps the host badge in its meta row: one server icon, the badge's.
+      await render({ item, cardDetails: NEW_CARD_STYLE })
+      expect(glyphs()).toHaveLength(1)
+      expect(texts()).toContain('openclaw')
+
+      // Local rows get no glyph, as the desktop shows none for local projects.
+      await render({ item: { ...item, hostId: 'local' }, cardDetails: COMPACT })
+      expect(glyphs()).toHaveLength(0)
+      expect(renderer!.root.findAll((node) => String(node.type) === 'Monitor')).toHaveLength(0)
+    })
+
+    it('leaves the chip out when the list is grouped by repo or the row is a folder', async () => {
+      await render({ cardDetails: COMPACT, hideRepo: true })
+      expect(repoChips()).toHaveLength(0)
+
+      await render({
+        cardDetails: COMPACT,
+        item: { ...baseItem, workspaceKind: 'folder-workspace' }
+      })
+      expect(repoChips()).toHaveLength(0)
+      expect(texts()).toContain('Folder')
+    })
+
+    it('keeps the PR badge next to the repo chip', async () => {
+      await render({
+        cardDetails: COMPACT,
+        item: { ...baseItem, linkedPR: { number: 7, state: 'open' } }
+      })
+      expect(repoChips()).toHaveLength(1)
+      expect(renderer!.root.findAll((node) => String(node.type) === 'GitPullRequest')).toHaveLength(
+        1
+      )
+      const badgeTexts = renderer!.root
+        .findAllByType('Text' as never)
+        .map((node) => [node.props.children].flat().join(''))
+      expect(badgeTexts).toContain('#7')
+    })
+
+    it('uses the chip under the new card style but keeps the branch line', async () => {
+      await render({ cardDetails: NEW_CARD_STYLE })
+      expect(repoChips()).toHaveLength(1)
+      expect(texts()).not.toContain('orca')
+      expect(texts()).toContain('feature/mobile-list')
+    })
+  })
+
+  it('passes the Jira, automation and CLI facts the card properties show', async () => {
+    const item: TestItem = {
+      ...baseItem,
+      automationCreated: true,
+      cliCreated: true,
+      linkedItems: [{ provider: 'jira', type: 'issue', number: 12, jiraIdentifier: 'ORCA-12' }]
+    }
+    const lastPresence = () => metaGlyphsRender.mock.lastCall?.[0].presence
+    await act(async () => {
+      renderer = create(createElement(ListRowHarness, { item, now: 2_000 }))
+    })
+    expect(lastPresence()).toMatchObject({ jira: true, automation: true, cli: true })
+
+    await act(async () =>
+      renderer!.update(
+        createElement(ListRowHarness, {
+          item,
+          now: 2_000,
+          cardDetails: getWorktreeCardDetails(['status', 'unread'], {
+            compactWorktreeCards: false,
+            newCardStyle: false
+          })
+        })
+      )
+    )
+    expect(lastPresence()).toMatchObject({ jira: false, automation: false, cli: false })
   })
 })

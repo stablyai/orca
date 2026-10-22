@@ -1,4 +1,5 @@
-import { app, clipboard, dialog, type BrowserWindow, type Tray } from 'electron'
+import { app, clipboard, dialog, type BrowserWindow, type Tray, type WebContents } from 'electron'
+import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
@@ -149,28 +150,23 @@ export function createSystemTrayDeferred(
   }
 }
 
+function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebContents | undefined {
+  // Why: a native browser popup is a BrowserWindow hosting a web page, not Orca's renderer.
+  return targetWindow && !targetWindow.isDestroyed() && !isNativeBrowserPopupWindow(targetWindow)
+    ? targetWindow.webContents
+    : state.mainWindow?.webContents
+}
+
 export function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openFeatureTour')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openFeatureTour')
 }
 
 export function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openSetupGuide')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openSetupGuide')
 }
 
 export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
-  const webContents =
-    targetWindow && !targetWindow.isDestroyed()
-      ? targetWindow.webContents
-      : state.mainWindow?.webContents
-  webContents?.send('ui:openCrashReport')
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:openCrashReport')
 }
 
 // Why: once auto-recovery gives up the window stays blank, so a main-process dialog is the only retry/quit surface.

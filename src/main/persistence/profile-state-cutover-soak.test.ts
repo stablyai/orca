@@ -17,6 +17,7 @@ import {
   type ProfileStateStoreFactoryResult
 } from './profile-state/profile-state-store-factory'
 import { profileStateDatabaseFile } from './profile-state/profile-state-database'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: {
@@ -185,10 +186,13 @@ describe('profile-state candidate cutover soak', () => {
           }
         ]
       })
-      reopened.store.setWorktreeMeta('repo-local::/fixture/local', {
-        comment: `soak-${round}`,
-        linkedPR: 100 + round
-      })
+      reopened.store.setWorktreeMeta(
+        hostWorktreeTarget({ id: 'repo-local::/fixture/local', hostId: 'local' }),
+        {
+          comment: `soak-${round}`,
+          linkedPR: 100 + round
+        }
+      )
       reopened.store.createAutomationRun(currentAutomation, 100 + round, 'manual')
       reopened.store.flushOrThrow()
       reopened.store.freezeWrites()

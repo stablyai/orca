@@ -9,7 +9,13 @@ import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
+import type { AgentInputFocusGuard } from './agent-input-focus-guard'
+import { CdpPageInputCommands } from './cdp-page-input-commands'
 import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
+import {
+  assertRemoteCliPageAccess,
+  runUnderRemoteCliPageAdmission
+} from './remote-cli-page-admission'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -24,10 +30,12 @@ export class CdpWsProxy {
   private readonly navigation: CdpPageNavigationCommands
   private readonly domFocusReplay: CdpDomFocusReplay
   private readonly pageCapture: CdpPageCaptureCommands
+  private readonly input: CdpPageInputCommands
 
   constructor(
     private readonly webContents: WebContents,
-    holdPaint: CapturePaintHold
+    holdPaint: CapturePaintHold,
+    guardFocus: AgentInputFocusGuard = async () => () => {}
   ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
@@ -50,6 +58,13 @@ export class CdpWsProxy {
     )
     this.domFocusReplay = new CdpDomFocusReplay(webContents, this.responder, this.debuggerChannel)
     this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder, holdPaint)
+    this.input = new CdpPageInputCommands(
+      webContents,
+      this.responder,
+      this.debuggerChannel,
+      this.domFocusReplay,
+      guardFocus
+    )
   }
 
   async start(): Promise<string> {
@@ -85,7 +100,9 @@ export class CdpWsProxy {
         this.closeClient()
         this.client = ws
         const onMessage = (data: WebSocket.RawData): void => {
-          this.handleClientMessage(ws, data.toString())
+          runUnderRemoteCliPageAdmission(this.webContents.id, () =>
+            this.handleClientMessage(ws, data.toString())
+          )
         }
         const onClose = (): void => {
           detach()
@@ -167,16 +184,26 @@ export class CdpWsProxy {
     }
     const clientId = msg.id
     this.responder.recordRequestSessionId(client, clientId, msg)
+    // Why here too: a revoked host's helper is refused even its read-only steps, so it stops at once.
+    try {
+      assertRemoteCliPageAccess(this.webContents.id)
+    } catch (error) {
+      this.responder.sendError(
+        clientId,
+        error instanceof Error ? error.message : String(error),
+        client
+      )
+      return
+    }
 
     if (this.discovery.handleCommand(client, clientId, msg)) {
       return
     }
     const effectiveSessionId = this.sessions.resolveDebuggerSessionId(msg.sessionId)
     this.domFocusReplay.invalidateForMethod(msg.method, effectiveSessionId)
-    if (msg.method === 'Page.bringToFront') {
-      if (!this.webContents.isDestroyed()) {
-        this.webContents.focus()
-      }
+    // Why: an agent raising its page must not take the user's keyboard focus (#20595); the
+    // page needs no native focus to receive input, so these succeed without side effects.
+    if (msg.method === 'Page.bringToFront' || msg.method === 'Target.activateTarget') {
       this.responder.sendResult(clientId, {}, client)
       return
     }
@@ -213,19 +240,14 @@ export class CdpWsProxy {
       this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
-    // Why: Input.insertText can still require native focus in Electron webviews.
-    // Do not auto-focus generic Runtime.evaluate/callFunctionOn traffic: wait
-    // polling and read-only JS probes use those methods heavily, and focusing on
-    // every eval steals the user's foreground window while background automation
-    // is running.
-    if (msg.method === 'Input.insertText' && !this.webContents.isDestroyed()) {
-      this.webContents.focus()
-      void this.domFocusReplay.forwardInsertText(
-        client,
-        clientId,
-        msg.params ?? {},
-        effectiveSessionId
-      )
+    // Why: a child frame's own session routes input to that frame without native focus; only
+    // the root session needs guest-direct delivery (docs/reference/agent-browser-focus-isolation.md).
+    // Why: Chromium routes main-session key and text input on a <webview> guest by the window's
+    // focus, and presses move that focus; see docs/reference/agent-browser-focus-isolation.md.
+    if (
+      msg.method.startsWith('Input.') &&
+      this.input.handle(client, clientId, msg.method, msg.params ?? {}, effectiveSessionId)
+    ) {
       return
     }
     // Why: agent-browser waits for network idle to detect navigation completion.

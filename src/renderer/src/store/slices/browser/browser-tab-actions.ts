@@ -1,10 +1,11 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
-import {
-  FLOATING_TERMINAL_WORKTREE_ID,
-  ORCA_BROWSER_BLANK_URL
-} from '../../../../../shared/constants'
-import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
+import type {
+  BrowserSlice,
+  BrowserSliceGet,
+  BrowserSliceSet,
+  CreateBrowserTabOptions
+} from './browser-slice-contract'
 import {
   assertManagedBrowserMaterializationAllowed,
   getClientCreationActionPolicy
@@ -16,14 +17,22 @@ import {
   findWorkspace
 } from '../browser-page-records'
 import { getBrowserSessionProfileHostId } from './browser-host-state'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
-import { ownsGlobalSelection } from '../../global-selection-owner'
 import {
   getRegisteredPairedBrowserTabCreator,
   loadPairedBrowserTabCreator
 } from './paired-browser-tab-creator'
 import { findGroupAndWorktree } from '../tab-group-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-layout-owner'
+import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  ORCA_BROWSER_BLANK_URL
+} from '../../../../../shared/constants'
+import type { AppState } from '../../types'
+import { ownsGlobalSelection } from '../../global-selection-owner'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -78,100 +87,56 @@ export function createBrowserTabActions(
         options?.sessionPartition
       )
 
-      set((s) => {
-        const existingTabs = s.browserTabsByWorktree[worktreeId] ?? []
-        const nextTabBarOrder = (() => {
-          const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
-          const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-          const editorIds = s.openFiles
-            .filter((file) => file.worktreeId === worktreeId)
-            .map((file) => file.id)
-          const browserIds = existingTabs.map((tab) => tab.id)
-          const allExistingIds = new Set([...terminalIds, ...editorIds, ...browserIds])
-          const base = currentOrder.filter((entryId) => allExistingIds.has(entryId))
-          const inBase = new Set(base)
-          for (const entryId of [...terminalIds, ...editorIds, ...browserIds]) {
-            if (!inBase.has(entryId)) {
-              base.push(entryId)
-              inBase.add(entryId)
-            }
-          }
-          base.push(workspaceId)
-          return base
-        })()
-
-        const shouldActivate = options?.activate ?? true
-        const shouldUpdateGlobalActiveSurface = shouldActivate && ownsGlobalSelection(s, worktreeId)
-        const shouldFocusFloatingTab =
-          shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-        const shouldFocusAddressBar =
-          (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
-          // Why the doc check and not just the url: a document page is blank by construction, and
-          // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
-          !page.docLocation &&
-          (options?.focusAddressBar ??
-            (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
-
-        return {
+      const drawHere = (): void => {
+        set((s) => ({
           browserTabsByWorktree: {
             ...s.browserTabsByWorktree,
-            [worktreeId]: [...existingTabs, browserTab]
+            [worktreeId]: [...(s.browserTabsByWorktree[worktreeId] ?? []), browserTab]
           },
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
             [workspaceId]: [page]
           },
-          tabBarOrderByWorktree: {
-            ...s.tabBarOrderByWorktree,
-            [worktreeId]: nextTabBarOrder
-          },
-          activeBrowserTabId: shouldUpdateGlobalActiveSurface ? workspaceId : s.activeBrowserTabId,
-          activeBrowserTabIdByWorktree: {
-            ...s.activeBrowserTabIdByWorktree,
-            [worktreeId]: shouldActivate
-              ? workspaceId
-              : (s.activeBrowserTabIdByWorktree[worktreeId] ?? null)
-          },
-          activeTabType: shouldUpdateGlobalActiveSurface ? 'browser' : s.activeTabType,
-          activeTabTypeByWorktree: shouldActivate
-            ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' }
-            : s.activeTabTypeByWorktree,
-          pendingAddressBarFocusByPageId: shouldFocusAddressBar
-            ? {
-                ...s.pendingAddressBarFocusByPageId,
-                [page.id]: true
-              }
-            : s.pendingAddressBarFocusByPageId,
-          pendingAddressBarFocusByTabId: shouldFocusAddressBar
-            ? {
-                ...s.pendingAddressBarFocusByTabId,
-                [workspaceId]: true,
-                [page.id]: true
-              }
-            : s.pendingAddressBarFocusByTabId
-        }
-      })
+          ...browserTabOpenView(s, worktreeId, browserTab, page, options)
+        }))
 
-      const state = get()
-      const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-        (t) => t.contentType === 'browser' && t.entityId === workspaceId
-      )
-      if (!alreadyHasUnifiedTab) {
-        const shouldActivate = options?.activate ?? true
-        const created = state.createUnifiedTab(worktreeId, 'browser', {
-          entityId: workspaceId,
-          label: browserTab.title,
-          targetGroupId: options?.targetGroupId,
-          ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
-          // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
-          ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
-          activate: shouldActivate
-        })
-        // Why: unified creation already selected the tab and recorded the visit; only the group moves.
-        if (shouldActivate && created) {
-          get().focusGroup(worktreeId, created.groupId)
+        const state = get()
+        const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+          (t) => t.contentType === 'browser' && t.entityId === workspaceId
+        )
+        if (!alreadyHasUnifiedTab) {
+          const shouldActivate = options?.activate ?? true
+          const created = state.createUnifiedTab(worktreeId, 'browser', {
+            entityId: workspaceId,
+            label: browserTab.title,
+            targetGroupId: options?.targetGroupId,
+            ...(options?.split ? { split: options.split } : {}),
+            ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
+            // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
+            ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
+            activate: shouldActivate
+          })
+          // Why: unified creation already selected the tab and recorded the visit; only the group moves.
+          if (shouldActivate && created) {
+            get().focusGroup(worktreeId, created.groupId)
+          }
         }
       }
+      // Switch point: main opens the tab under these ids and its frame draws it.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        openBrowserTabThroughLayoutOwner(get, {
+          worktreeId,
+          browserTab,
+          page,
+          options,
+          showView: () => set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options)),
+          drawHere
+        })
+      ) {
+        return browserTab
+      }
+      drawHere()
       return browserTab
     },
 
@@ -190,7 +155,7 @@ export function createBrowserTabActions(
         throw new Error(browserAvailability.reason)
       }
       const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           throw new Error('The paired runtime browser provider is unavailable.')
@@ -243,7 +208,7 @@ export function createBrowserTabActions(
       if (browserAvailability.state !== 'enabled') {
         return false
       }
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           return false
@@ -272,5 +237,75 @@ export function createBrowserTabActions(
       })
       return true
     }
+  }
+}
+
+// The window's own view of a browser tab it opens: its tab-bar order entry, browser selection and
+// the address-bar focus a blank New Tab asks for; a layout-owner build writes it once drawn.
+function browserTabOpenView(
+  s: AppState,
+  worktreeId: string,
+  browserTab: BrowserWorkspace,
+  page: BrowserPage,
+  options: CreateBrowserTabOptions | undefined
+): Partial<AppState> {
+  const workspaceId = browserTab.id
+  // Without this tab: a frame may already have drawn its record.
+  const existingTabs = (s.browserTabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => tab.id !== workspaceId
+  )
+  const nextTabBarOrder = (() => {
+    const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
+    const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+    const editorIds = s.openFiles
+      .filter((file) => file.worktreeId === worktreeId)
+      .map((file) => file.id)
+    const ids = [...terminalIds, ...editorIds, ...existingTabs.map((tab) => tab.id)]
+    const allExistingIds = new Set(ids)
+    const base = currentOrder.filter((entryId) => allExistingIds.has(entryId))
+    const inBase = new Set(base)
+    return [...base, ...[...allExistingIds].filter((entryId) => !inBase.has(entryId)), workspaceId]
+  })()
+
+  const shouldActivate = options?.activate ?? true
+  const shouldUpdateGlobalActiveSurface = shouldActivate && ownsGlobalSelection(s, worktreeId)
+  const shouldFocusFloatingTab = shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+  const shouldFocusAddressBar =
+    (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
+    // Why the doc check and not just the url: a document page is blank by construction, and
+    // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
+    !page.docLocation &&
+    (options?.focusAddressBar ??
+      (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
+
+  return {
+    tabBarOrderByWorktree: {
+      ...s.tabBarOrderByWorktree,
+      [worktreeId]: nextTabBarOrder
+    },
+    activeBrowserTabId: shouldUpdateGlobalActiveSurface ? workspaceId : s.activeBrowserTabId,
+    activeBrowserTabIdByWorktree: {
+      ...s.activeBrowserTabIdByWorktree,
+      [worktreeId]: shouldActivate
+        ? workspaceId
+        : (s.activeBrowserTabIdByWorktree[worktreeId] ?? null)
+    },
+    activeTabType: shouldUpdateGlobalActiveSurface ? 'browser' : s.activeTabType,
+    activeTabTypeByWorktree: shouldActivate
+      ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' }
+      : s.activeTabTypeByWorktree,
+    pendingAddressBarFocusByPageId: shouldFocusAddressBar
+      ? {
+          ...s.pendingAddressBarFocusByPageId,
+          [page.id]: true
+        }
+      : s.pendingAddressBarFocusByPageId,
+    pendingAddressBarFocusByTabId: shouldFocusAddressBar
+      ? {
+          ...s.pendingAddressBarFocusByTabId,
+          [workspaceId]: true,
+          [page.id]: true
+        }
+      : s.pendingAddressBarFocusByTabId
   }
 }

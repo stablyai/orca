@@ -176,6 +176,7 @@ describe('openWorkspaceBrowserTab', () => {
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://example.com/docs?token=secret',
+      targetGroupId: 'group-1',
       intent: { kind: 'url' }
     })
 
@@ -183,7 +184,8 @@ describe('openWorkspaceBrowserTab', () => {
       worktreeId: WORKSPACE_ID,
       environmentId: 'hub-a',
       url: 'https://example.com/docs?token=secret',
-      targetGroupId: undefined,
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1',
       selectWorktree: true,
       stagedTitle: 'example.com/docs',
       stagedFocusAddressBar: false,
@@ -597,5 +599,118 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.createRemote.mockResolvedValue(false)
     await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
     expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('links from a managed server reached over SSH', () => {
+  function sshDeployedRuntimeState(
+    orcadDeployment: Record<string, unknown>,
+    settings: Record<string, unknown> = {}
+  ): Record<string, unknown> {
+    return {
+      ...ownerState(toRuntimeExecutionHostId('orcad-env')),
+      runtimeEnvironments: [{ id: 'orcad-env', orcadDeployment }],
+      // Headless orcad advertises no screencast backend.
+      runtimeStatusByEnvironmentId: new Map([
+        ['orcad-env', { status: { capabilities: [] }, checkedAt: 1 }]
+      ]),
+      settings,
+      createBrowserTab: vi.fn(),
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+  }
+  const sshDeployment = {
+    kind: 'ssh',
+    sshTargetId: 'ssh-target',
+    sshTargetGeneration: 2,
+    localPort: 41000,
+    remotePort: 41001
+  }
+
+  it('opens the link in an SSH-routed desktop tab the runtime workspace still owns', async () => {
+    mocks.state = sshDeployedRuntimeState(sshDeployment)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'orcad-env')).toBe(
+      true
+    )
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: 'http://localhost:3000/',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'orcad-env'
+    })
+
+    expect(mocks.state.createBrowserTab).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      'http://localhost:3000/',
+      expect.objectContaining({
+        browserRuntimeEnvironmentId: null,
+        executionHostId: toRuntimeExecutionHostId('orcad-env')
+      })
+    )
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+  })
+
+  it('keeps a screencast-capable deployment on its runtime browser', async () => {
+    mocks.state = {
+      ...sshDeployedRuntimeState(sshDeployment),
+      ...browserCapableRuntime('orcad-env')
+    }
+
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: 'http://localhost:3000/',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'orcad-env'
+    })
+
+    expect(mocks.createRemote).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'orcad-env', waitForRegistration: true })
+    )
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['SSH browser routing is off', sshDeployment, { browserSshWorkspaceRoutingEnabled: false }],
+    [
+      'the user browses this host from this device',
+      sshDeployment,
+      { browserSshWorkspaceRoutingDisabledTargetIds: ['ssh-target'] }
+    ],
+    ['the server is a WSL deployment', { kind: 'wsl', distro: 'Ubuntu' }, {}]
+  ])('offers only the system browser when %s', async (_label, deployment, settings) => {
+    mocks.state = sshDeployedRuntimeState(deployment, settings)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'orcad-env')).toBe(
+      false
+    )
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'http://localhost:3000/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'orcad-env'
+      })
+    ).rejects.toThrow('Unable to open URL.')
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+  })
+
+  it('does not lend the SSH route to a link asserting another runtime', () => {
+    mocks.state = sshDeployedRuntimeState(sshDeployment)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'other-env')).toBe(
+      false
+    )
+  })
+
+  it('offers no in-app browser from the paired web client', () => {
+    mocks.pairedWeb = true
+    mocks.state = sshDeployedRuntimeState(sshDeployment)
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'orcad-env')).toBe(
+      false
+    )
   })
 })

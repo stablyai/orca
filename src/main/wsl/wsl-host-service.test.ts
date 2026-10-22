@@ -10,9 +10,11 @@ import {
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { WslHostServerStop, WslHostStatus } from '../../shared/wsl-host-types'
+import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
-import { WslOrcadLaunchDeferredError, type WslOrcadConnection } from './wsl-orcad-connection'
+import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
+import type { WslOrcadConnection } from './wsl-orcad-connection'
 
 const KEY = Buffer.alloc(32, 3).toString('base64')
 const UBUNTU_ID = '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f'
@@ -46,6 +48,8 @@ function makeConnector(distros: WslHostDistroCandidate[]) {
       return opened
     }),
     get: vi.fn((distro: string) => active.get(distro.toLowerCase()) ?? null),
+    forgetPairingFailures: vi.fn((_environmentId: string) => {}),
+    isReachable: vi.fn(async (distro: string) => active.has(distro.toLowerCase())),
     disconnect: vi.fn(async (distro: string) => {
       active.delete(distro.toLowerCase())
     }),
@@ -251,18 +255,22 @@ describe('WslHostService', () => {
       deferredUpdate: null
     })
 
-    await service.connect('wsl:ubuntu', { force: true })
+    await service.connect('wsl:ubuntu', { intent: 'force' })
     expect(connector.connect).toHaveBeenLastCalledWith('Ubuntu', {
-      force: true
+      intent: 'force'
     })
+    // A user's Connect is asking again, so a standing pairing-repair failure must not answer it.
+    expect(connector.forgetPairingFailures).toHaveBeenLastCalledWith('wsl:ubuntu')
   })
 
-  it('connects for a runtime call only while an open project or terminal needs the host', async () => {
+  it('reconciles a retained dead connection for user work without booting for passive calls', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
-    await connector.disconnect('Ubuntu')
     connector.connect.mockClear()
+    // No watch/holder event arrived: the bridge object outlived its server.
+    connector.isReachable.mockResolvedValue(false)
+    expect(connector.get('Ubuntu')).not.toBeNull()
 
     // Not a network server: the call learns why, and nothing is booted for it.
     await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow(
@@ -273,11 +281,17 @@ describe('WslHostService', () => {
 
     service.setVisibleWork(['wsl:ubuntu'])
     expect(service.hasUserVisibleWork('ubuntu')).toBe(true)
-    expect(connector.connect).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
 
-    await connector.disconnect('Ubuntu')
+    // Demand did not change, but a later call must still repair another lost server.
     await service.ensureForRuntimeCall('wsl:ubuntu')
     expect(connector.connect).toHaveBeenCalledTimes(2)
+
+    service.setVisibleWork([])
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('isn’t connected')
+    expect(connector.connect).toHaveBeenCalledTimes(2)
+    await service.connect('wsl:ubuntu')
+    expect(connector.connect).toHaveBeenCalledTimes(3)
   })
 
   it('refuses a connect while the experiment is off, but still removes the host', async () => {
@@ -352,6 +366,26 @@ describe('WslHostService', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
+  it('keeps a host whose removal failed usable and removable again', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    service.setVisibleWork(['wsl:ubuntu'])
+    connector.releaseHolder.mockRejectedValueOnce(
+      Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+    )
+
+    await expect(service.remove('wsl:ubuntu')).rejects.toThrow('EBUSY')
+
+    expect(listEnvironments(userDataPath)).toHaveLength(1)
+    expect(removed).not.toHaveBeenCalled()
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).resolves.toBeUndefined()
+    await expect(service.connect('wsl:ubuntu')).resolves.toBeUndefined()
+    await expect(service.remove('wsl:ubuntu')).resolves.toEqual({ stopped: true })
+    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(removed).toHaveBeenCalledWith('wsl:ubuntu')
+  })
+
   it('turning the experiment off closes every connection and releases holders; on resumes lazily', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
@@ -371,7 +405,7 @@ describe('WslHostService', () => {
 
     enabled = true
     await service.enabledChanged(true)
-    expect(connector.connect).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
     expect(service.hasUserVisibleWork('Ubuntu')).toBe(true)
   })
 
@@ -424,6 +458,57 @@ describe('WslHostService', () => {
     expect(connector.connect).not.toHaveBeenCalled()
   })
 
+  it('releases the holder of a failed or deferred first add, which no record would ever find', async () => {
+    const connector = makeConnector([UBUNTU])
+    connector.connect.mockRejectedValueOnce(new Error('deploy failed'))
+    const service = makeService(connector)
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({ kind: 'failed' })
+    expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
+    expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
+
+    vi.clearAllMocks()
+    connector.connect.mockRejectedValueOnce(
+      new WslOrcadLaunchDeferredError({
+        outcome: 'deferred',
+        distro: 'Ubuntu',
+        candidateVersion: '2.0.0',
+        code: 'live-terminals',
+        reason: 'Terminals are still running.',
+        forceable: true
+      })
+    )
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({ kind: 'deferred' })
+    expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
+    expect(listEnvironments(userDataPath)).toEqual([])
+  })
+
+  it('an add the experiment was turned off during ends without a host, connection or holder', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    let finishConnect: () => void = () => {}
+    connector.connect.mockImplementationOnce(async (distro: string) => {
+      await new Promise<void>((resolve) => {
+        finishConnect = resolve
+      })
+      return connection(distro)
+    })
+    const adding = service.add({ distro: 'Ubuntu' })
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalled())
+
+    // Off and back on before the connect lands: the add started under the old setting.
+    enabled = false
+    await service.enabledChanged(false)
+    enabled = true
+    await service.enabledChanged(true)
+    finishConnect()
+
+    await expect(adding).resolves.toMatchObject({ ok: false, kind: 'disabled' })
+    expect(listEnvironments(userDataPath)).toEqual([])
+    expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
+    expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
+    expect(ready).not.toHaveBeenCalled()
+  })
+
   it('treats a distro being added as known, so its first connect may spawn', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
@@ -445,5 +530,129 @@ describe('WslHostService', () => {
     await service.add({ distro: 'Ubuntu' })
     await service.start()
     expect(connector.adoptHolders).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [
+      'unsupported-wsl1',
+      () => new OrcadHostUnsupportedError('WSL 1 cannot run the Orca server.'),
+      'WSL 1 cannot run the Orca server.'
+    ],
+    ['failed', () => new Error('bridge refused'), 'bridge refused']
+  ])(
+    'reports a %s connect, releases it, and persists nothing',
+    async (kind, makeError, message) => {
+      const connector = makeConnector([UBUNTU])
+      connector.connect.mockRejectedValueOnce(makeError())
+      const service = makeService(connector)
+      await expect(service.add({ distro: 'Ubuntu' })).resolves.toEqual({ ok: false, kind, message })
+      expect(listEnvironments(userDataPath)).toEqual([])
+      // Nothing persisted could find this connection or holder later, so the add releases both.
+      expect(connector.disconnect).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+      expect(connector.releaseHolder).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+      expect(ready).not.toHaveBeenCalled()
+      expect(published).toEqual([])
+    }
+  )
+
+  it('undoes the connection when the host cannot be saved, even if the disconnect fails', async () => {
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'Ubuntu (WSL)',
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://203.0.113.9:6768',
+        deviceToken: 'other',
+        publicKeyB64: Buffer.alloc(32, 9).toString('base64')
+      })
+    })
+    const connector = makeConnector([UBUNTU])
+    const order: string[] = []
+    connector.disconnect.mockImplementationOnce(async () => {
+      order.push('disconnect')
+      throw new Error('already gone')
+    })
+    connector.releaseHolder.mockImplementationOnce(async () => {
+      order.push('release')
+      throw new Error('holder gone too')
+    })
+    const service = makeService(connector)
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toEqual({
+      ok: false,
+      kind: 'failed',
+      message: 'A server named "Ubuntu (WSL)" already exists.'
+    })
+    expect(order).toEqual(['disconnect', 'release'])
+    expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toBeNull()
+    expect(ready).not.toHaveBeenCalled()
+  })
+
+  it('shares one add between concurrent requests for the same distro, by any casing', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    const first = service.add({ distro: 'Ubuntu' })
+    const second = service.add({ distro: ' ubuntu ' })
+    expect(second).toBe(first)
+    await expect(first).resolves.toEqual({ ok: true, environmentId: 'wsl:ubuntu' })
+    expect(connector.listDistros).toHaveBeenCalledTimes(1)
+    expect(connector.connect).toHaveBeenCalledTimes(1)
+    // Settled: the next add runs again and finds the host already added.
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({ ok: false })
+    expect(connector.listDistros).toHaveBeenCalledTimes(2)
+  })
+
+  it('checks admission, then shared orcad, then connects; publishes ready before announcing it', async () => {
+    const connector = makeConnector([UBUNTU])
+    const order: string[] = []
+    connector.listDistros.mockImplementation(async () => {
+      order.push('list')
+      return [UBUNTU]
+    })
+    connector.readOrcadPublicKey.mockImplementation(async (distro: string) => {
+      order.push(`key:${distro}`)
+      return null
+    })
+    // A deferral on the new connection proves the published status was built from it.
+    const deferredUpdate = {
+      candidateVersion: '2.0.0+ff',
+      code: 'orcad_update_terminals_running',
+      reason: '1 terminal is running on this host.',
+      forceable: true
+    }
+    connector.connect.mockImplementation(async (distro: string) => {
+      order.push(`connect:${distro}`)
+      return { ...connection(distro), deferredUpdate }
+    })
+    ready.mockImplementation((id: string) => order.push(`ready:${id}:${published.length}`))
+    const service = makeService(connector)
+    await service.add({ distro: 'UBUNTU' })
+    expect(order).toEqual(['list', 'key:Ubuntu', 'connect:Ubuntu', 'ready:wsl:ubuntu:1'])
+    expect(published).toEqual([
+      {
+        environmentId: 'wsl:ubuntu',
+        distro: 'Ubuntu',
+        state: 'ready',
+        detail: null,
+        deferredUpdate
+      }
+    ])
+  })
+
+  it('refuses an add with no WSL connector before touching one, while turned off', async () => {
+    enabled = false
+    const service = new WslHostService({
+      userDataPath: () => userDataPath,
+      isEnabled: () => enabled,
+      hasServerFiles: () => serverFiles,
+      publish: (status) => published.push(status),
+      pairingChanged,
+      ready,
+      removed
+    })
+    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({ ok: false })
+    enabled = true
+    await expect(service.add({ distro: 'Ubuntu' })).rejects.toThrow(
+      'WSL hosts are not available on this computer.'
+    )
   })
 })

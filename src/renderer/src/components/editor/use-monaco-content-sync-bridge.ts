@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
 import { syncContentUpdate, type MonacoContentSyncMode } from './monaco-content-sync'
+import { mayPushTabTextIntoModel } from './editor-stale-mount-guard'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -25,9 +26,12 @@ export function useMonacoContentSyncBridge(params: {
   contentRef: MutableRefObject<string>
   contentSyncModeRef: MutableRefObject<MonacoContentSyncMode>
   modelKey: string
+  /** The tab whose text this editor shows; disk text from it never enters a dirty model. */
+  fileId?: string
   onContentChange: (content: string) => void
 }): MonacoContentSyncBridge {
-  const { editorRef, content, contentRef, contentSyncModeRef, modelKey, onContentChange } = params
+  const { editorRef, content, contentRef, contentSyncModeRef, modelKey, onContentChange, fileId } =
+    params
 
   const lastSyncedContentRef = useRef<string>(content)
 
@@ -67,7 +71,8 @@ export function useMonacoContentSyncBridge(params: {
     if (
       !ed ||
       ed.getModel()?.uri.toString() !== modelKey ||
-      lastSyncedContentRef.current === content
+      lastSyncedContentRef.current === content ||
+      (fileId !== undefined && !mayPushTabTextIntoModel(fileId))
     ) {
       return
     }
@@ -80,7 +85,7 @@ export function useMonacoContentSyncBridge(params: {
       isApplyingProgrammaticContentRef.current = false
       endProgrammaticContentSync(modelKey)
     }
-  }, [content, contentSyncModeRef, editorRef, modelKey])
+  }, [content, contentSyncModeRef, editorRef, fileId, modelKey])
 
   return {
     contentRef,

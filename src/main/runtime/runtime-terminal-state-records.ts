@@ -14,6 +14,7 @@ import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contra
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { TerminalCommandPaint } from './terminal-command-paint'
+import type { CliWriterConversation } from './structured-agent-cli-writers'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
@@ -30,6 +31,11 @@ type RuntimeTerminalTailState = {
   preview: string
   waitBlockedAt: number | null
   tailWaitState?: TerminalTailWaitState
+}
+
+export type PtyRegistrationClaim = {
+  incarnationId: PtyIncarnationId | null
+  exitedIncarnations: Set<PtyIncarnationId | null>
 }
 
 export type RuntimeLeafRecord = RuntimeSyncedLeaf &
@@ -68,6 +74,11 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
+  /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */
+  cliConversations?: {
+    incarnationId: PtyIncarnationId | null
+    byKey: Map<string, CliWriterConversation>
+  }
   foregroundAgent: TerminalAgent | null
   connected: boolean
   disconnectedAt: number | null
@@ -83,6 +94,9 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     updatedAt: number
     /** A `done` row that marks a new session owning the pane, not the end of a turn. */
     sessionBoundary?: boolean
+    /** OSC 7501 `done`: the program itself says it is at rest awaiting input, which a hook
+     *  `done` (possibly mid-turn) cannot claim. */
+    programAtRest?: boolean
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
@@ -98,6 +112,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   controllerTitle: string | null
   title: string | null
   titleUpdatedAt: number | null
+  /** The name a rename gave this terminal: display only, never title evidence (#20626). */
+  manualTitle?: string | null
   lastOutputAt: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint
@@ -121,6 +137,10 @@ export type RuntimePtyTitleTrackerEntry = {
   /** Run once this chunk's facts are emitted: status that readers must see after them. */
   afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
+  /** The program's OSC 7501 activity; while set it, not the title glyph, is the PTY's status. */
+  programActivity: AgentStatus | null
+  /** The last observed title, so a program's activity change can re-classify it. */
+  lastTitle: { raw: string; normalized: string } | null
 }
 
 export type RuntimeHeadlessTerminal = {

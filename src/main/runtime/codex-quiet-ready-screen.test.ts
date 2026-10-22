@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
 import {
   readRuntimeFixture,
+  readTimedRuntimeFixture,
   replayTranscript,
   type TranscriptReplayFrame
 } from './agent-transcript-replay-test-harness'
@@ -73,10 +72,11 @@ describe('Codex quiet ready screen', () => {
 
   describe('Codex composer ready screen, frame by frame', () => {
     it.each([...SETTLED_IDLE_FIXTURES, ...DIALOG_FIXTURES])(
-      '%s: never ready while loading, mid-turn, or under a drawn dialog',
+      '%s: rejects loading, busy and dialog frames and reads the final composer state',
       async (name) => {
         const seen = { loading: 0, busy: 0, dialog: 0 }
-        for (const frame of await collectFrames(readRuntimeFixture(name))) {
+        const frames = await collectFrames(readRuntimeFixture(name))
+        for (const frame of frames) {
           const screen = screenOf(frame)
           // Why only once the composer is gone: a half-drawn dialog keeps it for a few frames,
           // which quiescence absorbs; a drawn dialog replaces it.
@@ -102,21 +102,16 @@ describe('Codex quiet ready screen', () => {
         } else {
           expect(seen.busy).toBeGreaterThan(0)
         }
+        expect(isCodexComposerReadyScreen(screenOf(frames.at(-1)!))).toBe(
+          !DIALOG_FIXTURES.includes(name)
+        )
       },
       30_000
     )
 
-    it.each([...SETTLED_IDLE_FIXTURES, ...STA_8628_FIXTURES])(
-      '%s: ready on the final idle screen',
-      async (name) => {
-        const frames = await collectFrames(readRuntimeFixture(name))
-        expect(isCodexComposerReadyScreen(screenOf(frames.at(-1)!))).toBe(true)
-      }
-    )
-
-    it.each(DIALOG_FIXTURES)('%s: not ready while the dialog owns the screen', async (name) => {
+    it.each(STA_8628_FIXTURES)('%s: ready on the final idle screen', async (name) => {
       const frames = await collectFrames(readRuntimeFixture(name))
-      expect(isCodexComposerReadyScreen(screenOf(frames.at(-1)!))).toBe(false)
+      expect(isCodexComposerReadyScreen(screenOf(frames.at(-1)!))).toBe(true)
     })
 
     it('is not ready without a live screen', () => {
@@ -213,39 +208,30 @@ describe('Codex quiet ready screen', () => {
     })
   })
 
-  type Timing = { promptSentAtMs: number; chunks: [number, number][] }
-
-  function readTimedFixture(name: string): { chunks: string[]; times: number[]; promptAt: number } {
-    const data = readRuntimeFixture(name)
-    const timing: Timing = JSON.parse(
-      readFileSync(join(__dirname, '__fixtures__', `${name}.timing.json`), 'utf8')
-    )
-    const chunks: string[] = []
-    let offset = 0
-    for (const [, length] of timing.chunks) {
-      chunks.push(data.slice(offset, offset + length))
-      offset += length
-    }
-    expect(offset).toBe(data.length)
-    return { chunks, times: timing.chunks.map(([at]) => at), promptAt: timing.promptSentAtMs }
-  }
-
   describe('the quiet lane over recorded chunk timing (default animations)', () => {
     afterEach(() => {
       vi.useRealTimers()
     })
 
-    it.each(TIMED_FIXTURES)(
-      '%s: never settles mid-turn, and settles once the finished turn is quiet',
-      async (name) => {
-        const { chunks, times, promptAt } = readTimedFixture(name)
+    it.each([
+      { name: 'codex-0-155-1-timed-turn', composer: true, header: true },
+      { name: 'codex-0-158-0-timed-turn', composer: true, header: false },
+      { name: 'codex-0-157-1-timed-sleep-turn', composer: false, header: true }
+    ])(
+      '$name: never settles mid-turn, and settles once the finished turn is quiet',
+      async ({ name, composer, header }) => {
+        const { chunks, times, promptSentAtMs } = readTimedRuntimeFixture(name)
+        if (promptSentAtMs === undefined) {
+          throw new Error(`${name}.timing.json is missing promptSentAtMs`)
+        }
         const frames = await collectFrames(chunks)
         // Why after the replay: the emulator's write flush runs on real timers.
         vi.useFakeTimers()
         const lastBusy = frames.findLastIndex((frame) => BUSY_STATUS_RE.test(screenOf(frame)))
-        const firstTurnChunk = times.findIndex((at) => at >= promptAt)
-        expect(lastBusy).toBeGreaterThan(firstTurnChunk)
-        // The latest moment each frame stays on screen: just before the next chunk lands.
+        const firstTurnChunk = times.findIndex((at) => at >= promptSentAtMs)
+        if (composer) {
+          expect(lastBusy).toBeGreaterThan(firstTurnChunk)
+        }
         const settlesAt = (index: number, now: number): boolean => {
           vi.setSystemTime(now)
           return hasQuietReadyScreen(
@@ -260,37 +246,6 @@ describe('Codex quiet ready screen', () => {
             QUIESCENCE_MS
           )
         }
-        let readyBodyMidTurn = 0
-        for (let index = firstTurnChunk; index <= lastBusy; index += 1) {
-          if (isCodexComposerReadyScreen(screenOf(frames[index]!))) {
-            readyBodyMidTurn += 1
-          }
-          expect({ index, settles: settlesAt(index, times[index + 1]! - 1) }).toEqual({
-            index,
-            settles: false
-          })
-        }
-        // Presence precondition: the body alone does show mid-turn, so quiescence is load-bearing.
-        expect(readyBodyMidTurn).toBeGreaterThan(0)
-        const last = frames.length - 1
-        // Why +1: the fake clock keeps whole milliseconds; the recorded times do not.
-        expect(settlesAt(last, times[last]! + QUIESCENCE_MS + 1)).toBe(true)
-      },
-      120_000
-    )
-  })
-
-  describe('a busy 0.150-0.157 pane whose header stays in the tail', () => {
-    afterEach(() => {
-      vi.useRealTimers()
-    })
-
-    it.each(['codex-0-155-1-timed-turn', 'codex-0-157-1-timed-sleep-turn'])(
-      '%s: never settles tui-idle mid-turn, and settles once the finished turn is quiet',
-      async (name) => {
-        const { chunks, times, promptAt } = readTimedFixture(name)
-        const frames = await collectFrames(chunks)
-        vi.useFakeTimers()
         const verdictAt = (index: number, now: number) => {
           vi.setSystemTime(now)
           const { waitText, screenLines } = frames[index]!
@@ -309,24 +264,49 @@ describe('Codex quiet ready screen', () => {
             quiescenceMs: QUIESCENCE_MS
           })
         }
-        const lastBusy = frames.findLastIndex((frame) => BUSY_STATUS_RE.test(screenOf(frame)))
-        const firstTurnChunk = times.findIndex((at) => at >= promptAt)
+        let readyBodyMidTurn = 0
         let headerMidTurn = 0
+        // The latest moment each frame stays on screen: just before the next chunk lands.
         for (let index = firstTurnChunk; index <= lastBusy; index += 1) {
-          if (isKnownReadyPromptPreview(frames[index]!.waitText)) {
-            headerMidTurn += 1
+          if (composer) {
+            if (isCodexComposerReadyScreen(screenOf(frames[index]!))) {
+              readyBodyMidTurn += 1
+            }
+            expect({ index, settles: settlesAt(index, times[index + 1]! - 1) }).toEqual({
+              index,
+              settles: false
+            })
           }
-          const settles = isTuiIdleReadyVerdict(verdictAt(index, times[index + 1]! - 1))
-          expect({ index, settles }).toEqual({ index, settles: false })
+          if (header) {
+            if (isKnownReadyPromptPreview(frames[index]!.waitText)) {
+              headerMidTurn += 1
+            }
+            const settles = isTuiIdleReadyVerdict(verdictAt(index, times[index + 1]! - 1))
+            expect({ index, settles }).toEqual({ index, settles: false })
+          }
         }
-        // Presence precondition: the ready header is in the tail mid-turn, so the fix is load-bearing.
-        expect(headerMidTurn).toBeGreaterThan(0)
         const last = frames.length - 1
-        expect(verdictAt(last, times[last]!).kind).toBe('pending')
-        expect(verdictAt(last, times[last]! + QUIESCENCE_MS + 1).kind).toBe('ready-strong')
+        if (composer) {
+          // The composer appears mid-turn, so quiescence must refuse it until the output stops.
+          expect(readyBodyMidTurn).toBeGreaterThan(0)
+          // Why +1: the fake clock keeps whole milliseconds; the recorded times do not.
+          expect(settlesAt(last, times[last]! + QUIESCENCE_MS + 1)).toBe(true)
+        }
+        if (header) {
+          // The ready header stays in the tail mid-turn, so ranking must hold it to quiet too.
+          expect(headerMidTurn).toBeGreaterThan(0)
+          expect(verdictAt(last, times[last]!).kind).toBe('pending')
+          expect(verdictAt(last, times[last]! + QUIESCENCE_MS + 1).kind).toBe('ready-strong')
+        }
       },
       120_000
     )
+  })
+
+  describe('a busy 0.150-0.157 pane whose header stays in the tail', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
 
     const header = [
       '│ >_ OpenAI Codex (v0.157.1)                               │',
@@ -385,6 +365,7 @@ describe('Codex quiet ready screen', () => {
       it.each([...SETTLED_IDLE_FIXTURES, ...DIALOG_FIXTURES, ...STA_8628_FIXTURES])(
         '%s',
         async (name) => {
+          const comparisons = { codex: 0, unknown: 0 }
           for (const frame of await collectFrames(readRuntimeFixture(name), cols, rows)) {
             for (const agent of ['codex', null] as const) {
               const base = {
@@ -413,11 +394,14 @@ describe('Codex quiet ready screen', () => {
                     isQuietReadyScreenBody(frame.waitText, agent, () => frame.screenLines)
                 })
                 if (isTuiIdleReadyVerdict(before)) {
+                  comparisons[agent ?? 'unknown'] += 1
                   expect(isTuiIdleReadyVerdict(after)).toBe(true)
                 }
               }
             }
           }
+          expect(comparisons.codex).toBeGreaterThan(0)
+          expect(comparisons.unknown).toBeGreaterThan(0)
         },
         60_000
       )

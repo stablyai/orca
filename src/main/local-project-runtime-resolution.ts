@@ -21,6 +21,7 @@ import {
   hasCachedWslDistros
 } from './wsl'
 import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
+import { projectMatchesRepo } from '../shared/project-repo-match'
 import {
   resolveLocalWindowsTerminalRuntimeOptions,
   type LocalWindowsTerminalRuntimeOptions
@@ -103,9 +104,7 @@ export function resolveLocalProjectRuntimeForRepo(
 export function resolveLocalWorkspaceRuntime(
   store: ProjectRuntimeResolutionStore,
   repo: Repo,
-  workspacePath: string | null | undefined,
-  /** TEMPORARY parity: only a launch trusts a `\\wsl$` path; the agent list checks it, as on main. */
-  trustsWslPath = false
+  workspacePath: string | null | undefined
 ): ProjectExecutionRuntimeResolution | undefined {
   if (
     getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
@@ -113,8 +112,7 @@ export function resolveLocalWorkspaceRuntime(
   ) {
     return undefined
   }
-  // TEMPORARY parity: main finds the project by its source repos only; the window also by its id.
-  const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+  const project = store.getProjects().find((entry) => projectMatchesRepo(entry, repo.id))
   const preference = getWorkspaceRuntimePreference(
     project?.localWindowsRuntimePreference,
     workspacePath
@@ -125,7 +123,7 @@ export function resolveLocalWorkspaceRuntime(
     store,
     { id: project?.id ?? repo.id, localWindowsRuntimePreference: preference },
     undefined,
-    !trustsWslPath || Boolean(project?.localWindowsRuntimePreference) || preference.kind !== 'wsl'
+    Boolean(project?.localWindowsRuntimePreference) || preference.kind !== 'wsl'
   )
 }
 
@@ -185,7 +183,7 @@ export function resolveLocalLaunchScopeRuntime(
         )
       : undefined)
   // A repo-less folder has no runtime: its path alone places it, and its cwd picks its shell.
-  return repo ? resolveLocalWorkspaceRuntime(store, repo, scope.path, true) : undefined
+  return repo ? resolveLocalWorkspaceRuntime(store, repo, scope.path) : undefined
 }
 
 export function resolveLocalProjectRuntimesForRepos(

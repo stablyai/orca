@@ -121,6 +121,7 @@ export function SessionActionMenuItems({
         </Item>
       ) : null}
       <AiVaultSessionSurfaceSwitchMenuItems
+        action="resume"
         menuKind={menuKind}
         tooltipSide={menuKind === 'context' ? 'right' : 'left'}
         onResumeInNewChat={onResumeInNewChat}

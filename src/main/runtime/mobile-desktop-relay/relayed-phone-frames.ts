@@ -1,3 +1,4 @@
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
@@ -24,6 +25,30 @@ export function rewriteRelayedPhoneRequest(
   return JSON.stringify(requestId === undefined ? forwarded : { ...forwarded, id: requestId })
 }
 
+// Why: the server lists client-placed browser tabs only to callers declaring this; for a
+// mobile-scoped caller it is projection-only, since hosting duty requires a runtime-scoped one.
+export function relayedPhoneCapabilities(capabilities: readonly string[]): readonly string[] {
+  return capabilities.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)
+    ? capabilities
+    : [...capabilities, BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+}
+
+/** A forwarded `runtime.clientCapabilities.update` frame, carrying the relayed phone's set. */
+export function declareRelayedPhoneCapabilities(frame: string): string {
+  const parsed: unknown = JSON.parse(frame)
+  const params = isRecord(parsed) ? parsed.params : undefined
+  if (!isRecord(parsed) || !isRecord(params) || !Array.isArray(params.clientCapabilities)) {
+    return frame
+  }
+  const clientCapabilities = params.clientCapabilities.filter(
+    (capability): capability is string => typeof capability === 'string'
+  )
+  return JSON.stringify({
+    ...parsed,
+    params: { ...params, clientCapabilities: relayedPhoneCapabilities(clientCapabilities) }
+  })
+}
+
 const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.launchReplay'])
 
 // Why: a server picks a launch's surface from its own chat setting, but a relayed phone's user is
@@ -31,7 +56,7 @@ const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.laun
 export function withRelayedLaunchChatDefault(
   frame: string,
   method: string,
-  nativeChatDefault: boolean
+  nativeChatDefaultFor: (agent: string) => boolean
 ): string {
   if (!LAUNCH_METHODS_READING_CHAT_DEFAULT.has(method)) {
     return frame
@@ -40,7 +65,11 @@ export function withRelayedLaunchChatDefault(
   if (!isRecord(parsed) || !isRecord(parsed.params)) {
     return frame
   }
-  return JSON.stringify({ ...parsed, params: { ...parsed.params, nativeChatDefault } })
+  const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''
+  return JSON.stringify({
+    ...parsed,
+    params: { ...parsed.params, nativeChatDefault: nativeChatDefaultFor(agent) }
+  })
 }
 
 /**

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { nodeServerTestPaths } from './node-server-test-paths.mjs'
 import { nodeServerQualification } from './node-server-qualification.mjs'
+import { classifyNativeCompatChanges } from './node-server-native-compat-scope.mjs'
 
 const ROOT = resolve(import.meta.dirname, '../..')
 const BUILD_SCRIPTS = [
@@ -18,6 +19,7 @@ const BUILD_SCRIPTS = [
   'config/scripts/build-windows-security-addon.mjs',
   'config/scripts/run-node-server-tests.mjs',
   'config/vitest.config.ts',
+  'config/scripts/vitest-dom-setup.ts',
   'config/scripts/happy-dom-offscreen-canvas.ts',
   'config/scripts/happy-dom-mutation-observer-retention.ts',
   'config/scripts/vitest-host-ports-setup.ts',
@@ -32,14 +34,17 @@ const ALWAYS_FILES = new Set([
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   '.npmrc',
-  '.pnpmfile.cjs',
+  'config/pnpmfile.cjs',
   'tsconfig.json',
   '.github/workflows/node-server-tests.yml',
   'config/scripts/node-server-change-scope.mjs',
+  'config/scripts/node-server-native-compat-scope.mjs',
   ...NODE_SERVER_POLICY_TESTS,
   'config/scripts/workspace-source-exports.mjs',
   'config/scripts/workspace-source-exports.test.mjs',
   'config/scripts/headless-detector-compiler-cache.mjs',
+  'config/scripts/initialize-windows-native-toolchain.mjs',
+  'config/scripts/capture-windows-native-environment.cmd',
   'config/scripts/node-server-qualification.mjs',
   // The source graph sees process-host source, not the build that emits the dist servers load.
   'src/packages/process-host/.gitignore',
@@ -213,9 +218,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const policy = nodeServerQualification(changedFiles, result, {
     fullQualification: process.argv.includes('--full-qualification')
   })
-  const output = result.graphRequired
-    ? 'graph_required=true\n'
-    : `should_run=${result.shouldRun}\nqualification=${policy.qualification}\nrunners=${JSON.stringify(policy.runners)}\n`
+  const diffArgument = process.argv.indexOf('--diff-paths')
+  const native = result.graphUnavailable
+    ? { nativeCompatibility: true, reason: 'Server dependency graph unavailable' }
+    : await classifyNativeCompatChanges(changedFiles, collectNodeServerInputs, {
+        pullRequest: process.argv.includes('--pull-request'),
+        fullQualification: process.argv.includes('--full-qualification'),
+        rawDiff:
+          diffArgument === -1 ? undefined : readFileSync(process.argv[diffArgument + 1], 'utf8'),
+        deferGraph: process.argv.includes('--defer-graph')
+      })
+  console.log(native.reason)
+  let output = result.graphRequired || native.graphRequired ? 'graph_required=true\n' : ''
+  if (!result.graphRequired) {
+    output += `should_run=${result.shouldRun}\nqualification=${policy.qualification}\nrunners=${JSON.stringify(policy.runners)}\n`
+  }
+  if (!native.graphRequired) {
+    output += `native_compatibility=${native.nativeCompatibility}\n`
+  }
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(process.env.GITHUB_OUTPUT, output)
   } else {

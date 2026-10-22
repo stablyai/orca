@@ -4,6 +4,8 @@ export type CliInstallUnsupportedReason =
   | 'platform_not_supported'
   | 'launcher_missing'
   | 'launch_mode_unavailable'
+  /** wsl.exe did not answer in time (often a distro still booting); retryable. */
+  | 'wsl_unreachable'
 
 export type CliInstallMethod = 'symlink' | 'wrapper'
 

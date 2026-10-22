@@ -1,4 +1,9 @@
 // @vitest-environment happy-dom
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
@@ -145,6 +150,21 @@ describe('reports the sends that bring the latest into view', () => {
   })
 })
 
+// STA-10671: an older paired host would run the turn without the approval the chat asks for.
+describe('a send held by its host', () => {
+  it('starts no turn, but still lets an option command through', async () => {
+    const { send, structuredTransport } = harness('claude')
+    structuredTransport.sendBlockedReason = 'Update Orca on this host to use Ask for approval.'
+    await send('hello', [])
+    await send('/compact', [])
+    expect(structuredTransport.send).not.toHaveBeenCalled()
+    expect(structuredTransport.onError).not.toHaveBeenCalled()
+
+    await send('/model', [])
+    expect(structuredTransport.onError).toHaveBeenCalled()
+  })
+})
+
 describe("says a failed send in Orca's words, with the error it hit apart", () => {
   it('keeps a main-process failure apart from the words saying the message was not sent', async () => {
     const { send, structuredTransport } = harness('claude')
@@ -158,6 +178,23 @@ describe("says a failed send in Orca's words, with the error it hit apart", () =
       expect(structuredTransport.onError).toHaveBeenCalledWith('Your message was not sent.', {
         errorText: 'connect ECONNREFUSED /tmp/a.sock'
       })
+    )
+    updateNativeChatComposerDraft('tab-1:pane', { text: '$review' }, 'immediate')
+    const before = readNativeChatComposerDraft('tab-1:pane')
+    vi.mocked(structuredTransport.send).mockImplementation((text) =>
+      Boolean(
+        structuredAgentSessionSendBody(
+          text,
+          [],
+          Array.from({ length: 17 }, (_, path) => ({ name: 'review', path: `/${path}` }))
+        )
+      )
+    )
+    await send('$review', [])
+    expect(readNativeChatComposerDraft('tab-1:pane')).toBe(before)
+    expect(structuredTransport.onError).toHaveBeenLastCalledWith(
+      'Your message was not sent to Claude. Keep at most 16 selected skill files and try again.',
+      { errorText: undefined }
     )
   })
 })

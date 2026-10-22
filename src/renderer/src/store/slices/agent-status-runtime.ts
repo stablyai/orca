@@ -26,7 +26,10 @@ export type AgentStatusRuntime = {
 export function createAgentStatusRuntime(
   storeSet: Parameters<StateCreator<AppState>>[0],
   storeGet: Parameters<StateCreator<AppState>>[1],
-  getActions: () => Pick<AgentStatusSlice, 'setAgentStatus' | 'recordAgentProviderSession'>
+  getActions: () => Pick<
+    AgentStatusSlice,
+    'setAgentStatus' | 'recordAgentProviderSession' | 'setAgentProgramStatus'
+  >
 ): AgentStatusRuntime {
   let batchedAgentStatusState: AppState | null = null
   let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
@@ -104,6 +107,8 @@ export function createAgentStatusRuntime(
         update.routing,
         update.metadata
       )
+    } else if (update.kind === 'programStatus') {
+      actions.setAgentProgramStatus(update.paneKey, update.programStatus)
     } else {
       actions.setAgentStatus(
         update.paneKey,

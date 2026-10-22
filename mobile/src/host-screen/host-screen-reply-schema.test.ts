@@ -146,6 +146,26 @@ describe('host screen reply schemas', () => {
     expect(parsed.workspaceStatuses).toEqual([{ id: 'active', label: 'Active' }])
   })
 
+  it('reads every Workspace options value the desktop mirrors to its phone', () => {
+    const ui = {
+      hideAutomationGeneratedWorkspaces: true,
+      hideCliCreatedWorkspaces: false,
+      hideDetachedHeadWorkspaces: true,
+      hideWorkspacesFromOtherDevices: true,
+      projectOrderBy: 'recent',
+      worktreeCardProperties: ['status', 'a-property-from-a-newer-desktop'],
+      agentActivityDisplayMode: 'full'
+    }
+    expect(hostViewSettingsSchema.parse({ ui })).toEqual(ui)
+  })
+
+  it('reads a desktop that predates them as absent, which keeps the local value', () => {
+    const parsed = hostViewSettingsSchema.parse({
+      ui: { groupBy: 'repo', projectOrderBy: 'alphabetical', agentActivityDisplayMode: 7 }
+    })
+    expect(parsed).toEqual({ groupBy: 'repo' })
+  })
+
   it('salvages a non-array status catalog rather than handing a string to the group lookups', () => {
     expect(
       hostViewSettingsSchema.parse({ ui: { workspaceStatuses: 'active' } }).workspaceStatuses

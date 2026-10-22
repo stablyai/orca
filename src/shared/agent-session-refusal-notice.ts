@@ -47,6 +47,7 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',
+  'queued-edit': 'notDoneQueuedEdit',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
   goal: 'notDoneGoal'
@@ -102,7 +103,7 @@ function reasonParts(
 ): AgentSessionWriteNoticePart[] | undefined {
   if (
     failure.code === 'agent_session_operation_invalid' &&
-    failure.details?.codexInstallation &&
+    (failure.details?.agentInstallation || failure.details?.codexInstallation) &&
     (write === 'send' || write === 'composer-send')
   ) {
     return [
@@ -152,6 +153,11 @@ function reasonParts(
     return context.retryControl && words.action === 'retry' ? said : [...said, words.step]
   }
   if ('fact' in words) {
+    if (write === 'answer' && words.fact === 'providerExited') {
+      // An approval or question was waiting on the person when its agent stopped: one sentence
+      // that says the answer was not sent, names the agent, and says how to go on.
+      return [{ failure: { kind: words.fact }, surface: 'answer', context }]
+    }
     return write === 'send' || write === 'composer-send'
       ? [
           NOT_DONE[write],
@@ -279,10 +285,11 @@ export function agentSessionWriteNoticeEnglish(
  *  message is not read. */
 export function agentSessionRefusalNotice(
   refusal: Pick<AgentSessionWireRefusal, 'code' | 'message' | 'details'>,
-  write: AgentSessionWriteKind
+  write: AgentSessionWriteKind,
+  context: AgentSessionFailureWordsContext = {}
 ): string {
   return agentSessionWriteNoticeEnglish(
-    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), write)
+    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), write, context)
   )
 }
 

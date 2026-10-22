@@ -27,6 +27,9 @@ export function useNetworkSafeTabEntrySelection({
   const pinnedOptionIndex = pinnedOptionId
     ? activeOptions.findIndex((option) => getActiveOptionId(option) === pinnedOptionId)
     : -1
+  const missingPinnedAgent =
+    pinnedOptionIndex < 0 &&
+    (pinnedOptionId?.startsWith('chat:') || pinnedOptionId?.startsWith('cli:'))
   const rankedOption = pinnedOptionIndex < 0 ? activeOptions[0] : undefined
   const rankedClassification =
     rankedOption?.kind === 'entry' ? rankedOption.option.classification : null
@@ -59,8 +62,9 @@ export function useNetworkSafeTabEntrySelection({
   }, [fileIndexReady, hasRankedOption, rankedNetworkAction, rankingKey])
   const networkActionAllowed =
     networkRankingSettled && blockedNetworkRankingRef.current !== rankingKey
-  const activeSelectedIndex =
-    pinnedOptionIndex >= 0
+  const activeSelectedIndex = missingPinnedAgent
+    ? null
+    : pinnedOptionIndex >= 0
       ? pinnedOptionIndex
       : activeOptions.length === 0 || (rankedNetworkAction && !networkActionAllowed)
         ? null

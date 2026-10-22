@@ -87,3 +87,30 @@ export async function readWslDistroRegistryId(
   )
   return matches?.length === 1 ? matches[0].id : null
 }
+
+const SHARED_READ_TTL_MS = 30_000
+const sharedReads = new Map<string, { at: number; id: Promise<string | null> }>()
+
+/**
+ * One registry read shared by everything a single deploy does (the record's `distroId`, the
+ * launch env), so a launch never adds a `reg.exe` of its own. Short-lived: an unregister and
+ * re-import changes the id, and the next deploy must see it.
+ */
+export function readWslDistroRegistryIdShared(
+  distro: string,
+  now: () => number = Date.now,
+  read: (distro: string) => Promise<string | null> = readWslDistroRegistryId
+): Promise<string | null> {
+  const key = distro.trim().toLowerCase()
+  const cached = sharedReads.get(key)
+  if (cached && now() - cached.at < SHARED_READ_TTL_MS) {
+    return cached.id
+  }
+  const id = read(distro).catch(() => null)
+  sharedReads.set(key, { at: now(), id })
+  return id
+}
+
+export function resetWslDistroRegistryIdSharedReadsForTests(): void {
+  sharedReads.clear()
+}

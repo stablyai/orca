@@ -130,10 +130,12 @@ it('is saved before it interrupts, and a retry of its id never stops the newer t
 
   expect(rig.cancelTurn).toHaveBeenCalledOnce()
   expect(stopEvents()).toHaveLength(1)
-  expect(journal().activeTurnId()).toBe('turn-2')
+  expect(journal().runningTurn()?.turnId ?? null).toBe('turn-2')
   expect((await rig.submission(behind))?.dispatchState).not.toBe('rejected')
   expect((await rig.submission(newer))?.dispatchState).not.toBe('rejected')
   expect(await rig.drafts()).toEqual([])
+  expect(await rig.stop()).toMatchObject({ ok: true, replayed: false, value: { cancelled: true } })
+  expect(rig.cancelTurn).toHaveBeenCalledTimes(2)
 })
 
 // Round 1: a late Stop acted on newer work while the next message was handed over.

@@ -13,6 +13,7 @@ import {
   submitPromptToAgentPty
 } from './agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -55,11 +56,16 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId,
+  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
+}))
+vi.mock('../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   // Why drop the kind: this suite pins write shapes; startup-draft-input-kind.test.ts pins kinds.
   sendRuntimePtyInputVerified: (ptyId: string, data: string) =>
-    testState.sendRuntimePtyInputVerified(ptyId, data),
-  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
+    testState.sendRuntimePtyInputVerified(ptyId, data)
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({

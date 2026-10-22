@@ -2,15 +2,16 @@
 // retired fails the turn. The CLI says so itself: a synthetic reply whose `error` is
 // `model_not_found` (Claude Code 2.1.280). That reply is the evidence the saved model cannot run.
 
+import { beginClaudeOptionMutation } from './claude-structured-execution-observations'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
 
 /** The launched model, once, when a root reply says it does not exist and the chat still has it
- *  picked: the session stops holding it, so the record drops it. Null otherwise. */
+ *  picked: the live session stops holding it. Saved picks remain the user's. */
 export function retireClaudeLaunchedModel(
-  session: Pick<ClaudeSession, 'launchedModel' | 'options' | 'restoreSkippedOptions'>,
+  session: Pick<ClaudeSession, 'launchedModel' | 'options' | 'retiredModel'>,
   message: Record<string, unknown>
 ): string | null {
   const launched = session.launchedModel
@@ -24,7 +25,7 @@ export function retireClaudeLaunchedModel(
     return null
   }
   session.options.delete('model')
-  session.restoreSkippedOptions.add('model')
+  session.retiredModel = launched
   return launched
 }
 
@@ -37,7 +38,8 @@ export function resetClaudeRetiredModel(
   sessionId: string,
   retired: string
 ): void {
-  const sequence = session.optionMutationSequence
+  session.appliedInputOptions.delete('model')
+  const sequence = beginClaudeOptionMutation(session, 'model')
   void session.connection.setModel(undefined, { timeoutMs: deps.requestTimeoutMs }).then(
     () => {
       if (sequence !== session.optionMutationSequence) {
@@ -59,14 +61,4 @@ export function resetClaudeRetiredModel(
         error
       })
   )
-}
-
-/** The saved values this child showed it cannot run. Only a retired launch model is one: a launch
- *  never skips a model, so a skipped model is that. */
-export function claudeRetiredOptions(
-  session: Pick<ClaudeSession, 'launchedModel' | 'restoreSkippedOptions'>
-): { retiredOptions?: Record<string, string> } {
-  return session.restoreSkippedOptions.has('model') && session.launchedModel !== null
-    ? { retiredOptions: { model: session.launchedModel } }
-    : {}
 }

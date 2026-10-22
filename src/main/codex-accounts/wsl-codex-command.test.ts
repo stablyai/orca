@@ -27,6 +27,15 @@ describe('WSL Codex commands', () => {
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/managed-home')
     expect(command).toContain('exec "$resolved" login')
+    expect(command).not.toContain('BROWSER')
+  })
+
+  it('stops the distro opening a second tab only when Orca opens the link', () => {
+    const command = buildWslCodexLoginArgs('Ubuntu', '/home/alice/managed-home', {
+      orcaOpensSignInLink: true
+    }).at(-1)
+
+    expect(command).toContain('export BROWSER=true\nexec "$resolved" login')
   })
 
   it('quotes an explicit read-only app-server contract without changing the default', () => {

@@ -32,6 +32,19 @@ type RuntimeEnvironmentCatalog = {
   }) => Promise<void>
 }
 
+// Why module scope: reopening Settings shows the last failed probe while the quiet re-probe runs,
+// instead of flashing every row back to "Checking…".
+const lastSettledDetails = new Map<string, RuntimeHostDetails>()
+
+// Why only failures: a cached answer must never claim "Connected"; live status comes from the store.
+function isCacheableDetails(details: RuntimeHostDetails): boolean {
+  return details.status === 'error' && details.remoteControl?.state !== 'ready'
+}
+
+export function forgetCachedRuntimeHostDetails(environmentId: string): void {
+  lastSettledDetails.delete(environmentId)
+}
+
 export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
   const savedEnvironments = useAppStore((state) => state.runtimeEnvironments)
   const environments = useMemo(
@@ -41,7 +54,21 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
   const [isLoading, setIsLoading] = useState(false)
   const [detailsByEnvironmentId, setDetailsByEnvironmentId] = useState<
     Record<string, RuntimeHostDetails>
-  >({})
+  >(() => Object.fromEntries(lastSettledDetails))
+  useEffect(() => {
+    for (const environmentId of lastSettledDetails.keys()) {
+      if (!(environmentId in detailsByEnvironmentId)) {
+        lastSettledDetails.delete(environmentId)
+      }
+    }
+    for (const [environmentId, details] of Object.entries(detailsByEnvironmentId)) {
+      if (isCacheableDetails(details)) {
+        lastSettledDetails.set(environmentId, details)
+      } else {
+        lastSettledDetails.delete(environmentId)
+      }
+    }
+  }, [detailsByEnvironmentId])
   const mountedRef = useMountedRef()
 
   const loadEnvironments = useCallback(

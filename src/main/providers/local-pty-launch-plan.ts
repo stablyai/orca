@@ -2,6 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
+import { resolveUnixPaneShellPath } from '../daemon/shell-ready'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
 import {
   getDefaultCwd,
@@ -234,12 +235,11 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath =
-    args.shellOverride ||
-    getOptions().getDefaultShell?.()?.trim() ||
-    args.env?.SHELL ||
-    process.env.SHELL ||
-    '/bin/zsh'
+  const shellPath = resolveUnixPaneShellPath(
+    args.env ?? {},
+    args.shellOverride,
+    getOptions().getDefaultShell?.()
+  )
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
     // Why: shellOverride here is already resolved from the setting, so it cannot

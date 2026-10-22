@@ -68,7 +68,14 @@ export class ClaudeAccountSelection {
     const settings = this.store.getSettings()
     const selection = normalizeClaudeRuntimeSelection(settings)
     const accounts = settings.claudeManagedAccounts
-      .map((account) => this.summarize(account))
+      .map((account): ClaudeManagedAccountSummary => {
+        try {
+          return this.summarize(account)
+        } catch (error) {
+          console.warn('[claude-accounts] Could not read account folder:', error)
+          return { ...this.savedSummary(account), needsSignIn: true }
+        }
+      })
       .sort((a, b) => b.updatedAt - a.updatedAt)
     const userConfigDir = this.runtimeAuth.router.userConfigDir()
     // Why only with accounts, and at most every 5 s: the personal state file is large and every
@@ -87,18 +94,7 @@ export class ClaudeAccountSelection {
   }
 
   private summarize(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
-    const summary: ClaudeManagedAccountSummary = {
-      id: account.id,
-      email: account.email,
-      managedAuthRuntime: account.managedAuthRuntime ?? 'host',
-      wslDistro: account.wslDistro ?? null,
-      authMethod: account.authMethod ?? 'unknown',
-      organizationUuid: account.organizationUuid ?? null,
-      organizationName: account.organizationName ?? null,
-      createdAt: account.createdAt,
-      updatedAt: account.updatedAt,
-      lastAuthenticatedAt: account.lastAuthenticatedAt
-    }
+    const summary = this.savedSummary(account)
     if (account.managedAuthRuntime === 'wsl') {
       // Why no read: listing must not start a stopped distro. Only an older Orca's folder layout
       // is known to hold no login; a launch refuses a missing folder with its own reason.
@@ -117,8 +113,23 @@ export class ClaudeAccountSelection {
     }
     // Why: an account System default is signed in to runs there until it signs in on its own.
     return this.runtimeAuth.router.coveredBySystemDefault(account.id)
-      ? summary
+      ? { ...summary, runsOnSystemDefault: true }
       : { ...summary, needsSignIn: true }
+  }
+
+  private savedSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
+    return {
+      id: account.id,
+      email: account.email,
+      managedAuthRuntime: account.managedAuthRuntime ?? 'host',
+      wslDistro: account.wslDistro ?? null,
+      authMethod: account.authMethod ?? 'unknown',
+      organizationUuid: account.organizationUuid ?? null,
+      organizationName: account.organizationName ?? null,
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+      lastAuthenticatedAt: account.lastAuthenticatedAt
+    }
   }
 
   async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {

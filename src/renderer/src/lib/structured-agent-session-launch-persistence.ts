@@ -1,5 +1,7 @@
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import {
   validRecord,
+  parseStructuredLaunchSurfaceAddress,
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-record'
 export {
@@ -40,9 +42,13 @@ function load(): void {
           const seedOptions = parseStructuredLaunchSeedOptions(
             'seedOptions' in value ? value.seedOptions : undefined
           )
-          const { seedOptions: _stored, ...rest } = value
+          const surfaceAddress = parseStructuredLaunchSurfaceAddress(
+            'surfaceAddress' in value ? value.surfaceAddress : undefined
+          )
+          const { seedOptions: _stored, surfaceAddress: _address, ...rest } = value
           records.set(value.sessionId, {
             ...rest,
+            ...(surfaceAddress ? { surfaceAddress } : {}),
             ...(seedOptions ? { seedOptions } : {}),
             executionHostId:
               parseExecutionHostId(value.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID,
@@ -142,6 +148,24 @@ function writeTombstones(): void {
     // Why: persistence is recovery bookkeeping and must never block close.
     console.warn('[structured-agent-launch] could not persist cancellation tombstones')
   }
+}
+
+export function readStructuredAgentLaunchRecords(): readonly StructuredAgentLaunchPersistedRecord[] {
+  load()
+  return [...records.values()]
+}
+
+export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): Set<string> {
+  return new Set(
+    readStructuredAgentLaunchRecords().flatMap((record) =>
+      record.executionHostId === 'local' &&
+      record.lifecycle !== 'failed' &&
+      record.surfaceAddress?.worktreeId === worktreeId &&
+      (!groupId || record.surfaceAddress.targetGroupId === groupId)
+        ? [structuredAgentSessionTabId(record.sessionId)]
+        : []
+    )
+  )
 }
 
 export function readStructuredAgentLaunchRecord(

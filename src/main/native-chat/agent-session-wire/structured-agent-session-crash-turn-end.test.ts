@@ -32,7 +32,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalLifecycleBatchAppender } from '../agent-session-journal/journal-lifecycle-batch-appender'
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -102,7 +102,6 @@ function crashedClaudeRecord(): AgentSessionRecord {
       leaseDeadlineAt: LAST_RENEWED_AT + 30_000,
       lastRenewedAt: LAST_RENEWED_AT,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'live',
       unreconciled: false,
@@ -168,6 +167,9 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps>): void {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: vi.fn(),
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
@@ -431,6 +433,9 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     openHost({
       adapter: {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         dispatch: vi.fn(),
         cancelTurn: vi.fn(),
@@ -473,6 +478,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
         return {
+          acquisitionGeneration: globalThis.crypto.randomUUID(),
           process,
           link: {
             linkId: `claude-${fence}-link`,
@@ -486,6 +492,9 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     )
     openHost({
       adapter: {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire,
         dispatch: vi.fn(),
         cancelTurn: vi.fn(),
@@ -514,10 +523,10 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
   it('stays running when the open cannot write its settle, and a later open settles it', async () => {
     let now = RELAUNCHED_AT
     const log = recordingStructuredAgentSessionLogger()
-    const append = AgentSessionJournal.prototype.appendLifecycleBatch
+    const append = JournalLifecycleBatchAppender.prototype.appendPlanned
     let refused = false
-    vi.spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch').mockImplementation(function (
-      this: AgentSessionJournal,
+    vi.spyOn(JournalLifecycleBatchAppender.prototype, 'appendPlanned').mockImplementation(function (
+      this: JournalLifecycleBatchAppender,
       input
     ) {
       if (!refused && input.settlementId.startsWith(STALE_SESSION_ROW_PREFIX)) {
@@ -552,6 +561,7 @@ async function hostWithFailingFirstStart(failure: Error) {
         throw failure
       }
       return {
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process,
         link: {
           linkId: `claude-${fence}-link`,
@@ -565,6 +575,9 @@ async function hostWithFailingFirstStart(failure: Error) {
   )
   openHost({
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
       releaseAcquisition: async () => true,
       dispatch: vi.fn(),

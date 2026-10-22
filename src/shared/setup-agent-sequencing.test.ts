@@ -10,7 +10,6 @@ import {
   createSequencedSetupAgentCommands,
   createSetupAgentSequenceNonce,
   SETUP_COMPLETE_MESSAGE,
-  getSetupAgentSequenceShellForTests,
   resolveSetupAgentSequenceLaunchCommand,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
@@ -225,7 +224,6 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-wsl'
     })
 
-    expect(getSetupAgentSequenceShellForTests(resultPathWsl(), 'windows')).toBe('posix')
     expect(result.setupCommand).toContain(
       'bash /home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh'
     )
@@ -603,10 +601,6 @@ describe('createSetupAgentSequenceNonce', () => {
     vi.stubGlobal('crypto', originalCrypto)
   })
 })
-
-function resultPathWsl(): string {
-  return '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
-}
 
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-setup-sequencing-'))

@@ -11,15 +11,9 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
   const {
     clearRuntimePaneTitle,
     clearTabPtyId,
-    clearTerminalPaneUnread,
-    clearTerminalTabUnread,
-    clearWorktreeUnread,
     consumeTabIssueCommandSplit,
-    consumeTabSetupSplit,
     consumeTabStartupCommand,
-    markTerminalPaneUnread,
-    markTerminalTabUnread,
-    markWorktreeUnread,
+    markTerminalBell,
     openSpacePage,
     refreshWorkspaceSpace,
     setRuntimePaneTitle,
@@ -44,7 +38,6 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
-  const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
@@ -59,12 +52,7 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
     clearRuntimePaneTitle,
     updateTabPtyId,
     clearTabPtyId,
-    markWorktreeUnread,
-    markTerminalTabUnread,
-    markTerminalPaneUnread,
-    clearWorktreeUnread,
-    clearTerminalTabUnread,
-    clearTerminalPaneUnread,
+    markTerminalBell,
     openSpacePage,
     refreshWorkspaceSpace,
     settings,
@@ -79,8 +67,6 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
     sessionRestoredBannerPaneIds,
     setSessionRestoredBannerPaneIds,
     consumeTabStartupCommand,
-    setupSplit,
-    consumeTabSetupSplit,
     issueCommandSplit,
     consumeTabIssueCommandSplit
   }

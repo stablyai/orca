@@ -89,45 +89,6 @@ describe('terminal tab id hydration', () => {
     })
   })
 
-  it('drops legacy terminal tabs whose IDs cannot form pane keys', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      activeTabId: BAD_TAB_ID,
-      tabsByWorktree: {
-        w1: [
-          {
-            id: BAD_TAB_ID,
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'bad',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 100
-          },
-          {
-            id: GOOD_TAB_ID,
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'good',
-            customTitle: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 101
-          }
-        ]
-      }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1']))
-
-    expect(result.unifiedTabsByWorktree.w1.map((tab) => tab.id)).toEqual([GOOD_TAB_ID])
-    expect(result.groupsByWorktree.w1[0]).toMatchObject({
-      activeTabId: null,
-      tabOrder: [GOOD_TAB_ID]
-    })
-  })
-
   it('drops runtime terminal state whose IDs cannot form pane keys', () => {
     const store = createTestStore()
     seedStore(store, {

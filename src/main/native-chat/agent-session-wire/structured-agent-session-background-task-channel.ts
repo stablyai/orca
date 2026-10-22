@@ -1,3 +1,5 @@
+import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
+import { readCurrentRequestsPiece } from './agent-session-current-requests'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionHistoryRequest,
@@ -7,10 +9,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
-import {
-  structuredQueueSendGate,
-  tryReadQueuePublication
-} from './structured-agent-session-queued-publication'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import type { AgentSessionHistoryScope } from './agent-session-history-page'
 import type {
   AgentSessionSubscribers,
@@ -46,17 +45,19 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     scope?: AgentSessionHistoryScope
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      request.sessionId
+    )
     const result = readStructuredAgentSessionHistoryResult({
       journal,
       record: this.deps.store.getRecord(request.sessionId),
       request,
-      scope
+      scope,
+      ...(work ? { work } : {})
     })
     const backgroundTasks = this.read(request.sessionId)
-    const queue = tryReadQueuePublication(
-      journal,
-      structuredQueueSendGate(this.deps.store, request.sessionId)
-    )
+    const queue = this.subscribers.readQueuePublication(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,
@@ -75,6 +76,18 @@ export class StructuredAgentSessionBackgroundTaskChannel {
         backgroundTasks
       }
     }
+  }
+
+  async currentRequests(request: AgentSessionCurrentRequestsRead) {
+    await this.conversation(request.sessionId)
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      request.sessionId
+    )
+    if (!work) {
+      throw new Error('Current requests unavailable')
+    }
+    return readCurrentRequestsPiece(work.requestProjection(request.sessionId), request)
   }
 
   /** Resolves once the conversation is open and the subscriber holds its opening frame. */

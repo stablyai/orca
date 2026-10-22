@@ -29,6 +29,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     throw offline()
   })
 }))
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
+}))
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: vi.fn(async () => {
     calls.log.push('inventory')

@@ -6,7 +6,6 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
-import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { isRecord } from './rpc/orchestration-session-caller-test-fixture'
@@ -20,6 +19,8 @@ export type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   /** Every JSON-RPC method the adapter called, in order. */
   methods: string[]
   turns: { clientUserMessageId: string; text: string }[]
+  /** Messages steered into a running turn, as Codex takes them. */
+  steers: { expectedTurnId: string; clientUserMessageId: string; text: string }[]
 }
 
 /** How the fake provider misbehaves; reset before each test. */
@@ -61,6 +62,7 @@ export function fakeCodex() {
       threadId: null,
       methods: [],
       turns: [],
+      steers: [],
       pid: 4321,
       closed: false,
       request: async (method, params) => {
@@ -114,7 +116,12 @@ export function fakeCodex() {
           }
         }
         if (method === 'turn/steer') {
-          return refuseUnroutedSteer(undefined)
+          connection.steers.push({
+            expectedTurnId: String(input.expectedTurnId),
+            clientUserMessageId: String(input.clientUserMessageId),
+            text: JSON.stringify(input.input)
+          })
+          return { turnId: input.expectedTurnId }
         }
         return {}
       },

@@ -100,7 +100,7 @@ describe('automation run view state', () => {
       })
     ).toMatchObject({
       availability: 'workspace',
-      actionLabel: 'Resume workspace',
+      actionLabel: 'Open workspace',
       statusLabel: 'Workspace is available.'
     })
   })

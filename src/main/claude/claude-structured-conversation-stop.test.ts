@@ -18,7 +18,7 @@ async function written(claude: ReturnType<typeof fakeClaude>) {
       body: USER_MESSAGE,
       fence: 7
     })
-  ).resolves.toEqual({ state: 'admitted' })
+  ).resolves.toMatchObject({ state: 'admitted' })
   return adapter
 }
 
@@ -95,7 +95,7 @@ describe('Claude Stop that names no turn', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toMatchObject({ state: 'admitted' })
     expect(connection.sent).toHaveLength(2)
   })
 })

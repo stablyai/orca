@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
-  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from '../../shared/feedback-image-limits'
+import {
   appendFeedbackImagesToFormData,
   feedbackImageFilename,
   isSupportedFeedbackImageContentType,

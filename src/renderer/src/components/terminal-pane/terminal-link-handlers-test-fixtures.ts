@@ -1,5 +1,7 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
@@ -12,10 +14,17 @@ export type TerminalLinkStoreState = {
   setActiveWorktree: Mock
   createBrowserTab: Mock
   openFile: Mock
+  openFileForLink: Mock
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
   openFiles: { filePath: string; worktreeId: string }[]
+  groupsByWorktree: Record<string, TabGroup[]>
+  unifiedTabsByWorktree: Record<
+    string,
+    (Pick<Tab, 'id' | 'entityId' | 'groupId'> &
+      Partial<Pick<Tab, 'contentType' | 'executionHostId'>>)[]
+  >
   worktreesByRepo: Record<
     string,
     {
@@ -27,6 +36,17 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
+  repos: {
+    id: string
+    displayName: string
+    connectionId?: string | null
+    executionHostId?: ExecutionHostId
+  }[]
+  browserTabsByWorktree: Record<string, { id: string }[]>
+  browserPagesByWorkspace: Record<string, BrowserPage[]>
+  getKnownWorktreeById: (
+    id: string
+  ) => TerminalLinkStoreState['worktreesByRepo'][string][number] | undefined
 }
 
 export type TerminalLinkTestDoubles = {
@@ -34,6 +54,7 @@ export type TerminalLinkTestDoubles = {
   openFileUriMock: Mock
   openFilePathMock: Mock
   openFileMock: Mock
+  openFileForLinkMock: Mock
   statMock: Mock
   fsPathExistsMock: Mock
   runtimeEnvironmentCallMock: Mock
@@ -62,17 +83,52 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
+  // Why: specs assert the legacy openFile(file, options) shape; the link entry point delegates to it
+  // and records the view it "opened" so the guarded reveal can find it.
+  const openFileForLinkMock = vi.fn(
+    (
+      file: { filePath: string; worktreeId: string },
+      options: unknown,
+      _intent: unknown,
+      onShown?: (shown: { fileId: string; viewStateId: string; groupId: string }) => void
+    ) => {
+      const returned: unknown = openFileMock(file, options)
+      const fileId =
+        typeof returned === 'string'
+          ? returned
+          : (storeState.activeFileIdByWorktree[file.worktreeId] ?? file.filePath)
+      const view = { id: `view:${fileId}`, entityId: fileId, groupId: 'group-1' }
+      storeState.unifiedTabsByWorktree = {
+        ...storeState.unifiedTabsByWorktree,
+        [file.worktreeId]: [...(storeState.unifiedTabsByWorktree[file.worktreeId] ?? []), view]
+      }
+      const shown = { fileId, viewStateId: view.id, groupId: view.groupId }
+      // As today's store: the view is drawn at once.
+      onShown?.(shown)
+      return shown
+    }
+  )
   const storeState: TerminalLinkStoreState = {
     settings: undefined as TerminalLinkStoreSettings | undefined,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,
     openFile: openFileMock,
+    openFileForLink: openFileForLinkMock,
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
     openFiles: [] as { filePath: string; worktreeId: string }[],
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
     worktreesByRepo: {},
-    folderWorkspaces: [] as []
+    folderWorkspaces: [],
+    repos: [],
+    browserTabsByWorktree: {},
+    browserPagesByWorkspace: {},
+    getKnownWorktreeById: (id) =>
+      Object.values(storeState.worktreesByRepo)
+        .flat()
+        .find((worktree) => worktree.id === id)
   }
 
   return {
@@ -80,6 +136,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     openFileUriMock,
     openFilePathMock,
     openFileMock,
+    openFileForLinkMock,
     statMock,
     fsPathExistsMock,
     runtimeEnvironmentCallMock,

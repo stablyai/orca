@@ -8,11 +8,9 @@ import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
-import {
-  getWorktreeCreationLayout,
-  mergeWorktree,
-  resolveWorktreeCreateDisplayNameMeta
-} from '../ipc/worktree-logic'
+import { getWorktreeCreationLayout } from '../ipc/worktree-logic'
+import { mergeWorktree } from '../ipc/worktree-metadata-merge'
+import { resolveWorktreeCreateDisplayNameMeta } from '../ipc/worktree-display-name'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
@@ -24,6 +22,7 @@ import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
   request: RuntimeManagedWorktreeCreateArgs
@@ -76,7 +75,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     { requestedName: effectiveRequestedName, sanitizedName: effectiveSanitizedName }
   )
   const meta = timing.timeSync('persist_metadata', () =>
-    store.setWorktreeMeta(worktreeId, {
+    store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
       instanceId: randomUUID(),
       ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
       lastActivityAt: now,

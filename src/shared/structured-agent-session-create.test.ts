@@ -1,3 +1,5 @@
+import { ResumeSource } from './rpc-contract/structured-agent-session-params'
+import { STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY } from './structured-agent-session-surface-capabilities'
 import { describe, expect, it } from 'vitest'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES, RUNTIME_CAPABILITIES } from './protocol-version'
 import {
@@ -7,7 +9,8 @@ import {
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './electron-remote-runtime-client-capabilities'
 import {
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionFirstMessage
+  type StructuredAgentSessionFirstMessage,
+  type StructuredAgentSessionResumeSource
 } from './structured-agent-session-create'
 import {
   structuredAgentSessionCreateFingerprint,
@@ -26,7 +29,7 @@ function nextUuid(): string {
 
 function createParams(
   overrides: {
-    resumeFrom?: { providerSessionId: string }
+    resumeFrom?: StructuredAgentSessionResumeSource
     tabId?: string
     firstMessage?: StructuredAgentSessionFirstMessage
     options?: Record<string, string>
@@ -157,4 +160,35 @@ describe('the tab id a create reserves', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY)
     expect(AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY).toBe('agentSession.create.tab-id.v1')
   })
+})
+
+it('negotiates a strict pane identity and includes it in the create fingerprint without accepting paths', () => {
+  const source = {
+    providerSessionId: 'thread-abc',
+    cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' }
+  }
+  expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY)
+  expect(ResumeSource.parse(source)).toEqual(source)
+  expect(ResumeSource.safeParse({ ...source, transcriptPath: '/client/path' }).success).toBe(false)
+  expect(
+    ResumeSource.safeParse({
+      ...source,
+      cliSource: { ...source.cliSource, accountHome: '/client/home' }
+    }).success
+  ).toBe(false)
+  const first = createParams({ resumeFrom: source })
+  expect(first.envelope.payloadFingerprint).not.toBe(
+    createParams({ resumeFrom: RESUME }).envelope.payloadFingerprint
+  )
+  expect(first.envelope.payloadFingerprint).toBe(
+    createParams({ resumeFrom: source }).envelope.payloadFingerprint
+  )
+  expect(first.envelope.payloadFingerprint).not.toBe(
+    createParams({
+      resumeFrom: {
+        ...source,
+        cliSource: { ...source.cliSource, paneKey: 'other:leaf' }
+      }
+    }).envelope.payloadFingerprint
+  )
 })

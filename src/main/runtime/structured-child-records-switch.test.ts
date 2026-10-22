@@ -21,6 +21,7 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
@@ -44,6 +45,7 @@ const THREAD = 'thread-switch'
 const REVIEWER = 'thread-reviewer'
 const ROUTES: Record<string, unknown> = {
   'thread/start': { thread: { id: THREAD } },
+  'turn/start': { turn: { id: 'p2', status: 'inProgress' } },
   'model/list': {
     data: [
       {
@@ -132,7 +134,10 @@ describe('the chat strip and the session list read the same host child records',
       ...scriptedCodexTransport(openConnection),
       statusSink
     })
-    const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
+    const attachParams = hostTestAttachParams(null, {
+      providerHandle: undefined,
+      options: { model: 'gpt-test' }
+    })
     attachParams.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
     const attached = await host.attach({ callerKey: 'switch-test' }, attachParams)
     expect(attached).toMatchObject({ ok: true })
@@ -179,6 +184,17 @@ describe('the chat strip and the session list read the same host child records',
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
     const both = (expected: Row[]) => {
       expect(summaryRows()).toEqual(expected)
+      const sources = collectRuntimeWorktreeAgentSources({
+        hookSnapshots: server.getStatusSnapshot(),
+        readStructuredSummary: host.readStatusSummary,
+        mirroredWorktreeIdByTabId: new Map(),
+        connectedPtyEvidence: {
+          tabIds: new Set(),
+          paneKeys: new Set(),
+          ptyIdByTerminalHandle: new Map()
+        }
+      })
+      expect([...sources.values()].flatMap((source) => rows(source.children))).toEqual(expected)
       expect(stripRows()).toEqual(expected)
     }
 
@@ -316,6 +332,13 @@ describe('the chat strip and the session list read the same host child records',
         },
         body
       }
+    )
+    await vi.waitFor(async () =>
+      expect(
+        (await host.journalSnapshot(SESSION)).submissions.find(
+          (entry) => entry.clientMessageId === clientOperationId
+        )?.handedOverAt
+      ).toBeDefined()
     )
     await notify('turn/started', { threadId: THREAD, turn: { id: 'p2', status: 'inProgress' } })
     await notify('item/started', {

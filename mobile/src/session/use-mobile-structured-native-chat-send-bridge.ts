@@ -3,12 +3,7 @@ import type { StructuredAgentId } from '../../../src/shared/agent-session-provid
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
-
-type StructuredNativeChatAttachment = {
-  id?: string
-  path: string
-  previewUri: string
-}
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
@@ -16,7 +11,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredNativeChatAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -28,7 +23,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredNativeChatAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const {
@@ -44,7 +39,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredNativeChatAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
@@ -75,7 +70,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredNativeChatAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[]
     ) => (await sendWithOutcome(text, images, deadline, attachments)) !== 'rejected',
     [sendWithOutcome]
   )

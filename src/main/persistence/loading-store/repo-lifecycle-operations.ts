@@ -1,5 +1,7 @@
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   removeRepoFromHostWorkspaceSessions,
@@ -27,6 +29,19 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
 import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
+import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
+import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+
+// A paused WSL move keeps its local rows for a downgrade.
+function removeLocalRepoSession(
+  session: WorkspaceSessionState,
+  repoId: string
+): WorkspaceSessionState {
+  return isWslMoveProjectSessionFrozen({ repoId })
+    ? session
+    : removeRepoFromWorkspaceSession(session, repoId)
+}
 type RepoLifecycleOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'gitUsernameCache'
@@ -34,6 +49,7 @@ type RepoLifecycleOperationsRuntime = Pick<
   | 'repoOrderOperations'
   | 'repoUpdateOperations'
   | 'state'
+  | 'orcadTerminalRestoreHints'
 >
 
 const repoLifecycleOperationsContext = Symbol('RepoLifecycleOperations')
@@ -62,7 +78,9 @@ export class RepoLifecycleOperations {
     return getRepoOrderOperations(this).reorderReposForHost(orderedIds, hostId)
   }
 
-  removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+  removeProjectForHost(target: RepoHostTarget): void {
+    const id = target.id
+    const hostId = getRepoExecutionHostId(target)
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
     )
@@ -77,23 +95,26 @@ export class RepoLifecycleOperations {
     )
     if (!idStillPresent) {
       retireLocalWorktreeScanGeneration(id)
+      dropRepoRestoreHints(this, id)
       delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
       delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
     }
     syncProjectHostSetupCompatibilityState(this)
-    pruneWorktreeStateForRepo(this, id, idStillPresent ? hostId : null)
-    if (!idStillPresent) {
-      this[repoLifecycleOperationsContext].runtime.state.workspaceSession =
-        removeRepoFromWorkspaceSession(
-          this[repoLifecycleOperationsContext].runtime.state.workspaceSession,
-          id
-        )
+    // Why host-scoped: a paired client never registers that host's repos, so `idStillPresent` is
+    // false even when another paired host (or a re-pairing of this one) holds rows under the same id.
+    const pairedHost = parseExecutionHostId(hostId)?.kind === 'runtime'
+    pruneWorktreeStateForRepo(this, id, idStillPresent || pairedHost ? hostId : null)
+    if (!idStillPresent && !pairedHost) {
+      this[repoLifecycleOperationsContext].runtime.state.workspaceSession = removeLocalRepoSession(
+        this[repoLifecycleOperationsContext].runtime.state.workspaceSession,
+        id
+      )
       this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId =
         removeRepoFromHostWorkspaceSessions(
           this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
           id
         )
-    } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+    } else if (pairedHost) {
       const session =
         this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
       if (session) {
@@ -120,8 +141,9 @@ export class RepoLifecycleOperations {
     }
     for (const repoId of orphanRepoIds) {
       retireLocalWorktreeScanGeneration(repoId)
+      dropRepoRestoreHints(this, repoId)
       pruneWorktreeStateForRepo(this, repoId, null)
-      state.workspaceSession = removeRepoFromWorkspaceSession(state.workspaceSession, repoId)
+      state.workspaceSession = removeLocalRepoSession(state.workspaceSession, repoId)
       state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
         state.workspaceSessionsByHostId,
         repoId
@@ -132,7 +154,7 @@ export class RepoLifecycleOperations {
   }
 
   updateRepo(
-    id: string,
+    target: RepoHostTarget,
     updates: Partial<
       Pick<
         Repo,
@@ -141,6 +163,7 @@ export class RepoLifecycleOperations {
         | 'repoIcon'
         | 'upstream'
         | 'gitRemoteIdentity'
+        | 'defaultJiraProject'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -165,11 +188,17 @@ export class RepoLifecycleOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
-    },
-    hostId?: ExecutionHostId
+    }
   ): Repo | null {
-    return getRepoUpdateOperations(this).updateRepo(id, updates, hostId)
+    return getRepoUpdateOperations(this).updateRepo(target, updates)
   }
+}
+
+function dropRepoRestoreHints(owner: RepoLifecycleOperations, repoId: string): void {
+  dropOrcadTerminalRestoreHintsForWorktrees(
+    owner[repoLifecycleOperationsContext].runtime.orcadTerminalRestoreHints,
+    (worktreeId) => getRepoIdFromWorktreeId(worktreeId) === repoId
+  )
 }
 
 export function getRepoOrderOperations(
@@ -247,7 +276,7 @@ export function getProjectHostSetupOperations(
   owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations ??=
     new ProjectHostSetupPersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
-      updateRepo: (id, updates, hostId) => owner.updateRepo(id, updates, hostId),
+      updateRepo: (target, updates) => owner.updateRepo(target, updates),
       scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
     })
   return owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations

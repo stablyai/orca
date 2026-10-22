@@ -44,7 +44,6 @@ describe('a Claude chat launched with its saved options', () => {
       effort: 'high',
       fastMode: 'true'
     })
-    expect(spawn.skipped).toEqual([])
   })
 
   // A resolved id, a model newer than any listing Orca holds, a retired one: the CLI's own answer
@@ -55,7 +54,6 @@ describe('a Claude chat launched with its saved options', () => {
       const spawn = launched({ model, effort: 'xhigh' })
 
       expect(spawn.sdkOptions).toMatchObject({ model, effort: 'xhigh' })
-      expect(spawn.skipped).toEqual([])
     }
   )
 
@@ -64,7 +62,6 @@ describe('a Claude chat launched with its saved options', () => {
 
     expect(spawn.sdkOptions).not.toHaveProperty('effort')
     expect(spawn.sdkOptions).not.toHaveProperty('settings')
-    expect(spawn.skipped).toEqual(['effort', 'fastMode'])
   })
 
   it('keeps a saved Fast on for a new conversation, for its start to apply', () => {
@@ -73,7 +70,6 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.sdkOptions).not.toHaveProperty('settings')
     expect(spawn.options.get('fastMode')).toBe('true')
     expect(spawn.fastModeAtStart).toBe(true)
-    expect(spawn.skipped).toEqual([])
   })
 
   it('passes a saved Fast off to a new conversation', () => {
@@ -128,7 +124,6 @@ describe('a Claude chat launched with its saved options', () => {
 
       expect(spawn.sdkOptions).toEqual(FULL_ACCESS_LAUNCH)
       expect(spawn.options.size).toBe(0)
-      expect(spawn.skipped).toEqual([])
     }
   )
 })

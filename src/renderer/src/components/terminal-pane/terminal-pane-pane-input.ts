@@ -9,6 +9,7 @@ import {
 } from './terminal-ime-candidate-key-release-guard'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeComposerPlaceholderMask } from './terminal-ime-composer-placeholder-mask'
+import { createTerminalKittyOrphanKeyupGuard } from './terminal-kitty-orphan-keyup-guard'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import { installTerminalIosHangulPreedit } from './terminal-ios-hangul-preedit'
 import { createTerminalIosHangulPreeditRenderer } from './terminal-ios-hangul-preedit-overlay'
@@ -68,6 +69,8 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         renderPreedit: createTerminalIosHangulPreeditRenderer(pane.terminal)
       })
     : null
+  const getKittyKeyboardFlags = (): number =>
+    paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
   imeCompositionDisposablesRef.current.set(pane.id, {
     dispose: () => {
       imeComposerPlaceholderMask.dispose()
@@ -82,12 +85,14 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
           terminalElement: pane.terminal.element,
           isComposing: () => imeCompositionTracker.isActive(),
           sendInput: (data) => pane.terminal.input(data),
-          getKittyKeyboardFlags: () => paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
+          getKittyKeyboardFlags
         })
       : { claimKeyEvent: () => false, dispose: () => undefined }
   imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
 
-  pane.terminal.attachCustomKeyEventHandler((event) => {
+  const kittyOrphanKeyupGuard = createTerminalKittyOrphanKeyupGuard()
+
+  const resolveXtermKeyEvent = (event: KeyboardEvent): boolean => {
     const now = Date.now()
     const pendingCandidateReleaseGuardActive = shouldApplyTerminalImePendingCandidateKeyRelease(
       event,
@@ -173,10 +178,14 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       isMac,
       isIosWeb,
       hasSelection: pane.terminal.hasSelection(),
-      kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
+      kittyKeyboardFlags: getKittyKeyboardFlags()
     })
     return !shouldBypass
-  })
+  }
+
+  pane.terminal.attachCustomKeyEventHandler((event) =>
+    kittyOrphanKeyupGuard.filter(event, resolveXtermKeyEvent(event), getKittyKeyboardFlags())
+  )
 }
 
 export type { PaneInputContext }

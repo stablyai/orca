@@ -26,16 +26,25 @@ export function emptyTerminalSessionProfile(): string {
 
 /** Opens a real Store on SQLite in `directory`, seeding it first when `seed` is given. */
 export async function openTopologyStore(directory: string, seed?: string): Promise<Store> {
+  return (await openTopologyStoreWithAuthority(directory, seed)).store
+}
+
+/** As openTopologyStore, with the authority a test can fail writes through. */
+export async function openTopologyStoreWithAuthority(
+  directory: string,
+  seed?: string
+): Promise<{ store: Store; authority: DelayedAuthority }> {
   const inner = new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'topology')
   if (seed) {
     inner.writeSerializedState(Buffer.from(seed))
   }
+  const authority = new DelayedAuthority(inner)
   const store = new Store({
     dataFile: join(directory, 'orca-data.json'),
-    profileStateAuthority: new DelayedAuthority(inner)
+    profileStateAuthority: authority
   })
   await store.flushPendingOrThrowAsync()
-  return store
+  return { store, authority }
 }
 
 /** Quit and relaunch: drain pending writes, close, and load the profile cold. */

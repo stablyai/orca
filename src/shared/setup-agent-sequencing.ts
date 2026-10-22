@@ -1,3 +1,4 @@
+import { quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import { getPosixCodexShellLaunchPreflight } from './codex-shell-function'
 import { getPosixClaudeShellFunction } from './claude-shell-function'
@@ -5,7 +6,6 @@ import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
-  type SetupRunnerCommandShell,
   type SetupRunnerShell
 } from './setup-runner-command'
 import { createNonSecureContextUuid } from './non-secure-context-uuid'
@@ -90,9 +90,9 @@ export function createSequencedSetupAgentCommands(args: {
 }
 
 function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce: string): string {
-  const marker = quotePosixArg(markerPath)
-  const tmp = quotePosixArg(`${markerPath}.tmp`)
-  const nonceValue = quotePosixArg(nonce)
+  const marker = quotePosixShellUnlessPlainNoAt(markerPath)
+  const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
+  const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
 
   const script = [
     `rm -f ${marker} ${tmp} 2>/dev/null`,
@@ -103,7 +103,7 @@ function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce:
     'exit "$status"'
   ].join('; ')
 
-  return `bash -lc ${quotePosixArg(script)}`
+  return `bash -lc ${quotePosixShellUnlessPlainNoAt(script)}`
 }
 
 function buildPosixStartupScript(
@@ -112,9 +112,9 @@ function buildPosixStartupScript(
   nonce: string,
   waitTimeoutSeconds: number
 ): string {
-  const marker = quotePosixArg(markerPath)
-  const tmp = quotePosixArg(`${markerPath}.tmp`)
-  const nonceValue = quotePosixArg(nonce)
+  const marker = quotePosixShellUnlessPlainNoAt(markerPath)
+  const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
+  const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
   // Why: the PTY launch path feeds this command through an interactive shell,
@@ -132,7 +132,7 @@ function buildPosixStartupScript(
     // "Waiting for setup..." as the pane's last line forever.
     // Why here and not first: setup may be what puts codex on PATH, and this
     // `bash -lc` never reads Orca's shell wrapper, so it defines the function itself.
-    `if [ "$status" = "0" ]; then echo ${quotePosixArg(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     'echo "Setup failed; skipping agent startup." >&2;',
     'exit "${status:-1}";',
     'fi;',
@@ -153,7 +153,7 @@ function buildPosixStartupSuccessCommand(startupCommand: string): string {
     hasUnquotedPosixCommandSeparator(startupCommand) ||
     hasLeadingPosixEnvAssignment(startupCommand)
   ) {
-    return `eval ${quotePosixArg(startupCommand)}; exit "$?"`
+    return `eval ${quotePosixShellUnlessPlainNoAt(startupCommand)}; exit "$?"`
   }
   return `exec ${startupCommand}`
 }
@@ -297,18 +297,4 @@ function buildWindowsStartupCommand(
 // base64 stays: these strings are typed into a terminal pane and re-parsed by its shell.
 function encodePowerShellInvocation(script: string): string {
   return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(script)}`
-}
-
-function quotePosixArg(value: string): string {
-  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
-    return value
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-export function getSetupAgentSequenceShellForTests(
-  runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
-): SetupRunnerCommandShell {
-  return resolveSetupRunnerCommand(runnerScriptPath, platform).shell
 }

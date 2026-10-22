@@ -33,8 +33,10 @@ vi.mock('./runtime-local-worktree-setup', () => ({
   }))
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn(),
+vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn()
+}))
+vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 

@@ -3,7 +3,10 @@
 
 import { mkdirSync } from 'node:fs'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
-import { setAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import {
+  publishAgentSessionUploadRemoval,
+  setAgentSessionAttachmentStore
+} from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import {
   startAgentSessionAttachmentSweeps,
   type AgentSessionAttachmentSweeper
@@ -50,7 +53,8 @@ export function installAgentSessionAttachments(deps: {
         // Readable or not: an unreadable chat's claims still protect its uploads.
         has: (sessionId) =>
           deps.store.getRecord(sessionId) !== null || deps.store.isSessionUnreadable(sessionId)
-      })
+      }),
+      onUploadRemoved: publishAgentSessionUploadRemoval
     },
     {
       initialDelayMs: FIRST_SWEEP_DELAY_MS,

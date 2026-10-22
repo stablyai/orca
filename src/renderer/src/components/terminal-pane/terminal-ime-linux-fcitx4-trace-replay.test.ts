@@ -66,8 +66,8 @@ describe('fcitx4 Sogou via XIM under kitty event reporting', () => {
     const { emitted } = await replayThroughLinuxPane(events, '\x1b[>3u')
     const releasesAfter = (glyph: string, until: number): number =>
       emitted.slice(emitted.indexOf(glyph) + 1, until).split(KITTY_RELEASE_SUFFIX).length - 1
-    // The releases between the picks are the first pick's Space plus the second round's letters.
-    expect(releasesAfter('你', emitted.indexOf('浩'))).toBe(1 + 'hao'.length)
+    // Only the first pick's Space; the second round's letters reached the page as keyups only.
+    expect(releasesAfter('你', emitted.indexOf('浩'))).toBe(1)
     expect(releasesAfter('浩', emitted.length)).toBe(1)
   })
 })

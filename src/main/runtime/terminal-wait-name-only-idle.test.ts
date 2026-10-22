@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
-import { RuntimeTerminalWait } from './runtime-terminal-wait'
-import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
+import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
+import { RuntimeTerminalWait } from './terminal/wait/terminal-wait'
+import { RuntimeTerminalWaiterRegistry } from './terminal/wait/terminal-waiter-registry'
 import {
   errorMessage,
   makeTuiIdleLeaf,

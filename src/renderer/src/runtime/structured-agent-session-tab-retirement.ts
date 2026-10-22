@@ -1,3 +1,4 @@
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -8,7 +9,6 @@ import {
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -83,7 +83,9 @@ export function retireStructuredAgentSessionTab(args: {
 function reacceptHostSessionTabs(
   target: RuntimeClientTarget,
   worktreeId: string,
-  intentOwner: WebSessionIntentOwner
+  intentOwner: WebSessionIntentOwner,
+  /** This machine's host still lists the chat. */
+  stillListed?: { sessionId: string; reopen: () => void }
 ): void {
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
@@ -97,8 +99,19 @@ function reacceptHostSessionTabs(
           })
         )
       : import('./local-structured-session-tabs-sync/inventory-refresh').then(
-          ({ refreshLocalStructuredSessionWorktreeTabs }) =>
-            refreshLocalStructuredSessionWorktreeTabs(worktreeId, { reacceptCurrentVersion: true })
+          async ({ refreshLocalStructuredSessionWorktreeTabs }) => {
+            const listed = await refreshLocalStructuredSessionWorktreeTabs(worktreeId, {
+              reacceptCurrentVersion: true
+            })
+            if (
+              stillListed &&
+              listed?.tabs.some(
+                (tab) => tab.type === 'agent-session' && tab.sessionId === stillListed.sessionId
+              )
+            ) {
+              stillListed.reopen()
+            }
+          }
         )
   reread.catch((error: unknown) =>
     console.warn('[structured-agent-session] tab re-read after a close failed', error)
@@ -111,13 +124,17 @@ export function beginStructuredAgentSessionTabClose(args: {
   worktreeId: string
   sessionId: string
   provisional: boolean
+  layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
+  /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
+  reopen?: () => void
 }): void {
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(
       args.worktreeId,
       args.sessionId,
-      executionHostIdForStructuredTarget(args.target)
+      executionHostIdForStructuredTarget(args.target),
+      args.layoutOwner
     )
     discardStructuredAgentSessionChatSends(args.sessionId)
   } else {
@@ -131,12 +148,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   )
   const hostTabId = `agent-session:${args.sessionId}`
   // Why: a host frame sent before the host handles the close still lists the chat and would re-add
-  // it at the end of the strip; the intent lifts once a host frame stops listing it. Floating-panel
-  // frames are never applied, so nothing there could re-add the chat or ever end its intent.
-  if (args.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    void retireStructuredAgentSessionTab(args)
-    return
-  }
+  // it at the end of the strip; the intent lifts once a host frame stops listing it.
   recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
     if (!hostTabClosed) {
@@ -147,7 +159,14 @@ export function beginStructuredAgentSessionTabClose(args: {
     // needs a read; a paired server's frames travel apart from its answer, so, as for its terminal
     // closes, every close is followed by a read.
     if (!hostTabClosed || args.target.kind === 'environment') {
-      reacceptHostSessionTabs(args.target, args.worktreeId, intentOwner)
+      reacceptHostSessionTabs(
+        args.target,
+        args.worktreeId,
+        intentOwner,
+        !hostTabClosed && args.reopen
+          ? { sessionId: args.sessionId, reopen: args.reopen }
+          : undefined
+      )
     }
   })
 }

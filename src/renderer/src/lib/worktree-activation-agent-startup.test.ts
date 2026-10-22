@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   createMockStore,
-  registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+  registerWorktreeActivationReset,
+  createdTabStartups
+} from './worktree-activation.test-fixture'
 
 registerWorktreeActivationReset()
 
@@ -20,13 +21,13 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     )
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingStartup: expect.anything(),
       pendingActivationSpawn: true
     })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'claude "Fix this bug"'
     })
-    expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
   })
 
@@ -49,10 +50,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     )
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingStartup: expect.anything(),
       pendingActivationSpawn: true,
       launchAgent: 'claude'
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'claude',
       launchAgent: 'claude'
     })
@@ -82,6 +84,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     )
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingStartup: expect.anything(),
       pendingActivationSpawn: true,
       launchAgent: 'claude',
       ...expectedViewMode
@@ -114,6 +117,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       )
 
       expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+        pendingStartup: expect.anything(),
         pendingActivationSpawn: true,
         launchAgent: 'claude',
         ...expectedViewMode
@@ -141,6 +145,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     )
 
     expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+      pendingStartup: expect.anything(),
       pendingActivationSpawn: true,
       recordInteraction: false,
       launchAgent: 'claude'
@@ -173,6 +178,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       )
 
       expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+        pendingStartup: expect.anything(),
         pendingActivationSpawn: true,
         recordInteraction: false,
         launchAgent: 'claude',
@@ -200,10 +206,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     )
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingStartup: expect.anything(),
       pendingActivationSpawn: true,
       launchAgent: 'claude'
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'claude',
       telemetry: {
         agent_kind: 'claude-code',
@@ -228,10 +235,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     )
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingStartup: expect.anything(),
       pendingActivationSpawn: true,
       launchAgent: 'codex'
     })
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+    expect(createdTabStartups(store)['tab-1']).toEqual({
       command: 'codex',
       launchAgent: 'codex'
     })

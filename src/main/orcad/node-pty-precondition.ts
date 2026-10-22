@@ -67,13 +67,7 @@ export type NodePtyProbeFailure = {
   detail: string
 }
 
-/**
- * What the child actually reported, before any judgement is made about it.
- *
- * Split from the classification so callers that need the loader's own words — the relay,
- * which quotes them back when nothing recognizes the shape — do not have to re-derive
- * them from a formatted verdict.
- */
+/** What the child actually reported, before any judgement is made about it. */
 export type NodePtyProbeOutcome =
   | { kind: 'loaded'; loadedDir: string | null }
   | { kind: 'noBinary' }
@@ -197,7 +191,7 @@ export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
     `const fs=require('fs'),p=require('path');`,
     `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
     `let f=null;`,
-    `for(const d of ['build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
+    `for(const d of ['build/orca-napi-'+process.platform+'-'+process.arch,'build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,
     `const c=p.join(r,d,n+'.node');if(fs.existsSync(c)){f=c;break}}if(f)break}`,
     `if(!f){console.log(${JSON.stringify(NO_BINARY_TOKEN)});process.exit(3)}`,
@@ -222,14 +216,13 @@ function resolveNodePtyDir(): string | null {
   }
 }
 
-/** Local equivalent of the relay's remote toolchain probe, reusing its pure half. */
+/** Probes this machine's build toolchain for install hints. */
 export function probeLocalBuildToolchainHints(platform: NodeJS.Platform): string[] {
   if (platform === 'win32') {
     return []
   }
-  // Why macOS is not routed through the relay's hints: that function answers with a
-  // cross-distro apt/dnf/pacman/apk menu when it finds no package manager, and none of
-  // those lines is the macOS answer. Printing them here would be confidently wrong.
+  // Why macOS skips the generic hints: with no package manager found they list a
+  // cross-distro apt/dnf/pacman/apk menu, and none of those lines is the macOS answer.
   if (platform === 'darwin') {
     return ['  xcode-select --install']
   }

@@ -1,6 +1,8 @@
 import { useAppStore } from '../../store'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropTabThroughLayoutOwner } from '../tab-group/tab-group-layout-owner-commands'
 
 type TabMovePaneColumnState = Pick<
   ReturnType<typeof useAppStore.getState>,
@@ -47,6 +49,18 @@ export function moveTabToNewPaneColumn(args: {
   )?.[0]
   if (!worktreeId || !canMoveTabToNewPaneColumnFromState(state, args.unifiedTabId, args.groupId)) {
     return false
+  }
+  // Switch point: main places the tab beside its group first.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    dropTabThroughLayoutOwner(worktreeId, {
+      kind: 'split',
+      tabId: args.unifiedTabId,
+      groupId: args.groupId,
+      direction: args.direction
+    })
+  ) {
+    return true
   }
   const moved = state.dropUnifiedTab(args.unifiedTabId, {
     groupId: args.groupId,

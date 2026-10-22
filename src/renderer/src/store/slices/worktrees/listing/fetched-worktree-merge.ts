@@ -4,7 +4,11 @@ import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { routeListingBranchSwitchesThroughGitIdentity } from '../../worktree-listing-branch-switch'
-import { areDetectedWorktreeResultsEqual, areWorktreesEqual } from './worktree-catalog-visibility'
+import {
+  areDetectedWorktreeResultsEqual,
+  areWorktreesEqual,
+  worktreesDifferOnlyInSortOrder
+} from './worktree-catalog-visibility'
 import { mergeDetectedWorktreesForHost } from './detected-worktree-host-merge'
 import {
   getRemovedWorktreeIdsAfterAuthoritativeScan,
@@ -22,6 +26,8 @@ import {
   type WorktreeListingMergeOutcome
 } from './detected-worktree-refresh-admission'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
+import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
 import { branchName } from '@/lib/git-utils'
 import {
@@ -132,8 +138,22 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 
 export function mergeFetchedWorktrees(
   set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
+  if (args.purgeRemovedWorktrees !== false) {
+    // Why before the updater: delayed views must commit text the purge may offer back.
+    const state = get()
+    flushPurgedWorkspaceEdits(
+      state,
+      getRemovedWorktreeIdsAfterAuthoritativeScan(
+        state,
+        args.repoId,
+        args.refresh.result,
+        args.hostId
+      ).map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+    )
+  }
   // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
@@ -250,7 +270,10 @@ export function mergeFetchedWorktrees(
               ...s.worktreesByRepo,
               [args.repoId]: mergedWorktrees
             },
-            sortEpoch: s.sortEpoch + 1
+            // Why: an order save re-reads as a sortOrder-only change; re-sorting on it would schedule the next save (#27268).
+            ...(worktreesDifferOnlyInSortOrder(s.worktreesByRepo[args.repoId], mergedWorktrees)
+              ? { sortOrderEpoch: s.sortOrderEpoch + 1 }
+              : { sortEpoch: s.sortEpoch + 1 })
           }
         : {}),
       ...(detectedChanged
@@ -264,7 +287,7 @@ export function mergeFetchedWorktrees(
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,
-            removedIds.map((id) => ({ id, hostId: args.hostId }))
+            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
           )
         : {})
     }

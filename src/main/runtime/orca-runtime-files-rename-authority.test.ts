@@ -10,7 +10,7 @@ import {
   useRuntimeFileCommandsLifecycle
 } from './orca-runtime-files-test-harness'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
-import { setSshConnectionGeneration } from '../ssh/ssh-connection-generation'
+import { setSshConnectionGeneration } from '../ssh/connection/ssh-connection-generation'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -226,15 +226,6 @@ describe('RuntimeFileCommands', () => {
 
     await expect(
       commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-a', 'ssh:ssh-a')
-    ).rejects.toThrow('Workspace host changed')
-    expect(renameMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects a stale SSH expectation after the worktree becomes HUB-local', async () => {
-    const { commands } = createRuntimeFileCommands()
-
-    await expect(
-      commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts', 0, 'ssh-1', 'ssh:ssh-1')
     ).rejects.toThrow('Workspace host changed')
     expect(renameMock).not.toHaveBeenCalled()
   })

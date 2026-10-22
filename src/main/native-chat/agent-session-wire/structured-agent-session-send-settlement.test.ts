@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
+import {
+  StructuredAgentSessionSendSettlement,
+  type SendSettlementJournal
+} from './structured-agent-session-send-settlement'
 
-function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): AgentSessionJournal {
+function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlementJournal {
   return {
+    activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
     submissions: () => [
       {
@@ -17,21 +20,19 @@ function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): AgentSessio
         resolvedAt: dispatchState === 'pending' ? null : 2
       }
     ]
-  } as AgentSessionJournal
+  }
 }
 
-function emptyJournal(): AgentSessionJournal {
+function emptyJournal(): SendSettlementJournal {
   return {
+    activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: 2 }),
     submissions: () => []
-  } as unknown as AgentSessionJournal
+  }
 }
 
 /** A message accepted and not yet handed over, while `activeTurnId` names the running turn. */
-function queuedJournal(
-  activeTurnId: string | null,
-  handedOver = false
-): Pick<AgentSessionJournal, 'submissions' | 'cursor' | 'activeTurnId'> {
+function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
     cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
     activeTurnId: () => activeTurnId,

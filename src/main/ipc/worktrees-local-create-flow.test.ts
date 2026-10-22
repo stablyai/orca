@@ -22,6 +22,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -394,7 +398,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/rocket',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/rocket', hostId: 'local' }),
       expect.objectContaining({ displayName: '🚀' })
     )
   })
@@ -446,7 +450,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::../worktrees/feature',
+      hostWorktreeTarget({ id: 'repo-1::../worktrees/feature', hostId: 'local' }),
       expect.objectContaining({
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
@@ -584,7 +588,7 @@ describe('registerWorktreeHandlers', () => {
       kind: 'folder' as const
     }
     store.getRepo.mockReturnValue(repo)
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => ({
       displayName: '',
       comment: '',
       linkedIssue: null,
@@ -788,7 +792,7 @@ describe('registerWorktreeHandlers', () => {
     expect(result.setup?.command).toContain('printf')
   })
 
-  it('splits split-mode setup into the startup terminal without surfacing the workspace', async () => {
+  it('opens Setup beside the startup terminal without surfacing the workspace', async () => {
     addWorktreeMock.mockResolvedValue({})
     listWorktreesMock.mockResolvedValueOnce([
       {
@@ -818,12 +822,13 @@ describe('registerWorktreeHandlers', () => {
       startup: { command: 'claude' }
     })
 
-    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
+    expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
     // A user who moved on must not be scrolled to the new workspace by its setup pane (#9944).
-    expect(runtimeStub.splitTerminal).toHaveBeenCalledWith(
-      'term-startup',
+    expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
+      'id:repo-1::/workspace/improve-dashboard',
       {
-        direction: 'vertical',
+        title: 'Setup',
         command: expect.stringContaining('setup-runner.sh'),
         env: expect.any(Object),
         activate: false,

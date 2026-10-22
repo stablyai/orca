@@ -4,6 +4,7 @@ import type { GitHubSlice } from './slice-types'
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
+  getWorkItemCountedTotalPages,
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,
   PER_REPO_FETCH_LIMIT
@@ -14,7 +15,7 @@ import {
   isGitHubWorkItemsQueryTooLarge
 } from '../slices/github-work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
-import { GITHUB_SEARCH_RESULT_WINDOW, isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
+import { isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
   inflightWorkItemsRequests,
@@ -27,7 +28,8 @@ import {
   getWorkItemsCacheKeyForOwner,
   isGitHubUnavailableWorkItemsError,
   listGitHubWorkItemsForRepo,
-  getGitHubSourceTarget
+  getGitHubSourceTarget,
+  getGitHubWorkItemRowHostId
 } from './work-item-routing'
 
 export const createWorkItemAggregateActions = (
@@ -159,7 +161,17 @@ export const createWorkItemAggregateActions = (
             failedCount += 1
             return [] as GitHubWorkItem[]
           }
-          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          const repoHostId = getGitHubWorkItemRowHostId(
+            requestState,
+            r.repoId,
+            r.path,
+            r.sourceContext
+          )
+          return envelope.items.map((item): GitHubWorkItem => ({
+            ...item,
+            repoId: r.repoId,
+            ...(repoHostId ? { repoHostId } : {})
+          }))
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             if (options?.requireComplete) {
@@ -183,9 +195,6 @@ export const createWorkItemAggregateActions = (
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { totalCount: 0, totalPages: 0 }
     }
-    const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
-    // Why: GitHub 422s pages that start past its 1000-result search window.
-    const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
     const counts = await Promise.all(
       repos.map(async (r) => {
         // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
@@ -210,12 +219,7 @@ export const createWorkItemAggregateActions = (
     )
     return {
       totalCount: counts.reduce((sum, count) => sum + count, 0),
-      // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
-      totalPages: counts.reduce(
-        (maxPages, count) =>
-          Math.max(maxPages, Math.min(Math.ceil(count / normalizedLimit), maxReachablePages)),
-        0
-      )
+      totalPages: getWorkItemCountedTotalPages(counts, perRepoLimit)
     }
   },
 

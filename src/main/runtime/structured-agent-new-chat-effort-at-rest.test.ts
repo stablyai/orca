@@ -1,7 +1,7 @@
 // A new chat reads its options at rest before its agent starts. That answer must name the model and
 // effort the catalog's first frame showed for its workspace, or the picker changes before any start.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -153,11 +153,13 @@ function newChatRecord(
   workspacePath: string,
   options: Record<string, string>
 ): AgentSessionRecord {
+  const providerHandleChain: AgentSessionRecord['providerHandleChain'] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service and the at-rest read touch only these fields.
   return {
     sessionId: `${agent}-new`,
     provider: agent,
     accountHome: HOMES[agent]!,
+    providerHandleChain,
     launchDirectory: workspacePath,
     location: {
       executionHostId: 'local',
@@ -189,6 +191,20 @@ function host(agent: string, record: AgentSessionRecord) {
     getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async (name) => HOMES[name]!,
+    probes: {
+      codex: async (_home, options) => {
+        const project = existsSync(join(options?.workspacePath ?? '', '.codex/config.toml'))
+        const effort = project ? 'high' : 'medium'
+        return {
+          models: CODEX_LISTING.map((row) =>
+            row.isDefault ? { ...row, defaultEffort: effort } : row
+          ),
+          configured: { model: 'gpt-5.5', effort },
+          complete: true,
+          origin: 'probe'
+        }
+      }
+    },
     listingNamesConfiguredModel: new Set(['codex']),
     recordWorkspacePath: async (row) => row.launchDirectory ?? null,
     agentReadsProjectModelConfig,
@@ -197,7 +213,13 @@ function host(agent: string, record: AgentSessionRecord) {
   const resting = {
     child: null,
     params: { provider: agent },
-    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
+    journal: {
+      threadGoal: () => null,
+      visitItems: () => {},
+      submissions: () => [],
+      contextUsage: () => null,
+      context: { floor: () => null }
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the at-rest read touches only these members.
   const context = {
@@ -246,7 +268,7 @@ async function newChatFrames(
   const atRest = await readStructuredAgentSessionOptions(context, record.sessionId, {
     readsWithoutModel: chat.readsWithoutModel ?? true
   })
-  const settled = applyStructuredAgentSessionOptions(first, seed, atRest)
+  const settled = applyStructuredAgentSessionOptions(first, seed, atRest, { newLaunch: true })
   return { atRest, first: firstPills, settled: pills(settled) }
 }
 
@@ -263,14 +285,11 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.model?.value).toBe(model)
       expect(first.effort?.value).toBe(effort)
       expect(settled).toEqual(first)
-      expect(atRest.current).toEqual({ model, effort, ...modeOf(agent) })
+      expect(atRest.current).toEqual({ model, effort, defaulted: [], ...modeOf(agent) })
     }
   )
 
-  it.each([
-    ['codex', '.codex/config.toml', 'model_reasoning_effort = "high"\n'],
-    ['pi', '.pi/settings.json', '{ "defaultThinkingLevel": "low" }']
-  ])(
+  it.each([['pi', '.pi/settings.json', '{ "defaultThinkingLevel": "low" }']])(
     '%s names no default model or effort at rest where the project’s config may pick one',
     async (agent, file, text) => {
       const { atRest, first, settled } = await newChatFrames(agent, {
@@ -280,37 +299,51 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.model?.value).toBeUndefined()
       expect(first.effort).toBeNull()
       expect(settled).toEqual(first)
-      expect(atRest.current).toEqual(modeOf(agent))
+      expect(atRest.current).toEqual({ defaulted: [], ...modeOf(agent) })
     }
   )
 
-  it('keeps the account default model, with no effort, for a client that needs a model', async () => {
+  it('names the exact project default for a client that needs a model', async () => {
     const { atRest } = await newChatFrames('codex', {
       projectFiles: { '.codex/config.toml': 'model_reasoning_effort = "high"\n' },
       readsWithoutModel: false
     })
 
-    // The account default is not what this repo runs, so its effort is never claimed.
-    expect(atRest.current).toEqual({ model: 'gpt-5.5', permissionMode: 'ask' })
+    expect(atRest.current).toEqual({
+      model: 'gpt-5.5',
+      effort: 'high',
+      defaulted: [],
+      permissionMode: 'ask'
+    })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
   })
 
   it('names the folder’s default effort for a client that needs a model too', async () => {
     const { atRest } = await newChatFrames('codex', { readsWithoutModel: false })
 
-    expect(atRest.current).toEqual({ model: 'gpt-5.5', effort: 'medium', permissionMode: 'ask' })
+    expect(atRest.current).toEqual({
+      model: 'gpt-5.5',
+      effort: 'medium',
+      defaulted: [],
+      permissionMode: 'ask'
+    })
   })
 
   it('keeps a saved effort over the default model’s', async () => {
     const { atRest, settled } = await newChatFrames('grok', { saved: { effort: 'high' } })
 
-    expect(atRest.current).toEqual({ model: 'grok-4', effort: 'high' })
+    expect(atRest.current).toEqual({
+      model: 'grok-4',
+      effort: 'high',
+      defaulted: [],
+      ...modeOf('grok')
+    })
     expect(settled.effort?.value).toBe('high')
   })
 
   it('leaves the effort of a saved model to the agent, as its running child reports it', async () => {
     const { atRest } = await newChatFrames('codex', { saved: { model: 'gpt-5.5-mini' } })
 
-    expect(atRest.current).toEqual({ model: 'gpt-5.5-mini', permissionMode: 'ask' })
+    expect(atRest.current).toEqual({ model: 'gpt-5.5-mini', defaulted: [], permissionMode: 'ask' })
   })
 })

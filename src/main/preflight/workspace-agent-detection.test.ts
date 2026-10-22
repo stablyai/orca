@@ -181,12 +181,13 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
     })
   })
 
-  // TEMPORARY parity: the agent list checks a WSL-share path's distro against main's cached list.
-  it("checks a WSL-share workspace's distro against the cached list, as main does", () => {
+  // A `\\wsl$` path proves its distro exists, and the cached list can be stale.
+  it("trusts a WSL-share workspace's distro over a stale cached list", () => {
     _setWslCachesForTests({ available: true, distros: ['Debian'] })
     const s = store({ repos: [repo({ id: 'r1', path: WSL_REPO_PATH })] })
-    expect(resolveFor(s, `r1::${WSL_REPO_PATH}`)).toMatchObject({
-      context: { projectRuntime: { status: 'repair-required' } }
+    expect(resolveFor(s, `r1::${WSL_REPO_PATH}`)).toEqual({
+      kind: 'local',
+      context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
   })
 

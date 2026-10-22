@@ -1,11 +1,9 @@
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { agentHookServer } from '../../../agent-hooks/server'
-import { forgetFailedAgentLaunches } from '../../../agent-launch/agent-launch-pane-attachment'
+import { rekeyMovedPaneOwners } from '../../../runtime/moved-pane-owner-rekey'
 import {
   isTerminalLeafMoveRequest,
-  terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
 } from '../../../../shared/terminal-leaf-move'
@@ -22,32 +20,7 @@ export async function commitLeafMoveAndRekey(
   if (result.status !== 'moved') {
     return result
   }
-  const { from: fromPaneKey, to: toPaneKey } = terminalLeafMovePaneKeys(request)
-  forgetFailedAgentLaunches(request.worktreeId, {
-    kind: 'pane',
-    tabId: request.sourceTabId,
-    leafId: request.leafId
-  })
-  try {
-    // The process keeps the pane key baked into its env, so status must alias old to new.
-    agentHookServer.transferPaneAuthority(
-      fromPaneKey,
-      toPaneKey,
-      result.ptyId ?? undefined,
-      Date.now(),
-      { authorityVerified: true }
-    )
-  } catch (error) {
-    console.warn('[pty] moved pane kept its old agent-status key:', error)
-  }
-  try {
-    deps.runtime?.getExistingOrchestrationDb()?.rekeyWorkerTerminalResourcePaneKey({
-      fromPaneKey,
-      toPaneKey
-    })
-  } catch (error) {
-    console.warn('[pty] moved pane kept its old orchestration resource key:', error)
-  }
+  rekeyMovedPaneOwners(deps.runtime, { ...request, ptyId: result.ptyId })
   return result
 }
 

@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
-import { prewarmJcodeDaemon } from '../jcode/daemon-prewarm'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
@@ -44,10 +43,7 @@ export async function spawnLocalPty(
   if (args.attachOnly) {
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
-  // Why: the jcode runtime dir is stamped into the spawn env by the pty:spawn
-  // handler and the runtime env builder; create it async here at the provider
-  // chokepoint both paths pass through, keeping the sync spawn path free of
-  // filesystem syscalls.
+  // Validate the selected runtime directory before starting a fresh local process.
   const jcodeRuntimeDir = args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
   if (jcodeRuntimeDir) {
     try {
@@ -94,16 +90,6 @@ export async function spawnLocalPty(
       spawn: args,
       getOptions,
       plan,
-      env: finalEnv
-    })
-    // Why here rather than beside the mkdir above: the daemon inherits this env, and
-    // only finalEnv carries the hook port and token that buildPtyHostEnv adds — the
-    // managed hook script exits without them, so a daemon warmed from the raw spawn
-    // env would report no lifecycle events at all.
-    prewarmJcodeDaemon({
-      launchAgent: args.launchAgent,
-      runtimeDir: finalEnv[JCODE_RUNTIME_DIR_ENV_KEY],
-      cwd: args.cwd,
       env: finalEnv
     })
 

@@ -16,6 +16,11 @@ import {
   unboundSplitLayout,
   WORKTREE_ID
 } from './terminal-pane-tab-detach-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// The window makes the new tab itself; the layout-owner build's equivalents (main's command plus
+// its frame) are in terminal-pane-tab-detach-main-move.test.ts.
+const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
@@ -177,32 +182,35 @@ describe('resolveTerminalTabStripDropTarget', () => {
 })
 
 describe('detachTerminalPaneToTab', () => {
-  it.each([LEAF_1, LEAF_2])('moves chat mode only with its owning leaf %s', async (chatLeafId) => {
-    const store = createStore({ ...splitLayout(), chatLeafId })
-    await detachTerminalPaneToTab({
-      getStore: () => store,
-      manager: {
-        getPanes: () => [{ id: 1 }, { id: 2 }],
-        getLeafId: () => LEAF_2,
-        detachPaneForExternalMove: () => true
-      },
-      persistLayoutSnapshot: vi.fn(),
-      sourcePaneId: 2,
-      sourceTabId: SOURCE_TAB_ID,
-      targetGroupId: TARGET_GROUP_ID,
-      worktreeId: WORKTREE_ID
-    })
-    const options = vi.mocked(store.createTab).mock.calls[0]?.[3]
-    expect(options?.viewMode ?? 'terminal').toBe(chatLeafId === LEAF_2 ? 'chat' : 'terminal')
-    expect(store.terminalLayoutsByTabId['tab-detached']?.chatLeafId).toBe(
-      chatLeafId === LEAF_2 ? LEAF_2 : undefined
-    )
-    expect(store.terminalLayoutsByTabId[SOURCE_TAB_ID]?.chatLeafId).toBe(
-      chatLeafId === LEAF_1 ? LEAF_1 : undefined
-    )
-  })
+  itSwitchOff.each([LEAF_1, LEAF_2])(
+    'moves chat mode only with its owning leaf %s',
+    async (chatLeafId) => {
+      const store = createStore({ ...splitLayout(), chatLeafId })
+      await detachTerminalPaneToTab({
+        getStore: () => store,
+        manager: {
+          getPanes: () => [{ id: 1 }, { id: 2 }],
+          getLeafId: () => LEAF_2,
+          detachPaneForExternalMove: () => true
+        },
+        persistLayoutSnapshot: vi.fn(),
+        sourcePaneId: 2,
+        sourceTabId: SOURCE_TAB_ID,
+        targetGroupId: TARGET_GROUP_ID,
+        worktreeId: WORKTREE_ID
+      })
+      const options = vi.mocked(store.createTab).mock.calls[0]?.[3]
+      expect(options?.viewMode ?? 'terminal').toBe(chatLeafId === LEAF_2 ? 'chat' : 'terminal')
+      expect(store.terminalLayoutsByTabId['tab-detached']?.chatLeafId).toBe(
+        chatLeafId === LEAF_2 ? LEAF_2 : undefined
+      )
+      expect(store.terminalLayoutsByTabId[SOURCE_TAB_ID]?.chatLeafId).toBe(
+        chatLeafId === LEAF_1 ? LEAF_1 : undefined
+      )
+    }
+  )
 
-  it('creates a new terminal tab with the detached leaf layout and PTY id', async () => {
+  itSwitchOff('creates a new terminal tab with the detached leaf layout and PTY id', async () => {
     const store = createStore()
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
@@ -267,7 +275,7 @@ describe('detachTerminalPaneToTab', () => {
     expect(persistLayoutSnapshot).toHaveBeenCalled()
   })
 
-  it.each(['powershell.exe', 'wsl.exe'])(
+  itSwitchOff.each(['powershell.exe', 'wsl.exe'])(
     'preserves the moved PTY shell override when the source uses %s',
     async (shellOverride) => {
       const store = createStore(splitLayout(), [EXISTING_TAB_1], shellOverride)
@@ -296,7 +304,7 @@ describe('detachTerminalPaneToTab', () => {
     }
   )
 
-  it('syncs PTY ownership when the primary source pane is detached', async () => {
+  itSwitchOff('syncs PTY ownership when the primary source pane is detached', async () => {
     const store = createStore()
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
@@ -339,7 +347,7 @@ describe('detachTerminalPaneToTab', () => {
     })
   })
 
-  it('moves the detached tab into the requested group slot', async () => {
+  itSwitchOff('moves the detached tab into the requested group slot', async () => {
     const store = createStore(splitLayout(), [EXISTING_TAB_1, EXISTING_TAB_2])
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
@@ -361,51 +369,54 @@ describe('detachTerminalPaneToTab', () => {
     expect(store.reorderUnifiedTabs).toHaveBeenCalledWith(
       TARGET_GROUP_ID,
       [EXISTING_TAB_1, 'tab-detached', EXISTING_TAB_2],
-      { recordInteraction: false }
+      { recordInteraction: false, layoutOwnerHandled: false }
     )
   })
 
-  it('uses the live transport PTY id when the snapshot has not persisted it yet', async () => {
-    const store = createStore({
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        first: { type: 'leaf', leafId: LEAF_1 },
-        second: { type: 'leaf', leafId: LEAF_2 }
-      },
-      activeLeafId: LEAF_2,
-      expandedLeafId: null
-    })
-    const manager = {
-      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
-      getLeafId: vi.fn(() => LEAF_2),
-      detachPaneForExternalMove: vi.fn(() => true)
+  itSwitchOff(
+    'uses the live transport PTY id when the snapshot has not persisted it yet',
+    async () => {
+      const store = createStore({
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_1 },
+          second: { type: 'leaf', leafId: LEAF_2 }
+        },
+        activeLeafId: LEAF_2,
+        expandedLeafId: null
+      })
+      const manager = {
+        getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+        getLeafId: vi.fn(() => LEAF_2),
+        detachPaneForExternalMove: vi.fn(() => true)
+      }
+
+      await detachTerminalPaneToTab({
+        livePtyId: 'remote:env-2@@terminal-9',
+        getStore: () => store,
+        manager,
+        persistLayoutSnapshot: vi.fn(),
+        sourcePaneCwd: {
+          cwd: '/remote/repo',
+          confirmed: false,
+          deferredSplitSpawn: true,
+          pendingCwd: Promise.resolve('/remote/repo/packages/app')
+        },
+        sourcePaneId: 2,
+        sourceTabId: SOURCE_TAB_ID,
+        targetGroupId: TARGET_GROUP_ID,
+        worktreeId: WORKTREE_ID
+      })
+
+      expect(store.setTabLayout).toHaveBeenCalledWith('tab-detached', {
+        root: { type: 'leaf', leafId: LEAF_2 },
+        activeLeafId: LEAF_2,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_2]: 'remote:env-2@@terminal-9' }
+      })
     }
-
-    await detachTerminalPaneToTab({
-      livePtyId: 'remote:env-2@@terminal-9',
-      getStore: () => store,
-      manager,
-      persistLayoutSnapshot: vi.fn(),
-      sourcePaneCwd: {
-        cwd: '/remote/repo',
-        confirmed: false,
-        deferredSplitSpawn: true,
-        pendingCwd: Promise.resolve('/remote/repo/packages/app')
-      },
-      sourcePaneId: 2,
-      sourceTabId: SOURCE_TAB_ID,
-      targetGroupId: TARGET_GROUP_ID,
-      worktreeId: WORKTREE_ID
-    })
-
-    expect(store.setTabLayout).toHaveBeenCalledWith('tab-detached', {
-      root: { type: 'leaf', leafId: LEAF_2 },
-      activeLeafId: LEAF_2,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [LEAF_2]: 'remote:env-2@@terminal-9' }
-    })
-  })
+  )
 
   it('rejects a deferred split while inherited cwd is pending', async () => {
     await expectDeferredSplitDetachRejected({
@@ -430,7 +441,7 @@ describe('detachTerminalPaneToTab', () => {
     })
   })
 
-  it('carries resolved cwd when detaching an unbound non-deferred pane', async () => {
+  itSwitchOff('carries resolved cwd when detaching an unbound non-deferred pane', async () => {
     const store = createStore(unboundSplitLayout())
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),

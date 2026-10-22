@@ -1,7 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { writeSecureJsonFileWithinLimit } from '../../shared/bounded-secure-json-file'
+import { parseOrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { orcadMigrationCutoverFixture as cutover } from './orcad-migration-cutover-fixture'
 import {
   findOrcadMigrationSourceCutoverForTarget,
@@ -89,5 +91,22 @@ describe('migration cutover journal sidecar', () => {
     expect(findOrcadMigrationSourceCutoverForTarget(userDataPath, 'ssh-1')?.phase).toBe(
       'destination-staged'
     )
+  })
+
+  // Older desktops read these files: the shared store must keep the path and bytes the SSH
+  // journal has always written (the exact call it made before the store existed).
+  it('writes the same path and bytes the SSH journal always wrote', () => {
+    writeOrcadMigrationSourceCutover(userDataPath, cutover())
+    expect(orcadMigrationCutoverJournalDirectory(userDataPath)).toBe(
+      join(userDataPath, 'orcad-migration-cutovers')
+    )
+    const reference = join(userDataPath, 'reference.json')
+    writeSecureJsonFileWithinLimit(
+      reference,
+      parseOrcadMigrationSourceCutover(cutover()),
+      16 * 1024 * 1024,
+      { durable: true }
+    )
+    expect(readFileSync(journalPath('migration-1'))).toEqual(readFileSync(reference))
   })
 })

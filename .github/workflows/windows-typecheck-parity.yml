@@ -1,0 +1,53 @@
+name: Windows typecheck parity
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'src/packages/process-host/package.json'
+      - 'config/.bun-version'
+      - 'config/tsconfig*.json'
+      - 'src/packages/process-host/tsconfig*.json'
+      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/benchmark-preflight-compilers.mjs'
+      - 'config/scripts/preflight-benchmark-command.mjs'
+      - '.github/workflows/windows-typecheck-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-typecheck-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    name: Windows compiler diagnostics and file selection
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: none
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+      - name: Compare compiler diagnostics and project file lists
+        run: node config/scripts/benchmark-preflight-compilers.mjs --parity-only
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-typecheck-parity
+          path: .build/preflight-benchmark/
+          retention-days: 30

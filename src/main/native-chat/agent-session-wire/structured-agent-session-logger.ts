@@ -78,12 +78,18 @@ export function createStructuredAgentSessionLogger(options?: {
     (level: LogLevel) =>
     (message: string, fields: StructuredAgentSessionLogFields): void => {
       const { scope, error, ...rest } = fields
-      const attributes = { level, message, ...rest, ...errorAttributes(error) }
-      // Keyed on all the entry writes but its stack: only a failure writing the same entry repeats.
+      const attributes: Record<string, unknown> = {
+        level,
+        message,
+        ...rest,
+        ...errorAttributes(error)
+      }
+      // Keyed on all the entry writes but its stack and timing: only the same failure repeats.
+      const { openMs: _openMs, ...keyed } = attributes
       const suppressed = repeats.admit(
         stableJson([
           scope,
-          attributes,
+          keyed,
           error instanceof Error ? `${error.name}: ${error.message}` : null
         ])
       )

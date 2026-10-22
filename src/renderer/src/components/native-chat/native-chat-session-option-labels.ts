@@ -51,7 +51,7 @@ export function nativeChatSessionChoiceLabel(
   }
 }
 
-/** What a level's segment shows: the long effort names shortened, anything else as it is. */
+/** Compact labels for effort segments and the model pill. */
 export function nativeChatSessionChoiceShortLabel(
   choice: SessionOptionSelectChoice,
   optionId?: string
@@ -144,11 +144,14 @@ export function nativeChatOptionValuesLabel(
         (candidate) => candidate.value === descriptor.kind.currentValue
       )
       labels.push(
-        nativeChatSessionChoiceLabel(
+        (descriptor.id === 'effort'
+          ? nativeChatSessionChoiceShortLabel
+          : nativeChatSessionChoiceLabel)(
           choice ?? {
             value: descriptor.kind.currentValue,
             label: descriptor.kind.currentValue
-          }
+          },
+          descriptor.id
         )
       )
     } else if (descriptor.kind.type === 'boolean' && descriptor.kind.currentValue === true) {

@@ -22,7 +22,9 @@ function harness(structured: boolean) {
   }))
   const createTerminalAgent = vi.fn(async () => ({ handle: 'term_1' }))
   const runtime = {
-    getClientSettings: () => (structured ? { experimentalNativeChat: true } : null),
+    requireStore: () => ({
+      getSettings: () => (structured ? { experimentalNativeChat: true } : null)
+    }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true })
   }
   return {

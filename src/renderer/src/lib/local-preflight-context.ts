@@ -11,6 +11,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { projectMatchesRepo } from '../../../shared/project-repo-match'
 import { getIndexedRepoMap } from '@/store/worktree-repo-index'
 import { defaultScopeHost } from './default-creation-host'
 import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
@@ -318,8 +319,7 @@ function getLocalRuntimeProject(
   repoId: string
 ) {
   return state.projects?.find(
-    (entry) =>
-      entry.id === projectId || entry.id === repoId || entry.sourceRepoIds?.includes(repoId)
+    (entry) => entry.id === projectId || projectMatchesRepo(entry, repoId)
   )
 }
 

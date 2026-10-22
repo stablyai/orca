@@ -27,6 +27,7 @@ export type DaemonStartOptions = {
   hostTerminalLedgerDir?: string
   onIdleShutdown?: () => void
   onRpcShutdown?: () => void
+  onShutdownRequested?: () => void
   initialAdoptionTestConfig?: DaemonServerOptions['initialAdoptionTestConfig']
 }
 
@@ -74,6 +75,7 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
     ...(hostTerminalLedgerDir ? { hostTerminalLedgerDir } : {}),
     ...(opts.onIdleShutdown ? { onIdleShutdown: opts.onIdleShutdown } : {}),
     ...(opts.onRpcShutdown ? { onRpcShutdown: opts.onRpcShutdown } : {}),
+    ...(opts.onShutdownRequested ? { onShutdownRequested: opts.onShutdownRequested } : {}),
     ...(opts.initialAdoptionTestConfig
       ? { initialAdoptionTestConfig: opts.initialAdoptionTestConfig }
       : {})

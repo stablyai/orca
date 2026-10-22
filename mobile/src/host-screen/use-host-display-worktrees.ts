@@ -1,14 +1,27 @@
 import { useMemo } from 'react'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { useHostDescriptor } from '../transport/host-descriptor-store'
 import type { ConnectionState } from '../transport/types'
-import { serverHostHealth } from '../worktree/server-workspaces'
-import { filterVisibleHostRows } from '../worktree/visible-host-rows'
+import { serverHostHealth, withServerHosts } from '../worktree/server-workspaces'
 import { applyWorktreeHostContextLabels } from '../worktree/worktree-host-context-labels'
 import { applyWorktreeRowDisplayState } from '../worktree/worktree-host-row-identity'
 import type { HostScreenState } from './use-host-screen-state'
 
+/** The desktop's platform: its own report, or the paired descriptor's before that lands. */
+export function useResolvedHostPlatform(
+  state: HostScreenState,
+  hostId: string | undefined
+): NodeJS.Platform | null {
+  const descriptorPlatform = useHostDescriptor(hostId)?.platform ?? null
+  return state.hostPlatform ?? descriptorPlatform
+}
+
 /** The rows the host list renders: the live or last-known catalog with display state and host badges. */
-export function useHostDisplayWorktrees(connState: ConnectionState, state: HostScreenState) {
+export function useHostDisplayWorktrees(
+  connState: ConnectionState,
+  state: HostScreenState,
+  /** Metadata reads it only for a mixed desktop catalog; server rows mix it too. */
+  hostPlatform: NodeJS.Platform | null
+) {
   const { serverWorkspaces } = state
   // Why: a server's label and health come with its rows, alongside the desktop's SSH ones.
   const hostLabelById = useMemo(
@@ -23,17 +36,13 @@ export function useHostDisplayWorktrees(connState: ConnectionState, state: HostS
     // Why: live `worktrees` is authoritative only while connected; under the amber
     // mount default, connecting/handshaking must keep the pre-reconnect list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
-    const rows = filterVisibleHostRows(
-      [...base, ...serverWorkspaces.worktrees],
-      state.visibleHostIds,
-      state.repoHostIdByRepoId
-    )
+    const rows = [...base, ...serverWorkspaces.worktrees]
     return applyWorktreeHostContextLabels(
       applyWorktreeRowDisplayState(rows, state.sleptIds, state.optimisticActiveWorktreeIdentity),
       {
         repoHostIdByRepoId: state.repoHostIdByRepoId,
         hostLabelById,
-        hostPlatform: state.hostPlatform,
+        hostPlatform,
         hostHealthById
       }
     )
@@ -42,27 +51,11 @@ export function useHostDisplayWorktrees(connState: ConnectionState, state: HostS
     state.worktrees,
     state.lastKnownWorktrees,
     serverWorkspaces.worktrees,
-    state.visibleHostIds,
     state.sleptIds,
     state.optimisticActiveWorktreeIdentity,
     state.repoHostIdByRepoId,
     hostLabelById,
-    state.hostPlatform,
+    hostPlatform,
     hostHealthById
   ])
-}
-
-function withServerHosts<Value>(
-  desktop: ReadonlyMap<ExecutionHostId, Value>,
-  hosts: HostScreenState['serverWorkspaces']['hosts'],
-  read: (host: HostScreenState['serverWorkspaces']['hosts'][number]) => Value
-): ReadonlyMap<ExecutionHostId, Value> {
-  if (hosts.length === 0) {
-    return desktop
-  }
-  const merged = new Map(desktop)
-  for (const host of hosts) {
-    merged.set(host.hostId, read(host))
-  }
-  return merged
 }

@@ -1,3 +1,4 @@
+import { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -7,25 +8,26 @@ import {
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
 import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 import {
   heldProviderChildReader,
   type ProviderChildSessions
 } from './structured-agent-session-provider-child'
-import { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import {
   StructuredAgentSessionStartupAttempts,
-  StructuredAgentSessionStartupExpiredError,
   type StructuredAgentSessionExpiredStartup
 } from './structured-agent-session-startup-attempt'
+import { StructuredAgentSessionStartupExpiredError } from './structured-agent-session-startup-attempt-contract'
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
+  readonly deliveryOrder = new StructuredAgentSessionDeliveryOrder()
   readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
+  readonly startFlights = new StructuredAgentSessionStartFlights()
   readonly startupAttempts: StructuredAgentSessionStartupAttempts
-  readonly optionRevisions = new StructuredAgentSessionOptionRevisions()
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 
@@ -42,14 +44,11 @@ export class StructuredAgentSessionHostRuntimeState {
       ...(deps.startupLimits ? { limits: deps.startupLimits } : {}),
       settled: recordAgentSessionStartup,
       expire: (expired) => {
-        if (expired.child === null) {
-          this.acquireAborts.abort(
-            expired.sessionId,
-            new StructuredAgentSessionStartupExpiredError()
-          )
-          return
+        // Still acquiring, or applying the picks made meanwhile: either wait ends now.
+        this.acquireAborts.abort(expired.sessionId, new StructuredAgentSessionStartupExpiredError())
+        if (expired.child !== null) {
+          onStartupExpired?.(expired)
         }
-        onStartupExpired?.(expired)
       }
     })
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({

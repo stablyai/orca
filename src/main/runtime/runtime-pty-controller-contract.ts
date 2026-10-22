@@ -1,3 +1,4 @@
+import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
@@ -23,6 +24,7 @@ import type {
 } from '../providers/pty-provider-contract'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { StartupCwdFallback } from '../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type PtyInventoryRefreshOptions = {
@@ -38,6 +40,8 @@ export type RuntimePtyController = {
     leafId: string
   }): () => void
   adoptStablePane?(opts: {
+    signal?: AbortSignal
+    spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
     cols: number
     rows: number
     cwd?: string
@@ -96,6 +100,7 @@ export type RuntimePtyController = {
     signal?: AbortSignal
     refuseSleptWorktree?: boolean
     onPtySpawnCommitted?: () => void
+    paneSpawnOperation?: PaneSpawnOperation
     adoptedStablePane?: {
       result: PtySpawnResult
       owner: {
@@ -114,6 +119,9 @@ export type RuntimePtyController = {
     wslDistro?: string
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
+    /** The host started this process at the workspace root because the requested folder is gone. */
+    startupCwdFallback?: StartupCwdFallback
+    savedStartupCwd?: string
   }>
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
@@ -130,7 +138,8 @@ export type RuntimePtyController = {
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
   attach?(ptyId: string): Promise<boolean>
   kill(ptyId: string): boolean
-  retireRejectedPty?(ptyId: string, stopConfirmed: boolean): void
+  /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
+  retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
     opts?: { keepHistory?: boolean; deadlineMs?: number }
@@ -207,4 +216,6 @@ export type PtyControllerInventory = Readonly<{
   allLivePtyIds: ReadonlySet<string>
   terminalIdentityByPtyId: ReadonlyMap<string, PtyControllerTerminalIdentity>
   queriedHostIds: ReadonlySet<ExecutionHostId>
+  /** Live PTYs the host is killing: still live work, but no longer any pane's to show. */
+  exitingPtyIds?: ReadonlySet<string>
 }>

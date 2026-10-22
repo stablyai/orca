@@ -58,7 +58,18 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   const leadChanged =
     polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
     polled.payload.mainAgent?.outcome !== original.payload.mainAgent?.outcome
-  return subagentsChanged || leadChanged
-    ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
-    : undefined
+  if (!subagentsChanged && !leadChanged) {
+    return undefined
+  }
+  // Why: a replayed root Stop keeps its name so every desktop sees a turn end; a failed one goes
+  // unlabelled like a cancellation, because desktops derive a labelled Stop's outcome as success.
+  const replayedStop =
+    polled.hookEventName === 'Stop' &&
+    original.payload.mainAgent?.state !== 'done' &&
+    polled.payload.mainAgent?.outcome !== 'failure'
+  return {
+    ...polled,
+    hasExplicitPrompt: undefined,
+    hookEventName: replayedStop ? 'Stop' : undefined
+  }
 }

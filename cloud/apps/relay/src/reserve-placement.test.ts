@@ -29,6 +29,13 @@ function warmPlacer(now: { value: number }, random = () => 0.3) {
 }
 
 describe('reserve placer', () => {
+  it('reports free seats under the ceiling, never below zero or without a ceiling', () => {
+    const placer = warmPlacer({ value: 0 })
+    expect(placer.free(cell('c1', { seats: 60, bookings: 10 }))).toBe(30)
+    expect(placer.free(cell('c1', { seats: 120 }))).toBe(0)
+    expect(placer.free(cell('c1', { ceiling: undefined }))).toBe(0)
+  })
+
   it('places on the first cell that answers ok and counts one call', async () => {
     const now = { value: 0 }
     const placer = warmPlacer(now)

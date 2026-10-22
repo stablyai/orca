@@ -18,7 +18,7 @@ import {
   variantTrailingBackgroundRows
 } from './serialize-grid-variant-scope'
 import type { GridDiff } from './serialize-grid-cell-descriptors'
-import { cellDescriptor, CLIPPED, compareBufferRows } from './serialize-grid-cell-descriptors'
+import { compareBufferRows } from './serialize-grid-cell-descriptors'
 
 export type NamedSerializer = { name: string; create: () => SerializeAddon }
 
@@ -202,7 +202,12 @@ function countClippedWideCells(terminal: Terminal): number {
   const scratch = buffer.getNullCell()
   let count = 0
   for (let y = 0; y < buffer.length; y++) {
-    if (cellDescriptor(buffer.getLine(y), terminal.cols - 1, terminal.cols, scratch) === CLIPPED) {
+    const line = buffer.getLine(y)
+    if (
+      line &&
+      line.length > terminal.cols &&
+      (line.getCell(terminal.cols - 1, scratch)?.getWidth() ?? 0) > 1
+    ) {
       count++
     }
   }

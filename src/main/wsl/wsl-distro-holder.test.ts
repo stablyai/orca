@@ -287,14 +287,54 @@ describe('createWslDistroHolder', () => {
     const holder = makeHolder()
     await holder.ensureHeld('Alpine')
     let clock = 0
+    let notifySleep = () => {}
+    let resumeSleep: (nextClock: number) => void = () => {}
+    const firstSleep = new Promise<void>((resolve) => {
+      notifySleep = resolve
+    })
+    const queryTimes: number[] = []
     const released = makeHolder({
+      queryProcess: async (pid) => {
+        if (host.killed.includes(pid)) {
+          queryTimes.push(clock)
+        }
+        return host.query(pid)
+      },
       killProcess: (pid) => {
         host.killed.push(pid)
         host.processes.set(pid, { commandLine: null, startedAtMs: 5_000 })
       },
-      now: () => (clock += 1_000)
+      now: () => 0,
+      monotonicNow: () => clock,
+      sleep: () =>
+        new Promise<void>((resolve) => {
+          resumeSleep = (nextClock) => {
+            clock = nextClock
+            resolve()
+          }
+          notifySleep()
+        })
     })
-    expect(await released.release('Alpine')).toBe('unverifiable')
+    let settled = false
+    const release = released.release('Alpine').then((state) => {
+      settled = true
+      return state
+    })
+    await firstSleep
+    expect(queryTimes).toEqual([0])
+    expect(settled).toBe(false)
+    const finalSleep = new Promise<void>((resolve) => {
+      notifySleep = resolve
+    })
+    resumeSleep(4_999)
+    await finalSleep
+    expect(queryTimes).toEqual([0, 4_999])
+    expect(settled).toBe(false)
+    expect(await recordFiles()).toEqual(['alpine.json'])
+    resumeSleep(5_000)
+    expect(await release).toBe('unverifiable')
+    expect(clock).toBe(5_000)
+    expect(queryTimes).toEqual([0, 4_999, 5_000])
     expect(host.killed).toEqual([4000])
     expect(await recordFiles()).toEqual(['alpine.json'])
   })

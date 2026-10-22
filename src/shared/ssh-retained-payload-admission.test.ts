@@ -34,6 +34,28 @@ describe('SSH retained payload admission', () => {
     expect(admit({ state: 'from-the-future' })).toEqual({ kind: 'managed', environmentId: 'env-1' })
   })
 
+  it('keeps the projects a move linked, dropping malformed entries alone', () => {
+    const admit = (linked: unknown) =>
+      admitSshConnectionState(
+        {
+          targetId: 'ssh-a',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          managedServer: { kind: 'managed', environmentId: 'env-1', linked }
+        },
+        'ssh-a'
+      )?.managedServer
+    expect(
+      admit([{ path: '/root/app', automations: 2 }, { path: '/root/x', automations: -1 }, 'bad'])
+    ).toEqual({
+      kind: 'managed',
+      environmentId: 'env-1',
+      linked: [{ path: '/root/app', automations: 2 }]
+    })
+    expect(admit('nope')).toEqual({ kind: 'managed', environmentId: 'env-1' })
+  })
+
   it('caps an unverifiable serving detail like its sibling details', () => {
     const managedServer = admitSshConnectionState(
       {
@@ -123,6 +145,23 @@ describe('SSH retained payload admission', () => {
         'ssh-a'
       )?.managedServer
     ).toEqual(relay)
+  })
+
+  it('admits only a literal "Move anyway" offer', () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+    const refused = { kind: 'relay', reason: 'refused', detail: 'saved tabs and panes' }
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...refused, canLeaveBehind: true } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual({ ...refused, canLeaveBehind: true })
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...refused, canLeaveBehind: 1 } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual(refused)
   })
 
   it('rejects partial and malformed provider authority', () => {

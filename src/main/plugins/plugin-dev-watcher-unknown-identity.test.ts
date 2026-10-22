@@ -4,10 +4,8 @@ import { mkdir, rename, rm, stat, symlink } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import {
-  subscribeViaWatcherProcess,
-  type WatcherProcessCallback
-} from '../ipc/parcel-watcher-process'
+import { subscribeViaWatcherProcess } from '../ipc/parcel-watcher-process'
+import type { WatcherProcessCallback } from '../ipc/parcel-watcher-process-subscription'
 import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,
@@ -26,6 +24,13 @@ vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
   return { ...actual, stat: vi.fn(actual.stat) }
 })
+
+/** The catch-up refresh a live subscription schedules; later counts start after it. */
+async function flushCatchUpRefresh(refresh: ReturnType<typeof vi.fn>): Promise<void> {
+  await vi.advanceTimersByTimeAsync(300)
+  expect(refresh).toHaveBeenCalledOnce()
+  refresh.mockClear()
+}
 
 const originalPlatform = process.platform
 const subscribeMock = vi.mocked(subscribeViaWatcherProcess)
@@ -97,6 +102,7 @@ it.each(['zero', 'ctime'] as const)(
     const options = { enabled: true, devPaths: [fixture.realRoot], refresh, reapIdle: vi.fn() }
     housekeeping.sync(options)
     await Promise.resolve()
+    await flushCatchUpRefresh(refresh)
     for (let tick = 0; tick < 3; tick += 1) {
       await vi.advanceTimersByTimeAsync(60_000)
       await expect(checks.mock.results[tick]?.value).resolves.toBe(false)
@@ -194,17 +200,20 @@ it('recovers a silent replacement when previously unknown identity first becomes
   const options = { enabled: true, devPaths: [fixture.realRoot], refresh, reapIdle: vi.fn() }
   housekeeping.sync(options)
   await Promise.resolve()
+  await flushCatchUpRefresh(refresh)
   await rename(fixture.realRoot, join(fixture.base, 'old'))
   await mkdir(fixture.realRoot)
   await vi.advanceTimersByTimeAsync(60_000)
-  await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce())
-  expect(subscribeMock).toHaveBeenCalledTimes(2)
+  await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
+  await vi.advanceTimersByTimeAsync(300)
+  // The rebind refresh, then the rebound subscription's one catch-up.
+  expect(refresh).toHaveBeenCalledTimes(2)
   expect(subscriptions[0]?.unsubscribe).toHaveBeenCalledOnce()
   for (let tick = 1; tick < 4; tick += 1) {
     await vi.advanceTimersByTimeAsync(60_000)
     await expect(checks.mock.results[tick]?.value).resolves.toBe(false)
   }
-  expect(refresh).toHaveBeenCalledOnce()
+  expect(refresh).toHaveBeenCalledTimes(2)
   expect(subscribeMock).toHaveBeenCalledTimes(2)
 })
 
@@ -221,10 +230,12 @@ it('retries a failed native setup for an unknown present root on the existing ma
   housekeeping.sync(options)
   await Promise.resolve()
   await vi.advanceTimersByTimeAsync(60_000)
-  await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce())
-  expect(subscribeMock).toHaveBeenCalledTimes(2)
+  await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
+  await vi.advanceTimersByTimeAsync(300)
+  // The retry refresh, then the retried subscription's one catch-up.
+  expect(refresh).toHaveBeenCalledTimes(2)
   await vi.advanceTimersByTimeAsync(180_000)
-  expect(refresh).toHaveBeenCalledOnce()
+  expect(refresh).toHaveBeenCalledTimes(2)
   expect(subscribeMock).toHaveBeenCalledTimes(2)
 })
 
@@ -240,6 +251,7 @@ it('uses native notifications to recover when a silent replacement has no usable
   const options = { enabled: true, devPaths: [fixture.realRoot], refresh, reapIdle: vi.fn() }
   housekeeping.sync(options)
   await Promise.resolve()
+  await flushCatchUpRefresh(refresh)
   await rename(fixture.realRoot, join(fixture.base, 'old'))
   await mkdir(fixture.realRoot)
   await vi.advanceTimersByTimeAsync(60_000)

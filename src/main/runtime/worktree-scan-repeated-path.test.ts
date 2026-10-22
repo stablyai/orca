@@ -27,6 +27,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 
 import { OrcaRuntimeService } from './orca-runtime'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/home/me/fileLoc'
@@ -64,7 +65,7 @@ function makeRuntime(options: { connectionId?: string } = {}): OrcaRuntimeServic
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...metaById[id], ...meta }
       return metaById[id]
     },

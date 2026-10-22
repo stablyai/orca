@@ -61,6 +61,10 @@ export const REMOTE_WATCH_RESYNC_COALESCE_MS = 5_000
 export const REMOTE_WATCH_DORMANT_RETRY_MS = 60_000
 export const REMOTE_WATCH_DORMANT_RETRY_MAX_MS = 30 * 60_000
 
+// Why: a sender waiting out a cancelled install is in no listener map; unwatch and removal still need to reach it.
+export type CancelledInstallWaiter = { token: symbol; sender: WebContents }
+export type CancelledInstallWaiters = Map<string, Map<number, CancelledInstallWaiter>>
+
 export const watcherLifecycleState = {
   watchedRoots: new Map<string, WatchedRoot>(),
   unwatchableRoots: new Set<string>(),
@@ -86,6 +90,7 @@ export const watcherLifecycleState = {
   inFlightLocalInstalls: new Map<string, LocalWatcherInstallToken>(),
   pendingLocalInstallPromises: new Map<string, Promise<LocalWatcherInstallResult>>(),
   pendingLocalCapacityRetries: new Map<string, LocalWatcherCapacityRetry>(),
+  cancelledLocalInstallWaiters: new Map<string, Map<number, CancelledInstallWaiter>>(),
   // Remote watcher state
   // Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
   remoteWatchers: new Map<string, RemoteWatcherState>(),
@@ -119,6 +124,7 @@ export const watcherLifecycleState = {
   inFlightRemoteInstalls: new Map<string, RemoteWatcherInstallToken>(),
   // Why: dedupe concurrent installRemoteWatcher calls per key so overlapping watches share one watcher instead of clobbering per-key state.
   pendingRemoteInstallPromises: new Map<string, Promise<RemoteWatcherInstallResult>>(),
+  cancelledRemoteInstallWaiters: new Map<string, Map<number, CancelledInstallWaiter>>(),
   // Why: block installs beginning after closeAllWatchers (joiner recursion / retry tick bypass the abort loop); a new fs:watchWorktree clears it.
   remoteWatchersClosed: false,
   // Why: closeAllWatchers bumps this so a joiner that awaited across shutdown+reopen is refused (the latch alone can't tell it from a fresh call).

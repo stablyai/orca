@@ -23,7 +23,10 @@ import type {
   ExternalAutomationTarget
 } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import { isManagedOrcadSshTarget, isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
+import {
+  isManagedOrcadSshTarget,
+  isRuntimeOwnedSshTarget
+} from '../ssh/connection/ssh-connection-store'
 
 /** Current SSH registrations, hidden ones included so the guard can reject them itself. */
 export type DesktopSshTargetRegistry = {
