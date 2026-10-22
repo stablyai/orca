@@ -38,9 +38,8 @@ export type WslMoveDesktopRewriteStore = WslMoveMainRewriteStore | WslMoveRender
 const STORE_ID_PATTERN = /^[A-Za-z0-9:._-]{1,128}$/
 const MAX_STORES = 256
 
-// 7f (the last store PR) flips this; until then no move may leave `destination-committed`.
-// 7f-1 registers `browser-cookies` (wsl-move-browser-cookie-store.ts); the flip waits for 7c-7e.
-export const WSL_MOVE_DESKTOP_REWRITE_REGISTRY_COMPLETE: boolean = false
+// Every desktop-rewrite disposition has its store (wsl-move-rewrite-store-coverage.test.ts proves it).
+export const WSL_MOVE_DESKTOP_REWRITE_REGISTRY_COMPLETE: boolean = true
 
 let registryComplete = WSL_MOVE_DESKTOP_REWRITE_REGISTRY_COMPLETE
 

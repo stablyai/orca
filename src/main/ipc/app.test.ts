@@ -186,6 +186,7 @@ describe('registerAppHandlers', () => {
     expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(
       store,
       undefined,
+      undefined,
       undefined
     )
     expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()

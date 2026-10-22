@@ -92,6 +92,7 @@ describe('WSL move rewrite ledger', () => {
   })
 
   it('refuses client-rewritten while the store registry is incomplete', () => {
+    setWslMoveDesktopRewriteRegistryCompleteForTests(false)
     seedWslMoveCutover(userDataPath, committed([]))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'client-rewritten'))).toThrow(
       'wsl_move_rewrite_incomplete'

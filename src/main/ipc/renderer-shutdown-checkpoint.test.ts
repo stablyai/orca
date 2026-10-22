@@ -92,6 +92,32 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(event.returnValue).toEqual({ ok: true })
   })
 
+  it('corrects what the window staged before the flush', () => {
+    const callOrder: string[] = []
+    const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      stageWorkspaceSessionBeforeUnload: vi.fn(() => callOrder.push('session')),
+      updateUI: vi.fn(() => callOrder.push('ui')),
+      flushPendingOrThrowAsync: vi.fn(() => {
+        callOrder.push('persist')
+        return Promise.resolve()
+      })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls the four methods stubbed above.
+    registerRendererShutdownCheckpointHandler(store as never, undefined, undefined, () => {
+      callOrder.push('after-stage')
+    })
+
+    const event: { returnValue?: unknown } = {}
+    syncHandlers.get('app:stage-before-unload-sync')?.(event, {
+      sessions: [{ state: {} }],
+      ui: {}
+    })
+
+    expect(callOrder).toEqual(['session', 'ui', 'after-stage', 'persist'])
+    expect(event.returnValue).toEqual({ ok: true })
+  })
+
   it('never stages the source partition of a fenced host', () => {
     const store = {
       getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),

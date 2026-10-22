@@ -129,7 +129,7 @@ describe('WSL move main rewrite stores', () => {
     )
   })
 
-  it('rewrites and records each store on disk; the move stays committed until 7f', async () => {
+  it('rewrites and records each store on disk, then finishes the rewrite', async () => {
     seedWslMoveCutover(testState.dir, committedMove())
     loadWslMoveFence(testState.dir)
 
@@ -137,7 +137,8 @@ describe('WSL move main rewrite stores', () => {
 
     const [record] = listWslMoveCutovers(testState.dir)
     expect(record?.rewrittenStores).toEqual(STORE_IDS)
-    expect(record?.phase).toBe('destination-committed')
+    // Only these three are registered here, so the ledger is complete.
+    expect(record?.phase).toBe('client-rewritten')
     expect(record?.seededHostWorkspaceIds).toEqual([MOVED_ON_HOST])
     // Read back from the profile database: each store's flush made its write durable.
     const saved = persisted()

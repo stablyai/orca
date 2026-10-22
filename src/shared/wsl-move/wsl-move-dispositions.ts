@@ -78,7 +78,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     item: 22,
     note: "The desktop seeds the WSL host's session from the moved 'local' rows (D1b-7c)."
   },
-  remoteLayoutSnapshots: { disposition: 'rewrite-desktop', item: 47 },
+  remoteLayoutSnapshots: {
+    disposition: 'rederive',
+    item: 47,
+    note: "Rebuilt from the host's first tab stream; the seeded workspaceSessionsByHostId gives first paint."
+  },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),

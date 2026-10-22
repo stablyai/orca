@@ -34,7 +34,8 @@ export type WslMoveDesktopRewritePassOptions = {
   warn?: (message: string) => void
 }
 
-function rewriteContext(
+/** What each store is handed for a committed move; the re-apply after a stale window builds the same. */
+export function wslMoveDesktopRewriteContext(
   userDataPath: string,
   cutover: Readonly<WslMoveCutover>
 ): WslMoveDesktopRewriteContext {
@@ -138,7 +139,7 @@ async function rewriteMainStores(
     }
     const timeoutMs = options.storeTimeoutMs ?? WSL_MOVE_REWRITE_STORE_TIMEOUT_MS
     await withStoreTimeout(
-      () => store.run(rewriteContext(userDataPath, before)),
+      () => store.run(wslMoveDesktopRewriteContext(userDataPath, before)),
       timeoutMs,
       `${store.id} run`
     )

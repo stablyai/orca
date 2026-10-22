@@ -1,4 +1,4 @@
-import { app, session } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
@@ -16,17 +16,12 @@ import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-sc
 import { recoverInterruptedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-reset'
 import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl-move-startup-rewrite'
 import { installWslMoveRetention } from '../persistence/moving-wsl-projects/wsl-move-retention'
-import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
-import { registerWslMoveRendererRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
-import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
-import { registerWslMoveHostAutomationsStore } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
+import { registerWslMoveDesktopRewriteRegistry } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-registry'
+import { reapplyWslMoveFocusRewrites } from '../persistence/moving-wsl-projects/wsl-move-stale-window-reapply'
 import { enableWslHostAutomations } from '../ipc/wsl-host-automation-enable'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
-import {
-  productionWslMoveBrowserCookieCopyDependencies,
-  registerWslMoveBrowserCookieStore
-} from '../persistence/moving-wsl-projects/wsl-move-browser-cookie-store'
+import { productionWslMoveBrowserCookieCopyDependencies } from '../persistence/moving-wsl-projects/wsl-move-browser-cookie-store'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -168,20 +163,25 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.store = store
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
   const userDataPath = getAppEnvironment().getPath('userData')
-  registerWslMoveMainRewriteStores(store)
-  registerWslMoveOrchestrationHistoryStore(
-    orchestrationDbFile(getAppEnvironment().getPath('userData'))
-  )
-  registerWslMoveRendererRewriteStores()
-  registerWslMoveHostAutomationsStore({
-    enable: (environmentId, ids) => enableWslHostAutomations(userDataPath, environmentId, ids)
+  registerWslMoveDesktopRewriteRegistry({
+    profile: store,
+    windowOpen: () => BrowserWindow.getAllWindows().some((window) => !window.isDestroyed()),
+    orchestrationDatabasePath: orchestrationDbFile(userDataPath),
+    hostAutomations: {
+      enable: (environmentId, ids) => enableWslHostAutomations(userDataPath, environmentId, ids)
+    },
+    browserCookies: productionWslMoveBrowserCookieCopyDependencies(userDataPath)
   })
-  // Last among main-side stores: it throws until browser sessions exist, pausing any store after it.
-  registerWslMoveBrowserCookieStore(productionWslMoveBrowserCookieCopyDependencies(userDataPath))
-  // Resets a move interrupted before commit, then finishes one that committed; main-process-ready
-  // waits on both, bounded. Gated off, neither runs.
-  state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite({ userDataPath }, () =>
-    recoverInterruptedWslMoves(userDataPath)
+  // Resets a move interrupted before commit, corrects stale focus on finished ones, then finishes
+  // one that committed; main-process-ready waits on all three, bounded. Gated off, none runs.
+  state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite(
+    { userDataPath },
+    {
+      recover: () => recoverInterruptedWslMoves(userDataPath),
+      reapply: () => {
+        reapplyWslMoveFocusRewrites(userDataPath, store)
+      }
+    }
   )
   // Re-marks retained rows a downgrade stripped; never awaited, since nothing it writes gates a read.
   void state.wslMoveStartupRewriteReady.then(() => {

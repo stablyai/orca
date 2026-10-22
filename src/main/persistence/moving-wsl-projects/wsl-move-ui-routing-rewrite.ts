@@ -49,11 +49,7 @@ export function rewriteWslMoveUiRouting(
   ui: WslMoveUiRoutingState,
   scope: WslMoveRewriteScope
 ): Partial<WslMoveUiRoutingState> {
-  const updates: Partial<WslMoveUiRoutingState> = {}
-  const lastActive = ui.lastActiveWorktreeId
-  if (lastActive && scope.inScope(lastActive) && scope.worktreeId(lastActive) !== lastActive) {
-    updates.lastActiveWorktreeId = scope.worktreeId(lastActive)
-  }
+  const updates: Partial<WslMoveUiRoutingState> = { ...wslMoveLastActiveWorktreeUpdate(ui, scope) }
   const hostWorktreeKey = (key: string): string =>
     scope.inScope(key) ? scope.worktreeId(key) : key
   const dotfiles = withHostKeys(
@@ -112,6 +108,20 @@ export function rewriteWslMoveUiRouting(
     updates.collapsedGroups = collapsed
   }
   return updates
+}
+
+/**
+ * The last-active worktree on the host when it names a moved local one. Corrective only, so it is
+ * also safe to re-apply after a stale window wrote the old id back.
+ */
+export function wslMoveLastActiveWorktreeUpdate(
+  ui: Pick<WslMoveUiRoutingState, 'lastActiveWorktreeId'>,
+  scope: WslMoveRewriteScope
+): Pick<WslMoveUiRoutingState, 'lastActiveWorktreeId'> | null {
+  const lastActive = ui.lastActiveWorktreeId
+  return lastActive && scope.inScope(lastActive) && scope.worktreeId(lastActive) !== lastActive
+    ? { lastActiveWorktreeId: scope.worktreeId(lastActive) }
+    : null
 }
 
 /**

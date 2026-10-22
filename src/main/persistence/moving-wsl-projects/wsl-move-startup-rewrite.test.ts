@@ -20,26 +20,52 @@ describe('WSL move startup rewrite', () => {
   it('neither runs the pass nor waits with the gate closed', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
     const recover = vi.fn(async () => {})
-    await runWslMoveStartupRewrite({ userDataPath: '/data' }, recover)
+    const reapply = vi.fn()
+    await runWslMoveStartupRewrite({ userDataPath: '/data' }, { recover, reapply })
     expect(recover).not.toHaveBeenCalled()
+    expect(reapply).not.toHaveBeenCalled()
     expect(pass.run).not.toHaveBeenCalled()
   })
 
-  it('resets an interrupted move before the pass, and still runs the pass if that fails', async () => {
+  it('resets an interrupted move, then re-applies finished ones, before the pass, and still runs the pass if either fails', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
     const order: string[] = []
     pass.run.mockImplementation(async () => {
       order.push('pass')
     })
-    await runWslMoveStartupRewrite({ userDataPath: '/data' }, async () => {
-      order.push('recover')
-    })
+    await runWslMoveStartupRewrite(
+      { userDataPath: '/data' },
+      {
+        recover: async () => {
+          order.push('recover')
+        },
+        reapply: () => {
+          order.push('reapply')
+        }
+      }
+    )
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await runWslMoveStartupRewrite({ userDataPath: '/data' }, async () => {
-      order.push('recover-failed')
-      throw new Error('journal unreadable')
-    })
-    expect(order).toEqual(['recover', 'pass', 'recover-failed', 'pass'])
+    await runWslMoveStartupRewrite(
+      { userDataPath: '/data' },
+      {
+        recover: async () => {
+          order.push('recover-failed')
+          throw new Error('journal unreadable')
+        },
+        reapply: () => {
+          order.push('reapply-failed')
+          throw new Error('profile unreadable')
+        }
+      }
+    )
+    expect(order).toEqual([
+      'recover',
+      'reapply',
+      'pass',
+      'recover-failed',
+      'reapply-failed',
+      'pass'
+    ])
   })
 
   it('resolves once the pass finishes', async () => {

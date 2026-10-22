@@ -102,7 +102,9 @@ function stagedSessionForMain(
 export function registerRendererShutdownCheckpointHandler(
   store: Store,
   quitResumeRecordsFor: QuitResumeRecordsFor = () => [],
-  reconnectFactsFor?: ReconnectFactsFor
+  reconnectFactsFor?: ReconnectFactsFor,
+  /** Corrects what the window staged before the flush; must not throw. */
+  afterStage: () => void = () => {}
 ): void {
   // Why: beforeunload cannot await, so the sync reply only reports staging.
   // Durability is joined out-of-band by paths that are about to navigate.
@@ -122,6 +124,7 @@ export function registerRendererShutdownCheckpointHandler(
         }
       }
       store.updateUI(args.ui)
+      afterStage()
     } catch (error) {
       console.error('[app] Failed to stage renderer state before unload:', error)
       ok = false
