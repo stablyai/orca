@@ -33,7 +33,7 @@ vi.mock('@/store', () => ({
     })
 }))
 vi.mock('./useWorktreeAgentRows', () => ({ useWorktreeAgentRows: () => [] }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace: vi.fn() }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 5000 }))
 vi.mock('./focused-agent-row-highlight', () => ({

@@ -68,7 +68,7 @@ vi.mock('./CacheTimer', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorkspace: vi.fn()
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
