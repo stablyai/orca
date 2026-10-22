@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
+import { launchAgentInWebHostTab } from '../lib/launch-agent-web-host-tab'
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -83,6 +85,79 @@ describe('createWebRuntimeSessionTerminal', () => {
   afterEach(() => {
     resetTerminalCreateEnvironment()
   })
+
+  it.each([
+    { prompt: '', hostAuthority: false },
+    { prompt: '', hostAuthority: true },
+    { prompt: 'explain the bug', hostAuthority: false },
+    { prompt: 'explain the bug', hostAuthority: true }
+  ])(
+    'preserves new-tab presets with prompt=$prompt and hostAuthority=$hostAuthority',
+    async ({ prompt, hostAuthority }) => {
+      mocks.getState.mockReturnValue({ ...mocks.getState(), setActiveTabType: vi.fn() })
+      const runtimeCall = vi.fn(async (request: { method: string }) => {
+        const result =
+          request.method === 'status.get'
+            ? {
+                runtimeId: 'runtime-1',
+                graphStatus: 'ready',
+                runtimeProtocolVersion: 3,
+                minCompatibleRuntimeClientVersion: 2,
+                capabilities: hostAuthority ? ['agent-session.host-authority.v1'] : []
+              }
+            : request.method === 'session.tabs.createTerminal'
+              ? { tab: { id: 'host-tab-2' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
+              : request.method === 'terminal.createAgentSession'
+                ? { terminal: { tabId: 'host-tab-2', leafId: 'host-leaf-2' } }
+                : makeSnapshot()
+        return { id: request.method, ok: true, result }
+      })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+      const startupPlan = buildAgentStartupPlan({
+        agent: 'claude',
+        prompt,
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: { claude: 'ducc' },
+        agentArgs: '--dangerously-skip-permissions --model "Opus 5.5"',
+        agentEnv: { ORCA_TEST_PROFILE: 'custom' },
+        platform: 'linux',
+        isRemote: true
+      })
+      if (!startupPlan) {
+        throw new Error('Expected a valid startup plan')
+      }
+
+      await expect(
+        launchAgentInWebHostTab({
+          agent: 'claude',
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
+          startupPlan,
+          prompt,
+          promptDelivery: 'auto-submit',
+          pastePromptAfterReady: null,
+          submitPastedPrompt: false,
+          viewMode: 'terminal'
+        })
+      ).resolves.toMatchObject({ delivered: Boolean(prompt), failureNotified: false })
+
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'session.tabs.createTerminal',
+          params: expect.objectContaining({
+            command: startupPlan.launchCommand,
+            env: { ORCA_TEST_PROFILE: 'custom' },
+            launchConfig: startupPlan.launchConfig,
+            launchAgent: 'claude',
+            viewMode: 'terminal'
+          })
+        })
+      )
+      expect(
+        runtimeCall.mock.calls.some(([request]) => request.method === 'terminal.createAgentSession')
+      ).toBe(false)
+    }
+  )
 
   it('keeps exact legacy ordering when structured creation cannot express afterTabId', async () => {
     const runtimeCall = vi

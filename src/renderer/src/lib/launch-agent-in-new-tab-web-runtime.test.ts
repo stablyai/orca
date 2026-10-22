@@ -85,56 +85,71 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
   })
 
-  it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
-    const activate = mode === true
-    const status = mode === 'failed' ? 'failed' : 'created'
-    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
-      outcome: {
-        status,
-        ...(status === 'failed' ? { message: 'The host refused the launch.' } : {})
-      },
-      hostTabId: 'host-tab::leaf-1'
-    })
-    store.tabsByWorktree['wt-1'].push({ id: 'local-agent-tab', launchAgent: 'claude' })
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      activate,
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      groupId: 'group-1'
-    })
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        surface: { kind: 'host-published' },
-        pasteDraftAfterLaunch: false
+  it.each([true, false, 'failed'] as const)(
+    'preserves host quick-launch presets (%s)',
+    async (mode) => {
+      store.settings.agentCmdOverrides = { claude: 'ducc' }
+      store.settings.agentDefaultArgs = {
+        claude: '--dangerously-skip-permissions --model "Opus 5.5"'
+      }
+      const activate = mode === true
+      const status = mode === 'failed' ? 'failed' : 'created'
+      mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+        outcome: {
+          status,
+          ...(status === 'failed' ? { message: 'The host refused the launch.' } : {})
+        },
+        hostTabId: 'host-tab::leaf-1'
       })
-    )
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate,
-      ...(activate ? {} : { selectWorktree: false }),
-      agentSessionKind: 'fresh',
-      agent: 'claude',
-      viewMode: 'terminal'
-    })
-    expect(mocks.createTab).not.toHaveBeenCalled()
-    await expect(result?.terminalCompletion).resolves.toMatchObject({
-      outcome: { status },
-      ...(status === 'created' ? { tabId: 'web-terminal-host-tab' } : {})
-    })
-    expect(mocks.setActiveTabType).toHaveBeenCalledTimes(activate && status === 'created' ? 1 : 0)
-    expect(mocks.toastError).toHaveBeenCalledTimes(status === 'failed' ? 1 : 0)
-    if (status === 'failed') {
-      expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith('The host refused the launch.')
+      store.tabsByWorktree['wt-1'].push({ id: 'local-agent-tab', launchAgent: 'claude' })
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+      const result = launchAgentInNewTab({
+        requestId: 'request-1',
+        activate,
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        groupId: 'group-1'
+      })
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          surface: { kind: 'host-published' },
+          pasteDraftAfterLaunch: false
+        })
+      )
+      expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        targetGroupId: 'group-1',
+        activate,
+        ...(activate ? {} : { selectWorktree: false }),
+        agentSessionKind: 'fresh',
+        launchAgent: 'claude',
+        command: "ducc '--dangerously-skip-permissions' '--model' 'Opus 5.5'",
+        env: {},
+        launchConfig: {
+          agentCommand: "ducc '--dangerously-skip-permissions' '--model' 'Opus 5.5'",
+          agentArgs: '--dangerously-skip-permissions --model "Opus 5.5"',
+          agentEnv: {}
+        },
+        preparedAgentCommand: true,
+        viewMode: 'terminal'
+      })
+      expect(mocks.createTab).not.toHaveBeenCalled()
+      await expect(result?.terminalCompletion).resolves.toMatchObject({
+        outcome: { status },
+        ...(status === 'created' ? { tabId: 'web-terminal-host-tab' } : {})
+      })
+      expect(mocks.setActiveTabType).toHaveBeenCalledTimes(activate && status === 'created' ? 1 : 0)
+      expect(mocks.toastError).toHaveBeenCalledTimes(status === 'failed' ? 1 : 0)
+      if (status === 'failed') {
+        expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith('The host refused the launch.')
+      }
+      // A local tab closes locally (the host close no-ops), so a launch leaves it alone.
+      expect(mocks.closeTab).not.toHaveBeenCalled()
     }
-    // A local tab closes locally (the host close no-ops), so a launch leaves it alone.
-    expect(mocks.closeTab).not.toHaveBeenCalled()
-  })
+  )
 
   it('forwards prompt launch env and captured config to the host runtime', async () => {
     store.settings.agentDefaultArgs = { codex: '--model gpt-5 --reasoning-effort high' }
@@ -162,6 +177,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activate: true,
       agentSessionKind: 'fresh',
       launchAgent: 'codex',
+      preparedAgentCommand: true,
       command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
       env: { CODEX_PROFILE: 'captured' },
       launchConfig: {
