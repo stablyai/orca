@@ -25,6 +25,39 @@ export type BrowserLoadFailureRetry = () => void | Promise<void>
 const RETRY_DELAYS_MS = [1000, 1000, 2000, 3000, 5000]
 const MAX_ATTEMPTS = 120
 
+/** Runs `attempt` on the backoff schedule, never overlapping one still settling; returns its stop. */
+function pollWithBackoff(attempt: () => Promise<void> | null, onExhausted: () => void): () => void {
+  let attempts = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let stopped = false
+  const schedule = (): void => {
+    if (stopped) {
+      return
+    }
+    if (attempts >= MAX_ATTEMPTS) {
+      onExhausted()
+      return
+    }
+    timer = setTimeout(
+      () => {
+        const pending = attempt()
+        if (!pending) {
+          schedule()
+          return
+        }
+        attempts += 1
+        void pending.then(schedule)
+      },
+      RETRY_DELAYS_MS[Math.min(attempts, RETRY_DELAYS_MS.length - 1)]
+    )
+  }
+  schedule()
+  return () => {
+    stopped = true
+    clearTimeout(timer)
+  }
+}
+
 function useBrowserLoadFailureAutoRetry({
   failureKey,
   recovery,
@@ -43,6 +76,7 @@ function useBrowserLoadFailureAutoRetry({
   const loading = autoRetry?.loading ?? false
   // An online event that landed while a load was in flight; replayed once that load settles.
   const missedOnlineRef = useRef(false)
+  const giveUp = useEffectEvent(() => setStoppedKey(failureKey))
   const attempt = useEffectEvent((requireVisible: boolean): Promise<void> | null => {
     if (loading || (requireVisible && !whileWindowHidden && !isWindowVisible())) {
       return null
@@ -68,38 +102,7 @@ function useBrowserLoadFailureAutoRetry({
       return () => window.removeEventListener('online', onOnline)
     }
     // Why per run: coming back to a hidden tab starts again from the short delays.
-    let attempts = 0
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let cancelled = false
-    const schedule = (): void => {
-      if (cancelled) {
-        return
-      }
-      if (attempts >= MAX_ATTEMPTS) {
-        setStoppedKey(failureKey)
-        return
-      }
-      timer = setTimeout(
-        () => {
-          const pending = attempt(true)
-          if (!pending) {
-            schedule()
-            return
-          }
-          attempts += 1
-          // Why: a remote attempt can take a round trip before it reports loading; never overlap it.
-          void pending.then(schedule)
-        },
-        RETRY_DELAYS_MS[Math.min(attempts, RETRY_DELAYS_MS.length - 1)]
-      )
-    }
-    schedule()
-    return () => {
-      cancelled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-    }
+    return pollWithBackoff(() => attempt(true), giveUp)
   }, [enabled, failureKey, recovery])
 
   useEffect(() => {
@@ -146,7 +149,7 @@ export function BrowserLoadFailureAutoRetryStatus({
             ? 'waitingForHost'
             : 'waiting'
       )}{' '}
-      <Button type="button" variant="link" size="xs" className="h-auto px-0" onClick={stop}>
+      <Button type="button" variant="link" size="xs" className="h-auto" onClick={stop}>
         {translateLoadFailurePiece('stopWaiting')}
       </Button>
     </p>
