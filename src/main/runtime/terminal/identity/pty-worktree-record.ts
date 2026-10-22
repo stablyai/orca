@@ -15,6 +15,7 @@ import {
   recordPtySurfaceClaim,
   SURFACE_CLAIM_WITHOUT_STANDING
 } from '../../pty-recorded-surface-topology'
+import { followExportedPaneKeys } from './exported-pane-key-follow'
 
 export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceRepoScanRefresh {
   protected abstract nextTitleObservationSequence(): number
@@ -38,6 +39,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         | 'preview'
         | 'tabId'
         | 'paneKey'
+        | 'envPaneKey'
         | 'surfaceRecordedAtGraphSequence'
         | 'title'
         | 'connectionId'
@@ -76,6 +78,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         wslDistro,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
+        ...(state.envPaneKey ? { envPaneKey: state.envPaneKey } : {}),
         // A PTY the runtime is meeting for the first time has no prior observation for a graph
         // statement to contradict, and the leaf map cannot answer for a pane no statement has ever
         // named — a headless workspace has no renderer graph at all. The next statement decides it.
@@ -182,6 +185,9 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         state.surfaceRecordedAtGraphSequence ?? SURFACE_CLAIM_WITHOUT_STANDING
       )
     }
+    if (state.envPaneKey !== undefined) {
+      pty.envPaneKey = state.envPaneKey
+    }
     if (state.connected !== undefined) {
       pty.connected = state.connected
       pty.disconnectedAt = state.connected ? null : (pty.disconnectedAt ?? Date.now())
@@ -201,6 +207,11 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
     return pty
+  }
+
+  /** Moves agent status keyed by a re-homed terminal's exported pane key to the pane it is in. */
+  protected followExportedPaneKeys(): void {
+    followExportedPaneKeys(this.ptysById.values())
   }
 
   protected makeRuntimePaneKey(

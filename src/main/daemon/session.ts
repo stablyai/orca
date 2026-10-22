@@ -23,7 +23,8 @@ import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 export class Session {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
-  readonly terminalHandle: string | null
+  /** What the spawn env exported; a reattach never re-exports it. */
+  readonly spawnEnv: Readonly<Pick<SessionOptions, 'terminalHandle' | 'envPaneKey'>>
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
   readonly processNameIsSpawnFile: boolean
@@ -42,7 +43,7 @@ export class Session {
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
-    this.terminalHandle = opts.terminalHandle ?? null
+    this.spawnEnv = { terminalHandle: opts.terminalHandle, envPaneKey: opts.envPaneKey }
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess

@@ -30,6 +30,7 @@ import {
 } from '../../terminal/recovery/foreign-pane-bindings'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
 /** The longest a workspace's first surface waits for main's placement pass. */
 export const FIRST_SURFACE_PLACEMENT_WAIT_MS = 500
@@ -181,6 +182,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         if (pty && pane) {
           // No graph standing: a window's graph that later shows otherwise still wins.
           recordPtySurface(pty, pane.tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING)
+          followExportedPaneKeys(this.ptysById.values())
         }
       }
     })

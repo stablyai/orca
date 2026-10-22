@@ -69,6 +69,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
    * pty-recorded-surface-topology.ts.
    */
   surfaceRecordedAtGraphSequence: number
+  /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
+  envPaneKey?: string | null
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null

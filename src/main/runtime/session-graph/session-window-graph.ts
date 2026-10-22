@@ -278,6 +278,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
 
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
+    this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()
     // Why: the emitted client payload is a function of the stored snapshot AND
     // the tab/leaf graph (handles/titles/connected resolve from leaf state), so

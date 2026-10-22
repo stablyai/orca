@@ -20,7 +20,10 @@ export function listLiveTerminalHostSessions(
       state: session.isTerminating ? 'exiting' : session.state,
       shellState: session.shellState,
       isAlive: true,
-      ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+      ...(session.spawnEnv.terminalHandle
+        ? { terminalHandle: session.spawnEnv.terminalHandle }
+        : {}),
+      ...(session.spawnEnv.envPaneKey ? { envPaneKey: session.spawnEnv.envPaneKey } : {}),
       wslDistro: session.wslDistro,
       pid: session.pid,
       cwd: session.getCwd(),

@@ -55,7 +55,7 @@ export type PtySpawnCodexResumeDeps = {
 export type PtySpawnHostEnv = {
   codexResumeLaunch: CodexResumeLaunch
   launchCommand: string | undefined
-  /** Before Orca's host env; TEMPORARY (row 6 removes it): the window reports this one at commit. */
+  /** Before Orca's host env; TEMPORARY (rows 14-18 remove it): the window reports this one at commit. */
   baseEnv: Record<string, string> | undefined
   env: Record<string, string> | undefined
   selectedCodexHomePath: string | null
