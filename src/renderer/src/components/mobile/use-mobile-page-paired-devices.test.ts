@@ -210,4 +210,28 @@ describe('useMobilePagePairedDevices', () => {
     await vi.waitFor(() => expect(latest?.devices).toEqual([]))
     await vi.waitFor(() => expect(latest?.stage).toBe('intro'))
   })
+
+  it('issues one revoke call for a rapid double-click', async () => {
+    mocks.listDevices.mockResolvedValue({ devices: [device('phone-1')] })
+    let releaseRevoke: (() => void) | null = null
+    mocks.revokeDevice.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseRevoke = () => resolve({ revoked: true })
+        })
+    )
+
+    await renderProbe()
+    await vi.waitFor(() => expect(latest?.stage).toBe('paired'))
+
+    await act(async () => {
+      void latest?.revokeDevice('phone-1')
+      void latest?.revokeDevice('phone-1')
+    })
+
+    expect(mocks.revokeDevice).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      releaseRevoke?.()
+    })
+  })
 })
