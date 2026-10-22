@@ -124,3 +124,15 @@ it.each(['ws://orca.example', 'https://orca.example'])(
     expect(startPreProfilePairing).not.toHaveBeenCalled()
   }
 )
+
+it('does not save edge credentials when host persistence finishes after pairing timed out', async () => {
+  vi.mocked(startPreProfilePairing).mockReturnValue({
+    result: Promise.resolve({ hostId: 'host-1' }),
+    timedOut: true,
+    dispose
+  })
+  const attempt = start()
+  await expect(attempt.result).rejects.toThrow('Pairing cancelled')
+  expect(attempt.timedOut).toBe(true)
+  expect(writeEndpointAuthHeaders).not.toHaveBeenCalled()
+})

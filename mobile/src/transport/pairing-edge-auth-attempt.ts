@@ -46,7 +46,7 @@ export function startPairingWithEdgeAuth(args: {
   let revision = 0
   let epoch = 0
   let saving: Promise<void> | null = null
-  const active = () => !disposed && args.isCurrent()
+  const active = () => !disposed && !pairing.timedOut && args.isCurrent()
   const assertCurrent = () => {
     if (
       !active() ||
@@ -57,7 +57,9 @@ export function startPairingWithEdgeAuth(args: {
       throw new Error('Pairing cancelled')
     }
   }
-  assertCurrent()
+  if (disposed || !args.isCurrent()) {
+    throw new Error('Pairing cancelled')
+  }
   const pairing = startPreProfilePairing({
     offer: { ...args.offer, endpoint },
     timeoutMs: args.timeoutMs,
