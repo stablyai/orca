@@ -7,7 +7,7 @@
  * and `codex resume` reports nothing until the user sends a message.
  */
 import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
@@ -19,9 +19,11 @@ import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobi
 import { getManagedScript as getClaudeManagedScript } from '../../src/main/claude/hook-script'
 import { getManagedScript as getCodexManagedScript } from '../../src/main/codex/codex-hook-script'
 import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
+import type { AiVaultSession } from '../../src/shared/ai-vault-types'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
+import { buildMobileAiVaultResumeLaunch } from '../../mobile/src/session/ai-vault-resume-launch'
 
 test.skip(process.platform === 'win32', 'the fake agents are POSIX shell scripts')
 
@@ -274,6 +276,85 @@ test('a phone can read a resumed Codex chat before its first new turn', async ({
       phone,
       worktree,
       parentTabId: terminal.tabId,
+      agent: 'codex',
+      sessionId
+    })
+  } finally {
+    await host.dispose()
+    rmSync(fakeDir, { recursive: true, force: true })
+  }
+})
+
+// The phone's Session History creates a shell pane and types the resume into it, so the host
+// never spawns the agent itself; the create names the conversation so the host can record it.
+test('a phone can read a Codex chat it resumed from Session History before its first new turn', async ({
+  testRepoPath
+}) => {
+  test.setTimeout(240_000)
+  const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-10923-'))
+  const host = await launchHeadlessPairedRuntimeHost({ pairingScope: 'mobile' })
+  const phone = pairMobileClient(host.offer)
+  try {
+    const worktree = await openPhoneWorkspace(host, phone, testRepoPath)
+    const sessionId = randomUUID()
+    // A saved Codex conversation in the serve's own (isolated) Codex home, as History lists it.
+    const rolloutDir = path.join(host.env.HOME!, '.codex', 'sessions', '2026', '10', '16')
+    mkdirSync(rolloutDir, { recursive: true })
+    writeFileSync(
+      path.join(rolloutDir, `rollout-2026-10-16T00-00-00-${sessionId}.jsonl`),
+      transcriptLines('codex', sessionId, testRepoPath)
+    )
+    let session: AiVaultSession | undefined
+    await expect
+      .poll(
+        async () => {
+          const scan = await phone.call<{ sessions: AiVaultSession[] }>('aiVault.listSessions', {
+            limit: 50,
+            force: true,
+            scopePaths: [testRepoPath]
+          })
+          session = scan.sessions.find((row) => row.sessionId === sessionId)
+          return session?.agent ?? ''
+        },
+        { timeout: 30_000, message: 'Session History lists the saved Codex conversation' }
+      )
+      .toBe('codex')
+    const resumedCodex = path.join(fakeDir, 'codex-resumed')
+    writeFileSync(resumedCodex, '#!/bin/sh\necho FAKE_CODEX_RESUMED\nexec sleep 600\n')
+    chmodSync(resumedCodex, 0o755)
+    // The phone's own builder, with the agent command pointed at the fake.
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session!,
+      hostPlatform: process.platform,
+      settings: { agentCmdOverrides: { codex: resumedCodex } }
+    })
+    const { tab } = await phone.call<{ tab: { parentTabId: string } }>(
+      'session.tabs.createTerminal',
+      {
+        worktree,
+        ...(launch.env ? { env: launch.env } : {}),
+        ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
+        ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
+        launchAgent: launch.launchAgent,
+        ...(launch.resumeProviderSession
+          ? { resumeProviderSession: launch.resumeProviderSession }
+          : {}),
+        clientMutationId: `resume-${sessionId}`,
+        activate: false,
+        select: true,
+        navigation: 'caller'
+      }
+    )
+    const terminal = await waitForTerminal(phone, worktree, (row) => row.tabId === tab.parentTabId)
+    await phone.call('terminal.send', {
+      terminal: terminal.handle,
+      text: launch.command,
+      enter: true
+    })
+    await expectPhoneChatReadsTranscript({
+      phone,
+      worktree,
+      parentTabId: tab.parentTabId,
       agent: 'codex',
       sessionId
     })

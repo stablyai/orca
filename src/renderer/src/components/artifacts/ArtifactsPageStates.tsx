@@ -1,6 +1,7 @@
 import { ArrowRight, Files, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 export function ArtifactsPageErrorBanner({
   error,
@@ -24,12 +25,10 @@ export function ArtifactsPageErrorBanner({
 export function ArtifactsPageAuthState({
   needsReconnect,
   configured,
-  onConnect,
   onOpenAccountSettings
 }: {
   needsReconnect: boolean
   configured: boolean
-  onConnect: () => void
   onOpenAccountSettings: () => void
 }): React.JSX.Element {
   return (
@@ -60,14 +59,17 @@ export function ArtifactsPageAuthState({
         </p>
       </div>
       {configured ? (
-        <Button size="sm" onClick={onConnect}>
-          {needsReconnect
-            ? translate(
-                'auto.components.artifacts.ArtifactsPage.signInAgainAction',
-                'Sign in again'
-              )
-            : translate('auto.components.artifacts.ArtifactsPage.signIn', 'Sign in to Orca')}
-        </Button>
+        <>
+          <OrcaSignInButton size="sm">
+            {needsReconnect
+              ? translate(
+                  'auto.components.artifacts.ArtifactsPage.signInAgainAction',
+                  'Sign in again'
+                )
+              : translate('auto.components.artifacts.ArtifactsPage.signIn', 'Sign in to Orca')}
+          </OrcaSignInButton>
+          <OrcaSignInWaitNotice className="justify-center" />
+        </>
       ) : (
         <div className="flex flex-col items-center gap-2">
           <p className="max-w-sm text-xs leading-5 text-muted-foreground">

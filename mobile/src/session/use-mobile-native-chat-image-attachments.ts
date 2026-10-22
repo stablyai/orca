@@ -31,6 +31,8 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
+import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -62,11 +64,15 @@ type Args = {
     text: string,
     imagePreviewUris?: string[],
     deadline?: number,
-    attachments?: readonly PendingNativeChatImage[],
+    attachments?: readonly StructuredMobileSendAttachment[],
     sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured sessions send attachments without the terminal paste path. */
   readonly structuredNativeChat: boolean
+  /** A structured chat's stored files ride the next send beside its images. */
+  readonly files?: readonly PendingNativeChatFile[]
+  /** Drops the files a send carried once the host took it. */
+  readonly onFilesSent?: (ids: readonly string[]) => void
   /** Launch-context text parked on the agent's TUI input line, or null. The
    *  paste's leading clear must cover every line of it, or the draft's earlier
    *  lines survive and ride along with the image. */
@@ -88,6 +94,8 @@ export type MobileNativeChatImageAttachments = {
   readonly sendNativeChat: (text: string) => Promise<boolean>
 }
 
+const NO_FILES: readonly PendingNativeChatFile[] = []
+
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -104,6 +112,8 @@ export function useMobileNativeChatImageAttachments({
   onSendError,
   baseSend,
   structuredNativeChat,
+  files = NO_FILES,
+  onFilesSent,
   readSeededLaunchDraft,
   onAttachSuccess,
   onError,
@@ -175,7 +185,13 @@ export function useMobileNativeChatImageAttachments({
         const scope = scopeKey
         const pendingImages =
           (scope ? attachmentsByScope[scope] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
-        if (structuredNativeChat && pendingImages.length > 0 && scope) {
+        // Only stored files: one still uploading holds Send in the composer.
+        const storedFiles = structuredNativeChat
+          ? files.flatMap((file) =>
+              file.path === null ? [] : [{ kind: 'file' as const, id: file.id, path: file.path }]
+            )
+          : []
+        if (structuredNativeChat && pendingImages.length + storedFiles.length > 0 && scope) {
           if (!client || !enabled || connState !== 'connected') {
             onError?.()
             onSendError('Message not sent (disconnected)')
@@ -185,7 +201,7 @@ export function useMobileNativeChatImageAttachments({
             text,
             pendingImages.map((attachment) => attachment.previewUri),
             deadline,
-            pendingImages
+            [...pendingImages, ...storedFiles]
           )
           if (outcome !== 'rejected') {
             const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
@@ -196,6 +212,7 @@ export function useMobileNativeChatImageAttachments({
                 (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
               )
             )
+            onFilesSent?.(storedFiles.map((file) => file.id))
           }
           return outcome !== 'rejected'
         }
@@ -328,7 +345,9 @@ export function useMobileNativeChatImageAttachments({
       agent,
       deviceTokenRef,
       enabled,
+      files,
       onError,
+      onFilesSent,
       onSendError,
       readSeededLaunchDraft,
       scopeKey,

@@ -1,6 +1,6 @@
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { BrowserNetworkExecutionHost } from '../../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../../shared/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import type { BrowserWindow } from 'electron'

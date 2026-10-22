@@ -2,7 +2,7 @@ import { createTerminalEscapeScanner } from './terminal-escape-scanner'
 
 export const CODEX_CAPACITY_MESSAGE = 'Selected model is at capacity. Please try a different model.'
 
-const NOTICE = /^[■⚠]\s+Selected model is at capacity\. Please try a different model\.$/
+const NOTICE = /^[\u25A0\u26A0]\s+Selected model is at capacity\. Please try a different model\.$/
 const MAX_NOTICE_LENGTH = 160
 
 /** Only a newly painted native notice at the end of the conversation can close a turn. */
@@ -70,7 +70,7 @@ export class CodexCapacityNoticeTracker {
     this.pending = false
     this.tail = ''
     const lines = readScreen()
-    const composer = lines.findLastIndex((line) => /^\s*›/.test(line))
+    const composer = lines.findLastIndex((line) => /^\s*\u203A/.test(line))
     if (composer === -1) {
       return false
     }

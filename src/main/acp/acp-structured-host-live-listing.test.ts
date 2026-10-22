@@ -14,8 +14,9 @@ afterEach(async () => {
 describe('a live Grok listing', () => {
   it('is saved through the host catalog when the chat reads its options', async () => {
     const modelCatalog: AgentModelCatalogService = {
+      peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      retainedLiveModelIds: vi.fn(() => []),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: vi.fn(),
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),
@@ -38,8 +39,9 @@ describe('a live Grok listing', () => {
 
   it('starts the chat even when saving its start listing throws', async () => {
     const modelCatalog: AgentModelCatalogService = {
+      peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      retainedLiveModelIds: vi.fn(() => []),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: vi.fn().mockImplementationOnce(() => {
         throw new Error('catalog unavailable')
       }),
@@ -47,11 +49,19 @@ describe('a live Grok listing', () => {
       stop: vi.fn(),
       providerStarted: vi.fn()
     }
-    // The rig's attach must succeed: bookkeeping never fails a proven start.
-    const { host, store } = await openAttachedHostRig({}, undefined, modelCatalog)
+    // The rig waits for the child to turn ready: bookkeeping never fails a proven start.
+    const { host, rig, store, fence } = await openAttachedHostRig({}, undefined, modelCatalog)
     expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.lease.ownerProcess).not.toBeNull()
-    await expect(host.readOptions(SESSION)).resolves.toHaveProperty('models')
+    // The rest of the start still lands, and live options remain readable.
+    await expect(host.readOptions(SESSION)).resolves.toMatchObject({ current: expect.any(Object) })
     expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(2)
+    expect(
+      (await rig.adapter.readOptions({ sessionId: SESSION, fence: fence() })).current
+    ).toMatchObject({
+      model: 'grok-4.7',
+      effort: 'high'
+    })
+    expect(store.getRecord(SESSION)?.options).toBeUndefined()
   })
 })

@@ -42,6 +42,7 @@ export function useMobileBridgeChatPromptWrites(args: {
     enabled,
     handleRef,
     deviceTokenRef,
+    agentRef: args.agentRef,
     cancelPending,
     onSendError
   })

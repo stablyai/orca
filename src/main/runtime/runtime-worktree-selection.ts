@@ -1,5 +1,9 @@
 import type { Repo } from '../../shared/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { GitPushTarget } from '../../shared/worktree/types'
 
@@ -58,6 +62,17 @@ export function runtimeRepoMatchesExecutionHost(
     return true
   }
   return getRepoExecutionHostId(repo) === executionHostId
+}
+
+/**
+ * Whether `repo` can be the row a registration in this process dedupes onto. Registration reads its
+ * path on this machine, so an SSH row at the same path string is another machine's project.
+ */
+export function runtimeRepoIsRegistrationCandidate(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  return runtimeRepoMatchesExecutionHost(repo, executionHostId) && !getRepoSshConnectionId(repo)
 }
 
 export function parseExactWorktreeIdSelector(

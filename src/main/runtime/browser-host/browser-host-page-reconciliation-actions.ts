@@ -4,12 +4,13 @@ import type {
   BrowserClientHostCommandResult
 } from '../../../shared/browser-client-host-protocol'
 import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
+import { browserHostClientProfileFor } from './browser-host-client-profile-metadata'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import type {
   BrowserClientPagePlacementReservation,
-  BrowserHostPagePlacementRegistry,
-  RuntimeBrowserPlacement
+  BrowserHostPagePlacementRegistry
 } from './browser-host-page-placement'
+import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { BrowserHostPageReconciliationActions as ActionHandlers } from './browser-host-page-reconciliation-executor'
 import type {
   BrowserHostPageReconciliationPlan,
@@ -124,6 +125,7 @@ export class BrowserHostPageReconciliationActions {
       {
         type: 'restorePage',
         browserProfileId: intent.browserProfileId,
+        ...browserHostClientProfileFor(this.state.lease, intent.browserProfileId),
         executionHostKey: intent.executionHostKey,
         ...(url ? { url } : {}),
         ...(intent.workspaceId ? { workspaceId: intent.workspaceId } : {})
@@ -182,7 +184,9 @@ function pageAuthority(page: BrowserClientHostedPageInventory) {
 
 function assertNotAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw new Error('browser_host_page_reconciliation_aborted', { cause: signal.reason })
+    throw new Error('browser_host_page_reconciliation_aborted', {
+      cause: signal.reason
+    })
   }
 }
 
@@ -193,7 +197,11 @@ async function waitForCommandResult(
   let removeAbort = (): void => {}
   const aborted = new Promise<never>((_resolve, reject) => {
     const abort = (): void =>
-      reject(new Error('browser_host_page_reconciliation_aborted', { cause: signal.reason }))
+      reject(
+        new Error('browser_host_page_reconciliation_aborted', {
+          cause: signal.reason
+        })
+      )
     if (signal.aborted) {
       abort()
       return

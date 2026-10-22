@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { isPermissionError } from '../win32-utils'
 import { isMissingError } from './cli-install-errors'
-import { quoteShell } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 export type EntryIdentity = {
   dev: bigint
@@ -171,10 +171,12 @@ export function buildMacPrivilegedSymlinkReadableCommand(args: {
   commandPath: string
   expected: EntryIdentity
 }): string {
-  const commandPath = quoteShell(args.commandPath)
-  const changed = quoteShell(`The command at ${args.commandPath} changed while Orca inspected it.`)
+  const commandPath = quotePosixShellDoubleQuotedApostrophe(args.commandPath)
+  const changed = quotePosixShellDoubleQuotedApostrophe(
+    `The command at ${args.commandPath} changed while Orca inspected it.`
+  )
   return (
-    `if [ -L ${commandPath} ] && [ "$(/usr/bin/stat -f '%d:%i' ${commandPath})" = ${quoteShell(`${args.expected.dev}:${args.expected.ino}`)} ]; ` +
+    `if [ -L ${commandPath} ] && [ "$(/usr/bin/stat -f '%d:%i' ${commandPath})" = ${quotePosixShellDoubleQuotedApostrophe(`${args.expected.dev}:${args.expected.ino}`)} ]; ` +
     `then /bin/chmod -h 755 ${commandPath}; else echo ${changed} >&2; exit 73; fi`
   )
 }
@@ -194,43 +196,45 @@ export function buildMacPrivilegedSymlinkTransaction(
   const heldPath = join(transactionDirectory, basename(args.commandPath))
   const publishDirectory = join(transactionDirectory, 'publish')
   const publishPath = join(publishDirectory, basename(args.commandPath))
-  const recoveryMessage = quoteShell(`The displaced entry is preserved at ${heldPath}.`)
+  const recoveryMessage = quotePosixShellDoubleQuotedApostrophe(
+    `The displaced entry is preserved at ${heldPath}.`
+  )
   const restore =
-    `/bin/ln -P ${quoteShell(heldPath)} ${quoteShell(commandDirectory)} && ` +
-    `/bin/rm ${quoteShell(heldPath)} && /bin/rmdir ${quoteShell(transactionDirectory)}`
+    `/bin/ln -P ${quotePosixShellDoubleQuotedApostrophe(heldPath)} ${quotePosixShellDoubleQuotedApostrophe(commandDirectory)} && ` +
+    `/bin/rm ${quotePosixShellDoubleQuotedApostrophe(heldPath)} && /bin/rmdir ${quotePosixShellDoubleQuotedApostrophe(transactionDirectory)}`
   const restoreOrPreserve = `if ${restore}; then :; else echo ${recoveryMessage} >&2; exit 74; fi`
   const { fileSha256, rawSymlinkTarget, snapshot } = args.inspected
   const fileMismatch = fileSha256
-    ? ` || [ "$(/usr/bin/shasum -a 256 ${quoteShell(heldPath)} | /usr/bin/awk '{print $1}')" != ${quoteShell(fileSha256)} ]`
+    ? ` || [ "$(/usr/bin/shasum -a 256 ${quotePosixShellDoubleQuotedApostrophe(heldPath)} | /usr/bin/awk '{print $1}')" != ${quotePosixShellDoubleQuotedApostrophe(fileSha256)} ]`
     : ''
   const symlinkMismatch = rawSymlinkTarget
-    ? ` || [ "$(/usr/bin/readlink -n ${quoteShell(heldPath)}; /usr/bin/printf x)" != ${quoteShell(`${rawSymlinkTarget}x`)} ]`
+    ? ` || [ "$(/usr/bin/readlink -n ${quotePosixShellDoubleQuotedApostrophe(heldPath)}; /usr/bin/printf x)" != ${quotePosixShellDoubleQuotedApostrophe(`${rawSymlinkTarget}x`)} ]`
     : ''
   const rejectCaptured = snapshot
-    ? `if [ "$captured" -eq 1 ] && { [ "$(/usr/bin/stat -f '%d:%i' ${quoteShell(heldPath)})" != ${quoteShell(`${snapshot.identity.dev}:${snapshot.identity.ino}`)} ]${fileMismatch}${symlinkMismatch}; }; then ${restoreOrPreserve}; exit 73; fi`
+    ? `if [ "$captured" -eq 1 ] && { [ "$(/usr/bin/stat -f '%d:%i' ${quotePosixShellDoubleQuotedApostrophe(heldPath)})" != ${quotePosixShellDoubleQuotedApostrophe(`${snapshot.identity.dev}:${snapshot.identity.ino}`)} ]${fileMismatch}${symlinkMismatch}; }; then ${restoreOrPreserve}; exit 73; fi`
     : `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; exit 73; fi`
   // Why: macOS applies the umask to symlinks too, so the script publishes under 022 and only the
   // transaction directories are created private.
   const capture =
-    `umask 022; /bin/mkdir -p ${quoteShell(commandDirectory)} || exit $?; ` +
-    `/bin/mkdir -m 700 ${quoteShell(transactionDirectory)} || exit $?; captured=0; ` +
-    `if [ -e ${quoteShell(args.commandPath)} ] || [ -L ${quoteShell(args.commandPath)} ]; then ` +
-    `/bin/mv ${quoteShell(args.commandPath)} ${quoteShell(heldPath)} && captured=1 || exit $?; fi; ` +
+    `umask 022; /bin/mkdir -p ${quotePosixShellDoubleQuotedApostrophe(commandDirectory)} || exit $?; ` +
+    `/bin/mkdir -m 700 ${quotePosixShellDoubleQuotedApostrophe(transactionDirectory)} || exit $?; captured=0; ` +
+    `if [ -e ${quotePosixShellDoubleQuotedApostrophe(args.commandPath)} ] || [ -L ${quotePosixShellDoubleQuotedApostrophe(args.commandPath)} ]; then ` +
+    `/bin/mv ${quotePosixShellDoubleQuotedApostrophe(args.commandPath)} ${quotePosixShellDoubleQuotedApostrophe(heldPath)} && captured=1 || exit $?; fi; ` +
     `${rejectCaptured}; `
 
   if (args.action === 'remove') {
-    return `${capture}if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; /bin/rmdir ${quoteShell(transactionDirectory)}`
+    return `${capture}if [ "$captured" -eq 1 ]; then /bin/rm ${quotePosixShellDoubleQuotedApostrophe(heldPath)}; fi; /bin/rmdir ${quotePosixShellDoubleQuotedApostrophe(transactionDirectory)}`
   }
 
   const rollback =
-    `/bin/rm -f ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)} 2>/dev/null || :; ` +
-    `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; else /bin/rmdir ${quoteShell(transactionDirectory)}; fi; exit 73`
+    `/bin/rm -f ${quotePosixShellDoubleQuotedApostrophe(publishPath)}; /bin/rmdir ${quotePosixShellDoubleQuotedApostrophe(publishDirectory)} 2>/dev/null || :; ` +
+    `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; else /bin/rmdir ${quotePosixShellDoubleQuotedApostrophe(transactionDirectory)}; fi; exit 73`
   return (
-    `${capture}if /bin/mkdir -m 700 ${quoteShell(publishDirectory)} && ` +
-    `/bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)} && ` +
-    `/bin/ln -P ${quoteShell(publishPath)} ${quoteShell(commandDirectory)}; then ` +
-    `/bin/rm ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)}; ` +
-    `if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; ` +
-    `/bin/rmdir ${quoteShell(transactionDirectory)}; else ${rollback}; fi`
+    `${capture}if /bin/mkdir -m 700 ${quotePosixShellDoubleQuotedApostrophe(publishDirectory)} && ` +
+    `/bin/ln -s ${quotePosixShellDoubleQuotedApostrophe(args.launcherPath)} ${quotePosixShellDoubleQuotedApostrophe(publishPath)} && ` +
+    `/bin/ln -P ${quotePosixShellDoubleQuotedApostrophe(publishPath)} ${quotePosixShellDoubleQuotedApostrophe(commandDirectory)}; then ` +
+    `/bin/rm ${quotePosixShellDoubleQuotedApostrophe(publishPath)}; /bin/rmdir ${quotePosixShellDoubleQuotedApostrophe(publishDirectory)}; ` +
+    `if [ "$captured" -eq 1 ]; then /bin/rm ${quotePosixShellDoubleQuotedApostrophe(heldPath)}; fi; ` +
+    `/bin/rmdir ${quotePosixShellDoubleQuotedApostrophe(transactionDirectory)}; else ${rollback}; fi`
   )
 }

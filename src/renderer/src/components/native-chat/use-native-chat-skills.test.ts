@@ -75,6 +75,15 @@ describe('isNativeChatSkillForAgent', () => {
     expect(isNativeChatSkillForAgent('grok', skill({}), claude)).toBe(false)
   })
 
+  // Both OpenCode lines read `.claude/skills` in the home folder and the project, but not plugins.
+  it('shows OpenCode the Claude skill folders it reads, and not Claude plugins', () => {
+    const claude = discovery('claude')
+    expect(isNativeChatSkillForAgent('opencode', skill({}), claude)).toBe(true)
+    expect(isNativeChatSkillForAgent('opencode2', skill({}), claude)).toBe(true)
+    const plugin = { sources: [{ ...claude.sources[0], sourceKind: 'plugin' as const }] }
+    expect(isNativeChatSkillForAgent('opencode2', skill({}), plugin)).toBe(false)
+  })
+
   it('grants visibility through any contributing root, not just the dedup survivor', () => {
     const result = {
       sources: [

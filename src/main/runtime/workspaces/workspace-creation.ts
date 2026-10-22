@@ -15,7 +15,7 @@ import { createRuntimeFolderWorktree } from '../runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from '../runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from '../runtime-local-worktree-setup'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
@@ -23,10 +23,10 @@ import type { RuntimeWorkspaceCreateEvents } from '../../workspace-create-teleme
 import { createdWorkspaceActivationCallbacks } from './workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
-import {
-  WorkspaceCreationRegistry,
-  type WorkspaceCreationHandle
-} from '../sidebar-inputs/workspace-creation-registry'
+import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
+import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
+import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
@@ -35,8 +35,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     childRepo?: Repo
   ): Promise<WorktreeLineageResolution>
 
-  // Switch point: only a build where main produces the sidebar's inputs lists creations.
-  readonly workspaceCreations = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceCreationRegistry() : null
+  // Switch point: only a build where main produces the sidebar's inputs queues lifecycle commands.
+  readonly workspaceLifecycle = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null
 
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
@@ -68,7 +68,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     // Listed from here: a create refused before its project resolved has nothing to show.
-    const creation = this.workspaceCreations?.open({ creationId: args.creationId, repoId: repo.id })
+    const creation = this.workspaceLifecycle?.openCreate({
+      creationId: args.creationId,
+      repoId: repo.id,
+      keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+    })
     try {
       return await this.createInResolvedProject(args, repo, creation, rearm, events)
     } finally {

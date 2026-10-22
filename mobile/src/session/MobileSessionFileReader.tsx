@@ -35,21 +35,30 @@ import { DiffLineRow } from './MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from './mobile-diff-comments'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
-export function FileReader({
+type FileReaderProps = {
+  doc: FileDocState | undefined
+  client?: MobileFilePreviewRpcSender | null
+  title: string
+  relativePath: string
+  documentId?: string
+  language?: string
+  diffCommentActions?: DiffCommentActions
+}
+
+export function FileReader(props: FileReaderProps) {
+  return (
+    <FileReaderDocument key={JSON.stringify([props.documentId, props.relativePath])} {...props} />
+  )
+}
+
+function FileReaderDocument({
   doc,
   client = null,
   title,
   relativePath,
   language,
   diffCommentActions
-}: {
-  doc: FileDocState | undefined
-  client?: MobileFilePreviewRpcSender | null
-  title: string
-  relativePath: string
-  language?: string
-  diffCommentActions?: DiffCommentActions
-}) {
+}: FileReaderProps) {
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]

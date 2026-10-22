@@ -16,6 +16,7 @@ import { testImportClosure } from './e2e-test-import-closure.mjs'
 import { isLayoutOracleSource, LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import {
   hasNativeImeSourceChange,
+  MANUAL_ONLY_E2E_SPECS,
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   shouldRunReusablePrE2e
@@ -288,7 +289,7 @@ describe('ssh-browser-e2e-routing', () => {
       'src/main/browser/browser-network-deferred-socket.ts',
       'src/main/browser/browser-network-execution-route.ts',
       'src/main/browser/system-ssh-socks-client-socket.ts',
-      'src/main/ssh/system-ssh-dynamic-forward-process.ts',
+      'src/main/ssh/system-transport/system-ssh-dynamic-forward-process.ts',
       'tests/e2e/helpers/docker-ssh-host-target.ts',
       'tests/e2e/helpers/docker-ssh-host-image.ts'
     ]) {
@@ -354,7 +355,7 @@ describe('orcad-e2e-routing', () => {
   it('routes the auto-convert spec from its conversion sources and harness', () => {
     expectRouted(
       [
-        'src/main/ssh/orcad-runtime-conversion.ts',
+        'src/main/managed-server/lifecycle/orcad-runtime-conversion.ts',
         'tests/e2e/helpers/orcad-convert-flow.ts',
         'tests/e2e/helpers/orcad-convert-host.ts',
         'tests/e2e/helpers/orcad-template-variant.ts',
@@ -362,17 +363,17 @@ describe('orcad-e2e-routing', () => {
       ],
       ORCAD_AUTO_CONVERT_E2E_SPEC
     )
-    expect(selectPrE2eSpecs(['src/main/ssh/orcad-runtime-conversion.test.ts'])).not.toContain(
-      ORCAD_AUTO_CONVERT_E2E_SPEC
-    )
+    expect(
+      selectPrE2eSpecs(['src/main/managed-server/lifecycle/orcad-runtime-conversion.test.ts'])
+    ).not.toContain(ORCAD_AUTO_CONVERT_E2E_SPEC)
   })
 
   it('routes the idle-exit spec from its idle sources and the shared convert harness', () => {
     expectRouted(
       [
         'src/shared/orcad-idle-exit.ts',
-        'src/main/ssh/orcad-remote-runtime-control.ts',
-        'src/main/ssh/orcad-managed-serving.ts',
+        'src/main/managed-server/install/orcad-remote-runtime-control.ts',
+        'src/main/managed-server/lifecycle/orcad-managed-serving.ts',
         'tests/e2e/helpers/orcad-convert-flow.ts',
         'tests/e2e/helpers/orcad-convert-host.ts'
       ],
@@ -396,14 +397,16 @@ describe('orcad-e2e-routing', () => {
     expect(jobs['orcad-ssh-docker'].needs).toEqual(['build'])
   })
 
-  it('runs every managed-SSH spec in one sharded lane, only when one is routed', () => {
+  it('passes the requested managed-SSH specs to the sharded lane', () => {
     const lane = jobs['orcad-ssh-docker']
     expect(lane.if).toBe(
       `inputs.test_files == '' || contains(inputs.test_files, '${MANAGED_SSH_E2E_SPEC_PREFIX}')`
     )
-    expect(lane.strategy.matrix.shard).toEqual(['1/2', '2/2'])
+    expect(lane.strategy.matrix.shard).toBe(
+      `\${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}`
+    )
     const run = lane.steps.find((step) => step.env?.ORCA_E2E_SSH_DOCKER === '1').run
-    expect(run).toContain(` ${MANAGED_SSH_E2E_SPEC_PREFIX} `)
+    expect(run).toContain('"${TEST_FILES[@]}"')
     expect(run).toContain('--shard="$SHARD"')
     for (const spec of [
       ORCAD_AUTO_CONVERT_E2E_SPEC,
@@ -463,12 +466,12 @@ describe('orcad-e2e-routing', () => {
           'src/renderer/src/components/terminal-pane/terminal-host-file-link-existence.ts',
           'src/renderer/src/runtime/runtime-terminal-artifact-read.ts',
           // #30130's Disconnect sources merged with this lane skipped.
-          'src/main/ipc/ssh-host-user-disconnect.ts',
-          'src/main/ipc/ssh-connect-flow.ts',
-          'src/main/ipc/ssh-connection-handlers.ts',
-          'src/main/ipc/runtime-environment-connectivity-handlers.ts',
-          'src/main/ipc/runtime-environment-manual-disconnect.ts',
-          'src/main/ssh/ssh-connection-manager.ts',
+          'src/main/ipc/ssh/ssh-host-user-disconnect.ts',
+          'src/main/ipc/ssh/ssh-connect-flow.ts',
+          'src/main/ipc/ssh/ssh-connection-handlers.ts',
+          'src/main/ipc/runtime-environments/runtime-environment-connectivity-handlers.ts',
+          'src/main/ipc/runtime-environments/runtime-environment-manual-disconnect.ts',
+          'src/main/ssh/connection/ssh-connection-manager.ts',
           'src/main/ssh/ssh-user-disconnect.ts',
           'src/renderer/src/runtime/web-session-close-intent.ts',
           'src/renderer/src/runtime/web-session-close-replay.ts'
@@ -494,24 +497,30 @@ describe('managed-SSH remote sources routing', () => {
       .filter((name) => /^ssh-orcad-.*\.spec\.ts$/.test(name))
       .map((name) => `tests/e2e/${name}`)
     expect(specs.length).toBeGreaterThan(0)
-    expect(specs.filter((spec) => !routed.has(spec))).toEqual([])
+    expect(
+      specs.filter((spec) => !routed.has(spec) && !MANUAL_ONLY_E2E_SPECS.includes(spec))
+    ).toEqual([])
   })
 
   it('starts the lane for remote product sources no hand-kept route names', () => {
     for (const file of [
       // #30130 and #30120 merged with the lane skipped.
-      'src/main/ipc/ssh.ts',
+      'src/main/ipc/ssh/ssh.ts',
       'src/cli/runtime/serve-orcad-launch.ts',
       'src/main/orcad/orcad-entry.ts',
-      'src/main/ssh/ssh-connection.ts',
-      'src/main/ipc/runtime-environment-status-probe.ts',
-      'src/main/ipc/orcad-runtime-lifecycle-handlers.ts',
+      'src/main/ssh/connection/ssh-connection.ts',
+      'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
+      'src/main/ipc/runtime-environments/orcad-runtime-lifecycle-handlers.ts',
       'src/shared/protocol-version.ts',
       'src/shared/remote-runtime-client-error-classification.ts',
       // #30047 and #30060: sidebar sleep and project removal.
       'src/renderer/src/components/sidebar/sleep-worktree-flow.ts',
       'src/renderer/src/components/sidebar/ssh-host-remove-resolution.ts',
-      'src/renderer/src/store/repos/repo-removal.ts'
+      'src/renderer/src/store/repos/repo-removal.ts',
+      // #30775: the pane banner for a managed server that refused this desktop.
+      'src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.tsx',
+      'src/renderer/src/components/terminal-pane/use-managed-pairing-refused.ts',
+      'src/renderer/src/components/terminal-pane/TerminalPaneRuntimePortals.tsx'
     ]) {
       expect(existsSync(join(projectDir, file)), file).toBe(true)
       expect(selectsManagedSshLane(file), file).toBe(true)
@@ -520,8 +529,8 @@ describe('managed-SSH remote sources routing', () => {
 
   it('leaves unit tests and local-only sources alone', () => {
     for (const file of [
-      'src/main/ssh/ssh-connection.test.ts',
-      'src/main/ipc/ssh.test.ts',
+      'src/main/ssh/connection/ssh-connection.test.ts',
+      'src/main/ipc/ssh/ssh.test.ts',
       'src/main/daemon/daemon-server.ts',
       'src/main/runtime/rpc/methods/accounts.ts',
       'src/renderer/src/components/sidebar/WorktreeCard.tsx',

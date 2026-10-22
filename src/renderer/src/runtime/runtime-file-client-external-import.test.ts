@@ -115,7 +115,8 @@ describe('runtime file client', () => {
     })
 
     expect(fsStageExternalPathsForRuntimeUpload).toHaveBeenCalledWith({
-      sourcePaths: ['/Users/me/assets']
+      sourcePaths: ['/Users/me/assets'],
+      nameExtensionlessImages: undefined
     })
     const transportCalls = runtimeEnvironmentTransportCall.mock.calls.map(([args]) => args)
     expect(transportCalls.map((args) => args.method)).toEqual([

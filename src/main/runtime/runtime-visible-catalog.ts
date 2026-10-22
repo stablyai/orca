@@ -16,16 +16,18 @@ import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
 } from '../../shared/worktree-execution-host-resolution'
+import type { ProjectHostSetup } from '../../shared/project-types'
 import {
   visibleFolderWorkspaces,
   visibleProjectGroups,
+  visibleProjectHostSetups,
   visibleRepos
 } from '../ssh/orcad-retained-source'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type CatalogSource = Pick<
   RuntimeStore,
-  'getRepos' | 'getProjectGroups' | 'getFolderWorkspaces' | 'getSshTargets'
+  'getRepos' | 'getProjectGroups' | 'getFolderWorkspaces' | 'getSshTargets' | 'getProjectHostSetups'
 >
 
 // Headless orcad has no SSH targets, so nothing of its own is ever a retained source.
@@ -34,7 +36,8 @@ function catalogStore(store: CatalogSource) {
     getRepos: () => store.getRepos(),
     getProjectGroups: () => store.getProjectGroups?.() ?? [],
     getFolderWorkspaces: () => store.getFolderWorkspaces?.() ?? [],
-    getSshTargets: () => store.getSshTargets?.() ?? []
+    getSshTargets: () => store.getSshTargets?.() ?? [],
+    getProjectHostSetups: () => store.getProjectHostSetups?.() ?? []
   }
 }
 
@@ -44,6 +47,10 @@ export function runtimeVisibleRepos(store: CatalogSource | null): Repo[] {
 
 export function runtimeVisibleProjectGroups(store: CatalogSource | null): ProjectGroup[] {
   return store ? visibleProjectGroups(catalogStore(store)) : []
+}
+
+export function runtimeVisibleProjectHostSetups(store: CatalogSource | null): ProjectHostSetup[] {
+  return store ? visibleProjectHostSetups(catalogStore(store)) : []
 }
 
 export function runtimeVisibleFolderWorkspaces(store: CatalogSource | null): FolderWorkspace[] {

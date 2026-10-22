@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { bindOrcadIdleShutdown, beginOrcadIdleExit } from './orcad-managed-idle-exit-host'
 import { installOrcadManagedIdleExit } from './orcad-managed-idle-exit'
 import type * as ManagedIdleExit from './orcad-managed-idle-exit'

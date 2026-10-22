@@ -120,6 +120,9 @@ export function normalizeFolderWorkspaces(
       Number.isFinite(raw.smartAt)
         ? { smartTier: raw.smartTier, smartAt: raw.smartAt }
         : {}),
+      ...(typeof raw.lastTerminalUseAt === 'number' && Number.isFinite(raw.lastTerminalUseAt)
+        ? { lastTerminalUseAt: raw.lastTerminalUseAt }
+        : {}),
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:

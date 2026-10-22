@@ -1,4 +1,6 @@
 import { useAppStore } from '../../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { isWebRuntimeInitialTerminalBootstrapInFlight } from '../web-runtime-initial-terminal-bootstrap'
 import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
@@ -36,6 +38,10 @@ export function createInitialTerminalSeeder(
   let disposed = false
 
   const decide = (event: SessionTabsStreamEvent, firstHostAnswer: boolean): boolean => {
+    // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — a frame-drawn workspace's tabs are not the mirror's to create.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, worktreeId)) {
+      return false
+    }
     const state = useAppStore.getState()
     return shouldBootstrapInitialWebRuntimeTerminal({
       event,

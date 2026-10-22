@@ -25,6 +25,7 @@ import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
 
 type MonacoEditorProps = {
   fileId: string
@@ -108,6 +109,7 @@ export default function MonacoEditor({
     () => toEditorModelUri(filePath, modelOwnerKey),
     [filePath, modelOwnerKey]
   )
+  useEditorModelRekeyCarry(fileId, modelUri)
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -138,6 +140,7 @@ export default function MonacoEditor({
     contentRef,
     contentSyncModeRef,
     modelKey: modelUri,
+    fileId,
     onContentChange
   })
   const annotations = useMonacoMarkdownAnnotations({

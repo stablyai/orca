@@ -34,7 +34,12 @@ export function zcodeDiscoveries(
       list(),
       scopeWalksAgentFiles('zcode', options.scopePaths) ? list(options.scopePaths) : undefined
     ])
-    return { agent: 'zcode' as const, rootDir: dbPath, files, ...(scopeFiles ? { scopeFiles } : {}) }
+    return {
+      agent: 'zcode' as const,
+      rootDir: dbPath,
+      files,
+      ...(scopeFiles ? { scopeFiles } : {})
+    }
   })
 }
 

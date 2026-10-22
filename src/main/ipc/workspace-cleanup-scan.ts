@@ -3,7 +3,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import { mergeWorktree } from './worktree-logic'
+import { mergeWorktree } from './worktree-metadata-merge'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanArgs,

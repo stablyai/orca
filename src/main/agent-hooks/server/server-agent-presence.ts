@@ -1,3 +1,5 @@
+import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   isSameAgentProcess,
@@ -44,6 +46,37 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
       this.resolvePaneKeyAlias(paneKey)
     )?.agentPresence
     return presence?.process !== undefined && !presence.ended
+  }
+
+  /** A local inspection keeps the exact hook row, rather than probing the pane's next owner. */
+  readCliWriterObservation(expected: AgentStatusIpcPayload): CliWriterObservation | null {
+    const resolved = this.resolvePaneKeyAlias(expected.paneKey)
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    if (
+      !row ||
+      row.connectionId !== null ||
+      row.worktreeId !== expected.worktreeId ||
+      row.providerSession?.id !== expected.providerSession?.id ||
+      row.payload.agentType !== expected.agentType ||
+      !('receivedAt' in row) ||
+      row.receivedAt !== expected.receivedAt
+    ) {
+      return null
+    }
+    const token = this.token
+    const generation = this.statusHookGeneration
+    const presence = row.agentPresence
+    return {
+      current: () =>
+        this.statusHooksEnabled &&
+        this.token === token &&
+        this.statusHookGeneration === generation &&
+        this.state.lastStatusByPaneKey.get(resolved) === row &&
+        row.agentPresence === presence,
+      presence: () =>
+        presence?.process ? probeAgentProcessPresence(presence.process) : Promise.resolve(null),
+      topology: cliWriterTopology(row)
+    }
   }
 
   /** As checkAgentPresence, but keeps an exit this host proved at or after `exitedSince`. */

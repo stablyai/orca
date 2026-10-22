@@ -150,7 +150,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
     // The real bridge hook runs, so the props it owns are the ones the view is handed here; only the
     // client lookup is stubbed, because reaching it imports the Expo runtime this test does not have.
-    '../transport/client-context': () => ({
+    '../transport/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
     // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo

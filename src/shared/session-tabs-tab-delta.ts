@@ -4,7 +4,7 @@
 // may then replace `tabs` with `tabsDelta`: each entry is either the index of an identical tab in
 // the previous frame for that worktree on this stream, or the tab itself. Everything else in the
 // frame is sent as before. A client that never advertised the capability never sees either field.
-import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './runtime-capability-constants'
+import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
 
 export type SessionTabsTabDeltaRef = number | Record<string, unknown>
 

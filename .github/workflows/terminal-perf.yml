@@ -48,6 +48,12 @@ on:
     # terminal throughput regressions are caught before users report typing lag.
     - cron: '30 8 * * *'
 
+permissions:
+  contents: read
+
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 jobs:
   terminal-perf:
     name: terminal scale perf
@@ -88,7 +94,7 @@ jobs:
           const shared = process.env.RUNNER_KIND === 'github-hosted' && !process.env.JOB_CONTAINER &&
             process.env.RUNNER_OS === 'Linux' && process.env.RUNNER_ARCH === 'X64' &&
             manifest.engines?.node === '24' && typeof manifest.packageManager === 'string' &&
-            manifest.packageManager.split('+')[0] === 'pnpm@12.8.1' &&
+            manifest.packageManager.split('+')[0] === 'pnpm@12.14.0' &&
             supportedPostinstalls.includes(manifest.scripts?.postinstall) &&
             /^  native-runtime:/m.test(inputs) && /^  cache-pnpm-store-lookup-only:/m.test(inputs) &&
             fs.existsSync('.github/actions/prepare-native-runtime/action.yml') &&
@@ -115,6 +121,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Historical refs can lack the shared action; retain their original install path.

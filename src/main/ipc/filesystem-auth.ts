@@ -10,12 +10,6 @@ import {
   isRegisteredWorktreePath
 } from './registered-worktree-roots-cache'
 
-// Compatibility exports for runtime command modules that historically imported these seams from
-// filesystem-auth. The implementations remain owned by their focused modules.
-export { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-export { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
-export { isENOENT } from './filesystem-path-containment'
-
 export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
 /** One allowed-root list shared by every check in a single authorization, built on first use. */
 type AllowedRootsSnapshot = { get: () => readonly string[] }

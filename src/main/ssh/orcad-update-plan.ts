@@ -18,14 +18,14 @@
  * has no answer that can be computed. That is why rollback is defined against a
  * pre-activation snapshot rather than against a version comparison.
  */
-import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import {
   assessOrcadLiveDaemonCrossing,
   type OrcadDaemonProtocolFacts
 } from './orcad-daemon-protocol-crossing'
 
-export type OrcadUpdateDecision =
+type OrcadUpdateDecision =
   | { action: 'noop'; reason: string }
   | {
       action: 'proceed'
@@ -159,12 +159,12 @@ export function planOrcadUpdate(input: {
   }
 }
 
-export type OrcadRollbackSafety =
+type OrcadRollbackSafety =
   | { safety: 'clean'; target: string; notes: string[] }
   | { safety: 'lossy'; target: string; discards: string[] }
   | { safety: 'unsafe'; code: OrcadRollbackUnsafeCode; reason: string }
 
-export type OrcadRollbackUnsafeCode =
+type OrcadRollbackUnsafeCode =
   | 'orcad_rollback_no_target'
   | 'orcad_rollback_snapshot_missing'
   | 'orcad_rollback_orphans_live_terminals'

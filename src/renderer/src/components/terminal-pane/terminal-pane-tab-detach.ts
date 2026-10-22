@@ -149,10 +149,11 @@ async function moveLeafToNewTab(
   // Switch point: main moves the pane and names the new tab.
   const answer = await (
     ORCA_LAYOUT_OWNER_IS_MAIN
-      ? moveLeafThroughLayoutOwner(request, {
-          groupId: args.targetGroupId,
-          index: args.targetIndex
-        })
+      ? moveLeafThroughLayoutOwner(
+          request,
+          { groupId: args.targetGroupId, index: args.targetIndex },
+          args.sourcePaneCwd?.cwd
+        )
       : window.api.pty.moveLeafToNewTab(request)
   ).catch((error: unknown) => {
     console.warn('[terminal-pane-detach] main did not answer the move', error)
@@ -235,14 +236,17 @@ function applyMove(
       recordInteraction: true
     })
   const afterCreateStore = args.getStore()
-  moveCreatedTabToIndex({
-    groupId: args.targetGroupId,
-    store: afterCreateStore,
-    tabId: tab.id,
-    targetIndex: args.targetIndex,
-    worktreeId,
-    mainPlaced: mainMoved
-  })
+  // Main's frame drew the tab where main placed it; the window places it only when it drew it.
+  if (!frameDrawn) {
+    moveCreatedTabToIndex({
+      groupId: args.targetGroupId,
+      store: afterCreateStore,
+      tabId: tab.id,
+      targetIndex: args.targetIndex,
+      worktreeId,
+      mainPlaced: mainMoved
+    })
+  }
   if (split) {
     afterCreateStore.setTabLayout(sourceTabId, split.sourceLayout)
   }

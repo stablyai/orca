@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
-import type {
-  BrowserClientPageAuthority,
-  RuntimeBrowserClientPlacement
-} from './browser-host-page-placement'
+import type { BrowserClientPageAuthority } from './browser-host-page-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
 
 const registry = (reconnectGraceMs?: number): BrowserHostLeaseRegistry =>
   new BrowserHostLeaseRegistry({

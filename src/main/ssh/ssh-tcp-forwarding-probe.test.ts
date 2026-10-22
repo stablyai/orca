@@ -1,8 +1,8 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ForwardChannelOpenFailure } from './ssh-port-forward-provider'
+import type { ForwardChannelOpenFailure } from './port-forwarding/ssh-port-forward-provider'
 import { checkForwardChannel, probeTcpForwarding } from './ssh-tcp-forwarding-probe'
-import { lastChannelOpenFailure } from './system-ssh-port-forward-provider'
+import { lastChannelOpenFailure } from './port-forwarding/system-ssh-port-forward-provider'
 
 type OpenCallback = (error: (Error & { reason?: number }) | undefined, channel?: unknown) => void
 
@@ -115,6 +115,13 @@ describe('forward channel check (system SSH)', () => {
     const silent = await forwardAnswering((socket) => socket.resume())
     await expect(checkForwardChannel(silent, 50)).resolves.toBe('unverifiable')
     await expect(checkForwardChannel({ entry: dropped.entry })).resolves.toBe('unverifiable')
+  })
+
+  // Why: a forward still waiting on its own login (a key touch, a prompt) never binds its listener.
+  it('reports a listener that never came up as not listening', async () => {
+    const closed = await forwardAnswering(() => {})
+    await new Promise((resolve) => servers.pop()?.close(resolve))
+    await expect(checkForwardChannel(closed, 300)).resolves.toBe('not-listening')
   })
 
   it('reads the last channel failure OpenSSH logged', () => {

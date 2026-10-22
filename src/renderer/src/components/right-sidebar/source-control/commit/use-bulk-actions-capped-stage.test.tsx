@@ -74,12 +74,12 @@ describe('Stage All on a capped status listing', () => {
     expect(mocks.bulkStage).not.toHaveBeenCalled()
   })
 
-  it('stages tracked changes on the host for the capped Changes section only', async () => {
+  it('stages tracked and untracked changes on the host for the capped Changes section only', async () => {
     const { result } = renderBulkActions(GROUPED, true)
     await act(() => result.current.handleStageSectionPaths('unstaged', ['a.ts']))
     await act(() => result.current.handleStageSectionPaths('conflicts', ['c.ts']))
 
-    expect(mocks.stageScope).toHaveBeenCalledWith(expect.anything(), 'tracked')
+    expect(mocks.stageScope).toHaveBeenCalledWith(expect.anything(), 'all')
     expect(mocks.bulkStage).toHaveBeenCalledWith(expect.anything(), ['c.ts'])
   })
 

@@ -10,15 +10,23 @@ import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 export const COMPAT_FOLDERS = [
   {
     folder: 'src/shared/workspace-layout/old-client',
-    entries: ['old-client-session-tab-rows'],
-    importers: ['src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts']
+    entries: [
+      'old-client-method-translation',
+      'old-client-session-tab-rows',
+      'old-client-session-tabs-projection'
+    ],
+    importers: [
+      'src/main/runtime/session-tabs/main-layout-session-tab-move.ts',
+      'src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts',
+      'src/main/runtime/terminal/surface/terminal-surface-index.ts'
+    ]
   },
   {
     folder: 'src/main/remote-layout-snapshot',
     entries: ['remote-layout-snapshot-persistence', 'remote-layout-snapshot-recorder'],
     importers: [
-      'src/main/ipc/runtime-environments.ts',
-      'src/main/ipc/runtime-environment-removal-cleanup.ts',
+      'src/main/ipc/runtime-environments/runtime-environments.ts',
+      'src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts',
       'src/main/persistence/loading-store/store-domain-composition.ts'
     ]
   }

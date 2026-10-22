@@ -1,4 +1,4 @@
-// COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay-bridge/.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay/.
 
 /** A pane whose terminal still runs inside an older Orca's relay and is reached through the bridge. */
 export type LegacyRelayBridgedPane = {

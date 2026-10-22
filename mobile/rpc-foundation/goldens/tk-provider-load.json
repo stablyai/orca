@@ -21,11 +21,59 @@
         }
       ]
     },
-    "413e4f429e18": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": 4
+    "3eec4c7c7f4f": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 36,
+            "page": 1,
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:9",
+                "labels": [],
+                "number": 9,
+                "state": "open",
+                "title": "An issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ],
+            "sources": {
+              "issues": "upstream"
+            }
+          }
+        }
+      }
     },
     "470893ebd4a7": {
       "name": "linearWorkspaces",
@@ -106,10 +154,10 @@
         }
       ]
     },
-    "7a279381c58b": {
+    "823a0f3cec86": {
       "name": "github.listWorkItems#1",
       "ordinal": 13,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\",\"page\":1}}"
     },
     "9050cedbf1cf": {
       "name": "github.countWorkItems#1",
@@ -164,6 +212,12 @@
       "name": "settings.update#1",
       "ordinal": 11,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
+    },
+    "adcbf91f89c3": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": 1
     },
     "b972a52a94fe": {
       "name": "linear.status#1",
@@ -273,62 +327,6 @@
         }
       }
     },
-    "e93bedf82315": {
-      "name": "github.listWorkItems#1",
-      "ordinal": 12,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.listWorkItems"
-        },
-        {
-          "name": "params",
-          "value": {
-            "before": {
-              "$rpc": "undefined"
-            },
-            "limit": 36,
-            "query": "is:issue bug",
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "items": [
-              {
-                "author": {
-                  "$rpc": "null"
-                },
-                "id": "issue:9",
-                "labels": [],
-                "number": 9,
-                "state": "open",
-                "title": "An issue",
-                "type": "issue",
-                "updatedAt": "2020-01-01T00:00:00.000Z",
-                "url": ""
-              }
-            ],
-            "sources": {
-              "issues": "upstream"
-            }
-          }
-        }
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -388,8 +386,8 @@
       {
         "id": "github-page-settled",
         "observation": {
-          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07", "e93bedf82315"],
-          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861", "7a279381c58b"],
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07", "3eec4c7c7f4f"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861", "823a0f3cec86"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
@@ -413,14 +411,14 @@
             "b972a52a94fe",
             "93695401e4f8",
             "bd4e7772cf07",
-            "e93bedf82315",
+            "3eec4c7c7f4f",
             "de7bfe07e04b"
           ],
           "payloads": [
             "084da53ea1e3",
             "5e1882223b41",
             "a3b6191b3861",
-            "7a279381c58b",
+            "823a0f3cec86",
             "9050cedbf1cf"
           ],
           "settlements": {
@@ -428,7 +426,7 @@
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
             "github-page-2": "49c5fd241816",
-            "github-count-3": "413e4f429e18"
+            "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
           "effects": [

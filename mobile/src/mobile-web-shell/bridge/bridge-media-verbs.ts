@@ -115,3 +115,20 @@ export type BridgeMediaChunk = z.infer<typeof mediaReadResultSchema>
 export const mediaReleaseParamsSchema = z.strictObject({ handle: handleSchema })
 
 export const mediaReleaseResultSchema = z.strictObject({ released: z.boolean() })
+
+/** Longest picked-file name the shell hands back; a leaf name, so the usual file-system bound. */
+export const BRIDGE_MEDIA_NAME_MAX_CHARS = 255
+
+/**
+ * The picked file's own name, asked for after `pick` by a page that wants it.
+ *
+ * A verb of its own rather than a field on the item, because `mediaItemSchema` is strict on both
+ * sides: a shell adding the field would refuse every pick of a page built before it. A page reads
+ * the grant first and names the file itself when an older shell does not serve this.
+ */
+export const mediaNameParamsSchema = z.strictObject({ handle: handleSchema })
+
+/** Null where the picker reported no name, as the photo library and the pasteboard may not. */
+export const mediaNameResultSchema = z.strictObject({
+  name: z.string().min(1).max(BRIDGE_MEDIA_NAME_MAX_CHARS).nullable()
+})

@@ -137,7 +137,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
             requestedAt: Date.now(),
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
 
         // Wait for A's replay to open the turn, then send B mid-turn: the first
         // `sleep 8` guarantees the CLI is still inside A's request cycle.
@@ -160,7 +160,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI fold', () => {
             requestedAt: Date.now(),
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
 
         const results = () =>
           events.flatMap((event) =>

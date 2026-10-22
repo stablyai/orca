@@ -1,3 +1,4 @@
+import type { PopupCompatibilityStatus } from './browser-popup-compatibility-status'
 import { spawnProcess } from '@orca/process-host'
 import { createServer } from 'node:http'
 import { createServer as createPortServer } from 'node:net'
@@ -6,12 +7,15 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
 import { build as buildVite } from 'vite'
 import { waitForBrowserCdpEndpoint } from './browser-session-ua-cdp-collector'
 import { popupFixtureHtml } from './browser-popup-compatibility-page-fixture'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
-import { startHiddenRendererFrameCapture } from './hidden-renderer-frame-capture-fixture'
+import {
+  HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS,
+  startHiddenRendererFrameCapture
+} from './hidden-renderer-frame-capture-fixture'
 
 // Hidden renderer startup and CDP events can exceed the default one-second poll on CI.
 vi.setConfig({ expect: { poll: { timeout: 10_000 } } })
@@ -43,40 +47,7 @@ export const artifactDir = process.env.ORCA_POPUP_FIXTURE_ARTIFACT_DIR
 export const snapshots: ReturnType<typeof status>[] = []
 export const expectedSecurity = { sandbox: true, contextIsolation: true, nodeIntegration: false }
 
-export function status(): {
-  revision: number
-  ready?: boolean
-  error?: string
-  windowsHidden: boolean
-  tabOpens: { url: string; activate: boolean }[]
-  blocked: number[]
-  inputs: string[]
-  childRequests: {
-    adopted: boolean
-    native: boolean
-    sessionMatches: boolean
-    security: typeof expectedSecurity
-    permission?: string
-  }[]
-  routeGranted: boolean
-  routeContents: { security: typeof expectedSecurity; webRtcPolicy: string }[]
-  native: {
-    presentationCalls: string[]
-    requests: { disposition: string; features: string; frameName: string; post: boolean }[]
-    creation: {
-      firstNavigationPolicy: string
-      firstNavigationOwner: number | null
-      firstNavigationTitle: string
-    }[]
-    windows: {
-      closed: boolean
-      title: string
-      fullscreen: boolean
-      focused: boolean
-      contentSize: number[]
-    }[]
-  }
-} {
+export function status(): PopupCompatibilityStatus {
   return JSON.parse(readFileSync(statusPath, 'utf8'))
 }
 
@@ -116,7 +87,9 @@ const server = createServer((request, response) => {
     }
     response.setHeader('Content-Type', 'text/html')
     response.end(
-      ['/local', '/route', '/local-control', '/route-control'].includes(path)
+      ['/local', '/route', '/local-control', '/route-control', '/probe-one', '/probe-two'].includes(
+        path
+      )
         ? popupFixtureHtml(origin)
         : `<title>Hostile synthetic title</title><body>${path}<script>if(window.opener)window.opener.postMessage('callback:'+document.cookie,'*')</script></body>`
     )
@@ -134,8 +107,8 @@ async function reservePort(): Promise<number> {
   return address.port
 }
 
-async function waitForFixture(predicate: () => boolean): Promise<void> {
-  const deadline = Date.now() + 20_000
+async function waitForFixture(predicate: () => boolean, timeoutMs = 20_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
   while (!predicate()) {
     if (Date.now() > deadline) {
       throw new Error(`Popup fixture did not become ready: ${stderr}`)
@@ -194,7 +167,8 @@ beforeAll(async () => {
       ORCA_BACKGROUND_LAUNCH: '1',
       ORCA_POPUP_FIXTURE_ORIGIN: origin,
       ORCA_POPUP_FIXTURE_STATUS: statusPath,
-      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0'
+      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0',
+      ORCA_POPUP_FIXTURE_ADAPTER_PROBE: adapterProbe ? '1' : '0'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -215,9 +189,13 @@ beforeAll(async () => {
     return current.ready === true
   })
   expect(status()).toMatchObject({ ready: true, windowsHidden: true })
-  for (const name of nativeControls
-    ? ['local', 'route', 'local-control', 'route-control']
-    : ['local', 'route']) {
+  const names = [
+    'local',
+    'route',
+    ...(nativeControls ? ['local-control', 'route-control'] : []),
+    ...(adapterProbe ? ['probe-one', 'probe-two'] : [])
+  ]
+  for (const name of names) {
     await waitForFixture(() =>
       Boolean(
         browser
@@ -234,19 +212,18 @@ beforeAll(async () => {
       throw new Error('Missing guest page')
     }
     pages.set(name, page)
-  }
-}, 60_000)
-
-beforeEach(async () => {
-  for (const page of pages.values()) {
-    if (!stopFrameCaptures.has(page)) {
-      stopFrameCaptures.set(
-        page,
-        await startHiddenRendererFrameCapture(page, (hasFrame) => expect.poll(hasFrame).toBe(true))
+    // A fresh runner's first launch can take tens of seconds to start Chromium's GPU process, and
+    // no hidden page paints until it does; charge that to startup, not the first test's poll.
+    stopFrameCaptures.set(
+      page,
+      await startHiddenRendererFrameCapture(page, (hasFrame) =>
+        waitForFixture(hasFrame, HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS).catch((error: unknown) => {
+          throw new Error(`No first frame for ${name}`, { cause: error })
+        })
       )
-    }
+    )
   }
-})
+}, 90_000)
 
 afterEach(async () => {
   const route = pages.get('route')
@@ -306,6 +283,10 @@ export async function closeChildren(page: Page): Promise<void> {
 
 let evidenceName = 'electron-evidence.json'
 let nativeControls = false
+let adapterProbe = false
+export function enablePopupAdapterProbe(): void {
+  adapterProbe = true
+}
 export function enablePopupFixtureNativeControls(): void {
   nativeControls = true
 }

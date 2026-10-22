@@ -11,12 +11,12 @@ import {
 import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 
 // Every remote command runs in a real local shell, so the host-side checks are the real ones.
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess } = await import('@orca/process-host')
-  const { sshCommandExitError } = await import('./ssh-relay-exec-command')
+  const { sshCommandExitError } = await import('./remote-exec/remote-exec-command')
   return {
     ...(await importOriginal<typeof ExecCommandModule>()),
     execCommand: async (_conn: unknown, command: string) => {
@@ -29,7 +29,8 @@ vi.mock('./ssh-relay-exec-command', async (importOriginal) => {
   }
 })
 
-const { acquireInstallLock, RemoteInstallLockBusyError } = await import('./ssh-relay-install-lock')
+const { acquireInstallLock, RemoteInstallLockBusyError } =
+  await import('../managed-server/install/remote-install-lock')
 const { exitedOwnLockProof } = await import('./orcad-exited-own-lock')
 const { initOrcadHeldFenceTokenFile, ORCAD_HELD_FENCE_TOKENS_FILE_NAME } =
   await import('./orcad-held-fence-tokens')

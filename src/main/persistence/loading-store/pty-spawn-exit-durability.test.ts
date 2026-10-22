@@ -1,3 +1,11 @@
+import { SessionNotFoundError } from '../../daemon/daemon-errors'
+import { completePaneAdoption } from '../../ipc/pty/pane/complete-pane-adoption'
+import { LocalPtyProvider } from '../../providers/local-pty-provider'
+import { adoptStablePane } from '../../ipc/pty/pane/adopt-stable'
+import * as providerRegistry from '../../ipc/pty/provider/registry'
+import { bindProviderListeners } from '../../ipc/pty/provider/bind-listeners'
+import { createPtyIpcSession } from '../../ipc/pty/session'
+import { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
 import { expect, it, vi } from 'vitest'
 import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -23,7 +31,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -59,13 +67,33 @@ it.each(
     if (owner) {
       await store.persistPtyBinding({ ...binding, incarnationId: owner.persistedIncarnationId })
     }
-    runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
-    runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
-    runtime.assertPtyRegistrationAllowed(binding.ptyId, binding.incarnationId)
+    if (!stableOwner) {
+      runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
+      runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
+    }
     let commit: () => Promise<unknown>
     const reservationKey = JSON.stringify([connectionId, binding.worktreeId, binding.leafId])
     let reservation: PaneSpawnReservation | undefined
-    if (controller === 'runtime') {
+    if (owner) {
+      const provider = new LocalPtyProvider()
+      vi.spyOn(provider, 'spawn').mockResolvedValue({
+        id: binding.ptyId,
+        incarnationId: binding.incarnationId,
+        isReattach: true
+      })
+      commit = async () =>
+        (
+          await completePaneAdoption({
+            runtime,
+            store,
+            owner,
+            provider,
+            worktreeId: binding.worktreeId,
+            renderer: controller === 'ipc',
+            spawnOptions: { cols: 80, rows: 24 }
+          })
+        )?.result
+    } else if (controller === 'runtime') {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; its runtime/store are real and preflight-only dependencies are unreachable.
       const deps = { runtime, store, options: {} } as PtyRuntimeControllerDeps
       const ctx = createRuntimePtySpawnState(deps, { ...binding, connectionId, cols: 80, rows: 24 })
@@ -146,7 +174,15 @@ it.each(['replacement-pty', binding.ptyId])(
     })
     await gate.started.promise
     const registration = expect(
-      registerPersistedPtySpawn(runtime, store, binding.ptyId, binding.worktreeId, null, binding)
+      registerPersistedPtySpawn(
+        runtime,
+        store,
+        undefined,
+        binding.ptyId,
+        binding.worktreeId,
+        null,
+        binding
+      )
     ).rejects.toThrow('agent_session_exited_during_start')
     gate.finish.resolve()
     await Promise.all([replacement, registration])
@@ -165,7 +201,15 @@ it('retains the binding when loss of contact supplies no process-exit proof', as
   await store.persistPtyBinding(binding)
   await runtime.onPtyExit(binding.ptyId, -1, binding.incarnationId)
   expect(() =>
-    registerPersistedPtySpawn(runtime, store, binding.ptyId, binding.worktreeId, null, binding)
+    registerPersistedPtySpawn(
+      runtime,
+      store,
+      undefined,
+      binding.ptyId,
+      binding.worktreeId,
+      null,
+      binding
+    )
   ).toThrow('agent_session_exited_during_start')
   expect(
     readState().workspaceSession.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId[
@@ -185,6 +229,7 @@ it('does not settle rejected registration until its exit cleanup reaches SQLite'
   const cleanup = registerPersistedPtySpawn(
     runtime,
     store,
+    undefined,
     binding.ptyId,
     binding.worktreeId,
     null,
@@ -219,6 +264,190 @@ it('keeps successful registration synchronous through the remaining spawn public
   const runtime = new OrcaRuntimeService(store)
   await store.persistPtyBinding(binding)
   expect(
-    registerPersistedPtySpawn(runtime, store, binding.ptyId, binding.worktreeId, null, binding)
+    registerPersistedPtySpawn(
+      runtime,
+      store,
+      undefined,
+      binding.ptyId,
+      binding.worktreeId,
+      null,
+      binding
+    )
   ).toBeUndefined()
 })
+
+it.each(['success', 'new-exit', 'old-exit'] as const)(
+  'retains candidate authority over a disconnected old record: %s',
+  async (event) => {
+    const { store, authority, readState } = await fixture()
+    const runtime = new OrcaRuntimeService(store)
+    await store.persistPtyBinding(binding)
+    runtime.registerPty(binding.ptyId, binding.worktreeId, null, binding)
+    runtime.intentionalPtyStops.mark(binding.ptyId, 'replaced', binding.incarnationId)
+    await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
+    clearProviderPtyState(binding.ptyId)
+    ptyOwnership.delete(binding.ptyId)
+    expect(
+      runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
+    ).toMatchObject({ connected: false, incarnationId: binding.incarnationId })
+    const begin = vi.spyOn(runtime, 'beginPtyRegistration')
+    const provider = new DaemonPtyAdapter({
+      socketPath: '/unused-round3',
+      tokenPath: '/unused-round3-token'
+    })
+    const spawn = vi.spyOn(provider, 'spawn').mockResolvedValue({
+      id: binding.ptyId,
+      incarnationId: 'new-incarnation',
+      isReattach: true,
+      snapshot: 'history before attach\r\n',
+      providerSequence: { value: 10, generation: 'continued' }
+    })
+    let emitExit: Parameters<typeof provider.onExit>[0] = () => {}
+    vi.spyOn(provider, 'onExit').mockImplementation((listener) => {
+      emitExit = listener
+      return () => {}
+    })
+    providerRegistry.setLocalPtyProvider(provider)
+    const session = createPtyIpcSession({ runtime, store })
+    session.sendPtyExitToRenderer = vi.fn()
+    session.consumeSyntheticKillExit = () => false
+    bindProviderListeners(session)
+    const gate = authority.pause()
+    const operation = adoptStablePane(runtime, store, { ...binding, cols: 80, rows: 24 })
+    const settled = operation.then(
+      (value) => ({ value, error: null }),
+      (error) => ({ value: null, error })
+    )
+    await gate.started.promise
+    runtime.onPtyData(binding.ptyId, 'live during save\r\n', 11)
+    if (event === 'new-exit' || event === 'old-exit') {
+      emitExit({
+        id: binding.ptyId,
+        code: 0,
+        incarnationId: event === 'new-exit' ? 'new-incarnation' : binding.incarnationId
+      })
+    }
+    gate.finish.resolve()
+    const result = await settled
+    if (event === 'new-exit') {
+      expect.soft(result.error?.message).toBe('agent_session_exited_during_start')
+      expect
+        .soft(
+          readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[
+            binding.leafId
+          ]
+        )
+        .toBeUndefined()
+      expect
+        .soft(
+          runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
+            .connected
+        )
+        .toBe(false)
+    } else {
+      expect(result.error).toBeNull()
+      expect(result.value?.result).toMatchObject({
+        incarnationId: 'new-incarnation',
+        snapshotSeq: 10
+      })
+      const history = await runtime.serializeMainTerminalBuffer(binding.ptyId)
+      expect(history?.data).toContain('history before attach')
+      expect(history?.data).toContain('live during save')
+      expect(runtime.getPtyOutputSequence(binding.ptyId)).toBe(28)
+    }
+    expect(
+      runtime.narrowPtyRegistration(binding.ptyId, begin.mock.results[0].value, 'new-incarnation')
+    ).toBe(false)
+    expect(spawn.mock.calls.every(([args]) => args.attachOnly && args.command === undefined)).toBe(
+      true
+    )
+    provider.dispose()
+  }
+)
+
+it.each(['joined', 'fresh'] as const)(
+  'completes %s owner loss through B with final history and fenced fresh cleanup',
+  async (boundary) => {
+    const { store, authority, readState } = await fixture()
+    const runtime = new OrcaRuntimeService(store)
+    await store.persistPtyBinding(binding)
+    const provider = new LocalPtyProvider()
+    vi.spyOn(providerRegistry, 'getProvider').mockReturnValue(provider)
+    const shutdown = vi.spyOn(provider, 'shutdown').mockResolvedValue()
+    const spawn = vi.spyOn(provider, 'spawn').mockImplementation(async (args) => {
+      if (args.attachOnly && args.sessionId === binding.ptyId) {
+        throw new SessionNotFoundError(binding.ptyId)
+      }
+      return args.attachOnly
+        ? {
+            id: 'winner-B',
+            incarnationId: 'inc-B',
+            isReattach: true,
+            snapshot: 'B history\r\n',
+            providerSequence: { value: 20, generation: 'continued' }
+          }
+        : { id: 'fresh-A', incarnationId: 'inc-A' }
+    })
+    const key = JSON.stringify([null, binding.worktreeId, `${binding.tabId}:${binding.leafId}`])
+    const reservation = boundary === 'joined' ? reservePaneSpawn(key) : undefined
+    const operation = adoptStablePane(runtime, store, {
+      ...binding,
+      cols: 80,
+      rows: 24,
+      spawnFresh: async (paneSpawnOperation) => {
+        const result = await provider.spawn({ cols: 80, rows: 24 })
+        ptyIncarnationById.set(result.id, result.incarnationId!)
+        await store.persistPtyBinding({ ...binding, ptyId: 'winner-B', incarnationId: 'inc-B' })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: actual commit uses the real runtime/store; launch preparation is outside this candidate-loss flow.
+        const deps = { runtime, store, options: {} } as PtyRuntimeControllerDeps
+        const ctx = createRuntimePtySpawnState(deps, {
+          ...binding,
+          cols: 80,
+          rows: 24,
+          paneSpawnOperation
+        })
+        ctx.provider = provider
+        ctx.result = result
+        ctx.hostSessionBinding = { store, ...binding }
+        ctx.metadataLeafId = binding.leafId
+        return commitRuntimePtySpawn(ctx)
+      }
+    })
+    if (reservation) {
+      await store.persistPtyBinding({ ...binding, ptyId: 'winner-B', incarnationId: 'inc-B' })
+      resolvePaneSpawnReservation(key, reservation, { id: 'joined-A', incarnationId: 'inc-A' })
+    }
+    const result = await operation
+    expect(result?.result).toMatchObject({
+      id: 'winner-B',
+      incarnationId: 'inc-B',
+      snapshotSeq: 20
+    })
+    expect(
+      runtime.resolveTerminalPane(`${binding.tabId}:${binding.leafId}`, binding.worktreeId)
+    ).toMatchObject({ ptyId: 'winner-B', connected: true, incarnationId: 'inc-B' })
+    expect((await runtime.serializeMainTerminalBuffer('winner-B'))?.data).toContain('B history')
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[
+        binding.leafId
+      ]
+    ).toBe('winner-B')
+    store.updateSettings({ theme: 'dark' })
+    await store.flushPendingOrThrowAsync()
+    expect(readState().settings.theme).toBe('dark')
+    expect(authority.close).not.toHaveBeenCalled()
+    if (boundary === 'fresh') {
+      expect(shutdown).toHaveBeenCalledExactlyOnceWith('fresh-A', {
+        immediate: true,
+        expectedIncarnationId: 'inc-A'
+      })
+    } else {
+      expect(shutdown).not.toHaveBeenCalled()
+    }
+    expect(
+      spawn.mock.calls
+        .filter(([args]) => args.attachOnly)
+        .every(([args]) => args.command === undefined)
+    ).toBe(true)
+  }
+)

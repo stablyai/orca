@@ -150,6 +150,9 @@ export class AcpSessionRuntime {
     return (await this.call('session/fork', params, ForkSessionResponseSchema)).sessionId
   }
 
+  /** Deletes saved session `sessionId` (`session/delete`). Ask only an agent that advertises it. */
+  deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
+
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
     if (this.started) {
       return Promise.resolve(this.started)

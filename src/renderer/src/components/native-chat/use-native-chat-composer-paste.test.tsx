@@ -183,6 +183,19 @@ describe('useNativeChatComposerPaste', () => {
     expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ forNativeChatDraft: true })
   })
 
+  it("keeps a local structured chat's paste where that chat's send claims it", async () => {
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'local', structuredSessionId: 'session-1' })
+    })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
+      forNativeChatDraft: true,
+      forStructuredChat: true
+    })
+  })
+
   it('shows a pending chip before the save resolves', async () => {
     let resolveSave: (path: string) => void = () => {}
     mocks.saveClipboardImageAsTempFile.mockReturnValue(

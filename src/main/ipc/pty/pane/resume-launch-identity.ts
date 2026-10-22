@@ -32,6 +32,24 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
   ) {
     return
   }
+  seedResumeLaunchIdentity({
+    ...args,
+    paneKey: args.paneKey,
+    launchedAt: args.launchedAt.getTime()
+  })
+}
+
+/**
+ * Record a resume the host did not spawn as a command: a phone resuming from Session History
+ * creates a shell pane and types the resume into it. Callers rule out SSH panes themselves.
+ */
+export function seedResumeLaunchIdentity(args: {
+  paneKey: string
+  launchAgent: unknown
+  resumeProviderSession: unknown
+  worktreeId: unknown
+  launchedAt: number
+}): void {
   const agent = args.launchAgent
   const providerSession = normalizeAgentProviderSession(args.resumeProviderSession)
   if (!providerSession || !isResumableTuiAgent(agent)) {
@@ -46,6 +64,6 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
     ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
     agentType: agent,
     providerSession,
-    launchedAt: args.launchedAt.getTime()
+    launchedAt: args.launchedAt
   })
 }

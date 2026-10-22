@@ -17,6 +17,8 @@ import type { StructuredAgentSessionStopEnding } from './structured-agent-sessio
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
+import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
+import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import type {
@@ -36,18 +38,16 @@ export type StructuredAgentSessionMutationContext = {
   publishChildWork: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** What the live child holds changed with no row (`publishGenerationEnded`). */
   publishWorkChanged: (sessionId: string) => void
-  captureChildWorkStops: (
-    sessionId: string,
-    handleIds: readonly string[]
-  ) => CapturedChildWorkStops
+  captureChildWorkStops: (sessionId: string, handleIds: readonly string[]) => CapturedChildWorkStops
   /** Some of the session's running child work has no record. */
   childWorkOpen: (sessionId: string) => boolean
   childWorkIncomplete: (sessionId: string) => boolean
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** The session's conversation, opened when closed; inside the caller's serialize. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
-  /** Gives the session a provider child; inside the caller's serialize. */
-  ensureAgent: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
+  /** Claims a provider start on the caller's lane; its outcome is awaited outside. */
+  claimAgent: (sessionId: string) => StructuredAgentSessionStartClaim
+  startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
   startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   /** Joins a close a stop began on the session's child, for an operation that starts no child;
@@ -64,7 +64,7 @@ export type StructuredAgentSessionMutationContext = {
   wakeQueuedDrain?: (sessionId: string) => void
   /** The provider wait each session's serialize is on (a start, an option write), which a caller
    *  outside that serialize aborts. */
-  acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin'>
+  acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin' | 'captureOperations'>
   /** Moved by every pick a running child takes, so a report it read before is never persisted. */
   now: () => number
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   planBrowserHostPageReconciliation,
-  type BrowserClientHostedPageInventory,
   type BrowserHostRuntimePageIntent
 } from './browser-host-page-reconciliation-plan'
+import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
 
 const inventorySource = { inventoryPairedDeviceId: 'device-a' }
 

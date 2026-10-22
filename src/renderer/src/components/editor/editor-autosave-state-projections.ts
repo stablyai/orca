@@ -1,5 +1,10 @@
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import {
+  editorBufferIdOfView,
+  type EditorBufferViewIndex
+} from '@/store/slices/editor/buffers/editor-buffer-views'
+import { canAutoSaveOpenFile } from './editor-autosave'
 
 export type AutosaveSubscriberInputs = {
   openFiles: AppState['openFiles']
@@ -29,6 +34,28 @@ export function autosaveSubscriberInputsEqual(
   )
 }
 
+/**
+ * The views a restart save writes: one dirty view per record, its first that may autosave when it
+ * has one (a read-only or CSV preview view listed first must not refuse the restart).
+ */
+export function restartSaveTargets(
+  state: Pick<AppState, 'openFiles'> & EditorBufferViewIndex
+): OpenFile[] {
+  const targets = new Map<string, OpenFile>()
+  for (const file of state.openFiles) {
+    if (!file.isDirty) {
+      continue
+    }
+    const recordId = editorBufferIdOfView(state, file.id)
+    const chosen = targets.get(recordId)
+    if (!chosen || (!canAutoSaveOpenFile(chosen) && canAutoSaveOpenFile(file))) {
+      targets.set(recordId, file)
+    }
+  }
+  return [...targets.values()]
+}
+
+/** Paths held by more than one dirty record, e.g. an edit tab plus an unstaged diff. */
 export function getDuplicateDirtySavePaths(files: OpenFile[]): string[] {
   const counts = new Map<string, number>()
   for (const file of files) {

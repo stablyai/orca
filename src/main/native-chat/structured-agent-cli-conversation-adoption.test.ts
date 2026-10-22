@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
+import {
+  adoptsCliConversations,
+  CLI_CONVERSATION_ADOPTING_AGENTS
+} from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId,
@@ -157,16 +160,25 @@ function adopt(
 }
 
 describe('which chats can take over a CLI conversation', () => {
-  it('maps exactly the row agents of the agents the host registers a transcript import for', () => {
-    expect(
-      Object.fromEntries(
-        STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter(
-          (registration) => registration.transcriptImport
-        ).flatMap((registration) =>
-          registration.sessionHistory.rowAgents.map((row) => [row, registration.definition.agent])
-        )
-      )
-    ).toEqual(CLI_CONVERSATION_ADOPTING_AGENTS)
+  it('names, for every row an importing chat lists, only chats that import and list it', () => {
+    const importing = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.filter(
+      (registration) => registration.transcriptImport
+    )
+    const rows = new Set(importing.flatMap((registration) => registration.sessionHistory.rowAgents))
+    expect(new Set(Object.keys(CLI_CONVERSATION_ADOPTING_AGENTS))).toEqual(rows)
+    for (const [row, agents] of Object.entries(CLI_CONVERSATION_ADOPTING_AGENTS)) {
+      for (const agent of agents) {
+        const registration = importing.find((entry) => entry.definition.agent === agent)
+        expect(registration?.sessionHistory.rowAgents, `${agent} takes over ${row}`).toContain(row)
+      }
+    }
+    // Each importing chat takes over the rows of its own name first.
+    for (const registration of importing) {
+      const { agent } = registration.definition
+      if (adoptsCliConversations(agent)) {
+        expect(CLI_CONVERSATION_ADOPTING_AGENTS[agent][0]).toBe(agent)
+      }
+    }
   })
 })
 

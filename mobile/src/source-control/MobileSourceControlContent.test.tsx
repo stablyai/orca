@@ -365,3 +365,24 @@ describe('committed branch files during commit-message typing', () => {
     expect(format).not.toHaveBeenCalled()
   })
 })
+
+describe('AI commit message button', () => {
+  function generateButton() {
+    return renderer?.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        (node.props.accessibilityLabel === 'Generate commit message with AI' ||
+          node.props.accessibilityLabel === 'Cancel commit message generation')
+    )
+  }
+
+  it('matches desktop: a typed message blocks regenerating, and cancel stays available', () => {
+    render()
+    expect(generateButton()?.props.disabled).toBe(false)
+    patch({ commitMessage: 'my own message' })
+    expect(generateButton()?.props.disabled).toBe(true)
+    expect(generateButton()?.props.accessibilityHint).toBe('Clear the message to regenerate.')
+    patch({ generatingMessage: true })
+    expect(generateButton()?.props.disabled).toBe(false)
+  })
+})

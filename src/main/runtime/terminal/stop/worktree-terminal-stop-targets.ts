@@ -2,6 +2,7 @@ import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './worktree-termin
 import { setsEqual } from '../../runtime-worktree-binding-index'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 
 export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -101,9 +102,11 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     }
   }
 
+  /** With `hostFence`, only that host's copy: a same-id twin's PTYs are another host's. */
   protected getLivePtyIdsForWorktree(
     worktreeId: string,
-    freshPtyIds?: ReadonlySet<string>
+    freshPtyIds?: ReadonlySet<string>,
+    hostFence?: WorktreePtyHostFence
   ): Set<string> {
     const ptyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
@@ -123,6 +126,13 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         (!freshPtyIds || freshPtyIds.has(pty.ptyId))
       ) {
         ptyIds.add(pty.ptyId)
+      }
+    }
+    if (hostFence) {
+      for (const ptyId of ptyIds) {
+        if (!worktreePtyBelongsToHost(ptyId, this.ptysById.get(ptyId)?.connectionId, hostFence)) {
+          ptyIds.delete(ptyId)
+        }
       }
     }
     return ptyIds

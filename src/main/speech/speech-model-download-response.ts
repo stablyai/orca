@@ -1,8 +1,25 @@
-export type DownloadIncomingMessage = Electron.IncomingMessage &
-  NodeJS.ReadableStream & {
-    headers: Record<string, string | string[] | undefined>
-    destroy?: () => void
-  }
+/** The response half both Electron's `net` and Node's `https` provide. */
+export type DownloadIncomingMessage = NodeJS.ReadableStream & {
+  statusCode?: number
+  headers: Record<string, string | string[] | undefined>
+  destroy?: () => void
+}
+
+/** The request half both Electron's `net` and Node's `https` provide, through a host adapter. */
+export type SpeechDownloadRequest = {
+  setHeader(name: string, value: string): void
+  /** Returns the detach. Node's request errors on abort, so its adapter keeps a no-op listener. */
+  listen(listeners: {
+    error: (error: Error) => void
+    response: (response: DownloadIncomingMessage) => void
+    redirect: (statusCode: number, method: string, redirectUrl: string) => void
+  }): () => void
+  abort(): void
+  end(): void
+}
+
+/** Opens one GET; the host decides the network stack (Chromium on the desktop, Node on orcad). */
+export type OpenSpeechDownloadRequest = (url: string) => SpeechDownloadRequest
 export type DownloadTotals = {
   totalBytes: number
   completedBytes: number

@@ -4,8 +4,8 @@
  * the migration references it. The live profile is never passed here.
  */
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
-import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration-source-kind'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
 import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'
 
 export function subtractOrcadSourceCatalogState(

@@ -121,7 +121,9 @@ describe('a live Claude chat whose send could not be written', () => {
       expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     )
     const snapshot = await host.journalSnapshot(SESSION)
-    expect(snapshot.items.some((item) => item.body.kind === 'status' && item.body.failure)).toBe(false)
+    expect(snapshot.items.some((item) => item.body.kind === 'status' && item.body.failure)).toBe(
+      false
+    )
     expect(
       snapshot.items.some((item) => item.body.kind === 'turn' && item.body.state === 'completed')
     ).toBe(true)

@@ -2,7 +2,7 @@ import type WebSocket from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
-import type { RelayRegion } from './relay-region-preference'
+import type { RelayRegion } from './relay-region-probe'
 
 export type RelayOriginPoolOptions = {
   directorUrl: string

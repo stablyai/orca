@@ -8,10 +8,10 @@ import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView, LayoutContentFacts } from './workspace-layout-beside'
 import type {
-  LayoutEditorFile,
   LayoutLeaf,
   LayoutTab,
-  LayoutTerminalTab
+  LayoutTerminalTab,
+  WorkspaceLayout
 } from './workspace-layout-model'
 import { tabExecutionHostId } from './workspace-layout-tab-host'
 
@@ -27,7 +27,7 @@ export type WorkspaceSaveScope = {
   workspaceKey: string
   worktreeId: string
   hostId: ExecutionHostId
-  editorFiles: readonly LayoutEditorFile[] | undefined
+  workspace: Pick<WorkspaceLayout, 'worktreeId' | 'tabs' | 'editorFiles'>
   leaves: Readonly<Record<string, LayoutLeaf>>
   facts: LayoutContentFacts
   view: DesktopLayoutView
@@ -94,7 +94,7 @@ export function saveTabBarEntry(
     entityId: tab.entityId,
     groupId: placement.groupId,
     worktreeId: scope.worktreeId,
-    executionHostId: tabExecutionHostId(tab, scope.editorFiles, scope.hostId, scope.worktreeId),
+    executionHostId: tabExecutionHostId(tab, scope.workspace, scope.hostId),
     contentType: tab.kind,
     label,
     ...(tab.generatedTitle !== undefined ? { generatedLabel: tab.generatedTitle } : {}),
@@ -109,10 +109,10 @@ export function saveTabBarEntry(
 }
 
 /** Each pane's leaf-keyed values, as a layout's per-leaf map. */
-function byLeaf(
+function byLeaf<T>(
   leafIds: readonly string[],
-  value: (leafId: string) => string | undefined
-): Record<string, string> {
+  value: (leafId: string) => T | undefined
+): Record<string, T> {
   return Object.fromEntries(
     leafIds.flatMap((leafId) => {
       const entry = value(leafId)
@@ -143,10 +143,16 @@ export function saveTerminalLayout(
     ptyIdsByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.ptyId),
     buffersByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.buffer),
     scrollbackRefsByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.scrollbackRef),
-    titlesByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.title)
+    titlesByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.title),
+    lastGridsByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.lastGrid)
   }
   // Today's writers always write the bindings, even empty, and the other maps only when filled.
-  for (const field of ['buffersByLeafId', 'scrollbackRefsByLeafId', 'titlesByLeafId'] as const) {
+  for (const field of [
+    'buffersByLeafId',
+    'scrollbackRefsByLeafId',
+    'titlesByLeafId',
+    'lastGridsByLeafId'
+  ] as const) {
     if (Object.keys(layout[field] ?? {}).length === 0) {
       delete layout[field]
     }

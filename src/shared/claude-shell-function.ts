@@ -71,10 +71,8 @@ set -e __orca_claude_type
 `
 }
 
-/** Leading newline: the codex fragment it follows ends without one. */
 export function getPowerShellClaudeShellFunction(): string {
-  return `
-$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
+  return `$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
@@ -104,7 +102,8 @@ function Global:claude {
             $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome
         }
         $binary = Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1
-        if ($MyInvocation.ExpectingInput) { $input | & $binary.Source @args } else { & $binary.Source @args }
+        $claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)
+        if ($MyInvocation.ExpectingInput) { $input | & $binary.Source @claudeArgs } else { & $binary.Source @claudeArgs }
         $global:LASTEXITCODE = $LASTEXITCODE
     } catch { $global:LASTEXITCODE = 1; Write-Error $_ -ErrorAction Continue }
     finally {

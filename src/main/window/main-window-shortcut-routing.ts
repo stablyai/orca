@@ -1,5 +1,5 @@
+import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -20,7 +20,7 @@ import type { Store } from '../persistence'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
-import { isMacAppPasteInput } from './main-window-visual-lifecycle'
+import { isMacAppPasteInput } from './mac-app-paste-input'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -116,7 +116,7 @@ export function installMainWindowShortcutRouting(args: {
       return
     }
 
-    if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
+    if (input.type === 'keyDown' && !app.isPackaged && input.code === 'F12') {
       event.preventDefault()
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()

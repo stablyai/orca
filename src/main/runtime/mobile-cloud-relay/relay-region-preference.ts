@@ -31,8 +31,6 @@ import {
   type RelayRegionProbeReport
 } from './relay-region-probe'
 
-export { RELAY_REGIONS, type RelayRegion } from './relay-region-probe'
-
 const RELAY_REGION_CACHE_FILENAME = 'orca-relay-region-preference.json'
 const CACHE_MAX_BYTES = 8 * 1024
 const CACHE_TTL_MS = 24 * 60 * 60_000

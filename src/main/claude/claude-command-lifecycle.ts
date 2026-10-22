@@ -88,14 +88,18 @@ export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStarted
     : null
 }
 
-/** The sends the CLI holds: every waiter its echo, a lifecycle frame, idle or exit has not ended. */
+/** The sends the CLI holds: every waiter its echo, a lifecycle frame, idle or exit has not ended,
+ *  and each one a frame ended until the host is told, so no reader sees it held by neither. */
 export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
-  return new Set(session.dispatchWaiters.flatMap((waiter) => waiter.clientMessageId ?? []))
+  return new Set([
+    ...session.dispatchWaiters.flatMap((waiter) => waiter.clientMessageId ?? []),
+    ...(session.unreportedSettlements ?? [])
+  ])
 }
 
 /** A send the CLI took, until its echo, a terminal state or exit: the sweep must not rest its child. */
-export function claudeHoldsDispatch(session: ClaudeSession): boolean {
-  return session.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined)
+export function claudeHoldsDispatch(session: ClaudeSession | undefined): boolean {
+  return session?.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined) ?? false
 }
 
 /**

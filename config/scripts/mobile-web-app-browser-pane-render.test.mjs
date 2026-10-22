@@ -82,7 +82,7 @@ const OVER_CAP_FRAME = { width: 2400, height: 2160 }
  * because the capability probe is the session screen's to make and C7's to prove.
  */
 const ROUTE_SOURCE = `
-import { useHostClient } from '../../../src/transport/client-context'
+import { useHostClient } from '../../../src/transport/host-client-hooks'
 import { MobileBrowserPane } from '../../../src/browser/MobileBrowserPane'
 
 const TAB = {

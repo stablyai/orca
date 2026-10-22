@@ -83,6 +83,20 @@ it('a layout-owner build closes the pane itself when main closed it and no frame
   expect(mocks.commitTerminalSurfaceClose).not.toHaveBeenCalled()
 })
 
+it('a layout-owner build closes the pane itself when main holds no such pane, so no frame drops it', async () => {
+  mocks.layoutOwnerIsMain = true
+  const p = await preparePendingSplitClose()
+  ;(await import('@/runtime/layout-frame-position')).noteLayoutFramePosition(1)
+
+  p.actions.executeClosePane(1)
+  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply({ alreadyClosed: true })
+
+  const intents = await import('@/runtime/layout-owner-pane-intents')
+  expect(intents.takePaneCloseIntent('tab-parent', LEAF)).toBeNull()
+  expect(p.transports.has(1)).toBe(false)
+  expect(mocks.commitTerminalSurfaceClose).not.toHaveBeenCalled()
+})
+
 it('a layout-owner build closes as today, forgetting its close, when main lacks the pane', async () => {
   mocks.layoutOwnerIsMain = true
   const p = await preparePendingSplitClose()

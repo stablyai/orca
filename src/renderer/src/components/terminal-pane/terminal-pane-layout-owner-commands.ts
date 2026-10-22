@@ -31,8 +31,7 @@ export function equalizeTerminalPanes(
             then(manager)
           }
         },
-        asToday: equalize,
-        unapplied: () => {}
+        asToday: equalize
       }
     )
   ) {

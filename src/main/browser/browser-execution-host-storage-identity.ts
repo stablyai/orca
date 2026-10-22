@@ -1,4 +1,4 @@
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 
 const STORAGE_IDENTITY_VERSION = 1
 const STORAGE_IDENTITY_TAG = 'orca-browser-execution-host-storage'

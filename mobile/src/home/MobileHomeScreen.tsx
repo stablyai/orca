@@ -6,7 +6,6 @@ import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
@@ -17,7 +16,7 @@ import {
   useDisconnectHostClient,
   useForceReconnect,
   useForgetHostClient
-} from '../transport/client-context'
+} from '../transport/host-client-hooks'
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
@@ -31,6 +30,7 @@ import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 
 export function MobileHomeScreen() {
   const data = useMobileHomeData()
@@ -122,7 +122,11 @@ export function MobileHomeScreen() {
               connectedHosts={data.connectedHosts}
               resumeCard={data.resumeCard}
               taskProvidersByHost={data.taskProvidersByHost}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+              onCreateWorkspace={() =>
+                data.router.push(
+                  newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id))
+                )
+              }
               onOpenAccounts={openMobileAccounts}
               onOpenResume={openResume}
               onOpenTasks={openMobileTasks}

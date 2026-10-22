@@ -12,7 +12,7 @@ import {
   PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS
 } from './constants'
 import type { PtyIpcSession } from '../session'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../../pty-pending-data-drain-contract'
 
 export function getRendererInFlightCharsForPty(session: PtyIpcSession, id: string): number {
   const accounting = session.rendererDeliveryAccountingByPty.get(id)

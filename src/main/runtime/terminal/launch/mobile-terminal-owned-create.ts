@@ -48,6 +48,7 @@ export type OwnedMobileTerminalCreateOptions = {
   launchRuntime?: AgentLaunchRuntime
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
+  resumesSleepingRecord?: true
 }
 
 export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends OrcaRuntimeWithResolveMobileSessionTerminalCommand {
@@ -149,7 +150,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
         deferMobileSessionPublish: true,
         signal: opts.signal,
-        ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {})
+        ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
+        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
       })
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(
@@ -225,7 +227,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       ptyId: livePty.pty.ptyId,
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
-      ...(cwd ? { startupCwd: cwd } : {}),
+      // Omit only a proven root correction; an unverifiable fallback keeps its saved request.
+      ...((terminal.savedStartupCwd ?? cwd) && (terminal.savedStartupCwd ?? cwd) !== workspace.path
+        ? { startupCwd: terminal.savedStartupCwd ?? cwd }
+        : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       parentLayout,
@@ -301,7 +306,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     return {
       tab: created,
       publicationEpoch: result.publicationEpoch,
-      snapshotVersion: result.snapshotVersion
+      snapshotVersion: result.snapshotVersion,
+      ...(terminal.startupCwdFallback ? { startupCwdFallback: 'workspace-root' as const } : {})
     }
   }
 }

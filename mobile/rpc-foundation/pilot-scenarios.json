@@ -7219,7 +7219,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "repoId": "repo-1"
           },
           "reply": {
             "ok": true,
@@ -11984,10 +11984,8 @@
         {
           "complete": "github.listWorkItems#1",
           "params": {
-            "before": {
-              "$undefined": true
-            },
             "limit": 36,
+            "page": 1,
             "query": "is:issue bug",
             "repo": "id:repo-1"
           },
@@ -15973,7 +15971,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16124,7 +16122,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
             "enter": false
           },
           "reply": {

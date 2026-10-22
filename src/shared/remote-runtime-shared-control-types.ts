@@ -83,4 +83,9 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   onAnswered?: () => void
   reconnectStableResetMs?: number
   liveness?: RemoteRuntimeSocketLivenessOptions
+  /**
+   * The server refused this socket's token. Null leaves the usual reconnect; a promise means the
+   * caller owns recovery and says whether this connection should then retry or stay closed.
+   */
+  onAuthenticationRejected?: () => Promise<'retry' | 'stop'> | null
 }

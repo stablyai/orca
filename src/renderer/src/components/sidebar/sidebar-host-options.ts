@@ -20,7 +20,10 @@ import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostBlockedReason
+} from '../../../../shared/runtime-host-status'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import {
@@ -39,6 +42,7 @@ export type SidebarHostOption = {
   presence: 'local' | 'configured' | 'project' | 'active'
   // Why: surfaced to the sidebar host-header menu so it can warn on version skew.
   compatibility?: RuntimeCompatVerdict
+  blockedReason?: RuntimeHostBlockedReason
   // Why: lets host headers spell out auth-needed SSH states, not just an icon.
   connectionStatus?: SshConnectionStatus
   aliasHostIds?: readonly ExecutionHostId[]
@@ -200,6 +204,9 @@ export function getSidebarHostVisibilityLabel(
   )
 }
 
-export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health']): string {
-  return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health)
+export function getSidebarHostHealthLabel(
+  health: SidebarHostScopeOption['health'],
+  blockedReason?: RuntimeHostBlockedReason
+): string {
+  return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health, blockedReason)
 }

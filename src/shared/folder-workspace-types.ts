@@ -44,6 +44,7 @@ export type FolderWorkspace = {
   lastActivityAt: number
   smartTier?: SmartTier
   smartAt?: number
+  lastTerminalUseAt?: number
   createdAt: number
   updatedAt: number
   diffComments?: DiffComment[]

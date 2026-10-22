@@ -1,18 +1,23 @@
-import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalPlainStatusItem,
+  AgentJournalTurnScope
+} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../shared/native-chat-provider-frame-summary'
 import {
-  boundInlineText,
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
 import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { classifyProviderFrame } from './provider-frame-disposition'
+import { hookOutcomeRowBody } from '../../../shared/agent-session-hook-outcome'
 
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalPlainStatusItem
-  /** Why the frame surfaced. Error frames are exempt from generic-row caps. */
+  turnScope?: AgentJournalTurnScope
+  /** Why the frame surfaced. `error-surface` rows (failures, warnings, a hook's refusal) skip row caps. */
   classification: 'timeline-substantive' | 'error-surface'
 }
 
@@ -81,6 +86,19 @@ function hookText(value: unknown): string | null {
   return typeof value === 'string' ? value.trim() || null : null
 }
 
+/** A Codex prompt hook that refused the message: every entry but its context, in Codex's order.
+ *  Other hooks' blocks reach the model as their tool's result, so they write no row of their own. */
+function codexHookOutcomeRow(payload: unknown): AgentJournalPlainStatusItem | null {
+  const run = isProviderRecord(payload) && isProviderRecord(payload.run) ? payload.run : null
+  const status = run?.eventName === 'userPromptSubmit' ? run.status : null
+  const entries: unknown[] = Array.isArray(run?.entries) ? run.entries : []
+  const details = entries.flatMap((entry) => {
+    const text = isProviderRecord(entry) && entry.kind !== 'context' ? hookText(entry.text) : null
+    return text ? [text] : []
+  })
+  return status === 'blocked' || status === 'stopped' ? hookOutcomeRowBody(status, details) : null
+}
+
 function hookFailureFrameText(
   provider: string,
   kind: string,
@@ -118,14 +136,28 @@ function hookFailureFrameText(
   return null
 }
 
-/** Substantive adapter fallbacks become bounded journal rows; a chat draws one only with a sentence. */
+/** Substantive adapter fallbacks become journal rows; a chat draws one only with a sentence. The
+ *  row's readable text is kept whole. */
 export function unhandledProviderFrameJournalItem(
   provider: string,
   kind: string,
   payload: unknown,
-  limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  limits: JournalPayloadLimits = PROVIDER_FRAME_PAYLOAD_LIMITS,
   options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
+  // Uncapped like Codex's own warnings, and drawn the same for every agent: no raw-frame disclosure.
+  const hook =
+    provider === 'codex' && kind === 'notification:hook/completed'
+      ? codexHookOutcomeRow(payload)
+      : null
+  if (hook) {
+    return {
+      body: hook,
+      classification: 'error-surface',
+      // Codex never echoes a refused prompt, so the turn has no message to group under.
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+  }
   const classification =
     options.reportsFailure === true
       ? 'error-surface'
@@ -179,32 +211,15 @@ export function unhandledProviderFrameJournalItem(
     message = typeof content === 'string' && content.trim() ? content.trim() : message
   }
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
-  const display = message ? boundInlineText(message, limits) : null
-  const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
   const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null
   return {
     body: {
       kind: 'status',
-      text: compaction
-        ? 'Context compacted'
-        : (goalDisplay?.text ?? display?.text ?? `${provider} · ${kind}`),
+      text: compaction ? 'Context compacted' : goalText || message || `${provider} · ${kind}`,
       ...(compaction ? { presentation: 'compaction' } : {}),
       ...(tone ? { tone } : {}),
       providerFrame: { provider, kind, payload: bounded },
-      ...(threadGoal
-        ? {
-            threadGoal:
-              threadGoal.state === 'set'
-                ? {
-                    state: 'set' as const,
-                    goal: {
-                      ...threadGoal.goal,
-                      objective: boundInlineText(threadGoal.goal.objective, limits).text
-                    }
-                  }
-                : threadGoal
-          }
-        : {})
+      ...(threadGoal ? { threadGoal } : {})
     },
     classification: classification === 'error-surface' ? 'error-surface' : 'timeline-substantive'
   }

@@ -33,7 +33,7 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
   return projectGroupId === '' ? null : projectGroupId
 }
 
-function getFolderWorkspaceWorktreeHostId(
+export function getFolderWorkspaceWorktreeHostId(
   workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
 ): ExecutionHostId {
   return workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
@@ -98,6 +98,9 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     lastActivityAt: folderWorkspace.lastActivityAt,
     ...(folderWorkspace.smartTier !== undefined
       ? { smartTier: folderWorkspace.smartTier, smartAt: folderWorkspace.smartAt }
+      : {}),
+    ...(folderWorkspace.lastTerminalUseAt !== undefined
+      ? { lastTerminalUseAt: folderWorkspace.lastTerminalUseAt }
       : {}),
     createdAt: folderWorkspace.createdAt,
     createdWithAgent: folderWorkspace.createdWithAgent,

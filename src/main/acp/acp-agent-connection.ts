@@ -6,7 +6,7 @@ import {
   type ProviderProcessExit
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
+import { AcpConnectionClosedError, AcpSignInPromptError } from './acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 
@@ -135,7 +135,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     child.on('error', (error) => super.close(error))
     signedOut = () => {
       signIn?.answered?.(false)
-      super.close(new AcpAuthRequiredError('The agent asked to sign in in a browser'))
+      super.close(new AcpSignInPromptError('The agent asked to sign in in a browser'))
     }
     // A broken sign-in line on the protocol stream is a broken agent, not a sign-in answer.
     unreadable = () =>

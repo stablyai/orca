@@ -75,8 +75,6 @@ export type WorktreeTeardownResult = {
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
-export { WORKTREE_TEARDOWN_RPC_MARGIN_MS, teardownRpcDeadline } from './worktree-teardown-deadline'
-
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three
  * registration surfaces (renderer graph, installed PTY provider session list,

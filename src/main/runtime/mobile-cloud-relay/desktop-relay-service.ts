@@ -1,5 +1,6 @@
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import type { MobilePairingConnectionContext, OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { MobilePairingConnectionContext } from '../runtime-rpc/runtime-rpc-pairing-types'
+import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -11,7 +12,8 @@ import { readRelayAuthContext } from './relay-auth-context'
 import { relayIdentityKey } from './relay-auth-identity'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelayUnavailableError } from './relay-readiness'
-import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
+import { RelaySessionBroker } from './relay-session-broker'
+import type { RelayBrokerStatus } from './relay-session-broker-contract'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
   RelayRevokeOutbox,

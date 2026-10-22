@@ -1,3 +1,4 @@
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../shared/browser-client-profile-switch-protocol'
 import type { BrowserClientHostCommandEvent } from '../../../shared/browser-client-host-protocol'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../shared/browser-client-file-channel-protocol'
@@ -12,6 +13,12 @@ export function assertBrowserHostPageCommandAdmission(
   command: BrowserClientHostCommandEvent['command'],
   requireExecutionHost: (executionHostKey: string) => void
 ): void {
+  if (
+    command.type === 'switchProfile' &&
+    !lease.hostCapabilities.includes(BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY)
+  ) {
+    throw new Error('browser_host_profile_switch_unsupported')
+  }
   if (
     command.type !== 'createPage' &&
     command.type !== 'navigate' &&

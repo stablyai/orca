@@ -44,7 +44,10 @@ describe('AiVaultScanCoordinator', () => {
           })
       })
       await Promise.resolve()
-      expect(localAiVaultScanProgress('scope')).toMatchObject({ stage: 'finding', startedAt: 2_000 })
+      expect(localAiVaultScanProgress('scope')).toMatchObject({
+        stage: 'finding',
+        startedAt: 2_000
+      })
       expect(stages).not.toContain(null)
       finishPreparation?.(EMPTY_RESULT)
       await expect(Promise.all([first, replacement])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])

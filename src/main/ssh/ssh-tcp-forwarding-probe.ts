@@ -5,10 +5,12 @@
  */
 import { connect, type Socket } from 'node:net'
 import type { ClientChannel } from 'ssh2'
-import type { SshConnection } from './ssh-connection'
-import type { StartedPortForward } from './ssh-port-forward-provider'
+import type { SshConnection } from './connection/ssh-connection'
+import type { StartedPortForward } from './port-forwarding/ssh-port-forward-provider'
 
 export type TcpForwardingVerdict = 'allowed' | 'refused' | 'unverifiable'
+/** `not-listening`: no dial ever connected, so the forward never got as far as its listener. */
+export type ForwardChannelVerdict = TcpForwardingVerdict | 'not-listening'
 
 /** RFC 4254 open-failure codes: sshd policy, versus a port with nothing listening. */
 const ADMINISTRATIVELY_PROHIBITED = 1
@@ -81,7 +83,7 @@ export function probeTcpForwarding(
 export function checkForwardChannel(
   forward: Pick<StartedPortForward, 'entry' | 'lastChannelOpenFailure'>,
   timeoutMs = FORWARD_CHANNEL_CHECK_TIMEOUT_MS
-): Promise<TcpForwardingVerdict> {
+): Promise<ForwardChannelVerdict> {
   const readFailure = forward.lastChannelOpenFailure
   if (!readFailure) {
     return Promise.resolve('unverifiable')
@@ -99,7 +101,8 @@ export function checkForwardChannel(
     let poll: ReturnType<typeof setInterval> | undefined
     let redial: ReturnType<typeof setTimeout> | undefined
     let socket: Socket | undefined
-    const settle = (verdict: TcpForwardingVerdict): void => {
+    let everConnected = false
+    const settle = (verdict: ForwardChannelVerdict): void => {
       if (settled) {
         return
       }
@@ -110,7 +113,10 @@ export function checkForwardChannel(
       socket?.destroy()
       resolve(verdict)
     }
-    const timer = setTimeout(() => settle(verdictOf() ?? 'unverifiable'), timeoutMs)
+    const timer = setTimeout(
+      () => settle(verdictOf() ?? (everConnected ? 'unverifiable' : 'not-listening')),
+      timeoutMs
+    )
     const awaitFailureLog = (): void => {
       if (settled || poll) {
         return
@@ -131,6 +137,7 @@ export function checkForwardChannel(
       socket = current
       current.once('connect', () => {
         connected = true
+        everConnected = true
         current.write(FORWARD_CHANNEL_CHECK_BYTES)
       })
       current.once('data', () => settle('allowed'))

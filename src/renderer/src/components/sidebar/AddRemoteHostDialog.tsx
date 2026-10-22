@@ -286,7 +286,16 @@ export function AddRemoteHostDialog({
       setRuntimeEnvironments(environments)
       await readRuntimeHostStatusSnapshots()
       toast.success(
-        translate('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
+        result.updatedExisting
+          ? translate(
+              'auto.components.sidebar.AddRemoteHostDialog.serverAlreadyPaired',
+              'This server is already paired as {{value0}}; updated its connection.',
+              { value0: result.environment.name }
+            )
+          : translate(
+              'auto.components.sidebar.AddRemoteHostDialog.serverSaved',
+              'Remote server added.'
+            )
       )
       reset()
       onOpenChange(null)

@@ -14,6 +14,8 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-
 import { resetAgentStatusEpochClockForTests } from '@/lib/agent-status-epoch-clock'
 import { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
 import { useWorkspaceSpaceDecisionProjection } from './use-workspace-space-decision-projection'
+import { useWorkspaceSpaceManagerProjection } from './use-workspace-space-manager-projection'
+import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 
 let store: ReturnType<typeof createTestStore>
 vi.mock('../../store', () => ({
@@ -300,5 +302,43 @@ describe('mounted Space decision projection', () => {
     expect(view.result.current.decisionDetailsByWorktreeId.get('local|w0')?.activeAgentCount).toBe(
       0
     )
+  })
+})
+
+describe('Space git refresh scheduling', () => {
+  it('keeps the queue running across results, errors, and inspection changes', async () => {
+    const workspace = row('w0')
+    seed([workspace])
+    const refreshWorkspaceGitStatus = vi.fn(async () => {})
+    const view = renderHook(() => {
+      const bindings = useWorkspaceSpaceManagerBindings()
+      const decision = useWorkspaceSpaceDecisionProjection(bindings)
+      const projection = useWorkspaceSpaceManagerProjection({
+        bindings,
+        decision,
+        refreshWorkspaceGitStatus
+      })
+      return { bindings, projection }
+    })
+    await act(async () => {})
+    expect(refreshWorkspaceGitStatus).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      view.result.current.bindings.setGitStatusByWorktreeIdentity(
+        new Map([[getWorkspaceSpaceWorktreeIdentity(workspace), []]])
+      )
+    })
+    await act(async () => {
+      view.result.current.bindings.setGitRefreshStateByWorktreeId({
+        [getWorkspaceSpaceWorktreeIdentity(workspace)]: { isRefreshing: false, error: 'Offline' }
+      })
+      view.result.current.bindings.setInspectedWorktreeId(
+        getWorkspaceSpaceWorktreeIdentity(workspace)
+      )
+    })
+    expect(refreshWorkspaceGitStatus).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      view.result.current.bindings.setQuery('w0')
+    })
+    expect(refreshWorkspaceGitStatus).toHaveBeenCalledTimes(2)
   })
 })

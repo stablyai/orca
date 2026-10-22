@@ -115,6 +115,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal wait',
       'terminal stop',
       'terminal rename',
+      'terminal set-pane-title',
       'terminal create',
       'terminal switch',
       'terminal close',
@@ -220,6 +221,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'diagnostics',
     keys: ['diagnostics memory', 'terminal-daemon status', 'terminal-daemon restart'],
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
+  },
+  {
+    name: 'speech',
+    keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
+    load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS
   },
   {
     name: 'introspection',

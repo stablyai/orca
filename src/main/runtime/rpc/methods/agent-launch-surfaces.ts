@@ -25,11 +25,13 @@ import {
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
@@ -64,10 +66,16 @@ export function agentLaunchSurfaceFactory(
       agent,
       options,
       sessionId: requested,
-      tabId
+      tabId,
+      withoutPrompt
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
       const seeded = narrowStructuredLaunchSeedOptions(options)
+      // A client that creates chats without starting them starts this one on its first message.
+      const atRest =
+        withoutPrompt === true &&
+        context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
+          true
       const created = await createStructuredAgentSessionForWorktree({
         runtime: context.runtime,
         ensureHost: async () => {
@@ -91,6 +99,7 @@ export function agentLaunchSurfaceFactory(
         agent,
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
+        ...(atRest ? { atRest: true as const } : {}),
         activate:
           !callerPresentsSurface &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
@@ -192,8 +201,11 @@ export function agentLaunchSurfaceFactory(
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;
         // dropping it here was what left a client with no way to name the tab it just asked for.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
-        // Its only warning is that the host could not reveal the tab, which the caller shows itself.
-        ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {}),
+        // A caller that shows the tab itself reports a failed reveal; the fallback it can't know.
+        ...launchWarning(
+          terminal.startupCwdFallback ? STARTUP_CWD_FALLBACK_SENTENCE : undefined,
+          callerPresentsSurface ? undefined : terminal.warning
+        ),
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },
@@ -206,6 +218,11 @@ export function agentLaunchSurfaceFactory(
         text: prompt.text
       })
   }
+}
+
+function launchWarning(...parts: (string | undefined)[]): { warning?: string } {
+  const warning = parts.filter(Boolean).join(' ')
+  return warning ? { warning } : {}
 }
 
 function requireInstalledHost(): StructuredAgentSessionHost {

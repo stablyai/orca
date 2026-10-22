@@ -2,9 +2,11 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { useAppStore } from '../../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking
@@ -108,7 +110,7 @@ export function installActiveSessionTabsSubscription({
     receivedFrame: number,
     runtimeId?: string
   ): Promise<HostSessionMirrorSettle | null> => {
-    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+    const recovered = await recoverMirroredTerminalOrphansBeforeApply(
       useAppStore.getState(),
       event,
       environmentId,
@@ -150,7 +152,10 @@ export function installActiveSessionTabsSubscription({
       snapshotIsFresh: decision.apply,
       localTerminalCount,
       hasLiveLocalPty,
-      skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+      skipWakeRespawn:
+        shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId) ||
+        // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — a frame-drawn workspace's terminals are not the mirror's to respawn.
+        (ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, activeWorktreeId))
     })
     let settle: HostSessionMirrorSettle | null = decision.apply
       ? null

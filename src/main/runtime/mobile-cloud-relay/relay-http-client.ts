@@ -10,7 +10,7 @@ import {
   sharedRelayAssignRateGate,
   type RelayAssignRateGate
 } from './relay-assign-rate-gate'
-import type { RelayRegion } from './relay-region-preference'
+import type { RelayRegion } from './relay-region-probe'
 import {
   RelayRegionCorrectionResponseSchema,
   type RelayRegionCorrectionRequest

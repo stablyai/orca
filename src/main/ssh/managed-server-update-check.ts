@@ -3,9 +3,9 @@
  * into its status note and telemetry reason.
  */
 import type { SshManagedServerUpdateNote, SshTarget } from '../../shared/ssh-types'
-import type { ManagedOrcadAutoUpdateOutcome } from './orcad-managed-auto-update'
+import type { ManagedOrcadAutoUpdateOutcome } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import type { HostServerUpdateReason } from './ssh-host-server-connect-events'
-import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from './orcad-activation-fence-hold'
+import { ORCAD_ACTIVATION_FENCE_BUSY_CODE } from '../managed-server/activation/orcad-activation-fence-hold'
 
 export type ManagedServerUpdateDeps = {
   /** Runs the Managed servers update when the host is behind this app; `onUpdating` fires first. */
@@ -37,7 +37,6 @@ export async function checkManagedServerUpdate(
   deps: ManagedServerUpdateDeps,
   onUpdating: () => void
 ): Promise<HostServerUpdateOnConnect> {
-  const failure = deps.recordedUpdateFailure(target)
   let result: ManagedOrcadAutoUpdateOutcome
   try {
     result = await deps.autoUpdate(environmentId, {
@@ -58,8 +57,9 @@ export async function checkManagedServerUpdate(
     }
   }
   // Why clear on current too: a Managed servers update may have landed the build since.
+  // Why read after: an overlapping check may have recorded a failure while this one waited.
   if (
-    failure !== null &&
+    deps.recordedUpdateFailure(target) !== null &&
     (result.outcome === 'updated' || (result.outcome === 'skipped' && result.reason === 'current'))
   ) {
     deps.clearUpdateFailure(target)

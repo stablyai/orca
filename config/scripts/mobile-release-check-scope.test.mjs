@@ -96,7 +96,13 @@ it('gates Ruby independently and retains mobile static validation', () => {
   for (const step of gated) {
     expect(step.if).toBe("steps.ruby-scope.outputs.should_run != 'false'")
   }
-  for (const name of ['Typecheck', 'Typecheck tests (ratchet)', 'Lint', 'Check formatting']) {
+  for (const name of [
+    'Lint mobile imports with mobile dependencies installed',
+    'Typecheck',
+    'Typecheck tests (ratchet)',
+    'Lint',
+    'Check formatting'
+  ]) {
     expect(steps.find((step) => step.name === name)?.if).toBeUndefined()
     expect(steps.some((step) => step.name === name)).toBe(true)
   }

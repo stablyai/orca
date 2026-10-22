@@ -1,11 +1,14 @@
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
+import { findProjectSetups, setupHostId } from './project-selector'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 
 export type ProjectCreateTarget = {
   repoSelector: string
+  /** The selected setup's host; a repo id alone is ambiguous once it is set up on two hosts. */
+  repoHostId: string
   setup: ProjectHostSetup
 }
 
@@ -43,28 +46,46 @@ export function assertWorkspaceTargetFlagsCompatible(flags: Map<string, string |
   }
 }
 
-export async function resolveProjectCreateRepoSelector(
-  flags: Map<string, string | boolean>,
-  client: RuntimeClient
-): Promise<string | undefined> {
-  return (await resolveProjectCreateTarget(flags, client))?.repoSelector
-}
-
 // Why: the routed runtime can hold both an exact `runtime:<id>` row and a `local` row for the
 // same project; the exact stamp is the one the caller named, so it wins the selection.
-function findReadySetupOnHost(
-  setups: readonly ProjectHostSetup[],
-  projectId: string | undefined,
-  host: ParsedExecutionHost | undefined
+function selectSetupOnHost(
+  candidates: readonly ProjectHostSetup[],
+  host: ParsedExecutionHost | undefined,
+  selectorLabel: string
 ): ProjectHostSetup | undefined {
-  const candidates = setups.filter((candidate) => candidate.projectId === projectId)
-  if (!host) {
+  if (host) {
+    return (
+      candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
+      candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+    )
+  }
+  // Why: one host is not a choice, so demanding --host for it was ceremony. Two are a choice, and
+  // picking one would run the command on a machine the caller never named.
+  const hostIds = new Set(candidates.map(setupHostId))
+  if (hostIds.size <= 1) {
     return candidates[0]
   }
-  return (
-    candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
-    candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous ${selectorLabel}: it is set up on ${hostIds.size} hosts. Pass --host to choose one.`,
+    {
+      knownProjectHostSetups: candidates.map(summarizeSetup),
+      nextSteps: [
+        ...candidates.map(
+          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
+        ),
+        'Run `orca host list` to see every machine you can target and the flag for each.'
+      ]
+    }
   )
+}
+
+function summarizeSetup(setup: ProjectHostSetup): {
+  id: string
+  hostId: string
+  path: string
+} {
+  return { id: setup.id, hostId: setupHostId(setup), path: setup.path }
 }
 
 export async function resolveProjectCreateTarget(
@@ -92,19 +113,56 @@ export async function resolveProjectCreateTarget(
     throw error
   }
   const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
+  // Match against every setup so an exact id with no ready setup never falls through to a name.
+  const candidates =
+    projectId === undefined || projectHostSetupId
+      ? []
+      : (await findProjectSetups(client, result.result.setups, projectId)).filter(
+          (candidate) => candidate.setupState === 'ready'
+        )
+  // Why --host applies to both: setup ids are per host, so the same id can name two setups.
   const setup = projectHostSetupId
-    ? ready.find((candidate) => candidate.id === projectHostSetupId)
-    : findReadySetupOnHost(ready, projectId, host)
+    ? selectSetupOnHost(
+        ready.filter((candidate) => candidate.id === projectHostSetupId),
+        host,
+        `--project-host-setup ${projectHostSetupId}`
+      )
+    : selectSetupOnHost(candidates, host, `--project ${projectId}`)
   if (!setup) {
+    if (projectHostSetupId) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Project host setup is not ready or was not found: ${projectHostSetupId}${host ? ` on ${host.id}` : ''}`
+      )
+    }
+    // Why: blaming the host when no project matched sent callers to debug the wrong flag.
+    if (candidates.length === 0) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `No ready setup found for --project ${projectId} on any host.`,
+        {
+          nextSteps: [
+            'Run `orca project list` for project ids and names, and `orca project setups` for where each is set up.'
+          ]
+        }
+      )
+    }
     throw new RuntimeClientError(
       'invalid_argument',
-      projectHostSetupId
-        ? `Project host setup is not ready or was not found: ${projectHostSetupId}`
-        : `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`
+      `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`,
+      // Why: when the project is set up somewhere just not here, the recoverable answer is which
+      // hosts do have it — otherwise the caller has to go re-derive the listing by hand.
+      {
+        knownProjectHostSetups: candidates.map(summarizeSetup),
+        nextSteps: candidates.map(
+          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
+        )
+      }
     )
   }
   return {
     repoSelector: `id:${setup.repoId}`,
+    repoHostId: setupHostId(setup),
     setup
   }
 }
@@ -118,22 +176,28 @@ function getRepoSelectorFromWorktreeId(worktreeId: string | undefined): string |
   return `id:${worktreeId.slice(0, separatorIndex)}`
 }
 
-export async function getCreateRepoSelector(
+/**
+ * The repo a create names, as RPC params: spread it whole into every call that looks the repo up,
+ * so the host a project target picked is never dropped. `--repo` stays selector-only.
+ */
+export type CliRepoTarget = { repo: string; repoHostId?: string }
+
+export async function getCreateRepoTarget(
   flags: Map<string, string | boolean>,
   cwdParentWorktree: { worktreeId: string } | undefined,
   client: RuntimeClient
-): Promise<string> {
-  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
-  if (projectRepoSelector) {
-    return projectRepoSelector
+): Promise<CliRepoTarget> {
+  const projectTarget = await resolveProjectCreateTarget(flags, client)
+  if (projectTarget) {
+    return { repo: projectTarget.repoSelector, repoHostId: projectTarget.repoHostId }
   }
   const explicitRepo = getPresentStringFlag(flags, 'repo')
   if (explicitRepo) {
-    return explicitRepo
+    return { repo: explicitRepo }
   }
   const inferredRepo = getRepoSelectorFromWorktreeId(cwdParentWorktree?.worktreeId)
   if (inferredRepo) {
-    return inferredRepo
+    return { repo: inferredRepo }
   }
   throw new RuntimeClientError(
     'invalid_argument',

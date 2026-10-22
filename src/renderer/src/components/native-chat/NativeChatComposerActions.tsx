@@ -97,6 +97,8 @@ export function NativeChatComposerActions({
           : (sendReason ?? translate('components.native-chat.composer.send', 'Send'))
       }
       disabled={sendDisabled || (isWorking && isStopping)}
+      // A press keeps focus where it was; a focused button drops it to <body> when it disables.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
       variant={stops ? 'secondary' : 'default'}
       size="icon"

@@ -1,3 +1,4 @@
+import type { PtyRegistrationClaim } from '../../runtime/runtime-terminal-state-records'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { classifyError } from '../../telemetry/classify-error'
@@ -17,6 +18,7 @@ type PtySpawnExecuteState = {
   sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
   preparedProvisionalExecutionContext: boolean
   pendingRegistrationPtyId: string | null
+  pendingRegistrationClaim?: PtyRegistrationClaim
   rejectedRegistrationCandidate: PtySpawnResult | null
 }
 
@@ -42,17 +44,11 @@ export function failPtySpawnExecute(
       resetIncarnation: true
     })
   }
-  const rawMessage = err instanceof Error ? err.message : String(err)
-  if (rawMessage === 'agent_session_exited_during_start' && ctx.rejectedRegistrationCandidate) {
-    runtime?.releaseRejectedPtyRegistrationFence?.(
-      ctx.rejectedRegistrationCandidate.id,
-      ctx.rejectedRegistrationCandidate.incarnationId
-    )
-  }
   if (ctx.pendingRegistrationPtyId) {
     runtime?.cancelPendingPtyRegistration?.(
       ctx.pendingRegistrationPtyId,
-      ctx.rejectedRegistrationCandidate?.incarnationId
+      ctx.rejectedRegistrationCandidate?.incarnationId,
+      ctx.pendingRegistrationClaim
     )
     ctx.pendingRegistrationPtyId = null
   }

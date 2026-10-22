@@ -14,6 +14,7 @@ const UNAVAILABLE_REASONS = [
   'artifacts_unavailable',
   'libc_unidentified',
   'runtime_self_test',
+  'runtime_noexec',
   'security_software',
   'native_preflight'
 ] as const
@@ -147,7 +148,7 @@ export const sshHostServerMoveSchema = z
   })
   .strict()
 
-// COMPAT(legacy-relay-bridge): revisit 2027-01-15; drop with src/main/ssh/legacy-relay-bridge/.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15; drop with src/main/ssh/legacy-relay/.
 export const SSH_HOST_SERVER_LEGACY_RELAY_BRIDGE_TERMINAL_VALUES = [
   'none',
   '1',

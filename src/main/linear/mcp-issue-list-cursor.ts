@@ -1,4 +1,4 @@
-import { linearError } from './issue-context-errors'
+import { linearError } from './issue-context/errors'
 
 export const ISSUE_LIST_CURSOR_PREFIX = 'orca.linear.v1.'
 

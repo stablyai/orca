@@ -4,9 +4,6 @@ import {
   canReplaceSubagentState
 } from '../../shared/native-chat-subagent-summary'
 
-/** Children kept past this evict the oldest that ran and ended, else the oldest never started; a
- *  running child is always kept, however many run. */
-const MAX_CHILDREN = 128
 const MAX_SETTLED_TURNS = 256
 /** Turn ordinals remembered per child; a row from an older run reads as its first. */
 const MAX_TURN_ORDINALS_PER_CHILD = 64
@@ -123,6 +120,15 @@ export class CodexSubagentExecutions {
 
   /** The child and every child it spawned, at any depth. */
   lineage(agentThreadId: string): CodexExecutionChild[] {
+    const spawnedByThread = new Map<string, string[]>()
+    for (const child of this.children.values()) {
+      if (child.spawnerThreadId === null) {
+        continue
+      }
+      const siblings = spawnedByThread.get(child.spawnerThreadId) ?? []
+      siblings.push(child.agentThreadId)
+      spawnedByThread.set(child.spawnerThreadId, siblings)
+    }
     const lineage: CodexExecutionChild[] = []
     const seen = new Set<string>()
     const pending = [agentThreadId]
@@ -133,10 +139,8 @@ export class CodexSubagentExecutions {
       }
       seen.add(id)
       lineage.push(child)
-      for (const spawned of this.children.values()) {
-        if (spawned.spawnerThreadId === id) {
-          pending.push(spawned.agentThreadId)
-        }
+      for (const spawned of spawnedByThread.get(id) ?? []) {
+        pending.push(spawned)
       }
     }
     return lineage
@@ -162,17 +166,6 @@ export class CodexSubagentExecutions {
     const existing = this.children.get(agentThreadId)
     if (existing) {
       return existing
-    }
-    if (this.children.size >= MAX_CHILDREN) {
-      // Refusing a running child would hide it while it runs. One announced but not started is
-      // about to run, so it goes only when no child has ended; a restored history announces many.
-      const children = [...this.children.values()]
-      const evicted =
-        children.find((child) => child.execution !== null && child.execution.state !== 'working') ??
-        children.find((child) => child.execution === null)
-      if (evicted) {
-        this.children.delete(evicted.agentThreadId)
-      }
     }
     const child: CodexExecutionChild = {
       agentThreadId,

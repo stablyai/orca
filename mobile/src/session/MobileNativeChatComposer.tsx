@@ -1,51 +1,49 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Image,
-  Keyboard,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View
-} from 'react-native'
-import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
+import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import {
-  applyAutocomplete,
-  detectAutocompleteTrigger,
-  rankSlashCommandSuggestions,
-  rankSuggestions
-} from './mobile-native-chat-autocomplete'
-import {
-  composerSuggestionInsertText,
-  MobileNativeChatComposerSuggestions,
-  type ComposerSuggestion
-} from './MobileNativeChatComposerSuggestions'
+import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
+import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
+import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
+import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
+import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { ActionSheetModal } from '../components/ActionSheetModal'
+import { mobileNativeChatAttachActions } from './mobile-native-chat-attach-actions'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatPickerPresentation,
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
-import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
+import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
+import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
-import {
-  mobileNativeChatComposerExpanded,
-  mobileNativeChatComposerShowsStop
-} from './mobile-native-chat-composer-layout'
+import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from './MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
+const NO_FILES: PendingNativeChatFile[] = []
+
+/** What only a structured chat's composer has: the + sheet, files, and the session's skills. */
+export type MobileNativeChatStructuredComposer = {
+  catalog: MobileComposerStructuredCatalog
+  /** The `/` menu opened, so the session's list is worth reading again. */
+  onSlashMenuOpen: () => void
+  /** Any file from the phone, uploaded to the host; absent where the host cannot take one. */
+  onAttachFiles?: () => void
+  /** Files riding on the next send; one still uploading holds Send. */
+  files: readonly PendingNativeChatFile[]
+  onRemoveFile: (id: string) => void
+}
 
 type Props = {
   /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
   inputRef?: React.RefObject<TextInput | null>
-  structuredCommands?: readonly AgentSessionConversationCommand[]
+  /** Absent on a terminal-backed chat, whose + only adds photos and whose menu keeps its curated
+   *  commands. */
+  structured?: MobileNativeChatStructuredComposer | null
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
@@ -58,8 +56,7 @@ type Props = {
   getComposerEditGeneration: () => number
   /** Active tab's agent — the slash autocomplete serves its command catalog. */
   agent?: string | null
-  /** Model/session-option pickers shown in the composer action row; null when
-   *  the agent has no session-option catalog. */
+  /** The model pill and its sheet; null when the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
   /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
@@ -91,8 +88,8 @@ export function MobileNativeChatComposer({
   sendSurfaceId,
   getSendCompletionGeneration,
   getComposerEditGeneration,
-  agent,
-  structuredCommands,
+  agent = null,
+  structured = null,
   sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
@@ -105,15 +102,15 @@ export function MobileNativeChatComposer({
   onMicPressOut,
   disabled = false,
   sendDisabled = false,
-  placeholder = 'Message, @files, /commands',
+  placeholder = NATIVE_CHAT_COMPOSER_PLACEHOLDER,
   filePaths = NO_FILE_PATHS,
   onNeedFiles,
   stop = null
 }: Props): React.JSX.Element {
-  const [cursor, setCursor] = useState(0)
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)
+  const [attachOpen, setAttachOpen] = useState(false)
   const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
   const request = sessionOptions?.controller.optionPickerRequest
   const [lastRequest, setLastRequest] = useState(request)
@@ -121,12 +118,17 @@ export function MobileNativeChatComposer({
     setLastRequest(request)
     setPicker({ page: request.id, refocus: false })
   }
-  // Transiently drives the native caret after a mid-text autocomplete insert,
-  // then released on the next selection change so manual caret placement still
-  // works (a permanently controlled `selection` breaks it in React Native).
-  const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
-    null
-  )
+  const files = structured?.files ?? NO_FILES
+  const menu = useMobileNativeChatComposerMenu({
+    value,
+    onChangeText,
+    agent,
+    structuredCatalog: structured?.catalog,
+    filePaths,
+    onNeedFiles,
+    onSlashMenuOpen: structured?.onSlashMenuOpen,
+    focusField: () => fieldRef.current?.focus()
+  })
   const sendingRef = useRef(false)
   const mountedRef = useRef(true)
   const sendSurfaceIdRef = useRef(sendSurfaceId)
@@ -138,59 +140,26 @@ export function MobileNativeChatComposer({
     }
   }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
-  const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
-  // An attached image alone is a valid send (desktop parity), so the image rides
-  // along even when the user sends no accompanying text.
+  const filesUploading = files.some((file) => file.path === null)
+  const attachmentCount = attachments.length + files.length
+  // An attachment alone is a valid send (desktop parity), so it rides even with no text.
   const canSend =
-    (trimmed.length > 0 || attachments.length > 0) &&
+    (value.trim().length > 0 || attachmentCount > 0) &&
     !disabled &&
     !sendDisabled &&
     !sending &&
     !isAttaching &&
+    !filesUploading &&
     !sessionOptionDispatching
-  const composerContent = { draft: value, attachmentCount: attachments.length }
-  const pickerOpen = picker !== null && sessionOptions != null
-  const expanded = mobileNativeChatComposerExpanded({ focused, pickerOpen, ...composerContent })
   const showsStop = mobileNativeChatComposerShowsStop({
     canStop: stop !== null,
     sendBlocked: sendDisabled,
     canSend,
-    editing: isAttaching || micActive,
-    ...composerContent
+    editing: isAttaching || filesUploading || micActive,
+    draft: value,
+    attachmentCount
   })
-
-  const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  const suggestions = useMemo<ComposerSuggestion[]>(() => {
-    if (!trigger) {
-      return []
-    }
-    if (trigger.kind === 'slash') {
-      const commands =
-        structuredCommands !== undefined
-          ? structuredSlashCommands(structuredCommands, agent)
-          : agent
-            ? getMobileNativeChatCommands(agent)
-            : []
-      // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
-      // (~5 rows visible), so an uncapped `/` would mount every row and
-      // re-reconcile them on each streaming tick right above the transcript.
-      return rankSlashCommandSuggestions(commands, trigger.query, 12).map((command) => ({
-        kind: 'command' as const,
-        command
-      }))
-    }
-    return rankSuggestions(filePaths, trigger.query).map((path) => ({
-      kind: 'file' as const,
-      path
-    }))
-  }, [trigger, filePaths, agent, structuredCommands])
-
-  useEffect(() => {
-    if (trigger?.kind === 'file') {
-      onNeedFiles?.(trigger.query)
-    }
-  }, [onNeedFiles, trigger?.kind, trigger?.query])
 
   useEffect(() => {
     mountedRef.current = true
@@ -199,24 +168,6 @@ export function MobileNativeChatComposer({
       sendSurfaceGenerationRef.current += 1
     }
   }, [])
-
-  const handleChange = (next: string): void => {
-    onChangeText(next)
-  }
-
-  const pickSuggestion = (suggestion: ComposerSuggestion): void => {
-    if (!trigger) {
-      return
-    }
-    const { text: nextText, cursor: nextCursor } = applyAutocomplete(
-      value,
-      trigger,
-      composerSuggestionInsertText(suggestion)
-    )
-    onChangeText(nextText)
-    setCursor(nextCursor)
-    setPendingSelection({ start: nextCursor, end: nextCursor })
-  }
 
   const handleSend = async (): Promise<void> => {
     if (!canSend || sendingRef.current) {
@@ -238,7 +189,7 @@ export function MobileNativeChatComposer({
         sendCompletionGeneration === getSendCompletionGeneration() &&
         composerEditGeneration === getComposerEditGeneration()
       ) {
-        setCursor(0)
+        menu.resetCursor()
         // Why: the turn is now the agent's — the keyboard would cover the reply.
         // A rejected send keeps it up so the handed-back draft stays editable.
         Keyboard.dismiss()
@@ -249,77 +200,33 @@ export function MobileNativeChatComposer({
     }
   }
 
-  const attachButton = onAttachImage ? (
-    <Pressable
-      accessibilityLabel="Attach image"
-      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-      onPress={onAttachImage}
-      disabled={isAttaching || disabled}
-    >
-      {isAttaching ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : (
-        <ImagePlus size={20} color={colors.textSecondary} strokeWidth={2} />
-      )}
-    </Pressable>
-  ) : null
+  // A terminal-backed chat has only photos to add, so its + opens the library at once.
+  const attachPress = structured ? () => setAttachOpen(true) : onAttachImage
+  const attachLabel = structured ? 'Add to message' : 'Attach image'
 
   return (
     <View>
-      {suggestions.length > 0 ? (
-        <MobileNativeChatComposerSuggestions suggestions={suggestions} onPick={pickSuggestion} />
-      ) : null}
-      {attachments.length > 0 ? (
-        <ScrollView
-          horizontal
-          keyboardShouldPersistTaps="always"
-          showsHorizontalScrollIndicator={false}
-          style={styles.attachmentStrip}
-          contentContainerStyle={styles.attachmentStripContent}
-        >
-          {attachments.map((attachment) => (
-            <View key={attachment.id} style={styles.attachmentThumb}>
-              <Image
-                source={{ uri: attachment.previewUri }}
-                style={styles.attachmentImage}
-                resizeMode="cover"
-              />
-              {onRemoveAttachment ? (
-                <Pressable
-                  accessibilityLabel="Remove image"
-                  style={styles.attachmentRemove}
-                  onPress={() => onRemoveAttachment(attachment.id)}
-                  hitSlop={8}
-                >
-                  <X size={12} color={colors.textPrimary} strokeWidth={2.6} />
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-        </ScrollView>
+      {menu.rows.length > 0 ? (
+        <MobileNativeChatComposerMenu rows={menu.rows} onPick={menu.pick} />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
-        <View style={expanded ? styles.bar : styles.barCollapsed} testID="native-chat-composer">
-          {/* Collapsed puts attach before the field; the field keeps its child slot either way so
-              the switch never remounts it (that would drop focus mid-tap). */}
-          {expanded ? null : attachButton}
-          <TextInput
+        <View style={styles.bar} testID="native-chat-composer">
+          <MobileNativeChatComposerAttachments
+            images={attachments}
+            files={files}
+            onRemoveImage={onRemoveAttachment}
+            onRemoveFile={structured?.onRemoveFile}
+          />
+          <MobileNativeChatComposerField
             ref={fieldRef}
-            style={
-              expanded
-                ? mobileNativeChatInputStyles.input
-                : [mobileNativeChatInputStyles.freeInput, styles.inputCollapsed]
-            }
             value={value}
-            onChangeText={handleChange}
+            skillToken={menu.skillToken}
+            onChangeText={menu.onFieldChange}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             // Controlled only transiently right after an autocomplete insert.
-            selection={pendingSelection ?? undefined}
-            onSelectionChange={(e) => {
-              setCursor(e.nativeEvent.selection.end)
-              setPendingSelection(null)
-            }}
+            selection={menu.pendingSelection ?? undefined}
+            onSelectionChange={(e) => menu.onSelectionChange(e.nativeEvent.selection)}
             placeholder={placeholder}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
@@ -329,17 +236,25 @@ export function MobileNativeChatComposer({
             // The lock gates sending; the draft survives and rides the next send.
             textAlignVertical="top"
           />
-          <View
-            style={expanded ? styles.actionRow : styles.actionRowCollapsed}
-            testID="native-chat-composer-actions"
-          >
-            {expanded ? attachButton : null}
+          <View style={styles.actionRow} testID="native-chat-composer-actions">
+            {attachPress ? (
+              <Pressable
+                accessibilityLabel={attachLabel}
+                style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}
+                onPress={attachPress}
+                disabled={isAttaching || disabled}
+              >
+                {isAttaching ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
+                )}
+              </Pressable>
+            ) : null}
             {sessionOptions ? (
-              // Stays mounted collapsed so an open drawer, or a picker a command asks for, survives.
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
                 sendInFlight={sending || isAttaching}
-                pillsHidden={!expanded}
                 presentation={picker}
                 onNavigate={(page) => setPicker((current) => current && { ...current, page })}
                 onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
@@ -351,11 +266,11 @@ export function MobileNativeChatComposer({
                 }}
               />
             ) : null}
-            {expanded ? <View style={styles.actionSpacer} /> : null}
+            <View style={styles.actionSpacer} />
             {onMicPress ? (
               <Pressable
                 accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
-                style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.ghostButton, pressed && styles.pressed]}
                 // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
@@ -368,7 +283,7 @@ export function MobileNativeChatComposer({
                 {micActive ? (
                   <Square
                     pointerEvents="none"
-                    size={18}
+                    size={16}
                     color={colors.statusRed}
                     strokeWidth={2.4}
                     fill={colors.statusRed}
@@ -376,7 +291,7 @@ export function MobileNativeChatComposer({
                 ) : (
                   <Mic
                     pointerEvents="none"
-                    size={20}
+                    size={19}
                     color={colors.textSecondary}
                     strokeWidth={2}
                   />
@@ -398,15 +313,29 @@ export function MobileNativeChatComposer({
                 disabled={!canSend}
               >
                 <ArrowUp
-                  size={20}
+                  size={19}
                   color={canSend ? colors.bgBase : colors.textMuted}
-                  strokeWidth={2.6}
+                  strokeWidth={2.4}
                 />
               </Pressable>
             )}
           </View>
         </View>
       </View>
+      {structured ? (
+        <ActionSheetModal
+          visible={attachOpen}
+          onClose={() => setAttachOpen(false)}
+          actions={mobileNativeChatAttachActions({
+            onPhotos: onAttachImage,
+            onFiles: structured.onAttachFiles,
+            onWorkspaceFile: menu.openFileMenu,
+            onSkills: () => menu.openSlashMenu('skill'),
+            onCommands: () => menu.openSlashMenu('command'),
+            skillCount: menu.skillCount
+          })}
+        />
+      ) : null}
     </View>
   )
 }

@@ -25,6 +25,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../src/shared/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
+import { pickNextActiveTabAfterClose } from '../../src/shared/workspace-session-terminal-tab-close'
 import {
   addRepoWorktree,
   cliClient,
@@ -157,13 +158,14 @@ async function groupsOf(run: Run): Promise<GroupView[]> {
 /**
  * Moves a tab through the phone/CLI path, then checks the groups' tab orders and selection: the
  * moved tab is selected where it lands; any other group keeps its selection while that tab stays,
- * else falls back to its first tab.
+ * else moves on as the desktop's move does, by the tabs client A showed (`shown`, most recent last).
  */
 async function moveTab(
   run: Run,
   step: string,
   move: Record<string, unknown> & { tabId: string },
-  expectedOrders: string[][]
+  expectedOrders: string[][],
+  shown: string[] = []
 ): Promise<GroupView[]> {
   const before = await groupsOf(run)
   await attempt(run, step, () =>
@@ -188,12 +190,20 @@ async function moveTab(
       : [`groups ${orders}, expected ${JSON.stringify(expectedOrders)}`]
   )
   const selection = after.flatMap((group) => {
-    const kept = before.find((candidate) => candidate.id === group.id)?.activeTabId
+    const was = before.find((candidate) => candidate.id === group.id)
+    const kept = was?.activeTabId
     const expected = group.tabOrder.includes(move.tabId)
       ? move.tabId
       : kept && group.tabOrder.includes(kept)
         ? kept
-        : (group.tabOrder[0] ?? null)
+        : kept && was
+          ? pickNextActiveTabAfterClose(
+              { tabOrder: was.tabOrder, recentTabIds: shown },
+              new Set([kept]),
+              group.tabOrder,
+              new Set(group.tabOrder)
+            )
+          : (group.tabOrder[0] ?? null)
     return group.activeTabId === expected
       ? []
       : [`group ${group.id} selects ${group.activeTabId}, expected ${expected}`]
@@ -360,13 +370,15 @@ const SCENARIOS: Scenario[] = [
         run,
         'split third tab right',
         { kind: 'split', tabId: third, targetGroupId: source!.id, splitDirection: 'right' },
-        [[first, second], [third]]
+        [[first, second], [third]],
+        [first, second, third]
       )
       await moveTab(
         run,
         'move second tab into the new group',
         { kind: 'move-to-group', tabId: second, targetGroupId: target!.id, index: 0 },
-        [[first], [second, third]]
+        [[first], [second, third]],
+        [first, second, third]
       )
       await run.check('move to group', [1, 1, 1])
       await moveTab(

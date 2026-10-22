@@ -18,15 +18,15 @@ import {
   retireProvenExitedLeases,
   type HostRelayTerminalProof
 } from './orcad-migration-terminal-gate'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers
-} from './ssh-target-orcad-preflight'
+} from './targets/ssh-target-orcad-preflight'
 import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
-import { allowsDirectSshRelay } from './ssh-connection-store'
+import { allowsDirectSshRelay } from './connection/ssh-connection-store'
 
 // Relay-era profiles as the reporters' builds left them, loaded by the real Store and taken through
 // the conversion's source steps: terminal proof, lease retirement, then the fence and its preflight.
@@ -67,7 +67,12 @@ function relayEraProfile(projects: number): PersistedState {
 }
 
 /** One terminal tab, as the unified model and the legacy map both hold it. */
-function openTerminal(session: WorkspaceSessionState, worktreeId: string, tabId: string): void {
+function openTerminal(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string,
+  leafId = LEAF
+): void {
   session.tabsByWorktree[worktreeId] = [
     {
       id: tabId,
@@ -81,8 +86,8 @@ function openTerminal(session: WorkspaceSessionState, worktreeId: string, tabId:
     }
   ]
   session.terminalLayoutsByTabId[tabId] = {
-    root: { type: 'leaf', leafId: LEAF },
-    activeLeafId: LEAF,
+    root: { type: 'leaf', leafId },
+    activeLeafId: leafId,
     expandedLeafId: null
   }
   session.unifiedTabs = {
@@ -234,10 +239,16 @@ describe('#29083: about 14 projects, folders, a saved session and relay-era leas
       updatedAt: 1
     }))
     const host = state.workspaceSessionsByHostId![HOST]!
+    // Pane ids are unique across tabs; the server refuses a repeat.
     for (const index of [0, 3, 7]) {
-      openTerminal(host, `repo-${index}::/home/dev/src/project-${index}`, `tab-${index}`)
+      openTerminal(
+        host,
+        `repo-${index}::/home/dev/src/project-${index}`,
+        `tab-${index}`,
+        index === 0 ? LEAF : `leaf-${index}`
+      )
     }
-    openTerminal(host, 'folder:folder-notes', 'tab-notes')
+    openTerminal(host, 'folder:folder-notes', 'tab-notes', 'leaf-notes')
     const lease = (ptyId: string, state: SshRemotePtyLease['state']): SshRemotePtyLease => ({
       targetId: TARGET.id,
       ptyId,
@@ -384,7 +395,55 @@ describe('"Move anyway"', () => {
     })
   })
 
-  it("carries the desktop copy's drafts when the host's copy of the tabs wins", async () => {
+  it("moves past an unsaved draft of the host's own file that only this desktop holds", async () => {
+    const state = savedStateOnly()
+    state.workspaceSession.openFilesByWorktree = {
+      [worktreeId]: [
+        {
+          filePath: '/home/dev/src/project-0/notes.md',
+          relativePath: 'notes.md',
+          worktreeId,
+          language: 'markdown',
+          dirtyDraftContent: 'desktop draft'
+        }
+      ]
+    }
+    delete state.workspaceSession.tabsByWorktree[worktreeId]
+    const loaded = load(state)
+    confirmed(loaded)
+    const result = await connectMove(loaded)
+    expect(result).toMatchObject({ outcome: 'fenced' })
+    if ('cutover' in result) {
+      expect(
+        loaded.store.collectOrcadMigrationSourceDrafts(result.cutover.manifest)[worktreeId]
+      ).toEqual([expect.objectContaining({ dirtyDraftContent: 'desktop draft' })])
+    }
+  })
+
+  it('still refuses two different unsaved versions of one file, since only one can be renamed', async () => {
+    const state = savedStateOnly()
+    const notes = (dirtyDraftContent: string) => ({
+      filePath: '/home/dev/src/project-0/notes.md',
+      relativePath: 'notes.md',
+      worktreeId,
+      language: 'markdown',
+      dirtyDraftContent
+    })
+    state.workspaceSessionsByHostId![HOST]!.openFilesByWorktree![worktreeId]!.push(notes('host'))
+    state.workspaceSession.openFilesByWorktree = { [worktreeId]: [notes('desktop')] }
+    // An unrelated project's draft must not let the clash slip past as a left-behind item.
+    state.workspaceSessionsByHostId![HOST]!.openFilesByWorktree!['repo-9::/srv/other'] = [
+      { ...notes('other project'), worktreeId: 'repo-9::/srv/other', filePath: '/srv/other/x.md' }
+    ]
+    const loaded = load(state)
+    confirmed(loaded)
+    await expect(connectMove(loaded)).resolves.toMatchObject({
+      outcome: 'refused',
+      reason: expect.stringContaining('unsaved changes to /home/dev/src/project-0/notes.md')
+    })
+  })
+
+  it("keeps the desktop copy's drafts here when the host's copy of the tabs wins", async () => {
     const state = savedStateOnly()
     state.workspaceSession.openFilesByWorktree = {
       [worktreeId]: [
@@ -406,9 +465,13 @@ describe('"Move anyway"', () => {
     }
     const session = result.cutover.manifest.payload.dormantState?.workspaceSession
     expect(session?.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['tab-1'])
+    // The server gets the tab; the commit renames the draft into this desktop's server partition.
     expect(session?.openFilesByWorktree?.[worktreeId]).toEqual([
-      expect.objectContaining({ dirtyDraftContent: 'desktop draft' })
+      expect.not.objectContaining({ dirtyDraftContent: expect.anything() })
     ])
+    expect(
+      loaded.store.collectOrcadMigrationSourceDrafts(result.cutover.manifest)[worktreeId]
+    ).toEqual([expect.objectContaining({ dirtyDraftContent: 'desktop draft' })])
   })
 
   it('moves a pane whose saved history is gone, without that history', async () => {

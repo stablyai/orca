@@ -6,12 +6,13 @@
  */
 import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
+import { PtyExitProof } from '../pty-exit-proof'
 
 export type OrcadMigrationTerminalVerdict =
   | { verdict: 'exited'; provenPtyIds: string[] }
   /**
    * COMPAT(legacy-relay-bridge, revisit 2027-01-15): relay terminals may still run, and the host
-   * converts anyway. Converting stops nothing; src/main/ssh/legacy-relay-bridge/ keeps serving
+   * converts anyway. Converting stops nothing; src/main/ssh/legacy-relay/ keeps serving
    * these leases' panes from the old relay until each terminal exits.
    */
   | {
@@ -117,9 +118,10 @@ export function retireProvenExitedLeases(
     return
   }
   const proven = new Set(proof.provenPtyIds)
+  const census = PtyExitProof.from('host-census', undefined)
   for (const lease of store.getSshRemotePtyLeases(targetId)) {
     if (lease.state !== 'terminated' && proven.has(lease.ptyId)) {
-      store.markSshRemotePtyLease(targetId, lease.ptyId, 'terminated')
+      store.markSshRemotePtyLease(targetId, lease.ptyId, census)
     }
   }
 }

@@ -46,6 +46,10 @@
       "reason": "iOS zooms the page on focus of any text input under 16px and does not zoom back out, which leaves the document at a scale other than 1 for a whole typing session. keyboard-occlusion.web.ts reads a scale other than 1 as 'not a keyboard' on purpose, because geometry cannot separate a zoom from a keyboard, so the commit bar and the note composer would never lift on the platform they were written for. The web file raises the app's 14px body size to that floor; the native file is the body size, so a phone renders exactly what it rendered before. maximum-scale=1 on the viewport meta was the other fix and was rejected: Android WebView honours it and it would take deliberate pinch zoom away from low-vision users."
     },
     {
+      "file": "src/platform/text-input-content-height.web.ts",
+      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the queued-message edit field grows from one line to four; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
+    },
+    {
       "file": "src/platform/haptics.web.ts",
       "reason": "expo-haptics has a web build that fakes an iOS haptic by appending a hidden <label><input type=\"checkbox\" switch> to document.head, clicking it and removing it, once per call. C1.9 traced a long press that never fired on the worktree list to that stray click, and the file explorer calls triggerSelection on every row tap. So the page asks the shell for the device's own haptic instead, over the native.haptics.trigger notify behind the haptics grant: 70 to 77 bytes per frame, no reply, and haptics.ts's own Platform.OS split on the other side. A notify rather than a verb because nothing is owed back and a reply would spend a slot in the same in-flight window a forwarded request does, at 90 call sites (rulings-ota-c7.md ruling 30). The five exports are the five kinds the frame admits; mobile-web-app-haptics-seam.test.mjs is the fence."
     },
@@ -114,8 +118,12 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
     },
     {
+      "file": "src/session/MobileNativeChatComposerField.web.tsx",
+      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll."
+    },
+    {
       "file": "src/session/mobile-native-chat-input-styles.web.ts",
-      "reason": "The chat's composer and its question field render one point above the app's body size, which is 15 and under the floor below which iOS zooms the page on focus. keyboard-occlusion.web.ts reads a scale other than 1 as 'no keyboard' and answers 0, and on this screen that lift is the terminal's only feedback that its hidden input has focus, so one focus of the composer would cost the rest of the session. This file puts both fields on TEXT_INPUT_FONT_SIZE; the native sibling keeps 15."
+      "reason": "The chat's composer and its question field render one point above the app's body size, which is 15 and under the floor below which iOS zooms the page on focus. keyboard-occlusion.web.ts reads a scale other than 1 as 'no keyboard' and answers 0, and on this screen that lift is the terminal's only feedback that its hidden input has focus, so one focus of the composer would cost the rest of the session. This file puts both fields on TEXT_INPUT_FONT_SIZE; the native sibling keeps the question field at 15 and the composer at 16."
     },
     {
       "file": "src/browser/browser-address-field-styles.web.ts",
@@ -139,7 +147,7 @@
     },
     {
       "file": "src/components/AuthFailedBannerActions.web.tsx",
-      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:57, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
+      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:45, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
     },
     {
       "file": "src/components/use-html-preview-link-grant.web.ts",

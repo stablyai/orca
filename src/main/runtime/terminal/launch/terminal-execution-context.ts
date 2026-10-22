@@ -20,7 +20,7 @@ export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRunt
 
     if (options.resetIncarnation) {
       // Why: an explicit new lifecycle supersedes an unidentifiable exit from the reused PTY id.
-      this.earlyExitedPtyIncarnations.delete(ptyId)
+      this.pendingPtyRegistrationIncarnations.get(ptyId)?.exitedIncarnations.clear()
       this.disposeHeadlessTerminal(ptyId)
       this.osc7ScanTailByPtyId.delete(ptyId)
       this.terminalCwdByPtyId.delete(ptyId)

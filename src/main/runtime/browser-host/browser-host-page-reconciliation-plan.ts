@@ -23,8 +23,6 @@ export type BrowserHostRuntimePageIntent = BrowserHostPageAuthority &
     reclaimFrom?: BrowserHostPageAuthority & Readonly<{ pairedDeviceId: string }>
   }>
 
-export type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
-
 type PagePair = Readonly<{
   intent: BrowserHostRuntimePageIntent
   page: BrowserClientHostedPageInventory

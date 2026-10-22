@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyTerminalGitCredentialPromptGuard,
   TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV
-} from './terminal-git-credential-guard'
+} from '../../shared/terminal-git-credential-guard'
 
 function expectGuarded(env: Record<string, string>): void {
   expect(env.GIT_TERMINAL_PROMPT).toBe('0')

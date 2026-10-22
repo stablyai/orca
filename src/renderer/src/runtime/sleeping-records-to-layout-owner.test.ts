@@ -136,7 +136,7 @@ describe('main’s copy of the window’s resume records', () => {
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
-  it('sends a resumed pane’s real wake before the record drop that follows it', () => {
+  it('sends a resumed pane’s wake, record-only so main starts nothing, before the record drop', () => {
     setRecords({ [PANE]: record(PANE, LOCAL) })
     mocks.callRuntimeRpc.mockClear()
 
@@ -144,7 +144,7 @@ describe('main’s copy of the window’s resume records', () => {
     held.store!.getState().clearSleepingAgentSession(PANE)
 
     expect(sent()).toEqual([
-      { type: 'wake', workspace: LOCAL, tabId: TAB, paneKeys: [PANE] },
+      { type: 'wake', workspace: LOCAL, tabId: TAB, paneKeys: [PANE], recordOnly: true },
       { type: 'wake', workspace: LOCAL, tabId: TAB, paneKeys: [PANE], recordOnly: true }
     ])
   })

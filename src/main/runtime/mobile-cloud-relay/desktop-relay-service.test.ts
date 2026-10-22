@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MobilePairingConnectionContext } from '../runtime-rpc'
+import type { MobilePairingConnectionContext } from '../runtime-rpc/runtime-rpc-pairing-types'
 import { DesktopRelayService } from './desktop-relay-service'
 import { pairingAuthorizationForContext } from './relay-pairing-authorization'
 

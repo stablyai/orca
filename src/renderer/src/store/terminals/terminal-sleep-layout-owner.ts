@@ -40,35 +40,49 @@ export function recordPaneSleepThroughLayoutOwner(
   }
 }
 
+type HeldRecordsState = Pick<AppState, 'tabsByWorktree'>
+
+/**
+ * The resume records `next` sets or replaces since `previous`, and the ones it drops, of panes in
+ * tabs the window holds: a closed tab's or removed workspace's records went with it in main, and a
+ * capture from a stale agent status names a tab main no longer has.
+ */
+export function changedSleepingRecords(
+  state: HeldRecordsState,
+  previous: SleepingRecords,
+  next: SleepingRecords
+): { recorded: SleepingAgentSessionRecord[]; dropped: [string, SleepingAgentSessionRecord][] } {
+  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
+    state.tabsByWorktree[record.worktreeId]?.some(
+      (tab) => tab.id === parsePaneKey(paneKey)?.tabId
+    ) ?? false
+  return {
+    recorded: Object.entries(next)
+      .filter((entry) => previous[entry[0]] !== entry[1] && held(entry))
+      .map(([, record]) => record),
+    dropped: Object.entries(previous).filter((entry) => !(entry[0] in next) && held(entry))
+  }
+}
+
 /**
  * Every change of the window's resume records, as record-only commands: live and quit captures of
  * running agents, records a resume or close dropped, and the rest no sleep or wake command sends.
  * Without these main learned the records only from the window's session save.
  */
 export function recordSleepingRecordChangesThroughLayoutOwner(
-  state: WorktreeRuntimeOwnerState & Pick<AppState, 'tabsByWorktree'>,
+  state: WorktreeRuntimeOwnerState & HeldRecordsState,
   previous: SleepingRecords,
   next: SleepingRecords
 ): void {
-  // Only panes of tabs the window holds: a closed tab's or removed workspace's records went with it
-  // in main, and a capture from a stale agent status names a tab main no longer has.
-  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
-    state.tabsByWorktree[record.worktreeId]?.some(
-      (tab) => tab.id === parsePaneKey(paneKey)?.tabId
-    ) ?? false
-  const changedByWorktree = new Map<string, Record<string, SleepingAgentSessionRecord>>()
-  for (const [paneKey, record] of Object.entries(next)) {
-    if (previous[paneKey] !== record && held([paneKey, record])) {
-      changedByWorktree.set(record.worktreeId, {
-        ...changedByWorktree.get(record.worktreeId),
-        [paneKey]: record
-      })
-    }
+  const { recorded, dropped } = changedSleepingRecords(state, previous, next)
+  for (const [worktreeId, records] of Map.groupBy(recorded, (record) => record.worktreeId)) {
+    recordPaneSleepThroughLayoutOwner(
+      state,
+      worktreeId,
+      Object.fromEntries(records.map((record) => [record.paneKey, record])),
+      true
+    )
   }
-  for (const [worktreeId, records] of changedByWorktree) {
-    recordPaneSleepThroughLayoutOwner(state, worktreeId, records, true)
-  }
-  const dropped = Object.entries(previous).filter((entry) => !(entry[0] in next) && held(entry))
   for (const [tabId, entries] of byTab(dropped, ([paneKey]) => paneKey)) {
     recordLayoutApply(state, entries[0]![1].worktreeId, {
       type: 'wake',
@@ -79,7 +93,10 @@ export function recordSleepingRecordChangesThroughLayoutOwner(
   }
 }
 
-/** A layout-owner build's record of the one pane this window showed and resumed. */
+/**
+ * A layout-owner build's record of the one pane this window showed and resumed itself: record-only,
+ * since a plain wake has main start the pane too.
+ */
 export function recordPaneWakeThroughLayoutOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string,
@@ -87,6 +104,11 @@ export function recordPaneWakeThroughLayoutOwner(
 ): void {
   const tabId = parsePaneKey(paneKey)?.tabId
   if (tabId) {
-    recordLayoutApply(state, worktreeId, { type: 'wake', tabId, paneKeys: [paneKey] })
+    recordLayoutApply(state, worktreeId, {
+      type: 'wake',
+      tabId,
+      paneKeys: [paneKey],
+      recordOnly: true
+    })
   }
 }

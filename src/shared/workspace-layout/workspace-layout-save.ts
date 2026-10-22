@@ -15,7 +15,7 @@ import {
   FACT_SESSION_FIELDS,
   VIEW_SESSION_FIELDS
 } from './workspace-layout-beside'
-import { editorTabShowsFile } from './workspace-layout-editor-tab-file'
+import { editorFileKey, editorTabNamesFile } from './workspace-layout-editor-tab-file'
 import type { LoadedWorkspaceLayout } from './workspace-layout-load-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import { paneKeyOf, tabsInOrder, type WorkspaceLayout } from './workspace-layout-model'
@@ -43,7 +43,7 @@ function saveWorkspace(
     workspaceKey: key,
     worktreeId,
     hostId: loaded.layout.hostId,
-    editorFiles: workspace.editorFiles,
+    workspace,
     leaves: workspace.leaves ?? {},
     facts,
     view
@@ -104,10 +104,10 @@ function saveWorkspace(
     session.openFilesByWorktree[key] = workspace.editorFiles.map((file): PersistedOpenFile => ({
       ...file,
       worktreeId,
-      ...(previewTabs.some((tab) => editorTabShowsFile(tab.entityId, file, worktreeId))
+      ...(previewTabs.some((tab) => editorTabNamesFile(workspace, tab.entityId, file))
         ? { isPreview: true }
         : {}),
-      ...view.editorDrafts[key]?.[file.filePath]
+      ...view.editorDrafts[key]?.[editorFileKey(file)]
     }))
   }
   if (workspace.browserTabs) {
@@ -139,8 +139,10 @@ function saveWorkspaceRecords({
         if (leaf?.incarnationId !== undefined) {
           incarnations[paneKey] = leaf.incarnationId
         }
-        if (leaf?.sleeping) {
-          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...leaf.sleeping }
+        // One disk map holds both: a leaf has at most one of them.
+        const record = leaf?.sleeping ?? leaf?.resume
+        if (record) {
+          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...record }
         }
       }
     }

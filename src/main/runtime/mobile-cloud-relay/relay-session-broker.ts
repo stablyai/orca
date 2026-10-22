@@ -1,5 +1,4 @@
 import { StaleRelayBrokerError } from './relay-session-broker-contract'
-export { StaleRelayBrokerError } from './relay-session-broker-contract'
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
@@ -23,8 +22,6 @@ import { RelayOriginPool } from './relay-origin-pool'
 import { RelayRegionRefresh } from './relay-region-refresh'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
-
-export type { RelayBrokerStatus } from './relay-session-broker-contract'
 
 export class RelaySessionBroker {
   private readonly options: RelaySessionBrokerOptions

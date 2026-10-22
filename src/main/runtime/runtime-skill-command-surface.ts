@@ -20,16 +20,8 @@ import type {
   RuntimeSkillCommandSurface,
   RuntimeSkillCommandHost
 } from './runtime-skill-command-contract'
-import type {
-  SkillCloudOptions,
-  SkillCloudPublishRequest,
-  SkillCloudService
-} from './runtime-skill-types'
-export type {
-  RuntimeSkillCommandSurface,
-  RuntimeSkillCommandHost
-} from './runtime-skill-command-contract'
-export { installRuntimeSkillCommandSurface } from './runtime-skill-command-contract'
+import type { SkillCloudOptions, SkillCloudPublishRequest } from '../../shared/skill-cloud-contract'
+import type { SkillCloudService } from '../skills/skill-cloud-service'
 
 export class RuntimeSkillCommands
   extends RuntimeSkillInstallQueries

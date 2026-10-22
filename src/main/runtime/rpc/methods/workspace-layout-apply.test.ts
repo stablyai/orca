@@ -6,6 +6,15 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { LAYOUT_APPLY_METHODS } from './workspace-layout'
 
+const frozen = vi.hoisted(() => ({ workspaces: new Set<string>() }))
+vi.mock(
+  '../../../persistence/moving-wsl-projects/wsl-move-scope-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    isWslMoveWorkspaceSessionFrozen: (workspace: string) => frozen.workspaces.has(workspace)
+  })
+)
+
 const WORKTREE = 'repo-1::/work/one'
 const SPLIT = {
   type: 'splitPane',
@@ -49,18 +58,21 @@ function sessionListing(tabId: string): WorkspaceSessionState {
 
 function runtimeHolding(hostId: string) {
   const applyLayoutCommand = vi.fn(async () => ({ ok: true, result: { leafId: 'minted' } }))
+  const applyTabRenames = vi.fn(async () => [])
   const empty: WorkspaceSessionState = { ...sessionListing('other'), tabsByWorktree: {} }
   const store = {
     getRepo: () => undefined,
     getWorkspaceSessionHostIds: () => ['local', hostId],
     getWorkspaceSession: (host: string) => (host === hostId ? sessionListing('tab-1') : empty),
-    applyLayoutCommand
+    applyLayoutCommand,
+    applyTabRenames
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the apply path reads only these store methods.
-  return { runtime: new OrcaRuntimeService(store as never), applyLayoutCommand }
+  return { runtime: new OrcaRuntimeService(store as never), applyLayoutCommand, applyTabRenames }
 }
 
 afterEach(() => {
+  frozen.workspaces.clear()
   vi.doUnmock('../../../../shared/layout-owner-switch')
   vi.resetModules()
 })
@@ -95,6 +107,22 @@ describe('layout.apply', () => {
     expect(
       apply.params?.safeParse({ command: { ...SPLIT, newLeafId: 'window-minted' } }).success
     ).toBe(false)
+  })
+
+  it('takes no live-terminal adoption from the window: only main places a running terminal', () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const create = {
+      type: 'createTerminalTab',
+      workspace: WORKTREE,
+      tabId: 'tab-2',
+      leafId: '44444444-4444-4444-8444-444444444444'
+    } as const
+
+    expect(apply?.params?.parse({ command: { ...create, adopt: { ptyId: 'pty-1' } } })).toEqual({
+      command: create
+    })
   })
 
   it('takes no close semantics or blank title from the window', async () => {
@@ -174,6 +202,30 @@ describe('layout.apply', () => {
     ).toBe(false)
   })
 
+  it('accepts divider ratio intents, or an older window’s tree, but not both or neither', async () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const parse = (command: Record<string, unknown>) => apply?.params?.safeParse({ command })
+    const pane = { type: 'setPaneRatios', workspace: WORKTREE, tabId: 'tab-1' }
+    const group = { type: 'setGroupRatios', workspace: WORKTREE }
+    const root = { type: 'leaf', leafId: 'leaf-1' }
+    const groupLayout = { type: 'leaf', groupId: 'g1' }
+    const ratios = [{ path: 'first.second', ratio: 0.3 }]
+
+    expect(parse({ ...pane, ratios })?.success).toBe(true)
+    expect(parse({ ...pane, root })?.success).toBe(true)
+    expect(parse({ ...pane, root, ratios })?.success).toBe(false)
+    expect(parse(pane)?.success).toBe(false)
+    expect(parse({ ...group, ratios })?.success).toBe(true)
+    expect(parse({ ...group, groupLayout })?.success).toBe(true)
+    expect(parse({ ...group, groupLayout, ratios })?.success).toBe(false)
+    expect(parse(group)?.success).toBe(false)
+    expect(parse({ ...pane, ratios: [] })?.success).toBe(false)
+    expect(parse({ ...pane, ratios: [{ path: 'third', ratio: 0.3 }] })?.success).toBe(false)
+    expect(parse({ ...pane, ratios: [{ path: '', ratio: 1 }] })?.success).toBe(false)
+  })
+
   it('accepts the close of one tab with the window’s reason, but no force or refusals', async () => {
     const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
       (method) => method.name === 'layout.apply'
@@ -210,6 +262,11 @@ describe('layout.apply', () => {
     expect(
       apply?.params?.parse({ command: { ...move, windowDetach: { ptyId: 'pty-1', tabId: 'x' } } })
     ).toEqual({ command: { ...move, windowDetach: { ptyId: 'pty-1' } } })
+    expect(
+      apply?.params?.parse({
+        command: { ...move, windowDetach: { ptyId: null, startupCwd: '/a' } }
+      })
+    ).toEqual({ command: { ...move, windowDetach: { ptyId: null, startupCwd: '/a' } } })
     expect(apply?.params?.safeParse({ command: { ...move, windowDetach: {} } }).success).toBe(false)
     expect(
       apply?.params?.safeParse({ command: { ...move, windowDetach: { ptyId: null }, index: -1 } })
@@ -306,10 +363,12 @@ describe('layout.apply', () => {
 
     expect(
       apply?.params?.parse({
-        command: { ...open, file: { ...file, dirtyDraftContent: 'x' }, view: { mode: 'edit' } }
+        command: { ...open, file: { ...file, dirtyDraftContent: 'x' }, scrollTop: 3 }
       })
     ).toEqual({ command: { ...open, file } })
     expect(parse({ ...open, preview: true, groupId: 'g1' })?.success).toBe(true)
+    expect(parse({ ...open, groupId: 'g1', index: 2 })?.success).toBe(true)
+    expect(parse({ ...open, index: -1 })?.success).toBe(false)
     expect(parse({ ...open, tabId: undefined })?.success).toBe(false)
     expect(parse({ ...open, contentType: 'terminal' })?.success).toBe(false)
     expect(parse({ ...open, preview: false })?.success).toBe(false)
@@ -573,6 +632,111 @@ describe('layout.apply', () => {
     expect(parses({ type: 'setTabProps', clearLaunchAgent: false })).toBe(false)
     expect(apply?.params?.parse({ command: { ...tab, type: 'setTabProps', title: 'x' } })).toEqual({
       command: { ...tab, type: 'setTabProps' }
+    })
+  })
+
+  it('takes many tabs’ generated titles, of any workspaces, and no other title kind', () => {
+    const apply = eraseRpcMethods(LAYOUT_APPLY_METHODS).find(
+      (method) => method.name === 'layout.apply'
+    )
+    const parses = (command: Record<string, unknown>) =>
+      apply?.params?.safeParse({ command: { type: 'renameTabs', ...command } }).success
+    const titled = { workspace: WORKTREE, tabId: 'tab-1', title: 'Fix it' }
+
+    expect(parses({ kind: 'generated', renames: [titled, { ...titled, title: null }] })).toBe(true)
+    expect(parses({ kind: 'generated', renames: [] })).toBe(false)
+    expect(parses({ kind: 'custom', renames: [titled] })).toBe(false)
+    expect(parses({ kind: 'generated', renames: [{ ...titled, workspace: '' }] })).toBe(false)
+    // A title that replaces the tab's first one reaches main as such.
+    const replacing = { ...titled, replaceExisting: true }
+    expect(
+      apply?.params?.safeParse({
+        command: { type: 'renameTabs', kind: 'generated', renames: [replacing] }
+      }).data
+    ).toEqual({ command: { type: 'renameTabs', kind: 'generated', renames: [replacing] } })
+    expect(parses({ kind: 'generated', renames: [{ ...titled, replaceExisting: false }] })).toBe(
+      false
+    )
+  })
+
+  it('gives each title in its tab’s partition in one write, naming a paired server’s tab', async () => {
+    const applyTabRenames = vi.fn(async (batches: { renames: { tabId: string }[] }[]) => [
+      { rename: batches[0]!.renames[0]!, code: 'tab_not_found' }
+    ])
+    const hosts: Record<string, string> = { 'tab-1': 'local', 'tab-2': 'ssh:target-1' }
+    const store = {
+      getRepo: () => undefined,
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:target-1', 'runtime:env-1'],
+      getWorkspaceSession: (host: string) => ({
+        ...sessionListing('other'),
+        tabsByWorktree: {},
+        unifiedTabs: {
+          [WORKTREE]: Object.entries({ ...hosts, 'tab-3': 'runtime:env-1' })
+            .filter(([, owner]) => owner === host)
+            .map(([id]) => ({ id, entityId: id, contentType: 'terminal' }))
+        }
+      }),
+      applyTabRenames
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the apply path reads only these store methods.
+    const runtime = new OrcaRuntimeService(store as never)
+    const titled = (tabId: string) => ({ workspace: WORKTREE, tabId, title: `Title ${tabId}` })
+
+    const reply = await runtime.applyLayoutCommand({
+      type: 'renameTabs',
+      kind: 'generated',
+      renames: [titled('tab-1'), titled('tab-2'), titled('tab-3')]
+    })
+
+    const renameOf = (tabId: string) => ({ type: 'renameTab', kind: 'generated', ...titled(tabId) })
+    expect(applyTabRenames).toHaveBeenCalledTimes(1)
+    expect(applyTabRenames).toHaveBeenCalledWith([
+      { hostId: 'local', renames: [renameOf('tab-1')] },
+      { hostId: 'ssh:target-1', renames: [renameOf('tab-2')] }
+    ])
+    expect(reply).toEqual({
+      ok: true,
+      result: {
+        untitled: [
+          { workspace: WORKTREE, tabId: 'tab-3', code: 'host_not_owned' },
+          { workspace: WORKTREE, tabId: 'tab-1', code: 'tab_not_found' }
+        ]
+      },
+      frameSeq: 0
+    })
+  })
+
+  it('names a title of a workspace a WSL move paused, and gives the others', async () => {
+    const { runtime, applyTabRenames } = runtimeHolding('local')
+    const paused = 'repo-1::/work/paused'
+    frozen.workspaces.add(paused)
+
+    const reply = await runtime.applyLayoutCommand({
+      type: 'renameTabs',
+      kind: 'generated',
+      renames: [
+        { workspace: WORKTREE, tabId: 'tab-1', title: 'Fix it' },
+        { workspace: paused, tabId: 'tab-9', title: 'Paused' }
+      ]
+    })
+
+    expect(applyTabRenames).toHaveBeenCalledWith([
+      {
+        hostId: 'local',
+        renames: [
+          {
+            type: 'renameTab',
+            kind: 'generated',
+            workspace: WORKTREE,
+            tabId: 'tab-1',
+            title: 'Fix it'
+          }
+        ]
+      }
+    ])
+    expect(reply).toMatchObject({
+      ok: true,
+      result: { untitled: [{ workspace: paused, tabId: 'tab-9', code: 'wsl_move_in_progress' }] }
     })
   })
 

@@ -253,7 +253,7 @@ it('uses one launchd label per profile and protocol', () => {
   expect(macDaemonJobLabel('/Users/a/Library/Application Support/orca')).not.toBe(
     macDaemonJobLabel('/Users/a/Library/Application Support/orca-dev')
   )
-  expect(macDaemonJobLabel('/p')).toMatch(/^com\.stablyai\.orca\.terminal\.[0-9a-f]{16}\.v49$/)
+  expect(macDaemonJobLabel('/p')).toMatch(/^com\.stablyai\.orca\.terminal\.[0-9a-f]{16}\.v50$/)
 })
 
 it.each(['13.4.1', '12.7.6'])(

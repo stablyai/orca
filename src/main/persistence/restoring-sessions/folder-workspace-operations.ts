@@ -2,13 +2,17 @@ import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces'
 import { getNextProjectGroupOrder } from '../../../shared/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
+import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
@@ -144,6 +148,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'lastActivityAt'
         | 'smartTier'
         | 'smartAt'
+        | 'lastTerminalUseAt'
         | 'diffComments'
       >
     > &
@@ -179,7 +184,11 @@ export class FolderWorkspacePersistenceOperations {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      const previous = workspace.folderPath
       workspace.folderPath = updates.folderPath
+      if (previous !== workspace.folderPath) {
+        retireAtRestCommandContext(folderWorkspaceKey(workspace.id))
+      }
     }
     if (updates.linkedTask !== undefined) {
       workspace.linkedTask = normalizeWorkspaceLinkedItem(updates.linkedTask)
@@ -246,6 +255,9 @@ export class FolderWorkspacePersistenceOperations {
       workspace.smartTier = updates.smartTier
       workspace.smartAt = updates.smartAt
     }
+    if (updates.lastTerminalUseAt !== undefined && Number.isFinite(updates.lastTerminalUseAt)) {
+      workspace.lastTerminalUseAt = updates.lastTerminalUseAt
+    }
     if (updates.diffComments !== undefined) {
       workspace.diffComments = updates.diffComments
     }
@@ -269,8 +281,12 @@ export class FolderWorkspacePersistenceOperations {
     return true
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    const repo = this.state.repos.find((entry) => entry.id === repoId)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
+    )
     if (!repo) {
       return null
     }
@@ -278,7 +294,7 @@ export class FolderWorkspacePersistenceOperations {
       groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
         ? groupId
         : null
-    const siblingRepos = this.state.repos.filter((entry) => entry.id !== repoId)
+    const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
     repo.projectGroupId = normalizedGroupId
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)

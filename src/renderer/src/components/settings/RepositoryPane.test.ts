@@ -9,12 +9,9 @@ import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { useAppStore } from '../../store'
-import {
-  getRepositoryPaneSearchEntries,
-  matchesRepositoryIdentitySearch,
-  RepositoryPane
-} from './RepositoryPane'
+import { useAppStore } from '@/store/index'
+import { getRepositoryPaneSearchEntries, RepositoryPane } from './RepositoryPane'
+import { matchesRepositoryIdentitySearch } from './repository/identity/repository-identity-search'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
 

@@ -20,7 +20,7 @@ function isTypedUrlOption(option: TabEntryOption): boolean {
 // remembered page even when the match was fuzzy.
 function isFileOption(option: TabEntryOption): boolean {
   const { kind } = option.classification
-  return kind === 'existing-file' || kind === 'absolute-file'
+  return kind === 'existing-file' || kind === 'absolute-file' || kind === 'html-file-url'
 }
 
 function historyInsertIndex(

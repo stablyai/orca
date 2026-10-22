@@ -9,7 +9,11 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import type { Tab } from '../../shared/tab-types'
-import { editorTabShowsFile } from '../../shared/workspace-layout/workspace-layout-editor-tab-file'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import {
+  editorTabNamesFile,
+  sameEditorFile
+} from '../../shared/workspace-layout/workspace-layout-editor-tab-file'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
@@ -17,14 +21,28 @@ import type {
 
 export type HeadlessEditorTab = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
 
+function editorWorkspace(session: WorkspaceSessionState, worktreeId: string) {
+  return {
+    worktreeId,
+    tabs: session.unifiedTabs?.[worktreeId] ?? [],
+    editorFiles: session.openFilesByWorktree?.[worktreeId]
+  }
+}
+
 function editorUnifiedTab(
   session: WorkspaceSessionState,
   worktreeId: string,
   file: PersistedOpenFile
 ): Tab | undefined {
-  return (session.unifiedTabs?.[worktreeId] ?? []).find(
-    (tab) => tab.contentType === 'editor' && editorTabShowsFile(tab.entityId, file, worktreeId)
+  const workspace = editorWorkspace(session, worktreeId)
+  return workspace.tabs.find(
+    (tab) => tab.contentType === 'editor' && editorTabNamesFile(workspace, tab.entityId, file)
   )
+}
+
+/** A file's phone tab id: its unified tab's, else its path. */
+function listedTabId(unifiedTab: Tab | undefined, file: PersistedOpenFile): string {
+  return unifiedTab?.id ?? file.filePath
 }
 
 function editorTab(
@@ -33,16 +51,17 @@ function editorTab(
   file: PersistedOpenFile
 ): HeadlessEditorTab {
   const unifiedTab = editorUnifiedTab(session, worktreeId, file)
+  const activeFileId = session.activeFileIdByWorktree?.[worktreeId]
   const common = {
-    // A file's id is its path, which is also the unified tab's entity.
-    id: unifiedTab?.id ?? file.filePath,
+    id: listedTabId(unifiedTab, file),
     title: file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File',
     filePath: file.filePath,
     relativePath: file.relativePath,
     isDirty: file.dirtyDraftContent !== undefined,
     isActive:
       session.activeTabTypeByWorktree?.[worktreeId] === 'editor' &&
-      session.activeFileIdByWorktree?.[worktreeId] === file.filePath,
+      !!activeFileId &&
+      editorTabNamesFile(editorWorkspace(session, worktreeId), activeFileId, file),
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true
   }
@@ -72,6 +91,23 @@ export function buildHeadlessMobileSessionEditorTabs(
   )
 }
 
+/** The record the phone's tab names: two owners can hold one path, so by the id it was listed under. */
+export function findListedEditorFile(
+  files: readonly PersistedOpenFile[],
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tab: Pick<HeadlessEditorTab, 'id' | 'filePath'>
+): PersistedOpenFile | undefined {
+  const samePath = files.filter((candidate) => candidate.filePath === tab.filePath)
+  // Why no fallback for two: a stale id would retire the other owner's record.
+  return samePath.length < 2
+    ? samePath[0]
+    : samePath.find(
+        (candidate) =>
+          listedTabId(editorUnifiedTab(session, worktreeId, candidate), candidate) === tab.id
+      )
+}
+
 /** The session without one persisted editor tab, or null when it holds no such tab. */
 export function retireHeadlessEditorTab(
   session: WorkspaceSessionState,
@@ -80,7 +116,9 @@ export function retireHeadlessEditorTab(
   force = false
 ): WorkspaceSessionState | null {
   const files = session.openFilesByWorktree?.[worktreeId] ?? []
-  const file = files.find((candidate) => candidate.filePath === tab.filePath)
+  const file = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? findListedEditorFile(files, session, worktreeId, tab)
+    : files.find((candidate) => candidate.filePath === tab.filePath)
   if (!file) {
     return null
   }
@@ -97,12 +135,14 @@ export function retireHeadlessEditorTab(
     tabOrder: withoutTab(group.tabOrder) ?? [],
     ...(group.recentTabIds ? { recentTabIds: withoutTab(group.recentTabIds) } : {})
   }))
-  const wasActiveFile = session.activeFileIdByWorktree?.[worktreeId] === tab.filePath
+  const activeFileId = session.activeFileIdByWorktree?.[worktreeId]
+  const wasActiveFile =
+    !!activeFileId && editorTabNamesFile(editorWorkspace(session, worktreeId), activeFileId, file)
   return {
     ...session,
     openFilesByWorktree: {
       ...session.openFilesByWorktree,
-      [worktreeId]: files.filter((file) => file.filePath !== tab.filePath)
+      [worktreeId]: files.filter((candidate) => !sameEditorFile(candidate, file))
     },
     unifiedTabs: {
       ...session.unifiedTabs,

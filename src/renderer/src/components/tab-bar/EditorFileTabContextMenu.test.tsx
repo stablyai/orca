@@ -360,15 +360,15 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
   })
 
-  it('renders Close Others and both directional close items', async () => {
+  it('keeps Close Others without directional close items', async () => {
     const tree = expandNode(await renderMenu())
     const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
       extractText(item.props.children)
     )
 
     expect(labels).toContain('Close Others')
-    expect(labels.some((label) => label.includes('Close Tabs To The Right'))).toBe(true)
-    expect(labels.some((label) => label.includes('Close Tabs To The Left'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Right'))).toBe(false)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Left'))).toBe(false)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {

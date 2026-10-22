@@ -4,8 +4,6 @@ import type { WorkspaceSessionPatch } from '../../../shared/workspace-session-st
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from './worktree-tab-bucket-projection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { reportWindowSessionWriteActivity } from './window-session-write-activity'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -126,21 +124,9 @@ export function createSessionWriteSubscriber({
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
-  // Switch point (each report below, inline so a window-owned build keeps none of it): layout
-  // frames wait while this window owes main a write, including before it may save at all.
-  const owesWrite = (): boolean =>
-    !disposed &&
-    (timer !== null ||
-      writing ||
-      pendingChangedFields.size > 0 ||
-      !shouldPersistWorkspaceSession(store.getState()))
-
   const flushPendingWrite = (): void => {
     timer = null
     if (disposed || writing || pendingChangedFields.size === 0) {
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        reportWindowSessionWriteActivity(owesWrite())
-      }
       return
     }
     // Why: rebuild from the freshest store state rather than the snapshot
@@ -161,9 +147,6 @@ export function createSessionWriteSubscriber({
     pendingChangedFields.clear()
     const patch = buildWorkspaceSessionPatch(fresh, changed)
     if (Object.keys(patch).length === 0) {
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        reportWindowSessionWriteActivity(owesWrite())
-      }
       return
     }
     writing = true
@@ -180,10 +163,6 @@ export function createSessionWriteSubscriber({
         onPersistError?.(error)
       } else if (pendingChangedFields.size > 0) {
         armFlushTimer()
-      }
-      // A failed write stays owed, so structure frames wait for the next store wake's resend.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        reportWindowSessionWriteActivity(owesWrite())
       }
     }
     try {
@@ -209,9 +188,6 @@ export function createSessionWriteSubscriber({
       clearTimeout(timer)
     }
     timer = setTimeout(flushPendingWrite, debounceMs)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      reportWindowSessionWriteActivity(owesWrite())
-    }
   }
 
   /**
@@ -242,9 +218,6 @@ export function createSessionWriteSubscriber({
 
   const evaluateSessionState = (state: AppState): void => {
     if (!shouldPersistWorkspaceSession(state)) {
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        reportWindowSessionWriteActivity(owesWrite())
-      }
       return
     }
     // Why: this fires on every store write and almost none of them touch a session field. Scan
@@ -307,8 +280,5 @@ export function createSessionWriteSubscriber({
       clearTimeout(timer)
     }
     pendingChangedFields.clear()
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      reportWindowSessionWriteActivity(owesWrite())
-    }
   }
 }

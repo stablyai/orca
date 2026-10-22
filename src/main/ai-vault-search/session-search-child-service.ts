@@ -27,7 +27,9 @@ export function createChildSessionSearchService(
     search: async (request, hostScope) => {
       try {
         return await calls.search(request, hostScope)
-      } catch {
+      } catch (error) {
+        // The child's own search errors land here too; without this they read only as "not ready".
+        console.warn('[ai-vault-search] search failed', error)
         return { kind: 'unavailable', reason: 'not-ready' }
       }
     },

@@ -4,6 +4,7 @@ import { registerPtyHandlers } from './pty/register-handlers'
 import { setPtyOwnership } from './pty/provider/ownership-state'
 import { setLocalPtyProvider } from './pty/provider/registry'
 import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -304,7 +305,11 @@ describe('registerPtyHandlers', () => {
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(false)
 
         expect(localShutdown).not.toHaveBeenCalled()
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+          'ssh-1',
+          'relay-pty',
+          expect.objectContaining({ unverifiableReason: SSH_PROVIDER_UNREGISTERED_REASON })
+        )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', -1, undefined)
       })
       it('marks a detached SSH lease terminated when runtime controller kill has no provider', async () => {
@@ -332,7 +337,7 @@ describe('registerPtyHandlers', () => {
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
           'ssh-1',
           'remote-pty',
-          'terminated'
+          expect.objectContaining({ unverifiableReason: SSH_PROVIDER_UNREGISTERED_REASON })
         )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
       })

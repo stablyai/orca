@@ -1,4 +1,4 @@
-import { Loader2, MessageSquarePlus, RefreshCw } from 'lucide-react'
+import { MessageSquarePlus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -21,6 +21,7 @@ export function RemoteBrowserPageToolbar({
   addressBarEditSession,
   busy,
   loading,
+  loadFailed,
   markup,
   frameUrl,
   isActive,
@@ -39,6 +40,7 @@ export function RemoteBrowserPageToolbar({
   addressBarEditSession: BrowserAddressBarEditSessionBinding
   busy: boolean
   loading: boolean
+  loadFailed: boolean
   markup: MarkupModeController
   frameUrl: string | null
   isActive: boolean
@@ -53,7 +55,6 @@ export function RemoteBrowserPageToolbar({
         // dead-end back/forward RPC is simply a no-op on the host.
         canGoBack: true,
         canGoForward: true,
-        loading: busy || loading,
         goBack: onBack,
         goForward: onForward,
         reload: onReload,
@@ -61,6 +62,7 @@ export function RemoteBrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          pageId={addressBarEditSession.pageId}
           value={addressBarValue}
           onChange={onAddressBarChange}
           onSubmit={onSubmitAddressBar}
@@ -74,6 +76,8 @@ export function RemoteBrowserPageToolbar({
               presentation="streamed"
             />
           }
+          loading={busy || loading}
+          loadFailed={loadFailed}
         />
       }
       reloadControl={
@@ -91,11 +95,7 @@ export function RemoteBrowserPageToolbar({
               )}
               onClick={onReload}
             >
-              {busy || loading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
+              <RefreshCw className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>

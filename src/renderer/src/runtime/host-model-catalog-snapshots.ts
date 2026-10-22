@@ -40,7 +40,8 @@ function withoutNamedDefault(catalog: ListedCatalog): ListedCatalog {
  * What a chat's first frame may render from: undefined until the host has answered what that
  * frame would show. Whether a new chat runs the listed default depends on its workspace's own
  * config, so another workspace's answer serves only a chat that names its model, a list that
- * names no default, or a default the host says no workspace can replace.
+ * names no default, or a default the host says no workspace can replace; never a list the host
+ * says is that workspace's own.
  */
 export function readHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
@@ -56,8 +57,10 @@ export function readHostModelCatalogSnapshot(
     return exact
   }
   const listed = entry.account ?? entry.byWorktree.values().next().value
+  if (!listed || listed.modelsDifferByWorkspace) {
+    return undefined
+  }
   if (
-    !listed ||
     !launch.newLaunch ||
     listed.listingNamesConfiguredModel === false ||
     listed.defaultHoldsInEveryWorkspace === true

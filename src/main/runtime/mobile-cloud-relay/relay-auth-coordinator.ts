@@ -3,8 +3,7 @@ import {
   type RelayHostCloseReason
 } from '../../../shared/relay-host-close-reason'
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
-import type { RelayBrokerStatus } from './relay-session-broker'
-import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
+import type { RelayBrokerStatus, RelayAccessTokenRefresh } from './relay-session-broker-contract'
 import { shouldRetryRelayConnectionError } from './relay-http-client'
 import {
   RelayReadinessWaiters,

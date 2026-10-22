@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
+import { resolveCliChatResumeSource } from './cli-chat-resume-source'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -186,6 +187,20 @@ const exitedAgentRecords: Record<string, Partial<AppState>> = {
 }
 
 describe('resolveTabSessionHistorySubject', () => {
+  it('retains the chosen pane in the direct CLI create identity without a History row', () => {
+    expect(
+      resolveCliChatResumeSource(makeState(liveClaudeEntry), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID }
+      })
+    ).toMatchObject({
+      tabId: 'term-1',
+      workspaceId: WORKTREE_ID,
+      paneKey: 'term-1:leaf-1',
+      agent: 'claude',
+      providerSessionId: 'claude-session-1',
+      executionHostId: 'local'
+    })
+  })
   it('finds a native chat tab by the chat it shows', () => {
     expect(
       resolveTabSessionHistorySubject(makeState(), {
@@ -515,14 +530,14 @@ describe('resolveTabSessionSwitch', () => {
     structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
   })
 
-  it('offers Resume in New CLI on a chat tab whose row can fork', () => {
+  it('offers Switch to Terminal on a chat tab whose row can fork', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toEqual({
       action: 'resume-in-new-cli',
       worktreeId: WORKTREE_ID
     })
   })
 
-  it('hides Resume in New CLI for an empty or unresumable chat', () => {
+  it('hides Switch to Terminal for an empty or unresumable chat', () => {
     expect(
       resolveTabSessionSwitch(
         makeState(),
@@ -534,7 +549,7 @@ describe('resolveTabSessionSwitch', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toBeNull()
   })
 
-  it('offers Resume in New Native Chat where the row is eligible, in the workspace it names', () => {
+  it('offers Switch to Chat where the row is eligible, in the workspace it names', () => {
     mocks.resumeInChat.mockReturnValue({
       available: true,
       workspaceId: WORKTREE_ID

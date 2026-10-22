@@ -34,7 +34,9 @@ export function ChatPermissionSetting({
           <NativeChatPermissionModePicker
             current={current}
             modes={AGENT_CHAT_PERMISSION_MODES}
-            onSelect={(nativeChatPermissionMode) => updateSettings({ nativeChatPermissionMode })}
+            onSelect={(nativeChatPermissionMode) =>
+              updateSettings({ nativeChatPermissionMode, agentNativeChatPermissionModes: {} })
+            }
           />
         }
       />

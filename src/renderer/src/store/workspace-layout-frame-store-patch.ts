@@ -9,6 +9,11 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from './types'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'
+import {
+  NO_HELD_TABS,
+  withHeldTabsAsDrawn,
+  type HeldDrawnTabs
+} from './workspace-layout-frame-held-tabs'
 
 /** Row fields this window owns: what its mounted panes are doing, and which terminal each row
  *  binds (main publishes the saved binding; the live one stays the window's until main owns it). */
@@ -126,13 +131,16 @@ function setKey<T>(
  */
 export function buildLayoutFrameStorePatch(
   state: LayoutFrameStoreState,
-  built: LayoutFrameSlices,
+  frameSlices: LayoutFrameSlices,
   keys: readonly string[],
   /** A tab whose pane layout stays as the store has it: the window's own pane command holds it. */
   keepsTerminalLayout: (tabId: string) => boolean = () => false,
   /** This window's own fields for a row the frame creates. */
-  newRowFields: (tabId: string) => Partial<TerminalTab> | null = () => null
+  newRowFields: (tabId: string) => Partial<TerminalTab> | null = () => null,
+  /** Tabs the window drew, closed or moved before main answered: they stay as the store has them. */
+  held: HeldDrawnTabs = NO_HELD_TABS
 ): Partial<LayoutFrameStoreState> {
+  const built = withHeldTabsAsDrawn(state, frameSlices, keys, held)
   const patch: Partial<LayoutFrameStoreState> = {}
   const keyed = (slice: KeyedSlice, value: (key: string) => unknown): void => {
     let next: Record<string, unknown> = state[slice]

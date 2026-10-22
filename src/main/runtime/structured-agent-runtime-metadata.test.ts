@@ -28,6 +28,7 @@ describe('structured agent metadata without adapter implementations', () => {
       'claude',
       'grok',
       'opencode',
+      'opencode2',
       'omp',
       'antigravity'
     ])

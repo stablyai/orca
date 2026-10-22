@@ -62,7 +62,7 @@ export function sanitizeGeneratedJiraIssueSummary(raw: string): string {
   }
   const cleaned = line
     .replace(/^#+\s*/, '')
-    .replace(/^["'`“”「»]+|["'`“”」«]+$/g, '')
+    .replace(/^["'`\u201C\u201D\u300C\u00BB]+|["'`\u201C\u201D\u300D\u00AB]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
   let truncated = cleaned.slice(0, JIRA_ISSUE_SUMMARY_MAX_LENGTH)

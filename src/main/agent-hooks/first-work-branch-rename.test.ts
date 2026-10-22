@@ -35,7 +35,7 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
 vi.mock('../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: prepareLocalEnvMock
 }))
-vi.mock('../ipc/worktree-logic', () => ({
+vi.mock('../ipc/worktree-branch-name', () => ({
   computeBranchName: computeBranchNameMock,
   getConfiguredBranchPrefix: getConfiguredBranchPrefixMock
 }))

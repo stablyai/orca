@@ -33,7 +33,7 @@ import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
-import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const RPC_TIMEOUT_MS = 10_000
@@ -53,9 +53,9 @@ function buildWslCodexCommand(
   }
   const setupCommands = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
-    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
+    `export CODEX_HOME=${quotePosixShell(wslInfo.linuxPath)}`
   ].join(' && ')
-  const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')} <&3 >&4 3<&- 4>&-`
+  const execSuffix = `${args.map(quotePosixShell).join(' ')} <&3 >&4 3<&- 4>&-`
   const loginShellCommand = buildWslLoginShellCommand(
     [setupCommands, `exec codex ${execSuffix}`].join(' && ')
   )

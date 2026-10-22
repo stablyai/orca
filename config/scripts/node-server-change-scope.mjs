@@ -34,7 +34,7 @@ const ALWAYS_FILES = new Set([
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   '.npmrc',
-  '.pnpmfile.cjs',
+  'config/pnpmfile.cjs',
   'tsconfig.json',
   '.github/workflows/node-server-tests.yml',
   'config/scripts/node-server-change-scope.mjs',

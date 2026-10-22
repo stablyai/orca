@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createWorktreeHeadIdentityRefreshState,
   disposeWorktreeHeadIdentityRefreshState,
@@ -29,7 +28,6 @@ import {
 import { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 import {
   handleLocalWatchEvents,
-  handleRemoteWatchEvents,
   handleWatchOverflow,
   type ActiveWatch
 } from './worktree-base-directory-watch-events'
@@ -75,27 +73,6 @@ async function subscribeTarget(
   let activeWatch: ActiveWatch | null = null
   const gitStatusRefPaths = new Set<string>()
   applyActiveGitStatusRefBinding({ ...target, gitStatusRefPaths })
-  if (target.connectionId) {
-    const provider = getSshFilesystemProvider(target.connectionId)
-    if (!provider) {
-      throw new Error(`SSH filesystem provider unavailable for ${target.connectionId}`)
-    }
-    const unwatch = await provider.watch(target.path, (events) => {
-      const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
-      }
-      handleRemoteWatchEvents(currentWatch, events, () => activeWatches.values())
-    })
-    activeWatch = createActiveWatch(
-      target,
-      mainWindow,
-      { unsubscribe: async () => unwatch() },
-      gitStatusRefPaths
-    )
-    return activeWatch
-  }
-
   // Why: a recursive native watcher here forced fseventsd to deliver every
   // event under the whole workspace root (all worktrees) / whole common .git
   // (objects included) just to observe a few shallow paths. The poller reads

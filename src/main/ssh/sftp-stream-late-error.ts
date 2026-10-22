@@ -14,8 +14,8 @@
  * chroot makes a late `SSH_FX_NO_SUCH_FILE` the normal answer, so the listener has to
  * outlive the transfer rather than the other way round.
  *
- * `latchLateSftpSessionErrors` does this for the session emitter; this is the same
- * guarantee one level down, on the streams.
+ * `waitForSshChannelOpen` does this for every SFTP session `SshConnection.sftp()` opens;
+ * this is the same guarantee one level down, on the streams.
  */
 
 /** SSH_FX_* status code ssh2 copies onto the `Error` it builds from a STATUS reply. */
@@ -23,11 +23,6 @@ const SSH_FX_NO_SUCH_FILE = 2
 
 type ErrorEmitter = {
   on(event: 'error', listener: (err: Error) => void): unknown
-}
-
-type SftpSessionEmitter = ErrorEmitter & {
-  once(event: 'close', listener: () => void): unknown
-  removeListener(event: 'error', listener: (err: Error) => void): unknown
 }
 
 export type SftpStreamErrorLatch = {
@@ -54,24 +49,6 @@ export function latchLateSftpStreamErrors(
       settled = true
     }
   }
-}
-
-/**
- * Hold one `'error'` listener on the SFTP *session* for as long as the session lives.
- *
- * A transfer that attaches and removes its own session listener — `writeStringViaSftp`
- * does, so a session error can reject the write in flight — leaves the emitter with zero
- * listeners between transfers and after the last one. A late STATUS reply arriving in
- * that window is the synchronous throw described above. Errors during a transfer still
- * reach that transfer first: it prepends its listener ahead of this one.
- *
- * Attach this once, right after `conn.sftp()`, on every path that runs transfers over a
- * session it owns.
- */
-export function latchLateSftpSessionErrors(sftp: SftpSessionEmitter): void {
-  const swallowLateSftpError = (): void => {}
-  sftp.on('error', swallowLateSftpError)
-  sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
 }
 
 /**

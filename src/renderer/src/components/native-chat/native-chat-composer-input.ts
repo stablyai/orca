@@ -11,7 +11,7 @@ export type NativeChatComposerInput = Pick<
 > & {
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
-  insertSkill?: (from: number, to: number, token: string) => void
+  insertSkill?: (from: number, to: number, token: string, path?: string) => void
   /** Deletes every chip of one image, as when its thumbnail goes. */
   removeImageReferences?: (attachmentId: string) => void
   /** Inserts each file at the caret as a pill; its text stays the `@path` reference. */
@@ -32,4 +32,15 @@ export function insertNativeChatPastedText(
   input.focus()
   input.insertText(text)
   return true
+}
+
+/** Text and caret in one synchronous write, then focus, so the next native key lands after them. */
+export function writeNativeChatComposerText(
+  input: NativeChatComposerInput,
+  text: string,
+  caret: number
+): void {
+  input.value = text
+  input.setSelectionRange(caret, caret)
+  input.focus()
 }

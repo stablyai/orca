@@ -127,27 +127,31 @@ async function activateTab(page: Page, tabId: string): Promise<void> {
   }, tabId)
 }
 
+/** Moves the tab through the window's own tab-move path, which a layout-owner build sends to main. */
 async function moveTabIntoRightGroup(
+  app: ElectronApplication,
   page: Page,
   worktreeId: string,
   anchorTabId: string,
   movedTabId: string
 ): Promise<void> {
-  await page.evaluate(
+  const move = await page.evaluate(
     ({ wtId, anchorTabId, movedTabId }) => {
-      const store = window.__store!.getState()
-      const tabs = store.unifiedTabsByWorktree[wtId] ?? []
+      const tabs = window.__store!.getState().unifiedTabsByWorktree[wtId] ?? []
       const anchor = tabs.find((tab) => tab.entityId === anchorTabId)
       const moved = tabs.find((tab) => tab.entityId === movedTabId)
-      if (
-        !anchor ||
-        !moved ||
-        !store.dropUnifiedTab(moved.id, { groupId: anchor.groupId, splitDirection: 'right' })
-      ) {
-        throw new Error('Could not move the tab into a side-by-side group')
+      if (!anchor || !moved) {
+        throw new Error('Could not find the tabs to place side by side')
       }
+      return { tabId: moved.id, targetGroupId: anchor.groupId }
     },
     { wtId: worktreeId, anchorTabId, movedTabId }
+  )
+  await app.evaluate(
+    ({ BrowserWindow }, payload) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.send('ui:moveSessionTab', payload)
+    },
+    { worktreeId, kind: 'split' as const, splitDirection: 'right' as const, ...move }
   )
   await expect
     .poll(() =>
@@ -224,7 +228,7 @@ async function relaunchWithSleepingAgents(
       }
     }
     if (options.secondTabInRightGroup) {
-      await moveTabIntoRightGroup(page, worktreeId, tabIds[0]!, tabIds[1]!)
+      await moveTabIntoRightGroup(firstApp, page, worktreeId, tabIds[0]!, tabIds[1]!)
     }
     await activateTab(page, firstTabId)
 

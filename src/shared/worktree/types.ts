@@ -155,6 +155,9 @@ export type Worktree = {
   smartTier?: SmartTier
   /** When the workspace entered its tier. */
   smartAt?: number
+  /** When a terminal last took input or a phone attached, by any device; the owning host writes
+   *  it, throttled, for "last active" readers such as cleanup. Never a sort key. */
+  lastTerminalUseAt?: number
   /** Set once when Orca creates the worktree. Absent for worktrees discovered
    *  on disk or persisted before this field existed. Used by the sidebar to
    *  grant newly-created worktrees a short grace window at the top of Recent,

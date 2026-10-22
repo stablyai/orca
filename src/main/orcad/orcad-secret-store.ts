@@ -16,8 +16,6 @@ import {
 } from './orcad-secret-key-resolution'
 import { openOrcadSecret, sealOrcadSecret } from './orcad-secret-sealing'
 
-export type { OrcadSecretStorePrepareOptions } from './orcad-secret-key-resolution'
-
 export type OrcadSecretStore = SecretStore & {
   /** Resolves whether sealing works now, i.e. the key loaded. */
   prepare(options: OrcadSecretStorePrepareOptions): Promise<boolean>

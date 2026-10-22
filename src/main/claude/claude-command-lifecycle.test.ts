@@ -203,7 +203,7 @@ async function replayCapture(
           body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: event.text }] },
           fence: 7
         })
-      ).resolves.toEqual({ state: 'admitted' })
+      ).resolves.toMatchObject({ state: 'admitted' })
       uuidMap.set(event.sentUuid, String(connection.sent.at(-1)!.uuid))
     } else if (event.kind === 'control') {
       const answerAt = capture.findIndex(

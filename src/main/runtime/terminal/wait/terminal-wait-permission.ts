@@ -16,7 +16,7 @@ import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { TuiAgent } from '../../../../shared/tui-agent'

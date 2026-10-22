@@ -1,6 +1,6 @@
-// Stand-in for Claude Code's stream-json control protocol: answers `initialize` and reports init,
-// so a structured chat session starts without the real CLI. Launched only through a generated
-// wrapper whose first argument is the launch log the spec reads back.
+// Stand-in for Claude Code's stream-json control protocol: answers `initialize`, reports init and
+// runs each prompt as a short turn, so a structured chat works without the real CLI. Launched only
+// through a generated wrapper whose first argument is the launch log the spec reads back.
 const { randomUUID } = require('node:crypto')
 const fs = require('node:fs')
 
@@ -13,6 +13,10 @@ if (args.includes('--version') || args.includes('-v')) {
 }
 
 function argValue(name) {
+  const joined = args.find((arg) => arg.startsWith(`${name}=`))
+  if (joined) {
+    return joined.slice(name.length + 1)
+  }
   const index = args.indexOf(name)
   return index !== -1 ? args[index + 1] : undefined
 }
@@ -25,6 +29,59 @@ const initializeResponse = {
   account: {},
   output_style: 'default',
   available_output_styles: ['default']
+}
+
+// A prompt containing "slow" runs until it is interrupted.
+const TURN_MS = 500
+const SLOW_TURN_MS = 60_000
+let turnTimer = null
+
+function startTurn(frame) {
+  // The CLI's --replay-user-messages echo, which opens the turn.
+  write({ ...frame, isReplay: true })
+  const slow = JSON.stringify(frame.message ?? '').includes('slow')
+  turnTimer = setTimeout(
+    () => {
+      turnTimer = null
+      write({
+        type: 'assistant',
+        uuid: randomUUID(),
+        session_id: sessionId,
+        parent_tool_use_id: null,
+        message: {
+          id: randomUUID(),
+          role: 'assistant',
+          model: 'claude-fake',
+          content: [{ type: 'text', text: 'Stub reply.' }]
+        }
+      })
+      write({
+        type: 'result',
+        subtype: 'success',
+        uuid: randomUUID(),
+        session_id: sessionId,
+        is_error: false,
+        terminal_reason: 'completed',
+        result: 'Stub reply.'
+      })
+    },
+    slow ? SLOW_TURN_MS : TURN_MS
+  )
+}
+
+function interruptTurn() {
+  if (!turnTimer) {
+    return
+  }
+  clearTimeout(turnTimer)
+  turnTimer = null
+  write({
+    type: 'result',
+    subtype: 'error_during_execution',
+    is_error: true,
+    session_id: sessionId,
+    parent_tool_use_id: null
+  })
 }
 
 let buffer = ''
@@ -42,10 +99,17 @@ process.stdin.on('data', (chunk) => {
     } catch {
       frame = null
     }
+    if (frame?.type === 'user') {
+      startTurn(frame)
+      continue
+    }
     if (frame?.type !== 'control_request') {
       continue
     }
     const subtype = frame.request?.subtype
+    if (subtype === 'interrupt') {
+      interruptTurn()
+    }
     write({
       type: 'control_response',
       response: {

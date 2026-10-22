@@ -14,7 +14,10 @@ import {
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
-import { reconcileCodexSubagentTranscript } from '../../codex-subagent-transcript'
+import {
+  codexTranscriptTurnEnd,
+  reconcileCodexSubagentTranscript
+} from '../../codex-subagent-transcript'
 import {
   codexTurnApprovalsAreAutoReviewed,
   reconcileCodexSubagentReviewer
@@ -239,7 +242,8 @@ export function normalizeCodexEvent(
 
   if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
+    // Cleared, not deleted, so a reconcile cannot re-seed retired children from the previous row.
+    getOrCreateCodexSubagentRoster(state, paneKey).clear()
   }
   // Why: resolved after the transcript reconcile above, so this turn's reviewer is read from the
   // rollout during the very PermissionRequest being classified, not from a prior event.
@@ -251,15 +255,60 @@ export function normalizeCodexEvent(
     stateName
   )
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const turnId = readString(hookPayload, 'turn_id')
+  // Why: Codex fires no Stop for a failed turn, so a Stop for one is the rollout's end replayed.
+  const failedTurn =
+    eventName === 'Stop' &&
+    previousLead?.state !== 'done' &&
+    turnId !== undefined &&
+    codexTranscriptTurnEnd(transcript, turnId) === 'failed'
+  // Why: a compaction inside a running turn keeps that turn; one queued before the next turn follows an ended one.
+  const startsTurn =
+    eventName === 'UserPromptSubmit' ||
+    (eventName === 'SessionStart' &&
+      (readString(hookPayload, 'source') !== 'compact' ||
+        previousLead?.state === 'done' ||
+        !previousLead?.turnId ||
+        codexTranscriptTurnEnd(transcript, previousLead.turnId) !== undefined))
   const record = setCodexMainAgentTurnState(state, paneKey, {
     state: ownedState,
-    ...codexLeadOutcomeForEvent(eventName, previousLead, ownedState),
+    ...(failedTurn
+      ? { outcome: 'failure' as const }
+      : codexLeadOutcomeForEvent(eventName, previousLead, ownedState)),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
-      (eventName === 'SessionStart' ? undefined : previousLead?.model)
+      (eventName === 'SessionStart' ? undefined : previousLead?.model),
+    sessionId: readString(hookPayload, 'session_id'),
+    turnId: turnId ?? (startsTurn ? null : undefined)
   })
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
     updateLead: true
   })
+}
+
+/** A root hook for a turn whose rollout already recorded its end restates that end as Stop,
+ *  since Codex skips Stop for internal subagents such as /review. A delayed hook for an ended
+ *  turn the lead has moved past is dropped, so it can neither end nor rearm the current turn. */
+export function codexHookEventForEndedTurn(
+  state: HookListenerState,
+  paneKey: string,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): unknown {
+  const turnId = readString(hookPayload, 'turn_id')
+  if (
+    !turnId ||
+    eventName === 'Stop' ||
+    eventName === 'Interrupt' ||
+    readString(hookPayload, 'agent_id')
+  ) {
+    return eventName
+  }
+  if (!codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(paneKey), turnId)) {
+    return eventName
+  }
+  const leadTurnId = state.codexLeadStateByPaneKey.get(paneKey)?.turnId
+  return leadTurnId && leadTurnId !== turnId ? undefined : 'Stop'
 }

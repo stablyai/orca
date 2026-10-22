@@ -77,7 +77,7 @@ vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
 vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => doubles.gates
 }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => doubles.connection }))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async (client: unknown) => {

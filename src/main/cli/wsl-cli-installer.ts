@@ -11,9 +11,9 @@ import {
   getPosixDirname,
   getWslBridgeMarker,
   getWslLauncherMarker,
-  parseManagedLauncherTarget,
-  quoteShell
+  parseManagedLauncherTarget
 } from './wsl-cli-scripts'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 import { buildWslCliInstallCommand } from './wsl-cli-registration-command'
 import {
   buildWslCliStatus,
@@ -242,7 +242,10 @@ export class WslCliInstaller {
       // startup reconciliation as opt-in proof, silently undoing this removal.
       await this.run(
         this.distro as string,
-        ['set -eu', buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))].join('\n')
+        [
+          'set -eu',
+          buildManagedLegacyRemoveCommand(quotePosixShellDoubleQuotedApostrophe(legacyCommandPath))
+        ].join('\n')
       )
       return status
     }

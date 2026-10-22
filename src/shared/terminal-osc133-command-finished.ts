@@ -50,6 +50,16 @@ function findPrefixCarry(data: string): string {
   return ''
 }
 
+/**
+ * TUIs such as OMP end each prompt bubble with `B C D;0`, closing their own zone while they keep
+ * running (#10923). A shell's `C` follows the typed command line, never its own prompt's `B`
+ * directly. `adjacentMarkers` holds the markers seen back to back before this one, e.g. 'BC'.
+ */
+export function closesAppOsc133Zone(adjacentMarkers: string, payload: string): boolean {
+  const [sequence, exitCode] = payload.split(';')
+  return sequence === 'D' && exitCode === '0' && adjacentMarkers.endsWith('BC')
+}
+
 export type Osc133CommandFinishedScanner = {
   /** Feed one raw PTY chunk; fires once per complete OSC 133;D sequence. */
   scan: (data: string) => void
@@ -76,10 +86,8 @@ export function createOsc133CommandFinishedScanner(
 
   const handleOsc133 = (payload: string, endInChunk: number): void => {
     const [sequence, exitCode] = payload.split(';')
-    // Why: TUIs such as OMP end each prompt bubble with `B C D;0`, closing their own zone while
-    // they keep running (#10923). Read as the command's exit, that `D` retired a live agent's
-    // status. A shell's `C` follows the typed command line, never its own prompt's `B` directly.
-    const closesAppZone = sequence === 'D' && exitCode === '0' && adjacentMarkers.endsWith('BC')
+    // Why: read as the command's exit, that `D` retired a live agent's status.
+    const closesAppZone = closesAppOsc133Zone(adjacentMarkers, payload)
     adjacentMarkers = (adjacentMarkers + sequence.slice(0, 1)).slice(-2)
     if (closesAppZone) {
       return

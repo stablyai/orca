@@ -6,7 +6,7 @@ import {
 import { MANAGED_AGENT_HOOK_TARGETS } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TuiAgentDetectionCommand } from '../ipc/tui-agent-detection-commands'
+import type { TuiAgentDetectionCommand } from '../../shared/tui-agent-detection-commands'
 import { parseClaudeCliVersion } from '../claude/claude-hook-event-versions'
 
 export type ManagedHookDetectionSettings = Partial<

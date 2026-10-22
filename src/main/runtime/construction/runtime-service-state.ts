@@ -3,7 +3,7 @@ import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from '../orchestration/cli-command'
 import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender-names'
-import { isStructuredWorkerHandle } from '../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
@@ -40,6 +40,8 @@ import { RuntimeMessageWaiters } from '../runtime-message-waiters'
 import type { RuntimeSkillCommands } from '../runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -100,7 +102,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly worktreeLineage = new RuntimeWorktreeLineageController({
     getStore: () => this.store,
-    getCachedWorktrees: () => this.resolvedWorktrees.peek()?.worktrees ?? null,
     getDb: () => this.getOrchestrationDbIfAvailable(),
     resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
     listResolvedWorktrees: () => this.listResolvedWorktrees(),
@@ -142,7 +143,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),
     buildHostScope: (targetWorktreeId, terminals, worktrees, queriedHostIds) =>
-      this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds)
+      this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds),
+    // Switch point: main lists every saved pane of a workspace it owns.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { listsEveryPane: (id) => mainListsEveryPane(this, id) } : {})
   })
 
   protected readonly managedWorktreeQueries = new RuntimeManagedWorktreeQueries({

@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorSlice } from './editor'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -429,8 +444,9 @@ describe('createEditorSlice conflict status reconciliation', () => {
     ).toEqual(expect.objectContaining({ requestId: 2, error: 'newer result' }))
   })
 
-  it('opens check full details as a center-pane editor tab', () => {
+  it('opens check full details as a center-pane editor tab', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -471,12 +487,26 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       })
     )
+    // A layout-owner build draws the tab with main's frame, from the view its open sent.
+    await main.settle()
     expect(store.getState().unifiedTabsByWorktree['wt-1']).toContainEqual(
       expect.objectContaining({
         entityId: 'wt-1::check-details::check-run:42',
         contentType: 'check-details',
-        label: 'verify'
+        // Main's frame carries no label for a tab the window never drew.
+        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { label: 'verify' })
       })
     )
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(layoutApplyTestTransport.sentOfType('openEditorTab')).toEqual([
+        expect.objectContaining({
+          contentType: 'check-details',
+          view: expect.objectContaining({
+            view: expect.objectContaining({ mode: 'check-details' })
+          })
+        })
+      ])
+    }
+    main.close()
   })
 })

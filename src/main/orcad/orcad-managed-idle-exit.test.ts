@@ -10,9 +10,9 @@ import {
 } from './orcad-managed-idle-exit'
 import {
   ORCAD_E2E_IDLE_TIMEOUT_ENV,
-  ORCAD_IDLE_EXIT_TIMEOUT_MS,
-  ORCAD_MANAGED_ACTIVATION_ROOT_ENV
+  ORCAD_IDLE_EXIT_TIMEOUT_MS
 } from '../../shared/orcad-idle-exit'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 
 const config = { timeoutMs: 1_000, activationRoot: '/home/u/.orca-remote/.fence' }
 

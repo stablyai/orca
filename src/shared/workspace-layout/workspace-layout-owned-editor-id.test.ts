@@ -105,14 +105,9 @@ describe('editor tabs under an owned id, layout-owner build', () => {
     const { layout } = load(session)
     const workspace = layout.workspaces[GIT_KEY]!
 
-    expect(
-      tabExecutionHostId(
-        workspace.tabs[0]!,
-        workspace.editorFiles,
-        LOCAL_EXECUTION_HOST_ID,
-        workspace.worktreeId
-      )
-    ).toBe('runtime:env-1')
+    expect(tabExecutionHostId(workspace.tabs[0]!, workspace, LOCAL_EXECUTION_HOST_ID)).toBe(
+      'runtime:env-1'
+    )
     const closed = applyLayoutCommand(
       layout,
       { type: 'closeTabs', workspace: GIT_KEY, tabIds: [fileId] },

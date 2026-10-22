@@ -52,6 +52,9 @@ export function MobileSourceControlContent({ state }: Props) {
   // Why: a capped listing can hide unstaged rows behind an all-staged prefix.
   const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
+  // Why: as on desktop, a typed message blocks regenerating; while generating the button cancels.
+  const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
+  const generateDisabled = busyAction !== null || generateBlockedByMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
   const fileList = useMemo(
@@ -209,12 +212,16 @@ export function MobileSourceControlContent({ state }: Props) {
             <Pressable
               style={({ pressed }) => [
                 styles.generateButton,
-                busyAction !== null && styles.commitButtonDisabled,
+                generateDisabled && styles.commitButtonDisabled,
                 pressed && styles.commitButtonPressed
               ]}
               // Why: commit-message AI belongs to the commit path; hiding it
               // during Stage All keeps the quick action visually unambiguous.
-              disabled={busyAction !== null}
+              disabled={generateDisabled}
+              accessibilityState={{ disabled: generateDisabled }}
+              accessibilityHint={
+                generateBlockedByMessage ? 'Clear the message to regenerate.' : undefined
+              }
               onPress={() =>
                 generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
               }

@@ -21,7 +21,6 @@ import { leafTuiIdleEvidence, ptyTuiIdleEvidence } from '../../tui-idle-evidence
 import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
 
 import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
-import type { OrcaRuntimeWithDeliverPendingMessages } from '../../orchestration/mail/terminal-message-delivery'
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected abstract resolveWaiter(
@@ -31,10 +30,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   protected abstract removeWaiter(
     ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
   ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
-  protected abstract deliverPendingMessages(
-    ...args: Parameters<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
-  ): ReturnType<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
 
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
     const handle = this.issueHandle(leaf)
@@ -249,26 +244,5 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return title
     }
     return null
-  }
-
-  protected settlePendingMessageDelivery(
-    ptyId: string,
-    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
-  ): void {
-    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
-      return
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
-    if (!parked) {
-      return
-    }
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const [mailboxHandle, delivery] of parked) {
-      this.deliverPendingMessages(delivery.leaf, {
-        mailboxHandle,
-        reservedTypes: delivery.reservedTypes
-      })
-    }
   }
 }

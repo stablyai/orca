@@ -11,12 +11,6 @@ import {
   type BrowserHostPlacementIdentity
 } from './browser-host-page-placement-validation'
 
-export type {
-  RuntimeBrowserClientPlacement,
-  RuntimeBrowserPlacement,
-  RuntimeBrowserServerPlacement
-} from '../../../shared/runtime-browser-placement'
-
 const DEFAULT_MAX_PAGE_PLACEMENTS = 256
 
 export type BrowserPageRetirement = Readonly<{
@@ -141,6 +135,24 @@ export class BrowserHostPagePlacementRegistry {
     this.placementsByPageId.set(reservation.browserPageId, {
       placement: reservation.placement
     })
+    return reservation.placement
+  }
+
+  commitClientPageReplacement(
+    reservation: BrowserClientPagePlacementReservation,
+    expected: RuntimeBrowserClientPlacement
+  ): RuntimeBrowserClientPlacement {
+    const state = this.placementsByPageId.get(reservation.browserPageId)
+    if (
+      this.reservationsByPageId.get(reservation.browserPageId) !== reservation ||
+      state?.placement !== expected ||
+      state.retirement
+    ) {
+      throw new Error('browser_page_placement_stale')
+    }
+    this.reservationsByPageId.delete(reservation.browserPageId)
+    this.releaseReservationSlot(reservation)
+    this.placementsByPageId.set(reservation.browserPageId, { placement: reservation.placement })
     return reservation.placement
   }
 

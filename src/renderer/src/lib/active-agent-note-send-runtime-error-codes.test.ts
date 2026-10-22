@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { hasRuntimeRpcErrorCode, RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
   isRuntimeTerminalNotWritable,
   isRuntimeTerminalUnavailable,

@@ -82,7 +82,9 @@ describe('a paired client tab move in a layout-owner build', () => {
 
     // The store's reorder records the order in main as moves (tabs-layout-owner-groups-order).
     expect(mocks.drop).not.toHaveBeenCalled()
-    expect(mocks.store.reorderUnifiedTabs).toHaveBeenCalledWith('g1', ['b', 'a', 'c'])
+    expect(mocks.store.reorderUnifiedTabs).toHaveBeenCalledWith('g1', ['b', 'a', 'c'], {
+      projectedMoveTabId: 'c'
+    })
   })
 
   it('moves the tab here as today when main does not own the workspace', () => {
@@ -96,6 +98,8 @@ describe('a paired client tab move in a layout-owner build', () => {
       tabOrder: ['t2', 't1']
     })
 
-    expect(mocks.store.reorderUnifiedTabs).toHaveBeenCalledWith('g1', ['t2', 't1'])
+    expect(mocks.store.reorderUnifiedTabs).toHaveBeenCalledWith('g1', ['t2', 't1'], {
+      projectedMoveTabId: 't2'
+    })
   })
 })

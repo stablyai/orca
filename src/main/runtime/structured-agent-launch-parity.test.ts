@@ -154,7 +154,17 @@ import {
   structuredWorkerProcessIncarnation
 } from './structured-worker-identity'
 
-const AGENTS = ['claude', 'codex', 'grok', 'opencode', 'omp', 'pi', 'antigravity'] as const
+// A new agent goes last: its cases then shift only the configured ones' session ids.
+const AGENTS = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity',
+  'opencode2'
+] as const
 type Agent = (typeof AGENTS)[number]
 
 /** What each fake binary prints for `--version`: a release every launch gate accepts. */
@@ -165,7 +175,8 @@ const VERSIONS: Record<Agent, string> = {
   opencode: '2.0.20',
   omp: '17.1.0',
   pi: '1.1.0',
-  antigravity: '1.3.0'
+  antigravity: '1.3.0',
+  opencode2: '2.0.20'
 }
 /** An agent whose binary is not named after it. */
 const BINARIES: Partial<Record<Agent, string>> = { antigravity: 'agy_acp_server.par' }
@@ -280,7 +291,8 @@ function configuredSettings(): Partial<GlobalSettings> {
       opencode: '',
       omp: '',
       pi: '',
-      antigravity: ''
+      antigravity: '',
+      opencode2: ''
     },
     agentDefaultEnv: Object.fromEntries(
       AGENTS.map((agent) => [
@@ -346,6 +358,7 @@ function accountHomeFor(agent: Agent): AgentSessionAccountHome {
     case 'grok':
       return { variable: 'GROK_HOME', path: directory('grok') }
     case 'opencode':
+    case 'opencode2':
       return { kind: 'opencode', locator: { kind: 'unmanaged' } }
     case 'omp':
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('omp') }
@@ -374,6 +387,7 @@ async function resumedHandleFor(
     }
     case 'grok':
     case 'opencode':
+    case 'opencode2':
     case 'omp':
     case 'antigravity':
       return { transport: 'acp', agent, nativeId: `acp-session-${sessionId}` }
@@ -427,7 +441,6 @@ async function recordFor(
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'parity-key',
       claimStatus: 'released',
       unreconciled: false,

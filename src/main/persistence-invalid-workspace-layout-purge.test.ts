@@ -14,16 +14,17 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../sh
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import type { DetectedWorktreeListResult } from '../shared/worktree/types'
-import type { WorkspaceLayoutEvent } from '../shared/workspace-layout/workspace-layout-stream-frames'
+import { collectLayoutEvents } from './runtime/workspace-layout-stream-events.test-fixture'
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeCatalogVersion
 } from './local-worktree-scan-generation'
 import { dropWorkspacesTheListingInvalidates } from './persistence/restoring-sessions/invalid-workspace-layout-purge'
 import { WorkspaceLayoutStream } from './runtime/workspace-layout-stream'
+import { windowViewSaveForMain } from './persistence/window-save-view'
 
 vi.mock('../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -164,8 +165,10 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
         homeHostId: () => 'local',
         liveTitle: () => null
       })
-      const events: WorkspaceLayoutEvent[] = []
-      const { snapshot } = stream.subscribe((event) => events.push(event))
+      const collector = collectLayoutEvents()
+      const { events } = collector
+      const { snapshot } = stream.subscribe(collector.listener)
+      collector.seed(snapshot)
       expect(snapshot.map((entry) => entry.key)).toContain(DELETED)
 
       dropWorkspacesTheListingInvalidates(store, listing([KEPT]))
@@ -222,8 +225,7 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
     })
   })
 
-  // Pending until Core-A: today a window save still carries structure, so it can restore the key.
-  it.skip('a later window save that still names a dropped workspace does not bring it back', () => {
+  it('a later window save that still names a dropped workspace does not bring it back', () => {
     const store = (() => {
       writeDataFile({
         schemaVersion: 1,
@@ -235,7 +237,14 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
     })()
     dropWorkspacesTheListingInvalidates(store, listing([KEPT]))
 
-    store.setWorkspaceSession(sessionWith(KEPT, DELETED), 'local')
+    store.setWorkspaceSession(
+      windowViewSaveForMain(
+        store.getWorkspaceSession('local'),
+        sessionWith(KEPT, DELETED),
+        'local'
+      ),
+      'local'
+    )
 
     expect(storedKeys(store)).toEqual([KEPT])
   })

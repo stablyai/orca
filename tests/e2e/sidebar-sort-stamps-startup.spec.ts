@@ -9,7 +9,7 @@ import {
   mutateStoppedProfileState,
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
-import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady } from './helpers/store'
 import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { WorkspaceRowsSnapshotSchema } from '../../src/shared/sidebar-list/workspace-rows'

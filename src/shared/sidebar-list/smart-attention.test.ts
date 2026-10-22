@@ -163,8 +163,7 @@ describe('resolveAttention', () => {
     })
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 60_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 60_000
     })
   })
 
@@ -412,8 +411,7 @@ describe('resolveAttention', () => {
     })
     expect(resolveAttention(hookPanes([olderBlocked, newerBlocked]), NOW)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -435,7 +433,7 @@ describe('resolveAttention', () => {
         [{ kind: 'title', status: 'permission', worktreeLastActivityAt: NOW - 60_000 }],
         NOW
       )
-    ).toEqual({ cls: 1, attentionTimestamp: NOW, cause: 'title-heuristic' })
+    ).toEqual({ cls: 1, attentionTimestamp: NOW })
   })
 
   it('title-heuristic working maps to Class 3 with ts = worktree.lastActivityAt', () => {
@@ -497,7 +495,7 @@ describe('resolveAttention', () => {
         ],
         NOW
       )
-    ).toEqual({ cls: 1, attentionTimestamp: NOW, cause: 'title-heuristic' })
+    ).toEqual({ cls: 1, attentionTimestamp: NOW })
   })
 })
 
@@ -567,8 +565,7 @@ describe('buildAttentionByWorktree', () => {
 
     expect(buildAttentionByWorktree([w], {}, entries, {}, {}, NOW).get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -600,8 +597,7 @@ describe('buildAttentionByWorktree', () => {
     expect(attention.get(stale.id)).toEqual(IDLE)
     expect(attention.get(current.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -625,8 +621,7 @@ describe('buildAttentionByWorktree', () => {
     const map = buildAttentionByWorktree([w], { [w.id]: [tab] }, entries, {}, ptyMap([tab.id]), NOW)
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW - 5_000,
-      cause: 'blocked'
+      attentionTimestamp: NOW - 5_000
     })
   })
 
@@ -664,8 +659,7 @@ describe('buildAttentionByWorktree', () => {
     )
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
@@ -731,8 +725,7 @@ describe('buildAttentionByWorktree', () => {
 
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
@@ -779,8 +772,7 @@ describe('buildAttentionByWorktree', () => {
 
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 
@@ -808,8 +800,7 @@ describe('buildAttentionByWorktree', () => {
     )
     expect(map.get(w.id)).toEqual({
       cls: 1,
-      attentionTimestamp: NOW,
-      cause: 'title-heuristic'
+      attentionTimestamp: NOW
     })
   })
 

@@ -64,6 +64,8 @@ export type WorktreeMeta = {
   smartTier?: SmartTier
   /** See {@link Worktree.smartAt}. */
   smartAt?: number
+  /** See {@link Worktree.lastTerminalUseAt}. */
+  lastTerminalUseAt?: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
   /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */

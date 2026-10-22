@@ -306,7 +306,10 @@ export async function forEachSessionFile(
     options.signal?.throwIfAborted()
     // Why: a gate refusal means the scan could not run, not that the tree is
     // empty — swallowing it would misreport a stalled distro as "no transcript".
-    if (error instanceof WslTranscriptFsError || (options.strictErrors && !isMissingSidecarError(error))) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (options.strictErrors && !isMissingSidecarError(error))
+    ) {
       throw error
     }
     return

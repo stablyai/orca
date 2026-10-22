@@ -1,3 +1,4 @@
+import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
 import { useAppStore } from '@/store'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
@@ -226,9 +227,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           restoredSnapshotPaintsPrintableContent(snapshot)
         )
         session.ackHiddenOutputRestoreApplied(currentPtyId, coveredDropEpisode)
-        session.hiddenOutputRestoreReplayingSnapshot = null
-        const needsFreshSnapshot = session.hiddenOutputRestoreFreshSnapshotNeeded
-        session.hiddenOutputRestoreFreshSnapshotNeeded = false
+        const needsFreshSnapshot = unhideCoverage.consumeSnapshotRequirement(session, snapshot.seq)
         const drainOutcome = session.drainPendingLiveChunksAfterSnapshot(snapshot.seq)
         if (drainOutcome === 'drained' && !needsFreshSnapshot) {
           session.hiddenOutputRestoreNeeded = false
@@ -267,6 +266,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
     const hiddenOutputRestoreTask = session.hiddenOutputRestoreInFlight
     let trackedHiddenOutputRestore: Promise<void>
     trackedHiddenOutputRestore = hiddenOutputRestoreTask.finally(() => {
+      unhideCoverage.repairUnhandledMarker(session, trackedHiddenOutputRestore, ptyId)
       if (session.hiddenOutputRestoreInFlight === trackedHiddenOutputRestore) {
         session.hiddenOutputRestoreInFlight = null
       }

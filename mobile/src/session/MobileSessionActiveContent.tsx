@@ -7,6 +7,7 @@ import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibili
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
@@ -15,7 +16,9 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
+  const executionHost = useWorkspaceExecutionHost()
   const {
+    hostId,
     worktreeId,
     insets,
     connState,
@@ -23,6 +26,7 @@ export function MobileSessionActiveContent({
     terminals,
     terminalTextScale,
     setTerminalTextScale,
+    terminalTextScaleRevisionRef,
     activeHandle,
     markdownDocs,
     fileDocs,
@@ -32,6 +36,7 @@ export function MobileSessionActiveContent({
     setCreateError,
     setShowCreateTabDrawer,
     dictationMode,
+    dictationEnabled,
     toastMessage,
     handleTerminalTap,
     browserScreencastSupported,
@@ -69,6 +74,7 @@ export function MobileSessionActiveContent({
     handleKeyboardAvoidanceMetrics,
     handleHaptic,
     nativeChatImages,
+    nativeChatStructuredComposer,
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
@@ -129,6 +135,7 @@ export function MobileSessionActiveContent({
   ) : activeFileTab ? (
     <View style={styles.markdownFrame}>
       <FileReader
+        documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
         client={client}
         doc={fileDocs.get(activeFileTab.id)}
         title={activeFileTab.title || 'File'}
@@ -206,6 +213,7 @@ export function MobileSessionActiveContent({
           textScale={terminalTextScale}
           onTextScaleChange={(scale) => {
             // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
+            terminalTextScaleRevisionRef.current += 1
             setTerminalTextScale(scale)
             void saveTerminalTextScale(scale)
           }}
@@ -227,9 +235,11 @@ export function MobileSessionActiveContent({
       ))}
       <MobileNativeChatOverlay
         controller={nativeChatController}
+        activeSessionTabId={controller.activeSessionTab?.id}
         onOpenFile={handleNativeChatFileTap}
         images={nativeChatImages}
-        onMicPress={handleDictationToggle}
+        structuredComposer={nativeChatStructuredComposer}
+        onMicPress={dictationEnabled ? handleDictationToggle : undefined}
         micActive={dictation.isRecording}
         dictationMode={dictationMode}
         onMicPressIn={handleDictationPressIn}

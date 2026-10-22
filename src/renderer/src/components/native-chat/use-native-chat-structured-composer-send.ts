@@ -1,6 +1,11 @@
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { SkillRefLimitError } from '../../../../shared/structured-agent-session-send-mutation'
+import { promptSkillRefs } from './native-chat-prompt-document'
 import { useCallback } from 'react'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
-import { reportStructuredSessionUserInput } from '@/lib/worker-terminal-takeover-report'
+import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   isStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionGoalCommand,
@@ -95,23 +100,18 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport.onSubmitted?.()
       }
       const submitted = readNativeChatComposerDraft(draftScopeKey)
-      await dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
+      await dispatchNativeChatStructuredComposerText(
+        structuredTransport,
+        text,
+        attachments,
+        promptSkillRefs(submitted.document)
+      )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
           structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           if (!accepted) {
             return
           }
-          emitNativeChatMessageSent({ agent, runtime: structuredTransport.runtime })
-          if (revealsTranscript) {
-            structuredTransport.onSubmitted?.()
-          }
-          // A real user send is a takeover, exactly as typing into a worker's pane is. Only past
-          // `accepted`, and only from this hook: orchestration's own pointer nudges never reach
-          // the composer at all.
-          reportStructuredSessionUserInput(
-            structuredTransport.sessionId,
-            structuredTransport.runtimeEnvironmentId
-          )
+          completeNativeChatStructuredUserAction(agent, structuredTransport, revealsTranscript)
           // Why: the send settles after a round trip, while this or another composer of the same
           // conversation may have changed the draft; only what was sent leaves it.
           const left = nativeChatComposerDraftLeftAfterSend(
@@ -131,7 +131,16 @@ export function useNativeChatStructuredComposerSend({
         .catch((error) => {
           const notice = nativeChatNoticeFromError(
             error,
-            agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
+            error instanceof SkillRefLimitError
+              ? translate(
+                  'components.native-chat.composer.tooManySkills',
+                  'Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again.',
+                  {
+                    agent: isTuiAgent(agent) ? getAgentLabel(agent) : formatAgentTypeLabel(agent),
+                    limit: MAX_SKILL_REFS
+                  }
+                )
+              : agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })

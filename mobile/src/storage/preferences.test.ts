@@ -500,6 +500,27 @@ describe('terminal link open mode preference', () => {
     await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
   })
 
+  it('orders writes across settings mounts and makes readers wait for the latest choice', async () => {
+    const firstWrite = deferred<void>()
+    let stored: string | null = 'orca-browser'
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => stored)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (_key, value) => {
+      if (value === 'phone-browser') {
+        await firstWrite.promise
+      }
+      stored = value
+    })
+    const firstMount = saveTerminalLinkOpenMode('phone-browser')
+    const secondMount = saveTerminalLinkOpenMode('orca-browser')
+    const reader = loadTerminalLinkOpenMode()
+    await Promise.resolve()
+    expect(stored).toBe('orca-browser')
+    firstWrite.resolve()
+    await Promise.all([firstMount, secondMount])
+    await expect(reader).resolves.toBe('orca-browser')
+    expect(stored).toBe('orca-browser')
+  })
+
   it('persists the selected mode', async () => {
     await saveTerminalLinkOpenMode('phone-browser')
 

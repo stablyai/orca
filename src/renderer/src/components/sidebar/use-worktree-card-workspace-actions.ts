@@ -1,9 +1,10 @@
+import { draggedWorktreeCopiesOf } from './worktree-list/drag/dragged-worktree-copies'
 import React, { useCallback } from 'react'
 
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { runWorktreeDelete } from './delete-worktree-flow'
+import { deleteFolderWorkspaceUnlessUnsaved } from './folder-workspace-delete'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import { writeWorkspaceDragData } from './workspace-status'
@@ -26,8 +27,6 @@ export function useWorktreeCardWorkspaceActions({
   onCardDragEnd,
   onContextMenuSelect,
   folderWorkspaceId,
-  deleteFolderWorkspace,
-  setActiveWorktree,
   setShowRenameErrorDialog,
   isDeleting,
   showDeleteQuickAction
@@ -43,7 +42,7 @@ export function useWorktreeCardWorkspaceActions({
   | 'onCardDragEnd'
   | 'onContextMenuSelect'
 > &
-  Pick<Foundation, 'deleteFolderWorkspace' | 'setActiveWorktree' | 'setShowRenameErrorDialog'> &
+  Pick<Foundation, 'setShowRenameErrorDialog'> &
   Pick<LinkedDetails, 'isDeleting'> &
   Pick<ReviewDetails, 'folderWorkspaceId'> & {
     showDeleteQuickAction: boolean
@@ -54,19 +53,11 @@ export function useWorktreeCardWorkspaceActions({
       event.stopPropagation()
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
-          void deleteFolderWorkspace(
+          void deleteFolderWorkspaceUnlessUnsaved(
+            useAppStore.getState,
             folderWorkspaceId,
-            worktree.hostId ? { executionHostId: worktree.hostId } : undefined
-          ).then((deleted) => {
-            if (
-              deleted &&
-              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId) &&
-              (!worktree.hostId ||
-                useAppStore.getState().activeWorkspaceExecutionHostId === worktree.hostId)
-            ) {
-              setActiveWorktree(null)
-            }
-          })
+            worktree.hostId
+          )
           return
         }
         // Why the host (STA-4343): this row is one of possibly two for the same
@@ -74,14 +65,7 @@ export function useWorktreeCardWorkspaceActions({
         runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
       }
     },
-    [
-      deleteFolderWorkspace,
-      folderWorkspaceId,
-      worktree.hostId,
-      setActiveWorktree,
-      showDeleteQuickAction,
-      worktree.id
-    ]
+    [folderWorkspaceId, worktree.hostId, showDeleteQuickAction, worktree.id]
   )
   const handleOpenRenameErrorDialog = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -133,14 +117,18 @@ export function useWorktreeCardWorkspaceActions({
         event.preventDefault()
         return
       }
-      const dragIds =
-        isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((item) => item.id)
-          : worktree.id
-      writeWorkspaceDragData(event.dataTransfer, dragIds)
-      onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
+      const draggedCopies = draggedWorktreeCopiesOf(
+        worktree,
+        selectedWorktrees,
+        Boolean(isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1)
+      )
+      writeWorkspaceDragData(
+        event.dataTransfer,
+        draggedCopies.map((copy) => copy.id)
+      )
+      onCardDragStart?.(event, worktree.id, draggedCopies)
     },
-    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree]
   )
 
   const handleDragEnd = useCallback(

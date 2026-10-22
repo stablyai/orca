@@ -13,8 +13,6 @@ export type CodexAppServerConnectionHandlers = {
   onExit?: (error: Error, exit?: { expected: boolean }) => void
   /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
   onSpawned?: (pid: number) => Promise<void>
-  /** Any stdout or stderr chunk from the child. */
-  onOutput?: () => void
 }
 
 export type CodexAppServerConnection = {
@@ -23,7 +21,8 @@ export type CodexAppServerConnection = {
   request: (
     method: string,
     params?: Record<string, unknown>,
-    options?: { timeoutMs?: number; onReply?: () => void }
+    /** `timeoutMs` null: no deadline; the caller bounds the wait. */
+    options?: { timeoutMs?: number | null; onReply?: () => void }
   ) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
   respond: (id: number | string, result: unknown) => void

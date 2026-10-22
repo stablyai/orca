@@ -11,7 +11,7 @@ import {
   ORCAD_STDIO_BRIDGE_READY,
   ORCAD_STDIO_BRIDGE_REFUSED,
   orcadPosixStdioBridgeCommand
-} from '../ssh/orcad-stdio-bridge-script'
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
 import type { OrcadStdioBridge } from '../ssh/orcad-stdio-bridge'
 
 export type FakeWslBridgeChildren = {

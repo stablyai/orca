@@ -9,6 +9,8 @@ vi.mock('./orcad-browser-startup', () => ({
 
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 import { startOrcadWithHost } from './orcad-lifecycle'
+import { isDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 
 const roots: string[] = []
 afterEach(() => {
@@ -67,5 +69,25 @@ describe('startOrcadWithHost', () => {
     )
     await expect(handle.stop()).rejects.toThrow('orcad_quit_handlers_failed')
     expect(existsSync(join(root, ORCAD_LOCK_FILE_NAME))).toBe(true)
+  })
+
+  // Only a client's managed launch (an SSH host) has a desktop that can opt in to serve its CLI.
+  it.each([
+    ['a managed launch', { [ORCAD_MANAGED_ACTIVATION_ROOT_ENV]: '/home/me/.orca-server' }, true],
+    ['a server the user started', {}, false]
+  ])('takes desktop browser bridge commands only for %s', async (_name, env, expected) => {
+    vi.stubEnv(ORCAD_MANAGED_ACTIVATION_ROOT_ENV, env[ORCAD_MANAGED_ACTIVATION_ROOT_ENV] ?? '')
+    try {
+      const handle = await startOrcadWithHost(
+        dataRoot(),
+        async () => ({}),
+        () => {}
+      )
+      expect(isDesktopBrowserBridgeHostEnabled()).toBe(expected)
+      await handle.stop()
+      expect(isDesktopBrowserBridgeHostEnabled()).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })

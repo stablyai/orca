@@ -88,7 +88,8 @@ vi.mock('../rpc/relay-transport', () => ({
   }
 }))
 
-import { RelaySessionBroker, StaleRelayBrokerError } from './relay-session-broker'
+import { RelaySessionBroker } from './relay-session-broker'
+import { StaleRelayBrokerError } from './relay-session-broker-contract'
 import { RelayHttpError } from './relay-http-client'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import type { RelayAuthContext } from './relay-auth-identity'

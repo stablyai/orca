@@ -4,7 +4,7 @@ import type { MobileRelayStatus } from '../../../shared/mobile-relay-status'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import type { RelayRegion } from './relay-region-preference'
+import type { RelayRegion } from './relay-region-probe'
 import type { RelayRegionDecision, RelayRegionWindow } from './relay-region-correction-protocol'
 
 export type RelayBrokerStatus = MobileRelayStatus

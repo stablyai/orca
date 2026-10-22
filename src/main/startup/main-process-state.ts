@@ -25,7 +25,7 @@ import type { PluginKillListService } from '../plugins/plugin-kill-list-service'
 import type { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { RelayBrokerStatus } from '../runtime/mobile-cloud-relay/relay-session-broker'
+import type { RelayBrokerStatus } from '../runtime/mobile-cloud-relay/relay-session-broker-contract'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
@@ -103,6 +103,8 @@ export const mainProcessState = {
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the stop function assigned by main-process-observers.
+  stopDesktopPresenceReporter: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,
   watcherShutdownDone: false,
   automations: null as AutomationService | null,

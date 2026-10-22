@@ -54,9 +54,9 @@ const PrebuiltSlotManifestSchema = z.object({
 })
 
 export type PrebuiltSlotEntry = z.infer<typeof PrebuiltSlotEntrySchema>
-export type PrebuiltSlotManifest = z.infer<typeof PrebuiltSlotManifestSchema>
+type PrebuiltSlotManifest = z.infer<typeof PrebuiltSlotManifestSchema>
 
-export type PrebuiltSlotRefusal =
+type PrebuiltSlotRefusal =
   | 'no-slot'
   | 'no-prebuilds-dir'
   | 'no-manifest'
@@ -97,7 +97,7 @@ export function readPrebuiltSlotManifest(prebuildsDir: string): PrebuiltSlotMani
  * Why each check refuses instead of copying: a binary this host cannot load would replace
  * a "no usable prebuilt" diagnosis with a loader failure that reads as a corrupt install.
  */
-export function checkPrebuiltSlotEntry(
+function checkPrebuiltSlotEntry(
   entry: PrebuiltSlotEntry,
   abi: NativeHostAbi,
   hostNapi: number | null
@@ -135,7 +135,7 @@ function sha256File(path: string): string {
 }
 
 /** Compat slots (design D6 rung B) tried after `slot`'s own, e.g. linux-x64-glibc217 for linux-x64-glibc. */
-export function compatSlotsFor(slot: string): string[] {
+function compatSlotsFor(slot: string): string[] {
   return COMPAT_SERVER_TARGETS.filter((compat) => COMPAT_SERVER_TARGET_BASES[compat] === slot)
 }
 

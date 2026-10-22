@@ -91,7 +91,7 @@ function onDocumentVisibilityChange(scope: TerminalDocumentScope) {
   }
   // Why: iOS may restore the xterm model while discarding GPU pixels/theme
   // paint state, so visibility must rebuild the atlas and repaint every row.
-  applyTerminalTheme(scope, scope.terminalThemeInput)
+  applyTerminalTheme(scope, scope.terminalThemeInput, true)
   try {
     if (scope.webglAddon && scope.webglAddon.clearTextureAtlas) {
       scope.webglAddon.clearTextureAtlas()

@@ -20,7 +20,15 @@ afterEach(() => {
   setRuntimeBrowserUnavailableCause(null)
 })
 
-const host: RuntimeBrowserCommandHost = Object.create(null)
+// No desktop hosts pages for this runtime, so only the engine can answer.
+const host: RuntimeBrowserCommandHost = Object.assign(Object.create(null), {
+  getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry(),
+  getBrowserHostLeaseRegistry: () => ({
+    select: () => {
+      throw new Error('browser_host_unavailable')
+    }
+  })
+})
 function delayedProvider() {
   const pending = Promise.withResolvers<OrcadBrowserProvider | null>()
   vi.mocked(resolveOrcadBrowserProvider).mockReturnValueOnce(pending.promise)

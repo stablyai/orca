@@ -1,4 +1,10 @@
-import { recoverStructuredRewind } from './structured-rewind-recovery'
+import type { StructuredRewindRecoveryEvidence } from './structured-rewind-recovery'
+import {
+  publishAttachedChild,
+  readBoundChildRewind,
+  type AttachCandidate,
+  type BoundAttach
+} from './structured-agent-session-attach-publish'
 // The host's attach, lifted out of the host class.
 //
 // Attach is the one operation that touches every collaborator the host owns — the lease
@@ -6,12 +12,13 @@ import { recoverStructuredRewind } from './structured-rewind-recovery'
 // queue — so leaving it inline made the host grow every time any of them did. The host keeps the
 // state; this owns the ordering between them.
 
+import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
+import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { randomUUID } from 'node:crypto'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import type {
   AgentSessionAttachResult,
-  AgentSessionMutationResult,
-  AgentSessionTurnActivity
+  AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
@@ -25,51 +32,52 @@ import { refuseAgentSessionMutation } from './structured-agent-session-mutation-
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
-import {
-  indexProviderChild,
-  structuredAgentSessionConversationFence
-} from './structured-agent-session-provider-child'
-import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { noteStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt'
-import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
+import {
+  isStructuredAgentSessionStartupExpired,
+  type StructuredAgentSessionStartupAttempt
+} from './structured-agent-session-startup-attempt-contract'
 import {
   addAgentSessionCreatePhaseAttributes,
   withAgentSessionCreatePhase,
   withAgentSessionSpan,
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
+import {
+  heldStructuredAgentSessionAttachLock,
+  type StructuredAgentSessionAttachLock
+} from './structured-agent-session-attach-lock'
 
 export type StructuredAgentSessionAttachOptions = {
   hostLaunchDirectory?: string
+  /** The saved list a new chat's options are admitted against, for the folder its picker read. */
+  catalogModels?: AttachFlowInput['models']
   recordPhase?: AgentSessionCreatePhaseRecorder
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
   startedFor?: string
+  startupOptions?: Readonly<Record<string, string>>
   /** A close, an admitted Stop or quit aborted this attach: its refusal is that abort's. */
   onAborted?: () => void
   /** The startup limit aborted this attach's acquire: it failed, nobody stopped it. */
   onStartupExpired?: () => void
+  /** An agent start's: its steps run outside the session's serialize and commit under it. */
+  lock?: StructuredAgentSessionAttachLock
+  startupAttemptId?: string
+  /** The attach made its child the session's. */
+  onPublished?: () => void
 }
 
-/**
- * The attach itself, for a caller already inside the session's serialize.
- *
- * That is every caller that has to know what the session looks like RIGHT NOW: the delivery loop,
- * and an operation that needs the provider. They run their check and this attach in one serialized
- * step, so "the session has no child" is still true when
- * the attach starts. `attachStructuredAgentSession` is this under `serialize`, for a client.
- */
-export function attachStructuredAgentSessionUnderSerialize(
+/** The attach an agent start runs under its own lock (`structured-agent-session-start-flight`);
+ *  `attachStructuredAgentSession` runs the same steps inside one `serialize`, for a client. */
+export function attachStructuredAgentSessionForStart(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
   params: AgentSessionAttachParams,
-  options: StructuredAgentSessionAttachOptions = {}
+  options: StructuredAgentSessionAttachOptions & { lock: StructuredAgentSessionAttachLock }
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  return context.tasks.trackAttach(runAttach(context, callerKey, params, options))
+  return runAttach(context, callerKey, params, options)
 }
 
 export function attachStructuredAgentSession(
@@ -83,9 +91,39 @@ export function attachStructuredAgentSession(
   // evicts, so no child is spawned behind the eviction and orphaned.
   const run = (recordPhase?: AgentSessionCreatePhaseRecorder) =>
     context.tasks.trackAttach(
-      context.serialize(sessionId, () =>
-        runAttach(context, callerKey, params, { ...options, recordPhase })
-      )
+      (async () => {
+        for (;;) {
+          const selected = await context.serialize(sessionId, async () => {
+            const child = context.sessions.get(sessionId)?.child
+            const flight = context.runtimeState.startFlights.get(sessionId)
+            // The owning flight alone publishes its acquisition; replay waits outside its lane.
+            if (!child && flight) {
+              return { flight }
+            }
+            const record = context.deps.store.getRecord(sessionId)
+            if (!child && record && agentSessionLeaseAdmitsWriter(record.lease)) {
+              return {
+                result: {
+                  ok: false as const,
+                  refusal: refuse(
+                    'agent_session_ownership_unknown',
+                    { reason: 'noProviderChild' },
+                    'The session has no provider child to write to.'
+                  )
+                }
+              }
+            }
+            return {
+              result: await runAttach(context, callerKey, params, { ...options, recordPhase })
+            }
+          })
+          if (selected.result !== undefined) {
+            return selected.result
+          }
+          await selected.flight.outcome
+        }
+      })(),
+      { sessionId, location: params.location }
     )
   if (params.envelope.expectedRuntimeFence !== null) {
     return run()
@@ -110,15 +148,19 @@ async function runAttach(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  // Begun first, so a close or Stop during any phase below still stops the start.
-  const acquire = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  // Begun first, so a close or Stop during any phase below still stops the start. A start's lock
+  // carries the controller it registered before its first wait.
+  const acquire = options.lock
+    ? null
+    : context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  const lock = options.lock ?? heldStructuredAgentSessionAttachLock(acquire?.signal)
   try {
-    return await runAttachUnderAbort(context, callerKey, params, options, acquire.signal)
+    return await runAttachUnderAbort(context, callerKey, params, options, lock)
   } finally {
-    acquire.end()
-    if (isStructuredAgentSessionStartupExpired(acquire.signal.reason)) {
+    acquire?.end()
+    if (isStructuredAgentSessionStartupExpired(lock.signal.reason)) {
       options.onStartupExpired?.()
-    } else if (acquire.signal.aborted) {
+    } else if (lock.signal.aborted) {
       options.onAborted?.()
     }
   }
@@ -129,7 +171,7 @@ async function runAttachUnderAbort(
   callerKey: string,
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions,
-  acquireSignal: AbortSignal
+  lock: StructuredAgentSessionAttachLock
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const recordPhase = options.recordPhase
@@ -137,17 +179,18 @@ async function runAttachUnderAbort(
   const fenceBefore = context.sessions.has(sessionId)
     ? structuredAgentSessionConversationFence(context.deps.store, sessionId)
     : null
+  // Each verdict commits in the store's own transaction, against the owner identity it probed.
   const unreconciled = await withAgentSessionCreatePhase('reconcile_leases', recordPhase, () =>
-    context.reconcileLeases(sessionId)
+    lock.wait(context.reconcileLeases(sessionId))
   )
   if (unreconciled) {
     return refuseAgentSessionMutation(unreconciled)
   }
   await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
-    context.runtimeState.resolveRecovery(sessionId)
+    lock.wait(context.runtimeState.resolveRecovery(sessionId))
   )
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
-    context.runtimeState.probeOwner(sessionId)
+    lock.wait(context.runtimeState.probeOwner(sessionId))
   )
   // Read before the reserve clears it: how the previous generation ended decides how whatever it
   // left running is settled.
@@ -156,7 +199,9 @@ async function runAttachUnderAbort(
   const launchDirectory =
     !priorRecord && isFloatingWorkspaceId(params.location.workspaceId)
       ? (options.hostLaunchDirectory ??
-        (await context.deps.resolveWorkspacePath?.(params.location.workspaceId)))
+        (await lock.wait(
+          Promise.resolve(context.deps.resolveWorkspacePath?.(params.location.workspaceId))
+        )))
       : undefined
   if (!priorRecord && isFloatingWorkspaceId(params.location.workspaceId) && !launchDirectory) {
     throw new Error('floating_agent_session_launch_directory_unavailable')
@@ -169,10 +214,13 @@ async function runAttachUnderAbort(
     candidate: AttachCandidate | null
     committed: boolean
     startup: StructuredAgentSessionStartupAttempt | null
-  } = { candidate: null, committed: false, startup: null }
+    bound: BoundAttach | null
+    rewind: StructuredRewindRecoveryEvidence
+  } = { candidate: null, committed: false, startup: null, bound: null, rewind: null }
   const { startupAttempts } = context.runtimeState
   try {
     const attached = await performAttach({
+      models: priorRecord ? undefined : options.catalogModels,
       store: context.deps.store,
       adapter: context.deps.adapter,
       agents: context.deps.agents,
@@ -180,7 +228,9 @@ async function runAttachUnderAbort(
       eventSink: attemptSink.sink,
       // The superseded child's writes settle into its own journal before a new child starts.
       onAcquiring: async () => {
-        const barrier = await context.runtimeState.currentEventSink(sessionId)?.drained()
+        const barrier = await lock.wait(
+          Promise.resolve(context.runtimeState.currentEventSink(sessionId)?.drained())
+        )
         if (barrier && !barrier.ok) {
           throw barrier.error
         }
@@ -191,22 +241,24 @@ async function runAttachUnderAbort(
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
         probe,
-        ...(await pinnedAgentSessionLaunchArgs(context.deps.resolveLaunchArgs, params)),
-        ...(await pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params))
+        ...(await lock.wait(pinnedAgentSessionLaunchArgs(context.deps.resolveLaunchArgs, params))),
+        ...(await lock.wait(pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params)))
       },
       callerKey,
       params,
       now: () => context.now(),
       recordPhase,
-      acquireSignal,
-      onStartCatalogListing: (listing) =>
-        context.deps.modelCatalog?.recordLiveListing(sessionId, listing),
+      acquireSignal: lock.signal,
+      lock,
+      ...(options.startupAttemptId ? { startupAttemptId: options.startupAttemptId } : {}),
       onStartupAttempt: (startup) => {
         attempt.startup = startup
         return startupAttempts.track(sessionId, startup)
       },
+      ...(options.startupOptions ? { startupOptions: options.startupOptions } : {}),
       launchPermissionMode: async (record) =>
-        (await structuredAgentSessionLaunchPermission(context.deps, record)) ?? undefined,
+        (await lock.wait(structuredAgentSessionLaunchPermission(context.deps, record))) ??
+        undefined,
       ...(options.onAcquisitionFailed ? { onAcquisitionFailed: options.onAcquisitionFailed } : {}),
       openConversation: async (record) => {
         const conversation = await context.openConversation(record.sessionId, { acquisition: true })
@@ -218,13 +270,10 @@ async function runAttachUnderAbort(
       // The cleanup released the acquisition, which for a re-attach is the live child itself.
       onAcquisitionReleased: (cause, verdict) =>
         endStructuredAgentSessionReleasedChild(context, sessionId, cause, verdict),
-      onAttached: async (attached, acquisitionGeneration, owner, providerChildPhase) => {
+      // The commit before the drain: stale rows settle, and the sink binds to the journal.
+      onAttached: async (attached, acquisitionGeneration, owner) => {
         const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
         const current = context.sessions.get(sessionId)?.child ?? null
-        const startedFor = owner === 'acquired' ? options.startedFor : current?.startedFor
-        // A re-attach to a live child keeps the mode that child was launched with.
-        const permissionMode =
-          owner === 'acquired' ? attempt.startup?.permissionMode : current?.permissionMode
         // A re-attach to a live child keeps the sink that child already writes through.
         const eventSink =
           owner === 'acquired'
@@ -242,57 +291,39 @@ async function runAttachUnderAbort(
             failureTextContext: structuredAgentSessionFailureWordsContext(priorRecord)
           })
         }
-        await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
-          context.subscribers.publish(sessionId, attached.journal, activity)
-        )
-        attempt.candidate = {
-          sink: eventSink,
-          child: (owner === 'kept' && current) || {
-            generation: acquisitionGeneration ?? current?.generation ?? null,
-            fence,
-            // An acquire reports its phase; a re-attach keeps what its child already proved.
-            phase: owner === 'acquired' ? providerChildPhase : (current?.phase ?? 'ready'),
-            ...(startedFor === undefined ? {} : { startedFor }),
-            ...(permissionMode === undefined ? {} : { permissionMode }),
-            heldSends: () => context.deps.adapter.heldSends?.(sessionId),
-            exitObservation: eventSink.exitObservation
-          }
+        eventSink.bind({
+          journal: attached.journal,
+          fence,
+          publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity)
+        })
+        const { journal } = attached
+        attempt.bound = { acquisitionGeneration, owner, fence, journal, current, eventSink }
+      },
+      // Outside the commits: the barrier the host publishes behind, and for a proven child the
+      // provider's word on a rewind in doubt (a starting one recovers in its open step).
+      beforePublish: async (owner) => {
+        const barrier = await attempt.bound?.eventSink.drained()
+        if (barrier && !barrier.ok) {
+          throw barrier.error
         }
-        // Only a proven child has the protocol session recovery asks; a starting one recovers in
-        // its `started` step, before it is handed anything.
-        if (attempt.candidate?.child.phase === 'ready') {
-          await recoverStructuredRewind(
-            context.deps,
-            sessionId,
-            attached.journal,
-            fence,
-            context.deps.adapter,
-            context.now
-          )
+        if (owner === 'kept' && attempt.bound?.current?.phase === 'ready') {
+          attempt.rewind = await readBoundChildRewind(context, sessionId, attempt.bound)
         }
-        if (fenceBefore !== null && fence !== fenceBefore) {
-          context.subscribers.snapshot(sessionId, attached.journal, fence)
-        } else {
-          context.subscribers.publish(sessionId, attached.journal)
+      },
+      onPublish: async (attached, recordOutcome) => {
+        const published = await publishAttachedChild(context, sessionId, attached, {
+          bound: attempt.bound,
+          attempt,
+          attemptSink,
+          fenceBefore,
+          startedFor: options.startedFor,
+          recordOutcome
+        })
+        if (published) {
+          options.onPublished?.()
         }
       }
     })
-    const { candidate } = attempt
-    const conversation = context.sessions.get(sessionId)
-    if (attached.ok && candidate && conversation) {
-      context.runtimeState.adoptEventSink(sessionId, candidate.sink)
-      attempt.committed = candidate.sink === attemptSink
-      indexProviderChild(conversation, candidate.child)
-      if (attempt.startup) {
-        startupAttempts.published(sessionId, attempt.startup.attemptId, candidate.child)
-        if (candidate.child.phase === 'ready') {
-          noteStructuredAgentSessionProviderStarted(context.deps, sessionId)
-        } else {
-          context.openProviderChild?.(sessionId, candidate.child)
-        }
-      }
-      context.publishStatus?.(sessionId)
-    }
     return stampFailedCreateOwnerVerdict(context.deps.store, callerKey, params.envelope, attached)
   } finally {
     if (!attempt.committed) {
@@ -301,25 +332,5 @@ async function runAttachUnderAbort(
         startupAttempts.abandon(sessionId, attempt.startup.attemptId)
       }
     }
-  }
-}
-
-type AttachCandidate = {
-  child: StructuredAgentSessionProviderChild
-  sink: DeferredStructuredAgentSessionEventSink
-}
-
-/** Binds the sink to the journal and waits for the barrier the host publishes
- *  behind. It throws by design when a sink barrier fails. */
-async function bindAndDrain(
-  eventSink: DeferredStructuredAgentSessionEventSink,
-  journal: AgentSessionJournal,
-  fence: number,
-  publish: (activity?: AgentSessionTurnActivity | null) => void
-): Promise<void> {
-  eventSink.bind({ journal, fence, publish })
-  const barrier = await eventSink.drained()
-  if (!barrier.ok) {
-    throw barrier.error
   }
 }

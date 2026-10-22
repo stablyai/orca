@@ -3,6 +3,7 @@
 // user turn lands in the transcript. Kept separate from the view so the prune
 // rule (match on normalized user-message content) is unit-testable without React.
 
+import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
@@ -187,9 +188,8 @@ function gluedCandidateRows(
   const [oldest, ...newer] = open.map((entry) =>
     entry.afterMessageId === undefined ? { ...entry, afterMessageId: null } : entry
   )
-  // Glue needs a run of 2+ sends, so a lone queued echo — by far the common
-  // case while an agent streams — skips the per-send boundary scans entirely.
-  if (!oldest || newer.length === 0) {
+  // Ordinary lone sends need no glue scan; continuations may finish outside this queue.
+  if (!oldest || (newer.length === 0 && nativeChatContinuationSendText(oldest.text) === null)) {
     return []
   }
   const newerRowIds = newer.map(

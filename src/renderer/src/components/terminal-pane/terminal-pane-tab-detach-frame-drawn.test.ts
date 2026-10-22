@@ -128,8 +128,26 @@ function storeWithChatSplit() {
   return store
 }
 
+/** The source tab split in two, its second pane not yet bound to a terminal. */
+function storeWithUnboundSplit() {
+  const store = storeWithChatSplit()
+  const layout = store.getState().terminalLayoutsByTabId[SOURCE]!
+  store.setState({
+    unifiedTabsByWorktree: { [WT]: [entry(SOURCE, 1)] },
+    terminalLayoutsByTabId: {
+      [SOURCE]: { ...layout, chatLeafId: undefined, ptyIdsByLeafId: { [LEAF_1]: 'pty-left' } }
+    }
+  })
+  return store
+}
+
+type MoveCommand = Parameters<typeof sendLayoutCommandToOwner>[1] & { type: 'movePaneToNewTab' }
+
 /** Main applies the window's drag-out to its copy and the frame with the result is drawn. */
-function drawMainMove(store: ReturnType<typeof createTestStore>): void {
+function drawMainMove(
+  store: ReturnType<typeof createTestStore>,
+  windowDetach: MoveCommand['windowDetach'] = { ptyId: 'pty-right' }
+): void {
   const state = store.getState()
   const loaded = loadWorkspaceLayoutWithoutReport(
     'local',
@@ -144,7 +162,7 @@ function drawMainMove(store: ReturnType<typeof createTestStore>): void {
       tabId: SOURCE,
       leafId: LEAF_2,
       groupId: GROUP,
-      windowDetach: { ptyId: 'pty-right', tabId: MOVED }
+      windowDetach: { ...windowDetach, tabId: MOVED }
     },
     testContext()
   )
@@ -195,6 +213,31 @@ describe('a drag-out whose new tab main’s frame drew first', () => {
     expect(state.activeTabIdByWorktree[WT]).toBe(MOVED)
   })
 
+  it('leaves the tab where main’s frame placed it, asked for an index', async () => {
+    const store = storeWithFrameDrawnMove()
+    mocks.send.mockImplementation((_worktreeId, _command, handlers) => {
+      handlers.apply({ tabId: MOVED, ptyId: 'pty-right' })
+      return true
+    })
+
+    await detachTerminalPaneToTab({
+      getStore: () => store.getState(),
+      manager: {
+        getPanes: () => [{ id: 1 }, { id: 2 }],
+        getLeafId: (paneId: number) => (paneId === 2 ? LEAF_2 : LEAF_1),
+        detachPaneForExternalMove: () => true
+      },
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneId: 2,
+      sourceTabId: SOURCE,
+      targetGroupId: GROUP,
+      targetIndex: 0,
+      worktreeId: WT
+    })
+
+    expect(store.getState().groupsByWorktree[WT]![0]!.tabOrder).toEqual([SOURCE, MOVED])
+  })
+
   it('opens a dragged-out chat pane’s tab in chat view, as a window-owned build does', async () => {
     const store = storeWithChatSplit()
     mocks.send.mockImplementation((_worktreeId, _command, handlers) => {
@@ -220,5 +263,32 @@ describe('a drag-out whose new tab main’s frame drew first', () => {
     const moved = store.getState().unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === MOVED)
     expect(moved?.viewMode).toBe('chat')
     expect(store.getState().terminalLayoutsByTabId[MOVED]?.chatLeafId).toBe(LEAF_2)
+  })
+
+  it('starts an unbound pane’s new tab in the pane’s folder, as a window-owned build does', async () => {
+    const store = storeWithUnboundSplit()
+    mocks.send.mockImplementation((_worktreeId, command, handlers) => {
+      drawMainMove(store, command.type === 'movePaneToNewTab' ? command.windowDetach : undefined)
+      handlers.apply({ tabId: MOVED, ptyId: null })
+      return true
+    })
+
+    await detachTerminalPaneToTab({
+      getStore: () => store.getState(),
+      manager: {
+        getPanes: () => [{ id: 1 }, { id: 2 }],
+        getLeafId: (paneId: number) => (paneId === 2 ? LEAF_2 : LEAF_1),
+        detachPaneForExternalMove: () => true
+      },
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneCwd: { cwd: '/path/wt/packages/app', confirmed: false },
+      sourcePaneId: 2,
+      sourceTabId: SOURCE,
+      targetGroupId: GROUP,
+      worktreeId: WT
+    })
+
+    const moved = store.getState().tabsByWorktree[WT]!.find((tab) => tab.id === MOVED)
+    expect(moved).toMatchObject({ startupCwd: '/path/wt/packages/app' })
   })
 })

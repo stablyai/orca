@@ -1,13 +1,14 @@
 import { expect, it, vi } from 'vitest'
 import { fixture } from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence-session-fixtures'
-import { swapReplacedPaneBinding, type ReplacedPaneOwner } from './pane-owner-replacement'
+import { swapReplacedPaneBinding } from './pane-owner-replacement'
+import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../../ssh/ssh-config-parser', () => ({
+vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

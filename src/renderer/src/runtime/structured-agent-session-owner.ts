@@ -7,7 +7,7 @@ import {
 import type { Tab } from '../../../shared/tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
+import { isTwinWorkspace, namedHostForOwnerRef } from '@/lib/resolve-owner'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -33,9 +33,11 @@ export function resolveStructuredAgentSessionOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string
 ): ExecutionHostId | null {
+  // Why resolveOwner's twin rule: an id-only check missed folder twins and an active twin with no
+  // host picked, and the fallback below reads both as this machine.
   if (
-    state.activeWorktreeId !== worktreeId &&
-    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind === 'ambiguous'
+    !namedHostForOwnerRef(state, { workspaceId: worktreeId }) &&
+    isTwinWorkspace(state, worktreeId)
   ) {
     return null
   }

@@ -6,6 +6,8 @@ import {
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from './claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
+import type { AgentCliInstallationProblem } from './agent-cli-installation-problem'
+import { tuiAgentDisplayName } from './tui-agent-display-names'
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -28,8 +30,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
-  codexCliTooOld:
-    'Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
+  cliTooOld:
+    '{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
+  startTimedOut: '{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).',
+  startTimedOutKeepsHappening:
+    'If this keeps happening, the computer running this chat may be overloaded.',
   argumentsUnsupportedOption: 'Saved Arguments contain an unsupported option ({{option}}).',
   argumentsMissingValue: 'Saved Arguments need a value for {{option}}.',
   argumentsMultipleValues: 'Saved Arguments give {{option}} more than one value.',
@@ -46,6 +51,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   codexSystemNotSignedIn: "Codex isn't signed in. Run `{{loginCommand}}`.",
   codexManagedNotSignedIn:
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+  antigravityNotSignedIn:
+    "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:
@@ -144,6 +151,14 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerRetryNumber: 'Retry {{attempt}}.',
   providerRetryNumberOf: 'Retry {{attempt}} of {{maxRetries}}.',
   providerRetryLastError: 'Last error: {{detail}}.',
+  usageLimitReached: '{{agent}} hit its usage limit.',
+  usageLimitReachedNamed: '{{agent}} hit its {{window}} limit.',
+  usageLimitWindowSession: 'session',
+  usageLimitWindowWeekly: 'weekly',
+  usageLimitWindowWeeklyModel: 'weekly model',
+  usageLimitWindowCredits: 'extra usage',
+  usageLimitResetsAt: 'It resets at {{when}}.',
+  usageLimitSendAfterReset: 'Send a message once it resets to continue.',
   previousExitUnverifiable: "Couldn't stop {{agent}} from before.",
   sessionNotRestored:
     "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages."
@@ -160,11 +175,18 @@ export type AgentSessionFailureCopyValues = {
   loginCommand?: string
   slashCommand?: string
   detail?: string
+  /** A usage limit's name, from the `usageLimitWindow*` pieces. */
+  window?: string
+  /** When a usage limit resets, in the reader's clock. */
+  when?: string
   option?: string
   limit?: string
   size?: string
   attempt?: string
   maxRetries?: string
+  /** A provider protocol method that got no answer, e.g. `thread/start`. */
+  method?: string
+  seconds?: string
 }
 
 /** One piece in the reader's language, placeholders filled. */
@@ -173,21 +195,37 @@ export type AgentSessionFailureSay = (
   values?: AgentSessionFailureCopyValues
 ) => string
 
-export function codexInstallationFailureWords(
+/** The sentence for an agent binary too old for chats. */
+export function agentCliTooOldWords(
+  { agent, installedVersion, minimumVersion }: AgentCliInstallationProblem,
+  say: AgentSessionFailureSay
+): string {
+  return say('cliTooOld', {
+    agent: tuiAgentDisplayName(agent) ?? agent,
+    installedVersion,
+    minimumVersion
+  })
+}
+
+/** A refusal's installation sentence; a refusal saved before `agentInstallation` is Codex's. */
+export function agentCliInstallationFailureWords(
   refusal: AgentSessionRefusalReference | undefined,
   say: AgentSessionFailureSay
 ): string | null {
-  const installation =
-    refusal?.code === 'agent_session_operation_invalid'
-      ? refusal.details?.codexInstallation
-      : undefined
-  return installation
-    ? say(installation.installedVersion === null ? 'cliMissing' : 'codexCliTooOld', {
-        agent: 'Codex',
-        installedVersion: installation.installedVersion ?? '',
-        minimumVersion: installation.minimumVersion
-      })
-    : null
+  if (refusal?.code !== 'agent_session_operation_invalid') {
+    return null
+  }
+  const { agentInstallation, codexInstallation } = refusal.details ?? {}
+  if (agentInstallation) {
+    return agentCliTooOldWords(agentInstallation, say)
+  }
+  if (!codexInstallation) {
+    return null
+  }
+  const { installedVersion, minimumVersion } = codexInstallation
+  return installedVersion === null
+    ? say('cliMissing', { agent: 'Codex' })
+    : agentCliTooOldWords({ agent: 'codex', installedVersion, minimumVersion }, say)
 }
 
 /** The host's words, and any surface without translations. */

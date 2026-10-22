@@ -92,18 +92,23 @@ describe('conversationCommandBlocked background work', () => {
 
   it('waits on running work the store has no record of', () => {
     const unrecorded = { views: [SETTLED], open: true }
-    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, unrecorded)?.message).toBe(WAIT)
+    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, unrecorded)?.message).toBe(
+      WAIT
+    )
   })
 
   it('asks for a stop when the strip offers one on a live row', () => {
     expect(
-      conversationCommandBlocked(contextWith(TARGETED), RECORD, reading([SETTLED, child()]))?.message
+      conversationCommandBlocked(contextWith(TARGETED), RECORD, reading([SETTLED, child()]))
+        ?.message
     ).toBe(STOP)
   })
 
   it('asks for a stop when the strip offers its single untargeted stop', () => {
     const live = child({ stoppable: false })
-    expect(conversationCommandBlocked(contextWith(UNTARGETED), RECORD, reading([live]))?.message).toBe(STOP)
+    expect(
+      conversationCommandBlocked(contextWith(UNTARGETED), RECORD, reading([live]))?.message
+    ).toBe(STOP)
   })
 
   it('asks the user to wait when no live row on the strip has a stop', () => {
@@ -111,18 +116,23 @@ describe('conversationCommandBlocked background work', () => {
     const unstoppable = child({ stoppable: false })
     const unaddressable = child({ id: 'child-2', providerId: undefined })
     expect(
-      conversationCommandBlocked(contextWith(TARGETED), RECORD, reading([unstoppable, unaddressable]))
-        ?.message
+      conversationCommandBlocked(
+        contextWith(TARGETED),
+        RECORD,
+        reading([unstoppable, unaddressable])
+      )?.message
     ).toBe(WAIT)
   })
 
   it('asks the user to wait when the provider exposes no stop at all', () => {
     // Codex: an instruction to stop would name a control that does not exist.
-    expect(conversationCommandBlocked(contextWith(NO_STOP), RECORD, reading([child()]))?.message).toBe(WAIT)
+    expect(
+      conversationCommandBlocked(contextWith(NO_STOP), RECORD, reading([child()]))?.message
+    ).toBe(WAIT)
     // No live provider session answers for it either.
-    expect(conversationCommandBlocked(contextWith(undefined), RECORD, reading([child()]))?.message).toBe(
-      WAIT
-    )
+    expect(
+      conversationCommandBlocked(contextWith(undefined), RECORD, reading([child()]))?.message
+    ).toBe(WAIT)
   })
 
   it('still refuses on the open turn, not on the work the strip now shows', () => {

@@ -5,7 +5,7 @@ import {
   isFloatingWorkspaceSelector
 } from '../../../../shared/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   resolveWorktreeHostRouting,
   resolveWorktreeLaunchHost
@@ -198,17 +198,19 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       delete cleanBaseEnv[key]
     }
     // Pane identity (ORCA_PANE_KEY/TAB_ID/WORKTREE_ID, jcode dir) is stamped by the spawn step from the spawn's ids.
+    // Why: the window stamps ORCA_WORKSPACE_ID (its ORCA_WORKTREE_ID) for every workspace kind,
+    // and agent wrappers forward it.
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
-      ...this.buildAgentHookPtyEnv?.()
+      ...this.buildAgentHookPtyEnv?.(),
+      ORCA_WORKSPACE_ID: scope.id
     }
     if (!scope.folderWorkspace) {
       return env
     }
     return {
       ...env,
-      ORCA_WORKSPACE_ID: scope.id,
       ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
       ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }
