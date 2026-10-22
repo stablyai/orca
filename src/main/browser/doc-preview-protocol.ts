@@ -10,7 +10,9 @@ import { publishDocPreviewFailure } from './doc-preview-failure-notice'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'
 
 /** Must run before `app.whenReady()`; Electron freezes the privileged scheme table at ready. */
-export function registerDocPreviewSchemePrivileges(): void {
+export function registerDocPreviewSchemePrivileges(
+  additionalSchemes: Electron.CustomScheme[] = []
+): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: DOC_PREVIEW_SCHEME,
@@ -21,7 +23,8 @@ export function registerDocPreviewSchemePrivileges(): void {
         corsEnabled: true,
         stream: true
       }
-    }
+    },
+    ...additionalSchemes
   ])
 }
 

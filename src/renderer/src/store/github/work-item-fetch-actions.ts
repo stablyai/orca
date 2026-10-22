@@ -6,7 +6,7 @@ import type { WorkItemsCacheError } from './cache-model'
 import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../shared/work-items'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-query-bounds'
-import { reconcileCatalogRows } from '../slices/repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
@@ -21,10 +21,11 @@ import { findRepoForGitHubOwner } from './repository-routing'
 import {
   getGitHubWorkItemRequestContext,
   getGitHubWorkItemSourceCacheScope,
+  getGitHubWorkItemRowHostId,
   getGitHubWorkItemSourceHostId,
-  getGitHubWorkItemSourceSettings,
   getWorkItemsCacheKeyForOwner,
-  listGitHubWorkItemsForRepo
+  listGitHubWorkItemsForRepo,
+  getGitHubSourceTarget
 } from './work-item-routing'
 
 export const createWorkItemFetchActions = (
@@ -89,13 +90,8 @@ export const createWorkItemFetchActions = (
     }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
-    const requestSettings = getGitHubWorkItemSourceSettings(
-      requestState.settings,
-      repo,
-      options?.sourceContext
-    )
-    const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
-    const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
+    const ownerHostId = getGitHubWorkItemSourceHostId(repo, options?.sourceContext)
+    const cacheScope = getGitHubWorkItemSourceCacheScope(repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
@@ -105,7 +101,7 @@ export const createWorkItemFetchActions = (
     const requestInvalidationNonce = requestState.workItemsInvalidationNonce
     const requestContext = getGitHubWorkItemRequestContext(
       requestState,
-      requestSettings,
+      getGitHubSourceTarget(requestState, repo, options?.sourceContext),
       repoId,
       repoPath,
       options?.sourceContext
@@ -143,7 +139,17 @@ export const createWorkItemFetchActions = (
           ...(options?.noCache ? { noCache: true } : {})
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
-        const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        const repoHostId = getGitHubWorkItemRowHostId(
+          requestState,
+          repoId,
+          repoPath,
+          options?.sourceContext
+        )
+        const items: GitHubWorkItem[] = envelope.items.map((item) => ({
+          ...item,
+          repoId,
+          ...(repoHostId ? { repoHostId } : {})
+        }))
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
           throw new Error('GitHub work-item fetch returned a partial result.')
         }
@@ -161,11 +167,7 @@ export const createWorkItemFetchActions = (
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
-        const currentHostId = getGitHubWorkItemSourceHostId(
-          get(),
-          currentRepo,
-          options?.sourceContext
-        )
+        const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
           return items

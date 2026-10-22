@@ -5,10 +5,12 @@ import { toast } from 'sonner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
   callStructuredAgentSession: vi.fn(),
+  callRuntimeRpc: vi.fn(),
   createIntent: vi.fn(),
   retryIntent: vi.fn(),
   restoreIntent: vi.fn(),
@@ -45,12 +47,17 @@ vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
 
-vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
+}))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc,
+  ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
 vi.mock('@/store', () => ({
@@ -82,13 +89,19 @@ vi.mock('@/lib/agent-catalog', () => ({
   ]
 }))
 
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
+import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import {
   cancelStructuredAgentLaunch,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
-import { readOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import {
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 
@@ -127,6 +140,8 @@ describe('a close that races a structured launch', () => {
     localStorage.clear()
     resetStructuredAgentLaunchPersistenceForTests()
     resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentSessionSendsForTests()
+    clearNativeChatDraftCacheForTests()
     mocks.rendererTabs = {}
     mocks.listeners.clear()
     mocks.createIntent.mockImplementation((worktreeId: string, agent: 'claude' | 'codex') => {
@@ -147,6 +162,10 @@ describe('a close that races a structured launch', () => {
       ok: true,
       page: { fence: 1 }
     })
+    mocks.callRuntimeRpc.mockResolvedValue({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
   })
 
   it('cancels a close-racing launch without retrying or toasting', async () => {
@@ -162,13 +181,31 @@ describe('a close that races a structured launch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-1' })
     await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
     expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)).toBe(
-      true
-    )
     const persistedTombstones =
       localStorage.getItem('orca:structuredAgentLaunchCancelledSessions:v1') ?? ''
-    expect(persistedTombstones).toContain(JSON.stringify(intent.sessionId))
-    expect(persistedTombstones).not.toContain(worktreeId)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // This machine's main hears the cancel at once and fences the chat; the window keeps none.
+      expect(
+        hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)
+      ).toBe(false)
+      expect(persistedTombstones).not.toContain(JSON.stringify(intent.sessionId))
+      expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'agentSession.close',
+        { sessionId: intent.sessionId }
+      )
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'session.tabs.close',
+        expect.objectContaining({ tabId: `agent-session:${intent.sessionId}` })
+      )
+    } else {
+      expect(
+        hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)
+      ).toBe(true)
+      expect(persistedTombstones).toContain(JSON.stringify(intent.sessionId))
+      expect(persistedTombstones).not.toContain(worktreeId)
+    }
     resolveRefresh([])
     await flushLaunchSettlement()
 
@@ -196,12 +233,19 @@ describe('a close that races a structured launch', () => {
       prompt: 'first prompt'
     })
     await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
-    expect(readOutbox(intent.sessionId)).toHaveLength(1)
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(true)
 
     expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
-    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(false)
     resolveRefresh([])
     await flushLaunchSettlement()
+
+    // Neither sent nor given back to the closed chat's composer; a layout-owner build's only call
+    // retires the chat on this machine's main.
+    expect(mocks.callRuntimeRpc.mock.calls.map(([, method]) => method)).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? ['session.tabs.close'] : []
+    )
+    expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(intent.sessionId))).toBe('')
   })
 
   it('suppresses a close that races the retry verification catch', async () => {

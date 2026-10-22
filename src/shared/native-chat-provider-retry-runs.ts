@@ -3,6 +3,7 @@
 
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat-types'
+import { isNativeChatContextClear } from './agent-session-context-clear'
 
 function isProviderRetryRow(message: NativeChatMessage): boolean {
   const block = message.blocks.length === 1 ? message.blocks[0] : undefined
@@ -25,6 +26,9 @@ export function collapseProviderRetryRuns(
   const openRuns = new Map<string | null, number>()
   const drawn: (NativeChatMessage | null)[] = []
   for (const message of messages) {
+    if (isNativeChatContextClear(message)) {
+      openRuns.clear()
+    }
     if (!isProviderRetryRow(message)) {
       if (openRuns.size > 0) {
         openRuns.delete(agentJournalItemSubagentId(message))

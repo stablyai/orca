@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
-import type { RuntimeClientTarget } from './runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
@@ -23,15 +27,18 @@ export type StructuredAgentSessionHostCapabilityState = 'unknown' | 'supported' 
 /** Whether the session's host advertises `capability`. A failed probe stays `unknown` and a remote
  *  host is asked again each time this client regains contact with it. */
 export function useStructuredAgentSessionHostCapabilityState(
-  target: RuntimeClientTarget,
+  target: RuntimeClientTarget | null,
   capability: RuntimeCapability
 ): StructuredAgentSessionHostCapabilityState {
-  const key = structuredAgentSessionHostKey(target)
+  const key = target ? structuredAgentSessionHostKey(target) : null
   const [answer, setAnswer] = useState<{
-    key: string
+    key: string | null
     state: StructuredAgentSessionHostCapabilityState
-  }>(() => ({ key, state: target.kind === 'local' ? localCapabilityState(capability) : 'unknown' }))
-  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  }>(() => ({
+    key,
+    state: target?.kind === 'local' ? localCapabilityState(capability) : 'unknown'
+  }))
+  const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const [contact, setContact] = useState(0)
   useEffect(() => {
     if (environmentId === null) {
@@ -40,6 +47,9 @@ export function useStructuredAgentSessionHostCapabilityState(
     return subscribeRuntimeHostContactRegained(environmentId, () => setContact((n) => n + 1))
   }, [environmentId])
   useEffect(() => {
+    if (key === null) {
+      return
+    }
     let cancelled = false
     const probe: Promise<StructuredAgentSessionHostCapabilityState> =
       environmentId === null
@@ -93,19 +103,56 @@ export function useStructuredAgentSessionHostStopsConversation(
   )
 }
 
-/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`
- *  or call the queuedMessage RPCs. */
+/** Whether the host settles a rewind left in doubt on the next send, agent running or not: only
+ *  then may a client offer a rewind, which hands an in-doubt prompt back for that send. */
+export function useStructuredAgentSessionHostRecoversRewindOnSend(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(target, AGENT_SESSION_REWIND_RECOVERY_CAPABILITY)
+}
+
+/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`. The
+ *  published cards and their queuedMessage actions are not gated on it. */
 export function useStructuredAgentSessionHostQueuesMessages(target: RuntimeClientTarget): boolean {
   return useStructuredAgentSessionHostQueuesMessagesState(target) === 'supported'
 }
 
-/** Three-state, for the outbox: only `supported` lets a first attempt ask to be queued, and only
- *  `unsupported` drops the field from a replay; `unknown` holds nothing back. */
+/** Three-state: only `supported` lets a send ask to be queued; `unknown` holds nothing back. */
 export function useStructuredAgentSessionHostQueuesMessagesState(
   target: RuntimeClientTarget
 ): StructuredAgentSessionHostCapabilityState {
   return useStructuredAgentSessionHostCapabilityState(
     target,
     AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the host holds a /compact sent while the agent works as a queued card: only then may
+ *  a client send the command's `delivery`, and only where it also renders the queue's cards. */
+export function useStructuredAgentSessionHostQueuesCommands(target: RuntimeClientTarget): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the host edits a queued card in place and holds it from delivery while edited. Until
+ *  it says so, and against an older host, a card offers no Edit. */
+export function useStructuredAgentSessionHostEditsQueuedMessages(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether Save may send a queued card's image set; against an older host the edit is text only. */
+export function useStructuredAgentSessionHostEditsQueuedImages(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY
   )
 }

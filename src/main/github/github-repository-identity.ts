@@ -2,11 +2,6 @@ import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { readRemoteUrl } from '../git/remote-url-probe'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
-import {
-  getSshGitProvider,
-  getSshGitProviderGeneration,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   parseGitHubOwnerRepo,
@@ -16,6 +11,8 @@ import {
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -136,15 +133,11 @@ export async function getOwnerRepoForRemote(
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  if (
-    probeOptions.requireVerifiedSshProbe &&
-    context.connectionId &&
-    !getSshGitProvider(context.connectionId)
-  ) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  if (probeOptions.requireVerifiedSshProbe) {
+    requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
   }
   const runtimeKey = context.connectionId
-    ? `ssh:${context.connectionId}:${getSshGitProviderGeneration(context.connectionId)}`
+    ? `ssh:${context.connectionId}`
     : `local:${context.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
@@ -201,12 +194,8 @@ async function resolveOwnerRepoForRemote(
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
     if (!remoteUrl) {
-      if (
-        requireVerifiedSshProbe &&
-        context.connectionId &&
-        !getSshGitProvider(context.connectionId)
-      ) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      if (requireVerifiedSshProbe) {
+        requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
       }
       // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {

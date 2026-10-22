@@ -11,6 +11,7 @@ import {
 import { createTables } from './schema/create-tables'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
+import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 
 class OrchestrationDbCore {
   db: Database.Database
@@ -34,6 +35,7 @@ class OrchestrationDbCore {
     createRunCoordinatorAddressTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     backfillStructuredWorkerOrcaSessionIds(this.db)
+    reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)
     hardenOrchestrationDatabaseFiles(dbPath)

@@ -7,6 +7,13 @@ export const colors = {
   bgRaised: '#242424',
   borderSubtle: '#2a2a2a',
   editorSurface: '#1e1e1e',
+  // The chat composer: one lifted box whose round controls sit a step above it.
+  composerSurface: '#1d1d1d',
+  composerBorder: 'rgba(255, 255, 255, 0.08)',
+  composerControl: '#2a2a2a',
+  // A picked skill inside the composer's text.
+  skillToken: '#8ab4f8',
+  skillTokenSurface: 'rgba(59, 130, 246, 0.2)',
 
   textPrimary: '#e0e0e0',
   textSecondary: '#a1a1a1',
@@ -35,6 +42,13 @@ export const colors = {
   gitDecorationDeleted: '#c74e39',
   diffAddedBg: 'rgba(129, 184, 139, 0.1)',
   diffDeletedBg: 'rgba(199, 78, 57, 0.11)',
+  // Desktop's `--diff-*-gutter`: a tinted row's line-number column.
+  diffAddedGutter: 'rgba(129, 184, 139, 0.3)',
+  diffDeletedGutter: 'rgba(199, 78, 57, 0.32)',
+  // Desktop's `--chat-diff-*`: diff text in the chat, mixed toward the foreground so it reads on a
+  // tinted row where the git decoration colours would not.
+  chatDiffAdded: '#a5ccac',
+  chatDiffRemoved: '#d68273',
 
   syntaxComment: '#6a9955',
   syntaxKeyword: '#569cd6',
@@ -47,6 +61,14 @@ export const colors = {
 
   // Terminal WebView background (Tokyonight) — separate from app chrome
   terminalBg: '#1a1b26'
+} as const
+
+/** On your own message's fill (`colors.textPrimary`), where the dark palette's light text would
+ *  vanish; its body text is `colors.bgBase`. */
+export const onBrightColors = {
+  secondary: '#4a4a4a',
+  link: '#1e40af',
+  codeBackground: '#c8c8c8'
 } as const
 
 export const spacing = {
@@ -62,7 +84,10 @@ export const radii = {
   card: 14,
   button: 6,
   input: 6,
-  camera: 8
+  camera: 8,
+  composer: 24,
+  // Attachment thumbnails and file cards inside the composer.
+  composerItem: 12
 } as const
 
 export const typography = {

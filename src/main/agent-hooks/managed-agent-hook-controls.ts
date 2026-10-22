@@ -57,13 +57,6 @@ export function resolveStartupManagedHookAction(
   return isAgentStatusHooksEnabled(settings) ? 'install' : 'skip'
 }
 
-export function shouldInstallStartupManagedAgentHook(
-  settings: ManagedHookSettings,
-  agent: AgentHookTarget
-): boolean {
-  return isAgentStatusHooksEnabledForAgent(settings, agent)
-}
-
 export function shouldContinueManagedHookStartup(
   isQuitting: boolean,
   settings: ManagedHookSettings,

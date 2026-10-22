@@ -29,6 +29,7 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CUT_TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'cut-turn', ordinal: 1 }
 
@@ -49,6 +50,7 @@ beforeEach(() => {
   exitObservedFirst = false
   closeCalls = 0
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store: state.store,
     adapter: {
@@ -263,7 +265,7 @@ describe('a turn cut short by closing its provider', () => {
     expect(notices).toEqual(ONE_NOTICE)
   })
 
-  it("keeps the user's cancellation when a close aborts after the provider settled, then retries", async () => {
+  it("keeps the user's cancellation when a close's drain fails after the provider settled", async () => {
     await runningTurn()
     const sink = host['runtimeState'].eventSinkFor(SESSION)
     const drained = sink.drained.bind(sink)
@@ -275,10 +277,9 @@ describe('a turn cut short by closing its provider', () => {
       }
       return drained()
     })
-    // The adapter settled the turn, then the close aborted at the drain after it.
-    await expect(host.close(SESSION, 'user-close')).rejects.toThrow()
+    // The adapter settled the turn, then the drain after it failed: reported, and the close ends.
+    await expect(host.close(SESSION, 'user-close')).resolves.toBeUndefined()
     expect(closeCalls).toBe(1)
-    await host.close(SESSION, 'user-close')
     const { turn } = await settledTurn()
     expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
   })
@@ -287,7 +288,7 @@ describe('a turn cut short by closing its provider', () => {
     ['user-close', { outcome: 'cancellation' }],
     ['evict', { outcome: undefined }]
   ] as const)(
-    "keeps a %s's cause when the idle sweep finishes a wind-down it could not",
+    "keeps a %s's cause when the close's drain fails before the host settles its turn",
     async (cause, verdict) => {
       providerEnd = null
       await runningTurn()
@@ -301,10 +302,8 @@ describe('a turn cut short by closing its provider', () => {
         }
         return drained()
       })
-      // The provider is proven gone, then the close aborts before the host settles its turn.
-      await expect(host.close(SESSION, cause)).rejects.toThrow()
-
-      await host.collaboratorsForTests().lifetime.idleSweep.tick()
+      // The provider is proven gone, then the drain fails: the host still settles the turn.
+      await expect(host.close(SESSION, cause)).resolves.toBeUndefined()
 
       expect(closeCalls).toBe(1)
       const { turn, notices } = await settledTurn()

@@ -4,7 +4,8 @@ import type { AgentSessionConversationCommand } from '../../../src/shared/agent-
 import { useCallback, useMemo } from 'react'
 import type {
   SessionOptionDescriptor,
-  SessionOptionValue
+  SessionOptionValue,
+  SessionOptionsSurface
 } from '../../../src/shared/native-chat-session-options'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -26,6 +27,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   reportedModel: string | null
   modelSwitchCommand?: string
   structured: {
+    optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
     optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
@@ -80,12 +82,14 @@ export function useMobileNativeChatSessionOptionController(args: {
     dispatchCommand,
     onAgentPicker: handleAgentPicker
   })
+  // Kept with nothing to pick (OMP lists no models): the "/" menu reads the chat's commands from it.
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(
     () =>
-      activeChatStructured && structuredSnapshot.length > 0
+      activeChatStructured
         ? {
             snapshot: structuredSnapshot,
             optionPickerRequest: structured.optionPickerRequest,
+            optionSurface: structured.optionSurface,
             conversationCommands: structured.conversationCommands,
             pendingId: structuredPendingId,
             setOption: setStructuredOption,
@@ -100,7 +104,8 @@ export function useMobileNativeChatSessionOptionController(args: {
       structuredPendingId,
       structuredSnapshot,
       structured.conversationCommands,
-      structured.optionPickerRequest
+      structured.optionPickerRequest,
+      structured.optionSurface
     ]
   )
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(

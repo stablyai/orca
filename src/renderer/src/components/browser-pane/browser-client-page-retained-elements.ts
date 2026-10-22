@@ -1,4 +1,5 @@
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 
 export function createBrowserClientPageRetainedRoot(document: Document): HTMLDivElement {
   const root = document.createElement('div')
@@ -33,6 +34,21 @@ export function createBrowserClientPageRetainedHost(
   return host
 }
 
+/**
+ * The guest's `load-commit` listener that hides its host on a blank page. Why the host and not the
+ * guest: the host is a click target above the pane, so a blank tab must drop both its paint and its
+ * hit testing for the New Tab page underneath.
+ */
+export function hideRetainedHostWhileGuestIsBlank(
+  host: HTMLDivElement
+): (event: Electron.LoadCommitEvent) => void {
+  return (event) => {
+    if (event.isMainFrame) {
+      host.style.visibility = isBlankBrowserUrl(event.url) ? 'hidden' : ''
+    }
+  }
+}
+
 export function createBrowserClientPageWebview(options: {
   createWebview?: () => Electron.WebviewTag
   document: Document
@@ -41,7 +57,7 @@ export function createBrowserClientPageWebview(options: {
   const webview =
     options.createWebview?.() ?? (options.document.createElement('webview') as Electron.WebviewTag)
   webview.setAttribute('partition', options.partition)
-  webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
+  webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.setAttribute('src', 'about:blank')
   Object.assign(webview.style, { display: 'flex', width: '100%', height: '100%' })
   return webview

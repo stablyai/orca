@@ -10,9 +10,55 @@ export type LiveOutputs = {
   clearOnNextOutput: boolean
 }
 
+type StreamText = { text: string; tailStart: number; trailingReturn: boolean }
+
+// Why: weak output keys keep cursors off saved notebook data and release them with discarded outputs.
+const streamTextByOutput = new WeakMap<NotebookOutput, StreamText>()
+
 /** Applies terminal-style `\r` rewrites (progress bars), keeping a trailing `\r` for the next chunk. */
 export function collapseCarriageReturns(text: string): string {
   return text.replace(/\r+\n/g, '\n').replace(/^[^\n]*\r(?=[^\n])/gm, '')
+}
+
+function splitStreamText(text: string, prefix = ''): StreamText {
+  const tailStart = text.lastIndexOf('\n') + 1
+  return {
+    text: prefix + text,
+    tailStart: prefix.length + tailStart,
+    trailingReturn: text.endsWith('\r')
+  }
+}
+
+function appendStreamText(previous: StreamText, chunk: string): StreamText {
+  if (previous.trailingReturn || chunk.includes('\r')) {
+    // Why: carriage returns can rewrite only the unfinished line, never the LF-completed prefix.
+    return splitStreamText(
+      collapseCarriageReturns(previous.text.slice(previous.tailStart) + chunk),
+      previous.text.slice(0, previous.tailStart)
+    )
+  }
+  const tailStart = chunk.lastIndexOf('\n') + 1
+  // Why: inspecting the growing text (even endsWith) flattens V8 ropes on every frame.
+  return {
+    text: previous.text + chunk,
+    tailStart: tailStart === 0 ? previous.tailStart : previous.text.length + tailStart,
+    trailingReturn: false
+  }
+}
+
+function streamOutput(content: Record<string, unknown>, previous?: NotebookOutput): NotebookOutput {
+  const previousText = previous ? String(previous.text) : ''
+  const chunk = String(content.text ?? '')
+  const cached = previous ? streamTextByOutput.get(previous) : undefined
+  const stream =
+    cached && cached.text === previousText
+      ? appendStreamText(cached, chunk)
+      : splitStreamText(collapseCarriageReturns(previousText + chunk))
+  const output = previous
+    ? { ...previous, text: stream.text }
+    : { output_type: 'stream', name: content.name ?? 'stdout', text: stream.text }
+  streamTextByOutput.set(output, stream)
+  return output
 }
 
 function displayId(value: unknown): unknown {
@@ -61,21 +107,13 @@ export function applyKernelOutput<T extends LiveOutputs>(
   const outputs = live.clearOnNextOutput ? [] : live.outputs
   const last = outputs.at(-1)
   if (type === 'stream' && last?.output_type === 'stream' && last.name === content.name) {
-    const text = collapseCarriageReturns(`${String(last.text)}${String(content.text ?? '')}`)
     return {
       ...live,
-      outputs: [...outputs.slice(0, -1), { ...last, text }],
+      outputs: [...outputs.slice(0, -1), streamOutput(content, last)],
       clearOnNextOutput: false
     }
   }
-  const output =
-    type === 'stream'
-      ? {
-          output_type: type,
-          name: content.name ?? 'stdout',
-          text: collapseCarriageReturns(String(content.text ?? ''))
-        }
-      : toOutput(type, content)
+  const output = type === 'stream' ? streamOutput(content) : toOutput(type, content)
   return { ...live, outputs: [...outputs, output], clearOnNextOutput: false }
 }
 

@@ -144,7 +144,8 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
     {
       id: 'rovo',
       label: translate('auto.lib.agent.catalog.4e63c7b956', 'Rovo Dev'),
-      cmd: 'rovo',
+      // Why: seeds the full-command override, so it must be the launch command, not `acli`.
+      cmd: 'acli rovodev run',
       faviconDomain: 'atlassian.com',
       homepageUrl:
         'https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/'

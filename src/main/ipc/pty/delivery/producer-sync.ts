@@ -12,12 +12,6 @@ export function updateProducerFlowControl(session: PtyIpcSession, id: string): v
   if (!PRODUCER_FLOW_CONTROL_ENABLED) {
     return
   }
-  if (session.sourceCreditPendingPtys.has(id)) {
-    if (session.pendingData.get(id)) {
-      return
-    }
-    session.sourceCreditPendingPtys.delete(id)
-  }
   session.producerFlowControl.update(id, session.pendingData.get(id)?.data.length ?? 0)
 }
 

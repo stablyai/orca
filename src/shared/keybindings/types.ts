@@ -8,6 +8,7 @@ export type KeybindingScope =
   | 'editor'
   | 'fileExplorer'
   | 'composer'
+  | 'chat'
   | 'settings'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
@@ -78,6 +79,7 @@ export type KeybindingActionId =
   | 'tab.selectByIndex'
   | 'tab.openQuickCommandsMenu'
   | 'browser.find'
+  | 'chat.find'
   | 'browser.back'
   | 'browser.forward'
   | 'browser.reload'
@@ -151,6 +153,8 @@ export type KeybindingDefinition = {
   searchKeywords: readonly string[]
   defaultBindings: PlatformBindings
   allowInTerminal?: boolean
+  // Leaving it out means a focused text field keeps every key.
+  allowInTextField?: 'non-default-chords'
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string

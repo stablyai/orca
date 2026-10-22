@@ -13,18 +13,17 @@ import {
 } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   addressableSessionParty,
   structuredSessionMailReach
 } from './structured-session-mail-address'
 import {
-  lineageLiveSession,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
-import type { RunRow } from './types'
+import type { DispatchContextRow, RunRow } from './types'
+import { chatAssigneeSessionId } from './chat-assignee'
 
 /**
  * The session a Run's coordinator binding names when that binding has no handle. A structured
@@ -64,15 +63,19 @@ export function structuredSessionMailTarget(
 }
 
 /**
- * The session a structured worker's mail reaches: the one minted for it, or that session's live
- * `/clear` successor, which carries on as the worker the way a terminal keeps its handle.
+ * The target of a `dispatch:<id>` mailbox whose assignee is a chat: its live session, under the
+ * Dispatch's budget. `undefined` when the assignee is not a chat, so a worker keeps its own lookup.
  */
-export function structuredWorkerMailSessionId(
-  mintedSessionId: string,
-  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): string | null {
-  const live = store ? lineageLiveSession(store, mintedSessionId) : null
-  return live && structuredWorkerHostScope(live.location) ? live.sessionId : null
+export function chatDispatchMailTarget(
+  dispatch: Pick<DispatchContextRow, 'id' | 'assignee_handle'>,
+  db: OrchestrationDb | null | undefined
+): StructuredPointerTarget | null | undefined {
+  const sessionId = chatAssigneeSessionId(dispatch.assignee_handle)
+  if (!sessionId) {
+    return undefined
+  }
+  const target = structuredSessionMailTarget(sessionId, db)
+  return target ? { ...target, dispatchId: dispatch.id } : null
 }
 
 /**
@@ -91,9 +94,10 @@ export function structuredSessionAddressTarget(
 }
 
 /**
- * Every mailbox a session reads for itself: the Runs it coordinates and its own direct mail.
- * Re-derived from the database on each idle edge rather than remembered, so mail that arrived
- * while the session could not take it (mid-turn, closed) is found again.
+ * Every mailbox a session reads for itself: the Runs it coordinates, its own direct mail and its
+ * active Dispatch, a worker's or a chat's; a `/clear` successor reads its root's. Re-derived from the database
+ * on each idle edge rather than remembered, so mail that arrived while the session could not take
+ * it (mid-turn, closed) is found again.
  */
 export function structuredSessionOwnedMailboxes(sessionId: string, db: OrchestrationDb): string[] {
   const party = isOrcaSessionId(sessionId) ? addressableSessionParty(sessionId, db) : null
@@ -103,6 +107,12 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
   const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
   if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
     mailboxes.push(party.address)
+  }
+  // Why: Dispatch mail parked on a session a /clear or restart ended waits for an edge that never
+  // comes. A party's address is what its Dispatch names it by: a worker's handle, a chat's root.
+  const dispatch = db.findActiveDispatchForAssignee(party.address, party.paneKey ?? undefined)
+  if (dispatch) {
+    mailboxes.push(`dispatch:${dispatch.id}`)
   }
   return mailboxes
 }

@@ -4,15 +4,6 @@
   "family": "nativeChat.image-upload",
   "namedDeltas": [],
   "values": {
-    "2ec71b490683": {
-      "name": "image-uploaded",
-      "ordinal": 8,
-      "value": {
-        "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
-        "path": "/tmp/img-1.png",
-        "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-      }
-    },
     "2fd17c25e4d0": {
       "name": "clipboard.startImageUpload#2",
       "ordinal": 9,
@@ -47,6 +38,14 @@
           "id": "frame-4",
           "ok": false
         }
+      }
+    },
+    "31f4965e4ed4": {
+      "name": "image-uploaded",
+      "ordinal": 8,
+      "value": {
+        "path": "/tmp/img-1.png",
+        "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
       }
     },
     "6696a47819e1": {
@@ -204,7 +203,7 @@
             "two": "765ab192e1a5"
           },
           "state": "b2b1a4389f58",
-          "effects": ["994fccf9b305", "2ec71b490683"]
+          "effects": ["994fccf9b305", "31f4965e4ed4"]
         }
       }
     ]

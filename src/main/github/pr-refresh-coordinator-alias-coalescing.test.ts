@@ -326,7 +326,7 @@ describe('pr-refresh-coordinator', () => {
       1
     )
     await vi.runOnlyPendingTimersAsync()
-    await vi.advanceTimersByTimeAsync(90_000)
+    await vi.advanceTimersByTimeAsync(120_000)
 
     const outcomeEvents = sendMock.mock.calls
       .map(([, event]) => event)

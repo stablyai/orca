@@ -15,6 +15,9 @@ import {
 } from './terminal-recovery-ledger-test-store'
 import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
+const { notifyTerminalInputNotSent } = vi.hoisted(() => ({ notifyTerminalInputNotSent: vi.fn() }))
+vi.mock('./terminal-input-not-sent-notice', () => ({ notifyTerminalInputNotSent }))
+
 vi.mock('@/store', async () => {
   const store = await import('./terminal-recovery-ledger-test-store')
   return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
@@ -27,6 +30,7 @@ vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
 
 beforeEach(() => {
   _resetTerminalPaneRecoveryForTests()
+  notifyTerminalInputNotSent.mockReset()
   resetRecoveryLedgerStore()
   setTerminalTabs([{ id: 'tab-1' }, { id: 'tab-ssh' }])
   vi.stubGlobal('window', {
@@ -725,6 +729,50 @@ describe('requestTerminalPaneRecovery', () => {
       expect(isTerminalInputQuarantined('tab-1')).toBe(true)
     })
 
+    it('warns that input the host never applied is gone with the old shell', async () => {
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-rejected-by-host',
+        endpointReplaced: true,
+        hasUndeliveredInput: () => true
+      })
+
+      expect(result).toBe(true)
+      expect(notifyTerminalInputNotSent).toHaveBeenCalledWith('tab-1')
+    })
+
+    it('stays quiet when no pane held undelivered input', async () => {
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-rejected-by-host',
+        endpointReplaced: true,
+        hasUndeliveredInput: () => false
+      })
+
+      expect(notifyTerminalInputNotSent).not.toHaveBeenCalled()
+    })
+
+    it('reads undelivered input when the remount is admitted, not when it was requested', async () => {
+      // Why: typing can land while the liveness probe is pending; a request-time snapshot
+      // would discard it with the old panes and say nothing.
+      let typedSinceRequest = false
+      mocks.hasPty.mockImplementationOnce(async () => {
+        typedSinceRequest = true
+        return true
+      })
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable',
+        endpointReplaced: true,
+        hasUndeliveredInput: () => typedSinceRequest
+      })
+
+      expect(notifyTerminalInputNotSent).toHaveBeenCalledWith('tab-1')
+    })
+
     it('does not arm when the same live shell is reattached', async () => {
       const result = await requestTerminalPaneRecovery({
         tabId: 'tab-1',
@@ -777,8 +825,8 @@ describe('requestTerminalPaneRecovery', () => {
 
     // One production reattach cycle: connect-pane-pty captures the epoch and
     // registers the xterm (connect-pane-pty.ts), the reattach answers
-    // unverifiable, recoverUnverifiableDirectSshReattach settles this pane's
-    // attempt 'failed' and re-requests, and the remount disposes that xterm —
+    // unverifiable, the pane settles its attempt 'failed' and re-requests, and
+    // the remount disposes that xterm —
     // session-reconcile-dispose unregisters the instance.
     async function driveUnverifiableReattachCycle(tabId: string): Promise<void> {
       const terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(tabId)

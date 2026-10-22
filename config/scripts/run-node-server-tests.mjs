@@ -1,8 +1,12 @@
 // Runs the headless-server suites under the pinned Node (design D4/D4a), not the host's.
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { ORCAD_VERSION_FILENAME } from '../../src/shared/orcad-artifacts.ts'
+import { globSync, readFileSync } from 'node:fs'
+import {
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_SERVER_ENTRY_FILENAME,
+  ORCAD_VERSION_FILENAME
+} from '../../src/shared/orcad-artifacts.ts'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
@@ -11,7 +15,10 @@ import {
 import { packagedNodeRuntimePath } from './build-orcad-node.mjs'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
 import { currentTarget } from './server-build-target.mjs'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { UNIT_INCLUDE } from './ci-unit-files.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
+import { resolveBuildSourceCommit } from './build-source-commit.mjs'
 import {
   CROSS_RUNTIME_TEST_PATHS,
   nodeServerTestPaths,
@@ -21,7 +28,7 @@ import {
 const root = resolve(import.meta.dirname, '../..')
 const target = currentTarget()
 const artifact = process.argv.includes('--artifact')
-// Lanes that provide Bun 1.4.2 and the last Bun orcad slot (design D7 upgrade and rollback).
+// Lanes that provide the pinned Bun and the last Bun orcad slot (design D7 upgrade and rollback).
 const crossRuntime = process.argv.includes('--cross-runtime')
 const testArgs = process.argv
   .slice(2)
@@ -59,7 +66,7 @@ if (artifact) {
   const nonce = randomUUID()
   const result = runProcessSync({
     program: runtimePath,
-    args: [join(packageDir, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
+    args: [join(packageDir, ORCAD_SERVER_ENTRY_FILENAME), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
     cwd: root,
     env,
     timeoutMs: 90_000
@@ -74,6 +81,34 @@ if (artifact) {
     readFileSync(join(packageDir, ORCAD_VERSION_FILENAME), 'utf8').trim()
   )
   process.stdout.write(`${JSON.stringify({ target, ...response })}\n`)
+
+  const source = `https://github.com/stablyai/orca/tree/${resolveBuildSourceCommit()}`
+  const cli = runProcessSync({
+    program: runtimePath,
+    args: [
+      join(packageDir, ORCAD_CLI_ENTRY_FILENAME),
+      'skills',
+      'install',
+      '--skill',
+      'orca-cli',
+      '--agent',
+      'universal',
+      '--dry-run'
+    ],
+    cwd: root,
+    env,
+    timeoutMs: 90_000
+  })
+  if (
+    cli.code !== 0 ||
+    cli.timedOut ||
+    cli.outputTruncated ||
+    !cli.stdout.split('\n')[0].split(' ').includes(source)
+  ) {
+    throw new Error(
+      `Bundled CLI skills source did not match ${source}: ${describeProcessFailure(cli)}`
+    )
+  }
 }
 run(runtimePath, [
   join(root, 'node_modules/vitest/vitest.mjs'),
@@ -84,9 +119,14 @@ run(runtimePath, [
 ])
 
 function defaultTestArgs() {
-  return [
-    ...nodeServerTestPaths({ artifact, crossRuntime }),
-    // A directory selector would otherwise pull them into lanes that lack their inputs.
-    ...(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS.flatMap((path) => ['--exclude', path]))
-  ]
+  // Why: vitest 5 drops CLI --exclude for inline projects, so the selectors' substring matches
+  // are resolved to files here and filtered before vitest sees them.
+  // Electron probes run in desktop jobs; headless compatibility containers have no display.
+  const selectors = nodeServerTestPaths({ artifact, crossRuntime })
+  const skipped = new Set(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS)
+  return globSync(UNIT_INCLUDE, { cwd: root })
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => selectors.some((selector) => path.includes(selector)))
+    .filter((path) => !path.endsWith('.electron.test.ts') && !skipped.has(path))
+    .sort()
 }

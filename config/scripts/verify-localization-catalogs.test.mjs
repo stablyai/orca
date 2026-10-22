@@ -1,7 +1,8 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
 import { main as verifyTogether } from './verify-localization-catalogs.mjs'
 import { main as verifyCatalog } from './verify-localization-catalog.mjs'
 import { main as verifyRuntimeCatalog } from './generate-runtime-required-english-catalog.mjs'
@@ -31,6 +32,38 @@ afterEach(async () => {
 })
 
 describe('combined localization verification', () => {
+  it.each([
+    ['valid catalogs', undefined, undefined, 0],
+    ['missing reference', `${renderer}/greeting.ts`, "translate('missing', 'Missing')", 1],
+    ['missing runtime entry', runtimePath, '{}', 1]
+  ])(
+    'runs the real CLI with the same Node and Bun verdict: %s',
+    async (_name, file, contents, code) => {
+      const root = await fixture()
+      if (file) {
+        await writeFile(join(root, file), contents)
+      }
+      const results = []
+      for (const program of [process.execPath, 'bun']) {
+        const result = runProcessSync({
+          program,
+          args: [resolve(import.meta.dirname, 'verify-localization-catalogs.mjs')],
+          cwd: root,
+          env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+          timeoutMs: 10000
+        })
+        expect(result.code, result.stderr).toBe(code)
+        expect(result.timedOut).toBe(false)
+        results.push({ stdout: result.stdout, stderr: result.stderr })
+      }
+      expect(results[1].stdout.split('\n').sort()).toEqual(results[0].stdout.split('\n').sort())
+      expect(results[1].stderr.split('\n').sort()).toEqual(results[0].stderr.split('\n').sort())
+      expect(`${results[0].stdout}${results[0].stderr}`).toContain(
+        code === 0 ? 'Verified 2 localization key references' : 'Run `pnpm run sync:localization'
+      )
+    }
+  )
+
   it.each([
     ['valid catalogs', undefined, undefined, 0, 0],
     ['missing reference', `${renderer}/greeting.ts`, "translate('missing', 'Missing')", 1, 1],

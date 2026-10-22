@@ -44,36 +44,66 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
  */
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
 
+// Only this licensed desktop-identical asset has its own allowance; code retains the 9 MiB fence.
+export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
+const TERMINAL_FONT_SHA256 = '8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467'
+const TERMINAL_FONT_BYTES = 1_177_916
+
+export function mobileWebAppBundleBudgetBytes(manifest) {
+  const fonts = manifest.assets.filter(
+    (asset) => asset.path.endsWith('.woff2') || asset.contentType.startsWith('font/')
+  )
+  if (fonts.length > 1) {
+    fail('only one licensed terminal font may use the independent font allowance')
+  }
+  const font = fonts[0]
+  if (!font) {
+    return manifest.totalBytes
+  }
+  if (
+    font.path !== `assets/${TERMINAL_FONT_SHA256}.woff2` ||
+    font.sha256 !== TERMINAL_FONT_SHA256 ||
+    font.contentType !== 'font/woff2' ||
+    font.byteLength !== TERMINAL_FONT_BYTES ||
+    font.byteLength > MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES
+  ) {
+    fail(
+      'terminal font allowance requires the approved hash, path, MIME type and bounded byte length'
+    )
+  }
+  return manifest.totalBytes - font.byteLength
+}
+
 /**
  * Scripts emitted at every prefix of the sorted route key list, and the route each prefix added.
  *
  * A chunk is emitted per distinct set of importers, not per route, so a route's marginal cost is
  * what it fails to share rather than what it weighs. Re-measured on this head by building
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
- * fitted to. The spread it shows is 1 to 9: `pr` and `web` add one script each, `review` adds nine.
+ * fitted to. The spread it shows is 1 to 14: `pr` adds one script, `tasks` adds fourteen.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 69 scripts at 16 routes, the old 15 read 67 on the same head.
+ * swept tree reads 91 scripts at 16 routes, with theme tokens in the entry.
  *
  * This table is the fence's only input, so a route added to the tree stales it and the pins beside
  * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
  */
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 7],
-  ['./h/[hostId]/accounts.tsx', 9],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 13],
-  ['./h/[hostId]/edit.tsx', 18],
-  ['./h/[hostId]/files/[worktreeId].tsx', 21],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 28],
-  ['./h/[hostId]/history/[worktreeId].tsx', 30],
-  ['./h/[hostId]/index.tsx', 35],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 36],
-  ['./h/[hostId]/review/[worktreeId].tsx', 45],
-  ['./h/[hostId]/session/[worktreeId].tsx', 54],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 59],
-  ['./h/[hostId]/tasks.tsx', 66],
-  ['./h/[hostId]/web.tsx', 67],
-  ['./h/_layout.tsx', 69]
+  ['./h/[hostId]/[...page].tsx', 6],
+  ['./h/[hostId]/accounts.tsx', 10],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
+  ['./h/[hostId]/edit.tsx', 20],
+  ['./h/[hostId]/files/[worktreeId].tsx', 24],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
+  ['./h/[hostId]/history/[worktreeId].tsx', 34],
+  ['./h/[hostId]/index.tsx', 42],
+  ['./h/[hostId]/new-workspace.tsx', 49],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 50],
+  ['./h/[hostId]/review/[worktreeId].tsx', 57],
+  ['./h/[hostId]/session/[worktreeId].tsx', 69],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 73],
+  ['./h/[hostId]/tasks.tsx', 87],
+  ['./h/_layout.tsx', 91]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -87,13 +117,13 @@ export const MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD = sweptScripts
  * How far above the measurement the envelope sits, and the only slack a refactor gets.
  *
  * Measured, not chosen, and per head rather than cumulative: at 8, 10, 12 and 14 routes the head
- * that wrote the old `4r + 16` read 32, 43, 61 and 69, the head that first swept these prefixes
- * read 34, 44, 57 and 65, and this one reads 33, 43, 56 and 64. So one head has moved the count by
- * as much as four at a fixed route count with no route added (61 to 57), and the step that dropped
- * the page's second Zod moved it by one everywhere. Four is that worst step, which is what a shared
- * importer set moving between heads costs. Summing the steps instead would grow this number every
- * head and loosen the fence for free. A refactor inside four keeps building; anything past it
- * re-measures the sweep.
+ * that wrote the old `4r + 16` read 32, 43, 61 and 69, and one refactor with no route added moved
+ * the 12-route prefix by four (61 to 57). Four is the worst step a refactor alone has cost. The
+ * sweep before this branch read 34, 40, 58 and 71 and this head reads 34, 40, 59 and 75: four at
+ * 14 routes, from main's own drift plus the server-workspace modules this head adds. A head
+ * between them read 77 there, six past that sweep, and re-measured rather than fitting inside the
+ * margin, which is what a step past four is meant to force.
+ * Summing the steps instead would grow this number every head and loosen the fence for free.
  */
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN = 4
 
@@ -191,7 +221,7 @@ export async function readMobileWebBundleMaxAssets() {
  * shells return null for a manifest over MOBILE_WEB_BUNDLE_MAX_ASSETS rather than dropping the
  * extra assets, so a route count that pushes the chunk envelope plus images plus the document past
  * it would pass this build and fail on the device with nothing to read. At today's 42 images that
- * is 31 routes, inside what Phase C adds, which is why this is a build failure and not a comment.
+ * is 28 routes, inside what Phase C adds, which is why this is a build failure and not a comment.
  * The envelope grants the worst swept route to each one past the sweep, so re-measuring a tree
  * whose routes share more moves that crossing out again.
  */
@@ -223,9 +253,10 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
 
-  if (manifest.totalBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
+  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest)
+  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
-      `bundle is ${String(manifest.totalBytes)} bytes, over the Phase C budget of ` +
+      `bundle excluding the approved font is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
     )
   }
@@ -276,7 +307,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     const manifest = await verifyMobileWebAppBundle()
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
-        `${String(manifest.totalBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes, ` +
+        `${String(manifest.totalBytes)} total bytes, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest))}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
         `reproducible buildId ${manifest.buildId}`
     )
   } catch (error) {

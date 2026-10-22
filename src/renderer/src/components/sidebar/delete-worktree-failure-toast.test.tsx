@@ -67,7 +67,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(toast.info).toHaveBeenCalledWith(
       'Failed to delete workspace feature/foo',
       expect.objectContaining({
-        id: 'delete-worktree-failure:wt-1',
+        id: 'delete-worktree-failure:|wt-1',
         dismissible: true,
         duration: Infinity
       })
@@ -82,11 +82,11 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).toContain('It has changed files.')
 
     clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
     expect(onViewChanges).toHaveBeenCalled()
 
     clickButton(body, 'Force Delete')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
     expect(onForceDelete).toHaveBeenCalled()
   })
 
@@ -107,7 +107,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(toast.error).toHaveBeenCalledWith(
       'Failed to delete workspace feature/bar',
       expect.objectContaining({
-        id: 'delete-worktree-failure:wt-2',
+        id: 'delete-worktree-failure:|wt-2',
         dismissible: true,
         duration: 10000
       })
@@ -118,7 +118,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).not.toContain('Force Delete')
 
     clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-2')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-2')
     expect(onViewChanges).toHaveBeenCalled()
   })
 
@@ -150,7 +150,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).not.toContain('Force Delete')
 
     clickButton(body, 'Delete Anyway')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-archive')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-archive')
     expect(onDeleteAnyway).toHaveBeenCalled()
   })
 
@@ -210,5 +210,23 @@ describe('showDeleteWorktreeFailureToast', () => {
     const body = renderToastBody('info')
     expect(body.textContent).toContain('Git reported: active agent session')
     expect(body.textContent).toContain('View')
+  })
+  it('offers a persistent nested deletion review for the exact failed target', () => {
+    Object.assign(window, { api: { worktrees: { previewNestedRemoval: vi.fn() } } })
+    showDeleteWorktreeFailureToast({
+      error:
+        'Refusing to delete worktree because it contains another registered worktree: /parent/child',
+      canForceDelete: false,
+      forceDeleteReason: null,
+      onViewChanges: vi.fn(),
+      onForceDelete: vi.fn(),
+      onDeleteAnyway: vi.fn(),
+      worktreeId: 'repo::/parent',
+      worktreeName: 'parent',
+      nestedRemovalTarget: { id: 'repo::/parent', executionHostId: 'local' }
+    })
+    const body = renderToastBody('error')
+    expect(body.textContent).toContain('Delete with nested worktrees…')
+    expect(vi.mocked(toast.error).mock.calls.at(-1)?.[1]?.duration).toBe(Infinity)
   })
 })

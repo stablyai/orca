@@ -1,8 +1,9 @@
-import type { KeybindingPlatform } from '../../../../shared/keybindings'
+import { keybindingMatchesAction, type KeybindingPlatform } from '../../../../shared/keybindings'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
 import type { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { useAppStore } from '@/store'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
   isTerminalImeConsumedKey,
@@ -19,6 +20,7 @@ import { dispatchTerminalShortcutAction } from './terminal-keyboard-action-dispa
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
+import { isInsideNativeChatCover } from './native-chat-covered-pane'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 
@@ -161,7 +163,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     // Cmd+G / Cmd+Shift+G navigates terminal search matches even when focus
     // is inside the search input itself, so this check must run before the
     // editable-target guard would otherwise bypass all terminal shortcuts.
-    // stopImmediatePropagation prevents App.tsx's Cmd+Shift+G (source-control sidebar) from also firing.
+    // App owners run before this listener; source control's Cmd+Shift+G stands down while terminal search is open.
     const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
     if (direction !== null) {
       if (e.repeat) {
@@ -194,7 +196,14 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       return
     }
 
-    if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
+    if (
+      handleEmptyFloatingWorkspacePanelCloseShortcut(
+        useAppStore.getState(),
+        e,
+        shortcutPlatform,
+        keybindings
+      )
+    ) {
       return
     }
 
@@ -212,6 +221,17 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
     const action = resolveShortcutEvent(shortcutEvent)
     if (!action) {
+      return
+    }
+    // The chat covering this pane owns find, on whatever chord it is bound to, and its own
+    // selection; the hidden terminal buffer is not what the user sees.
+    if (
+      isInsideNativeChatCover(e.target) &&
+      (action.type === 'toggleSearch' ||
+        action.type === 'selectAll' ||
+        action.type === 'copySelection' ||
+        keybindingMatchesAction('chat.find', e, shortcutPlatform, keybindings))
+    ) {
       return
     }
 

@@ -14,11 +14,14 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
-import { composeWorktreeHostIdentity } from '../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  hostWorktreeTarget
+} from '../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { PersistedState } from '../shared/persisted-state-types'
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -77,8 +80,12 @@ describe('deregistered repo residue', () => {
     const seed = await createStore()
     seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))
     seed.addRepo(makeRepo({ id: GONE_REPO, path: '/workspace/orphan' }))
-    seed.setWorktreeMetaForHost(LIVE_WORKTREE, 'local', { displayName: 'Live' })
-    seed.setWorktreeMetaForHost(GONE_WORKTREE, 'local', { displayName: 'Orphan' })
+    seed.setWorktreeMeta(hostWorktreeTarget({ id: LIVE_WORKTREE, hostId: 'local' }), {
+      displayName: 'Live'
+    })
+    seed.setWorktreeMeta(hostWorktreeTarget({ id: GONE_WORKTREE, hostId: 'local' }), {
+      displayName: 'Orphan'
+    })
     seed.setWorkspaceSession(sessionFor(GONE_WORKTREE), 'local')
     seed.flush()
 
@@ -249,7 +256,9 @@ describe('deregistered repo residue', () => {
   it('leaves a profile with no orphans byte-identical across reloads', async () => {
     const seed = await createStore()
     seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))
-    seed.setWorktreeMetaForHost(LIVE_WORKTREE, 'local', { displayName: 'Live' })
+    seed.setWorktreeMeta(hostWorktreeTarget({ id: LIVE_WORKTREE, hostId: 'local' }), {
+      displayName: 'Live'
+    })
     seed.setWorkspaceSession(sessionFor(LIVE_WORKTREE), 'local')
     seed.flush()
 

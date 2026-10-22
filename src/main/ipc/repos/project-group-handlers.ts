@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import type { NestedRepoScanResult, ProjectGroup } from '../../../shared/project-group-types'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -13,10 +14,15 @@ import {
   ProjectGroupUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
+import {
+  assertWslMoveProjectWritable,
+  assertWslMoveRepoWritable
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
+import { visibleProjectGroups } from '../../ssh/orcad-retained-source'
 
 export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle('projectGroups:list', () => store.getProjectGroups())
+  ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
     const args = parseProjectGroupIpcArgs(
@@ -67,7 +73,16 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_move_repo_args'
     )
-    const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
+    const target: RepoHostTarget | undefined = args.hostId
+      ? { id: args.projectId, executionHostId: args.hostId }
+      : store.getRepo(args.projectId)
+    if (!target) {
+      assertWslMoveProjectWritable(store, { repoId: args.projectId })
+      return null
+    }
+    // Why the target's host: a WSL move fences the local twin only, never its SSH sibling.
+    assertWslMoveRepoWritable(store, target)
+    const moved = store.moveProjectToGroup(target, args.groupId, args.order)
     if (moved) {
       notifyReposChanged(mainWindow)
     }

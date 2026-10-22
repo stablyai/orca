@@ -10,6 +10,8 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO_ID = 'repo'
@@ -188,6 +190,19 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
         sessions.get(hostId ?? LOCAL_EXECUTION_HOST_ID) ?? getDefaultWorkspaceSession(),
       setWorkspaceSession: (next: WorkspaceSessionState, hostId?: ExecutionHostId) => {
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, next)
+      },
+      // A layout-owner build's own layout write, as the Store applies it to the routed partition.
+      applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly ExecutionHostId[]) => {
+        const hostId = hostIds[0] ?? LOCAL_EXECUTION_HOST_ID
+        const change = applyCommandToSession(
+          hostId,
+          sessions.get(hostId) ?? getDefaultWorkspaceSession(),
+          command
+        )
+        if (change.session) {
+          sessions.set(hostId, change.session)
+        }
+        return change.value
       },
       flushPendingOrThrowAsync: async () => {},
       // The production store commits asynchronously; a synchronous flush on these paths is a bug.
@@ -521,6 +536,7 @@ async function runtimeWithUnpublishedPhoneCreate(): Promise<OrcaRuntimeService> 
   const webContents = {
     isDestroyed: () => false,
     setBackgroundThrottling: () => {},
+    capturePage: async () => null,
     send: (channel: string, payload: { requestId: string }) => {
       if (channel !== 'terminal:requestTabCreate') {
         return

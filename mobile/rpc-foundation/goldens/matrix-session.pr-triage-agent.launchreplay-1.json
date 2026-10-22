@@ -327,6 +327,11 @@
         "message": "Couldn't start the agent."
       }
     },
+    "742db574bda3": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-9::/w\"}}"
+    },
     "7cdbda15d605": {
       "name": "agent.launchReplay#1",
       "ordinal": 7,
@@ -418,38 +423,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "9c16efc31903": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["codex"]
-        }
-      }
     },
     "a4273b38df83": {
       "launched": "unlaunched"
@@ -742,6 +715,38 @@
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
+    "e5392ac00e18": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
     "eaa398d8c3aa": {
       "launched": {
         "kind": "unconfirmed",
@@ -760,11 +765,6 @@
       "launched": {
         "kind": "sent"
       }
-    },
-    "f49d184679d1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     }
   },
   "recording": {
@@ -785,8 +785,8 @@
       {
         "id": "pr-triage-launch.normal:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "ba3fac1eb199"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "ba3fac1eb199"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -797,8 +797,8 @@
       {
         "id": "pr-triage-launch.result-absent:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "8638ab90602a"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "8638ab90602a"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -809,8 +809,8 @@
       {
         "id": "pr-triage-launch.result-null:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "c39600966772"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "c39600966772"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -821,8 +821,8 @@
       {
         "id": "pr-triage-launch.inner-ok-missing:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "ab12d545c466"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "ab12d545c466"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -833,8 +833,8 @@
       {
         "id": "pr-triage-launch.inner-false-string-error:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "5b817dac4c7d"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "5b817dac4c7d"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -845,8 +845,8 @@
       {
         "id": "pr-triage-launch.inner-false-object-error:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "7cdbda15d605"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "7cdbda15d605"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -857,8 +857,8 @@
       {
         "id": "pr-triage-launch.outer-refused:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "a8f475e8a3a8"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "a8f475e8a3a8"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -869,8 +869,8 @@
       {
         "id": "pr-triage-launch.outer-refused-no-message:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "4a304acaf84f"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "4a304acaf84f"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -881,8 +881,8 @@
       {
         "id": "pr-triage-launch.method-not-found:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "b613a82cee3d"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "b613a82cee3d"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
@@ -896,14 +896,14 @@
           "sender": [
             "3e6a0417d2ee",
             "02188f091419",
-            "9c16efc31903",
+            "e5392ac00e18",
             "3b9fb3dfed63",
             "b81eb9edc2b2"
           ],
           "payloads": [
             "e0eef7c9fafe",
             "1c2564f1daca",
-            "f49d184679d1",
+            "742db574bda3",
             "28339abecf78",
             "dca101029f70"
           ],
@@ -920,14 +920,14 @@
           "sender": [
             "3e6a0417d2ee",
             "02188f091419",
-            "9c16efc31903",
+            "e5392ac00e18",
             "675c01bc8b85",
             "b81eb9edc2b2"
           ],
           "payloads": [
             "e0eef7c9fafe",
             "1c2564f1daca",
-            "f49d184679d1",
+            "742db574bda3",
             "28339abecf78",
             "dca101029f70"
           ],

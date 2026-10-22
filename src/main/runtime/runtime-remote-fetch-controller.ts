@@ -1,6 +1,8 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import type { GitExecOptions } from '../git/command-runner/git-exec-options'
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
-import { getCanonicalRepoKey } from '../git/canonical-repo-key'
+import { getCanonicalRepoKey, type CanonicalRepoKeyOptions } from '../git/canonical-repo-key'
 import {
   armLocalRepoRefMaintenance,
   setRepoRefMaintenanceBusyProbe
@@ -23,6 +25,7 @@ type GitOptions = LocalGitExecOptions
 const FETCH_FRESHNESS_MS = 30_000
 // Why: a credential-manager prompt must not wedge worktree creation indefinitely.
 const REMOTE_FETCH_TIMEOUT_MS = 60_000
+const PREVIEW_FETCH_BUDGET_MS = 10_000
 const REMOTE_FETCH_CACHE_MAX = 512
 
 export class RuntimeRemoteFetchController {
@@ -31,40 +34,31 @@ export class RuntimeRemoteFetchController {
   private readonly fetchLastCompletedAt = new Map<string, number>()
   private readonly canonicalFetchKeyCache = new Map<string, string>()
 
-  getCanonicalFetchKeyCache(): ReadonlyMap<string, string> {
-    return this.canonicalFetchKeyCache
-  }
-
-  getFetchLastCompletedAt(): ReadonlyMap<string, number> {
-    return this.fetchLastCompletedAt
-  }
-
   /** `${runtimeKey}::${gitCommonDir}` -- one repo on one execution host. */
-  async getCanonicalRepoKey(repoPath: string, gitOptions: GitOptions = {}): Promise<string> {
+  async getCanonicalRepoKey(
+    repoPath: string,
+    gitOptions: CanonicalRepoKeyOptions = {}
+  ): Promise<string> {
     return getCanonicalRepoKey(repoPath, gitOptions)
   }
 
   async getCanonicalFetchKey(
     repoPath: string,
     remote: string,
-    gitOptions: GitOptions = {}
+    gitOptions: CanonicalRepoKeyOptions = {}
   ): Promise<string> {
     const runtimeKey = gitOptions.wslDistro ? `wsl:${gitOptions.wslDistro}` : 'local'
     const cacheKey = `${runtimeKey}::${repoPath}::${remote}`
     const cached = this.canonicalFetchKeyCache.get(cacheKey)
-    if (cached !== undefined) {
-      setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, cached, REMOTE_FETCH_CACHE_MAX)
-      return cached
-    }
-    const resolved = `${await this.getCanonicalRepoKey(repoPath, gitOptions)}::${remote}`
+    const resolved = cached ?? `${await this.getCanonicalRepoKey(repoPath, gitOptions)}::${remote}`
     setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, resolved, REMOTE_FETCH_CACHE_MAX)
     return resolved
   }
 
   /**
-   * Orca strips git's auto-maintenance off these fetches, so every one of them
-   * adds to a loose-ref backlog nothing else will ever pack. Arm the idle sweep
-   * that pays it back; each fetch pushes the attempt a further quiet period out.
+   * Exact-base refreshes skip git's auto-maintenance (full fetches keep it as
+   * git's housekeeping outlet), so their loose refs are never packed. Arm the idle
+   * sweep that pays it back; each fetch pushes the attempt a further quiet period out.
    */
   private armRefMaintenance(repoPath: string, gitOptions: GitOptions): void {
     void this.getCanonicalRepoKey(repoPath, gitOptions)
@@ -82,13 +76,7 @@ export class RuntimeRemoteFetchController {
   }
 
   private hasInflightFetchForRepo(repoKey: string): boolean {
-    const prefix = `${repoKey}::`
-    for (const key of this.fetchInflight.keys()) {
-      if (key.startsWith(prefix)) {
-        return true
-      }
-    }
-    return false
+    return [...this.remoteFetchQueueTail.keys()].some((key) => key.startsWith(`${repoKey}::`))
   }
 
   private enqueueRemoteFetch(
@@ -180,38 +168,96 @@ export class RuntimeRemoteFetchController {
       if (this.getFreshFetchCompletedAt(key) !== null) {
         return { ok: true }
       }
-      return gitExecFileAsync(
-        [
-          ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
-          'fetch',
-          '--no-tags',
-          base.remote,
-          `+refs/heads/${base.branch}:${base.ref}`
-        ],
-        {
-          cwd: repoPath,
-          ...gitOptions,
-          useConfiguredSshCommandForNetwork: true,
-          timeout: REMOTE_FETCH_TIMEOUT_MS
-        }
-      )
-        .then((): RemoteFetchResult => {
-          this.rememberFreshFetchCompletedAt(key)
-          return { ok: true }
-        })
-        .catch((err): RemoteFetchResult => {
-          console.warn(
-            `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
-            err
-          )
-          return { ok: false, errorKind: 'git_error' }
-        })
+      return this.runExactBaseRefresh(repoPath, base, key, gitOptions)
     }).finally(() => {
       this.fetchInflight.delete(key)
       this.armRefMaintenance(repoPath, gitOptions)
     })
     this.fetchInflight.set(key, promise)
     return promise
+  }
+
+  async refreshRemoteTrackingBaseForPreview(
+    repoPath: string,
+    base: RemoteTrackingBase,
+    gitOptions: GitOptions = {}
+  ): Promise<RemoteFetchResult> {
+    const expiresAt = Date.now() + PREVIEW_FETCH_BUDGET_MS
+    const expiry = new AbortController()
+    const canStart = (): boolean => !expiry.signal.aborted && Date.now() < expiresAt
+    const previewOptions = { ...gitOptions, signal: expiry.signal, canStart }
+    const timer = setTimeout(() => expiry.abort(), PREVIEW_FETCH_BUDGET_MS)
+    const operation = (async (): Promise<RemoteFetchResult> => {
+      const remoteKey = await this.getCanonicalFetchKey(repoPath, base.remote, previewOptions)
+      const key = await this.getCanonicalFetchKey(
+        repoPath,
+        `base:${base.remote}:${base.branch}`,
+        previewOptions
+      )
+      if (!canStart()) {
+        return { ok: false, errorKind: 'git_error' }
+      }
+      if (this.getFreshFetchCompletedAt(key) !== null) {
+        return { ok: true }
+      }
+      const normal = this.fetchInflight.get(key)
+      if (normal) {
+        return normal
+      }
+      // Preview lifetime/failure is private; normal callers reuse only its successful freshness.
+      return this.enqueueRemoteFetch(remoteKey, () => {
+        const remainingMs = expiresAt - Date.now()
+        if (!canStart() || remainingMs <= 0) {
+          return Promise.resolve<RemoteFetchResult>({ ok: false, errorKind: 'git_error' })
+        }
+        if (this.getFreshFetchCompletedAt(key) !== null) {
+          return Promise.resolve<RemoteFetchResult>({ ok: true })
+        }
+        return this.runExactBaseRefresh(repoPath, base, key, previewOptions, remainingMs)
+      }).finally(() => this.armRefMaintenance(repoPath, gitOptions))
+    })()
+    try {
+      return await waitForPromiseWithSignal(operation, expiry.signal)
+    } catch {
+      return { ok: false, errorKind: 'git_error' }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  private runExactBaseRefresh(
+    repoPath: string,
+    base: RemoteTrackingBase,
+    key: string,
+    gitOptions: GitOptions & Pick<GitExecOptions, 'signal' | 'canStart'>,
+    timeout = REMOTE_FETCH_TIMEOUT_MS
+  ): Promise<RemoteFetchResult> {
+    return gitExecFileAsync(
+      [
+        ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
+        'fetch',
+        '--no-tags',
+        base.remote,
+        `+refs/heads/${base.branch}:${base.ref}`
+      ],
+      {
+        cwd: repoPath,
+        ...gitOptions,
+        useConfiguredSshCommandForNetwork: true,
+        timeout
+      }
+    )
+      .then((): RemoteFetchResult => {
+        this.rememberFreshFetchCompletedAt(key)
+        return { ok: true }
+      })
+      .catch((err): RemoteFetchResult => {
+        console.warn(
+          `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
+          err
+        )
+        return { ok: false, errorKind: 'git_error' }
+      })
   }
 
   async fetchRemoteWithCache(
@@ -228,6 +274,9 @@ export class RuntimeRemoteFetchController {
     gitOptions: GitOptions = {}
   ): Promise<RemoteTrackingBase | null> {
     const remoteRefPrefix = 'refs/remotes/'
+    if (baseBranch.startsWith('refs/') && !baseBranch.startsWith(remoteRefPrefix)) {
+      return null
+    }
     const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
       ? baseBranch.slice(remoteRefPrefix.length)
       : baseBranch

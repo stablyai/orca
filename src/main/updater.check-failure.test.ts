@@ -8,7 +8,7 @@ const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
   netRequestMock: vi.fn()
 }))
 
-const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, killAllPtyMock } =
+const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, killAllPtyMock } =
   vi.hoisted(() => {
     const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
     const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -79,7 +79,7 @@ const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, 
         on: vi.fn()
       },
       autoUpdaterMock,
-      isMock: { dev: false },
+
       killAllPtyMock: vi.fn()
     }
   })
@@ -100,13 +100,7 @@ vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
 }))
 
-vi.mock('@electron-toolkit/utils', () => ({
-  is: isMock
-}))
-
-vi.mock('./ipc/pty', () => ({
-  killAllPty: killAllPtyMock
-}))
+vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: killAllPtyMock }))
 
 vi.mock('./updater-nudge', () => ({
   fetchNudge: vi.fn().mockResolvedValue(null),
@@ -180,7 +174,7 @@ describe('updater check failure handling', () => {
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
+
     killAllPtyMock.mockReset()
     vi.unstubAllGlobals()
     vi.useRealTimers()

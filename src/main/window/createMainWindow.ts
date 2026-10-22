@@ -1,5 +1,4 @@
-import { BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
-import { is } from '@electron-toolkit/utils'
+import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
 import { join } from 'node:path'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
@@ -8,8 +7,10 @@ import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-h
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
+import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
 import type { Store } from '../persistence'
 import { closeDashboardPopout } from './dashboard-popout-window'
+import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import {
   installMainWindowCloseLifecycle,
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
@@ -31,12 +32,13 @@ import {
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   const load =
-    is.dev && process.env.ELECTRON_RENDERER_URL
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
       : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   // Observe each load promise so failures cannot leave recovery waiting silently.
@@ -155,6 +157,9 @@ export function createMainWindow(
           ? event.reasons.filter((reason) => typeof reason === 'string').join(',')
           : ''
       })
+      flushUnsavedCloudSessions()
+      // Windows emits no will-quit for an OS shutdown or logoff, so its teardown never records it.
+      recordAgentSessionRuntimeEnd('quit')
     })
   }
 
@@ -204,6 +209,7 @@ export function createMainWindow(
 
   mainWindow.on('closed', () => {
     closeDashboardPopout()
+    closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
     focus.dispose()

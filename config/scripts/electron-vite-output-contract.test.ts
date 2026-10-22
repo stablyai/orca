@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { MainConfigFactory } from 'electron-vite'
+import { resolveConfig } from 'vite'
 import {
   DEV_BUNDLE_ID,
   DEV_HELPER_BUNDLE_ID,
@@ -17,8 +19,10 @@ import {
   createBootstrapFatalExitBanner
 } from '../build-plugins/bootstrap-fatal-exit-banner'
 import { createRequire } from 'node:module'
-import { electronViteConfig } from '../../electron.vite.config'
+import configureElectronVite, { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
+import { FOREIGN_SQLITE_READER_ENTRY_FILENAME } from '../../src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
+import { ORCAD_CHILD_ENTRY_POINTS } from './orcad-entry-build.mjs'
 
 type BootstrapProcessMock = EventEmitter & {
   env: Record<string, string>
@@ -70,9 +74,63 @@ function failBootstrapWithBanner(options: {
   return processMock
 }
 
-const electronBuilderConfig = createRequire(import.meta.url)('../electron-builder.config.cjs')
+const require = createRequire(import.meta.url)
+const electronBuilderConfig = require('../electron-builder.config.cjs')
+const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('Electron Vite output contract', () => {
+  it('skips main maps only for explicit check builds and always keeps official release maps', async () => {
+    try {
+      for (const [setting, identity, expected] of [
+        [undefined, undefined, 'hidden'],
+        ['false', undefined, 'hidden'],
+        ['1', undefined, 'hidden'],
+        ['0', undefined, false],
+        ['0', 'stable', 'hidden'],
+        ['0', 'rc', 'hidden']
+      ] as const) {
+        vi.stubEnv('ORCA_CI_MAIN_SOURCEMAPS', setting)
+        vi.stubEnv('ORCA_BUILD_IDENTITY', identity)
+        vi.resetModules()
+        const { electronViteConfig: configured } = await import('../../electron.vite.config')
+        expect(configured.main?.build?.sourcemap).toBe(expected)
+        expect(configured.main?.build?.minify).toBe(electronViteConfig.main?.build?.minify)
+        expect(configured.main?.build?.rollupOptions?.input).toEqual(
+          electronViteConfig.main?.build?.rollupOptions?.input
+        )
+        expect(configured.renderer?.build).toEqual(electronViteConfig.renderer?.build)
+        expect(configured.preload?.build).toEqual(electronViteConfig.preload?.build)
+      }
+    } finally {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    }
+  })
+
+  it('can skip main source maps during development without changing build output settings', () => {
+    try {
+      vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', undefined)
+      const defaults = configureElectronVite({ command: 'serve', mode: 'development' })
+      expect(defaults.main?.build?.sourcemap).toBe('hidden')
+      expect(defaults.main?.build?.minify).toBe(false)
+      vi.stubEnv('ORCA_DEV_MAIN_SOURCEMAPS', '0')
+      const development = configureElectronVite({ command: 'serve', mode: 'development' })
+      expect(development.main?.build?.sourcemap).toBe(false)
+      expect(development.main?.build?.minify).toBe(false)
+      expect(development.main?.build?.rollupOptions).toBe(
+        electronViteConfig.main?.build?.rollupOptions
+      )
+      expect(development.renderer).toBe(electronViteConfig.renderer)
+      expect(development.preload).toBe(electronViteConfig.preload)
+      for (const mode of ['development', 'production']) {
+        expect(configureElectronVite({ command: 'build', mode })).toBe(electronViteConfig)
+      }
+      expect(electronViteConfig.main?.build?.sourcemap).toBe('hidden')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it("minifies main and renderer with rolldown's in-process minifier", () => {
     // Why: 'esbuild' routes every chunk through a second, undeclared transpiler.
     expect(electronViteConfig.main?.build?.minify).toBe('oxc')
@@ -90,13 +148,38 @@ describe('Electron Vite output contract', () => {
 
   it('keeps main-process and plain-Node entries at stable CommonJS paths', () => {
     const output = electronViteConfig.main?.build?.rollupOptions?.output
-    if (!output || Array.isArray(output)) {
-      throw new Error('Expected one main-process output')
+    if (!output || Array.isArray(output) || typeof output.entryFileNames !== 'string') {
+      throw new Error('Expected one main-process output with a filename template')
     }
 
     expect(output.format).toBe('cjs')
     expect(output.entryFileNames).toBe('[name].js')
     expect(output.chunkFileNames).toBe('chunks/[name]-[hash].js')
+
+    const build = electronViteConfig.main?.build
+    const input = build?.rollupOptions?.input
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new Error('Expected named main-process inputs')
+    }
+
+    const entryName = nodePath.parse(FOREIGN_SQLITE_READER_ENTRY_FILENAME).name
+    expect(input[entryName]).toBe(nodePath.resolve(ORCAD_CHILD_ENTRY_POINTS.foreignSqliteReader))
+    const outputFilename = output.entryFileNames.replace('[name]', entryName)
+    expect(outputFilename).toBe(FOREIGN_SQLITE_READER_ENTRY_FILENAME)
+
+    const appRoot = join(tmpdir(), 'orca-sqlite-unpack-app')
+    const matcher = new FileMatcher(
+      appRoot,
+      join(tmpdir(), 'orca-sqlite-unpack-destination'),
+      (value: string) => value,
+      electronBuilderConfig.asarUnpack
+    )
+    const relativeOutDir = nodePath.relative(
+      nodePath.resolve('.'),
+      nodePath.resolve(build?.outDir ?? join('out', 'main'))
+    )
+    const outputPath = join(appRoot, relativeOutDir, outputFilename)
+    expect(matcher.createFilter()(outputPath, { isDirectory: () => false })).toBe(true)
   })
 
   it('keeps CLI main imports unpacked at stable paths', () => {
@@ -107,6 +190,7 @@ describe('Electron Vite output contract', () => {
 
     for (const name of [
       'gitlab/project-ref-parser',
+      'macos-tree-clone',
       'orca-profiles/profile-index-store',
       'persistence/profile-state/profile-state-access',
       'persistence/profile-state/profile-state-active-location',
@@ -123,6 +207,8 @@ describe('Electron Vite output contract', () => {
       expect(input).toHaveProperty(name)
     }
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/gitlab/project-ref-parser.js')
+    expect(electronBuilderConfig.asarUnpack).toContain('out/main/macos-tree-clone.js')
+    expect(electronBuilderConfig.asarUnpack).toContain('out/main/asar-transparent-fs.js')
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/persistence/profile-state/**')
     expect(electronBuilderConfig.asarUnpack).toContain(
       'out/main/orca-profiles/profile-index-store.js'
@@ -132,22 +218,34 @@ describe('Electron Vite output contract', () => {
     )
   })
 
-  it('externalizes packaged dependencies but bundles self-contained main dependencies', () => {
-    const external = electronViteConfig.main?.build?.rollupOptions?.external
-    if (typeof external !== 'function') {
-      throw new Error('Expected main-process external predicate')
+  it('externalizes packaged dependencies but bundles self-contained main dependencies', async () => {
+    const main = await new MainConfigFactory(electronViteConfig.main ?? {}, {}, {}).build()
+    const resolved = await resolveConfig({ ...main, configFile: false }, 'build')
+    const patterns = resolved.build.rolldownOptions.external
+    if (!Array.isArray(patterns)) {
+      throw new Error('Expected mergeable main-process external patterns')
     }
+    const external = (source: string) =>
+      patterns.some((pattern) =>
+        typeof pattern === 'string' ? pattern === source : pattern.test(source)
+      )
 
-    expect(external('node-pty', undefined, false)).toBe(true)
-    expect(external('@parcel/watcher', undefined, false)).toBe(true)
-    expect(external('electron', undefined, false)).toBe(true)
-    expect(external('node:fs', undefined, false)).toBe(true)
-    expect(external('@xterm/headless', undefined, false)).toBe(false)
-    expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
-    expect(external('tldts', undefined, false)).toBe(false)
-    expect(external('zod', undefined, false)).toBe(false)
-    expect(external('smol-toml', undefined, false)).toBe(false)
-    expect(external('smol-toml/package.json', undefined, false)).toBe(false)
+    expect(external('node-pty')).toBe(true)
+    expect(external('@parcel/watcher')).toBe(true)
+    expect(external('electron')).toBe(true)
+    expect(external('electron/common')).toBe(true)
+    expect(external('fs')).toBe(true)
+    expect(external('node:fs')).toBe(true)
+    expect(external('@orca/process-host')).toBe(true)
+    expect(external('@orca/process-host/spawn-observer')).toBe(true)
+    expect(external('@xterm/headless')).toBe(false)
+    expect(external('@xterm/addon-serialize')).toBe(false)
+    expect(external('tldts')).toBe(false)
+    expect(external('zod')).toBe(false)
+    expect(external('smol-toml')).toBe(false)
+    expect(external('smol-toml/package.json')).toBe(false)
+    expect(external('@noble/hashes/blake3')).toBe(false)
+    expect(external('@noble/hashes/utils')).toBe(false)
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('tldts')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('smol-toml')

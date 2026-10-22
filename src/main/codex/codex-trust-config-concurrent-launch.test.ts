@@ -9,6 +9,17 @@ import type {
 import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
 import type { CodexTrustEntry } from './config-toml-trust'
 
+// Why: the guest identity probe needs wsl.exe; a failed probe leaves the grant unstamped.
+vi.mock('@orca/process-host', () => ({
+  runProcess: vi.fn(async () => ({
+    code: 1,
+    signal: null,
+    timedOut: false,
+    stdout: '',
+    stderr: ''
+  }))
+}))
+
 const testState = {
   fakeHomeDir: '',
   userDataDir: '',
@@ -86,8 +97,11 @@ function buildPlan(
     tomlPath: join(runtimeHomeDir, 'config.toml'),
     managedCommand: MANAGED_COMMAND,
     managedEntries: entries,
-    host: { kind: 'native' },
-    telemetryLane: 'real-home',
+    host: {
+      kind: 'wsl',
+      distro: 'Ubuntu',
+      linuxRuntimeHome: overrides.runtimeHomePath ?? runtimeHomeDir
+    },
     ...overrides
   }
 }
@@ -137,7 +151,7 @@ describe('two Codex pane launches against one config.toml', () => {
   it("leaves a concurrent grant's records in place when a sibling grant fails", async () => {
     // Why warm: on a cold host the shared capability probe serializes the two
     // grants. Once the host is known-supported, their sessions overlap.
-    codexAppServerCapabilityCache.rememberSupported('native')
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const entries = [managedEntry('session_start')]
     let call = 0
@@ -173,7 +187,7 @@ describe('two Codex pane launches against one config.toml', () => {
   })
 
   it('writes project trust while a grant session is still running, and keeps it', async () => {
-    codexAppServerCapabilityCache.rememberSupported('native')
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const entries = [managedEntry('session_start')]
     const workspace = mkdtempSync(join(tmpdir(), 'orca-concurrent-ws-'))
@@ -308,11 +322,11 @@ describe('host-scoped transient cooldown', () => {
     ).toMatchObject({ lane: 'fallback', reason: 'retry-cached' })
     expect(calls).toBe(1)
 
-    // A WSL distro runs its own codex binary; the native cooldown must not reach it.
+    // Another distro runs its own codex binary; this distro's cooldown must not reach it.
     expect(
       await grantManagedCodexHookTrust(
         buildPlan(entries, {
-          host: { kind: 'wsl', distro: 'Ubuntu', linuxRuntimeHome: '/home/u/.codex' }
+          host: { kind: 'wsl', distro: 'Debian', linuxRuntimeHome: '/home/u/.codex' }
         })
       )
     ).toMatchObject({ lane: 'fallback', reason: 'error' })
@@ -323,7 +337,7 @@ describe('host-scoped transient cooldown', () => {
   // can succeed after a sibling failed. That proof of health must clear the
   // sibling's cooldown instead of suppressing the host for five more minutes.
   it('lets a concurrent success clear a cooldown a sibling failure just set', async () => {
-    codexAppServerCapabilityCache.rememberSupported('native')
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const secondHome = join(testState.userDataDir, 'second-runtime-home')
     mkdirSync(secondHome, { recursive: true })
     writeFileSync(join(secondHome, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')

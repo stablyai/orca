@@ -11,13 +11,13 @@ import { constants } from 'node:fs'
 import { lstat, open } from 'node:fs/promises'
 import { posix } from 'node:path'
 import { Readable } from 'node:stream'
-import type { SshConnection } from './ssh-connection'
-import { shellEscape } from './ssh-connection-utils'
-import { execCommand } from './ssh-relay-exec-command'
-import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { execCommand } from './remote-exec/remote-exec-command'
+import { REMOTE_INSTALL_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { makePosixWriteFileCommand } from './system-ssh-file-binary-transfer'
-import { collectLocalUploadPlan } from './system-ssh-file-transfer'
+import { makePosixWriteFileCommand } from './system-transport/system-ssh-file-binary-transfer'
+import { collectLocalUploadPlan } from './system-transport/system-ssh-file-transfer'
 
 export const EXEC_STDIN_WRITE_DONE = 'ORCA_EXEC_STDIN_WRITE_DONE'
 
@@ -33,21 +33,21 @@ export function makeExecStdinWriteFileCommand(
     throw new Error(`Invalid upload size: ${byteLength}`)
   }
   const part = `${remotePath}.orca-part-${options.token}`
-  const escapedPart = shellEscape(part)
+  const escapedPart = quotePosixShell(part)
   const steps = [
-    `mkdir -p ${shellEscape(posix.dirname(remotePath))}`,
+    `mkdir -p ${quotePosixShell(posix.dirname(remotePath))}`,
     makePosixWriteFileCommand(part),
     // Why tr: BSD `wc -c` pads its count with spaces.
     `[ "$(wc -c < ${escapedPart} | tr -d ' ')" = ${byteLength} ]`,
     ...(options.executable ? [`chmod 755 ${escapedPart}`] : []),
-    `mv -f ${escapedPart} ${shellEscape(remotePath)}`,
+    `mv -f ${escapedPart} ${quotePosixShell(remotePath)}`,
     `echo ${EXEC_STDIN_WRITE_DONE}`
   ]
   return `{ ${steps.join(' && ')}; } || { rm -f ${escapedPart}; exit 1; }`
 }
 
 async function writeViaExecStdin(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   remotePath: string,
   byteLength: number,
   stdin: Readable,
@@ -59,7 +59,7 @@ async function writeViaExecStdin(
     conn,
     makeExecStdinWriteFileCommand(remotePath, byteLength, { token, executable }),
     // Why the deploy bound: a runtime archive over a slow link outlasts the 30 s probe default.
-    { signal: options?.signal, stdin, timeoutMs: RELAY_DEPLOY_TIMEOUT_MS }
+    { signal: options?.signal, stdin, timeoutMs: REMOTE_INSTALL_TIMEOUT_MS }
   )
   if (output.trim().split('\n').at(-1) !== EXEC_STDIN_WRITE_DONE) {
     throw new Error(`The host did not confirm the upload of ${remotePath}`)
@@ -67,7 +67,7 @@ async function writeViaExecStdin(
 }
 
 export async function uploadFileViaExecStdin(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   localPath: string,
   remotePath: string,
   options?: ExecStdinOptions
@@ -103,7 +103,7 @@ export async function uploadFileViaExecStdin(
 }
 
 export async function writeStringViaExecStdin(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   remotePath: string,
   contents: string,
   options?: ExecStdinOptions
@@ -114,14 +114,14 @@ export async function writeStringViaExecStdin(
 
 /** One exec creates the tree (empty directories included), then one exec per file. */
 export async function uploadDirectoryViaExecStdin(
-  conn: SshConnection,
+  conn: RemoteInstallTransport,
   localDir: string,
   remoteDir: string,
   host: RemoteHostPlatform,
   options?: ExecStdinOptions
 ): Promise<void> {
   const plan = await collectLocalUploadPlan(localDir, remoteDir, host, options?.signal)
-  await execCommand(conn, `mkdir -p ${plan.directories.map(shellEscape).join(' ')}`, {
+  await execCommand(conn, `mkdir -p ${plan.directories.map(quotePosixShell).join(' ')}`, {
     signal: options?.signal
   })
   for (const file of plan.files) {

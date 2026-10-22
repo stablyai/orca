@@ -1,15 +1,17 @@
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { toast } from 'sonner'
 import {
   clearRuntimeCompatibilityCache,
-  markRuntimeEnvironmentCompatible,
-  unwrapRuntimeRpcResult
+  markRuntimeEnvironmentCompatible
 } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
@@ -69,6 +71,8 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands
     )
+    // The web client stores its own list without main's check, so refuse here too, before any write.
+    assertTerminalQuickCommandsStorable(sanitizedUpdates.terminalQuickCommands)
   }
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
@@ -93,6 +97,11 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
       createId: createBrowserUuid
     })
+  }
+  if ('nativeChatAppearance' in updates) {
+    sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
+      updates.nativeChatAppearance
+    )
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
@@ -282,7 +291,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       }
       // Why: hydration is host-merged by downstream slices. Switching focus
       // should add/update the selected host without discarding other hosts.
-      await get().fetchRepos()
+      // Why: hydrate the newly chosen default host's catalog; other hosts keep theirs.
+      await get().fetchRepos({ runtimeEnvironmentId: nextId })
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()

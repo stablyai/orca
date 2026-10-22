@@ -46,8 +46,7 @@ function shouldFlushInterruptImmediately(
 ): boolean {
   return (
     requiresDoubleEscapeInterrupt(baseline.agentType, baseline.intent) ||
-    baseline.agentType === 'gemini' ||
-    (baseline.agentType === 'codex' && baseline.intent === 'plain-escape')
+    baseline.agentType === 'gemini'
   )
 }
 

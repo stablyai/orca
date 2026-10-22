@@ -17,6 +17,7 @@ import {
   store,
   withPlatform
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('tui-idle times out when PTY data has no agent OSC title transitions', async () => {
@@ -144,6 +145,7 @@ describe('OrcaRuntimeService', () => {
           branch: 'feature/foo',
           isArchived: false,
           isMainWorktree: false,
+          defaultBranch: false,
           hasHostSidebarActivity: true,
           parentWorktreeId: null,
           childWorktreeIds: [],
@@ -151,6 +153,7 @@ describe('OrcaRuntimeService', () => {
           workspaceStatus: 'in-progress',
           sortOrder: 0,
           linkedIssue: 123,
+          linkedItems: [{ provider: 'github', type: 'issue', number: 123 }],
           linkedPR: null,
           linkedLinearIssue: null,
           linkedGitLabMR: null,
@@ -162,6 +165,7 @@ describe('OrcaRuntimeService', () => {
           unread: false,
           liveTerminalCount: 1,
           hasAttachedPty: true,
+          unverifiableTerminalCount: 0,
           lastActivityAt: 0,
           lastOutputAt: 321,
           preview: 'build green',
@@ -265,7 +269,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },

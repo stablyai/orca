@@ -49,6 +49,10 @@ export type CatalogModel = {
   label: string
   description?: string
   isDefault?: boolean
+  /** Tokens the model's context window holds, where the host's listing states it. */
+  contextWindowTokens?: number
+  /** The listing says the model runs Approve for me; absent is unknown, which offers it nowhere. */
+  supportsAutoMode?: boolean
   options: CatalogOption[]
 }
 
@@ -74,6 +78,9 @@ export type AgentSessionOptionCatalog = {
    * model while the picker, which never reads launch args, still names the CLI default.
    * A real fix means threading `modelApply.removeAgentArgs` through to the surface. */
   defaultModelIsCliDefault?: true
+  /** For a host too old to say so itself: its model listing names the model the account is
+   *  configured to run, so a new chat may run the listed default. */
+  hostListingNamesConfiguredModel?: true
   listModels?: {
     command: string
     parse: (stdout: string) => CatalogModel[]

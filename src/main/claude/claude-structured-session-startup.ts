@@ -1,11 +1,9 @@
-// What Claude reports at initialize, read after the session is already published. None of it
-// gates the create: a slow start is still a start, and every way it can fail (exit, auth,
-// a foreign session id) faults the published session through its exit path.
+// Claude initialize is awaited by the host after process publication, under its own bound. Settings
+// enrichment follows independently; the host owns a failed open and its single close.
 
-import type {
-  StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionStartedEvent
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import {
@@ -13,72 +11,96 @@ import {
   claudeInitializationAuthError,
   readClaudeCapabilities,
   readClaudeModels,
-  type ClaudeInitObservation
+  type ClaudeInitObservation,
+  type ClaudeInitProof
 } from './claude-structured-init-proof'
-import { restoreClaudeStructuredSessionOptions } from './claude-structured-options'
 import {
   claudeStructuredSessionPublicationOptions,
-  prepareClaudeStructuredSessionAcquisitionOptions,
-  readClaudeStructuredSessionSettings
+  prepareClaudeStructuredSessionAcquisitionOptions
 } from './claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
+  readClaudeSettingsApplied,
+  readClaudeFastModeFacts,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
-import { failClaudeStartup } from './claude-structured-session-startup-state'
-import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { claudeExecutionObservations } from './claude-structured-execution-observations'
+import type {
+  ClaudeAuthDiagnostic,
+  ClaudeSession,
+  ClaudeStructuredSessionEvent
+} from './claude-structured-session-state'
 
-export type ClaudeInitProof = {
-  promise: Promise<ClaudeInitObservation>
-  resolve: (init: ClaudeInitObservation) => void
-  reject: (error: Error) => void
-}
+export type ClaudeOpenFacts = Pick<StructuredAgentSessionProviderOpenResult, 'reportedOptions'>
 
-export function createClaudeInitProof(): ClaudeInitProof {
-  let resolve = (_init: ClaudeInitObservation): void => {}
-  let reject = (_error: Error): void => {}
-  const promise = new Promise<ClaudeInitObservation>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  void promise.catch(() => {})
-  return { promise, resolve, reject }
-}
+/** A lifecycle event the start reports, before the session's identity is stamped on it. */
+export type ClaudeStartupReport = {
+  type: 'options-reported'
+} & ClaudeOpenFacts
 
-export type StructuredAgentSessionStartedOptions = Pick<
-  StructuredAgentSessionStartedEvent,
-  'reportedOptions' | 'restoreSkippedOptions'
->
-
-export type ClaudeStartupFacts = {
-  init: ClaudeInitObservation
+/** What the initialize answer proved: enough to start. */
+export type ClaudeInitializeFacts = {
+  init: ClaudeInitObservation | null
+  initProof: ClaudeInitProof
   initialization: unknown
+  resumesTranscript: boolean
+  requestTimeoutMs: number | undefined
+}
+
+/** The initialize facts and the optional settings read that followed them. */
+export type ClaudeStartupFacts = ClaudeInitializeFacts & {
   settings: unknown
   prepared: ReturnType<typeof prepareClaudeStructuredSessionAcquisitionOptions>
 }
 
-/** Settles on the CLI's answers or on its exit; there is no startup timer. */
+/** The CLI's initialize answer is a start step like any other: past this the start fails. */
+export const CLAUDE_INITIALIZE_TIMEOUT_MS = 60_000
+
+/** Settles on the CLI's initialize answer, or on its exit, a refused proof or the bound. */
 export async function readClaudeStartupFacts(input: {
   connection: ClaudeStreamJsonConnection
   initProof: ClaudeInitProof
   sessionId: string
   providerSessionId: string
   resumesTranscript: boolean
-  inputOptions: StructuredAgentSessionAcquireInput['options']
+  account?: AgentSessionAccountKind
   requestTimeoutMs: number | undefined
   emit: (event: ClaudeStructuredSessionEvent) => void
-}): Promise<ClaudeStartupFacts> {
-  const [initialization, init] = await Promise.all([
-    input.connection.initializationResult().then((result) => {
-      const authError = claudeInitializationAuthError(result)
-      if (authError) {
-        throw authError
-      }
-      return result
-    }),
-    input.initProof.promise
-  ])
+}): Promise<ClaudeInitializeFacts> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const initialization = await Promise.race([
+    input.connection
+      .initializationResult()
+      .catch((error: unknown) => {
+        // The SDK may replace the child's own exit diagnostic with a generic closed-query error.
+        input.initProof.seen()
+        throw error
+      })
+      .then((result) => {
+        const authError = claudeInitializationAuthError(result, input.account)
+        if (authError) {
+          throw authError
+        }
+        return result
+      }),
+    input.initProof.promise.then(() => new Promise<never>(() => {})),
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            withProviderRequestTimeout(
+              new Error(
+                `claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`
+              ),
+              { method: 'initialize', timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS }
+            )
+          ),
+        CLAUDE_INITIALIZE_TIMEOUT_MS
+      )
+      timer.unref?.()
+    })
+  ]).finally(() => clearTimeout(timer))
   if (input.connection.closed) {
     throw new Error('claude session closed before startup completed')
   }
@@ -87,125 +109,164 @@ export async function readClaudeStartupFacts(input: {
     sessionId: input.sessionId,
     models: readClaudeModels(initialization)
   })
-  if (init.providerSessionId !== input.providerSessionId) {
-    throw new Error(
-      `claude proved session ${init.providerSessionId}, expected ${input.providerSessionId}`
-    )
-  }
-  const settings = await readClaudeStructuredSessionSettings(
-    input.connection,
-    input.requestTimeoutMs
-  )
-  input.emit({
-    type: 'auth-diagnostic',
-    sessionId: input.sessionId,
-    diagnostic: claudeAuthDiagnostic(init, settings)
-  })
   return {
-    init,
+    init: input.initProof.seen(),
+    initProof: input.initProof,
     initialization,
-    settings,
-    prepared: prepareClaudeStructuredSessionAcquisitionOptions({
-      settings,
-      initialization,
-      inputOptions: input.inputOptions,
-      resumesTranscript: input.resumesTranscript
-    })
+    resumesTranscript: input.resumesTranscript,
+    requestTimeoutMs: input.requestTimeoutMs
   }
 }
 
-function applyClaudeStartupFacts(session: ClaudeSession, facts: ClaudeStartupFacts): void {
-  const { init, initialization, settings, prepared } = facts
-  const effort = readClaudeSettingsEffort(settings)
-  const published = claudeStructuredSessionPublicationOptions(prepared)
+function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitializeFacts): void {
+  const { init, initialization } = facts
   // A turn's own init frame may already have reported the running model.
-  if (init.model && session.reportedOptions.model === undefined) {
+  if (init?.model && session.reportedOptions.model === undefined) {
     session.reportedOptions.model = init.model
     session.reportedModelMutation = session.optionMutationSequence
   }
-  observeClaudeSettingsApplied(session, settings)
-  if (effort) {
-    session.reportedOptions.effort = effort
-    session.confirmedOptions.add('effort')
+  const fastModeFacts = readClaudeFastModeFacts(initialization)
+  if (session.fastModeState === undefined && fastModeFacts.state) {
+    session.fastModeState = fastModeFacts.state
+    session.fastModeReportedMutation = 0
   }
-  if (published.fastMode !== null) {
-    session.reportedOptions.fastMode = published.fastMode
-    session.confirmedOptions.add('fastMode')
-  }
-  if (published.fastModePerSessionOptIn !== null) {
-    session.fastModePerSessionOptIn = published.fastModePerSessionOptIn
-  }
-  session.fastModeState ??= published.fastModeState
-  session.fastModeDisabledReason ??= published.fastModeDisabledReason
-  session.options = prepared.options
-  session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init.message)
+  session.fastModeDisabledReason ??= fastModeFacts.disabledReason
+  session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init?.message)
   // A catalog frame that streamed in after publish is newer than the initialize answer.
   if (session.commands.commands === undefined) {
-    session.commands = new ClaudeSlashCommandCatalog(init.message, initialization)
+    session.commands = new ClaudeSlashCommandCatalog(init?.message, initialization)
   }
   session.events?.publish()
 }
 
-/** What the start persists as the session's options. The applied effort is display-only: saved,
- *  it would pin an effort nobody chose on every reopen, past a later settings change. */
+/** A later settings read cannot overwrite a newer option write. */
+function applyClaudeSettingsFacts(
+  session: ClaudeSession,
+  facts: ClaudeStartupFacts,
+  writtenSinceRead: boolean
+): void {
+  const { settings, prepared } = facts
+  const effort = readClaudeSettingsEffort(settings)
+  const published = claudeStructuredSessionPublicationOptions(prepared)
+  if (!writtenSinceRead) {
+    const applied = readClaudeSettingsApplied(settings)
+    session.configuredDefaults = {
+      ...(!session.options.has('model') && applied?.model ? { model: applied.model } : {}),
+      ...(!session.options.has('effort') && applied?.effort ? { effort: applied.effort } : {})
+    }
+  }
+  if (published.fastModePerSessionOptIn !== null) {
+    session.fastModePerSessionOptIn = published.fastModePerSessionOptIn
+  }
+  if (writtenSinceRead) {
+    session.events?.publish()
+    return
+  }
+  observeClaudeSettingsApplied(session, settings)
+  // The readback vouches for a value the child was launched with only when it reports that value.
+  const agrees = (key: string, reported: string): boolean =>
+    !session.options.has(key) || session.options.get(key) === reported
+  if (effort) {
+    session.reportedOptions.effort = effort
+    if (agrees('effort', effort)) {
+      session.confirmedOptions.add('effort')
+    }
+  }
+  // A launch `--effort` shows only in `applied`, never in `effective` (measured on 2.1.280).
+  const launchedEffort = session.options.get('effort')
+  if (launchedEffort !== undefined && session.appliedOptions?.effort === launchedEffort) {
+    session.confirmedOptions.add('effort')
+  }
+  if (published.fastMode !== null) {
+    session.reportedOptions.fastMode = published.fastMode
+    if (!published.fastMode) {
+      delete session.fastModeReportedMutation
+    }
+    if (agrees('fastMode', String(published.fastMode))) {
+      session.confirmedOptions.add('fastMode')
+    }
+  }
+  session.events?.publish()
+}
+
+/** What the start persists as the session's options, and the account listing it read for the
+ *  host's catalog. The applied effort is display-only: saved, it would pin an effort nobody chose
+ *  on every reopen, past a later settings change. */
 function claudeStartedReportedOptions(
   session: ClaudeSession,
   catalog: unknown[]
-): StructuredAgentSessionStartedOptions['reportedOptions'] {
+): Pick<ClaudeOpenFacts, 'reportedOptions'> {
   const { current } = claudeStructuredSessionOptionsFrom(session, catalog)
+  const { model: _projected, ...rest } = current
+  const model = claudeExecutionObservations(session).model
+  const observed = { ...rest, ...(model ? { model } : {}) }
   if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
-    return current
+    return { reportedOptions: observed }
   }
-  const { effort: _displayOnly, ...persisted } = current
-  return persisted
+  const { effort: _displayOnly, ...persisted } = observed
+  return { reportedOptions: persisted }
 }
 
-/** Applies startup facts to the published session and restores saved options; only then does the
- *  session take input. Any failure faults the session so the user sees why it never started. */
-export async function settleClaudeSessionStartup(input: {
+/** The host awaits initialize and proof while owning the published child. */
+export async function openClaudeSession(input: {
   session: ClaudeSession
-  facts: Promise<ClaudeStartupFacts>
+  facts: Promise<ClaudeInitializeFacts>
+  readSettings: () => Promise<unknown>
   isCurrent: () => boolean
-  requestTimeoutMs: number | undefined
-  fault: (error: Error) => void
-  /** Startup has proven; `options` is what the child now reports, snapshotted from memory. */
-  onStarted: (options: StructuredAgentSessionStartedOptions) => void
-}): Promise<void> {
+  diagnose: (diagnostic: ClaudeAuthDiagnostic) => void
+  onLateRefusal: (error: Error) => void
+  report: (event: ClaudeStartupReport) => void
+}): Promise<ClaudeOpenFacts> {
   const { session } = input
-  const superseded = (): boolean => {
+  const initialized = await input.facts
+  if (!input.isCurrent()) {
+    throw new Error('claude session closed before startup completed')
+  }
+  initialized.initProof.onRefusal = (error) => {
     if (input.isCurrent()) {
-      return false
+      input.onLateRefusal(error)
     }
-    failClaudeStartup(session, new Error('claude session closed before startup completed'))
-    return true
   }
+  applyClaudeInitializeFacts(session, initialized)
+  const result: ClaudeOpenFacts = {
+    ...claudeStartedReportedOptions(session, readClaudeModels(initialized.initialization))
+  }
+  void settleClaudeStartupSettings(input, initialized)
+  return result
+}
+
+async function settleClaudeStartupSettings(
+  input: Parameters<typeof openClaudeSession>[0],
+  initialized: ClaudeInitializeFacts
+): Promise<void> {
+  const { session } = input
+  const sequence = session.optionMutationSequence
+  const settings = await input.readSettings()
+  if (!input.isCurrent()) {
+    return
+  }
+  let init: ClaudeInitObservation | null
   try {
-    const facts = await input.facts
-    if (superseded()) {
-      return
-    }
-    applyClaudeStartupFacts(session, facts)
-    await restoreClaudeStructuredSessionOptions(session, input.requestTimeoutMs)
-    if (!superseded()) {
-      input.onStarted({
-        // `list_models` is answered from this same initialize result, so nothing is re-read.
-        reportedOptions: claudeStartedReportedOptions(
-          session,
-          readClaudeModels(facts.initialization)
-        ),
-        restoreSkippedOptions: [...session.restoreSkippedOptions]
-      })
-      if (session.startup.state === 'pending') {
-        session.startup.state = 'proven'
-      }
-    }
-  } catch (caught) {
-    const error = caught instanceof Error ? caught : new Error(String(caught))
-    // A close or exit that already ended startup owns how the session ends.
-    const endedElsewhere = session.startup.state !== 'pending'
-    failClaudeStartup(session, error)
-    if (!endedElsewhere && input.isCurrent()) {
-      input.fault(error)
-    }
+    // Read again: a frame naming the session may have come since; a refusal is already ending it.
+    init = initialized.initProof.seen()
+  } catch {
+    return
   }
+  const facts: ClaudeStartupFacts = {
+    ...initialized,
+    init,
+    settings,
+    prepared: prepareClaudeStructuredSessionAcquisitionOptions({
+      settings,
+      initialization: initialized.initialization
+    })
+  }
+  input.diagnose(claudeAuthDiagnostic(facts.initialization, facts.init, settings))
+  const writtenSinceRead = sequence !== session.optionMutationSequence
+  applyClaudeSettingsFacts(session, facts, writtenSinceRead)
+  input.report({
+    type: 'options-reported',
+    reportedOptions: claudeStartedReportedOptions(session, readClaudeModels(facts.initialization))
+      .reportedOptions
+  })
 }

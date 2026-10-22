@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
@@ -24,5 +25,7 @@ export async function createAgentPromptSubmissionRuntime(
   const terminal = await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
     launchAgent
   })
+  // The pane holds a live agent, which its host would find in front of its terminal.
+  vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
   return { runtime, handle: terminal.handle, writes }
 }

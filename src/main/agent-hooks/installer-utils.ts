@@ -12,12 +12,14 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
-import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
-import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from './hook-stdin-contract'
+import { renameOverLockedTarget } from './locked-executable-rename'
+import {
+  getWindowsNativeHookAgent,
+  WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
+} from './windows-native-hook-executable'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -79,6 +81,8 @@ export function createManagedCommandMatcher(
     `agent-hooks/${scriptStem}.ps1`,
     `agent-hooks/${scriptStem}.sh`
   ]
+  // The shared native hook names its agent in the first argument: `orca-agent-hook.exe claude`.
+  const nativeHook = `agent-hooks/${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME} ${getWindowsNativeHookAgent(scriptFileName)} `
   return (command) => {
     if (!command) {
       return false
@@ -86,7 +90,10 @@ export function createManagedCommandMatcher(
     const decodedCommand = decodePowerShellEncodedCommand(command)
     const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
     const normalizedCommand = searchText.replaceAll('\\', '/')
-    return needles.some((needle) => normalizedCommand.includes(needle))
+    return (
+      needles.some((needle) => normalizedCommand.includes(needle)) ||
+      normalizedCommand.split('\n').some((line) => `${line} `.includes(nativeHook))
+    )
   }
 }
 
@@ -114,43 +121,12 @@ export {
   WINDOWS_POWERSHELL_HOOK_SWITCHES
 } from './windows-powershell-hook-launcher'
 
-export function wrapWindowsHookCommand(
-  scriptPath: string,
-  env: Record<string, string> = {},
-  options: { fallbackStdout?: string } = {}
-): string {
-  return wrapWindowsPowerShellEncodedCommand(
-    buildWindowsHookPowerShellCommand(scriptPath, env, options)
-  )
-}
-
-export function buildWindowsHookPowerShellCommand(
-  scriptPath: string,
-  env: Record<string, string> = {},
-  // Why: POSIX wrap already answers missing-script with stdout; Windows must match so gate events cannot drift (#15462).
-  options: { fallbackStdout?: string } = {}
-): string {
-  // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
-  const quoted = quotePowerShellLiteral(scriptPath)
-  const envPrefix = Object.entries(env)
-    .map(([key, value]) => `$env:${key} = ${quotePowerShellLiteral(value)}; `)
-    .join('')
-  const fallback =
-    options.fallbackStdout === undefined
-      ? ''
-      : `Write-Output ${quotePowerShellLiteral(options.fallbackStdout)}; `
-  // Why the order: answer first (a gate event reads silence as deny), then the shared
-  // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
-  // pipe, and ReadToEnd would strand the launcher there forever (#11549).
-  return `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
-}
-
-export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
-
-export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Direct-spawn consumers need one executable token; a cmd `if exist` fragment is not one (#8430).
-  return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
-}
+export {
+  buildWindowsHookPowerShellCommand,
+  isSafeUnicodeWindowsBatchHookPath,
+  WINDOWS_CMD_SAFE_PATH,
+  wrapWindowsHookCommand
+} from './windows-hook-command'
 
 /**
  * Extra form lines inserted before the final `payload@-` line (each should end with ` ^`).
@@ -259,13 +235,17 @@ export function hookDefinitionHasManagedCommand(
 }
 
 // Why: temp+rename so concurrent writers can't leave a torn script for an in-flight /bin/sh to source.
-export function writeManagedScript(scriptPath: string, content: string): void {
+export function writeManagedScript(
+  scriptPath: string,
+  content: string | Buffer,
+  options: { moveLockedTargetAside?: boolean } = {}
+): void {
   const dir = dirname(scriptPath)
   mkdirSync(dir, { recursive: true })
 
   if (existsSync(scriptPath)) {
     try {
-      if (readFileSync(scriptPath, 'utf-8') === content) {
+      if (readFileSync(scriptPath).equals(Buffer.from(content))) {
         if (process.platform !== 'win32') {
           chmodSync(scriptPath, 0o755)
         }
@@ -283,7 +263,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)
     }
-    renameSync(tmpPath, scriptPath)
+    renameOverLockedTarget(tmpPath, scriptPath, options.moveLockedTargetAside === true)
   } finally {
     if (existsSync(tmpPath)) {
       try {
@@ -296,7 +276,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
 }
 
 // Why: a restrictive directory DACL makes writes fail with EPERM on Windows; grant an ACL and retry once.
-function writeScriptWithAclRetry(scriptPath: string, content: string): void {
+function writeScriptWithAclRetry(scriptPath: string, content: string | Buffer): void {
   try {
     writeFileSync(scriptPath, content, 'utf-8')
   } catch (error) {
@@ -306,7 +286,7 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
         writeFileSync(scriptPath, content, 'utf-8')
         return
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // a failed grant is not actionable; re-throw the original EPERM
       }
     }
     throw error
@@ -330,8 +310,10 @@ export function writeHooksJson(
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+  // Why preserve by default: a rewrite must not widen an owner-only config (settings.json can
+  // hold API keys) to the process umask, which on SSH hosts is the login's (#31125).
   const existingMode =
-    options?.preserveMode === true && existsSync(writePath)
+    options?.preserveMode !== false && existsSync(writePath)
       ? statSync(writePath).mode & 0o777
       : options?.defaultMode
 
@@ -350,7 +332,9 @@ export function writeHooksJson(
   }
 
   try {
-    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode, flag: 'wx' })
+    // Why not on Windows: a read-only config's mode would make the temp file undeletable on failure.
+    const tmpMode = process.platform === 'win32' ? undefined : existingMode
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: tmpMode, flag: 'wx' })
     if (existingMode !== undefined && process.platform !== 'win32') {
       // Preserve requested permissions even with a stricter process umask.
       chmodSync(tmpPath, existingMode)

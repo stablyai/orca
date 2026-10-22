@@ -1,8 +1,7 @@
 import type { JSX } from 'react'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
@@ -22,9 +21,6 @@ export function BrowserUseSkillSetupCard(props: {
   const installCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_INSTALL_COMMAND
-  const updateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_UPDATE_COMMAND
 
   const handleBeforeOpenTerminal = (): void => {
     useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
@@ -43,7 +39,6 @@ export function BrowserUseSkillSetupCard(props: {
         "Enables agents to navigate and verify pages in Orca's browser."
       )}
       command={installCommand}
-      installedCommand={updateCommand}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="feature-wall-browser-use-skill-terminal"

@@ -72,7 +72,7 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
   function focus(f: ReturnType<typeof fixture>, requested = true) {
     if (operation === 'initial') {
       createInitialManagedPane(f.host, { focus: requested })
-      expect(f.publishPaneCreated).toHaveBeenCalledWith(f.pane)
+      expect(f.publishPaneCreated).toHaveBeenCalledWith(f.pane, { placement: { kind: 'new-tab' } })
     } else {
       f.root.append(f.container)
       f.manager.setActivePane(f.pane.id, { focus: requested })

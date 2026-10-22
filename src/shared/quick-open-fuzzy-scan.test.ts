@@ -7,7 +7,7 @@ import {
   type QuickOpenIndexedFile
 } from './quick-open-path-search'
 
-function referenceScore(query: string, file: QuickOpenIndexedFile): number {
+function referenceScore(query: string, file: QuickOpenIndexedFile): number | null {
   let qi = 0
   let score = 0
   let lastMatch = -1
@@ -23,7 +23,7 @@ function referenceScore(query: string, file: QuickOpenIndexedFile): number {
     qi++
   }
   if (qi < query.length) {
-    return -1
+    return null
   }
   return score - (file.lowerFilename.includes(query) ? 100 : 0)
 }
@@ -96,10 +96,14 @@ it('preserves code-unit scores and ordering for generated Unicode paths and quer
     queries.push(`${alphabet[next() % alphabet.length]}${alphabet[next() % alphabet.length]}`)
   }
   for (const query of queries) {
+    // Separator queries now include word-boundary matches.
+    if (/[-_]/.test(query)) {
+      continue
+    }
     const normalized = query.trim().replace(/\\/g, '/').toLowerCase()
     const expected = files
       .map((file) => ({ ...file, score: normalized ? referenceScore(normalized, file) : 0 }))
-      .filter((file) => file.score !== -1)
+      .filter((file): file is typeof file & { score: number } => file.score !== null)
       .sort(
         (a, b) =>
           a.score - b.score || compareFileNames(a.path, b.path) || a.inputIndex - b.inputIndex

@@ -1,3 +1,4 @@
+import type { PairedE2EEClientHandshake } from './paired-e2ee-client-handshake'
 import type WebSocket from 'ws'
 import type {
   SharedControlConnectionState,
@@ -11,7 +12,7 @@ import {
 export function ensureSharedControlReady(args: {
   state: SharedControlConnectionState
   ws: WebSocket | null
-  sharedKey: Uint8Array | null
+  handshake: PairedE2EEClientHandshake | null
   readyWaiters: SharedControlReadyWaiter[]
   timeoutMs: number
   signal?: AbortSignal

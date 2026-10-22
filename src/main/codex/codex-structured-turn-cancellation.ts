@@ -48,6 +48,9 @@ export async function interruptCodexTurn(input: {
       }
     }
   }
+  if (threadId === session.threadId) {
+    session.abortedTurnIds?.add(turnId)
+  }
   const promptAdmission = input.onConfirmed?.()
   if (promptAdmission && !promptAdmission.accepted) {
     throw new Error(

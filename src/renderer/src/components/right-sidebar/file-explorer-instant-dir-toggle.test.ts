@@ -11,7 +11,7 @@ import type { TreeNode } from './file-explorer-types'
 
 vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved',
-  requireMatchingFileExplorerOperationRoute: () => ({ settings: {} })
+  requireMatchingFileExplorerOperationRoute: () => ({ target: { kind: 'local' } })
 }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
@@ -48,7 +48,7 @@ const symlinkDirectoryNode: TreeNode = {
 function createHandlerParams(toggleDir: (worktreeId: string, dirPath: string) => void) {
   return {
     activeWorktreeId: 'wt-1',
-    openFile: vi.fn(),
+    openWorkspaceFile: vi.fn(),
     makePreviewFilePermanent: vi.fn(),
     toggleDir,
     loadDir: vi.fn().mockResolvedValue(true),
@@ -62,7 +62,11 @@ function createHandlerParams(toggleDir: (worktreeId: string, dirPath: string) =>
 function renderHandlers(toggleDir: (worktreeId: string, dirPath: string) => void) {
   const params = createHandlerParams(toggleDir)
   const hook = renderHook(() => useFileExplorerHandlers(params))
-  return { ...hook, openFile: params.openFile, setSelectedPath: params.setSelectedPath }
+  return {
+    ...hook,
+    openWorkspaceFile: params.openWorkspaceFile,
+    setSelectedPath: params.setSelectedPath
+  }
 }
 
 // Wires a row like the explorer does so clicks resolve timing in handleRowClick.
@@ -183,7 +187,7 @@ describe('instant directory toggle', () => {
 
   it('keeps opening files on the second click, which is not a directory toggle', async () => {
     const toggleDir = vi.fn()
-    const { result, openFile } = renderHandlers(toggleDir)
+    const { result, openWorkspaceFile } = renderHandlers(toggleDir)
 
     await act(async () => {
       result.current.handleClick(fileNode, 'skip')
@@ -191,6 +195,6 @@ describe('instant directory toggle', () => {
     })
 
     expect(toggleDir).not.toHaveBeenCalled()
-    expect(openFile).toHaveBeenCalledTimes(1)
+    expect(openWorkspaceFile).toHaveBeenCalledTimes(1)
   })
 })

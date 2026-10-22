@@ -1,6 +1,11 @@
 import { vi } from 'vitest'
+import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured-agent-definition'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -23,7 +28,9 @@ export function structuredHostStub(
     restartResumableDismiss: vi.fn(async () => 0),
     restartResumeAll: vi.fn(async () => []),
     restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
+    continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
+    create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     // Attach-shaped entries take a client-supplied location, so the host is asked whether it
     // supports creating there. A real host always answers; leaving it unstubbed made every
     // `ensure` refuse for the harness's own reason rather than the location's.
@@ -56,18 +63,27 @@ export function structuredHostStub(
     queuedMessageSend: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessageDelete: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessagesResume: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageUpdate: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageEditHold: vi.fn(async () => ({
+      status: 'held' as const,
+      fingerprint: 'a'.repeat(64),
+      leaseDurationMs: 120_000,
+      remainingMs: 120_000
+    })),
     rewind: vi.fn(async () => ({
       ok: true,
       replayed: false,
       value: { itemId: 'item-1', epoch: 'rewound-epoch' }
     })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [] })),
     revealSession: vi.fn(async () => ({
       sessionId,
       workspaceId,
       agent: 'codex' as const,
       readable: true
     })),
+    regenerateConversationName: vi.fn(() => true),
     hold: vi.fn(async () => undefined),
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -78,6 +94,7 @@ export function structuredHostStub(
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    readCurrentRequests: vi.fn(() => ({ json: '[]', nextCursor: null })),
     sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn(() => ({
       sessionId,
@@ -93,7 +110,9 @@ export function structuredHostStub(
     // No opening emit, unlike the status feed above: a completion is an edge, so this stream
     // opens empty and a subscriber that was away has missed what passed.
     subscribeTurnCompletions: vi.fn(() => () => undefined),
-    unsubscribe: vi.fn()
+    unsubscribe: vi.fn(),
+    agentDefinitions: vi.fn(() => [CODEX_STRUCTURED_AGENT]),
+    knownAgentIds: vi.fn(() => [CODEX_STRUCTURED_AGENT.agent])
   }
 }
 
@@ -106,13 +125,18 @@ export function installableHost(
 ): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
-    deps: { modelCatalog: { read: hostCalls.modelCatalog } },
+    // The catalog read checks the session's record for a floating chat's own folder; none here.
+    deps: {
+      modelCatalog: { read: hostCalls.modelCatalog },
+      store: { getRecord: () => null, getOperationRow: () => null }
+    },
     restartResume: {
       list: hostCalls.restartResumableList,
       listFailures: hostCalls.restartResumableFailures,
       dismiss: hostCalls.restartResumableDismiss,
       resume: hostCalls.restartResumeAll,
-      continueAfterRestart: hostCalls.restartContinueAll
+      continueAfterRestart: hostCalls.restartContinueAll,
+      continueInterrupted: hostCalls.continueInterrupted
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a spy map standing in for the host; the dispatcher reaches only the members stubbed above, and a missing one fails the call rather than type-checking.
@@ -147,4 +171,42 @@ export const turnItemSkew = {
       [[...current.capabilities], { ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
     ] as const
   }
+}
+
+/** A Codex provider that is ready as soon as it is published, as one with an instant handshake is,
+ *  for a real host that only needs a running agent behind a chat. */
+export function readyCodexProviderAdapter(input: {
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
+  sessionId: string
+  thread: string
+  now: number
+  spawnToken: string
+  host: () => StructuredAgentSessionHost
+}): StructuredAgentSessionAdapter {
+  const { store, now } = input
+  return startsWhenPublished(
+    {
+      acquire: async ({ fence }) => ({
+        acquisitionGeneration: `wire-host-${fence}`,
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: now,
+          spawnToken: store.getRecord(input.sessionId)?.lease.reservedSpawnToken ?? input.spawnToken
+        },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(input.thread),
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: now
+        }
+      }),
+      dispatch: async () => ({ state: 'accepted' }),
+      cancelTurn: async () => ({ cancelled: true }),
+      answerPrompt: async () => undefined,
+      setOption: async () => undefined
+    },
+    input.host
+  )
 }

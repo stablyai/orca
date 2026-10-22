@@ -7,6 +7,8 @@ import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatPaneCover } from '../terminal-pane/NativeChatPaneCover'
+import { NativeChatQuestionCard } from './NativeChatQuestionCard'
+import { focusNativeChatCover } from '../terminal-pane/native-chat-covered-pane'
 import { registerTerminalPanePasteListeners } from '../terminal-pane/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from '../terminal-pane/use-terminal-pane-close-actions'
 import type { TerminalPanePasteExecution } from '../terminal-pane/terminal-pane-paste-execution'
@@ -82,6 +84,8 @@ function composerHandle(): NativeChatComposerHandle & { element: HTMLElement } {
       return true
     }),
     insertTypedText: vi.fn(() => true),
+    appendText: vi.fn(),
+    acceptsText: () => true,
     handlePasteEvent: vi.fn(),
     pasteFromClipboard: vi.fn(),
     contains: (node) => element.contains(node)
@@ -106,7 +110,7 @@ function ChatRoot({
   useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef: answerRef })
   return (
     // Mirrors NativeChatPaneFileDropSurface, which publishes the composer scope pane-wide.
-    <div data-composer-scope-key="pane" data-native-file-drop-target="composer">
+    <div data-composer-scope-key="pane">
       <div
         ref={(node) => {
           rootRef.current = node
@@ -159,6 +163,7 @@ function fixture(options: { platform?: NodeJS.Platform } = {}) {
     keybindings: {},
     worktreeId: 'workspace',
     managerRef: { current: { getActivePane: () => pane, getPanes: () => [pane, sibling] } },
+    paneTransportsRef: { current: new Map() },
     setTerminalError: vi.fn()
   } as unknown as TerminalPaneCloseController
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the two execution callbacks read by the listener.
@@ -221,6 +226,42 @@ function menuContext(): TerminalPaneMenuPasteContext {
 }
 
 describe('a chat cover owns focus over its terminal', () => {
+  it.each([false, true])(
+    'hands the covered keyboard to a shown question (cover already mounted: %s)',
+    (alreadyCovered) => {
+      const f = fixture()
+      const onAnswer = vi.fn()
+      if (alreadyCovered) {
+        f.cover()
+      }
+      f.cover(
+        <div data-native-chat-root>
+          <NativeChatQuestionCard
+            shouldFocus
+            prompt={{
+              questions: [
+                {
+                  question: 'Choose',
+                  multiSelect: false,
+                  options: [{ label: 'First' }, { label: 'Second' }]
+                }
+              ]
+            }}
+            onAnswer={onAnswer}
+            onCancel={() => {}}
+          />
+        </div>
+      )
+      const first = f.shell().querySelector('button[aria-pressed]')
+      expect(document.activeElement).toBe(first)
+      expect(first?.getAttribute('aria-pressed')).toBe('false')
+      f.sibling.helper.focus()
+      focusNativeChatCover(f.pane)
+      expect(document.activeElement).toBe(first)
+      expect(onAnswer).not.toHaveBeenCalled()
+    }
+  )
+
   it('moves focus off the covered xterm and keeps it off', () => {
     const f = fixture()
     expect(document.activeElement).toBe(f.pane.helper)
@@ -412,5 +453,30 @@ describe('terminal context-menu paste on a covered pane', () => {
     await act(async () => finish('old answer'))
     expect(answer.value).toBe('')
     expect(answerRef.current.value).toBe('')
+  })
+})
+
+describe('pane menu paste opened on a question answer', () => {
+  it('fills that answer rather than the mounted composer', async () => {
+    const root = document.createElement('div')
+    const composer = composerHandle()
+    const answer = document.createElement('input')
+    answer.setAttribute('data-native-chat-answer-field', '')
+    root.append(composer.element, answer)
+    document.body.append(root)
+    let pasteInto: ((origin?: HTMLTextAreaElement | HTMLInputElement) => void) | undefined
+    function Probe(): null {
+      pasteInto = useNativeChatPasteBridge({
+        rootRef: { current: root },
+        composerRef: { current: composer }
+      })
+      return null
+    }
+    render(<Probe />)
+    await act(async () => {
+      pasteInto?.(answer)
+    })
+    expect(answer.value).toBe('menu text')
+    expect(composer.pasteFromClipboard).not.toHaveBeenCalled()
   })
 })

@@ -6,14 +6,15 @@ import {
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   clearSelfWrite,
   getRecentSelfWrite,
   type RecentSelfWrite
 } from '@/components/editor/editor-self-write-registry'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export type EditorExternalWatchNotification = {
   worktreeId: string
@@ -27,27 +28,59 @@ export type EditorExternalWatchNotification = {
 }
 
 // Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per owner+path.
+// Never push an armed dispatch back: same-path events under sustained writes would starve it.
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
-const pendingExternalReloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingExternalReloads = new Map<string, EditorExternalWatchNotification>()
 
 export function scheduleDebouncedEditorExternalReload(
   notification: EditorExternalWatchNotification
 ): void {
   const key = `${notification.worktreeId}::${notification.runtimeEnvironmentId ?? 'client'}::${notification.relativePath}`
-  const existing = pendingExternalReloadTimers.get(key)
-  if (existing !== undefined) {
-    globalThis.clearTimeout(existing)
+  const armed = pendingExternalReloads.has(key)
+  pendingExternalReloads.set(key, notification)
+  if (armed) {
+    return
   }
-  const handle = globalThis.setTimeout(() => {
-    pendingExternalReloadTimers.delete(key)
-    notifyEditorExternalFileChange(notification)
+  globalThis.setTimeout(() => {
+    const latest = pendingExternalReloads.get(key)
+    pendingExternalReloads.delete(key)
+    if (latest) {
+      notifyEditorExternalFileChange(latest)
+    }
   }, EXTERNAL_RELOAD_DEBOUNCE_MS)
-  pendingExternalReloadTimers.set(key, handle)
 }
 
-const inFlightEchoVerificationReads = new Map<string, ReturnType<typeof readRuntimeFileContent>>()
+type EchoVerificationRead = ReturnType<typeof readRuntimeFileContent>
+type EchoVerificationSlot = {
+  current: EchoVerificationRead
+  /** Payloads in the task that issued `current` were emitted before the read reached disk. */
+  joinable: boolean
+  next: EchoVerificationRead | null
+}
+const echoVerificationReads = new Map<string, EchoVerificationSlot>()
+
+function beginEchoVerificationRead(
+  key: string,
+  read: () => EchoVerificationRead
+): EchoVerificationRead {
+  const current = read()
+  const slot: EchoVerificationSlot = { current, joinable: true, next: null }
+  echoVerificationReads.set(key, slot)
+  queueMicrotask(() => {
+    slot.joinable = false
+  })
+  const release = (): void => {
+    if (echoVerificationReads.get(key) === slot && !slot.next) {
+      echoVerificationReads.delete(key)
+    }
+  }
+  current.then(release, release)
+  return current
+}
 
 // Why: one save echo can arrive as a burst of payloads; share the in-flight full-file read so concurrent payloads for the same file don't stack duplicate reads.
+// A payload from a later task may describe a write the in-flight read already missed, so it never
+// joins that read; it shares exactly one fresh read issued once the current one settles.
 function readFileForEchoVerification(args: {
   runtimeEnvironmentId: string | null | undefined
   filePath: string
@@ -55,34 +88,34 @@ function readFileForEchoVerification(args: {
   worktreeId: string | null | undefined
   connectionId: string | undefined
   expectedExternalSshTargetId?: string
-}): ReturnType<typeof readRuntimeFileContent> {
+}): EchoVerificationRead {
   const key = [
     args.runtimeEnvironmentId ?? '',
     args.connectionId ?? '',
     args.expectedExternalSshTargetId ?? '',
     args.filePath
   ].join('::')
-  let pending = inFlightEchoVerificationReads.get(key)
-  if (!pending) {
-    pending = readRuntimeFileContent({
-      settings: args.runtimeEnvironmentId
-        ? { activeRuntimeEnvironmentId: args.runtimeEnvironmentId }
-        : null,
+  const read = (): EchoVerificationRead =>
+    readRuntimeFileContent({
+      target: runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId ?? null),
       filePath: args.filePath,
       relativePath: args.relativePath,
       worktreeId: args.worktreeId ?? undefined,
       connectionId: args.connectionId,
       expectedExternalSshTargetId: args.expectedExternalSshTargetId
     })
-    inFlightEchoVerificationReads.set(key, pending)
-    const release = (): void => {
-      if (inFlightEchoVerificationReads.get(key) === pending) {
-        inFlightEchoVerificationReads.delete(key)
-      }
-    }
-    pending.then(release, release)
+  const slot = echoVerificationReads.get(key)
+  if (!slot) {
+    return beginEchoVerificationRead(key, read)
   }
-  return pending
+  if (slot.joinable) {
+    return slot.current
+  }
+  slot.next ??= slot.current.then(
+    () => beginEchoVerificationRead(key, read),
+    () => beginEchoVerificationRead(key, read)
+  )
+  return slot.next
 }
 
 function markTabsChangedOnDisk(fileIds: string[], connectionId: string | undefined): void {
@@ -129,7 +162,7 @@ export function scheduleEditorChangedOnDiskMark(
     })
 }
 
-// Per-file generation so a newer echo-verify read supersedes an older one — overlapping reads can't clear each other's autosave gate or apply a stale verdict.
+// Per-file generation so a newer echo-verify read supersedes an older one — an overlapping read can't apply a stale verdict.
 const liveMoveVerifyGeneration = new Map<string, number>()
 let liveMoveVerifyCounter = 0
 
@@ -141,10 +174,10 @@ type LiveMoveVerifyCandidate = {
   operationId?: string
 }
 
-// Fails closed: anything but a proven baseline match surfaces the conflict, so a real external write is never swallowed.
+// Fails closed: `false` (anything but a proven match) surfaces the conflict; `null` (unread, on a resync) proves nothing.
 function resolveLiveMoveVerification(
   candidate: LiveMoveVerifyCandidate,
-  diskSignature: string | null,
+  matchesDisk: boolean | null,
   connectionId: string | undefined,
   consumeProvenance: boolean
 ): void {
@@ -154,7 +187,6 @@ function resolveLiveMoveVerification(
   }
   liveMoveVerifyGeneration.delete(fileId)
   const state = useAppStore.getState()
-  state.setPendingLiveDiskVerification(fileId, false)
   const file = state.openFiles.find((candidateFile) => candidateFile.id === fileId)
   if (
     !file ||
@@ -169,8 +201,7 @@ function resolveLiveMoveVerification(
   if (consumeProvenance) {
     state.clearSelfMoveEcho(fileId)
   }
-  const isMoveEcho = baseline !== undefined && diskSignature === baseline
-  if (!isMoveEcho) {
+  if (matchesDisk === false) {
     markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
   }
 }
@@ -195,11 +226,12 @@ export function verifyLatchedEditorMoveDestinations(
   )
 }
 
-// Autosave is suspended synchronously first so a write landing mid-read can't be overwritten before verification settles.
+/** `resync`: a watch reconnect check, where a failed read leaves the tab to its guarded save. */
 export function scheduleEditorSelfMoveEchoVerification(
   target: EditorExternalWatchTarget,
   fileIds: string[],
-  consumeProvenance: boolean
+  consumeProvenance: boolean,
+  resync = false
 ): void {
   if (fileIds.length === 0) {
     return
@@ -212,7 +244,6 @@ export function scheduleEditorSelfMoveEchoVerification(
     }
     const generation = ++liveMoveVerifyCounter
     liveMoveVerifyGeneration.set(fileId, generation)
-    state.setPendingLiveDiskVerification(fileId, true)
     const candidate: LiveMoveVerifyCandidate = {
       fileId,
       baseline: file.lastKnownDiskSignature,
@@ -229,16 +260,22 @@ export function scheduleEditorSelfMoveEchoVerification(
       expectedExternalSshTargetId: file.externalSshTargetId
     })
       .then((result) => {
-        const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
+        const matchesDisk =
+          !result.isBinary &&
+          ((candidate.baseline !== undefined &&
+            getDiskBaselineSignature(result.content) === candidate.baseline) ||
+            // Why: the tab's own save can land before it rebaselines; that is not an external change.
+            getRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)?.content ===
+              result.content)
+        resolveLiveMoveVerification(candidate, matchesDisk, target.connectionId, consumeProvenance)
+      })
+      .catch(() =>
         resolveLiveMoveVerification(
           candidate,
-          diskSignature,
+          resync ? null : false,
           target.connectionId,
           consumeProvenance
         )
-      })
-      .catch(() =>
-        resolveLiveMoveVerification(candidate, null, target.connectionId, consumeProvenance)
       )
   }
 }

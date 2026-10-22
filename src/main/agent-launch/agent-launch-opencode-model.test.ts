@@ -13,6 +13,7 @@ function harness() {
   const deliverPrompt = vi.fn(async () => true)
   const createWorktree = vi.fn(async () => ({
     worktreeId: 'wt_new',
+    connectionId: null,
     startupTerminalHandle: 'term_new'
   }))
   return {
@@ -24,7 +25,7 @@ function harness() {
       executeAgentLaunch({
         intent,
         runtime: {
-          getClientSettings: readSettings,
+          requireStore: () => ({ getSettings: readSettings }),
           getStructuredAgentSessionCreateSupport: createSupport
         },
         surfaces: {
@@ -34,7 +35,12 @@ function harness() {
           },
           deliverTerminalPrompt: deliverPrompt
         },
-        workspaces: { createWorktree }
+        workspaces: {
+          createWorktree,
+          createFolderWorkspace: async () => {
+            throw new Error('folder_create_not_expected')
+          }
+        }
       })
   }
 }

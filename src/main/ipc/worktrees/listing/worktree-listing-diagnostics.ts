@@ -1,6 +1,5 @@
 import { shouldEmitBoundedWarning } from '../../bounded-warning-dedupe'
 
-export const loggedUnavailableSshGitProviders = new Set<string>()
 export const loggedWorktreeListFailures = new Set<string>()
 export const loggedMalformedWorktreeMetaKeys = new Set<string>()
 

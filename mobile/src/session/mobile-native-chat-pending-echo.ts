@@ -12,6 +12,7 @@ export type MobileNativeChatPendingMessage = {
    *  and rebased onto the first authoritative read instead of reconciling
    *  against rows that may belong to another tab. */
   baselineResolved: boolean
+  sentAt?: number
 }
 
 export type MobileNativeChatSendOrigin = {
@@ -22,9 +23,7 @@ export type MobileNativeChatSendOrigin = {
   baselineOccurrences: number
   baselineTailMessageId: string | null
   baselineResolved: boolean
-  /** Queued-draft cards already on screen at send time, so an earlier identical
-   *  card cannot confirm this send. Structured lane on a queue-capable host only. */
-  baselineQueuedMessageIds?: readonly string[]
+  sentAt: number
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>
@@ -73,6 +72,7 @@ export function appendMobileNativeChatPending(
             : origin.baselineOccurrences + earlierOutstanding + 1,
         baselineTailMessageId: origin.baselineTailMessageId,
         baselineResolved: origin.baselineResolved,
+        sentAt: origin.sentAt,
         ...(images?.length ? { images } : {})
       }
     ]

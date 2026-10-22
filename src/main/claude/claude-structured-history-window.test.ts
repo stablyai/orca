@@ -5,14 +5,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
 import { structuredAgentSessionPayloadFingerprint } from '../../shared/structured-agent-session-mutation'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { reconcileSubmissions } from '../native-chat/agent-session-journal/journal-submission-reconciler'
 import {
   claudeProviderHistoryWindowFromJsonl,
   resolveClaudeProviderHistoryWindow
 } from './claude-structured-history-window'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const PROVIDER_SESSION = 'provider-1'
 const ORCA_SESSION = 'session-1'
@@ -82,29 +82,13 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
         workspaceId: 'workspace-1',
         hostId: 'host-1',
         agent: 'claude',
-        providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION, leafUuid: 'anchor' }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION, 'anchor')
       },
       accountHomePath: accountHome,
       hasLiveSession: false
     })
 
     expect(window?.items.map((item) => item.providerItemId)).toEqual(['u-1'])
-  })
-
-  it('pins the renderer and host fingerprint functions to the same digest', () => {
-    // The renderer computes a send's fingerprint with one, the host admission gate
-    // validates it with the other, and the window matches with the host's. A
-    // divergence would refuse every send long before it reached here — but it
-    // would also silently turn every reconciliation into `not_delivered`.
-    const input = {
-      method: 'agentSession.send',
-      sessionId: ORCA_SESSION,
-      fields: { body: structuredAgentSessionSendBody('ship it', []) }
-    }
-
-    expect(structuredAgentSessionPayloadFingerprint(input)).toBe(
-      computeAgentSessionPayloadFingerprint(input)
-    )
   })
 
   it('fingerprints a prompt after the anchor exactly as the send that produced it', () => {

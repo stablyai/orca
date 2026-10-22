@@ -44,6 +44,22 @@ describe('getSafeRelativePath', () => {
     expect(getSafeRelativePath('safe/../../escape')).toEqual({ safe: false })
     expect(getSafeRelativePath('..\\escape')).toEqual({ safe: false })
     expect(getSafeRelativePath('foo\\..\\..\\escape')).toEqual({ safe: false })
+    expect(getSafeRelativePath('.')).toEqual({ safe: false })
+    expect(getSafeRelativePath('./')).toEqual({ safe: false })
+  })
+
+  it('returns the spelling git prints for dot-prefixed and slash-suffixed entries', () => {
+    expect(getSafeRelativePath('./node_modules')).toEqual({ safe: true, rel: 'node_modules' })
+    expect(getSafeRelativePath('node_modules/')).toEqual({ safe: true, rel: 'node_modules' })
+    expect(getSafeRelativePath('./packages//app/./dist/')).toEqual({
+      safe: true,
+      rel: 'packages/app/dist'
+    })
+  })
+
+  it('rejects a drive designator hidden behind a dot segment', () => {
+    expect(getSafeRelativePath('./C:payload')).toEqual({ safe: false })
+    expect(getSafeRelativePath('.\\C:payload')).toEqual({ safe: false })
   })
 })
 

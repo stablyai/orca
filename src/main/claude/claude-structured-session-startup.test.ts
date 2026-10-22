@@ -1,247 +1,159 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   adapterAtPublishFor,
   fakeClaude,
   identityFor,
+  claudeOpened,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
-import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
-
-type LateSettlement = Parameters<
-  NonNullable<ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']>
->[0]
-
-const SLOW_INIT_MS = 12_000
-
-function startingAdapter(claude: ReturnType<typeof fakeClaude>): {
-  adapter: ReturnType<typeof adapterAtPublishFor>
-  events: ClaudeStructuredSessionEvent[]
-  late: LateSettlement[]
-} {
-  const events: ClaudeStructuredSessionEvent[] = []
-  const late: LateSettlement[] = []
-  const adapter = adapterAtPublishFor(
-    claude,
-    {},
-    events,
-    [],
-    undefined,
-    undefined,
-    undefined,
-    (settlement) => late.push(settlement)
-  )
-  return { adapter, events, late }
-}
+import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 
 const ACQUIRE = { identity: identityFor(), fence: 7, spawnToken: 'spawn-9' }
-const PROMPT = { sessionId: 'session-1', clientMessageId: 'client-1', body: USER_MESSAGE, fence: 7 }
 
-describe('Claude structured session publishes before the CLI answers initialize', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+function adapterFor(claude: ReturnType<typeof fakeClaude>) {
+  const events: ClaudeStructuredSessionEvent[] = []
+  return { adapter: adapterAtPublishFor(claude, {}, events), events }
+}
 
-  it('creates a session whose init takes longer than any old deadline, then reports its facts', async () => {
-    const claude = fakeClaude({ initDelayMs: SLOW_INIT_MS })
-    const { adapter, events } = startingAdapter(claude)
+describe('Claude host-awaited open', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
 
-    await expect(adapter.acquire(ACQUIRE)).resolves.toBeDefined()
+  it('publishes the owned process as starting before initialize answers', async () => {
+    const claude = fakeClaude({ initDelayMs: 12_000 })
+    const { adapter, events } = adapterFor(claude)
+    const acquisition = await adapter.acquire(ACQUIRE)
+    expect(acquisition).toMatchObject({ process: { pid: 4321 } })
+    expect(acquisition.link).toBeUndefined()
+    expect(claude.connections[0].calls).toEqual([])
     expect(events.some((event) => event.type === 'options')).toBe(false)
-    expect(adapter.readCommands('session-1')).toBeUndefined()
 
-    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS)
-    await adapter.awaitStarted('session-1')
-
-    expect(events.find((event) => event.type === 'options')).toMatchObject({
-      models: [{ value: 'claude-sonnet' }]
-    })
-    expect(events.some((event) => event.type === 'ended')).toBe(false)
-    expect(claude.connections[0].closeCount).toBe(0)
-    await adapter.closeAll()
-  })
-
-  it('reports `started` once saved options are restored, having written no prompt of its own', async () => {
-    const claude = fakeClaude({ initDelayMs: SLOW_INIT_MS, initModel: 'claude-opus-9' })
-    const { adapter, events } = startingAdapter(claude)
-    const order: string[] = []
-    claude.routes.set_model = () => {
-      order.push('set_model')
-      return undefined
-    }
-    await adapter.acquire({ ...ACQUIRE, options: { model: 'opus' } })
-    expect(events.some((event) => event.type === 'started')).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS)
-    await adapter.awaitStarted('session-1')
-
-    const startedAt = events.findIndex((event) => event.type === 'started')
-    expect(events[startedAt]).toEqual({
-      type: 'started',
-      sessionId: 'session-1',
-      fence: 7,
-      acquisitionGeneration: expect.any(String),
-      // What the restore just proved, carried so the host never asks the CLI again.
-      reportedOptions: expect.objectContaining({ model: 'opus' }),
-      restoreSkippedOptions: []
-    })
-    // The restore wrote the saved model before `started`; no message waits inside the adapter.
-    expect(order).toEqual(['set_model'])
-    expect(claude.connections[0].sent).toEqual([])
-    expect(events.slice(0, startedAt).some((event) => event.type === 'options')).toBe(true)
-    await adapter.closeAll()
-  })
-
-  it('lets an option write wait for startup instead of refusing it', async () => {
-    const claude = fakeClaude({ initDelayMs: SLOW_INIT_MS })
-    const { adapter } = startingAdapter(claude)
-    await adapter.acquire(ACQUIRE)
-    const pick = { sessionId: 'session-1', key: 'model', value: 'opus', fence: 7 }
-    await expect(adapter.setOption(pick)).rejects.toThrow('still starting')
-
-    let writable = false
-    const waited = adapter.awaitOptionWritable('session-1').then(() => {
-      writable = true
-    })
-    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS - 1)
-    expect(writable).toBe(false)
+    const open = claudeOpened(adapter, 'session-1')
+    await vi.advanceTimersByTimeAsync(11_999)
+    expect(claude.connections[0].calls.map((call) => call.subtype)).toEqual(['initialize'])
     await vi.advanceTimersByTimeAsync(1)
-    await waited
-
-    await expect(adapter.setOption(pick)).resolves.toMatchObject({ model: 'opus' })
-    await adapter.closeAll()
-  })
-
-  it('stops waiting on a start that never lands, so the write is refused as before', async () => {
-    const claude = fakeClaude({ initDelayMs: 10 * CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS })
-    const { adapter } = startingAdapter(claude)
-    await adapter.acquire(ACQUIRE)
-    let writable = false
-    void adapter.awaitOptionWritable('session-1').then(() => {
-      writable = true
+    await expect(open).resolves.toMatchObject({
+      link: expect.objectContaining({ handle: expect.objectContaining({ agent: 'claude' }) }),
+      reportedOptions: expect.any(Object)
     })
-    await vi.advanceTimersByTimeAsync(CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS)
-    expect(writable).toBe(true)
-    await expect(
-      adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'opus', fence: 7 })
-    ).rejects.toThrow('still starting')
+    expect(events.map((event) => event.type)).not.toContain('started')
     await adapter.closeAll()
   })
 
-  // The host's delivery loop waits here before it hands a message over, so the adapter no longer
-  // holds prompts of its own: nothing is written until startup lands because nothing is sent.
-  it('resolves awaitStarted only once startup lands', async () => {
-    const claude = fakeClaude({ initDelayMs: SLOW_INIT_MS })
-    const { adapter } = startingAdapter(claude)
-    await adapter.acquire(ACQUIRE)
-    let started = false
-    const waited = adapter.awaitStarted('session-1').then(() => {
-      started = true
+  it('returns from open without waiting for optional settings', async () => {
+    let answerSettings: (value: unknown) => void = () => {}
+    const settings = new Promise<unknown>((resolve) => {
+      answerSettings = resolve
     })
-
-    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS - 1)
-    expect(started).toBe(false)
-    await vi.advanceTimersByTimeAsync(1)
-    await waited
-
-    await expect(adapter.dispatch(PROMPT)).resolves.toEqual({ state: 'admitted' })
-    expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })])
+    const claude = fakeClaude({ settings })
+    const { adapter, events } = adapterFor(claude)
+    await adapter.acquire(ACQUIRE)
+    const opened = await claudeOpened(adapter, 'session-1')
+    expect(opened.reportedOptions).toBeDefined()
+    expect(claude.connections[0].calls.map((call) => call.subtype)).toContain('get_settings')
+    expect(events.some((event) => event.type === 'options-reported')).toBe(false)
+    answerSettings({ applied: { model: 'claude-haiku-4-5' }, effective: {} })
+    await vi.waitFor(() =>
+      expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
+        reportedOptions: { model: 'claude-haiku-4-5' }
+      })
+    )
     await adapter.closeAll()
   })
 
-  it('ends the session with the exit reason when the CLI dies before init', async () => {
+  it('applies a Fast choice at message input when launch settings cannot carry it', async () => {
+    let fastMode = false
     const claude = fakeClaude({
-      initDelayMs: SLOW_INIT_MS,
-      exitBeforeInit: 'claude stream-json exited (code 1): stderr says no'
+      initModels: [{ value: 'claude-sonnet-5', displayName: 'Sonnet', supportsFastMode: true }],
+      routes: {
+        apply_flag_settings: () => {
+          fastMode = true
+        }
+      }
     })
-    const { adapter, events } = startingAdapter(claude)
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterAtPublishFor(
+      claude,
+      { options: { extraArgs: { settings: '/repo/claude.json' } } },
+      events
+    )
+    await adapter.acquire({ ...ACQUIRE, options: { fastMode: 'true' } })
+    await claudeOpened(adapter, 'session-1')
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'options-reported')).toBe(true)
+    )
+    const connection = claude.connections[0]!
+    expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual([])
+    connection.getSettings = async () => ({ effective: { effortLevel: 'high', fastMode } })
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'fast-choice',
+        body: USER_MESSAGE,
+        executionOptions: { fastMode: 'true' },
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(connection.calls.filter((call) => call.subtype === 'apply_flag_settings')).toEqual([
+      { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'high' } } },
+      { subtype: 'apply_flag_settings', params: { settings: { fastMode: true } } }
+    ])
+    expect(connection.sent).toHaveLength(1)
+    await adapter.closeAll()
+  })
+
+  it('rejects an advertised signed-out initialize answer for the host to close once', async () => {
+    const claude = fakeClaude({ initAccount: { tokenSource: 'none', apiKeySource: 'none' } })
+    const { adapter } = adapterFor(claude)
     await adapter.acquire(ACQUIRE)
-
-    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS)
-    await adapter.awaitStarted('session-1')
-    await adapter.drainObservedExits()
-
-    expect(events.find((event) => event.type === 'ended')).toMatchObject({
-      reason: 'claude stream-json exited (code 1): stderr says no',
-      cause: 'unexpected-exit',
-      startupUnproven: true
-    })
-    expect(claude.connections[0].sent).toEqual([])
+    await expect(claudeOpened(adapter, 'session-1')).rejects.toThrow('not signed in')
+    expect(claude.connections[0].closeCount).toBe(0)
+    await adapter.closeSession('session-1')
     expect(claude.connections[0].closeCount).toBe(1)
   })
 
-  it('ends a start whose root exit was seen first-hand even when its descendants are unverifiable', async () => {
-    const claude = fakeClaude({
-      initDelayMs: SLOW_INIT_MS,
-      exitBeforeInit: 'claude stream-json exited (code 1): stderr says no',
-      unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' }
-    })
-    const { adapter, events } = startingAdapter(claude)
+  it('rejects a frame that proves a different provider session', async () => {
+    const claude = fakeClaude({ initSessionId: 'foreign-session' })
+    const { adapter } = adapterFor(claude)
     await adapter.acquire(ACQUIRE)
-
-    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS)
-    await adapter.awaitStarted('session-1')
-    await adapter.drainObservedExits()
-
-    // A failed start is released on the same evidence a failed create is.
-    expect(events.find((event) => event.type === 'ended')).toMatchObject({
-      cause: 'unexpected-exit',
-      startupUnproven: true
-    })
+    await expect(claudeOpened(adapter, 'session-1')).rejects.toThrow('provider session expected')
+    await adapter.closeSession('session-1')
+    expect(claude.connections[0].closeCount).toBe(1)
   })
 
-  it('ends an unauthenticated start with sign-in guidance', async () => {
-    const claude = fakeClaude({ initAccount: { apiProvider: 'firstParty', tokenSource: 'none' } })
-    const { adapter, events } = startingAdapter(claude)
+  it('fails open when initialize does not answer within its own bound', async () => {
+    const claude = fakeClaude({ initDelayMs: 10 * 60_000 })
+    const { adapter } = adapterFor(claude)
     await adapter.acquire(ACQUIRE)
-    await adapter.awaitStarted('session-1')
-    await adapter.drainObservedExits()
-
-    expect(events.find((event) => event.type === 'ended')).toMatchObject({
-      reason: expect.stringMatching(/not signed in/),
-      startupUnproven: true
+    const open = claudeOpened(adapter, 'session-1').catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(CLAUDE_INITIALIZE_TIMEOUT_MS)
+    const error = await open
+    expect(error).toBeInstanceOf(Error)
+    expect(String(error)).toContain('did not answer initialize')
+    expect(providerRequestTimeoutOf(error)).toEqual({
+      method: 'initialize',
+      timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS
     })
+    await adapter.closeSession('session-1')
+    expect(claude.connections[0].closeCount).toBe(1)
   })
 
-  // A Stop that closes a child still starting must end the wait the host's delivery loop is in,
-  // though initialize never answers; otherwise every later send joins a loop that never moves.
-  it('ends the wait on a start closed before init, without faulting it', async () => {
-    const claude = fakeClaude({ initDelayMs: 10 * SLOW_INIT_MS })
-    const { adapter, events } = startingAdapter(claude)
-    await adapter.acquire(ACQUIRE)
-    let ended = false
-    const waited = adapter.awaitStarted('session-1').then(() => {
-      ended = true
+  it('lets the host abort a silent initialize wait and close the owned process', async () => {
+    const claude = fakeClaude({ initDelayMs: 12_000 })
+    const { adapter } = adapterFor(claude)
+    const acquisition = await adapter.acquire(ACQUIRE)
+    const controller = new AbortController()
+    const open = adapter.open({
+      sessionId: 'session-1',
+      fence: 7,
+      acquisitionGeneration: acquisition.acquisitionGeneration,
+      signal: controller.signal
     })
-
-    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    await vi.advanceTimersByTimeAsync(0)
-    await waited
-
-    expect(ended).toBe(true)
-    const connection = claude.connections[0]
-    expect(connection.closeCount).toBe(1)
-    expect(connection.sent).toEqual([])
-    expect(connection.calls.map(({ subtype }) => subtype)).not.toContain('get_settings')
-    expect(events.some((event) => event.type === 'ended' && event.startupUnproven)).toBe(false)
-    expect(events.some((event) => event.type === 'started')).toBe(false)
-  })
-
-  it('interrupts nothing when Stop lands before init: nothing was written', async () => {
-    const claude = fakeClaude({ initDelayMs: SLOW_INIT_MS })
-    const { adapter } = startingAdapter(claude)
-    await adapter.acquire(ACQUIRE)
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-
-    expect(claude.connections[0].calls.map(({ subtype }) => subtype)).not.toContain('interrupt')
-    expect(claude.connections[0].sent).toEqual([])
-    await adapter.closeAll()
+    controller.abort(new Error('host start expired'))
+    await expect(open).rejects.toThrow('host start expired')
+    await adapter.closeSession('session-1')
+    expect(claude.connections[0].closeCount).toBe(1)
   })
 })

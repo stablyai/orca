@@ -152,7 +152,7 @@ export function PluginMarketplacePreviewDialog({
     : undefined
   return (
     <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className="plugin-security-chrome max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-xl">
+      <DialogContent surface="security" scrollable className="sm:max-w-xl">
         {preview ? (
           <>
             <DialogHeader>

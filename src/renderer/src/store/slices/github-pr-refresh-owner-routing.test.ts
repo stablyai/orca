@@ -75,6 +75,11 @@ function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path'>): Repo {
     badgeColor: 'blue',
     addedAt: 1,
     kind: 'git',
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/owner/repo',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/owner/repo.git'
+    },
     ...overrides
   }
 }
@@ -278,7 +283,8 @@ describe('GitHub PR refresh owner-host routing', () => {
 
     store.getState().reportVisibleGitHubPRRefreshCandidates(['wt-local', 'wt-runtime'], 123)
 
-    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().visibleReviewWorktreeIds).toEqual(['wt-local', 'wt-runtime'])
     expect(reportVisiblePRRefreshCandidates).toHaveBeenCalledWith({
       candidates: [
         expect.objectContaining({
@@ -289,17 +295,57 @@ describe('GitHub PR refresh owner-host routing', () => {
       ],
       generation: 123
     })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'github.prForBranch',
-      params: {
-        repo: 'repo-runtime',
-        branch: 'feature/runtime',
-        linkedPRNumber: null,
-        currentHeadOid: 'head-oid',
-        reason: 'visible'
-      },
-      timeoutMs: 30_000
-    })
   })
+})
+
+describe('known non-GitHub review event routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRuntimeMocks()
+  })
+
+  it.each(['local', 'runtime:env-1'] as const)(
+    'does not start GitHub lookups from activation, push or manual enqueue on %s',
+    (executionHostId) => {
+      const store = createTestStore()
+      const worktree = { ...makeWorktree('repo', 'feature/review', 'worktree'), linkedGitLabMR: 8 }
+      seed(store, {
+        repos: [makeRepo({ id: 'repo', path: '/repo', executionHostId })],
+        worktreesByRepo: { repo: [worktree] },
+        activeWorktreeId: worktree.id
+      })
+      store.getState().enqueueGitHubPRRefresh(worktree.id, 'active', 80)
+      store.getState().refreshGitHubForWorktreeIfStale(worktree.id)
+      store.getState().refreshGitHubForWorktree(worktree.id)
+      expect(enqueuePRRefresh).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    }
+  )
+})
+
+it('acknowledges visibility admission before foreground callers can enqueue work', async () => {
+  vi.clearAllMocks()
+  let release: () => void = () => {}
+  reportVisiblePRRefreshCandidates.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      })
+  )
+  const store = createTestStore()
+  seed(store, {
+    repos: [makeRepo({ id: 'repo', path: '/repo' })],
+    worktreesByRepo: { repo: [makeWorktree('repo', 'branch', 'worktree')] }
+  })
+  const acknowledged = vi.fn()
+  const completion = store
+    .getState()
+    .reportVisibleGitHubPRRefreshCandidates(['worktree'], 1)
+    .then(acknowledged)
+  await Promise.resolve()
+  expect(acknowledged).not.toHaveBeenCalled()
+  release()
+  await completion
+  expect(acknowledged).toHaveBeenCalledOnce()
 })

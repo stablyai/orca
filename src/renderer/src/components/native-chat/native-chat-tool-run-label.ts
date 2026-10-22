@@ -1,11 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import {
-  joinNativeChatToolRunClauses,
-  nativeChatToolRunClauses
+  nativeChatToolRunSentence as sharedRunSentence,
+  type NativeChatToolRunSentenceWords
 } from '../../../../shared/native-chat-tool-run-sentence'
 import type { NativeChatToolCategory } from '../../../../shared/native-chat-tool-icon'
-import { isToolCallBlock, type NativeChatBlock } from '../../../../shared/native-chat-types'
-import { toolInputCommand } from '../../../../shared/native-chat-tool-summary'
+import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 
 /** One clause, localized.
  *
@@ -176,41 +175,25 @@ function liveClause(
   }
 }
 
+const LOCALIZED_WORDS: NativeChatToolRunSentenceWords = {
+  clause,
+  pair: (first, second) =>
+    translate('components.native-chat.tool.runPair', '{{value0}} and {{value1}}', {
+      value0: first,
+      value1: second
+    }),
+  list: (leading, last) =>
+    translate('components.native-chat.tool.runList', '{{value0}}, and {{value1}}', {
+      value0: leading,
+      value1: last
+    })
+}
+
 /** The one line a run reads as, localized: past tense once settled, present
  *  while live. */
 export function nativeChatToolRunSentence(
   blocks: readonly NativeChatBlock[],
   { live = false }: { live?: boolean } = {}
 ): string | null {
-  const calls = blocks.filter(isToolCallBlock)
-  if (calls.length === 0) {
-    return null
-  }
-  // A lone shell call keeps its own command: `git push` identifies the work
-  // better than "Ran 1 command" can, and it is the row the reader would open
-  // anyway. A call carrying no command has nothing better than its category.
-  // Not while live: the command is then the preview beside the sentence, and a
-  // header that swapped shape when the second call arrived is the swap this row
-  // exists to avoid.
-  if (calls.length === 1 && !live) {
-    const command = toolInputCommand(calls[0].input)
-    if (command !== null && command.length > 0) {
-      return command
-    }
-  }
-  return joinNativeChatToolRunClauses(
-    nativeChatToolRunClauses(calls).map(({ category, count }) => clause(category, count, live)),
-    {
-      pair: (first, second) =>
-        translate('components.native-chat.tool.runPair', '{{value0}} and {{value1}}', {
-          value0: first,
-          value1: second
-        }),
-      list: (leading, last) =>
-        translate('components.native-chat.tool.runList', '{{value0}}, and {{value1}}', {
-          value0: leading,
-          value1: last
-        })
-    }
-  )
+  return sharedRunSentence(blocks, { live }, LOCALIZED_WORDS)
 }

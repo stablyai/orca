@@ -88,11 +88,9 @@ describe('a write the page makes', () => {
     // Held locally it would answer a later read with a value no other screen in the app can see —
     // a pin that looks set and is not, which is the failure the grant exists to avoid. Dropped
     // rather than rejected: ruling 33.4, and the case at the end of this file says why.
-    await expect(
-      pageAsyncStorage.setItem('orca:mobileWebShellEnabled', 'true')
-    ).resolves.toBeUndefined()
+    await expect(pageAsyncStorage.setItem('orca:hosts', 'true')).resolves.toBeUndefined()
     expect(writes).toEqual([])
-    await expect(pageAsyncStorage.getItem('orca:mobileWebShellEnabled')).resolves.toBeNull()
+    await expect(pageAsyncStorage.getItem('orca:hosts')).resolves.toBeNull()
   })
 
   it('carries each pair of a multi-write up to the first it cannot, and no further', async () => {

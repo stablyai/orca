@@ -4,6 +4,7 @@ import {
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
@@ -11,8 +12,11 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from './protocol-version'
+import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from './terminal-quick-command-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from './sidebar-inputs-switch'
+import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from './workspace-unread-raise-capability'
 
 // Keep every remote request transport on the same mixed-version capability contract.
 export function remoteRuntimeClientCapabilities(
@@ -32,6 +36,11 @@ export function remoteRuntimeClientCapabilities(
       WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
       WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
       AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+      REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+      TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
+      // Switch point: every desktop socket, browser hosting's included, leaves the unread flag to
+      // a host that raises it.
+      ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY] : []),
       ...additionalCapabilities
     ])
   )

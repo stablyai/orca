@@ -1,5 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activateWebRuntimeSessionTab, closeWebRuntimeSessionTab } from './web-runtime-session'
+import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab,
+  replayWebSessionTabCloses
+} from './web-runtime-session-tab-lifecycle'
+import {
+  holdWebSessionCloseForReplay,
+  resetWebSessionCloseReplaysForTests,
+  takeDueWebSessionCloseReplays
+} from './web-session-close-replay'
+import { appPairedTerminalTabCloseIntentStore as INTENTS } from './paired-terminal-tab-close-intent-store'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { createPairedTerminalTabCloseIntentTestStore } from '../store/terminals/paired-terminal-tab-close-intent.test-fixture'
 import {
   peekWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -10,8 +23,9 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
-import { toHostSessionTabId } from './web-terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -31,7 +45,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -43,25 +56,30 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
-  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
-  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
+}))
+vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/tracking-decisions', async (importOriginal) => ({
+  ...(await importOriginal<typeof TrackingDecisions>()),
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
+}))
+vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     // The production caller invokes the returned settle receipt.
     return () => {}
-  },
+  }
+}))
+vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -73,12 +91,16 @@ vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
-afterEach(() => resetWebSessionCloseIntentForTests())
+afterEach(() => {
+  resetWebSessionCloseIntentForTests()
+  resetWebSessionCloseReplaysForTests()
+})
 
 describe('web runtime session tab actions', () => {
   beforeEach(() => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mocks.getState.mockReturnValue({
+    const intents = createPairedTerminalTabCloseIntentTestStore()
+    mocks.getState.mockImplementation(() => ({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
@@ -86,8 +108,9 @@ describe('web runtime session tab actions', () => {
       terminalLayoutsByTabId: {},
       activeTabIdByWorktree: {},
       activeGroupIdByWorktree: {},
-      setActiveWorktree: mocks.setActiveWorktree
-    })
+      setActiveWorktree: mocks.setActiveWorktree,
+      ...intents.getState()
+    }))
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
         args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
@@ -127,13 +150,7 @@ describe('web runtime session tab actions', () => {
         result: makeSnapshot()
       })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       activateWebRuntimeSessionTab({
@@ -182,13 +199,38 @@ describe('web runtime session tab actions', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 
+  it('carries the picked split pane and the visible tab guard to the owner and focus intent', async () => {
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue('host-terminal')
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'activate', ok: true, result: {} })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+    await activateWebRuntimeSessionTab({
+      worktreeId: WORKTREE_ID,
+      tabId: 'local-terminal',
+      leafId: 'leaf-b',
+      expectedCurrentLocalTabId: 'unified-local-terminal'
+    })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.activate',
+        params: expect.objectContaining({ tabId: 'host-terminal', leafId: 'leaf-b' })
+      })
+    )
+    expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual({
+      hostTabId: 'host-terminal',
+      leafId: 'leaf-b',
+      expectedCurrentLocalTabId: 'unified-local-terminal'
+    })
+  })
+
   it('supersedes browser focus intent when a terminal is activated next', async () => {
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
         args.tabId === 'local-browser-unified' ? 'host-browser-unified' : 'host-terminal'
     )
     const runtimeCall = vi.fn().mockResolvedValue({ id: 'activate', ok: true, result: {} })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await activateWebRuntimeSessionTab({
       worktreeId: WORKTREE_ID,
@@ -208,13 +250,7 @@ describe('web runtime session tab actions', () => {
       .mockResolvedValueOnce({ id: 'list-1', ok: true, result: makeSnapshot() })
       .mockResolvedValueOnce({ id: 'close-2', ok: true, result: {} })
       .mockResolvedValueOnce({ id: 'list-2', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       closeWebRuntimeSessionTab({
@@ -263,9 +299,7 @@ describe('web runtime session tab actions', () => {
       ok: true,
       result: makeSnapshot()
     })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       closeWebRuntimeSessionTab({
@@ -300,7 +334,7 @@ describe('web runtime session tab actions', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       closeWebRuntimeSessionTab({
@@ -325,7 +359,7 @@ describe('web runtime session tab actions', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await closeWebRuntimeSessionTab({
       worktreeId: WORKTREE_ID,
@@ -370,7 +404,7 @@ describe('web runtime session tab actions', () => {
           })
         })
         .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
       await expect(
         closeWebRuntimeSessionTab({
@@ -403,9 +437,7 @@ describe('web runtime session tab actions', () => {
         }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       closeWebRuntimeSessionTab({
@@ -450,13 +482,7 @@ describe('web runtime session tab actions', () => {
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: authoritative })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       closeWebRuntimeSessionTab({
@@ -491,7 +517,7 @@ describe('web runtime session tab actions', () => {
         .fn()
         .mockResolvedValueOnce({ id: 'close', ok: true, result })
         .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
-      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
       return closeWebRuntimeSessionTab({
         worktreeId: WORKTREE_ID,
         tabId: 'local-browser-unified',
@@ -541,13 +567,7 @@ describe('web runtime session tab actions', () => {
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
 
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     recordWebSessionCloseIntent(
       { environmentId: ENVIRONMENT_ID },
@@ -584,13 +604,225 @@ describe('web runtime session tab actions', () => {
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).not.toHaveBeenCalled()
   })
 
+  // STA-6224: clearing on a dropped connection let the host's next snapshot re-add the tab.
+  it('holds a user close the host never received and sends it again once reachable', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
+      .mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+    const owner = { environmentId: ENVIRONMENT_ID }
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe('failed')
+
+    // Durable: a reconnect long after the RPC timeout must still not re-show it.
+    expect(
+      isWebSessionCloseIntentPending(
+        owner,
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now() + 60_000
+      )
+    ).toBe(true)
+    const due = takeDueWebSessionCloseReplays(
+      INTENTS,
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      new Set(['host-browser-unified'])
+    )
+    expect(due.map((replay) => replay.hostTabIds[0])).toEqual(['host-browser-unified'])
+
+    await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
+
+    const closeCalls = runtimeCall.mock.calls.filter(
+      ([request]: unknown[]) =>
+        typeof request === 'object' &&
+        request !== null &&
+        'method' in request &&
+        request.method === 'session.tabs.close'
+    )
+    expect(closeCalls).toHaveLength(2)
+    expect(closeCalls[1]?.[0]).toMatchObject({
+      params: { tabId: 'host-browser-unified', reason: 'user' }
+    })
+    expect(
+      takeDueWebSessionCloseReplays(
+        INTENTS,
+        ENVIRONMENT_ID,
+        WORKTREE_ID,
+        new Set(['host-browser-unified'])
+      )
+    ).toEqual([])
+  })
+
+  // #30130 made a host's Disconnect answer calls locally; a tab closed then came back on reconnect.
+  it('holds a user close made while the host is disconnected', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'runtime.manualDisconnect',
+        ok: false,
+        error: {
+          code: 'runtime_manually_disconnected',
+          message: 'Runtime environment is manually disconnected.'
+        }
+      })
+      .mockResolvedValue({ id: 'close', ok: true, result: { closed: true } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+    const owner = { environmentId: ENVIRONMENT_ID }
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe('failed')
+
+    expect(
+      isWebSessionCloseIntentPending(
+        owner,
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now() + 60_000
+      )
+    ).toBe(true)
+    expect(
+      takeDueWebSessionCloseReplays(
+        INTENTS,
+        ENVIRONMENT_ID,
+        WORKTREE_ID,
+        new Set(['host-browser-unified'])
+      ).map((replay) => replay.hostTabIds[0])
+    ).toEqual(['host-browser-unified'])
+  })
+
+  it('re-lists the worktree after holding a close so an idle host still gets the first replay', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtimeCall = vi.fn().mockRejectedValue(new Error('socket hang up'))
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+      await closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+      const callsAfterClose = runtimeCall.mock.calls.length
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(
+        runtimeCall.mock.calls
+          .slice(callsAfterClose)
+          .some(
+            ([request]: unknown[]) =>
+              typeof request === 'object' &&
+              request !== null &&
+              'method' in request &&
+              request.method === 'session.tabs.list'
+          )
+      ).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-lists the worktree after a failed replay so an idle host still gets the next attempt', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtimeCall = vi.fn().mockRejectedValue(new Error('socket hang up'))
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+      const owner = { environmentId: ENVIRONMENT_ID }
+      holdWebSessionCloseForReplay(INTENTS, owner, WORKTREE_ID, ['host-browser-unified'])
+
+      await replayWebSessionTabCloses(
+        ENVIRONMENT_ID,
+        takeDueWebSessionCloseReplays(
+          INTENTS,
+          ENVIRONMENT_ID,
+          WORKTREE_ID,
+          new Set(['host-browser-unified'])
+        )
+      )
+      const callsAfterReplay = runtimeCall.mock.calls.length
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      const relisted = runtimeCall.mock.calls
+        .slice(callsAfterReplay)
+        .some(
+          ([request]: unknown[]) =>
+            typeof request === 'object' &&
+            request !== null &&
+            'method' in request &&
+            request.method === 'session.tabs.list'
+        )
+      expect(relisted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never replays a held close to an environment re-paired since', async () => {
+    const runtimeCall = vi.fn()
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 0, pairingRevision: 1 }])
+    const owner = { environmentId: ENVIRONMENT_ID, pairingRevision: 1 }
+    holdWebSessionCloseForReplay(INTENTS, owner, WORKTREE_ID, ['host-browser-unified'])
+    const due = takeDueWebSessionCloseReplays(
+      INTENTS,
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      new Set(['host-browser-unified'])
+    )
+    // Re-paired between the snapshot that made it due and the send.
+    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 0, pairingRevision: 2 }])
+
+    try {
+      await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
+    } finally {
+      replaceRuntimeEnvironmentRevisions([])
+    }
+
+    expect(due).toHaveLength(1)
+    expect(runtimeCall).not.toHaveBeenCalled()
+    expect(INTENTS.getIntents()?.[ENVIRONMENT_ID]).toBeUndefined()
+  })
+
+  it('does not hold a lifecycle close the host never received', async () => {
+    stubRuntimeEnvironmentBridge({ call: vi.fn().mockRejectedValue(new Error('socket hang up')) })
+
+    await closeWebRuntimeSessionTab({
+      worktreeId: WORKTREE_ID,
+      tabId: 'local-browser-unified',
+      reason: 'cleanup',
+      publicationEpoch: 'epoch-1',
+      terminalHandle: 'term-1'
+    })
+
+    expect(
+      takeDueWebSessionCloseReplays(
+        INTENTS,
+        ENVIRONMENT_ID,
+        WORKTREE_ID,
+        new Set(['host-browser-unified'])
+      )
+    ).toEqual([])
+  })
+
   it('clears an optimistic close intent when pairing CAS rejects the host call', async () => {
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'close-rejected',
       ok: false,
       error: { code: 'conflict', message: 'runtime_environment_replaced' }
     })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
     await expect(
       closeWebRuntimeSessionTab({

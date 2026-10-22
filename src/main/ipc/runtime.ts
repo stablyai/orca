@@ -12,8 +12,10 @@ import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-br
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
+import { publishMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -48,7 +50,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      return runtime.syncWindowGraph(window.id, graph)
+      const result = runtime.syncWindowGraph(window.id, graph)
+      // Why after the sync: only the authoritative window's graph is accepted, so only its catalog is.
+      if (graph.projectSectionCatalog) {
+        publishMobileProjectSections(graph.projectSectionCatalog)
+      }
+      return result
     }
   )
 
@@ -78,6 +85,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         {
           clientId: 'desktop-renderer',
+          caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
@@ -120,6 +128,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           signal: controller.signal,
           clientId: 'desktop-renderer',
+          caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId,
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES

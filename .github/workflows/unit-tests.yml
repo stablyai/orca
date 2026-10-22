@@ -14,17 +14,60 @@ on:
         default: ubuntu-latest
         type: string
 
+      browser_contract:
+        description: Include the PR external Chromium browser contract in relay integration.
+        required: false
+        default: false
+        type: boolean
+
+      run_shards:
+        description: Run the planned root unit shards.
+        required: false
+        default: true
+        type: boolean
+
       shards:
         description: JSON array of shard assignments, produced by unit-plan.yml.
         required: true
         type: string
+
+      module_cache:
+        description: Transform cache policy (off, cold producer, or warm exact restore).
+        default: 'off'
+        type: string
+
+      module_cache_namespace:
+        description: Isolate a same-source cache comparison from existing archives.
+        default: ''
+        type: string
+
+      module_cache_seed:
+        description: Publish comparison caches from a manually dispatched workflow.
+        default: false
+        type: boolean
+
+      phase_diagnostics:
+        description: Attach bounded per-file worker phase diagnostics.
+        default: false
+        type: boolean
+
+      artifact_prefix:
+        description: Distinguish evidence from repeated same-source comparison lanes.
+        default: unit
+        type: string
+
+      run_relay_integration:
+        description: Run relay contracts alongside normal unit checks.
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
+    if: inputs.run_shards
+    name: ${{ inputs.artifact_prefix != 'unit' && format('{0} ', inputs.artifact_prefix) || '' }}tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
     strategy:
@@ -48,22 +91,109 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
+      # The image resets HOME during login; shell fixtures intentionally use temporary homes.
+      - name: Preserve explicit login-shell homes on Blacksmith
+        if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
+        run: |
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+          profile = Path('/etc/profile.d/blacksmith.sh')
+          if profile.exists():
+              original = profile.read_text()
+              updated = original.replace('export HOME="$RUNNER_HOME"', 'export HOME="${HOME:-$RUNNER_HOME}"')
+              if updated != original:
+                  profile.write_text(updated)
+          PYTHON
+
+      - name: Verify Blacksmith unit runner environment
+        if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
+        run: |
+          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
+          fixture_home="$(mktemp -d)"
+          trap 'rm -rf "$fixture_home"' EXIT
+          printf 'export ORCA_CI_PROFILE_LOADED=1\n' > "$fixture_home/.bash_profile"
+          HOME="$fixture_home" ORCA_CI_FIXTURE_HOME="$fixture_home" /bin/bash -lc '
+            test "$HOME" = "$ORCA_CI_FIXTURE_HOME" && test "$ORCA_CI_PROFILE_LOADED" = 1
+          ' || {
+            echo '::error::Runner login profile overrides fixture HOME'
+            grep -nH 'HOME' /etc/profile /etc/profile.d/*.sh || true
+            HOME="$fixture_home" /bin/bash -lc 'printf "Observed HOME=%s\n" "$HOME"'
+            exit 1
+          }
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+
+      - name: Resolve unit module cache
+        id: module-cache
+        if: inputs.module_cache == 'cold' || inputs.module_cache == 'warm'
+        env:
+          ORCA_UNIT_SHARD_INDEX: ${{ matrix.shard.index }}
+          ORCA_UNIT_SHARD_COUNT: ${{ matrix.shard.count }}
+          ORCA_UNIT_CACHE_NAMESPACE: ${{ inputs.module_cache_namespace }}
+        run: node config/scripts/ci-unit-module-cache.mjs identity
+
+      - name: Restore exact unit module cache
+        id: module-cache-restore
+        if: inputs.module_cache == 'warm' && steps.module-cache.outputs.key != ''
+        continue-on-error: true
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ steps.module-cache.outputs.path }}
+          key: ${{ steps.module-cache.outputs.key }}
+
+      - name: Validate restored unit module cache or use cold transforms
+        if: steps.module-cache.outputs.key != ''
+        env:
+          ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-hit }}
+        run: node config/scripts/ci-unit-module-cache.mjs prepare
+
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: unit-selection-attempt-${{ github.run_attempt }}
           path: ci-shards/
 
+      - name: Record full unit discovery
+        if: inputs.phase_diagnostics
+        continue-on-error: true
+        run: >-
+          node --input-type=module -e '
+          import { discoverUnitFiles } from "./config/scripts/ci-unit-files.mjs";
+          import { writeAssignment } from "./config/scripts/ci-shard-assignment.mjs";
+          writeAssignment("ci-shards/unit-discovery.json", { files: discoverUnitFiles() });'
+
       - name: Test shard
         env:
+          NODE_COMPILE_CACHE: ${{ runner.temp }}/orca-node-compile-cache-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.node }}-${{ matrix.shard.index }}
           ORCA_BALANCE_UNIT_SHARDS: '1'
           ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_UNIT_PHASE_REPORT: ${{ inputs.phase_diagnostics && 'ci-shards/unit-phases.json' || '' }}
         run: |
           ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           export ORCA_SHARD_SOURCE_SHA
-          pnpm exec vitest run --config config/vitest.config.ts \
+          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }}
+            ${{ (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
+
+      - name: Seal unit module cache
+        id: module-cache-seal
+        if: >-
+          success() && steps.module-cache.outputs.key != '' &&
+          steps.module-cache-restore.outputs.cache-hit != 'true' &&
+          (github.event_name == 'pull_request' ||
+          github.ref == 'refs/heads/main' && github.event_name != 'pull_request' ||
+          inputs.module_cache_seed && github.event_name == 'workflow_dispatch')
+        run: node config/scripts/ci-unit-module-cache.mjs seal
+
+      - name: Save unit module cache
+        if: steps.module-cache-seal.outputs.ready == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.module-cache.outputs.path }}
+          key: ${{ steps.module-cache.outputs.key }}
 
       - name: Upload unit shard assignment
         if: always()
@@ -71,12 +201,13 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: unit-shard-node-${{ matrix.node }}-${{ matrix.shard.index }}-attempt-${{ github.run_attempt }}
+          name: ${{ inputs.artifact_prefix }}-shard-node-${{ matrix.node }}-${{ matrix.shard.index }}-attempt-${{ github.run_attempt }}
           path: ci-shards/
           retention-days: 14
           if-no-files-found: warn
 
   relay_integration:
+    if: inputs.run_relay_integration
     name: relay integration node ${{ matrix.node }}
     strategy:
       fail-fast: false
@@ -92,23 +223,48 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
+        id: root_dependencies
         with:
-          native-runtime: node
+          native-runtime: none
           node-version: ${{ matrix.node }}
-          cache-electron-package: 'true'
           cache-dependency-path: |
             pnpm-lock.yaml
             cloud/pnpm-lock.yaml
 
+      - name: Resolve Chrome for the browser provider
+        id: browser_executable
+        if: inputs.browser_contract && success()
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::No Google Chrome on the runner; the browser provider test would silently skip."
+            exit 1
+          fi
+          "$chrome" --version
+          echo "executable=$chrome" >> "$GITHUB_OUTPUT"
+
+      - name: Test external Chromium browser provider
+        if: inputs.browser_contract && success()
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_BROWSER_EXECUTABLE: ${{ steps.browser_executable.outputs.executable }}
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/orcad/external-chromium-browser-process.integration.test.ts
+
       # These two tests import the cloud relay workspace directly. Keeping them in one job
       # avoids installing and building the same workspace once per unit-test shard.
       - name: Install relay integration dependencies
+        id: relay_dependencies
+        if: ${{ !cancelled() && steps.root_dependencies.outcome == 'success' }}
         working-directory: cloud
         run: |
-          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay^...' build
+          pnpm --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          pnpm --filter '@orca-cloud/relay^...' build
 
       - name: Test relay integration contracts
+        if: ${{ !cancelled() && steps.relay_dependencies.outcome == 'success' }}
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-

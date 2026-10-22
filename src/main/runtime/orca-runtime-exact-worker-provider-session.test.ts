@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
-import { OrcaRuntimeWithGetTerminalInteractiveWait } from './orca-runtime-get-terminal-interactive-wait'
+import { OrcaRuntimeWithGetTerminalInteractiveWait } from './terminal/wait/terminal-interactive-wait'
 
 const PANE_KEY = 'tab:worker'
 const PTY_ID = 'pty-wsl'

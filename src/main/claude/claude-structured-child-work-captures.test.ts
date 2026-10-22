@@ -87,7 +87,8 @@ describe('Claude child work from captured frame orders', () => {
     })
   })
 
-  it('stops what still runs when Orca ends the session, and keeps every record', async () => {
+  // A close Orca proves is still loss of contact: no Stop was accepted, so no outcome is claimed.
+  it('leaves how they ended unknown when Orca ends the session, and keeps every record', async () => {
     const run = await producer(hostWithParent())
     const [running] = until(MOVED_TO_BACKGROUND, 51_275)
     run.replay(running)
@@ -99,8 +100,8 @@ describe('Claude child work from captured frame orders', () => {
         outcome
       }))
     ).toEqual([
-      { description: 'Run 45s sleep command', membership: 'settled', outcome: 'cancelled' },
-      { description: 'Sleep 45 seconds then print 1', membership: 'settled', outcome: 'cancelled' }
+      { description: 'Run 45s sleep command', membership: 'settled', outcome: 'unknown' },
+      { description: 'Sleep 45 seconds then print 1', membership: 'settled', outcome: 'unknown' }
     ])
   })
 

@@ -1,5 +1,7 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../browser/browser-manager'
+import { browserSiteDisplayController } from '../browser/browser-site-display-controller'
+import { isBrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import { publishBrowserClientPageMetadata } from '../browser/browser-client-page-metadata-transport'
 import {
   BrowserClientPageMetadataParams,
@@ -8,6 +10,10 @@ import {
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
+import {
+  isBrowserSiteColorScheme,
+  type BrowserPageSiteDisplay
+} from '../../shared/browser-site-display'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,
@@ -22,6 +28,50 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
   ipcMain.removeHandler('browser:publishClientPageMetadata')
+  ipcMain.removeHandler('browser:getPageSiteDisplay')
+  ipcMain.removeHandler('browser:zoomPage')
+  ipcMain.removeHandler('browser:setPageSiteColorScheme')
+
+  // Why the page registry only: these act on a browser page, never on a document preview.
+  const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
+    isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
+      ? browserManager.getGuestWebContentsId(browserPageId)
+      : null
+
+  ipcMain.handle(
+    'browser:getPageSiteDisplay',
+    (event, args: { browserPageId: string }): BrowserPageSiteDisplay | null => {
+      const guestId = pageGuestId(event, args?.browserPageId)
+      return guestId === null ? null : browserSiteDisplayController.getPageDisplay(guestId)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:zoomPage',
+    (event, args: { browserPageId: string; direction: unknown }): BrowserPageSiteDisplay | null => {
+      const guestId = pageGuestId(event, args?.browserPageId)
+      const { direction } = args
+      if (guestId === null || !isBrowserPageZoomDirection(direction)) {
+        return null
+      }
+      return browserSiteDisplayController.zoomPage(guestId, direction)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:setPageSiteColorScheme',
+    (
+      event,
+      args: { browserPageId: string; colorScheme: unknown }
+    ): BrowserPageSiteDisplay | null => {
+      const guestId = pageGuestId(event, args?.browserPageId)
+      const { colorScheme } = args
+      if (guestId === null || (colorScheme !== null && !isBrowserSiteColorScheme(colorScheme))) {
+        return null
+      }
+      return browserSiteDisplayController.setColorScheme(guestId, colorScheme)
+    }
+  )
 
   ipcMain.handle('browser:openDevTools', (event, args: { browserPageId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
@@ -112,6 +162,8 @@ export function registerBrowserGuestViewHandlers(): void {
         typeof args.enabled !== 'boolean' ||
         typeof args.emitViewport !== 'boolean' ||
         !isValidBrowserAnnotationViewportBridgeMarkers(args.markers) ||
+        (args.selectionId !== undefined &&
+          (typeof args.selectionId !== 'string' || args.selectionId.length > 80)) ||
         !isValidBrowserAnnotationViewportBridgeToken(args.token)
       ) {
         return false
@@ -132,6 +184,7 @@ export function registerBrowserGuestViewHandlers(): void {
           enabled: args.enabled,
           emitViewport: args.emitViewport,
           markers: args.markers,
+          selectionId: args.selectionId,
           token: args.token
         },
         resolveGuest

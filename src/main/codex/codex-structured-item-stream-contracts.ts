@@ -17,13 +17,14 @@ export type CodexItemStreamDeps = {
   coalesceMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
-  maxMetadataBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }
 
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
+  /** Host clock when the item started, for a row its stream writes first. */
+  startedAt?: number
 }
 
 export type CodexPendingItemPatch = {
@@ -42,13 +43,13 @@ export type CodexStructuredItemStreamHandleResult = {
 
 export type CodexStructuredItemStreams = {
   readonly persistentCount: number
-  canTrack: (threadId: string, item: CodexThreadItem, identity: AgentJournalItemIdentity) => boolean
   track: (
     threadId: string,
     turnId: string | null,
     item: CodexThreadItem,
-    identity: AgentJournalItemIdentity
-  ) => boolean
+    identity: AgentJournalItemIdentity,
+    startedAt?: number
+  ) => void
   handle: (
     threadId: string,
     method: string,

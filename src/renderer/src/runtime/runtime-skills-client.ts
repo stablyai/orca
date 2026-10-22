@@ -11,9 +11,9 @@ import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
+  runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const SKILL_DISCOVERY_TIMEOUT_MS = 15_000
 

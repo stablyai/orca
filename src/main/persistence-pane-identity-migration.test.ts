@@ -1,9 +1,10 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  writeDataFile,
-  readDataFile
+  readDataFile,
+  testState,
+  workspaceRepos,
+  writeDataFile
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
@@ -11,6 +12,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import { agentHookServer } from './agent-hooks/server'
 
 import {
   TEST_LEAF_1,
@@ -24,7 +26,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -67,6 +69,7 @@ describe('Store', () => {
   })
 
   afterEach(async () => {
+    agentHookServer.stop()
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -75,7 +78,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -187,7 +190,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -298,7 +301,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -394,7 +397,7 @@ describe('Store', () => {
     const ownerPaneKey = makePaneKey('tab-target', TEST_LEAF_2)
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -430,7 +433,7 @@ describe('Store', () => {
   it('persists fallback aliases when a legacy split layout has no PTY leaf bindings', async () => {
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -520,7 +523,7 @@ describe('Store', () => {
     const leafCount = 130_000
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -576,7 +579,7 @@ describe('Store', () => {
     const stablePaneKey = makePaneKey('tab1', TEST_LEAF_1)
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},

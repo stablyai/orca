@@ -40,6 +40,15 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'opencode-1-18-32-timed-boot-slow': 16,
   'opencode-1-18-32-timed-first-launch': 16,
   'opencode-2-0-18-timed-boot-hidden-pane': 14,
+  // STA-9359 OpenCode 2 captures, serializer untouched: every background diff is the live pen's
+  // panel colour on restored cells, plus the rows kept below the source after a shrink.
+  'opencode-2-0-14-timed-cold-standalone': 4,
+  'opencode-2-0-21-timed-cold-standalone': 36,
+  'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
+  'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
+  'opencode-cmd-2-0-21-timed-warm-server': 21,
+  // The same, plus the cursor one column short after a shrink and the pen's bold bit on a glyph.
+  'opencode-2-0-21-timed-narrow-pane': 8,
   // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
   'qoder-no-account': 2,
   'qoder-ready': 2,
@@ -65,6 +74,11 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0-158-0-approval': 12,
   'codex-0-158-0-timed-turn': 20,
   'codex-0-158-0-trustprompt': 36,
+  // Fullscreen startup captures diverge identically with the base b58f8197dc36 serializer.
+  'codex-fullscreen-custom-footer': 18,
+  'codex-fullscreen-early-input': 4,
+  'codex-fullscreen-multiline-early-input': 10,
+  'codex-fullscreen-startup': 14,
   'claude-dialog-trust-workspace-answered': 13,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
@@ -72,6 +86,8 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // regression, by replaying it against the previous build
   // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
   'dsh-tui-ready-no-key': 10,
+  // Capacity capture (#28231): identical attribute leaks with the pre-capture serializer.
+  'codex-model-capacity-fullscreen': 12,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
   // STA-8741 agy/Cline/Prime captures, serializer untouched: the same true-colour background
@@ -109,7 +125,10 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // short, as for Qoder. The unscrubbed captures diverge identically, so the scrub is not the cause.
   'omp-18-composer': 2,
   'omp-18-composer-narrow': 7,
-  'omp-18-setup': 6
+  'omp-18-setup': 6,
+  // STA-10739 ConPTY capture, serializer untouched: a cursor wrap-pending at column 120 (ConPTY
+  // pads the row to the edge) restores at column 119 on the unresized schedule.
+  'pwsh-7-6-psreadline-history-prediction-conpty': 2
 }
 
 // Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.
@@ -210,9 +229,17 @@ describe('serialize round trip over captured PTY transcripts', () => {
       const blocking: string[] = []
       const failureSignatures: string[] = []
       for (const schedule of SCHEDULES) {
+        const cases: SerializeFuzzCase[] = []
+        for (let seed = 1; seed <= SEEDS; seed++) {
+          cases.push(buildReplayCase(transcript, schedule, false, seed))
+        }
         for (const conpty of [false, true]) {
-          for (let seed = 1; seed <= SEEDS; seed++) {
-            const testCase = buildReplayCase(transcript, schedule, conpty, seed)
+          for (const replayCase of cases) {
+            const { seed } = replayCase
+            const testCase: SerializeFuzzCase = {
+              ...replayCase,
+              category: conpty ? 'conpty' : 'normal'
+            }
             const run = await runSerializeFuzzCase(testCase, serializers)
             expect(run.sourceCrash).toBeNull()
             for (const check of run.checks) {

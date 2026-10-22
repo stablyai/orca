@@ -1,7 +1,13 @@
+import {
+  acquireReadyCodexForTest,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
 // Codex's default multi-agent mode announces a helper only by the `collabAgentToolCall` items that
 // spawn, message, wait on or close it. These frames, through the real adapter, must register that
-// helper the same way a `subAgentActivity` does: one child in the strip, the host's records and
-// the roster row.
+// helper the same way a `subAgentActivity` does: one child in the strip and the host's records,
+// which the host saves as the helper's row.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
@@ -11,7 +17,6 @@ import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child
 import { createAgentStatusStore } from '../../shared/agent-status-store'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
@@ -161,7 +166,7 @@ async function session() {
     appendTombstone: () => {},
     publish: () => {}
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',
@@ -179,21 +184,15 @@ async function session() {
   const strip = () => adapter.backgroundTaskState('session-1')?.tasks ?? []
   const toolRow = (name: string) =>
     [...rows.values()].find((body) => body.kind === 'tool-call' && body.name === name)
-  const rosterRows = () =>
-    [...rows.values()].flatMap((body) =>
-      body.kind === 'message'
-        ? body.blocks.flatMap((block) => (block.type === 'subagent-group' ? [block] : []))
-        : []
-    )
   const rawCollabRows = () =>
     [...rows.values()].filter(
       (body) => body.kind === 'status' && body.providerFrame?.kind === 'item:collabAgentToolCall'
     )
-  return { send, agents, commands, strip, toolRow, rosterRows, rawCollabRows }
+  return { send, agents, commands, strip, toolRow, rawCollabRows }
 }
 
 describe('Codex default-mode helpers', () => {
-  it('registers a helper announced only by its spawn call, in the strip, the records and the roster row', async () => {
+  it('registers a helper announced only by its spawn call, in the strip and the records', async () => {
     const run = await session()
     run.send(turn('turn/started', THREAD_ID, PARENT_TURN), spawnStarted)
     // The call has not said which thread the helper is yet.
@@ -211,11 +210,6 @@ describe('Codex default-mode helpers', () => {
     ])
     expect(run.strip()).toEqual([
       { id: `codex-agent:${HELPER}`, kind: 'agent', description: LABEL }
-    ])
-    expect(run.rosterRows()).toEqual([
-      expect.objectContaining({
-        agents: [expect.objectContaining({ id: HELPER, label: LABEL, state: 'working' })]
-      })
     ])
 
     // While the helper runs, its command is the helper's work, not the session's own.
@@ -245,9 +239,6 @@ describe('Codex default-mode helpers', () => {
       })
     ])
     expect(run.strip()).toEqual([])
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, state: 'completed' })
-    ])
   })
 
   it('labels a command the helper leaves running with the helper, once its turn is over', async () => {
@@ -316,12 +307,7 @@ describe('Codex default-mode helpers', () => {
       expect.objectContaining({ membership: 'live', state: 'working', description: LABEL })
     ])
     expect(run.strip()).toHaveLength(1)
-    expect(run.rosterRows()).toEqual([
-      expect.objectContaining({
-        agents: [expect.objectContaining({ id: HELPER, label: LABEL, state: 'working' })]
-      })
-    ])
-    // The roster row does not stand in for the call's own row.
+    // The call keeps its own row.
     expect(run.toolRow('spawn_agent')).toMatchObject({
       state: 'completed',
       input: { description: LABEL }
@@ -355,11 +341,6 @@ describe('Codex default-mode helpers', () => {
     expect(run.strip()).toEqual([
       { id: `codex-agent:${HELPER}`, kind: 'agent', description: LABEL }
     ])
-    expect(run.rosterRows()).toEqual([
-      expect.objectContaining({
-        agents: [expect.objectContaining({ id: HELPER, state: 'working' })]
-      })
-    ])
   })
 
   it('registers nothing for a spawn that created no thread', async () => {
@@ -376,7 +357,6 @@ describe('Codex default-mode helpers', () => {
     )
     expect(run.agents()).toEqual([])
     expect(run.strip()).toEqual([])
-    expect(run.rosterRows()).toEqual([])
   })
 
   it('leaves a helper running when its caller failed to close it', async () => {
@@ -415,9 +395,6 @@ describe('Codex default-mode helpers', () => {
     )
     expect(run.agents()).toEqual([expect.objectContaining({ membership: 'live' })])
     expect(run.strip()).toHaveLength(1)
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, state: 'working' })
-    ])
 
     // A close that works aborts the helper's turn, which Codex reports on the helper's thread.
     run.send(closeCompleted, turn('turn/completed', HELPER, HELPER_TURN, 'interrupted'))
@@ -425,9 +402,6 @@ describe('Codex default-mode helpers', () => {
       expect.objectContaining({ membership: 'settled', outcome: 'cancelled' })
     ])
     expect(run.strip()).toEqual([])
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, state: 'stopped' })
-    ])
     expect(run.toolRow('close_agent')).toMatchObject({
       state: 'completed',
       input: { description: LABEL }
@@ -480,9 +454,6 @@ describe('Codex default-mode helpers', () => {
     expect(run.strip()).toEqual([
       { id: `codex-agent:${HELPER}`, kind: 'agent', description: 'sleeper' }
     ])
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, label: 'sleeper' })
-    ])
   })
 })
 
@@ -503,7 +474,10 @@ describe('a helper whose spawn was never seen', () => {
       turn('turn/started', HELPER, HELPER_TURN),
       helperShell('item/started')
     )
-    expect(run.strip()).toEqual([expect.objectContaining({ kind: 'command' })])
+    expect(run.strip()).toEqual([])
+    expect(run.commands()).toEqual([
+      expect.objectContaining({ membership: 'live', residency: 'foreground' })
+    ])
 
     run.send(sendInput)
     // No spawn named it, so it reads as any unnamed subagent does.
@@ -516,9 +490,6 @@ describe('a helper whose spawn was never seen', () => {
         membership: 'live',
         parentChildWorkId: run.agents()[0]?.childWorkId
       })
-    ])
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, label: 'subagent', state: 'working' })
     ])
     expect(run.toolRow('send_input')).toMatchObject({ input: { description: HELPER } })
   })
@@ -545,13 +516,9 @@ describe('a helper whose spawn was never seen', () => {
       expect.objectContaining({ membership: 'live' }),
       expect.objectContaining({ membership: 'live' })
     ])
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, label: 'subagent' }),
-      expect.objectContaining({ id: second, label: 'subagent 2' })
-    ])
   })
 
-  it("puts a helper's run in the turn that sent it work, even after that turn ended", async () => {
+  it("reopens a helper's one entry when a later turn sends it work, even after that turn ended", async () => {
     const run = await session()
     run.send(
       turn('turn/started', THREAD_ID, PARENT_TURN),
@@ -564,10 +531,9 @@ describe('a helper whose spawn was never seen', () => {
       turn('turn/completed', THREAD_ID, 'parent-turn-2'),
       turn('turn/started', HELPER, 'helper-turn-2')
     )
-    const groups = new Set(run.rosterRows().map((row) => row.groupId))
-    expect(groups.size).toBe(2)
-    expect(run.rosterRows().at(-1)?.agents).toEqual([
-      expect.objectContaining({ id: HELPER, state: 'working' })
+    // One record per helper, back at work.
+    expect(run.agents()).toEqual([
+      expect.objectContaining({ membership: 'live', state: 'working' })
     ])
   })
 
@@ -586,14 +552,13 @@ describe('a helper whose spawn was never seen', () => {
       }
     }
     expect(readCodexSubagentAnnouncements(waited, THREAD_ID)).toEqual([
-      { agentThreadId: HELPER, label: null, namesParentTurn: false, spawned: false },
-      { agentThreadId: second, label: null, namesParentTurn: false, spawned: false }
+      { agentThreadId: HELPER, label: null, spawned: false },
+      { agentThreadId: second, label: null, spawned: false }
     ])
   })
 })
 
-describe('the roster row follows a helper whose turn ends', () => {
-  const lastRow = (run: Awaited<ReturnType<typeof session>>) => run.rosterRows().at(-1)?.agents
+describe('the record follows a helper whose turn ends', () => {
   const running = async () => {
     const run = await session()
     run.send(
@@ -601,11 +566,10 @@ describe('the roster row follows a helper whose turn ends', () => {
       activityStarted,
       turn('turn/started', HELPER, HELPER_TURN)
     )
-    expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'working' })])
     return run
   }
 
-  it('settles the row with the strip and the record on the failed completion that follows a fatal error', async () => {
+  it('settles the strip and the record on the failed completion that follows a fatal error', async () => {
     const run = await running()
     // Codex sends the fatal error, then the helper's failed `turn/completed` 0-32 ms later.
     run.send({
@@ -619,24 +583,21 @@ describe('the roster row follows a helper whose turn ends', () => {
     })
     expect(run.strip()).toEqual([expect.objectContaining({ id: `codex-agent:${HELPER}` })])
     expect(run.agents()).toEqual([expect.objectContaining({ membership: 'live' })])
-    expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'working' })])
 
     run.send(turn('turn/completed', HELPER, HELPER_TURN, 'failed'))
     expect(run.strip()).toEqual([])
     expect(run.agents()).toEqual([
       expect.objectContaining({ membership: 'settled', outcome: 'failed' })
     ])
-    expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'failed' })])
   })
 
-  it('settles the row with the strip and the record when its thread closes with no turn/completed', async () => {
+  it('settles the strip and the record when its thread closes with no turn/completed', async () => {
     const run = await running()
     run.send({ method: 'thread/closed', params: { threadId: HELPER } })
     expect(run.strip()).toEqual([])
     expect(run.agents()).toEqual([
       expect.objectContaining({ membership: 'settled', outcome: 'unknown' })
     ])
-    expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'unverifiable' })])
   })
 })
 

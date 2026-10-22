@@ -17,22 +17,22 @@ import { SearchableSetting } from './SearchableSetting'
 import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
 import type { SettingsProjectRemovalScope } from './settings-project-list'
 import { matchesSettingsSearch } from './settings-search'
-import { useAppStore } from '../../store'
+import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
-import { RepositoryIconPicker } from './RepositoryIconPicker'
+import { RepositoryIconPicker } from './repository/identity/RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
-import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
+import { RepositoryForkSyncSection } from './repository/identity/RepositoryForkSyncSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
-import { matchesRepositoryIdentitySearch } from './repository-identity-search'
+import { matchesRepositoryIdentitySearch } from './repository/identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
+import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
 export { getRepositoryPaneSearchEntries }
-export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
@@ -176,6 +176,7 @@ export function RepositoryPane({
   const identityEntryTitles = new Set([
     translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
     translate(
       'auto.components.settings.repository.search.keepForkUpToDate',
@@ -305,6 +306,13 @@ export function RepositoryPane({
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
 
+        <RepositoryJiraProjectSection
+          key={`${selectedHostId}:${repo.id}`}
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
         {!isFolder ? (
           <>
             <RepositoryHostSetupsSection
@@ -379,7 +387,7 @@ export function RepositoryPane({
       <SparsePresetSettingsSection key={`sparse-presets:${repo.id}`} repoId={repo.id} />
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
-      <McpConfigSection key="mcp-configs" repo={repo} />
+      <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
     ) : null
   ].filter(Boolean)
 

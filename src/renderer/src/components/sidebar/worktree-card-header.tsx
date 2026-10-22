@@ -15,7 +15,7 @@ import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
-// Why: pinned repo icon and compact inline badge share this chip shell so both repo cues read as the same affordance.
+// Why: pinned and compact inline project cues share this chip so both read as the same affordance.
 function RepoIdentityChip({
   repo,
   children
@@ -27,14 +27,21 @@ function RepoIdentityChip({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55"
+          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
           aria-label={translate(
             'auto.components.sidebar.WorktreeCard.35ccfe2475',
             'Project {{value0}}',
             { value0: repo.displayName }
           )}
         >
-          {children}
+          {/* Why: emoji glyphs scale with font size (0.9em), so pin it to fit the 12px icon box. */}
+          <span className="inline-flex size-3 shrink-0 items-center justify-center text-2xs">
+            {children}
+          </span>
+          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
+          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
+            {repo.displayName}
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>

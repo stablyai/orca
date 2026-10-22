@@ -1,5 +1,7 @@
+import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
+import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import type { SshHostRemoveResolution } from './ssh-host-remove-resolution'
 
 export type ClearSshHostWorkspacesResult = {
@@ -21,9 +23,10 @@ export type ClearSshHostWorkspacesResult = {
  * still-registered child. Failures are collected (not thrown) so the caller can
  * decide whether to proceed with target removal.
  */
-export async function clearSshHostWorkspaces(
+async function clearSshHostWorkspacesImpl(
   resolution: SshHostRemoveResolution,
-  mode: 'delete-remote' | 'forget-local'
+  mode: 'delete-remote' | 'forget-local',
+  confirmedDiscards: ConfirmedUnsavedDiscards | undefined
 ): Promise<ClearSshHostWorkspacesResult> {
   const store = useAppStore.getState()
   const forgetLocalOnly = mode === 'forget-local'
@@ -32,14 +35,13 @@ export async function clearSshHostWorkspaces(
   // removed, so that target is the host each removal is confirmed against
   // (STA-4343) — a bare id could land on a local checkout at the same path.
   const hostId = toSshExecutionHostId(resolution.targetId)
-
   for (const worktreeId of resolution.workspaceWorktreeIds) {
     // Why: sequential, not parallel — deletes on the same repo contend on git
     // ref locks, and forget is cheap enough that ordering keeps failures legible.
     const result = await store.removeWorktree(
       { id: worktreeId, executionHostId: hostId },
       false,
-      forgetLocalOnly ? { mode: 'forget-local' } : undefined
+      forgetLocalOnly ? { mode: 'forget-local', confirmedDiscards } : { confirmedDiscards }
     )
     if (!result.ok) {
       failedIds.push(worktreeId)
@@ -54,7 +56,7 @@ export async function clearSshHostWorkspaces(
   // clearing Orca's records without a successful remote call.
   for (const repoId of resolution.hostRepoIds) {
     try {
-      await store.removeProject(repoId, { hostId })
+      await store.removeProject(repoId, { hostId, confirmedDiscards })
     } catch {
       failedIds.push(repoId)
     }
@@ -70,4 +72,14 @@ export async function clearSshHostWorkspaces(
   }
 
   return { failedIds }
+}
+
+export async function clearSshHostWorkspaces(
+  resolution: SshHostRemoveResolution,
+  mode: 'delete-remote' | 'forget-local',
+  confirmedDiscards?: ConfirmedUnsavedDiscards
+): Promise<ClearSshHostWorkspacesResult> {
+  return runEnclosingWorktreeRemoval({ hostId: toSshExecutionHostId(resolution.targetId) }, () =>
+    clearSshHostWorkspacesImpl(resolution, mode, confirmedDiscards)
+  )
 }

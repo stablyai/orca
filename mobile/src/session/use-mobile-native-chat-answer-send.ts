@@ -19,6 +19,7 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import {
+  nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
@@ -30,7 +31,7 @@ import {
 export type MobileNativeChatAnswerSend = {
   /** Answer the current question(s) from the card's per-question selections. */
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
-  /** Drop any in-flight per-keystroke writes (call on Stop). */
+  /** Cancel unsent groups; an already-issued write may still settle. */
   cancelPending: () => void
 }
 
@@ -49,8 +50,8 @@ function sanitizeAskFreeText(text: string): string {
  * `terminal.send` passthrough (raw text, no enter) — same contract the
  * permission card already uses, so old runtimes replay them verbatim (no new
  * RPC; keystrokes are built client-side). The scheduled wait chain is cancelled
- * on a new answer, on `cancelPending` (Stop), and on unmount / session swap — so
- * a detached chain can never write PTY bytes to a stale pane.
+ * on a new answer, on `cancelPending` (Stop), and on unmount / session swap.
+ * Cancellation prevents later groups; already-issued writes retain their verdict.
  */
 export function useMobileNativeChatAnswerSend(args: {
   client: RpcClient | null
@@ -105,6 +106,11 @@ export function useMobileNativeChatAnswerSend(args: {
 
   const answerAsk = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
+      if (nativeChatAskRequiresTerminal(agentRef.current)) {
+        cancelPending()
+        onSendError('Answer this question in terminal view')
+        return false
+      }
       const handle = handleRef.current
       if (!client || !handle || !enabled) {
         onSendError('Answer not sent (disconnected)')
@@ -166,7 +172,8 @@ export function useMobileNativeChatAnswerSend(args: {
             activeRoute.client !== client ||
             activeRoute.sessionId !== sessionId ||
             activeRoute.streamIdentity !== streamIdentity ||
-            handleRef.current !== handle
+            handleRef.current !== handle ||
+            nativeChatAskRequiresTerminal(agentRef.current)
           ) {
             return false
           }
@@ -175,6 +182,7 @@ export function useMobileNativeChatAnswerSend(args: {
             terminal: handle,
             text: body,
             enter,
+            requireWriteSettlement: true,
             deadline,
             ...(deviceTokenRef.current
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
@@ -223,9 +231,9 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           return false
         }
-        // Grok commits pasted labels; Claude and Codex need their selector-specific
+        // Grok and async questions take pasted text; Claude and Codex need their selector-specific
         // keystrokes paced so each step renders before the next lands.
-        if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        if (prompt.replyAsMessage || !shouldStepNativeChatAskAnswer(agentRef.current)) {
           // This shape pastes the label into the composer and commits it, so an
           // orphaned image paste would be submitted along with the answer (#10228).
           // The selector shapes below deliberately skip the heal: their keys are

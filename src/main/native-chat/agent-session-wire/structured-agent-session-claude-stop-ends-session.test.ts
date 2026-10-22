@@ -22,6 +22,8 @@ import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from '../../claude/claude-structured-session-state'
 import {
+  claudeFrame as frame,
+  claudeWasSent as wrote,
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
@@ -42,6 +44,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 // As Claude Code 2.1.280 advertises them on a turn's system/init frame.
@@ -104,6 +107,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),
@@ -129,7 +133,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await adapter.awaitStarted(SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
@@ -179,10 +183,6 @@ async function dispatch(clientMessageId: string) {
     (entry) => entry.clientMessageId === clientMessageId
   )
   return { state: submission?.dispatchState, reason: submission?.reason }
-}
-
-function frame(connection: FakeConnection, message: Record<string, unknown>): void {
-  connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
 }
 
 /** Sends a message and lets Claude open its turn and write one reply; returns the turn's id. */
@@ -244,10 +244,6 @@ function stopEventsAtClose(connection: FakeConnection): () => number | undefined
     return close()
   }
   return () => atClose
-}
-
-function wrote(connection: FakeConnection, text: string): boolean {
-  return connection.sent.some((message) => JSON.stringify(message).includes(text))
 }
 
 const INTERRUPTED_RESULT = {
@@ -497,8 +493,8 @@ it('ends background work Claude runs when the Stop ends the child', async () => 
       ...background,
       state: 'done',
       membership: 'settled',
-      // Stopped with the chat, as a task's own stop reads: Interrupted, not an unknown ending.
-      outcome: 'cancelled'
+      // Claude accepted no Stop of this task: ending its process is loss of contact.
+      outcome: 'unknown'
     })
   ])
   expect(await agentStatus()).toEqual({
@@ -524,7 +520,7 @@ it('starts a new child for the next send after a Stop, on the same Claude conver
   })
   // The wake resumes the same Claude conversation; the first test pins the leaf it resumes after.
   expect(store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toMatchObject({
-    sessionId: PROVIDER_SESSION_ID
+    nativeId: PROVIDER_SESSION_ID
   })
   expect(resumed.closed).toBe(false)
   expect(await dispatch(next)).toMatchObject({ state: 'pending' })
@@ -590,8 +586,7 @@ it('sends a queue-if-active message issued while the Stop ends the child directl
   const sent = host.send(CALLER, {
     envelope: envelope('agentSession.send', { body, delivery: 'queue-if-active' }, fence),
     body,
-    delivery: 'queue-if-active',
-    userSend: true
+    delivery: 'queue-if-active'
   })
   frame(connection, INTERRUPTED_RESULT)
 
@@ -655,53 +650,28 @@ it('still answers the Stop, with its row, when the child cannot be proven gone; 
   connection.close = close
 })
 
-it.each([
-  ['takes', undefined],
-  [
-    'fails',
-    () => {
-      throw new Error('control request lost')
-    }
-  ],
-  ['never answers', NEVER_ANSWERS]
-])(
-  'ends the child for a Stop naming the turn that just ended when Claude interrupts the follow-up and %s',
-  async (_answer, interrupt) => {
-    if (interrupt) {
-      claude.routes.interrupt = interrupt
-    }
-    const connection = claude.connections[0]!
-    const eventsAtClose = stopEventsAtClose(connection)
-    const ended = await openTurn(connection)
-    frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result-1' })
-    await eventually(async () =>
-      expect(
-        activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
-      ).toBeNull()
-    )
-    // Handed over but not yet echoed: no turn of its own for a client to name.
-    await send('Follow-up.')
-    await eventually(() => expect(wrote(connection, 'Follow-up.')).toBe(true))
+// The phone names the turn it last saw working, which is over: a late Stop, an accepted no-op that
+// neither interrupts nor ends the child while the follow-up is handed over.
+it('leaves the child and the follow-up alone for a Stop naming the turn that just ended', async () => {
+  const connection = claude.connections[0]!
+  const ended = await openTurn(connection)
+  frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result-1' })
+  await eventually(async () =>
+    expect(
+      activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
+    ).toBeNull()
+  )
+  // Handed over but not yet echoed: no turn of its own for a client to name.
+  await send('Follow-up.')
+  await eventually(() => expect(wrote(connection, 'Follow-up.')).toBe(true))
 
-    // As the phone sends it: the turn it last saw working.
-    await expect(
-      _answer === 'fails'
-        ? stop(ended)
-        : stopAcrossGrace(
-            connection,
-            interrupt === NEVER_ANSWERS ? 'interrupt' : 'request-end',
-            ended
-          )
-    ).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-    await laneDrained()
+  await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
+  await laneDrained()
 
-    expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(true)
-    expect(connection.closed).toBe(true)
-    expect(eventsAtClose()).toBe(1)
-    expect(await statusTexts()).toEqual(['Cancellation requested.'])
-  },
-  15_000
-)
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect(connection.closed).toBe(false)
+  expect(await statusTexts()).toEqual([])
+}, 15_000)
 
 it('keeps a second Stop pressed while the first ends the child quiet', async () => {
   const connection = claude.connections[0]!

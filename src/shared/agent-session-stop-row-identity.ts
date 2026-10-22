@@ -4,7 +4,7 @@
 // Contract: a new row that explains a stop must carry the providerExited fact or one of these
 // prefixes, or a client derives a second notice beside it.
 
-/** The exit row the unexpected-exit settle writes, keyed by the child that exited. */
+/** The exit row the child-exit settle writes for an unexpected exit, keyed by the child that exited. */
 export const PROVIDER_EXIT_ROW_PREFIX = 'provider-exit:'
 /** The exit row a reopen or acquire writes for a generation found dead. */
 export const STALE_SESSION_ROW_PREFIX = 'stale-session:'

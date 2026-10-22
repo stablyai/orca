@@ -263,6 +263,32 @@ describe('resolveComposerReuseOverride', () => {
 })
 
 describe('resolveComposerBranchReuse', () => {
+  it('reuses a qualified local selector but does not reuse a qualified remote selector', () => {
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'refs/heads/feature/加',
+        localBranchName: 'feature/加',
+        selectionProducedOverride: true,
+        branchCheckedOutElsewhere: false
+      })
+    ).toEqual({ reuseEligibleBranch: 'feature/加', defaultReuse: true })
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'refs/remotes/origin/feature/加',
+        localBranchName: 'feature/加',
+        selectionProducedOverride: true,
+        branchCheckedOutElsewhere: false
+      })
+    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
+    expect(
+      resolveComposerReuseOverride({
+        refName: 'refs/heads/feature/加',
+        localBranchName: 'feature/加',
+        branchNameOverride: 'feature/加',
+        branchCheckedOutElsewhere: true
+      })
+    ).toBeUndefined()
+  })
   it('marks an existing local branch reusable and defaults reuse ON for an auto-derived name', () => {
     expect(
       resolveComposerBranchReuse({

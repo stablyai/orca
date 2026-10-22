@@ -104,6 +104,43 @@ describe('filesystem-list-files', () => {
     }
   })
 
+  it('retains a late 25,002nd file in a complete inventory', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked authorization and runtime options do not read the store.
+    const result = listQuickOpenFiles('/mock/root', {} as unknown as Store)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    child.stdout?.emit(
+      'data',
+      Array.from({ length: 25002 }, (_, i) => `src/file-${i}.ts\0`).join('')
+    )
+    child.emit('close', 0, null)
+    const paths = await result
+    expect(paths).toHaveLength(25002)
+    expect(paths.at(-1)).toBe('src/file-25001.ts')
+  })
+
+  it('stops a full-inventory producer at its aggregate retained-byte ceiling', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked authorization and runtime options do not read the store.
+    const result = listQuickOpenFiles('/mock/root', {} as unknown as Store)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    const rejected = expect(result).rejects.toThrow('inventory is too large')
+    let produced = 0
+    while (child.stdout?.listenerCount('data') && produced < 100000) {
+      child.stdout.emit(
+        'data',
+        Array.from({ length: 100 }, () => `src/${'x'.repeat(1000)}-${produced++}.ts\0`).join('')
+      )
+    }
+    await rejected
+    expect(produced).toBeLessThan(40000)
+    expect(child.kill).toHaveBeenCalled()
+    expect(child.stdout?.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
   it('counts NUL-delimited filenames containing newlines as one result each', async () => {
     const child = createMockProcess()
     spawnMock.mockReturnValue(child)
@@ -230,14 +267,14 @@ describe('filesystem-list-files', () => {
     ])
   })
 
-  it('spawns the bundled Linux rg inside the registered WSL runtime for Windows-path worktrees', async () => {
+  it('spawns the bundled Linux rg inside the registered WSL runtime', async () => {
     const p1 = createMockProcess()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
 
     spawnMock.mockReturnValue(p1)
 
     const storeMock = {} as unknown as Store
-    const promise = listQuickOpenFiles('C:\\repo', storeMock)
+    const promise = listQuickOpenFiles('/repo', storeMock)
 
     setTimeout(() => {
       p1.stdout?.emit('data', 'src/index.ts\0')
@@ -247,28 +284,30 @@ describe('filesystem-list-files', () => {
     await expect(promise).resolves.toEqual(['src/index.ts'])
     expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
       storeMock,
-      'C:\\repo',
-      'C:\\repo'
+      '/repo',
+      '/repo'
     )
     expect(bundledRipgrepCommandMock).toHaveBeenCalledWith({ wsl: true })
     expect(spawnMock.mock.calls.every((call) => call[0] === '/bundled/linux/rg')).toBe(true)
   })
 
-  it('normalizes absolute WSL rg output for Windows-path worktrees', async () => {
+  it('keeps the host rg for a Windows-drive worktree under a WSL runtime', async () => {
     const p1 = createMockProcess()
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
 
     spawnMock.mockReturnValue(p1)
 
-    const storeMock = {} as unknown as Store
-    const promise = listQuickOpenFiles('C:\\repo', storeMock)
+    const store: Store = Object.create(null)
+    const promise = listQuickOpenFiles('C:\\repo', store)
 
     setTimeout(() => {
-      p1.stdout?.emit('data', '/mnt/c/repo/src/index.ts\0')
+      p1.stdout?.emit('data', 'src/index.ts\0')
       p1.emit('close', 0, null)
     }, 10)
 
     await expect(promise).resolves.toEqual(['src/index.ts'])
+    expect(bundledRipgrepCommandMock).not.toHaveBeenCalledWith({ wsl: true })
+    expect(spawnMock.mock.calls.every((call) => call[0] === BUNDLED_RG)).toBe(true)
   })
 
   it('treats a WSL launcher exit 127 as the bundled rg failing to start', async () => {
@@ -277,7 +316,8 @@ describe('filesystem-list-files', () => {
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
     spawnMock.mockReturnValue(p1)
 
-    const promise = listQuickOpenFiles('C:\\repo', {} as unknown as Store)
+    const store: Store = Object.create(null)
+    const promise = listQuickOpenFiles('/repo', store)
     setTimeout(() => {
       p1.emit('close', 127, null)
     }, 0)

@@ -1,3 +1,4 @@
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { colors } from '../../theme/mobile-theme'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
 
@@ -172,10 +173,15 @@ export type TerminalDocumentThemeTarget = {
 
 export function applyTerminalTheme(
   scope: TerminalDocumentScope,
-  input: TerminalDocumentThemeMessage
+  input: TerminalDocumentThemeMessage,
+  force = false
 ) {
   scope.terminalThemeInput = input
-  scope.terminalTheme = normalizeTerminalTheme(scope, input)
+  const nextTheme = normalizeTerminalTheme(scope, input)
+  const themeChanged = Object.keys(scope.defaultTheme).some(
+    (key) => scope.terminalTheme[key] !== nextTheme[key]
+  )
+  scope.terminalTheme = nextTheme
   const background = scope.terminalTheme.background || TERMINAL_BACKGROUND_FALLBACK
   scope.paintDocumentBackground(background)
   // Why prefer the published value: the desktop user may have lowered or disabled the floor (#10754);
@@ -186,7 +192,13 @@ export function applyTerminalTheme(
   scope.terminalMinimumContrastRatio =
     publishedFloor === null ? resolveTerminalContrastFloor(background) : publishedFloor
   if (scope.term) {
-    scope.term.options.theme = scope.terminalTheme
-    scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
+    // Reassigning the theme resets live OSC palette changes; visibility recovery still repaints.
+    if (force || themeChanged) {
+      scope.term.options.theme = scope.terminalTheme
+    }
+    if (scope.term.options.minimumContrastRatio !== scope.terminalMinimumContrastRatio) {
+      scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
+    }
   }
+  paintBottomRowBackdrop(scope)
 }

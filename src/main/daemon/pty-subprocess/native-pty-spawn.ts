@@ -5,6 +5,7 @@ import {
 } from '../../providers/macos-tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
+import { wrapPtySpawnInTerminalScope } from '../terminal-scopes-runtime'
 
 async function loadNodePty(): Promise<typeof pty> {
   return import('node-pty')
@@ -37,7 +38,9 @@ export async function spawnNativeDaemonPty(args: {
     cwd: string
   ): Promise<pty.IPty> => {
     args.signal?.throwIfAborted()
-    const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    // Linux: exec through systemd-run into this terminal's own scope.
+    const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
     const nodePty = await loadNodePty()
     // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
     if (process.platform === 'win32') {
@@ -48,12 +51,12 @@ export async function spawnNativeDaemonPty(args: {
       cols: args.cols,
       rows: args.rows,
       cwd,
-      env: args.env,
+      env: wrapped.env,
       // Why: bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
-    reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
-    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
+    reportsChildExitStatus = hostReportsChildExitStatus(tcc.file)
+    args.onMacosTccSpawnStrategy?.(tcc.file === shellPath ? 'direct' : 'wrapped')
     return proc
   }
 

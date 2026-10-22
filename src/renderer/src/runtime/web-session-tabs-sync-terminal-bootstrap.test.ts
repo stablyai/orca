@@ -5,7 +5,7 @@ import {
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
   shouldSyncRuntimeSessionTabs
-} from './web-session-tabs-sync'
+} from './web-session-tabs-sync/tracking-decisions'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
 import {
   ENV,
@@ -70,7 +70,8 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: false,
         snapshotIsFresh: staleIsFresh,
         localTerminalCount: 0,
-        hasPersistedTerminalState: false
+        hasPersistedTerminalState: false,
+        firstHostAnswer: false
       })
     ).toBe(false)
   })
@@ -89,7 +90,8 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: false,
         snapshotIsFresh: true,
         localTerminalCount: 1,
-        hasPersistedTerminalState: true
+        hasPersistedTerminalState: true,
+        firstHostAnswer: false
       })
     ).toBe(false)
   })
@@ -111,7 +113,8 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: false,
         snapshotIsFresh: true,
         localTerminalCount: 0,
-        hasPersistedTerminalState: true
+        hasPersistedTerminalState: true,
+        firstHostAnswer: false
       })
     ).toBe(false)
   })
@@ -130,7 +133,8 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: false,
         snapshotIsFresh: true,
         localTerminalCount: 0,
-        hasPersistedTerminalState: false
+        hasPersistedTerminalState: false,
+        firstHostAnswer: false
       })
     ).toBe(true)
   })
@@ -155,9 +159,37 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: false,
         snapshotIsFresh: true,
         localTerminalCount: 0,
-        hasPersistedTerminalState: false
+        hasPersistedTerminalState: false,
+        firstHostAnswer: false
       })
     ).toBe(false)
+  })
+
+  // A paired client sees both frames through its navigation projection: the host still starting,
+  // and the host's real answer for a worktree it has no tabs for.
+  it('waits out a still-starting host but bootstraps on its real empty answer for a paired client', () => {
+    const bootstrapOn = (publicationEpoch: string): boolean =>
+      shouldBootstrapInitialWebRuntimeTerminal({
+        event: {
+          type: 'snapshot',
+          ...makeSnapshot([], {
+            publicationEpoch,
+            snapshotVersion: 0,
+            activeGroupId: null,
+            activeTabId: null,
+            activeTabType: null
+          })
+        },
+        activeWorktreeId: WT,
+        requestedInitialTerminal: false,
+        snapshotIsFresh: true,
+        localTerminalCount: 0,
+        hasPersistedTerminalState: false,
+        firstHostAnswer: false
+      })
+
+    expect(bootstrapOn('none:client-navigation')).toBe(false)
+    expect(bootstrapOn('empty:3:client-navigation')).toBe(true)
   })
 
   // Why: the shared latch outlives the subscription closures, so a create RPC that never settles
@@ -200,7 +232,8 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: isWebRuntimeInitialTerminalBootstrapInFlight(OTHER_ENV, WT),
         snapshotIsFresh: true,
         localTerminalCount: 0,
-        hasPersistedTerminalState: false
+        hasPersistedTerminalState: false,
+        firstHostAnswer: false
       })
     ).toBe(false)
   })
@@ -241,7 +274,8 @@ describe('applyWebSessionTabsSnapshot', () => {
         requestedInitialTerminal: isWebRuntimeInitialTerminalBootstrapInFlight(ENV, WT),
         snapshotIsFresh: true,
         localTerminalCount: 0,
-        hasPersistedTerminalState: false
+        hasPersistedTerminalState: false,
+        firstHostAnswer: false
       })
 
     expect(decide()).toBe(true)

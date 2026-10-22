@@ -25,6 +25,7 @@ export type WriteAmbiguityReason =
   | 'settlement_timeout'
   | 'endpoint_write_threw'
   | 'provider_threw_after_handoff'
+  | 'partial_write'
 
 export type WriteSettlement =
   | Readonly<{ outcome: 'accepted' }>

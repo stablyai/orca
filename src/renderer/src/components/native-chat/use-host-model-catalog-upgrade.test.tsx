@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, render, renderHook } from '@testing-library/react'
-import { useLayoutEffect } from 'react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
@@ -24,13 +23,18 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
 const PAIRED_TARGET = { kind: 'environment', environmentId: 'server-1' } as const
 const UNKNOWN = { origin: 'unknown' }
 const LISTING = { origin: 'unknown', listingInProgress: true }
 const HOST_CATALOG = {
   origin: 'probe',
-  models: [{ id: 'gpt-hosted', label: 'GPT Hosted', isDefault: true, efforts: [] }],
+  models: [
+    { id: 'gpt-hosted', label: 'GPT Hosted', isDefault: true, efforts: [] },
+    // The launch seed's model, so the saved pick is one the host list names.
+    { id: 'gpt-5.5', label: 'GPT-5.5', efforts: [] }
+  ],
   fetchedAt: 1_000
 }
 
@@ -98,6 +102,11 @@ function catalogReads(): unknown[] {
     .map(([, , params]) => params)
 }
 
+/** The picker opens and takes a pick: what a usable first frame means. */
+function usable(snapshot: readonly SessionOptionDescriptor[]): boolean {
+  return model(snapshot).settable && modelChoices(snapshot).length > 0
+}
+
 function model(snapshot: readonly SessionOptionDescriptor[]): SessionOptionDescriptor {
   return snapshot.find((entry) => entry.id === 'model')!
 }
@@ -112,26 +121,30 @@ const flush = (): Promise<void> => act(async () => {})
 describe('host model catalog read', () => {
   beforeEach(() => {
     mocks.call.mockReset()
+    resetHostModelCatalogSnapshotsForTests()
     sessionCount += 1
     sessionId = `session-${sessionCount}`
   })
 
-  it('reads a warm catalog once and never holds the picker', async () => {
+  it('reads a warm catalog once, showing the quiet placeholder only until it answers', async () => {
     const first = deferred()
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    // A read in flight is not a reason to hold the picker.
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
+    // No built-in label the host's list could replace.
+    expect(modelChoices(result.current.optionSnapshot)).toEqual([])
+    expect(model(result.current.optionSnapshot).settable).toBe(false)
     first.resolve(HOST_CATALOG)
     await flush()
     expect(catalogReads()).toEqual([{ agent: 'codex', sessionId }])
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
+    const named = model(result.current.optionSnapshot)
+    expect(named.kind.type === 'select' ? named.kind.currentValue : null).toBe('gpt-5.5')
+    expect(usable(result.current.optionSnapshot)).toBe(true)
     unmount()
   })
 
-  it('waits once for a listing the host reports, holding the picker until it lands', async () => {
+  it('a new Codex chat on a cold catalog shows a usable unnamed built-in list, then the listing', async () => {
     const waited = deferred()
     answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const { result, unmount } = renderOptions()
@@ -140,23 +153,25 @@ describe('host model catalog read', () => {
       { agent: 'codex', sessionId },
       { agent: 'codex', sessionId, waitForListing: true }
     ])
-    const held = model(result.current.optionSnapshot)
-    expect(held).toMatchObject({ choicesPending: true, settable: false })
-    // The label stays: the pill still names the launch's model.
-    expect(held.kind.type === 'select' ? held.kind.currentValue : null).toBe('gpt-5.5')
+    // Once the host says it has none: the built-in list, open to a pick, naming nothing it
+    // could replace.
+    const first = model(result.current.optionSnapshot)
+    expect(usable(result.current.optionSnapshot)).toBe(true)
+    expect(first.kind.type === 'select' ? first.kind.currentValue : null).toBeUndefined()
+    expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     await act(async () => {
-      expect(await result.current.setStructuredOption('model', 'gpt-5.5')).toBe(false)
+      expect(await result.current.setStructuredOption('model', 'gpt-5.5')).toBe(true)
     })
 
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
+    expect(usable(result.current.optionSnapshot)).toBe(true)
     expect(catalogReads()).toHaveLength(2)
     unmount()
   })
 
-  it('releases the picker on the seed when the waiting read fails or times out', async () => {
+  it('keeps the built-in list when the waiting read fails or times out', async () => {
     for (const failure of [
       () => Promise.resolve(UNKNOWN),
       () => Promise.reject(Object.assign(new Error('timed out'), { code: 'runtime_timeout' })),
@@ -167,8 +182,7 @@ describe('host model catalog read', () => {
       const { result, unmount } = renderOptions()
       await flush()
       expect(catalogReads()).toHaveLength(2)
-      expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
-      expect(model(result.current.optionSnapshot).settable).toBe(true)
+      expect(usable(result.current.optionSnapshot)).toBe(true)
       expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
       unmount()
     }
@@ -179,46 +193,43 @@ describe('host model catalog read', () => {
     const { result, unmount } = renderOptions()
     await flush()
     expect(catalogReads()).toHaveLength(1)
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
+    expect(usable(result.current.optionSnapshot)).toBe(true)
     unmount()
   })
 
-  it('releases the picker when the running provider reports its own list first', async () => {
+  it('the running provider list wins over a host listing that lands later', async () => {
     const live = deferred()
-    answerCatalog([() => Promise.resolve(LISTING), () => new Promise(() => {})])
+    const waited = deferred()
+    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const catalogAnswers = mocks.call.getMockImplementation()!
     mocks.call.mockImplementation((target: unknown, method: string, params: unknown) =>
       method === 'agentSession.options' ? live.promise : catalogAnswers(target, method, params)
     )
     const { result, unmount } = renderOptions({ attached: true })
     await flush()
-    expect(model(result.current.optionSnapshot).choicesPending).toBe(true)
     live.resolve({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live', confirmed: ['model'] }
     })
     await flush()
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-live')
+    waited.resolve(HOST_CATALOG)
+    await flush()
+    expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     unmount()
   })
 
-  it('keeps the hold through attach and joins the wait already in flight', async () => {
+  it('joins the wait already in flight through attach', async () => {
     const waited = deferred()
     answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const { result, rerender, unmount } = renderOptions()
     await flush()
-    expect(model(result.current.optionSnapshot).choicesPending).toBe(true)
     rerender({ attached: true })
-    // No frame on the stand-in list between the old fence and the new one.
-    expect(model(result.current.optionSnapshot).choicesPending).toBe(true)
     await flush()
-    expect(model(result.current.optionSnapshot).choicesPending).toBe(true)
     expect(catalogReads()).toHaveLength(2)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
     unmount()
   })
 
@@ -232,11 +243,9 @@ describe('host model catalog read', () => {
     rerender({})
     await flush()
     expect(catalogReads()).toHaveLength(2)
-    expect(model(result.current.optionSnapshot).choicesPending).toBe(true)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
     unmount()
   })
 
@@ -249,15 +258,14 @@ describe('host model catalog read', () => {
     const { result, unmount } = renderOptions()
     await flush()
     expect(catalogReads()).toHaveLength(2)
-    expect(model(result.current.optionSnapshot).choicesPending).toBe(true)
+    expect(usable(result.current.optionSnapshot)).toBe(true)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
     unmount()
   })
 
-  it('holds and answers only the chat whose host is listing', async () => {
+  it('answers only the chat whose host is listing', async () => {
     const waited = deferred()
     answerCatalog([
       () => Promise.resolve(LISTING),
@@ -268,7 +276,6 @@ describe('host model catalog read', () => {
     await flush()
     rerender({ sessionId: `${sessionId}-other` })
     await flush()
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
@@ -292,66 +299,7 @@ describe('host model catalog read', () => {
     const { result, unmount } = renderOptions()
     await flush()
     expect(catalogReads()).toHaveLength(3)
-    expect(model(result.current.optionSnapshot).choicesPending).toBeUndefined()
+    expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     unmount()
   })
-})
-
-function CommitRecorder(props: { sessionId: string; attached: boolean; commits: string[] }) {
-  const { optionSnapshot } = useStructuredAgentSessionOptions({
-    agent: 'codex',
-    sessionId: props.sessionId,
-    target: PAIRED_TARGET,
-    transportEnabled: props.attached,
-    isVisible: true,
-    providerVisible: false,
-    fence: props.attached ? 1 : null,
-    turnId: null,
-    unloadedTurnRevisions: undefined,
-    mutate,
-    launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
-  })
-  const descriptor = model(optionSnapshot)
-  const state = `held=${descriptor.choicesPending === true} hosted=${modelChoices(optionSnapshot).includes('gpt-hosted')}`
-  // No deps: one entry per commit, which act() would otherwise batch out of sight.
-  useLayoutEffect(() => {
-    props.commits.push(state)
-  })
-  return null
-}
-
-describe('the end of a host listing wait', () => {
-  beforeEach(() => {
-    mocks.call.mockReset()
-    sessionCount += 1
-    sessionId = `session-${sessionCount}`
-  })
-
-  for (const attachedFirst of [false, true]) {
-    it(`never commits the built-in list unheld before the host list (${attachedFirst ? 'joined after attach' : 'started here'})`, async () => {
-      const waited = deferred()
-      answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
-      const commits: string[] = []
-      const view = render(
-        <CommitRecorder sessionId={sessionId} attached={false} commits={commits} />
-      )
-      await flush()
-      if (attachedFirst) {
-        view.rerender(<CommitRecorder sessionId={sessionId} attached commits={commits} />)
-        await flush()
-      }
-      expect(commits.at(-1)).toBe('held=true hosted=false')
-      const settledFrom = commits.length
-      Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', false)
-      try {
-        waited.resolve(HOST_CATALOG)
-        await vi.waitFor(() => expect(commits.at(-1)).toBe('held=false hosted=true'))
-        await new Promise((resolve) => setTimeout(resolve, 20))
-      } finally {
-        Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
-      }
-      expect(commits.slice(settledFrom)).not.toContain('held=false hosted=false')
-      view.unmount()
-    })
-  }
 })

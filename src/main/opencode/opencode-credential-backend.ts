@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'

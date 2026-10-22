@@ -45,8 +45,7 @@ type UpdaterModuleFactories = {
   }
   electronUpdater: () => { autoUpdater: AutoUpdaterMock }
   electronUpdaterLoader: () => { loadElectronAutoUpdater: () => AutoUpdaterMock }
-  electronToolkitUtils: () => { is: { dev: boolean } }
-  ipcPty: () => { killAllPty: UpdaterSpy }
+  ptyKillAll: () => { killAllPty: UpdaterSpy }
   linuxUpdatePackageType: () => {
     getLinuxPackageType: Mock<() => LinuxPackageType>
     getLinuxRootPackageType: Mock<() => 'deb' | 'rpm' | null>
@@ -72,7 +71,6 @@ export type UpdaterMocks = {
   browserWindowMock: { getAllWindows: Mock<() => unknown[]> }
   nativeUpdaterMock: { on: UpdaterSpy }
   autoUpdaterMock: AutoUpdaterMock
-  isMock: { dev: boolean }
   killAllPtyMock: UpdaterSpy
   powerMonitorOnMock: UpdaterSpy
   getLinuxPackageTypeMock: Mock<() => LinuxPackageType>
@@ -206,7 +204,6 @@ export function createUpdaterMocks(): UpdaterMocks {
   const nativeUpdaterMock = {
     on: vi.fn()
   }
-  const isMock = { dev: false }
   const killAllPtyMock = vi.fn()
   const powerMonitorOnMock = vi.fn()
   const getLinuxRootPackageTypeMock = vi.fn<() => 'deb' | 'rpm' | null>(() => null)
@@ -237,8 +234,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     }),
     electronUpdater: () => ({ autoUpdater: autoUpdaterMock }),
     electronUpdaterLoader: () => ({ loadElectronAutoUpdater: loadGenerationScopedAutoUpdater }),
-    electronToolkitUtils: () => ({ is: isMock }),
-    ipcPty: () => ({ killAllPty: killAllPtyMock }),
+    ptyKillAll: () => ({ killAllPty: killAllPtyMock }),
     // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
     linuxUpdatePackageType: () => ({
       getLinuxPackageType: getLinuxPackageTypeMock,
@@ -282,7 +278,6 @@ export function createUpdaterMocks(): UpdaterMocks {
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
-    isMock.dev = false
     killAllPtyMock.mockReset()
     armExitWatchdogMock.mockReset()
     disarmExitWatchdogMock.mockReset()
@@ -319,7 +314,6 @@ export function createUpdaterMocks(): UpdaterMocks {
     browserWindowMock,
     nativeUpdaterMock,
     autoUpdaterMock,
-    isMock,
     killAllPtyMock,
     powerMonitorOnMock,
     getLinuxPackageTypeMock,

@@ -14,6 +14,8 @@ import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  /** Account `projects` folders the System default does not link; resolved by the host process. */
+  claudeProfileProjectsDirs?: readonly string[]
   codebuddyProjectsDir?: string
   qoderProjectsDir?: string
   codexSessionsDir?: string
@@ -50,11 +52,12 @@ export type AiVaultScanOptions = {
   kimiSessionsDir?: string
   museSessionsDir?: string
   jcodeSessionsDir?: string
+  kiroSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeCwdBucketFiles).
+  // the recency cap (see AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
@@ -95,6 +98,8 @@ export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
+  scopeFiles?: FileWithMtime[]
 }
 
 export type SessionParseResult = {

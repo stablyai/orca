@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
+import {
+  dropDeletedSshResumeCwd,
+  prepareAiVaultSessionForFork,
+  prepareAiVaultSessionForResume,
+  prepareAiVaultSessionForTerminalResume
+} from './ai-vault-session-resume-preparation'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -92,6 +97,128 @@ describe('prepareAiVaultSessionForResume', () => {
 
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
     expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+describe('ordinary Resume against an older paired host', () => {
+  it.each([
+    new Error(
+      "Error invoking remote method 'aiVault:prepareSessionResume': Error: aiVault.prepareSessionResume: method_not_found"
+    ),
+    Object.assign(new Error('Unknown method: aiVault.prepareSessionResume'), {
+      code: 'method_not_found'
+    })
+  ])('retains neutral resumes but requires managed Codex home preparation', async (error) => {
+    stubPreparation(vi.fn().mockRejectedValue(error))
+    const remote = session({ agent: 'claude', executionHostId: 'runtime:paired' })
+    await expect(prepareAiVaultSessionForTerminalResume(remote)).resolves.toBe(remote)
+    await expect(
+      prepareAiVaultSessionForTerminalResume(
+        session({
+          executionHostId: 'runtime:paired',
+          codexHome: '/tmp/orca/codex-runtime-home/home'
+        })
+      )
+    ).rejects.toBe(error)
+  })
+})
+
+describe('prepareAiVaultSessionForFork', () => {
+  // A fork of a chat-owned conversation must run under the selected account, as a resume does.
+  it('repins a chat-owned per-account session, asking the host as a fork', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({
+      useRealCodexHome: false,
+      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
+    })
+    stubPreparation(prepareSessionResume)
+    const owned = session({
+      codexHome: '/tmp/orca/codex-accounts/account-1/home',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    const prepared = await prepareAiVaultSessionForFork(owned)
+
+    expect(prepared.copied).toBe(false)
+    expect(prepared.session.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
+    expect(prepareSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      sessionId: owned.sessionId,
+      filePath: owned.filePath,
+      codexHome: owned.codexHome,
+      executionHostId: 'local',
+      fork: true
+    })
+  })
+
+  it('does not ask the host for a home that needs no preparation', async () => {
+    const prepareSessionResume = vi.fn()
+    stubPreparation(prepareSessionResume)
+    const owned = session({
+      agent: 'claude',
+      codexHome: null,
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForFork(owned)).resolves.toEqual({
+      session: owned,
+      copied: false
+    })
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it("refuses a host that made no copy rather than resuming the chat's own conversation", async () => {
+    stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
+    const owned = session({
+      agent: 'omp',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForFork(owned)).rejects.toThrow(
+      'Update Orca on the host that runs this chat to resume it in a new CLI.'
+    )
+  })
+})
+
+describe('dropDeletedSshResumeCwd', () => {
+  it('leaves a live SSH session alone, scanner command and all', async () => {
+    const pathExists = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
+
+    // Why: dropping the cwd here would strand every ordinary remote resume at the workspace root.
+    await expect(dropDeletedSshResumeCwd(remote)).resolves.toBe(remote)
+    expect(pathExists).toHaveBeenCalledWith({
+      filePath: '/home/ada/wt/feat-x',
+      connectionId: 'server-1'
+    })
+  })
+
+  it('never probes a host for a local session', async () => {
+    const pathExists = vi.fn()
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const local = session({ cwd: '/repo' })
+
+    await expect(dropDeletedSshResumeCwd(local)).resolves.toBe(local)
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
+  it('keeps the recorded folder when the SSH host cannot answer', async () => {
+    const pathExists = vi.fn().mockRejectedValue(new Error('CONNECTION_LOST'))
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
+
+    // Why: losing the host is not evidence the folder is gone (ssh-execution-boundary.md).
+    await expect(dropDeletedSshResumeCwd(remote)).resolves.toBe(remote)
+    expect(pathExists).toHaveBeenCalled()
+  })
+
+  it('keeps the recorded folder for an agent that can only resume there', async () => {
+    const pathExists = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const kimi = session({ agent: 'kimi', executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/x' })
+
+    // Why: kimi-cli 1.52 silently opens a new empty session with the same id from any other folder.
+    await expect(dropDeletedSshResumeCwd(kimi)).resolves.toBe(kimi)
   })
 })
 

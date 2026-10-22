@@ -59,6 +59,9 @@ export function useCombinedDiffSectionRetry({
                 ...section,
                 loading: !collapsed,
                 error: undefined,
+                // Why: a retry refetches from disk, so it also discards edits a refused save kept.
+                dirty: false,
+                saveConflict: undefined,
                 diffResult: null,
                 originalContent: '',
                 modifiedContent: '',
@@ -111,9 +114,9 @@ export function useCombinedDiffSectionRetry({
       }
       // Why: a rebase touches the same path many times over a few seconds. Without coalescing
       // each touch refetches a whole diff, and the payload churn alone stalls the renderer.
-      const pending = reloadTimersRef.current.get(index)
-      if (pending !== undefined) {
-        window.clearTimeout(pending)
+      // Never push an armed reload back: sustained writes would otherwise starve it.
+      if (reloadTimersRef.current.has(index)) {
+        return
       }
       reloadTimersRef.current.set(
         index,

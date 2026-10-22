@@ -6,7 +6,10 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {
@@ -22,6 +25,7 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'wire-admission-session'
 const LARGE_TEXT = 'x'.repeat(250 * 1024)
@@ -38,7 +42,7 @@ beforeEach(async () => {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: root
   })
@@ -61,7 +65,8 @@ describe('structured agent-session outbound admission', () => {
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
 
-    const subscribers = new AgentSessionSubscribers()
+    let roster: AgentSessionBackgroundTaskState | null = null
+    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
     const initial: AgentSessionSubscribeEvent[] = []
     const dispose = subscribers.open({
       id: 'initial',
@@ -74,7 +79,8 @@ describe('structured agent-session outbound admission', () => {
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
 
-    subscribers.backgroundTasks(SESSION, null, 2)
+    roster = { state: 'monitoring' }
+    subscribers.republishBackgroundTasks(SESSION, 2)
     subscribers.snapshot(SESSION, journal, 2)
     expect(initial.slice(1)).toHaveLength(2)
     initial.slice(1).forEach(expectAdmitted)
@@ -115,7 +121,7 @@ describe('structured agent-session outbound admission', () => {
     dispose()
   })
 
-  it('splits valid-cursor catch-up into admitted batch frames', () => {
+  it('replaces an over-budget catch-up with one admitted newest page', () => {
     const subscribers = new AgentSessionSubscribers()
     const catchup: AgentSessionSubscribeEvent[] = []
     const firstItemSequence = journal.snapshot().items[0]!.sequence
@@ -129,14 +135,11 @@ describe('structured agent-session outbound admission', () => {
       emit: (event) => catchup.push(event)
     })
 
-    expect(catchup.length).toBeGreaterThan(1)
+    expect(catchup).toHaveLength(1)
     catchup.forEach(expectAdmitted)
-    expect(
-      catchup.flatMap((event) => (event.type === 'batch' ? event.batch.items : []))
-    ).toHaveLength(19)
-    expect(catchup.at(-1)).toMatchObject({
-      type: 'batch',
-      batch: { cursor: journal.cursor() },
+    expect(catchup[0]).toMatchObject({
+      type: 'snapshot',
+      page: { hasOlder: true, hasNewer: false, liveCursor: journal.cursor() },
       fence: 2
     })
   })
@@ -190,7 +193,7 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: root
   })

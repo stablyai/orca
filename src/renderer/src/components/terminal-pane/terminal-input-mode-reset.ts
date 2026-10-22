@@ -1,4 +1,4 @@
-import { resetWebRuntimeTerminalInputModes } from '@/runtime/web-runtime-session'
+import { resetWebRuntimeTerminalInputModes } from '@/runtime/web-runtime-terminal-buffer-actions'
 import { resetPtyRendererInputModes } from './pty-buffer-serializer'
 
 /**

@@ -8,10 +8,6 @@ import type {
   CodexPaneAccountRegistryFile,
   CodexPaneHomeRoute
 } from './codex-pane-account-registry-types'
-import type {
-  CodexEnvironmentHomeOverride,
-  CodexShellStartupHomeOverride
-} from './codex-real-home-path'
 
 export type {
   CodexPaneAccountRecord,
@@ -129,43 +125,15 @@ function parseRegistry(parsed: unknown): CodexPaneAccountRegistryFile {
   }
   for (const [ptyId, record] of Object.entries(panes)) {
     if (isPaneAccountRecord(record)) {
+      const homeRoute = readPaneHomeRoute(record.homeRoute)
       empty.panes[ptyId] = {
         selectionKey: record.selectionKey,
         accountId: record.accountId,
-        ...(isPaneHomeRoute(record.homeRoute) ? { homeRoute: record.homeRoute } : {}),
-        ...(isShellStartupHomeOverride(record.shellStartupHomeOverride)
-          ? { shellStartupHomeOverride: record.shellStartupHomeOverride }
-          : {}),
-        ...(isEnvironmentHomeOverride(record.environmentHomeOverride)
-          ? { environmentHomeOverride: record.environmentHomeOverride }
-          : {})
+        ...(homeRoute ? { homeRoute } : {})
       }
     }
   }
   return empty
-}
-
-function isEnvironmentHomeOverride(value: unknown): value is CodexEnvironmentHomeOverride {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const context = value as Partial<CodexEnvironmentHomeOverride>
-  return typeof context.codexHome === 'string' && context.codexHome.length > 0
-}
-
-function isShellStartupHomeOverride(value: unknown): value is CodexShellStartupHomeOverride {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const context = value as Partial<CodexShellStartupHomeOverride>
-  return (
-    typeof context.home === 'string' &&
-    context.home.length > 0 &&
-    (context.shell === undefined || typeof context.shell === 'string') &&
-    (context.configHome === undefined || typeof context.configHome === 'string') &&
-    typeof context.codexHome === 'string' &&
-    context.codexHome.length > 0
-  )
 }
 
 function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
@@ -180,14 +148,17 @@ function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
   )
 }
 
-function isPaneHomeRoute(value: unknown): value is CodexPaneHomeRoute {
-  return (
-    value === 'real-home' ||
+// Why: older builds wrote 'custom-home' for a shared-home pane with a pane-local CODEX_HOME.
+function readPaneHomeRoute(value: unknown): CodexPaneHomeRoute | undefined {
+  if (value === 'custom-home') {
+    return 'shared-home'
+  }
+  return value === 'real-home' ||
     value === 'shared-home' ||
     value === 'account-home' ||
-    value === 'custom-home' ||
     value === 'wsl-home'
-  )
+    ? value
+    : undefined
 }
 
 function writeRegistry(registry: CodexPaneAccountRegistryFile): boolean {
@@ -242,7 +213,6 @@ export function getCodexPaneAccount(ptyId: string): CodexPaneAccountRecord | nul
   return readRegistry().panes[ptyId] ?? null
 }
 
-/** `custom-home` stays conservative because it can mask a non-comparable shared-home route. */
 export function isCodexPaneHomeRouteProvenAwayFromSharedHome(
   route: CodexPaneHomeRoute | undefined
 ): boolean {
@@ -289,9 +259,7 @@ export function hasRecordedLegacySharedCodexPane(): boolean {
   return Object.values(readRegistry().panes).some(
     (record) =>
       record.selectionKey === 'host' &&
-      (record.homeRoute === undefined ||
-        record.homeRoute === 'shared-home' ||
-        record.homeRoute === 'custom-home')
+      (record.homeRoute === undefined || record.homeRoute === 'shared-home')
   )
 }
 
@@ -337,7 +305,6 @@ export function hasRecordedManagedHostCodexPane(): boolean {
       record.selectionKey === 'host' &&
       (record.homeRoute === undefined ||
         record.homeRoute === 'shared-home' ||
-        record.homeRoute === 'custom-home' ||
         (record.homeRoute === 'account-home' && record.accountId !== null))
   )
 }

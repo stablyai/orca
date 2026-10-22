@@ -21,6 +21,7 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { dshHookService } from '../dsh/hook-service'
+import { kiroHookService } from '../kiro/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { qwenCodeHookService } from '../qwen-code/hook-service'
@@ -61,6 +62,7 @@ describe('remote hook service registry coverage', () => {
       ['codebuddy', codebuddyHookService],
       ['zcode', zcodeHookService],
       ['dsh', dshHookService],
+      ['kiro', kiroHookService],
       ['jcode', jcodeHookService]
     ])
 

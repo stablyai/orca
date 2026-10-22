@@ -17,6 +17,8 @@ type TerminalTabLeadingIconProps = {
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
   isActive: boolean
+  /** Program-reported 0–100 for the tab's live work; fills the state ring. */
+  progress?: number
 }
 
 type TerminalTabAgentIdentityIconProps = {
@@ -48,7 +50,8 @@ export function TerminalTabLeadingIcon({
   activityStatus,
   shell,
   showUnreadActivity,
-  isActive
+  isActive,
+  progress
 }: TerminalTabLeadingIconProps): React.JSX.Element {
   if (showUnreadActivity) {
     return (
@@ -76,7 +79,8 @@ export function TerminalTabLeadingIcon({
         data-agent-activity-status={activityStatus}
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
-        <AgentStateDot state={dotState} size="md" />
+        {/* Why: the state glyph is self-describing and the tab title already has a tooltip; hover here stays quiet. */}
+        <AgentStateDot state={dotState} size="md" title={null} progress={progress} />
         {/* Why: status and identity answer different questions. Keep the agent
             logo beside the state glyph so parallel tabs remain scannable. */}
         {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}

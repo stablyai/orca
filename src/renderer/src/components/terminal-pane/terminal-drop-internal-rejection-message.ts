@@ -1,8 +1,14 @@
 import { translate } from '@/i18n/i18n'
 
 export function getTerminalInternalFileDropRejectionMessage(
-  reason: 'paths-too-large' | 'too-many-paths'
+  reason: 'paths-too-large' | 'too-many-paths' | 'source-host-mismatch'
 ): string {
+  if (reason === 'source-host-mismatch') {
+    return translate(
+      'auto.components.terminal.pane.terminal.drop.handler.internalHostMismatch',
+      'Drop files from the same host as this terminal.'
+    )
+  }
   if (reason === 'too-many-paths') {
     return translate(
       'auto.components.terminal.pane.terminal.drop.handler.internalTooManyPaths',

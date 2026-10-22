@@ -6,11 +6,9 @@ import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
-import TaskItem from '@tiptap/extension-task-item'
+import { TaskItem } from '@tiptap/extension-list'
 import { RichMarkdownTable } from './rich-markdown-table'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createLowlight, common } from 'lowlight'
@@ -19,12 +17,12 @@ import {
   loadLocalImageSrc,
   onImageCacheInvalidated
 } from './useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,
   createRichMarkdownLiteral
-} from './raw-markdown-html'
+} from './raw-markdown-html-nodes'
 import {
   createOrcaDetailsExtensions,
   getRichMarkdownPlaceholder
@@ -44,6 +42,10 @@ import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 import { documentResourceAccess } from '@/lib/local-file-access'
+import {
+  readRichMarkdownImageRuntimeContext,
+  resolveRichMarkdownImageUrl
+} from './rich-markdown-image-context'
 
 const lowlight = createCachedLowlight(createLowlight(common))
 
@@ -142,9 +144,7 @@ export function createRichMarkdownExtensions({
             releaseImageLease?.()
             releaseImageLease = undefined
             const fp = this.storage.filePath as string
-            const runtimeContext = this.storage.runtimeContext as
-              | RuntimeFileOperationArgs
-              | undefined
+            const runtimeContext = readRichMarkdownImageRuntimeContext(this.storage)
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
               const access = documentResourceAccess(fp)
@@ -171,7 +171,7 @@ export function createRichMarkdownExtensions({
                 }
               )
             } else if (src) {
-              img.src = src
+              img.src = resolveRichMarkdownImageUrl(this.storage, src)
             } else {
               img.removeAttribute('src')
             }

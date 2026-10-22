@@ -7,13 +7,18 @@
 /skill-stubs/_shared/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
 /src/cli/bundled-skill-guides.ts text eol=lf
+# SVG bytes feed embedded data URLs and asset hashes on every build host.
+*.svg text eol=lf
+# Compiler input line breaks must not depend on the checkout OS.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.html text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
 # Relay assets are copied verbatim into the bundle and hashed byte-for-byte into
 # .version, which names the immutable remote install dir. A CRLF checkout makes a
 # Windows-built client disagree with a mac/Linux-built one on the same release,
 # so one host ends up with two relay trees (#17886 review).
-/config/relay-assets/** text eol=lf
 # Pin the bytes so a patch reads and diffs identically on every host. It is NOT
 # what makes the hash right: pnpm hashes a patch LF-normalized, so a CRLF checkout
 # cannot change it. Believing otherwise put a hand-computed raw digest in the
@@ -41,6 +46,7 @@
 # normalisation on a Windows checkout would rewrite the evidence the fixture exists to be.
 /src/main/runtime/__fixtures__/*.txt -text
 /src/main/daemon/__fixtures__/pty-transcripts/*.txt -text
+/src/renderer/src/components/terminal-pane/terminal-link-transcripts/*.txt -text whitespace=cr-at-eol
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
@@ -88,3 +94,10 @@
 /mobile/web-entry/**/*.otf -text
 /mobile/web-entry/**/*.woff -text
 /mobile/web-entry/**/*.woff2 -text
+
+# Generated ACP schemas are checked byte-for-byte against formatted output.
+/src/main/acp/generated/*.generated.ts linguist-generated=true text eol=lf
+# Generated skill bundle artifacts are verified byte-for-byte against fresh output.
+/resources/skills/*.json linguist-generated=true text eol=lf
+# Vitest writes snapshots with LF, so checkout bytes must match on every host.
+**/__snapshots__/*.snap text eol=lf

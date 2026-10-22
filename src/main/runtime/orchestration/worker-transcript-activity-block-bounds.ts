@@ -7,7 +7,7 @@ import type { NativeChatBlock, NativeChatSubagentState } from '../../../shared/n
 
 type WorkerTranscriptActivityBlock = Extract<
   NativeChatBlock,
-  { type: 'subagent-group' | 'background-task' }
+  { type: 'subagent-group' | 'subagent' | 'background-task' }
 >
 
 export type WorkerTranscriptActivityBlockBounders = {
@@ -37,6 +37,17 @@ export function boundWorkerTranscriptActivityBlock(
         label: bounders.clipMetadata(agent.label),
         state: clipSubagentState(agent.state, bounders)
       }))
+    }
+  }
+  if (block.type === 'subagent') {
+    return {
+      ...block,
+      id: bounders.boundEntryId(block.id),
+      label: bounders.clipMetadata(block.label),
+      state: clipSubagentState(block.state, bounders),
+      groupId: bounders.clipMetadata(block.groupId),
+      ...(block.parentId !== undefined ? { parentId: bounders.boundEntryId(block.parentId) } : {}),
+      ...(block.run !== undefined ? { run: bounders.clipMetadata(block.run) } : {})
     }
   }
   const { outputFile, ...carried } = block

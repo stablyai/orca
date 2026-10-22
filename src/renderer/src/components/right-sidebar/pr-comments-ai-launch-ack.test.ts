@@ -620,14 +620,15 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
       reviewContextKey: 'repo::main::gitlab::7::abc',
       provider: 'gitlab',
       selectedGroups: [openThread('D1')],
-      gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 }
+      gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7, ownerHostId: 'local' }
     }
     clearPendingPRCommentAiAck()
     setPendingPRCommentAiAck(payload)
     expect(takePendingPRCommentAiAck()?.gitlabTarget).toEqual({
       repoPath: '/repos/widgets',
       repoId: 'repo-1',
-      iid: 7
+      iid: 7,
+      ownerHostId: 'local'
     })
   })
 

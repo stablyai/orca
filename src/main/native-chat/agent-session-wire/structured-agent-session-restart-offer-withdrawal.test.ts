@@ -17,6 +17,7 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   interruptedRestart,
+  QUIT_CUT_NOTICE,
   statusNotes
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
@@ -385,8 +386,8 @@ it("refuses an automatic continuation when the user's message was accepted first
   expect(result.continued).toMatchObject([{ outcome: 'refused', reason: SUPERSEDED }])
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce(), COLD_START)
   expect(sentTexts(dispatch)).toEqual(['A new request'])
-  // Nothing the user did failed: no row reached the reader, and nothing is kept.
-  expect(await statusNotes(host)).toEqual([])
+  // Nothing the user did failed: no row but the quit's own about the cut, and nothing is kept.
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(
     events.some(
       (event) =>

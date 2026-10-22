@@ -3,7 +3,8 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { OpenFile } from '../store/slices/editor'
 import type { Tab } from '../../../shared/tab-types'
 import { recordWebSessionBrowserPlacement } from './web-session-browser-placement'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   LEAF_ID,

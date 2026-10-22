@@ -61,16 +61,14 @@ function AddRepoNestedScanProgressNotice({
 
 type AddRepoLocalStartStepProps = {
   repoCount: number
-  isSshLikely: boolean
   isAdding: boolean
   addProjectBusyLabel: string | null
   nestedScanInProgress: boolean
   nestedScanId: string | null
   hostSelector?: ReactNode
-  showRemoteAction?: boolean
-  canCreateProject?: boolean
   actionsDisabled?: boolean
-  browseHostKind?: 'local' | 'ssh' | 'runtime'
+  browseHostKind?: 'local' | 'runtime'
+  offersServerSshHosts?: boolean
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
@@ -80,16 +78,14 @@ type AddRepoLocalStartStepProps = {
 
 export function AddRepoLocalStartStep({
   repoCount,
-  isSshLikely,
   isAdding,
   addProjectBusyLabel,
   nestedScanInProgress,
   nestedScanId,
   hostSelector,
-  showRemoteAction = true,
-  canCreateProject = true,
   actionsDisabled = false,
   browseHostKind = 'local',
+  offersServerSshHosts,
   onBrowse,
   onOpenCloneStep,
   onOpenRemoteStep,
@@ -100,14 +96,12 @@ export function AddRepoLocalStartStep({
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const actionsUnavailable = isAdding || actionsDisabled
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
-    isSshLikely,
     onBrowse,
     onOpenCloneStep,
     onOpenRemoteStep,
     onOpenCreateStep,
-    showRemoteAction,
-    canCreateProject,
-    browseHostKind
+    browseHostKind,
+    offersServerSshHosts
   })
 
   // The white fill + ⏎ chip is a roving selection indicator, not a fixed "primary" badge:

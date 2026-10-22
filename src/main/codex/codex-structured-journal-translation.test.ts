@@ -4,21 +4,18 @@ import type {
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import { projectStructuredAgentSessionStatus } from '../../shared/structured-agent-session-projection'
 import {
   createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventTarget
+  type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { MAX_CODEX_ACTIVE_TURNS } from './codex-structured-journal-translation-turn-state'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
-import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { deferredTarget } from './codex-deferred-sink-target-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
@@ -98,36 +95,6 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
   return { translator, tap, window }
 }
 
-function deferredTarget(
-  log: AgentJournalItemBody[],
-  publishes: string[] = []
-): StructuredAgentSessionEventTarget {
-  return {
-    fence: 7,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
-    journal: withJournalQueueMembers({
-      appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        log.push(body)
-        return { cursor: { epoch: 'e', sequence: log.length } }
-      }),
-      appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
-      appendLifecycleBatch: vi.fn(
-        async (input: { mutations: readonly JournalLifecycleMutationInput[] }) => {
-          for (const mutation of input.mutations) {
-            if (mutation.kind === 'item') {
-              log.push(mutation.body)
-            }
-          }
-          return { epoch: 'e', sequence: log.length }
-        }
-      )
-    }) as unknown as StructuredAgentSessionEventTarget['journal'],
-    publish: vi.fn(() => {
-      publishes.push('publish')
-    })
-  }
-}
-
 function hardWatermarkDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
     ...testEventSinkLogging(),
@@ -143,31 +110,6 @@ function hardWatermarkDeferred() {
 }
 
 describe('codex journal translation', () => {
-  it('refuses an active-turn overflow before publishing an un-settleable lifecycle row', () => {
-    const tap = recorder()
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    for (let index = 0; index < MAX_CODEX_ACTIVE_TURNS; index += 1) {
-      expect(
-        translator.handle(notification('turn/started', { turn: { id: `turn-${index}` } }))
-      ).toEqual({ accepted: true })
-    }
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(MAX_CODEX_ACTIVE_TURNS)
-
-    expect(translator.handle(notification('turn/completed', { turn: { id: 'turn-0' } }))).toEqual({
-      accepted: true
-    })
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: true })
-  })
-
   it('projects turns restored by thread/resume into durable conversation rows', () => {
     const { translator, tap } = translatorWith()
 
@@ -394,103 +336,6 @@ describe('codex journal translation', () => {
 
       expect(statusOf(tap.rows)).toBe('working')
       expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
-    })
-  })
-
-  describe('the thread reporting it stopped running releases unanswered sends', () => {
-    function statusChanged(type: string) {
-      return notification('thread/status/changed', { threadId: THREAD_ID, status: { type } })
-    }
-
-    function translatorReporting(stopped: string[]) {
-      const tap = recorder()
-      const translator = createCodexJournalTranslator({
-        sink: tap.sink,
-        primaryThreadId: () => THREAD_ID,
-        onPrimaryThreadStoppedRunning: () => stopped.push(THREAD_ID)
-      })
-      return { tap, translator }
-    }
-
-    it.each(['idle', 'systemError'])('reports the thread stopped running on %s', (type) => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(statusChanged(type))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it.each(['active', 'notLoaded'])('stays silent on %s', (type) => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(statusChanged(type))
-
-      expect(stopped).toEqual([])
-    })
-
-    it('stays silent while a turn is open, whatever the thread reports', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(statusChanged('systemError'))
-
-      expect(stopped).toEqual([])
-    })
-
-    it('releases after the failed completion that follows systemError and the error', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(statusChanged('systemError'))
-      translator.handle(
-        notification('error', {
-          turnId: TURN_ID,
-          willRetry: false,
-          error: { message: 'fatal' }
-        })
-      )
-      expect(stopped).toEqual([])
-
-      translator.handle(notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it('releases after idle arrives before the terminal turn completion notification', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(statusChanged('idle'))
-      expect(stopped).toEqual([])
-
-      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it('reports once the open turn has settled', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
-      translator.handle(statusChanged('idle'))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it('ignores a bare string status from a shape this build does not get', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(notification('thread/status/changed', { status: 'idle' }))
-
-      expect(stopped).toEqual([])
     })
   })
 

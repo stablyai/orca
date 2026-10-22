@@ -4,7 +4,7 @@ import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import { getLocalImageCacheKey, loadLocalImageAbsolutePath } from './useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { documentResourceAccess } from '@/lib/local-file-access'
 
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT = 64
@@ -31,7 +31,8 @@ type MarkdownImageAstNode = {
 type ExtractLocalImageCandidatesOptions = {
   connectionId?: string | null
   limit?: number
-  runtimeContext?: MarkdownImageRuntimeContext
+  /** `null`: the owner is unresolved, so nothing is read. */
+  runtimeContext?: MarkdownImageRuntimeContext | null
 }
 
 type PrewarmMarkdownPreviewLocalImagesOptions = ExtractLocalImageCandidatesOptions & {
@@ -70,7 +71,7 @@ export function extractMarkdownPreviewLocalImageCandidates(
   options: ExtractLocalImageCandidatesOptions = {}
 ): MarkdownPreviewLocalImageCandidate[] {
   const limit = Math.max(0, options.limit ?? MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT)
-  if (limit === 0) {
+  if (limit === 0 || options.runtimeContext === null || !markdown.includes('!')) {
     return []
   }
 
@@ -98,7 +99,8 @@ export function extractMarkdownPreviewLocalImageCandidates(
     const cacheKey = getLocalImageCacheKey(
       absolutePath,
       options.connectionId,
-      options.runtimeContext,
+      // Null returned early above.
+      options.runtimeContext ?? undefined,
       documentResourceAccess(filePath)
     )
     if (seenCacheKeys.has(cacheKey)) {

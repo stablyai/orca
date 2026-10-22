@@ -66,6 +66,28 @@ describe('ai vault session storage compatibility', () => {
     ).toBe(true)
   })
 
+  // #24408: on Windows a WSL workspace and a Windows workspace are both `local`, but the
+  // agent only exists, and only finds the session, inside one of them.
+  it('resumes a local session only in the namespace that stores it', () => {
+    const local = { sessionExecutionHostId: 'local', targetExecutionHostId: 'local' } as const
+    const resume = (sessionFilePath: string, targetWslDistro: string | null | undefined) =>
+      canResumeAiVaultSessionOnTarget({
+        ...local,
+        sessionFilePath,
+        targetStatus: 'local',
+        targetWslDistro
+      })
+
+    expect(resume(wslLocalhostSessionFile, null)).toBe(false)
+    expect(resume(wslLocalhostSessionFile, 'Debian')).toBe(false)
+    expect(resume(wslLocalhostSessionFile, 'ubuntu')).toBe(true)
+    expect(resume(windowsHostSessionFile, 'Ubuntu')).toBe(false)
+    expect(resume(windowsHostSessionFile, null)).toBe(true)
+    // An unknown namespace refuses only what it can prove.
+    expect(resume(wslLocalhostSessionFile, undefined)).toBe(true)
+    expect(resume(windowsHostSessionFile, undefined)).toBe(true)
+  })
+
   it('allows host-tagged SSH sessions only on the matching SSH target', () => {
     expect(
       canResumeAiVaultSessionOnTarget({

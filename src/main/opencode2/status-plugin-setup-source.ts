@@ -12,11 +12,14 @@ export function getOpenCode2ModuleSource(pluginID: string, expectedAgent: string
   ]
 }
 
+// Interpolated so the server bundle stays ASCII; String.raw keeps the generated source's bytes.
+const EM_DASH = '\u2014'
+
 export function getOpenCode2SetupSource(): string[] {
   return String.raw`
 // Why: OpenCode owns a form under a session id, and Orca retires a blocker when
 // that session goes idle. An owner that is not a real session has no idle, so a
-// blocker minted for it can only ever be retired by an exact reply — add an id
+// blocker minted for it can only ever be retired by an exact reply ${EM_DASH} add an id
 // here to drop forms Orca could otherwise strand. OpenCode's own schema calls
 // "global" a temporary MCP-elicitation sentinel it intends to replace with real
 // session ids; when it does, this set stops matching and those forms block.
@@ -90,7 +93,7 @@ async function setupOpenCode2Status(ctx) {
   }
   let hooks;
   // Why: OpenCode may probe setup() with no context during startup, and the setup
-  // API shape can drift between releases. Never throw from setup — a throw surfaces
+  // API shape can drift between releases. Never throw from setup ${EM_DASH} a throw surfaces
   // as an 'orca-opencode-status' plugin failed error in the TUI, which is worse
   // than silently running without status reporting.
   try {
@@ -99,7 +102,7 @@ async function setupOpenCode2Status(ctx) {
     if (await tuiReportsPaneLifecycle()) return noop;
     const controller = new AbortController();
     // Why the envelope: OpenCode 2's plugin adapter unwraps a single-property
-    // { data } success schema, so ctx.session.get resolves to the bare record —
+    // { data } success schema, so ctx.session.get resolves to the bare record ${EM_DASH}
     // but the shared lineage lookup only accepts result?.data?.id === sessionID.
     // Without it, resolveRootSessionID returns null for every session and a
     // subagent's work publishes as if it were the root's.

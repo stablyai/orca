@@ -28,11 +28,6 @@ export type NativeChatToolPairing = {
   pairedResults: ReadonlySet<NativeChatBlock>
 }
 
-export const NO_NATIVE_CHAT_TOOL_PAIRING: NativeChatToolPairing = {
-  resultByCall: new Map(),
-  pairedResults: new Set()
-}
-
 /** The desktop run's view of `pairToolBlocks`, so every reader of a run pairs with one loop. */
 export function pairNativeChatToolResults(
   blocks: readonly NativeChatBlock[]

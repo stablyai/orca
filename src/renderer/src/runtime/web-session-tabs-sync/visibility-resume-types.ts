@@ -4,6 +4,13 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { TrackedWebSessionTabsWorktree } from './state'
 
+export type SessionTabsSnapshotHandler<R> = (
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId?: string
+) => R
+
 export type VisibilityResumeEnvironment = {
   trackedWorktrees: readonly TrackedWebSessionTabsWorktree[]
   inventoryReceived: boolean

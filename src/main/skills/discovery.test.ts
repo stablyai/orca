@@ -212,6 +212,26 @@ describe('skill discovery', () => {
     ])
   })
 
+  it("discovers a project's OpenCode skills as OpenCode's", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const repo = join(root, 'repo')
+    const opencodeSkill = join(repo, '.opencode', 'skills', 'release-notes')
+    await mkdir(opencodeSkill, { recursive: true })
+    await writeFile(join(opencodeSkill, 'SKILL.md'), '# Release notes\n\nWrite release notes.')
+
+    const result = await discoverSkills({
+      homeDir: join(root, 'home'),
+      cwd: join(root, 'missing-cwd'),
+      repos: [makeRepo(repo)]
+    })
+
+    const skill = result.skills.find((candidate) => candidate.name === 'Release notes')
+    expect(result.sources.find((source) => source.path === skill?.rootPath)).toMatchObject({
+      sourceKind: 'repo',
+      owner: 'opencode'
+    })
+  })
+
   it('filters discovery by requested directory name and source kind', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -397,6 +417,28 @@ describe('skill discovery', () => {
     const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
     expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
+  })
+
+  it('reports an SSH-backed repository as a remote-repo source instead of dropping it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const runtimeRepo = makeRepo('/runtime/repo')
+    runtimeRepo.executionHostId = 'runtime:environment-1'
+    const repos = [makeRepo('/remote/repo', 'ssh-1'), runtimeRepo]
+
+    const result = await discoverSkills({ homeDir: join(root, 'home'), repos, includeCwd: false })
+    const homeOnly = await discoverSkills({
+      homeDir: join(root, 'home'),
+      repos,
+      includeCwd: false,
+      sourceKinds: ['home']
+    })
+
+    const remoteSources = result.sources.filter((source) => source.skippedReason === 'remote-repo')
+    expect(remoteSources).toEqual([
+      expect.objectContaining({ path: '/remote/repo', sourceKind: 'repo', exists: false })
+    ])
+    expect(result.sources.some((source) => source.path.startsWith('/remote/repo/'))).toBe(false)
+    expect(homeOnly.sources.some((source) => source.skippedReason === 'remote-repo')).toBe(false)
   })
 
   it('scans each provider home skill root', () => {

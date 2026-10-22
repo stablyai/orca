@@ -1,5 +1,7 @@
+import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault-chat-fork-contract'
 import { z } from 'zod'
 import {
+  AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   type AiVaultListArgs,
   type AiVaultListResult,
@@ -7,9 +9,9 @@ import {
 } from '../../shared/ai-vault-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import type {
-  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
 import type {
@@ -18,11 +20,8 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
-
-export type RuntimeAiVaultHostInfo = {
-  environmentId: string
-  executionHostId: `runtime:${string}`
-}
+import { isGatedOffWslHost } from '../wsl/wsl-host-gate'
+import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
@@ -32,16 +31,29 @@ export type RuntimeAiVaultScanOptions = {
 // parent would silently drop it and resume under the wrong account's home.
 const aiVaultPrepareSessionResumeResultSchema = z.object({
   useRealCodexHome: z.boolean(),
-  substituteCodexHome: z.string().optional()
+  cliForkSource: AiVaultChatForkSourceSchema.optional(),
+  substituteCodexHome: z.string().optional(),
+  forkedSession: z
+    .object({
+      sessionId: z.string(),
+      agent: z.enum(AI_VAULT_AGENTS),
+      filePath: z.string().optional()
+    })
+    .optional()
 })
 
 export function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
 ): readonly RuntimeAiVaultHostInfo[] {
-  return listEnvironments(userDataPath).map((environment) => ({
-    environmentId: environment.id,
-    executionHostId: toRuntimeExecutionHostId(environment.id)
-  }))
+  return listEnvironments(userDataPath)
+    .filter((environment) => !isGatedOffWslHost(environment))
+    .map((environment) => ({
+      environmentId: environment.id,
+      executionHostId: toRuntimeExecutionHostId(environment.id),
+      ...(environment.connectionDependency
+        ? { connectionDependency: environment.connectionDependency }
+        : {})
+    }))
 }
 
 export async function scanRuntimeAiVaultSessions(
@@ -60,6 +72,7 @@ export async function scanRuntimeAiVaultSessions(
       limit: args.limit,
       unlimited: args.unlimited,
       force: args.force,
+      ...(args.afterFingerprint !== undefined ? { afterFingerprint: args.afterFingerprint } : {}),
       // Why: cap here so the set of scanned paths is explicit on this side —
       // the RPC schema CLAMPS to the same bound anyway (older hosts had no
       // cap). Dropped paths only lose the older-than-recency-cap guarantee,
@@ -71,10 +84,14 @@ export async function scanRuntimeAiVaultSessions(
   )
   if (response.ok === true) {
     try {
-      const result = withRuntimeExecutionHost(
-        parseAiVaultListResult(response.result),
-        executionHostId
-      )
+      const parsed = parseAiVaultListResult(response.result)
+      if (parsed.unchanged) {
+        if (parsed.fingerprint !== args.afterFingerprint) {
+          throw new Error('Unchanged response did not match the requested fingerprint')
+        }
+        return parsed
+      }
+      const result = withRuntimeExecutionHost(parsed, executionHostId)
       if (!args.scopePaths || args.scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         return result
       }
@@ -132,7 +149,7 @@ export async function resolveRuntimeAiVaultSessionTitles(
 export async function prepareRuntimeAiVaultSessionResume(
   userDataPath: string,
   environmentId: string,
-  args: AiVaultPrepareSessionResumeArgs
+  args: AiVaultPrepareSessionResumeRequest
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const response = await callRuntimeEnvironment(
     userDataPath,
@@ -141,6 +158,13 @@ export async function prepareRuntimeAiVaultSessionResume(
     args
   )
   if (response.ok !== true) {
+    if (
+      response.error.code === 'method_not_found' &&
+      response.error.message === 'Unknown method: aiVault.prepareSessionResume'
+    ) {
+      // Why: Electron drops custom error fields; this exact message preserves the host's verdict.
+      throw new Error('aiVault.prepareSessionResume: method_not_found')
+    }
     throw new Error(response.error.message)
   }
   const parsed = aiVaultPrepareSessionResumeResultSchema.safeParse(response.result)
@@ -159,7 +183,8 @@ function withRuntimeExecutionHost(
   return {
     sessions: result.sessions.map((session) => retagRuntimeSession(session, executionHostId)),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
-    scannedAt: result.scannedAt
+    scannedAt: result.scannedAt,
+    ...(result.fingerprint ? { fingerprint: result.fingerprint } : {})
   }
 }
 

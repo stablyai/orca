@@ -6,7 +6,7 @@
  * provider's session list, and the local pty-registry.
  */
 
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -16,11 +16,6 @@ import { teardownRpcDeadline } from './worktree-teardown-deadline'
 // Why: normal inventories still coalesce into one process scan, while a stale
 // or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
 const WORKTREE_TEARDOWN_CONCURRENCY = 32
-
-export type WorktreeTeardownStopPty = (
-  ptyId: string,
-  stop: () => Promise<boolean>
-) => Promise<{ stopped: boolean; owner: boolean }>
 
 export async function sweepProviderByPrefix(
   worktreeId: string,

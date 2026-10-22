@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
@@ -7,7 +7,7 @@ import {
   type StructuredAgentLaunchOptions
 } from '@/lib/structured-agent-session-launch'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import { findIdleEmptyStructuredChat } from '@/lib/structured-agent-session-idle-empty-chat'
+import { StructuredAgentSessionCreateAbandonedError } from './structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchSettlement =
   | {
@@ -27,13 +27,17 @@ export type StructuredAgentLaunchSettlement =
   | { kind: 'terminal' }
 
 export type StructuredAgentLaunchHooks = {
+  activate?: boolean
   onStructuredReady?: (sessionId: string) => void
   /** Abort the moment the caller abandons the launch. The loop cancels on the event, not only by
    *  polling after awaits, so a staged prompt is discarded before it can reach the provider. */
   signal?: AbortSignal
+  beforeCreate?: () => boolean
 }
 
 export type StructuredAgentLaunchHandle = {
+  /** An existing launch retains publication and any draft it already owns. */
+  joined?: boolean
   sessionId: string
   /** The host the chat is created on. */
   executionHostId: ExecutionHostId
@@ -81,6 +85,9 @@ async function settleStartedStructuredAgentLaunch(
     if (isCancelled()) {
       return cancelled()
     }
+    if (error instanceof StructuredAgentSessionCreateAbandonedError) {
+      return cancelled()
+    }
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       return { kind: 'failed', error }
     }
@@ -98,36 +105,21 @@ async function settleStartedStructuredAgentLaunch(
 /** Exposes the durable identity before host acquisition so its chat can render immediately. */
 export function beginStructuredAgentLaunchSettlement(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {
-  // A new chat with nothing to say reuses an empty published one open here (the launch joins an
-  // empty starting one); the reused chat is not this caller's to cancel.
-  const idle =
-    options.resumeFrom || options.prompt?.trim()
-      ? undefined
-      : findIdleEmptyStructuredChat(
-          worktreeId,
-          agent,
-          options.executionHostId,
-          options.targetGroupId
-        )
-  if (idle) {
-    return {
-      ...idle,
-      settlement: Promise.resolve().then((): StructuredAgentLaunchSettlement => {
-        if (hooks.signal?.aborted) {
-          return { kind: 'cancelled', sessionId: idle.sessionId }
-        }
-        hooks.onStructuredReady?.(idle.sessionId)
-        return { kind: 'structured', sessionId: idle.sessionId }
-      }),
-      cancel: () => {}
-    }
+  const launch = startStructuredAgentLaunch(worktreeId, agent, {
+    ...options,
+    ...(hooks.activate !== undefined ? { activate: hooks.activate } : {}),
+    ...(hooks.beforeCreate ? { beforeCreate: hooks.beforeCreate } : {})
+  })
+  // Joining transfers no source ownership to the already independent destination.
+  if (launch.joined) {
+    hooks.beforeCreate?.()
   }
-  const launch = startStructuredAgentLaunch(worktreeId, agent, options)
   return {
+    joined: launch.joined,
     sessionId: launch.sessionId,
     executionHostId: launch.executionHostId,
     settlement: settleStartedStructuredAgentLaunch(worktreeId, launch, hooks),
@@ -139,7 +131,7 @@ export function beginStructuredAgentLaunchSettlement(
 /** Compatibility wrapper for callers that do not need the provisional identity. */
 export function settleStructuredAgentLaunch(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): Promise<StructuredAgentLaunchSettlement> {

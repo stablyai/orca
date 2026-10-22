@@ -233,6 +233,26 @@ describe('agent hooks CLI handler', () => {
     }
   )
 
+  it('names the file each status reports on', async () => {
+    writeDataFile(userDataPath, getDefaultPersistedState(userDataPath))
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getManagedAgentHookStatusesMock.mockReturnValue([
+      {
+        agent: 'codex',
+        state: 'installed',
+        configPath: '/u/orca/codex-runtime-home/home/hooks.json',
+        managedHooksPresent: true,
+        detail: null
+      }
+    ])
+
+    await main(['agent', 'hooks', 'status'], userDataPath)
+
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('codex: installed (/u/orca/codex-runtime-home/home/hooks.json)')
+    )
+  })
+
   it.each(['missing', 'corrupt'] as const)(
     'uses the backup index when the primary is %s',
     async (primary) => {

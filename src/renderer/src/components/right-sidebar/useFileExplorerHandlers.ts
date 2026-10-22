@@ -11,25 +11,13 @@ import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { WorkspaceFileOpener } from '@/lib/workspace-file-open'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
-  openFile: (
-    params: {
-      filePath: string
-      relativePath: string
-      worktreeId: string
-      language: string
-      mode: 'edit'
-      runtimeEnvironmentId?: string | null
-    },
-    options?: {
-      preview?: boolean
-      suppressActiveRuntimeFallback?: boolean
-      focusEditor?: boolean
-    }
-  ) => void
+  openWorkspaceFile: WorkspaceFileOpener
   makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
@@ -50,14 +38,11 @@ type UseFileExplorerHandlersReturn = {
   handleWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
 }
 
-type OpenFileParams = Parameters<UseFileExplorerHandlersParams['openFile']>[0]
-type OpenFileOptions = Parameters<UseFileExplorerHandlersParams['openFile']>[1]
-
 export async function activateFileExplorerNode(args: {
   node: TreeNode
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
-  openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
+  openWorkspaceFile: WorkspaceFileOpener
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
@@ -68,7 +53,7 @@ export async function activateFileExplorerNode(args: {
   const {
     node,
     activeWorktreeId,
-    openFile,
+    openWorkspaceFile,
     toggleDir,
     canToggleDirectories = true,
     loadDir,
@@ -133,13 +118,14 @@ export async function activateFileExplorerNode(args: {
   let fileRuntimeEnvironmentId: string | null
   try {
     const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
-    fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
+    fileRuntimeEnvironmentId = runtimeTargetEnvironmentId(route.target)
   } catch {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
     return
   }
-  openFile(
-    {
+  openWorkspaceFile({
+    kind: 'file',
+    file: {
       filePath: node.path,
       // Why: a file link out of the project opens by its absolute path, as a file the user named,
       // so it reads the same before and after a restart instead of being refused as a project file.
@@ -149,7 +135,7 @@ export async function activateFileExplorerNode(args: {
       language: detectLanguage(node.name),
       mode: 'edit'
     },
-    {
+    options: {
       preview: true,
       // Why: activating an Explorer file is a focus handoff even if the rich
       // editor finishes mounting after the row receives browser focus.
@@ -158,13 +144,13 @@ export async function activateFileExplorerNode(args: {
       // encode "no runtime owner" via the fallback-suppression option.
       suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null
     }
-  )
+  })
 }
 
 export function useFileExplorerHandlers({
   activeWorktreeId,
   runtimeEnvironmentId,
-  openFile,
+  openWorkspaceFile,
   makePreviewFilePermanent,
   toggleDir,
   canToggleDirectories = true,
@@ -186,7 +172,7 @@ export function useFileExplorerHandlers({
         node,
         activeWorktreeId,
         runtimeEnvironmentId,
-        openFile,
+        openWorkspaceFile,
         toggleDir,
         canToggleDirectories,
         loadDir,
@@ -201,7 +187,7 @@ export function useFileExplorerHandlers({
       canToggleDirectories,
       loadDir,
       markPathAsDirectory,
-      openFile,
+      openWorkspaceFile,
       statPath,
       toggleDir,
       setSelectedPath

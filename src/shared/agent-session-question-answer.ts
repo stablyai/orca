@@ -24,7 +24,10 @@ export type AgentSessionPromptResponse =
 
 /** The questions an item asks: its grouped list, or the item itself as one question. */
 export function agentSessionPromptQuestions(
-  body: Pick<AgentJournalQuestionItem, 'question' | 'options' | 'questions' | 'freeTextQuestionId'>
+  body: Pick<
+    AgentJournalQuestionItem,
+    'question' | 'options' | 'questions' | 'freeTextQuestionId' | 'freeTextInput'
+  >
 ): AgentJournalQuestion[] {
   if (body.questions) {
     return body.questions
@@ -35,7 +38,8 @@ export function agentSessionPromptQuestions(
       question: body.question,
       options: body.options,
       multiSelect: false,
-      ...(body.freeTextQuestionId ? { freeTextQuestionId: body.freeTextQuestionId } : {})
+      ...(body.freeTextQuestionId ? { freeTextQuestionId: body.freeTextQuestionId } : {}),
+      ...(body.freeTextInput ? { freeTextInput: body.freeTextInput } : {})
     }
   ]
 }
@@ -66,7 +70,7 @@ function decodeLegacyFreeTextAnswer(
  * predate structured answers take it as `optionId`, and older clients render receipts from it.
  */
 export function legacyAgentSessionSelectedOptionId(
-  body: Pick<AgentJournalQuestionItem, 'questions'>,
+  body: Pick<AgentJournalQuestionItem, 'questions' | 'freeTextInput'>,
   answers: readonly AgentSessionQuestionAnswer[]
 ): string | null {
   if (body.questions) {
@@ -76,15 +80,21 @@ export function legacyAgentSessionSelectedOptionId(
   if (!answer || answers.length !== 1) {
     return null
   }
-  const other = answer.other?.trim()
+  const other = body.freeTextInput?.allowEmpty ? answer.other : answer.other?.trim()
   return (
-    answer.optionIds[0] ?? (other ? encodeLegacyFreeTextAnswer(answer.questionId, other) : null)
+    answer.optionIds[0] ??
+    (other !== undefined && (other.length > 0 || body.freeTextInput?.allowEmpty)
+      ? encodeLegacyFreeTextAnswer(answer.questionId, other)
+      : null)
   )
 }
 
 /** Reads an answer an older client packed into `optionId`. */
 export function legacyAgentSessionQuestionAnswers(
-  body: Pick<AgentJournalQuestionItem, 'question' | 'options' | 'questions' | 'freeTextQuestionId'>,
+  body: Pick<
+    AgentJournalQuestionItem,
+    'question' | 'options' | 'questions' | 'freeTextQuestionId' | 'freeTextInput'
+  >,
   optionId: string
 ): AgentSessionQuestionAnswer[] | null {
   const grouped = body.questions ? decodeAgentSessionQuestionAnswers(optionId) : null
@@ -102,7 +112,7 @@ export function legacyAgentSessionQuestionAnswers(
   const freeText = decodeLegacyFreeTextAnswer(optionId)
   return body.freeTextQuestionId &&
     freeText?.questionId === body.freeTextQuestionId &&
-    freeText.answer.trim().length > 0
+    (freeText.answer.trim().length > 0 || body.freeTextInput?.allowEmpty === true)
     ? [{ questionId, optionIds: [], other: freeText.answer }]
     : null
 }
@@ -174,11 +184,13 @@ export function isValidAgentSessionQuestionAnswers(
     if (answer.optionIds.some((optionId) => !offered.has(optionId))) {
       return false
     }
-    const other = answer.other?.trim() ?? ''
-    if (other && !question.freeTextQuestionId) {
+    const hasOther =
+      answer.other !== undefined &&
+      (question.freeTextInput?.allowEmpty === true || answer.other.trim().length > 0)
+    if (hasOther && !question.freeTextQuestionId) {
       return false
     }
-    const answerCount = answer.optionIds.length + (other ? 1 : 0)
+    const answerCount = answer.optionIds.length + (hasOther ? 1 : 0)
     return answerCount > 0 && (question.multiSelect || answerCount === 1)
   })
 }

@@ -14,7 +14,7 @@ function makeEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry 
     prompt: 'write tests',
     updatedAt: 1_000,
     stateStartedAt: 900,
-    agentType: 'codex',
+    agentType: 'custom-agent',
     paneKey: PANE_KEY,
     terminalTitle: 'Codex',
     stateHistory: [],
@@ -72,8 +72,7 @@ describe('agent interrupt inference', () => {
 
   it.each([
     ['plain-escape', 'gemini'],
-    ['ctrl-c', 'gemini'],
-    ['plain-escape', 'codex']
+    ['ctrl-c', 'gemini']
   ] as const)('emits a strict baseline request for %s from %s immediately', (intent, agentType) => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
@@ -321,8 +320,8 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
-  it.each([['claude'], ['omp'], ['pi'], ['prime-agent']] as const)(
-    'never asks main to interrupt %s on a single Escape while working',
+  it.each([['claude'], ['codex'], ['omp'], ['pi'], ['prime-agent']] as const)(
+    'never asks main to interrupt %s on repeated navigation Escape while working',
     (agentType) => {
       // Why: Escape is ambiguous at the source for these TUIs, so the renderer does not spend a
       // round-trip on it. main re-checks the same rule for requests that never came from here.
@@ -337,7 +336,9 @@ describe('agent interrupt inference', () => {
       })
 
       tracker.observeInputIntent('plain-escape')
+      tracker.observeInputIntent('plain-escape')
       vi.advanceTimersByTime(500)
+      expect(tracker.flushPending()).toBe(false)
 
       expect(inferInterrupt).not.toHaveBeenCalled()
       tracker.dispose()
@@ -493,7 +494,7 @@ describe('agent interrupt inference', () => {
       baselineUpdatedAt: 1_000,
       baselineStateStartedAt: 900,
       baselinePrompt: 'write tests',
-      baselineAgentType: 'codex',
+      baselineAgentType: 'custom-agent',
       intent: 'plain-escape'
     })
     tracker.dispose()
@@ -580,7 +581,7 @@ describe('agent interrupt inference', () => {
         baselineUpdatedAt: 2_000,
         baselineStateStartedAt: 1_900,
         baselinePrompt: 'newer task',
-        baselineAgentType: 'codex',
+        baselineAgentType: 'custom-agent',
         intent: 'plain-escape'
       })
     }

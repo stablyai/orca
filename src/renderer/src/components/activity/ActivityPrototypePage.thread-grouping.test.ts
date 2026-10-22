@@ -4,13 +4,10 @@ import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import {
-  buildActivityThreadGroups,
-  buildActivityEvents,
-  buildAgentPaneThreads,
-  getActivityThreadGroup,
-  ThreadAgentStateIndicator
-} from './ActivityPrototypePage'
+import { buildActivityThreadGroups, getActivityThreadGroup } from './activity-thread-grouping'
+import { buildActivityEvents } from './activity-event-builder'
+import { buildAgentPaneThreads } from './activity-thread-builder'
+import { ThreadAgentStateIndicator } from './activity-thread-controls'
 import {
   makeActivityResult,
   makeRepo,

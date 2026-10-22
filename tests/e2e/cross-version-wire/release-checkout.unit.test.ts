@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
-import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { spawnProcess } from '@orca/process-host'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -298,6 +298,28 @@ describe('release checkout materialization', () => {
 
     expect(protocol.REMOTE_SERVER_UPDATE_CAPABILITY).toBe('updater.remote-control.v1')
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
+  }, 180_000)
+
+  // Default cache root lets released source resolve packages from the repo's node_modules.
+  it('runs a released schema with an existing package dependency', async () => {
+    const checkout = await materializeReleaseCheckout('v1.4.221')
+    const schema = await importReleaseCheckoutModule(
+      checkout,
+      '/src/shared/agent-session-context-usage-schema.ts'
+    )
+    const isAdmissible = schema.isAdmissibleAgentSessionContextUsage
+    if (typeof isAdmissible !== 'function') {
+      throw new Error('v1.4.221 has no isAdmissibleAgentSessionContextUsage export')
+    }
+
+    expect(
+      isAdmissible({
+        window: { tokens: 200_000, capturedAt: 1 },
+        used: { kind: 'unknown', capturedAt: 1 }
+      })
+    ).toBe(true)
+    expect(isAdmissible({ window: { tokens: 0, capturedAt: 1 } })).toBe(false)
+    expect(isAdmissible({ used: { kind: 'invalid', capturedAt: 1 } })).toBe(false)
   }, 180_000)
 
   it('keeps an import live while another colliding release label materializes', async () => {

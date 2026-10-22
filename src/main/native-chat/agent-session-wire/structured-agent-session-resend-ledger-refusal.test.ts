@@ -1,5 +1,4 @@
-// A send id the ledger refuses is answered with that refusal and nothing else: no chat opened, no
-// write. A /clear in flight refuses only a send's first run, judged when the send arrived.
+// Send identity outlives the ledger policy; /clear still refuses a first run at its arrival.
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
@@ -19,14 +18,6 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-
-const EXPIRED = {
-  ok: false,
-  refusal: {
-    code: 'agent_session_operation_expired',
-    details: { reason: 'operationExpired' }
-  }
-}
 
 let root: string
 let store: AgentSessionRecordStore
@@ -72,43 +63,67 @@ function clear() {
   })
 }
 
-describe('an expired send id', () => {
-  it('is answered expired while its chat is closed, not as a chat this host lacks', async () => {
+describe('send without ledger policy', () => {
+  it('accepts an id older than 24 hours while its chat is closed', async () => {
     await attach()
     await host.close(SESSION, 'evict')
 
-    await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject(EXPIRED)
-    expect(host.hasSession(SESSION)).toBe(false)
+    await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject({
+      ok: true,
+      replayed: false
+    })
+    expect(host.hasSession(SESSION)).toBe(true)
   })
 
-  it('is answered expired by a store a newer Orca wrote', async () => {
+  it('still refuses a write to a newer database', async () => {
     await attach()
     const database = openTestJournalHostDatabase(root)
     Object.defineProperty(database, 'readOnly', { value: true })
     expect(store.readOnly).toBe(true)
     try {
-      await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject(EXPIRED)
+      await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject({
+        ok: false,
+        refusal: { details: { reason: 'journalWrittenByNewerOrca' } }
+      })
     } finally {
       // Teardown stops the live child, which writes.
       Object.defineProperty(database, 'readOnly', { value: false })
     }
   })
 
-  it('is answered expired when its row lapses while the chat opens for the resend', async () => {
+  it('accepts a six-minute future id without evaluating or writing admission', async () => {
     await attach()
-    const params = sendParams('recorded, then it lapsed')
+    const evaluate = vi.spyOn(store, 'evaluateMutationOperation').mockImplementation(() => {
+      throw new Error('ledger refuses admission')
+    })
+    const admit = vi
+      .spyOn(store, 'admitMutationOperation')
+      .mockRejectedValue(new Error('ledger full'))
+    const params = sendParams('host clock is behind', `${NOW + 6 * 60_000}-${'f'.repeat(32)}`)
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
+    expect(evaluate).not.toHaveBeenCalled()
+    expect(admit).not.toHaveBeenCalled()
+  })
+
+  it('replays accepted ids after the compatibility ledger has expired', async () => {
+    await attach()
+    const params = sendParams('receipt survives the ledger')
     await host.send(CALLER, params)
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-    const evaluate = store.evaluateMutationOperation
-    // The second read, after the open, sees the clock past the row's whole retention.
-    vi.spyOn(store, 'evaluateMutationOperation')
-      .mockImplementationOnce(evaluate)
-      .mockImplementationOnce((args) =>
-        evaluate({ ...args, now: args.now + 3 * AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS })
-      )
-
-    await expect(host.send(CALLER, params)).resolves.toMatchObject(EXPIRED)
+    const db = openTestJournalHostDatabase(root).db
+    db.prepare('DELETE FROM agent_session_operations').run()
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['invalid', '1-a', `${NOW}-${'a'.repeat(33)}`])('refuses malformed id %s', async (id) => {
+    await attach()
+    await expect(host.send(CALLER, sendParams('invalid', id))).resolves.toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'operationIdInvalid' } }
+    })
+    expect(dispatch).not.toHaveBeenCalled()
   })
 })
 
@@ -146,12 +161,15 @@ describe('a /clear in flight', () => {
     ).toBeLessThanOrEqual(1)
   })
 
-  it('answers an expired id expired', async () => {
+  it('refuses an old id only for the clear in flight', async () => {
     await attach()
     const clearing = clear()
     const expired = host.send(CALLER, expiredParams('typed long ago'))
     await clearing
 
-    await expect(expired).resolves.toMatchObject(EXPIRED)
+    await expect(expired).resolves.toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'conversationCommandInFlight' } }
+    })
   })
 })

@@ -12,11 +12,7 @@ import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-ren
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
-import {
-  combinedDiffScrollAnchorCache,
-  combinedDiffScrollTopCache,
-  combinedDiffViewStateCache
-} from '../remember-view/combined-diff-view-memory'
+import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
@@ -86,7 +82,8 @@ function useViewer(props: Viewer) {
     setSectionHeights,
     setSections,
     setSideBySide,
-    viewStateKey: props.viewStateKey
+    viewStateKey: props.viewStateKey,
+    worktreeId: props.file.worktreeId
   })
   const loader = useCombinedDiffSectionLoader({
     entrySet: props.entrySet,
@@ -201,9 +198,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.useRealTimers()
   mocks.fetch.mockReset()
-  combinedDiffViewStateCache.clear()
-  combinedDiffScrollAnchorCache.clear()
-  combinedDiffScrollTopCache.clear()
+  clearCombinedDiffViewMemory()
 })
 
 describe('combined diff discarded-result analysis budget', () => {
@@ -278,6 +273,77 @@ describe('combined diff discarded-result analysis budget', () => {
       expect(reads.count()).toBe(0)
     }
   )
+
+  it('keeps reloading a visible section while external writes never stop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    mocks.fetch.mockResolvedValue(textResult('base', 'edited'))
+    const hook = await startViewer()
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
+    // Watch batches every 100 ms: a restarting 300 ms coalesce would never fire.
+    for (let elapsed = 0; elapsed < 3_000; elapsed += 100) {
+      hook.result.current.retry.requestSectionReload(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      await flushLoads()
+    }
+    expect(mocks.fetch.mock.calls.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('commits slow refetches while external writes never stop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let version = 0
+    mocks.fetch.mockImplementation(() => {
+      const next = textResult('base', `v${++version}`)
+      return new Promise<GitDiffResult>((resolve) => setTimeout(() => resolve(next), 250))
+    })
+    const hook = await startViewer()
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
+    for (let elapsed = 0; elapsed < 5_000; elapsed += 100) {
+      hook.result.current.retry.requestSectionReload(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      await flushLoads()
+    }
+    // Every fetch superseded by the next invalidation would leave the first load on screen.
+    const shown = Number(hook.result.current.sections[0]?.modifiedContent.slice(1))
+    expect(shown).toBeGreaterThanOrEqual(3)
+  })
+
+  it('never commits a load over a section the user started editing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const loads: ReturnType<typeof deferredResult>[] = []
+    mocks.fetch.mockImplementation(() => {
+      const load = deferredResult()
+      loads.push(load)
+      return load.promise
+    })
+    const hook = await startViewer()
+    await settle(loads[0]!, textResult('base', 'v1'))
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
+    hook.result.current.retry.requestSectionReload(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    await flushLoads()
+    // A write lands mid-flight, so this load is discarded once.
+    hook.result.current.retry.requestSectionReload(0)
+    await settle(loads[1]!, textResult('base', 'v2'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    await flushLoads()
+    // Another write lands, then the user types before the load settles.
+    hook.result.current.retry.requestSectionReload(0)
+    act(() => {
+      hook.result.current.setSections((prev) =>
+        prev.map((section) => ({ ...section, dirty: true, modifiedContent: 'typed' }))
+      )
+    })
+    await settle(loads[2]!, textResult('base', 'v3'))
+    expect(hook.result.current.sections[0]).toMatchObject({ dirty: true, modifiedContent: 'typed' })
+  })
 
   it('keeps synchronous token-reload reentry into a replacement generation', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

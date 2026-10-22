@@ -249,6 +249,24 @@ export function distributeHeadlessTabsAcrossGroups(
     .filter((group) => group.tabOrder.length > 0)
 }
 
+// Why: a restored split must name one of its own groups as active, never a generated headless id.
+export function pickRestoredActiveGroupId(
+  groups: readonly RuntimeMobileSessionTabGroup[],
+  preferredGroupIds: readonly (string | null | undefined)[],
+  activeTopLevelId: string | null
+): string | null {
+  const groupIds = new Set(groups.map((group) => group.id))
+  const preferred = preferredGroupIds.find((id): id is string => id != null && groupIds.has(id))
+  return (
+    preferred ??
+    (activeTopLevelId
+      ? groups.find((group) => group.tabOrder.includes(activeTopLevelId))?.id
+      : undefined) ??
+    groups[0]?.id ??
+    null
+  )
+}
+
 export function buildMaterializedHeadlessParentLayout(
   leafId: string,
   ptyId: string,

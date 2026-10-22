@@ -1,8 +1,8 @@
 // `resolveRuntimeGitTarget` read `store.getRepo(worktree.repoId)?.connectionId` and never looked at
 // `worktree.hostId`, so one arbitrarily chosen row decided the execution host for ~36 downstream
 // Git dispatches. `undefined` there meant "runtime host", "unresolved" and "genuinely local" at
-// once (#11163). These cases pin all four answers end to end, through the real SSH provider table.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// once (#11163). These cases pin all four answers end to end; an `ssh:` host is refused by name.
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -21,7 +21,7 @@ vi.mock('../git/status', async () => ({
 }))
 
 import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REMOTE_PATH = '/srv/app-feature'
@@ -50,36 +50,25 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
   return runtime
 }
 
-function stubProvider() {
-  return { getStatus: vi.fn().mockResolvedValue({ entries: [] }) }
+async function expectRefusedFor(promise: Promise<unknown>, connectionId: string): Promise<void> {
+  const error = await promise.then(
+    () => null,
+    (caught: unknown) => caught
+  )
+  expect(error).toBeInstanceOf(SshHostNotServedError)
+  expect(error).toMatchObject({ connectionId })
+  expect(mocks.getStatus).not.toHaveBeenCalled()
 }
 
 describe('runtime Git target execution host', () => {
-  const registered: string[] = []
-
-  function register(connectionId: string) {
-    const provider = stubProvider()
-    registerSshGitProvider(connectionId, provider as never)
-    registered.push(connectionId)
-    return provider
-  }
-
   beforeEach(() => {
     vi.restoreAllMocks()
     mocks.getStatus.mockReset().mockResolvedValue({ entries: [] })
   })
 
-  afterEach(() => {
-    for (const connectionId of registered.splice(0)) {
-      unregisterSshGitProvider(connectionId)
-    }
-  })
-
   // The case whose absence let the original cross-host leak through review: two SSH hosts, and the
   // rival row is the one `getRepo` returns first.
-  it('serves an ssh worktree from the host it names, not from a rival row on another ssh host', async () => {
-    const openclaw = register('openclaw')
-    const m4air = register('m4air')
+  it('routes an ssh worktree to the host it names, not to a rival row on another ssh host', async () => {
     const runtime = makeRuntime(
       [
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },
@@ -88,31 +77,21 @@ describe('runtime Git target execution host', () => {
       'ssh:m4air'
     )
 
-    await runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)
-
-    expect(m4air.getStatus).toHaveBeenCalledWith(REMOTE_PATH)
-    expect(openclaw.getStatus).not.toHaveBeenCalled()
-    expect(mocks.getStatus).not.toHaveBeenCalled()
+    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
   })
 
   it("routes to the worktree's host even when the only repo row names a different ssh host", async () => {
-    const openclaw = register('openclaw')
-    const m4air = register('m4air')
     const runtime = makeRuntime(
       [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
       'ssh:m4air'
     )
 
-    await runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)
-
-    expect(m4air.getStatus).toHaveBeenCalledWith(REMOTE_PATH)
-    expect(openclaw.getStatus).not.toHaveBeenCalled()
+    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
   })
 
   // `local` has no SSH namespace to nest in, so a surviving `connectionId` is a row contradicting
   // itself. The old shape handed it out and dialled a remote host for a local workspace.
   it('ignores a stale connection on a row that declares itself local', async () => {
-    const m4air = register('m4air')
     const runtime = makeRuntime(
       [
         {
@@ -127,15 +106,13 @@ describe('runtime Git target execution host', () => {
 
     await runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)
 
-    expect(m4air.getStatus).not.toHaveBeenCalled()
     expect(mocks.getStatus).toHaveBeenCalled()
   })
 
   // A `runtime:` row's `connectionId` names a target in the *server's* namespace. Dialling it here
   // reaches a same-named target on this client — a silent-wrong-host answer, worse than the
   // silent-local one it replaced.
-  it('refuses a runtime host whose nested ssh target is also registered on this client', async () => {
-    const impostor = register('nested-1')
+  it('refuses a runtime host whose row carries a nested ssh target', async () => {
     const runtime = makeRuntime(
       [
         {
@@ -151,7 +128,6 @@ describe('runtime Git target execution host', () => {
     await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
       ExecutionHostNotDispatchableError
     )
-    expect(impostor.getStatus).not.toHaveBeenCalled()
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
@@ -168,7 +144,6 @@ describe('runtime Git target execution host', () => {
   })
 
   it('refuses rather than guessing when rival rows disagree and the worktree names no host', async () => {
-    register('m4air')
     const runtime = makeRuntime([
       { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
       { id: 'repo-shared', path: '/home/me/app' }
@@ -180,13 +155,10 @@ describe('runtime Git target execution host', () => {
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
-  it('still answers from the single row when the worktree names no host', async () => {
-    const m4air = register('m4air')
+  it('still routes by the single row when the worktree names no host', async () => {
     const runtime = makeRuntime([{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }])
 
-    await runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)
-
-    expect(m4air.getStatus).toHaveBeenCalledWith(REMOTE_PATH)
+    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
   })
 
   // Losing contact with a remote host is never evidence that its files are here

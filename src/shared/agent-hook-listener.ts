@@ -1,4 +1,6 @@
 import { readAgentProcessIdentity } from './agent-process-presence'
+import { resolveAgentStatusIdentity } from './agent-status-identity'
+import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
@@ -25,6 +27,7 @@ import {
   suppressOpenCodeSharedServerPost,
   trackOpenCodePaneLaunchToken
 } from './agent-hook-listener/opencode-session-registry'
+import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
@@ -151,6 +154,34 @@ export function normalizeHookPayload(
     return null
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
+  const previousReceivedAt =
+    previousStatus &&
+    'receivedAt' in previousStatus &&
+    typeof previousStatus.receivedAt === 'number'
+      ? previousStatus.receivedAt
+      : previousStatus?.hostEvidenceObservedAt
+  // Reject before provider folds mutate the pane's prompt, tool and child caches.
+  if (
+    previousStatus &&
+    previousReceivedAt !== undefined &&
+    sameAgentStatusTerminalOwner(
+      { connectionId: previousStatus.connectionId ?? null, worktreeId: previousStatus.worktreeId },
+      { connectionId: null, worktreeId }
+    ) &&
+    resolveAgentStatusIdentity({
+      existing: {
+        agentType: previousStatus.payload.agentType,
+        state: previousStatus.payload.state,
+        updatedAt: previousReceivedAt,
+        restoredUnconfirmed: previousStatus.restoredUnconfirmed,
+        agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
+      },
+      incoming: source,
+      now: Date.now()
+    }).inheritedFromActivePane
+  ) {
+    return null
+  }
   // Why: only a MANUAL completion claims anything, so only it may write compact-scoped state. An
   // auto compact runs inside a turn that resumes and emits its own Stop; running the ownership
   // guard for it would burn the pane's consumed-compact slot on an event that maps to nothing.
@@ -194,7 +225,9 @@ export function normalizeHookPayload(
   // Why: presence needs the agent's own process; without it the hook cannot speak for liveness.
   const agentProcess =
     source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
-  const agentPresence = agentProcess ? { agent: source, process: agentProcess } : undefined
+  const agentPresence = agentProcess
+    ? { agent: source, process: agentProcess, sessionOwner: true as const }
+    : undefined
   const sessionEndReason = readString(hookPayloadRecord, 'reason')
   if (
     eventName === 'SessionEnd' &&
@@ -271,13 +304,13 @@ export function normalizeHookPayload(
           : undefined
         : hasExplicitUserPrompt(
             source,
-            eventName,
+            dispatched.eventName,
             extractedPrompt,
             dispatched.resolvedPromptText,
             dispatched.hasTranscriptPromptEvidence
           ),
     promptInteractionKey: dispatched.promptInteractionKey,
-    hookEventName: typeof eventName === 'string' ? eventName : undefined,
+    hookEventName: typeof dispatched.eventName === 'string' ? dispatched.eventName : undefined,
     providerPromptId:
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
@@ -291,13 +324,12 @@ export function normalizeHookPayload(
     toolAgentType: readString(hookPayloadRecord, 'agent_type'),
     ...(source === 'claude'
       ? {
-          claudeRunningNonAgentTask:
-            state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-            state.claudeActiveSessionCronPaneKeys.has(paneKey)
+          claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(state, paneKey)
         }
       : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+    ...dispatched.hostTurnSignals,
     payload: transportPayload
   }
 }

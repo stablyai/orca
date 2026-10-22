@@ -5,13 +5,27 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 
+function optimisticMessage(args: {
+  clientMessageId: string
+  sessionId?: string
+  text: string
+  attachments: readonly { path: string; previewUri: string }[]
+  queuedAt: number
+}): StructuredAgentSessionOptimisticMessage {
+  return {
+    clientMessageId: args.clientMessageId,
+    body: structuredAgentSessionSendBody(args.text, args.attachments),
+    queuedAt: args.queuedAt
+  }
+}
+
 afterEach(cleanup)
 const EMPTY: never[] = []
-const NO_CARDS: readonly string[] = []
 function tool(id: string, sequence: number): AgentJournalRenderItem {
   return {
     itemId: id,
@@ -26,8 +40,7 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
   const first = tool('first', 1)
   const second = tool('second', 2)
   const { result, rerender } = renderHook(
-    (items: AgentJournalRenderItem[]) =>
-      useStructuredAgentSessionMessages(items, EMPTY, EMPTY, NO_CARDS),
+    (items: AgentJournalRenderItem[]) => useStructuredAgentSessionMessages(items, EMPTY, EMPTY),
     { initialProps: [first, second] }
   )
   const initial = result.current
@@ -52,9 +65,7 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
     [structuredClone(completed)]
   ]) {
     rerender(items)
-    expect(result.current).toEqual(
-      projectStructuredAgentSessionMessages(items, EMPTY, EMPTY, NO_CARDS)
-    )
+    expect(result.current).toEqual(projectStructuredAgentSessionMessages(items, EMPTY, EMPTY))
     expect(result.current.find((message) => message.id === 'second')).not.toBe(initial[1])
   }
   const replacement = {
@@ -66,14 +77,12 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
     }
   }
   rerender([replacement])
-  expect(result.current).toEqual(
-    projectStructuredAgentSessionMessages([replacement], EMPTY, EMPTY, NO_CARDS)
-  )
+  expect(result.current).toEqual(projectStructuredAgentSessionMessages([replacement], EMPTY, EMPTY))
   expect(result.current[0]).not.toBe(initial[0])
 })
 
 it('keeps optimistic sends and their settlement identical to uncached projection', () => {
-  const entry = createStructuredAgentSessionOutboxEntry({
+  const entry = optimisticMessage({
     clientMessageId: 'send',
     sessionId: 'session',
     text: 'Send this',
@@ -97,14 +106,14 @@ it('keeps optimistic sends and their settlement identical to uncached projection
     }: {
       items: AgentJournalRenderItem[]
       submissions: AgentJournalSubmission[]
-    }) => useStructuredAgentSessionMessages(items, [entry], submissions, NO_CARDS),
+    }) => useStructuredAgentSessionMessages(items, [entry], submissions),
     { initialProps: { items: [tool('tool', 1)], submissions: [submission] } }
   )
   for (const dispatchState of ['pending', 'unknown', 'accepted'] as const) {
     const props = { items: [tool('tool', 1)], submissions: [{ ...submission, dispatchState }] }
     rerender(props)
     expect(result.current).toEqual(
-      projectStructuredAgentSessionMessages(props.items, [entry], props.submissions, NO_CARDS)
+      projectStructuredAgentSessionMessages(props.items, [entry], props.submissions)
     )
   }
 })
@@ -112,7 +121,7 @@ it('keeps optimistic sends and their settlement identical to uncached projection
 it('does no transcript projection work on a status-only render', () => {
   const items = [tool('tool', 1)]
   const { result, rerender } = renderHook(() =>
-    useStructuredAgentSessionMessages(items, EMPTY, EMPTY, NO_CARDS)
+    useStructuredAgentSessionMessages(items, EMPTY, EMPTY)
   )
   const initial = result.current
   rerender()

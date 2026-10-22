@@ -1,43 +1,21 @@
 import type { RecentlyClosedTabPosition } from '../../recently-closed-tabs'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
-import type { OpenCheckRunDetailsState } from '@/components/editor/check-run-details-tab'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
 } from '../../../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type {
-  GitConflictKind,
-  GitConflictResolutionStatus,
-  GitConflictStatusSource,
-  GitStatusEntry
-} from '../../../../../../shared/git-status-types'
-
-export type DiffSource =
-  | 'unstaged'
-  | 'staged'
-  | 'branch'
-  | 'commit'
-  | 'combined-all'
-  | 'combined-uncommitted'
-  | 'combined-branch'
-  | 'combined-commit'
-
-export type BranchCompareSnapshot = Pick<
-  GitBranchCompareSummary,
-  'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
-> & {
-  compareVersion: string
-}
-
-export type CommitCompareSnapshot = Pick<
-  GitCommitCompareSummary,
-  'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
-> & {
-  compareVersion: string
-  subject?: string
-  message?: string
-}
+  BranchCompareSnapshot,
+  CombinedDiffAlternate,
+  CombinedDiffSkippedConflict,
+  CommitCompareSnapshot,
+  ConflictReviewState,
+  DiffSource,
+  OpenCheckRunDetailsState,
+  OpenConflictMetadata
+} from '../../../../../../shared/editor-tab-view-types'
 
 export type BranchCompareLike = Pick<
   GitBranchCompareSummary,
@@ -50,37 +28,6 @@ export type CommitCompareLike = Pick<
 > & {
   subject?: string
   message?: string
-}
-
-export type CombinedDiffAlternate = {
-  source: 'combined-all' | 'combined-branch'
-  branchCompare?: BranchCompareSnapshot
-}
-
-export type OpenConflictMetadata = {
-  kind: 'conflict-editable' | 'conflict-placeholder'
-  conflictKind: GitConflictKind
-  conflictStatus: GitConflictResolutionStatus
-  conflictStatusSource: GitConflictStatusSource
-  message?: string
-  guidance?: string
-}
-
-export type ConflictReviewEntry = {
-  path: string
-  conflictKind: GitConflictKind
-}
-
-export type ConflictReviewState = {
-  source: 'live-summary' | 'combined-diff-exclusion'
-  snapshotTimestamp: number
-  entries: ConflictReviewEntry[]
-  selectedFileId?: string
-}
-
-export type CombinedDiffSkippedConflict = {
-  path: string
-  conflictKind: GitConflictKind
 }
 
 // OpenFile is one type (not a `mode` union); consumers reading `filePath` must check `mode` first — conflict-review tabs use the worktree root, not a real file.
@@ -97,6 +44,8 @@ export type OpenFile = {
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
+  /** Host grant for a read-only file outside every workspace on `runtimeEnvironmentId`; never persisted. */
+  terminalArtifactGrantId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
@@ -124,10 +73,6 @@ export type OpenFile = {
   externalMutation?: 'deleted' | 'renamed' | 'changed'
   /** Signature of the disk content this tab's edits are based on; persisted so a restore detects a changed-on-disk conflict before autosave clobbers an agent write. */
   lastKnownDiskSignature?: string
-  /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow SSH read loses the race. Not persisted. */
-  pendingDiskBaselineVerification?: boolean
-  /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */
-  pendingLiveDiskVerification?: boolean
   /** Blocks saves while a restored tab's filesystem authority is being replaced. */
   pendingOwnerMigration?: boolean
   /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */

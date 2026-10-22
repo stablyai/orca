@@ -62,7 +62,7 @@ describe('resolveProcessCwd', () => {
     await vi.waitFor(() =>
       expect(execFileMock).toHaveBeenCalledWith(
         'lsof',
-        ['-a', '-p', '42', '-d', 'cwd', '-Fn'],
+        ['-b', '-w', '-a', '-p', '42', '-d', 'cwd', '-Fn'],
         { encoding: 'utf-8', timeout: 1500 },
         expect.any(Function)
       )

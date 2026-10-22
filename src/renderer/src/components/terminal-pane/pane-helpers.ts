@@ -52,6 +52,10 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (element.classList.contains('xterm-helper-textarea') || element.closest('.xterm')) {
     return false
   }
+  // Why: a field in a just-hidden pane keeps focus until Chromium drops it to body a task later.
+  if (element.closest('[hidden], [inert]')) {
+    return false
+  }
   // Why: deferred fit/focus work can run after inline rename or settings
   // fields take focus. Layout maintenance must not blur user edits closed.
   return (
@@ -62,18 +66,4 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   )
 }
 
-// Why: escape rules are a property of the *target* shell receiving the path,
-// not the client OS. A Windows client dropping onto a Linux SSH worktree must
-// produce POSIX-quoted output; passing a userAgent string here coupled escape
-// rules to the client and silently misquoted cross-platform SSH drops.
-export function shellEscapePath(path: string, targetShell: 'posix' | 'windows'): string {
-  if (targetShell === 'windows') {
-    return /^[a-zA-Z0-9_./@:\\-]+$/.test(path) ? path : `"${path}"`
-  }
-
-  if (/^[a-zA-Z0-9_./@:-]+$/.test(path)) {
-    return path
-  }
-
-  return `'${path.replace(/'/g, "'\\''")}'`
-}
+export { shellEscapePath } from '../../../../shared/shell-path-quoting'

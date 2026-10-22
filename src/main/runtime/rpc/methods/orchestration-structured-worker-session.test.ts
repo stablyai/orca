@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
@@ -21,8 +22,7 @@ const {
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { structuredSessionChildIdentityEnv } =
-  await import('../../structured-session-child-identity-env')
+const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a host stub carrying only the members the worker start reaches.
 function installHost(location = { executionHostId: 'local', wslDistro: null as string | null }) {
@@ -84,7 +84,7 @@ describe('structured worker session', () => {
     createSpy.mockImplementation(async (args: { envelope: { sessionId: string } }) => {
       // `attach` is what spawns the provider child, and the child's env is read from the registry
       // at spawn time. Registering afterwards ships a worker with no ORCA_TERMINAL_HANDLE.
-      envAtSpawn = structuredSessionChildIdentityEnv(args.envelope.sessionId, {})
+      envAtSpawn = sealedChildEnv(args.envelope.sessionId)
       return { ok: true, value: { sessionId: args.envelope.sessionId } }
     })
     const created = await createStructuredWorkerSession({
@@ -270,8 +270,41 @@ describe('structured worker dispatch preamble', () => {
     }
   }
 
+  const TASK_FROM: AgentMessageSource = {
+    kind: 'agent',
+    senders: [
+      {
+        party: { address: 'term_coord', terminalHandle: 'term_coord', orcaSessionId: null },
+        name: 'Coordinator'
+      }
+    ],
+    orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'd1' }
+  }
+
   const send = (host: PreambleHost) =>
-    sendStructuredWorkerPreamble({ host, sessionId: 's1', dispatchId: 'd1', preamble: 'spec' })
+    sendStructuredWorkerPreamble({
+      host,
+      sessionId: 's1',
+      dispatchId: 'd1',
+      preamble: 'spec',
+      from: TASK_FROM
+    })
+
+  // No source and no person: a restart or a close rejects it, and orchestration re-derives it.
+  it('sends the preamble as no person’s', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('source')
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('userSend')
+  })
+
+  it('names who the task is from on the turn it sends', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).toMatchObject({ body: { from: TASK_FROM } })
+  })
 
   it('reports the preamble delivered only on an accepted submission', async () => {
     await expect(

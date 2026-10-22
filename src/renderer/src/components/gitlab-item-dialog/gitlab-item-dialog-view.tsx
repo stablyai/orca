@@ -1,6 +1,6 @@
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { CircleDot, ExternalLink, GitMerge, LoaderCircle, RefreshCw, Send, X } from 'lucide-react'
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,

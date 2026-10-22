@@ -46,12 +46,9 @@ export function writeStartupCommandWhenShellReady(
       postReadyTimer = null
     }
     // Why: run in the same interactive shell (not `shell -c`) so the session survives after the agent exits.
-    // Why CR on Windows: PSReadLine/cmd.exe submit on `\r`, not LF; POSIX treats either as Enter under ICRNL.
-    const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: single write after the ready barrier avoids incremental-paste char drops; multiline is bracketed-paste wrapped so newlines don't submit early.
     proc.write(
       buildStartupCommandSubmission(startupCommand, {
-        submit,
         bracketedPasteSafe: options.bracketedPasteSafe === true
       })
     )

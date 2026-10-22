@@ -22,7 +22,7 @@ export function repoRelativeClosurePath(closurePath) {
  * Every family whose scenario names a call site inside the closure, less the shell's own.
  *
  * `mobileWeb.*` is dropped for the reason each pin file's docstring gives: measured from a route's
- * native switch rather than its `.web.tsx` sibling the closure reaches the shell, and the shell's
+ * native route file rather than its `.web.tsx` sibling the closure reaches the shell, and the shell's
  * families belong to the shell.
  */
 export function pageClosureFamilies(closureLocalPaths, scenarios) {

@@ -6,14 +6,19 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeCapability } from '../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
 import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../shared/protocol-version'
+  resolveRpcCallerIdentity,
+  rpcCallerOperationKey,
+  type RpcCallerIdentity
+} from '../runtime/rpc/rpc-caller-identity'
 
 type AdvertisedClient = {
   clientKind?: 'mobile' | 'runtime'
   clientCapabilities?: readonly RuntimeCapability[]
+  caller?: RpcCallerIdentity
+  pairedDeviceId?: string
 }
 
 const { handlers, advertised } = vi.hoisted(
@@ -59,6 +64,7 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
 
 const { registerRuntimeHandlers } = await import('./runtime')
 const { supportsAgentLaunch } = await import('../runtime/rpc/methods/agent-launch')
+const { agentLaunchOperationCallerKey } = await import('../runtime/rpc/methods/agent-launch-replay')
 
 function rendererEvent() {
   const mainFrame = {}
@@ -127,5 +133,20 @@ describe('desktop renderer reaching agent.launch on its own main process', () =>
       onlyAdvertisedClient(advertised.unary).clientCapabilities
     )
     expect(supportsAgentLaunch(streaming)).toBe(true)
+  })
+
+  it('names the desktop as its caller on both paths, so its launches replay under one identity', () => {
+    invoke('runtime:call', { method: 'status.get' })
+    invoke('runtime:subscribe', { subscriptionId: 'sub-1', method: 'session.tabs.watch' })
+
+    for (const client of [advertised.unary, advertised.streaming].map(onlyAdvertisedClient)) {
+      const caller = resolveRpcCallerIdentity(client)
+      expect(caller).toEqual({ kind: 'desktop' })
+      expect(agentLaunchOperationCallerKey({ caller })).toBe('trusted-local:desktop')
+    }
+    // Negative control: without the transport's word the same renderer has no identity at all.
+    const { caller: _named, ...unnamed } = onlyAdvertisedClient(advertised.unary)
+    expect(resolveRpcCallerIdentity(unnamed)).toBeUndefined()
+    expect(rpcCallerOperationKey({ kind: 'local-cli' })).toBe('trusted-local:runtime')
   })
 })

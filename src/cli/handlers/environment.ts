@@ -7,7 +7,7 @@ import {
   printResult,
   type HostNameResult
 } from '../format'
-import { listSshTargets } from '../host-selector-alternatives'
+import { listSshTargets, LOCAL_HOST_LIST_NAME } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
@@ -91,7 +91,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     const hosts = [
       {
         kind: 'local' as const,
-        name: 'this machine',
+        name: LOCAL_HOST_LIST_NAME,
         id: 'local',
         selector: '--host local',
         ...localStatus,

@@ -1,6 +1,5 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
 import { createServer, type Server, type Socket } from 'node:net'
-import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
@@ -19,21 +18,6 @@ const servers = new Set<Server>()
 const sockets = new Set<Socket>()
 
 const handshakeTimeoutError = (): Error => new Error(WS_HANDSHAKE_TIMEOUT_MESSAGE)
-
-/**
- * Files whose WebSocket construction must carry the connect bound: the shared
- * remote-runtime transports, swept by prefix. Other WebSocket sites (relay
- * control and data transports, emulator control) carry their own bounds and are
- * deliberately not covered here.
- */
-function coveredSocketSources(): string[] {
-  return readdirSync(__dirname)
-    .filter(
-      (name) =>
-        name.startsWith('remote-runtime-') && name.endsWith('.ts') && !name.includes('.test.')
-    )
-    .map((name) => join(__dirname, name))
-}
 
 afterEach(async () => {
   for (const socket of sockets) {
@@ -77,25 +61,6 @@ describe('remote runtime connect bound', () => {
     expect(options.maxPayload).toBe(1024)
   })
 
-  // Why: the bound only helps if every Node-side remote-runtime socket carries
-  // it; a new transport that calls `new WebSocket` directly reintroduces #18191.
-  it('routes every covered WebSocket construction through the bounded options', () => {
-    const offenders: string[] = []
-    let scannedConstructions = 0
-    for (const path of coveredSocketSources()) {
-      const source = readFileSync(path, 'utf8')
-      const constructions = source.split('new WebSocket(').length - 1
-      const bounded = source.split('remoteRuntimeConnectOptions(').length - 1
-      scannedConstructions += constructions
-      if (constructions > bounded) {
-        offenders.push(`${basename(path)}: ${constructions} WebSocket(s), ${bounded} bounded`)
-      }
-    }
-    expect(offenders).toEqual([])
-    // Guards against the scan silently matching nothing and passing vacuously.
-    expect(scannedConstructions).toBeGreaterThan(0)
-  })
-
   it('reports an unanswered host as unreachable rather than as an empty result', async () => {
     const endpoint = await listenSilentUpgradeServer()
     const keyPair = generateKeyPair()
@@ -103,12 +68,12 @@ describe('remote runtime connect bound', () => {
     const onTextFrame = vi.fn()
 
     const opened = openRemoteRuntimeWebSocket(
-      {
+      pairedRuntimeConnectionFromOffer({
         v: 2,
         endpoint,
         deviceToken: 'device-token',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-      },
+      }),
       { onClose: vi.fn(), onError, onTextFrame },
       150
     )

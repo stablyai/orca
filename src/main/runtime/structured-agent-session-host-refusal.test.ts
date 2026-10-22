@@ -44,7 +44,8 @@ function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
     resolveEnvironment: async () => ({}),
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' })
   })
 }
 

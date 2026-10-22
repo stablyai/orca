@@ -17,6 +17,7 @@ import {
   getFolderWorkspaceCandidateRepos,
   getFolderWorkspaceConnectionId
 } from './folder-workspace-connection'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ConnectionOwnerState = Pick<
   AppState,
@@ -35,18 +36,18 @@ export function createConnectionIdForFileSelector(
       return undefined
     }
     if (
-      previousSlices?.folderWorkspaces === state.folderWorkspaces &&
+      previousSlices?.folderWorkspaces === selectFolderWorkspaces(state) &&
       previousSlices.projectGroups === state.projectGroups &&
       previousSlices.repos === state.repos &&
-      previousSlices.worktreesByRepo === state.worktreesByRepo
+      selectWorktreesByRepo(previousSlices) === selectWorktreesByRepo(state)
     ) {
       return previousResult
     }
     previousSlices = {
-      folderWorkspaces: state.folderWorkspaces,
+      folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo
+      worktreesByRepo: selectWorktreesByRepo(state)
     }
     previousResult = getConnectionIdForFileFromState(state, worktreeId, filePath)
     return previousResult
@@ -66,7 +67,7 @@ export function getConnectionIdFromState(
   }
   // Why: owner resolution runs from retained Zustand selectors, so unrelated
   // store writes must not flatten every worktree or scan every repository.
-  const worktreeResolution = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  const worktreeResolution = resolveIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
   if (worktreeResolution.kind === 'ambiguous') {
     // Why (#17799): rows that disagree about the owner cannot name a connection.
     // `undefined` is this module's documented "cannot determine the host" answer;

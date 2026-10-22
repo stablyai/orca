@@ -4,7 +4,7 @@ import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { buildWslBridgeScript, buildWslLauncher } from './wsl-cli-scripts'
 
 const FORWARDED_ARGS = [

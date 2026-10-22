@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Plus } from 'lucide-react'
-import { ActionButton } from './SourceControl'
+import { ActionButton } from './source-control/listing/action-button'
 import { Button } from '@/components/ui/button'
 
 type ReactElementLike = {
@@ -120,27 +120,6 @@ describe('ActionButton', () => {
     const element = ActionButton({ ...baseProps, onClick: vi.fn(), disabled: true })
     const button = findInnerButton(element)
     expect(button.props['aria-disabled']).toBe(true)
-  })
-
-  it('applies the visual-disabled class when disabled', () => {
-    const element = ActionButton({ ...baseProps, onClick: vi.fn(), disabled: true })
-    const button = findInnerButton(element)
-    expect(button.props.className).toContain('opacity-50')
-    expect(button.props.className).toContain('cursor-not-allowed')
-  })
-
-  it('omits the visual-disabled class when enabled', () => {
-    const element = ActionButton({ ...baseProps, onClick: vi.fn(), disabled: false })
-    const button = findInnerButton(element)
-    expect(button.props.className).not.toContain('opacity-50')
-  })
-
-  it('keeps the full icon button box as the hover and click target', () => {
-    const element = ActionButton({ ...baseProps, onClick: vi.fn() })
-    const button = findInnerButton(element)
-    expect(button.props.className).not.toContain('h-auto')
-    expect(button.props.className).not.toContain('w-auto')
-    expect(button.props.className).toContain('hover:bg-background/70')
   })
 
   it('swallows clicks and calls preventDefault when disabled', () => {

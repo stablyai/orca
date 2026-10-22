@@ -22,7 +22,7 @@ import { getStatus } from './status'
 // Git normalizes to `//./nul` and rejects — `fatal: unable to access '//./nul': Invalid
 // argument`. Every git call in this file then threw. POSIX resolves it to /dev/null,
 // which Git accepts, so CI never saw it. An empty file works on every platform and
-// matches how skill-git-tree-identity and skill-windows-workspace already isolate.
+// matches how skill-windows-workspace already isolates.
 //
 // Why process.env and not just this helper's env: resolveWorktreeSharedDirectories
 // runs its own `git check-ignore` through the production runner, which inherits

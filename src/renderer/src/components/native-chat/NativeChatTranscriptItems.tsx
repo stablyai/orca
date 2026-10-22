@@ -1,51 +1,75 @@
+import { Fragment, useMemo } from 'react'
 import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
 } from './NativeChatTranscriptRow'
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
+import type { ReaderGesture } from './native-chat-autoscroll'
+import { NativeChatForwardedGestureContext } from './native-chat-reader-scroll-input'
+import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
+import {
+  NativeChatReplyRevealsContext,
+  useNativeChatReplyReveals
+} from './native-chat-reply-reveals'
 
-/** Windowed transcript rows, absolutely positioned inside a full-height spacer. */
+/** Mounted rows own their height; only unloaded gaps use cached measurements. */
 export function NativeChatTranscriptItems({
   slots,
+  loadedMessageIds,
   context,
-  window
+  window,
+  newRowsMarker,
+  forwardGesture
 }: {
   slots: readonly NativeChatTranscriptSlot[]
+  loadedMessageIds: ReadonlySet<string>
   context: NativeChatTranscriptRowContext
   window: NativeChatTranscriptWindow
+  newRowsMarker?: NativeChatNewRowsMarkerState
+  /** A reader gesture a row's visual frame took before the transcript could see it. */
+  forwardGesture: (gesture: ReaderGesture) => void
 }): React.JSX.Element {
+  const rowKeys = useMemo(() => slots.map(nativeChatSlotKey), [slots])
+  const replyReveals = useNativeChatReplyReveals(rowKeys, loadedMessageIds)
   return (
-    <div
-      ref={window.sizerRef}
-      data-native-chat-window
-      className="relative w-full"
-      style={{ height: `${window.totalSize}px` }}
-    >
-      {window.virtualItems.map((item) => {
-        const slot = slots[item.index]
-        if (!slot) {
-          return null
-        }
-        return (
+    <NativeChatReplyRevealsContext.Provider value={replyReveals}>
+      <NativeChatForwardedGestureContext.Provider value={forwardGesture}>
+        <div ref={window.sizerRef} data-native-chat-window className="relative w-full">
+          {window.virtualItems.map((item, position) => {
+            const slot = slots[item.index]
+            if (!slot) {
+              return null
+            }
+            const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
+            return (
+              <Fragment key={item.key}>
+                <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
+                <div data-index={item.index} ref={window.measureRow} className="flow-root w-full">
+                  <NativeChatTranscriptRow
+                    slot={slot}
+                    context={context}
+                    newRowsMarker={
+                      rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
+                    }
+                  />
+                </div>
+              </Fragment>
+            )
+          })}
           <div
-            key={item.key}
-            data-index={item.index}
-            ref={window.measureRow}
-            // `top`, not a transform: the reveal path walks `offsetTop` to find
-            // where a card sits, and a transform is invisible to it.
+            aria-hidden
             style={{
-              position: 'absolute',
-              top: `${item.start - window.scrollMargin}px`,
-              left: 0,
-              width: '100%'
+              height: Math.max(
+                0,
+                window.totalSize -
+                  ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) - window.scrollMargin)
+              )
             }}
-          >
-            <NativeChatTranscriptRow slot={slot} context={context} />
-          </div>
-        )
-      })}
-    </div>
+          />
+        </div>
+      </NativeChatForwardedGestureContext.Provider>
+    </NativeChatReplyRevealsContext.Provider>
   )
 }
 

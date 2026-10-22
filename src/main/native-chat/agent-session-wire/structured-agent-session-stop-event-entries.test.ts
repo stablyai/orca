@@ -14,8 +14,10 @@ import {
   eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 
 let rig: QueuedMessageTestRig
+const { setTimeout: realSetTimeout, clearTimeout: realClearTimeout } = globalThis
 
 afterEach(() => rig.dispose())
 
@@ -42,13 +44,73 @@ function stopEvents(): JournalStopEvent[] {
 }
 
 /** The Stop events as the provider's close finds them, or null when no close ran. */
-function stopEventsAtClose(): { events: JournalStopEvent[] | null } {
+function stopEventsAtClose(onClose?: () => void): { events: JournalStopEvent[] | null } {
   const seen: { events: JournalStopEvent[] | null } = { events: null }
   rig.closeSession.mockImplementationOnce(async () => {
+    onClose?.()
+    // The event is issued before the kill, never awaited by it: the journal writes it ahead of
+    // anything the kill makes the child write.
+    await new Promise((resolve) => setImmediate(resolve))
     seen.events = stopEvents()
     return true
   })
   return seen
+}
+
+async function awaitCloseStep<T>(pending: Promise<T>, phase: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  // A missing host callback must fail without advancing the observation clock.
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = realSetTimeout(() => reject(new Error(`Timed out awaiting ${phase}`)), 2_000)
+  })
+  try {
+    return await Promise.race([pending, deadline])
+  } finally {
+    realClearTimeout(timeout)
+  }
+}
+
+async function closePastSlowDrain(
+  cause: 'user-close' | 'evict',
+  prepare: () => void | Promise<void>
+) {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  const began = Date.now()
+  const entered = Promise.withResolvers<void>()
+  const closingProvider = Promise.withResolvers<void>()
+  const runtime = rig.host.collaboratorsForTests().runtimeState
+  const flush = runtime.flushEventSink.bind(runtime)
+  let closing: ReturnType<QueuedMessageTestRig['host']['close']> | undefined
+  const flushing = vi.spyOn(runtime, 'flushEventSink')
+  try {
+    await awaitCloseStep(Promise.resolve().then(prepare), 'slow sink preparation')
+    flushing.mockImplementationOnce((sessionId) => {
+      const pending = flush(sessionId)
+      entered.resolve()
+      return pending
+    })
+    const atClose = stopEventsAtClose(closingProvider.resolve)
+    const callsBefore = rig.closeSession.mock.calls.length
+    closing = rig.host.close(HOST_TEST_SESSION, cause)
+    await awaitCloseStep(entered.promise, 'close entering the sink drain')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await vi.advanceTimersByTimeAsync(999)
+    expect(rig.closeSession).toHaveBeenCalledTimes(callsBefore)
+    await vi.advanceTimersByTimeAsync(1)
+    await awaitCloseStep(closingProvider.promise, 'provider close at 1,000ms')
+    expect(Date.now() - began).toBe(1_000)
+    return atClose
+  } finally {
+    try {
+      // Finish the original 1,500ms sink delay before teardown drains it.
+      await vi.advanceTimersByTimeAsync(Math.max(0, 1_500 - (Date.now() - began)))
+    } finally {
+      flushing.mockRestore()
+      vi.useRealTimers()
+    }
+    await awaitCloseStep(Promise.resolve(closing), 'host close cleanup')
+    await awaitCloseStep(rig.host.flushStreamedEvents(HOST_TEST_SESSION), 'event sink cleanup')
+  }
 }
 
 async function runningTurn(turnId = 'turn-1'): Promise<string> {
@@ -71,15 +133,6 @@ async function queuedDraft(text: string): Promise<string> {
 
 function idleSweep() {
   return rig.host.collaboratorsForTests().lifetime.idleSweep
-}
-
-/** Holds every start until the returned release. */
-function holdStart(): () => void {
-  let release: () => void = () => undefined
-  rig.awaitStarted.mockImplementation(
-    () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-  )
-  return () => release()
 }
 
 describe('every Stop entry writes its event, with its reason, before it ends the child', () => {
@@ -120,7 +173,6 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       restartable: true,
       idleSweep: MANUAL_IDLE_SWEEP
     })
-    holdStart()
     rig.send('work on this')
     await eventually(async () =>
       expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
@@ -167,29 +219,37 @@ describe('every Stop entry writes its event, with its reason, before it ends the
     const open = journal()
     const append = open.appendItem.bind(open)
     let held = false
-    vi.spyOn(open, 'appendItem').mockImplementation(async (...args: Parameters<typeof append>) => {
-      if (!held && args[1].kind === 'turn' && args[1].state === 'running') {
-        held = true
-        await new Promise((resolve) => setTimeout(resolve, 1_500))
-      }
-      return append(...args)
+    const heldSink = Promise.withResolvers<void>()
+    const atClose = await closePastSlowDrain('user-close', async () => {
+      vi.spyOn(open, 'appendItem').mockImplementation(
+        async (...args: Parameters<typeof append>) => {
+          if (!held && args[1].kind === 'turn' && args[1].state === 'running') {
+            held = true
+            const delay = new Promise((resolve) => setTimeout(resolve, 1_500))
+            heldSink.resolve()
+            await delay
+          }
+          return append(...args)
+        }
+      )
+      rig.host
+        .collaboratorsForTests()
+        .runtimeState.eventSinkFor(HOST_TEST_SESSION)
+        .sink.appendItem(
+          { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
+          {
+            kind: 'turn',
+            turnId: 'turn-1',
+            state: 'running',
+            startedAt: Date.now(),
+            userItemId: agentJournalSubmissionKey(sent)
+          },
+          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        )
+      await heldSink.promise
+      // The echo's acceptance lands straight in the journal, ahead of the turn row.
+      await rig.settleAccepted(sent, 'turn-1')
     })
-    rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION).sink.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 999 },
-      {
-        kind: 'turn',
-        turnId: 'turn-1',
-        state: 'running',
-        startedAt: Date.now(),
-        userItemId: agentJournalSubmissionKey(sent)
-      },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    // The echo's acceptance lands straight in the journal, ahead of the turn row.
-    await rig.settleAccepted(sent, 'turn-1')
-    const atClose = stopEventsAtClose()
-
-    await rig.host.close(HOST_TEST_SESSION, 'user-close')
 
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-close'])
   }, 20_000)
@@ -247,17 +307,18 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
       const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
       const drained = sink.drained.bind(sink)
-      vi.spyOn(sink, 'drained')
-        .mockImplementationOnce(
-          () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1_500))
-        )
-        .mockImplementation(drained)
-      const atClose = stopEventsAtClose()
-
-      await rig.host.close(HOST_TEST_SESSION, 'evict')
+      const atClose = await closePastSlowDrain('evict', () => {
+        vi.spyOn(sink, 'drained')
+          .mockImplementationOnce(
+            () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1_500))
+          )
+          .mockImplementation(drained)
+      })
 
       expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
-      expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+      // The close hides the row, as every close of a chat does; the Stop still pauses.
+      expect(await rig.queuePause()).toBeNull()
+      expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toContain('stopped')
     },
     20_000
   )
@@ -273,7 +334,7 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       { kind: 'turn', turnId: 'turn-1', state: 'interrupted', completedAt: Date.now() },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
     const drained = sink.drained.bind(sink)
     vi.spyOn(sink, 'drained')
@@ -286,9 +347,9 @@ describe('every Stop entry writes its event, with its reason, before it ends the
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
   })
 
-  // The idle sweep finishes a stop whose exit was unproven: the same stop, so its event stands alone.
+  // A later stop joins a close whose exit was unproven: the same close, so its event stands alone.
   it.each([['user-close' as const], ['evict' as const]])(
-    'writes one event for a close (%s) whose exit was unproven, and none for its retry',
+    'writes one event for a close (%s) whose exit was unproven, and none for a stop that joins it',
     async (cause) => {
       rig = await createQueuedMessageTestRig({ idleSweep: MANUAL_IDLE_SWEEP })
       await runningTurn()
@@ -296,13 +357,14 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       const session = () => rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!
 
       await rig.host.close(HOST_TEST_SESSION, cause).catch(() => undefined)
-      expect(session().child).not.toBeNull()
-      expect(session().owesProviderChildWindDown).toMatchObject({ cause })
+      expect(session().child?.close).toMatchObject({ cause })
       expect(stopEvents()).toEqual([{ reason: cause, turnId: 'turn-1', at: expect.any(Number) }])
 
-      await idleSweep().tick()
+      await rig.host['tasks'].serialize(HOST_TEST_SESSION, () =>
+        rig.host['lifetime'].stopAgent(HOST_TEST_SESSION, { cause: 'host-stop' })
+      )
 
-      expect(session().owesProviderChildWindDown).toBeUndefined()
+      expect(session().child).toBeNull()
       expect(stopEvents().map((event) => event.reason)).toEqual([cause])
       expect(session().lastEndedChild?.cause).toBe(cause)
     }
@@ -385,14 +447,14 @@ describe("a person's Stop pause and the Stop events after it", () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     await rig.settleAccepted(working, 'stopped')
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // Orchestration mail starts a turn the host sent, which lifts nothing.
-    await rig.send('mail for the lead', undefined, { internal: true }).result
+    // Orchestration mail's turn runs, but its send is not accepted yet, so it lifts nothing yet.
+    await rig.send('mail for the lead').result
     await journal().appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-mail', ordinal: 999 },
       { kind: 'turn', turnId: 'turn-mail', state: 'running', startedAt: 1 },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['stopped'])
     const atClose = stopEventsAtClose()
 
     await rig.host.close(HOST_TEST_SESSION, 'evict')
@@ -414,8 +476,7 @@ describe("a person's Stop pause and the Stop events after it", () => {
     // The agent at rest goes, writing nothing; mail then starts a new child, which never lands.
     await idleSweep().tick()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    holdStart()
-    rig.send('mail for the lead', undefined, { internal: true })
+    rig.send('mail for the lead')
     await eventually(async () =>
       expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
         'starting'
@@ -426,7 +487,8 @@ describe("a person's Stop pause and the Stop events after it", () => {
     await idleSweep().tick()
 
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
-    expect(await rig.handoff(held)).toBeUndefined()
     expect(await rig.queuePause()).not.toEqual({ reason: 'stopped' })
+    // The pause ended with the host's stop, so the card goes out to the next start.
+    await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
   })
 })

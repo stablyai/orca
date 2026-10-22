@@ -79,6 +79,13 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   isCapabilityPaused?: () => boolean
   /** Publishes local transport diagnostics after a meaningful state transition. */
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
+  /** Any inbound frame, ping or pong on the current socket. */
+  onAnswered?: () => void
   reconnectStableResetMs?: number
   liveness?: RemoteRuntimeSocketLivenessOptions
+  /**
+   * The server refused this socket's token. Null leaves the usual reconnect; a promise means the
+   * caller owns recovery and says whether this connection should then retry or stay closed.
+   */
+  onAuthenticationRejected?: () => Promise<'retry' | 'stop'> | null
 }

@@ -1,7 +1,11 @@
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+import { encodePairingOffer, parsePairingCode } from './pairing'
 import {
   decrypt,
   decryptBytes,
@@ -337,7 +341,12 @@ describe('sendRemoteRuntimeRequest', () => {
     'rejects invalid timer delay %s before reading pairing data',
     async (timeoutMs) => {
       await expect(
-        sendRemoteRuntimeRequest({} as PairingOffer, 'status.get', {}, timeoutMs)
+        sendRemoteRuntimeRequest(
+          pairedRuntimeConnectionFromOffer({ endpoint: '', deviceToken: '', publicKeyB64: '' }),
+          'status.get',
+          {},
+          timeoutMs
+        )
       ).rejects.toMatchObject({ code: 'invalid_argument' })
     }
   )
@@ -526,7 +535,7 @@ async function createSubscriptionServer(
     disableAutoPong?: boolean
   } = {}
 ): Promise<{
-  pairing: PairingOffer
+  pairing: PairedRuntimeConnection
   nextBinary: Promise<Uint8Array>
   nextAuth: Promise<unknown>
 }> {
@@ -618,7 +627,7 @@ async function createSubscriptionServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, nextBinary, nextAuth }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing), nextBinary, nextAuth }
 }
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
@@ -628,7 +637,7 @@ function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): 
 async function createClosingServer(
   code: number,
   reason: string
-): Promise<{ pairing: PairingOffer }> {
+): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
@@ -649,10 +658,10 @@ async function createClosingServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing) }
 }
 
-async function createInvalidHandshakeServer(): Promise<{ pairing: PairingOffer }> {
+async function createInvalidHandshakeServer(): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
@@ -673,7 +682,7 @@ async function createInvalidHandshakeServer(): Promise<{ pairing: PairingOffer }
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing) }
 }
 
 async function createOneShotServer(
@@ -683,7 +692,7 @@ async function createOneShotServer(
     onRequest?: (request: Record<string, unknown>) => void
     sendUndecryptableResponse?: boolean
   } = {}
-): Promise<{ pairing: PairingOffer }> {
+): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
@@ -758,5 +767,5 @@ async function createOneShotServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing }
+  return { pairing: pairedRuntimeConnectionFromOffer(pairing) }
 }

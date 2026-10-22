@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 
 const SCOPE = { kind: 'turn' as const, turnItemId: 'turn-1' }
@@ -59,19 +59,24 @@ vi.mock('./use-structured-agent-session-read', () => ({
     loadOlder: vi.fn()
   })
 }))
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: vi.fn(),
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: vi.fn()
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 describe('useStructuredAgentSession transcript', () => {
+  // A root left mounted can commit after happy-dom is torn down ("window is not defined").
+  afterEach(cleanup)
+
   it('shows a cut turn no row explains with its one notice, placed in that turn', () => {
     const { result } = renderHook(() =>
       useStructuredAgentSession({
@@ -93,5 +98,20 @@ describe('useStructuredAgentSession transcript', () => {
     })
     // The list places rows by the same items, so the notice joins the cut turn.
     expect(result.current.journalItems.at(-1)).toMatchObject({ turnScope: SCOPE })
+  })
+
+  it('names any other agent by its own label, never as Claude', () => {
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'gemini',
+        target: { kind: 'local' },
+        isVisible: true
+      })
+    )
+
+    expect(result.current.messages.at(-1)).toMatchObject({
+      blocks: [{ text: expect.stringMatching(/^Gemini stopped while/) }]
+    })
   })
 })

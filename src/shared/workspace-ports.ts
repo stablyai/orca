@@ -54,6 +54,17 @@ export type WorkspacePortAdvertisedUrlChangedEvent = {
   port: number
 }
 
+/** Asks whether a scanned listener serves a web page. Loopback only; the scan supplies host and port. */
+export type WorkspacePortPageProbeRequest = {
+  host: string
+  port: number
+  protocol: 'http' | 'https'
+}
+
+export type WorkspacePortPageProbeResult =
+  | { kind: 'page'; title: string | null; faviconDataUrl: string | null }
+  | { kind: 'not-page' }
+
 export type WorkspacePortKillRequest = {
   repoId?: string
   pid: number
@@ -72,4 +83,17 @@ export type WorkspacePortScanResult = {
   scannedAt: number
   ports: WorkspacePort[]
   unavailableReason?: string
+}
+
+/** A scan of one execution host, named endpoint-relative (`local` or `ssh:<target>` as the host sees it). */
+export type WorkspacePortHostScanResult = WorkspacePortScanResult & {
+  executionHostId: string
+}
+
+export type WorkspacePortHostKillRequest = {
+  worktree: string
+  /** The host the row was scanned on; Stop is refused when the workspace now resolves elsewhere. */
+  executionHostId: string
+  pid: number
+  port: number
 }

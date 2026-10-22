@@ -38,13 +38,13 @@ vi.mock('@/lib/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
-vi.mock('@/runtime/web-runtime-session', () => ({
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => 'web-runtime'
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => 'web-runtime'
 }))
 
 vi.mock('@/lib/launch-agent-web-host-tab', () => ({

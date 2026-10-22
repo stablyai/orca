@@ -1,6 +1,11 @@
+import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
-import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
+import {
+  isTurnEndDisposition,
+  normalizeAgentStatusPayload
+} from '../../../shared/agent-status-types'
+import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
@@ -21,45 +26,15 @@ import {
   olderPeerAgentStatusLegacyMode
 } from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
-import { normalizeRemoteEnvelopeFields } from './server-remote-envelope-normalization'
+import {
+  normalizeRemoteEnvelopeFields,
+  type RemoteAgentStatusEnvelope
+} from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
-  ingestRemote(
-    envelope: {
-      paneKey: string
-      tabId?: string
-      worktreeId?: string
-      env?: string
-      version?: string
-      launchToken?: string
-      hasExplicitPrompt?: boolean
-      promptInteractionKey?: string
-      agentPresence?: unknown
-      hookEventName?: string
-      source?: unknown
-      providerPromptId?: unknown
-      grokPromptBoundary?: unknown
-      compactTrigger?: unknown
-      toolUseId?: string
-      toolAgentId?: string
-      teammateName?: string
-      toolAgentType?: string
-      providerSession?: unknown
-      providerSessionOnly?: unknown
-      isReplay?: boolean
-      /** Payload fields the relay dropped to fit an oversized frame; validated below. */
-      shedFields?: unknown
-      claudeRunningNonAgentTask?: unknown
-      /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
-      advertisedAgentStatusCapabilities?: readonly string[]
-      statusUnavailable?: unknown
-      evidenceAgeMs?: unknown
-      payload: unknown
-    },
-    connectionId: string | null
-  ): void {
+  ingestRemote(envelope: RemoteAgentStatusEnvelope, connectionId: string | null): void {
     if (
       !canAdmitLegacyAgentStatus(
         'main-status-update',
@@ -135,6 +110,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       worktreeId,
       promptInteractionKey,
       toolUseId,
+      claudeSettledRequests,
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -194,7 +170,13 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName,
       isReplay: envelope.isReplay === true,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true,
-      launchToken: envelope.launchToken
+      launchToken: envelope.launchToken,
+      retainedLaunchTokenHash: envelope.launchToken?.trim()
+        ? undefined
+        : this.retainedOwnerLaunchTokenHash(paneKey, {
+            worktreeId,
+            connectionId: trimmedConnectionId
+          })
     })
     if (statusDisposition === 'suppress') {
       return
@@ -282,6 +264,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }
         : {}),
+      hostTurnRevision: normalizeHostTurnRevision(envelope.hostTurnRevision),
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,
@@ -293,12 +276,17 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       compactTrigger,
       toolUseId,
+      ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
       toolAgentId,
       teammateName,
       toolAgentType,
       providerSession,
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
+      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
+      ...(isTurnEndDisposition(envelope.turnEndDisposition)
+        ? { turnEndDisposition: envelope.turnEndDisposition }
+        : {}),
       claudeRunningNonAgentTask:
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask

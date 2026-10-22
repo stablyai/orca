@@ -168,7 +168,7 @@ describe('NativeChatSubagentRun', () => {
     )
 
     const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('no recent update')
+    expect(row).toHaveTextContent('status unavailable')
     // `unverifiable` with no terminal timestamp has no known run length, so the
     // clock would measure to `now` and report the time since we lost sight of
     // the child as how long it ran — on a row that is not even counting.
@@ -189,7 +189,7 @@ describe('NativeChatSubagentRun', () => {
     )
 
     const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('1 with no recent update')
+    expect(row).toHaveTextContent('1 with status unavailable')
     expect(row.textContent).not.toContain('·')
   })
 
@@ -234,7 +234,6 @@ describe('NativeChatToolRun with a spawn group', () => {
         blocks={[]}
         subagentGroups={[group([{ id: 'a', label: 'read', state: 'completed' }])]}
         expandSignal={false}
-        expandOverride={false}
         activeTurnIsWorking={false}
       />
     )
@@ -242,7 +241,7 @@ describe('NativeChatToolRun with a spawn group', () => {
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
   })
 
-  // The roster-only branch returns a `mt-3` wrapper whenever it has rows, so a
+  // The roster-only branch returns a spacing wrapper whenever it has rows, so a
   // group that draws nothing must not count as one — that wrapper would be the
   // empty bubble with a margin that the message row refuses to emit.
   it('draws nothing at all for a spawn group that carries no children', () => {
@@ -251,30 +250,11 @@ describe('NativeChatToolRun with a spawn group', () => {
         blocks={[]}
         subagentGroups={[group([])]}
         expandSignal={false}
-        expandOverride={false}
         activeTurnIsWorking={false}
       />
     )
 
     expect(container).toBeEmptyDOMElement()
-  })
-
-  // The roster-only escape above is keyed on `blocks.length === 0`, so a group
-  // sharing its message with tool calls falls through to the settled-turn guard
-  // — which returned bare null and took the roster with it.
-  it('keeps a roster that shares its message with tool calls on a collapsed turn', () => {
-    render(
-      <NativeChatToolRun
-        blocks={[{ type: 'tool-call', name: 'shell', input: { command: 'ls' } }]}
-        subagentGroups={[group([{ id: 'a', label: 'read', state: 'completed' }])]}
-        expandSignal={false}
-        expandOverride={false}
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.queryByText('shell')).toBeNull()
   })
 
   it('renders the roster alongside the tool activity of its turn', () => {

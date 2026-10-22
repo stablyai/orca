@@ -55,6 +55,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -117,6 +118,9 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules. Gated with the
       # build it feeds, so a cache hit does not pay for an install nothing consumes.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - uses: ./.github/actions/prepare-windows-agent-hook
         if: steps.cache-installer.outputs.cache-hit != 'true'
 
       - name: Build Windows installer (unsigned)

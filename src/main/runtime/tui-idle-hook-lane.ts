@@ -3,6 +3,7 @@ import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-type
 import type { TuiAgent } from '../../shared/tui-agent'
 import { hookAuthority } from './agent-state-rules/agent-state-rules-engine'
 import { selectFreshExplicitAgentStatusRow } from './runtime-hook-agent-row-selection'
+import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
 
 type HookTurnState = 'done' | 'working' | 'permission'
 
@@ -14,6 +15,7 @@ type HookTurnState = 'done' | 'working' | 'permission'
 export type TuiIdleHookTurn = {
   state: HookTurnState
   blockedReason: RuntimeTerminalWaitBlockedReason | null
+  taskWakeupPending?: true
 }
 
 /**
@@ -42,6 +44,11 @@ export type TuiIdleHookTurnRead = {
   handles: Iterable<string>
   paneKeys: Iterable<string>
   hookRows: readonly AgentStatusIpcPayload[]
+  connectionId?: string | null
+  wslDistro?: string | null
+  launchToken?: string | null
+  titleObservedAtEpochMs?: number | null
+  hasExplicitIdleTitle?: boolean
   /** When the PTY respawned: every row from before it is the previous process's. */
   respawnedAt?: number
   /** When input last reached the pane, typed or sent: a `done` from before it cannot speak for
@@ -73,8 +80,23 @@ export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn 
   const blockedReason = read.resolveBlockedText(state, row)
   // Why the hook alone blocks: a question or custom modal paints no dialog text the arbiter knows,
   // and these hooks report its answer. Input since may have answered it before the hook arrived.
+  const taskWakeupPending =
+    read.agent === 'claude' &&
+    row.state !== 'done' &&
+    (row.claudeTaskWakeupPending === 'notification' ||
+      (row.claudeTaskWakeupPending === 'finishing-turn' &&
+        !(
+          read.hasExplicitIdleTitle &&
+          typeof read.titleObservedAtEpochMs === 'number' &&
+          read.titleObservedAtEpochMs > (row.turnStartedAt ?? row.receivedAt)
+        ))) &&
+    row.observation?.origin === 'hook' &&
+    row.providerSession?.key === 'session_id' &&
+    terminalHostConnectionMatches(row.connectionId, read.connectionId ?? null, read.wslDistro) &&
+    (!read.launchToken || row.launchToken === read.launchToken)
   return {
     state,
+    ...(taskWakeupPending ? { taskWakeupPending: true as const } : {}),
     blockedReason:
       blockedReason ??
       (state === 'permission' && !predatesInput ? 'agent-interactive-prompt' : null)
@@ -99,6 +121,15 @@ export function evaluateHookTurn(
   agent: TuiAgent | null | undefined,
   readHookTurn: () => TuiIdleHookTurn | null
 ): TuiIdleHookVerdict | null {
+  // A ready composer can still owe a task wake-up; only that owner-produced fact vetoes Claude rest.
+  if (agent === 'claude') {
+    const turn = readHookTurn()
+    return turn?.taskWakeupPending
+      ? turn.blockedReason
+        ? { kind: 'blocked', reason: turn.blockedReason }
+        : { kind: 'working' }
+      : null
+  }
   const authority = hookAuthority(agent)
   if (authority === 'identity-only') {
     return null

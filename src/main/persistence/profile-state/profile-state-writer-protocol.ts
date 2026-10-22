@@ -19,7 +19,7 @@ export type ProfileStateWriterCommand =
       runPayloads: readonly string[]
     }
   | { command: 'assert-revision' | 'close' }
-  | { command: 'export-json' | 'export-latest' | 'export-compatibility'; targetPath: string }
+  | { command: 'export-json' | 'export-latest'; targetPath: string }
 
 export type ProfileStateWriterRequest = ProfileStateWriterCommand & { id: number }
 export type ProfileStateWriterFailureOutcome = 'known-failure' | 'indeterminate'
@@ -30,6 +30,8 @@ export type ProfileStateWriterErrorData = {
   expectedRevision?: number
   actualRevision?: number
   domain?: string | null
+  /** The SQLite failure behind a database open error, which the error class alone cannot name. */
+  cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =
   | { id: number; ok: true; revision: number; exportedRevision?: number | null }
@@ -73,7 +75,6 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
       return true
     case 'export-json':
     case 'export-latest':
-    case 'export-compatibility':
       return typeof value.targetPath === 'string' && value.targetPath.length > 0
     case 'write-complete':
     case 'write-domains':
@@ -98,7 +99,17 @@ function isErrorData(value: unknown): value is ProfileStateWriterErrorData {
     (value.outcome === 'known-failure' || value.outcome === 'indeterminate') &&
     (value.expectedRevision === undefined || isProfileStateRevision(value.expectedRevision)) &&
     (value.actualRevision === undefined || isProfileStateRevision(value.actualRevision)) &&
-    (value.domain === undefined || value.domain === null || typeof value.domain === 'string')
+    (value.domain === undefined || value.domain === null || typeof value.domain === 'string') &&
+    (value.cause === undefined || isErrorCauseData(value.cause))
+  )
+}
+
+function isErrorCauseData(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    (value.code === undefined || typeof value.code === 'string') &&
+    (value.errcode === undefined || typeof value.errcode === 'number')
   )
 }
 

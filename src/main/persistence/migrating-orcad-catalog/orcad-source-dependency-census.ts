@@ -1,0 +1,92 @@
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
+import {
+  ORCAD_MIGRATION_DEPENDENCY_KINDS,
+  type OrcadMigrationDependencyKind
+} from '../../../shared/orcad-migration/orcad-migration-preflight'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
+import {
+  inspectOrcadMigrationSourceSessions,
+  type OrcadMigrationSourceSessionInspection
+} from './orcad-source-session-dependencies'
+import {
+  collectOrcadMigrationSourceDormantState,
+  orcadMigrationLeavesBehind
+} from './orcad-source-dormant-state'
+import {
+  createOrcadMigrationSourceScope,
+  orcadMigrationOwnerMatchesScope,
+  orcadMigrationPartitionScope,
+  type OrcadMigrationSourceScope
+} from './orcad-source-scope'
+import { paneBelongsToTabs } from '../../../shared/workspace-session-pane-ownership'
+
+export type OrcadMigrationSourceDependencyCensus = {
+  totalCount: number
+  counts: Record<OrcadMigrationDependencyKind, number>
+  /** For the kinds it can name: what blocks and how to clear it. */
+  names?: Partial<Record<OrcadMigrationDependencyKind, string[]>>
+}
+
+/** What still references the target that this manifest cannot carry. */
+export function collectOrcadMigrationUntransferredDependencyCensus(
+  state: PersistedState,
+  manifest: OrcadMigrationManifest,
+  storage?: TerminalScrollbackSnapshotStorage
+): OrcadMigrationSourceDependencyCensus {
+  const scope = createOrcadMigrationSourceScope({
+    source: manifest.source,
+    catalog: manifest.payload,
+    repos: state.repos
+  })
+  const sessions = inspectOrcadMigrationSourceSessions(state, {
+    hostId: scope.hostId,
+    ownerMatches: (ownerKey, partitionHostId) =>
+      orcadMigrationOwnerMatchesScope(
+        ownerKey,
+        orcadMigrationPartitionScope(scope, partitionHostId)
+      )
+  })
+  const dormant = collectOrcadMigrationSourceDormantState(
+    state,
+    manifest.source,
+    manifest.payload,
+    storage,
+    manifest.destinationEnvironmentId
+  )
+  const counts: Record<OrcadMigrationDependencyKind, number> = {
+    ...dormant.blockedCounts,
+    'terminal-lease': state.sshRemotePtyLeases.filter(
+      (lease) => lease.targetId === scope.targetId && lease.state !== 'terminated'
+    ).length,
+    // Left behind, recovery records stay with this desktop; the terminal gate still proves exit.
+    'terminal-recovery': orcadMigrationLeavesBehind(state, scope.targetId)
+      ? 0
+      : countTerminalRecoveryState(state, scope, sessions)
+  }
+  return {
+    counts,
+    totalCount: ORCAD_MIGRATION_DEPENDENCY_KINDS.reduce((total, kind) => total + counts[kind], 0),
+    names:
+      dormant.blockedSessionItems.length > 0
+        ? { 'workspace-session': dormant.blockedSessionItems }
+        : {}
+  }
+}
+
+// Consumer recoveries never block: the terminal gate proves before every move that their leases exited.
+// Legacy pane-key aliases never block either: an alias only routes hook events and names a terminal
+// the tab or pane already records, which the lease checks and the terminal gate govern.
+function countTerminalRecoveryState(
+  state: PersistedState,
+  scope: OrcadMigrationSourceScope,
+  sessions: OrcadMigrationSourceSessionInspection
+): number {
+  return state.migrationUnsupportedPtyEntries.filter(
+    (entry) =>
+      orcadMigrationOwnerMatchesScope(entry.worktreeId, scope) ||
+      (entry.tabId ? sessions.tabIds.has(entry.tabId) : false) ||
+      sessions.ptyIds.has(entry.ptyId) ||
+      (entry.paneKey ? paneBelongsToTabs(entry.paneKey, sessions.tabIds) : false)
+  ).length
+}

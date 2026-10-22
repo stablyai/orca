@@ -1,4 +1,4 @@
-import { resolveRuntimePaneTitleForLeaf } from '@/lib/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from '../../../../shared/runtime-pane-title-leaf-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 /**

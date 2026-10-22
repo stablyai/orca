@@ -1,10 +1,10 @@
 // The only place a new fence number is chosen.
 //
-// Normally that is just "one past the current fence". For a record the one-time import took from
-// the records file's backup, or found beside a set-aside copy, it is not: the commit that never
-// landed may already have granted a fence the copy cannot show, and `isAgentSessionFenceCurrent`
-// compares with STRICT EQUALITY, so minting that exact number would hand a second writer a lease
-// the first one still believes it holds.
+// Normally that is just "one past the current fence". For a record an earlier build's one-time
+// import took from its records file's backup, or found beside a set-aside copy, it is not: the
+// commit that never landed may already have granted a fence the copy cannot show, and
+// `isAgentSessionFenceCurrent` compares with STRICT EQUALITY, so minting that exact number would
+// hand a second writer a lease the first one still believes it holds.
 //
 // Recovery records the floor instead of rewriting the current fence, because `live` means a handle
 // proven at exactly the current fence — moving it would invalidate the very records recovery exists

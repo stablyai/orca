@@ -62,7 +62,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   )
   const operationRoute = operationGuard.route
   const fileContext = {
-    settings: operationRoute.settings,
+    target: operationRoute.target,
     worktreeId,
     worktreePath,
     connectionId: operationRoute.connectionId,

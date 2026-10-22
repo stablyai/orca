@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeDoctorResult
@@ -23,8 +23,8 @@ import {
 import {
   cleanupEphemeralVmRuntime,
   provisionEphemeralVmRuntime
-} from '../ephemeral-vm-runtime-service'
-import { connectRuntimeOwnedSshTarget } from '../ephemeral-vm-runtime-ssh'
+} from '../ephemeral-vm/runtime-service'
+import { connectRuntimeOwnedSshTarget } from '../ephemeral-vm/runtime-ssh'
 import {
   getRecipeRepo,
   listRecipeCatalog,
@@ -35,7 +35,7 @@ import {
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
 import type { PluginService } from '../plugins/plugin-service'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
-import { resolveProvisionedRootSource } from '../ephemeral-vm-provisioned-root-source'
+import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
@@ -53,6 +53,8 @@ export type EphemeralVmProvisionIpcResult =
       connectionType: 'ssh'
       runtime: EphemeralVmRuntimeRecord
       sshTargetId: string
+      /** The managed Orca server the host runs; its workspace lives there. */
+      environmentId?: string
       expectedRefHead?: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
@@ -144,10 +146,8 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           chunk: redactEphemeralVmRecipeDiagnosticText(chunk)
         })
       }
-      // Why: keep the controller registered across BOTH the recipe-create phase AND
-      // the post-create SSH-connect/provider-wait phase, so cancelProvision can still
-      // abort during the up-to-10s SSH connect window. Removing it in the provision
-      // promise's own .finally() would deregister it before SSH connect even starts.
+      // Why: deregister only when the whole handler settles, so cancelProvision still finds the
+      // controller for every phase that reads its signal.
       try {
         let recipeRepoUrl = repo.repo.gitRemoteIdentity?.remoteUrl
         let sourceRef = args.ref
@@ -206,14 +206,14 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           try {
             const ssh = await connectRuntimeOwnedSshTarget({
               runtimeId: result.runtime.id,
-              connection,
-              ...(controller ? { signal: controller.signal } : {})
+              connection
             })
             const runtime = updateEphemeralVmRuntimeStatus(
               app.getPath('userData'),
               result.runtime.id,
               {
-                sshTargetId: ssh.targetId
+                sshTargetId: ssh.targetId,
+                runtimeEnvironmentId: ssh.environmentId
               }
             )
             return {
@@ -221,6 +221,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
               connectionType: 'ssh',
               runtime,
               sshTargetId: ssh.targetId,
+              environmentId: ssh.environmentId,
               ...(expectedRefHead ? { expectedRefHead } : {}),
               stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
               warnings: getEphemeralVmRecipeResultWarnings(result.start.result)

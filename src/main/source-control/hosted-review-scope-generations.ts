@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { MAX_BRANCH_MAP_ENTRIES } from './hosted-review-refresh-pacing'
 
 /**
@@ -17,6 +18,11 @@ const scopeGenerations = new Map<string, number>()
  * eviction can only make a lookup discard its result, never adopt a stale one.
  */
 let evictedGeneration = 0
+
+// Cache invalidation and provider reads must use the same host-scoped identity.
+export function hostedReviewRepoScope(repoPath: string, executionHostId: ExecutionHostId): string {
+  return `${executionHostId}\0${repoPath}`
+}
 
 export function scopeGeneration(scope: string): number {
   return scopeGenerations.get(scope) ?? evictedGeneration

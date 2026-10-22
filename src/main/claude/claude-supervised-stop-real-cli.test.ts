@@ -1,11 +1,13 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from './claude-child-exit-proof-ladder'
+import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import { realClaudeLaunchHome } from './claude-real-cli-availability-test-support'
 import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection
@@ -15,14 +17,16 @@ import {
   claudeStructuredPermissionOptions
 } from './claude-structured-launch-resolution'
 
-// Opt-in only: spends a real (haiku) turn per case. Run it in an isolated HOME with
-// ORCA_REAL_CLAUDE_BIN set, and ORCA_REAL_CLAUDE_SETTINGS when auth lives in a settings file.
+// Opt-in only: spends a real (haiku) turn per case. Needs ORCA_REAL_CLAUDE_BIN; set
+// ORCA_REAL_CLAUDE_SETTINGS only when auth lives in a settings file outside the Claude home.
 const CLAUDE_BIN = process.env.ORCA_REAL_CLAUDE_BIN ?? ''
 const enabled =
   process.env.ORCA_REAL_CLAUDE_SUPERVISED_STOP === '1' &&
   process.platform !== 'win32' &&
   CLAUDE_BIN.length > 0
 const FRAMES_OUT = process.env.ORCA_REAL_CLAUDE_FRAMES_OUT
+// Launch and transcript lookup share one home, as production acquisition does.
+const home = realClaudeLaunchHome()
 const TOOL_MARKER = 'orca_supervised_stop_probe'
 const TOOL_PROMPT = `Use the Bash tool to run exactly this command, with no timeout argument, and nothing else: python3 -c "import time; time.sleep(120)  # ${TOOL_MARKER}"`
 
@@ -80,7 +84,7 @@ async function until<T>(read: () => Promise<T | null> | T | null, what: string, 
 
 async function open(sessionId: string, cwd: string, resume: boolean, frames: Frame[]) {
   const settings = process.env.ORCA_REAL_CLAUDE_SETTINGS
-  const permission = claudeStructuredPermissionOptions('bypassPermissions')
+  const permission = claudeStructuredPermissionOptions('full-access')
   const connection = await openClaudeStreamJsonConnection(
     {
       pathToClaudeCodeExecutable: CLAUDE_BIN,
@@ -94,7 +98,8 @@ async function open(sessionId: string, cwd: string, resume: boolean, frames: Fra
         },
         ...(resume ? { resume: sessionId } : { sessionId })
       },
-      cwd
+      cwd,
+      env: { ...home.env, ...claudeConfigDirEnvPatch(home.claudeConfigDir, { env: home.env }) }
     },
     { onMessage: (message) => frames.push({ at: Date.now(), message }) }
   )
@@ -113,11 +118,10 @@ function userMessage(text: string): Record<string, unknown> {
 }
 
 async function transcriptLines(sessionId: string): Promise<string> {
-  const configDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
   const path = await until(
     () =>
       resolveSessionFilePath('claude', sessionId, {
-        claudeProjectsDir: join(configDir, 'projects')
+        claudeProjectsDir: join(home.claudeConfigDir, 'projects')
       }),
     'the transcript',
     15_000

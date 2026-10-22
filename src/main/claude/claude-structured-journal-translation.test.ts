@@ -15,15 +15,12 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
@@ -180,7 +177,7 @@ const JOURNAL_IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('claude-session', 'leaf-1')
 }
 
 let journalRoot = ''
@@ -621,7 +618,7 @@ describe('Claude structured journal translation', () => {
     expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
   })
 
-  it('bounds persisted thinking text to the shared journal payload limit', () => {
+  it('saves long thinking text whole', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     const thinking = 'considering '.repeat(20_000)
@@ -635,9 +632,8 @@ describe('Claude structured journal translation', () => {
     expect(reasoning?.body).toEqual({
       kind: 'message',
       role: 'reasoning',
-      blocks: [
-        { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
-      ]
+      blocks: [{ type: 'text', text: thinking }],
+      state: 'completed'
     })
   })
 

@@ -5,10 +5,13 @@ import { observeRelayDatabase } from './observed-relay-database.js'
 import {
   CONTROL_RTT_RESERVOIR_LIMIT,
   observedRelayRequests,
+  PRE_AUTH_RESERVOIR_LIMIT,
   percentile,
   RelayObservability,
+  STICKY_CONNECTION_LIMIT,
   type RelayProcessCounts
 } from './relay-observability.js'
+import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
 
 const counts: RelayProcessCounts = {
   totalConnections: 9,
@@ -57,6 +60,39 @@ function renameStageKeys(bucket: unknown): unknown {
 }
 
 describe('relay observability', () => {
+  it('stamps every runtime metrics line with the fix level', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'production-gce-c25', region: 'asia-east2' },
+      (entry) => entries.push(entry)
+    )
+    observability.flush(counts)
+    expect(entries[0]).toMatchObject({
+      event: 'orca_relay_runtime_metrics',
+      fixLevel: RELAY_FIX_LEVEL
+    })
+    expect(RELAY_FIX_LEVEL).toBeGreaterThanOrEqual(1)
+  })
+
+  // Why: a director whose loop froze for 134 s still reported a 68 ms p99 (staging 2026-10-11).
+  it('reports one long event-loop freeze as the window max', async () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    observability.start(() => counts, 3_600_000)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const frozenUntil = performance.now() + 300
+    while (performance.now() < frozenUntil) {
+      // Holds the loop the way a blocking connect() does.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    observability.flush(counts)
+    observability.stop()
+    expect(entries[0]!.eventLoopDelayMsMax).toBeGreaterThanOrEqual(250)
+  })
+
   it('emits safe readiness dependency outcomes', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(
@@ -200,6 +236,153 @@ describe('relay observability', () => {
     })
   })
 
+  it('splits non-drain 503s from scheduled drain-return deferrals', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let index = 0; index < 40; index++) {
+      observability.recordAssignmentUnavailable('drain-return-deferred')
+    }
+    observability.recordAssignmentUnavailable('sticky-lane')
+    observability.recordAssignmentUnavailable('relay_capacity_exhausted')
+    observability.recordAssignmentUnavailable('relay_capacity_exhausted')
+    observability.flush(counts)
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      assign503sByCauseDelta: {
+        'drain-return-deferred': 40,
+        'sticky-lane': 1,
+        relay_capacity_exhausted: 2
+      },
+      assignNonDrain503sDelta: 3
+    })
+    expect(entries[1]).toMatchObject({ assign503sByCauseDelta: {}, assignNonDrain503sDelta: 0 })
+  })
+
+  it('reports lane slot service times only for windows that served the lane', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let ms = 1; ms <= 100; ms++) {
+      observability.recordAdmissionServiceMs('sticky', ms)
+      observability.recordAdmissionServiceMs('drain-return', ms * 10)
+    }
+    observability.flush(counts)
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      stickyServiceMsP50: 50,
+      stickyServiceMsP99: 99,
+      drainReturnServiceMsP50: 500,
+      drainReturnServiceMsP95: 950
+    })
+    expect(entries[1]).not.toHaveProperty('stickyServiceMsP50')
+    expect(entries[1]).not.toHaveProperty('drainReturnServiceMsP50')
+  })
+
+  it('summarises sticky slots per window and per pooled connection', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let ms = 1; ms <= 100; ms++) {
+      observability.recordStickySlot({
+        queueWaitMs: ms * 20,
+        poolWaitMs: ms,
+        sqlMs: ms * 2,
+        statements: 14,
+        // The slow connection serves every other request.
+        statementMsByConnection: new Map([ms % 2 === 0 ? [1, [300]] : [2, [5, 6]]])
+      })
+    }
+    observability.flush(counts)
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      stickySlotsDelta: 100,
+      stickyQueueWaitMsP50: 1_000,
+      stickyQueueWaitMsP99: 1_980,
+      stickyQueueWaitMsMax: 2_000,
+      stickyPoolWaitMsP50: 50,
+      stickyPoolWaitMsP99: 99,
+      stickySqlMsP50: 100,
+      stickySqlMsP99: 198,
+      stickyStatementsP50: 14,
+      stickyStatementsMax: 14,
+      stickySqlByConnection: {
+        '1': {
+          requests: 50,
+          statements: 50,
+          statementMsP50: 300,
+          statementMsP99: 300,
+          statementMsMax: 300
+        },
+        '2': { requests: 50, statements: 100, statementMsP50: 5, statementMsP99: 6 }
+      },
+      stickySqlConnectionSamplesDroppedDelta: 0
+    })
+    expect(entries[1]).not.toHaveProperty('stickySlotsDelta')
+    expect(entries[1]).not.toHaveProperty('stickySqlByConnection')
+  })
+
+  it('bounds the per-connection sticky summary', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let id = 1; id <= STICKY_CONNECTION_LIMIT + 3; id++) {
+      observability.recordStickySlot({
+        queueWaitMs: 0,
+        poolWaitMs: 0,
+        sqlMs: 1,
+        statements: 1,
+        statementMsByConnection: new Map([[id, [1]]])
+      })
+    }
+    observability.flush(counts)
+
+    expect(Object.keys(entries[0]?.stickySqlByConnection as object)).toHaveLength(
+      STICKY_CONNECTION_LIMIT
+    )
+    expect(entries[0]).toMatchObject({ stickySqlConnectionSamplesDroppedDelta: 3 })
+  })
+
+  it('sums lock waiters per role and table over the samples taken', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'director', cellId: 'director', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    observability.recordDatabaseLockWaitSample([
+      { waiterRole: 'cell', table: 'relay_cells', holderRole: 'cell', waiters: 3 },
+      { waiterRole: 'director', table: 'relay_cells', holderRole: 'cell', waiters: 1 },
+      { waiterRole: 'cell', table: 'relay_assignments', holderRole: 'director', waiters: 2 }
+    ])
+    observability.recordDatabaseLockWaitSample([])
+    observability.recordDatabaseLockWaitSample([
+      { waiterRole: 'cell', table: 'relay_cells', holderRole: 'cell', waiters: 1 }
+    ])
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      dbLockWaitSamplesDelta: 3,
+      dbLockWaitersByKeyDelta: {
+        'cell:relay_cells:cell': 4,
+        'director:relay_cells:cell': 1,
+        'cell:relay_assignments:director': 2
+      },
+      dbCellRowLockWaitersDirectorDelta: 1,
+      dbCellRowLockWaitersCellDelta: 4
+    })
+  })
+
   it('aggregates coarse region requests, selections, fallbacks, and outages', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(
@@ -325,6 +508,8 @@ describe('relay observability', () => {
     observability.recordControlClose(1006)
     observability.recordControlClose(1006)
     observability.recordControlClose(4402)
+    observability.recordPostProofClose('relay draining')
+    observability.recordPostProofClose('relay draining')
     observability.recordSpliceClose('host-oversize-frame')
     observability.recordSpliceClose('queue-limit')
     observability.recordClientAcceptAbandoned('activity', 14_250.4)
@@ -335,15 +520,52 @@ describe('relay observability', () => {
 
     expect(entries[0]).toMatchObject({
       controlClosesByCodeDelta: { 1006: 2, 4402: 1 },
+      postProofClosesByReasonDelta: { 'relay draining': 2 },
       spliceClosesByTriggerDelta: { 'host-oversize-frame': 1, 'queue-limit': 1 },
       clientAcceptsAbandonedByStageDelta: { activity: 2, credential: 1 },
       clientAcceptAbandonedMsMax: 14_250.4
     })
     expect(entries[1]).toMatchObject({
       controlClosesByCodeDelta: {},
+      postProofClosesByReasonDelta: {},
       spliceClosesByTriggerDelta: {},
       clientAcceptsAbandonedByStageDelta: {},
       clientAcceptAbandonedMsMax: 0
+    })
+  })
+
+  it('counts the phone path, phone refusals by code and the step-6 failures per window', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'production-gce-c28', region: 'asia-east2' },
+      (entry) => entries.push(entry)
+    )
+    const stageMs = { assignment: 0, credential: 170, activity: 0, attach: 300, basis: 0 }
+    observability.recordClientAcceptCompleted({ totalMs: 470, stageMs, phonePath: 'memory' })
+    observability.recordClientAcceptCompleted({ totalMs: 3_600, stageMs, phonePath: 'db' })
+    observability.recordPhoneRejection(4401)
+    observability.recordPhoneRejection(4404)
+    observability.recordPhoneRejection(4404)
+    observability.recordPhoneAttachDeadline()
+    observability.recordPhoneAcceptDatabaseError()
+    observability.recordResumeConfirmFailure('reject-revoked')
+    observability.recordResumeRenewalFailure()
+    observability.flush({ ...counts, resumeAuditDropped: 3 })
+    observability.flush(counts)
+    expect(entries[0]).toMatchObject({
+      clientAcceptsByPhonePathDelta: { memory: 1, db: 1 },
+      phoneRejectionsByCodeDelta: { '4401': 1, '4404': 2 },
+      phoneAttachDeadlinesDelta: 1,
+      phoneAcceptDatabaseErrorsDelta: 1,
+      resumeConfirmFailuresByCodeDelta: { 'reject-revoked': 1 },
+      resumeRenewalFailuresDelta: 1,
+      resumeAuditDropped: 3
+    })
+    expect(entries[1]).toMatchObject({
+      phoneRejectionsByCodeDelta: {},
+      phoneAttachDeadlinesDelta: 0,
+      phoneAcceptDatabaseErrorsDelta: 0,
+      resumeConfirmFailuresByCodeDelta: {}
     })
   })
 
@@ -389,6 +611,7 @@ describe('relay observability', () => {
       clientAcceptsAbandonedByStageDelta: {},
       clientAcceptAbandonedMsMax: 0
     })
+    expect(entries[0]).toMatchObject({ clientAcceptsByPhonePathDelta: {} })
     // An empty window publishes counts only: a zero percentile point is
     // indistinguishable from a real zero once Cloud Logging aggregates it.
     expect(entries[1]).toMatchObject({ clientAcceptCompletedDelta: 0, controlRttSamplesDelta: 0 })
@@ -456,6 +679,109 @@ describe('relay observability', () => {
     // fewer than the 5% the p95 needs is out of reach of this suite.
     expect(entries[0]!.controlRttMsP95).toBe(900)
     expect(entries[0]!.controlRttMsMax).toBe(900)
+  })
+
+  it('summarises host pre-auth latency per path and outcome', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'staging-gce-c1', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    for (let ms = 1; ms <= 100; ms++) observability.recordHostPreAuth('db', 'admitted', ms)
+    observability.recordHostPreAuth('db', 'abandoned', 6_000)
+    observability.recordHostPreAuth('beforeCheck', 'refused', 2_000)
+    observability.recordHostPreAuth('reserve', 'admitted', 12.3456)
+    observability.flush(counts)
+    observability.flush(counts)
+
+    const none = { admitted: { count: 0 }, refused: { count: 0 }, abandoned: { count: 0 } }
+    const buckets = (filled: Partial<Record<string, number>>): Record<string, number> => ({
+      '50': 0,
+      '100': 0,
+      '200': 0,
+      '300': 0,
+      '450': 0,
+      '700': 0,
+      '1000': 0,
+      '2000': 0,
+      '5000': 0,
+      '+Inf': 0,
+      ...filled
+    })
+    expect(entries[0]!.preAuthLatencyMs).toEqual({
+      beforeCheck: {
+        ...none,
+        refused: {
+          count: 1,
+          p50: 2_000,
+          p95: 2_000,
+          p99: 2_000,
+          max: 2_000,
+          bucketsLeMs: buckets({ '2000': 1 })
+        }
+      },
+      db: {
+        ...none,
+        admitted: {
+          count: 100,
+          p50: 50,
+          p95: 95,
+          p99: 99,
+          max: 100,
+          bucketsLeMs: buckets({ '50': 50, '100': 50 })
+        },
+        abandoned: {
+          count: 1,
+          p50: 6_000,
+          p95: 6_000,
+          p99: 6_000,
+          max: 6_000,
+          bucketsLeMs: buckets({ '+Inf': 1 })
+        }
+      },
+      reserve: {
+        ...none,
+        admitted: {
+          count: 1,
+          p50: 12.346,
+          p95: 12.346,
+          p99: 12.346,
+          max: 12.346,
+          bucketsLeMs: buckets({ '50': 1 })
+        }
+      }
+    })
+    // The window resets, and an empty window publishes counts only.
+    expect(entries[1]!.preAuthLatencyMs).toEqual({ beforeCheck: none, db: none, reserve: none })
+  })
+
+  it('counts every hello in the pre-auth buckets, inclusive of each bound', () => {
+    const entries: Array<Record<string, unknown>> = []
+    const observability = new RelayObservability(
+      { role: 'cell', cellId: 'staging-gce-c1', region: 'us-central1' },
+      (entry) => entries.push(entry)
+    )
+    const flooded = PRE_AUTH_RESERVOIR_LIMIT * 5
+    for (let sample = 0; sample < flooded; sample++) {
+      observability.recordHostPreAuth('reserve', 'admitted', 450)
+    }
+    observability.recordHostPreAuth('reserve', 'admitted', 450.001)
+    observability.recordHostPreAuth('reserve', 'admitted', 9_000)
+    observability.flush(counts)
+
+    expect(entries[0]).toMatchObject({
+      preAuthLatencyMs: {
+        reserve: {
+          admitted: {
+            // Exact past the reservoir cap, even when it declined the slowest hello.
+            count: flooded + 2,
+            max: 9_000,
+            p50: 450,
+            bucketsLeMs: { '300': 0, '450': flooded, '700': 1, '5000': 0, '+Inf': 1 }
+          }
+        }
+      }
+    })
   })
 
   it('observes successful and failed database calls including transactions', async () => {

@@ -25,7 +25,12 @@ import {
   updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
+import {
+  claudePaneHasRunningChildWork,
+  claudeRowHasUnlistedLiveWork
+} from './claude-pane-hold-evidence'
 import { buildClaudeStatusPayload } from './claude-status-build'
+import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
 
 export function normalizeClaudeEvent(
   state: HookListenerState,
@@ -65,6 +70,7 @@ export function normalizeClaudeEvent(
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
     // Why: a new session's main agent starts its own clock, not the old session's last Stop.
     setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
@@ -92,6 +98,9 @@ export function normalizeClaudeEvent(
         ? ('failure' as const)
         : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
+  const isTaskWakeup =
+    eventAgentId === undefined &&
+    trackClaudeTaskNotificationDelivery(state, paneKey, eventName, hookPayload, backgroundTasks)
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
   const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0
@@ -236,6 +245,7 @@ export function normalizeClaudeEvent(
             // pause after a cancelled turn must not erase them when the wait clears.
             ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
             stateStartedAt: previousLead.stateStartedAt,
+            ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
             // Why: a child's permission pause displaces an already-finished lead; keep the end time so the later drain is still that turn's tail.
             ...(previousLead.turnCompletedAt !== undefined
               ? { turnCompletedAt: previousLead.turnCompletedAt }
@@ -260,7 +270,14 @@ export function normalizeClaudeEvent(
     }
   }
 
-  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, { state: reportedStateName })
+  const taskWakeupTurn =
+    eventName === 'UserPromptSubmit'
+      ? isTaskWakeup
+      : !isTurnBoundary && !isManualCompactCompletion && previousLead?.taskWakeupTurn === true
+  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
+    state: reportedStateName,
+    ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {})
+  })
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName
@@ -275,12 +292,16 @@ export function normalizeClaudeEvent(
     isAgentStatusHeldOpenByChildWork({
       state: resolvedStatus.stateName,
       mainAgent: { state: reportedStateName }
-    })
+    }) &&
+    // Why: a turn held only by an owed notification resumes within ~100 ms; announcing it would
+    // add a premature "finished" before the wake-up turn's own.
+    claudePaneHasRunningChildWork(state, paneKey)
       ? Date.now()
       : undefined
 
   setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
+    ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
     ...(outcome ? { outcome } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
@@ -295,8 +316,7 @@ export function normalizeClaudeEvent(
     resolvedStatus.stateName === 'working' &&
     claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
     !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
-    !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
-    !state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    !claudeRowHasUnlistedLiveWork(state, paneKey)
   ) {
     // Why: a legacy or partial Stop confirms the lead boundary, not a child restored from disk; keep the child-only gate eligible for reconciliation.
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)

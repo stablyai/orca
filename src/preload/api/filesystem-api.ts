@@ -20,6 +20,10 @@ import type {
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../shared/file-write-disk-precondition'
+import type {
   CreateVenvResult,
   KernelFrameEvent,
   KernelStartResult,
@@ -27,6 +31,14 @@ import type {
   PythonEnvironments
 } from '../../shared/notebook-kernel-types'
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
+import type {
+  AgentSessionAttachmentPathUploadResult,
+  AgentSessionAttachmentUploadTarget
+} from '../../shared/agent-session-attachments'
+import type {
+  PrepareDroppedPathsRequest,
+  PreparedDroppedPaths
+} from '../../shared/native-file-drop-preparation'
 
 export type ExportApi = {
   htmlToPdf: (args: {
@@ -39,6 +51,8 @@ export type ExportApi = {
 
 export type FilesystemApi = {
   fs: {
+    getPathForFile?: (file: File) => string
+    prepareDroppedPaths: (args: PrepareDroppedPathsRequest) => Promise<PreparedDroppedPaths>
     readFileChunk: (args: {
       filePath: string
       connectionId?: string
@@ -46,7 +60,11 @@ export type FilesystemApi = {
       offset: number
       length: number
     }) => Promise<RuntimeFileReadChunkResult>
-    readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
+    readDir: (args: {
+      dirPath: string
+      connectionId?: string
+      followSymlinks?: boolean
+    }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
@@ -55,6 +73,7 @@ export type FilesystemApi = {
     }) => Promise<{
       content: string
       isBinary: boolean
+      mediaUrl?: string
       isImage?: boolean
       mimeType?: string
       fileIdentity?: string
@@ -99,8 +118,9 @@ export type FilesystemApi = {
         content: string
         connectionId?: string
         access?: LocalFileAccess
+        diskPrecondition?: FileWriteDiskPrecondition
       } & SshMutationExpectation
-    ) => Promise<void>
+    ) => Promise<FileWriteResult>
     createFile: (
       args: {
         filePath: string
@@ -108,7 +128,11 @@ export type FilesystemApi = {
       } & SshMutationExpectation
     ) => Promise<void>
     createDir: (
-      args: { dirPath: string; connectionId?: string } & SshMutationExpectation
+      args: {
+        dirPath: string
+        connectionId?: string
+        followSymlinks?: boolean
+      } & SshMutationExpectation
     ) => Promise<void>
     rename: (
       args: {
@@ -153,10 +177,17 @@ export type FilesystemApi = {
       requestToken?: string
       maxResults?: number
       searchQuery?: string
+      candidatePaths?: string[]
+      includeIgnored?: boolean
+      allowLegacyIncludeIgnored?: boolean
+      followSymlinks?: boolean
       nameFilter?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
-    search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
+    cancelSearch: (args: { requestToken: string }) => Promise<void>
+    search: (
+      args: SearchOptions & { connectionId?: string; requestToken?: string }
+    ) => Promise<SearchResult>
     importExternalPaths: (
       args: {
         sourcePaths: string[]
@@ -168,6 +199,7 @@ export type FilesystemApi = {
     ) => Promise<{ results: ImportItemResult[] }>
     stageExternalPathsForRuntimeUpload: (args: {
       sourcePaths: string[]
+      nameExtensionlessImages?: boolean
     }) => Promise<{ sources: StagedExternalImportSource[] }>
     uploadExternalFileToRuntime: (
       args: RuntimeUploadFileStreamRequest
@@ -179,6 +211,10 @@ export type FilesystemApi = {
         connectionId?: string
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
+    /** Uploads client-local files into a paired server's store for one structured chat. */
+    uploadPathsToAgentSessionAttachments: (
+      args: AgentSessionAttachmentUploadTarget & { paths: string[] }
+    ) => Promise<AgentSessionAttachmentPathUploadResult>
     watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void

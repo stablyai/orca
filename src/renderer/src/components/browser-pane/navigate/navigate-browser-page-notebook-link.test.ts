@@ -8,7 +8,7 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       settings: {},
-      allWorktrees: () => [{ id: 'wt-1', path: '/repo' }],
+      getKnownWorktreeById: (id: string) => (id === 'wt-1' ? { id, path: '/repo' } : undefined),
       setActiveTabType: vi.fn(),
       ensureWorktreeRootGroup: () => 'group-1',
       openFile: mocks.openFile
@@ -29,7 +29,6 @@ function openNotebookUrl(url: string): void {
     worktreeId: 'wt-1',
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref(null),
-    trackNextLoadingEventRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
     webviewRef: ref(null),
     onSetUrlRef: ref(vi.fn()),

@@ -5,9 +5,9 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { uploadBuffer, uploadFile, writeStringViaSftp, writeStringsViaSftp } from './sftp-upload'
-import { writeRelayFile } from './ssh-relay-install-transfers'
-import type { SshConnection } from './ssh-connection'
+import { uploadBuffer, uploadFile, writeStringViaSftp } from './sftp-upload'
+import { writeRemoteInstallFile } from '../managed-server/install/remote-install-transfers'
+import type { SshConnection } from './connection/ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 /** The exact error ssh2 builds from a STATUS reply of SSH_FX_NO_SUCH_FILE. */
@@ -66,46 +66,6 @@ describe('late SFTP stream errors', () => {
     expect(() => stream.emit('error', sftpNoSuchFileError())).not.toThrow()
   })
 
-  // The failure mode a per-file loop reintroduces: writeStringViaSftp removes its own
-  // session listener at each settle, so a session that ran N transfers ends up with zero
-  // listeners while it is still open and still able to deliver a STATUS reply.
-  it('does not throw when a session error arrives after a multi-file write settles', async () => {
-    const sftp = Object.assign(new EventEmitter(), {
-      createWriteStream: () => {
-        const stream = new PassThrough()
-        stream.resume()
-        return stream
-      },
-      end: () => {}
-    }) as unknown as SFTPWrapper
-
-    await writeStringsViaSftp({ sftp: () => Promise.resolve(sftp) }, [
-      { path: '/home/user/.local/bin/orca', contents: '#!/bin/sh\n' },
-      { path: '/home/user/.local/bin/orca.mjs', contents: 'export {}\n' }
-    ])
-
-    expect(() => sftp.emit('error', sftpNoSuchFileError())).not.toThrow()
-  })
-
-  it('still rejects a multi-file write with a session error raised during it', async () => {
-    const sftp = Object.assign(new EventEmitter(), {
-      createWriteStream: () => {
-        const stream = new PassThrough()
-        queueMicrotask(() => sftp.emit('error', sftpNoSuchFileError()))
-        return stream
-      },
-      end: () => {}
-    }) as unknown as SFTPWrapper
-
-    // The latch must sit behind the transfer's own prepended listener, or a real
-    // mid-transfer failure would be swallowed into a hang.
-    await expect(
-      writeStringsViaSftp({ sftp: () => Promise.resolve(sftp) }, [
-        { path: '/home/user/.local/bin/orca', contents: '#!/bin/sh\n' }
-      ])
-    ).rejects.toThrow('file does not exist')
-  })
-
   it('still rejects with the SFTP error when it arrives during the transfer', async () => {
     const stream = new PassThrough()
     stream.resume()
@@ -131,7 +91,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
       writeFile: () => Promise.reject(Object.assign(new Error('permission denied'), { code: 3 }))
     } as unknown as SshConnection
 
-    const failure: unknown = await writeRelayFile(
+    const failure: unknown = await writeRemoteInstallFile(
       conn,
       getRemoteHostPlatform('linux-x64'),
       '/home/user/.orca-remote/relay-1/.version',
@@ -152,7 +112,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
 
     // Windows hosts have no exec-stdin fallback; POSIX hosts stream instead (exec-fallback tests).
     await expect(
-      writeRelayFile(
+      writeRemoteInstallFile(
         conn,
         getRemoteHostPlatform('win32-x64'),
         'C:/Users/user/.orca-remote/relay-1/.version',
@@ -167,7 +127,7 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
     } as unknown as SshConnection
 
     await expect(
-      writeRelayFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
+      writeRemoteInstallFile(conn, getRemoteHostPlatform('linux-x64'), '/home/user/x', 'v1')
     ).rejects.toThrow('Connection lost')
   })
 })

@@ -26,13 +26,7 @@ vi.mock('@/runtime/runtime-linear-project-client', () => ({
   linearTeamMembers: linearMocks.linearTeamMembers
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtimeMocks.callRuntimeRpc,
-  getActiveRuntimeTarget: (settings?: { activeRuntimeEnvironmentId?: string | null } | null) =>
-    settings?.activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
-      : { kind: 'local' }
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeMocks.callRuntimeRpc }))
 
 const roots: Root[] = []
 
@@ -174,8 +168,7 @@ describe('useIssueMetadata hooks', () => {
 
     function LabelsProbe(): null {
       labels = useRepoLabels('/local/repo', 'remote-repo-id', {
-        runtimeEnvironmentId: ' env-explicit ',
-        activeRuntimeEnvironmentId: 'env-active'
+        target: { kind: 'environment', environmentId: 'env-explicit' }
       }).data
       return null
     }
@@ -201,7 +194,7 @@ describe('useIssueMetadata hooks', () => {
     function StatesProbe(): null {
       renders += 1
       // Fresh settings object each render — the storm trigger.
-      const metadata = useTeamStates('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
+      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
       states = metadata.data
       return null
     }
@@ -221,7 +214,7 @@ describe('useIssueMetadata hooks', () => {
 
     function StatesProbe(): null {
       renders += 1
-      const metadata = useTeamStates('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
+      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
       error = metadata.error
       return null
     }
@@ -255,11 +248,7 @@ describe('useIssueMetadata hooks', () => {
     })
 
     function MultiProbe(): null {
-      const metadata = useTeamsStates(
-        ['team-fe', 'team-be'],
-        { activeRuntimeEnvironmentId: null },
-        'ws-1'
-      )
+      const metadata = useTeamsStates(['team-fe', 'team-be'], { kind: 'local' }, 'ws-1')
       states = metadata.data as { id: string; name: string }[]
       return null
     }

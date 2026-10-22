@@ -1,11 +1,15 @@
 // The rail itself: a column of ticks down the right edge of the transcript, one
-// per user message, with a hover panel that previews them and jumps on click.
+// per user message. Each tick previews its own message and the agent's reply
+// while hovered or focused, and jumps to the message on click.
 
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatRailItem } from './native-chat-message-rail-items'
+import {
+  NATIVE_CHAT_RAIL_ROOMY_TICKS,
+  type NativeChatRailItem
+} from './native-chat-message-rail-items'
 import type { NativeChatMessageRailState } from './use-native-chat-message-rail'
 
 const WHEEL_DELTA_LINE = 1
@@ -22,82 +26,25 @@ function railItemLabel(item: NativeChatRailItem): string {
     : translate('components.native-chat.railEmptyMessage', 'Message')
 }
 
-type NativeChatMessageRailMode = 'hover' | 'interactive' | null
+/** Where the card sits, and the reply it showed, latched on close for its exit animation. */
+type NativeChatRailPreviewTarget = { id: string; top: number; reply: string }
 
-function NativeChatMessageRailItems({
-  mode,
-  items,
-  activeId,
-  pendingId,
-  onSelect
-}: {
-  mode: NativeChatMessageRailMode
-  items: readonly NativeChatRailItem[]
-  activeId: string | null
-  pendingId: string | null
-  onSelect: (item: NativeChatRailItem) => void
-}): React.JSX.Element {
-  const listRef = useRef<HTMLUListElement>(null)
-  const currentItemRef = useRef<HTMLButtonElement>(null)
-  const previousMode = useRef<NativeChatMessageRailMode>(null)
+/** From a tick's centre up to the card's top edge, so the card's first line meets
+ *  the tick: the card's `p-4` plus half a `text-xs leading-snug` line. */
+const PREVIEW_FIRST_LINE_PX = 24
 
-  const open = mode !== null
-  // Reveal the lit row when the list opens or its rows shift — not when a hover
-  // preview turns interactive, which a press on an item does: moving the list
-  // then slides the item out from under the pointer and the click is lost. Nor
-  // while a picked item pages in: each landed page shifts the rows under it.
-  useLayoutEffect(() => {
-    if (open && activeId !== null && items.length > 0 && pendingId === null) {
-      currentItemRef.current?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [activeId, items, open, pendingId])
-
-  // Entering interactive from the rail moves focus into the list; entering it by
-  // focusing an item already put focus where the reader chose.
-  useLayoutEffect(() => {
-    if (
-      mode === 'interactive' &&
-      previousMode.current !== 'interactive' &&
-      !listRef.current?.contains(document.activeElement)
-    ) {
-      const focusTarget =
-        (activeId === null ? null : currentItemRef.current) ??
-        listRef.current?.querySelector<HTMLButtonElement>('button')
-      focusTarget?.focus({ preventScroll: true })
-    }
-    previousMode.current = mode
-  }, [activeId, mode])
-
-  return (
-    <ul ref={listRef} className="scrollbar-sleek max-h-64 overflow-y-auto overflow-x-hidden">
-      {items.map((item) => (
-        <li key={item.id}>
-          <button
-            type="button"
-            ref={item.id === activeId ? currentItemRef : undefined}
-            onClick={() => onSelect(item)}
-            aria-current={item.id === activeId ? 'true' : undefined}
-            aria-busy={item.id === pendingId ? true : undefined}
-            data-current={item.id === activeId}
-            className={cn(
-              'flex w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              item.id === activeId && 'bg-accent'
-            )}
-          >
-            <span
-              className={cn(
-                'line-clamp-2 text-xs leading-snug',
-                item.id === activeId ? 'text-foreground' : 'text-muted-foreground',
-                item.id === pendingId && 'animate-pulse'
-              )}
-            >
-              {railItemLabel(item)}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  )
+/** How far a navigation key moves through the messages; null for any other key. */
+function railKeyStep(key: string, index: number, count: number): number | null {
+  if (key === 'ArrowDown') {
+    return index + 1
+  }
+  if (key === 'ArrowUp') {
+    return index - 1
+  }
+  if (key === 'Home') {
+    return 0
+  }
+  return key === 'End' ? count - 1 : null
 }
 
 export const NativeChatMessageRail = memo(function NativeChatMessageRail({
@@ -111,79 +58,84 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   scrollRef: React.RefObject<HTMLDivElement | null>
   onSelect: (item: NativeChatRailItem) => void
   /** The reader scrolled the transcript through the rail. */
-  onReaderScroll?: () => void
+  onReaderScroll?: (deltaY: number) => void
   /** A tick whose older history is still paging in. */
   pendingId?: string | null
 }): React.JSX.Element | null {
-  // Hover preserves focus; activation enters the focus-managed prompt picker.
-  const [mode, setMode] = useState<NativeChatMessageRailMode>(null)
-  // A pick that pages history in keeps the list open, its item pulsing, until the
-  // jump lands or is abandoned; then it closes as any pick does.
-  const [heldId, setHeldId] = useState<string | null>(null)
-  if (heldId !== null && (heldId !== pendingId || mode === null)) {
-    setHeldId(null)
-    setMode(null)
-  }
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const restoreFocus = useRef(false)
-  const open = mode !== null
-  const cancelClose = (): void => {
-    if (closeTimer.current !== null) {
-      clearTimeout(closeTimer.current)
+  const [target, setTarget] = useState<NativeChatRailPreviewTarget | null>(null)
+  const railRef = useRef<HTMLDivElement>(null)
+  /** A message an arrow key asked to focus, whose tick may not be drawn until the next render. */
+  const focusRequest = useRef<string | null>(null)
+  const { ticks, items, focusId } = rail
+
+  useLayoutEffect(() => {
+    if (focusRequest.current !== focusId) {
+      return
     }
-    closeTimer.current = null
-  }
-  const leavePreview = (): void => {
-    cancelClose()
-    if (mode === 'hover') {
-      closeTimer.current = setTimeout(() => setMode(null), 120)
+    const index = ticks.findIndex((item) => item.id === focusId)
+    if (index !== -1) {
+      focusRequest.current = null
+      railRef.current?.querySelectorAll('button')[index]?.focus()
     }
-  }
-  useEffect(
-    () => () => {
-      if (closeTimer.current !== null) {
-        clearTimeout(closeTimer.current)
-      }
-    },
-    []
-  )
+  }, [focusId, ticks])
+
   if (!rail.visible) {
     return null
   }
 
+  const previewed = target === null ? null : (ticks.find((item) => item.id === target.id) ?? null)
+  const previewedId = rail.previewId !== null && previewed ? previewed.id : null
+  const reply = previewedId === null ? (target?.reply ?? '') : rail.previewReply
+  // One tab stop for the whole rail; arrow keys walk it from there.
+  const tabId =
+    [focusId, rail.activeId].find((id) => ticks.some((item) => item.id === id)) ?? ticks[0]?.id
+
+  const show = (item: NativeChatRailItem, element: HTMLElement): void => {
+    setTarget({ id: item.id, top: element.offsetTop + element.offsetHeight / 2, reply: '' })
+    rail.onPreview(item.id)
+  }
+  const close = (): void => {
+    setTarget((current) => current && { ...current, reply: rail.previewReply })
+    rail.onPreview(null)
+  }
+
   return (
-    <Popover
-      open={open}
-      onOpenChange={(open) => {
-        cancelClose()
-        if (open) {
-          restoreFocus.current = true
-        }
-        setMode(open ? 'interactive' : null)
-      }}
+    // One card for the whole rail, moved to the tick it previews: a card per tick
+    // would animate out and in again on every step between neighbours. The ticks
+    // open it; the card's own hover, blur and Escape handling closes it.
+    <HoverCard
+      open={previewedId !== null}
+      onOpenChange={(next) => !next && close()}
+      openDelay={0}
+      closeDelay={100}
     >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
+      <HoverCardTrigger asChild>
+        <div
+          ref={railRef}
+          role="toolbar"
           data-native-chat-rail
           aria-label={translate('components.native-chat.railLabel', 'Your messages')}
-          onPointerEnter={(event) => {
-            if (event.pointerType === 'touch') {
+          aria-orientation="vertical"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              rail.onFocusItem(null)
+            }
+          }}
+          onKeyDown={(event) => {
+            // Through every message, not only the drawn ticks: a long thread samples them.
+            const next = railKeyStep(
+              event.key,
+              items.findIndex((item) => item.id === tabId),
+              items.length
+            )
+            if (next === null) {
               return
             }
-            cancelClose()
-            if (mode === null) {
-              restoreFocus.current = false
-            }
-            setMode((current) => current ?? 'hover')
-          }}
-          onPointerLeave={leavePreview}
-          onClick={(event) => {
-            cancelClose()
-            if (mode === 'hover') {
-              event.preventDefault()
-              restoreFocus.current = true
-              setMode('interactive')
+            event.preventDefault()
+            const item = items[next]
+            if (item) {
+              focusRequest.current = item.id
+              rail.onFocusItem(item.id)
             }
           }}
           // The rail overlays the transcript without being inside it, so a wheel
@@ -200,59 +152,77 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                 : event.deltaMode === WHEEL_DELTA_PAGE
                   ? element.clientHeight
                   : 1
-            element.scrollTop += event.deltaY * scale
-            onReaderScroll?.()
-          }}
-          className="group/rail absolute inset-y-0 right-[14px] z-10 flex w-4 cursor-default flex-col items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {rail.ticks.map((item) => (
-            <span
-              key={item.id}
-              aria-hidden
-              className={cn(
-                'h-[3px] shrink-0 rounded-full transition-all duration-150',
-                item.id === rail.activeId
-                  ? 'w-5 bg-foreground/30 group-hover/rail:bg-foreground/70'
-                  : 'w-3 bg-foreground/10 group-hover/rail:bg-foreground/25'
-              )}
-            />
-          ))}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="left"
-        align="center"
-        aria-label={translate('components.native-chat.railLabel', 'Your messages')}
-        className="w-72 p-1"
-        onPointerEnter={cancelClose}
-        onPointerLeave={leavePreview}
-        onFocusCapture={() => {
-          cancelClose()
-          restoreFocus.current = true
-          setMode('interactive')
-        }}
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        onCloseAutoFocus={(event) => {
-          if (!restoreFocus.current) {
-            event.preventDefault()
-          }
-        }}
-      >
-        <NativeChatMessageRailItems
-          mode={mode}
-          items={rail.items}
-          activeId={rail.activeId}
-          pendingId={pendingId}
-          onSelect={(item) => {
-            onSelect(item)
-            if (item.slotIndex === null) {
-              setHeldId(item.id)
-            } else {
-              setMode(null)
+            if (event.ctrlKey) {
+              return
             }
+            onReaderScroll?.(event.deltaY * scale)
+            element.scrollTop += event.deltaY * scale
           }}
-        />
-      </PopoverContent>
-    </Popover>
+          className="absolute top-1/2 right-2.5 z-10 flex w-6 -translate-y-1/2 flex-col"
+        >
+          {ticks.map((item) => {
+            // The pointer or keyboard owns the fill while a preview is open; otherwise
+            // the fill reports the scroll position.
+            const lit = item.id === (previewedId ?? rail.activeId)
+            return (
+              <button
+                key={item.id}
+                type="button"
+                tabIndex={item.id === tabId ? 0 : -1}
+                aria-label={railItemLabel(item)}
+                aria-current={item.id === rail.activeId ? 'true' : undefined}
+                aria-busy={item.id === pendingId ? true : undefined}
+                onPointerEnter={(event) => {
+                  if (event.pointerType !== 'touch') {
+                    show(item, event.currentTarget)
+                  }
+                }}
+                onFocus={(event) => {
+                  rail.onFocusItem(item.id)
+                  // A click focuses the tick too, and must not reopen the preview it dismissed.
+                  if (event.currentTarget.matches(':focus-visible')) {
+                    show(item, event.currentTarget)
+                  }
+                }}
+                onClick={() => onSelect(item)}
+                // Padding, not a gap, so the pointer never falls between two ticks.
+                className={cn(
+                  'flex w-full shrink-0 cursor-pointer items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  ticks.length > NATIVE_CHAT_RAIL_ROOMY_TICKS ? 'py-0.5' : 'py-1'
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    'h-[3px] rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none',
+                    lit ? 'w-5 bg-foreground' : 'w-3 bg-foreground/50',
+                    item.id === pendingId &&
+                      'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
+                  )}
+                />
+              </button>
+            )
+          })}
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="left"
+        align="start"
+        alignOffset={(target?.top ?? 0) - PREVIEW_FIRST_LINE_PX}
+        sideOffset={8}
+        className="w-72"
+      >
+        {previewed ? (
+          <div className="flex flex-col gap-1">
+            <p className="line-clamp-2 text-xs leading-snug text-foreground">
+              {railItemLabel(previewed)}
+            </p>
+            {reply.length > 0 ? (
+              <p className="line-clamp-3 text-xs leading-snug text-muted-foreground">{reply}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </HoverCardContent>
+    </HoverCard>
   )
 })

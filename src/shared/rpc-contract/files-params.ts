@@ -9,6 +9,9 @@ export const FilePathsExist = WorktreeSelector.extend({
 })
 
 export const FilePathSearch = WorktreeSelector.extend({
+  allowLegacyIncludeIgnored: z.boolean().optional(),
+  includeIgnored: z.boolean().optional(),
+  followSymlinks: z.boolean().optional(),
   query: z.string().max(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS).default(''),
   limit: z.number().int().positive().max(32).default(16),
   excludePaths: z.array(z.string()).optional(),
@@ -43,11 +46,19 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
 })
 
 // Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
-export const FileOpenTab = FileOpen.extend({
+const FileOpenTarget = FileOpen.extend({
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
-export const FileOpenDiff = FileOpenTab.extend({
+export const FileOpenTab = FileOpenTarget.extend({
+  line: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  column: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional()
+}).refine((params) => params.column === undefined || params.line !== undefined, {
+  message: 'column requires line',
+  path: ['column']
+})
+
+export const FileOpenDiff = FileOpenTarget.extend({
   staged: z.boolean().optional()
 })
 
@@ -58,6 +69,7 @@ export const DocPreviewFileRead = FileOpen.extend({
 })
 
 export const FileTreePath = WorktreeSelector.extend({
+  followSymlinks: z.boolean().optional(),
   relativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -98,6 +110,12 @@ export const FileSearch = WorktreeSelector.extend({
 // means there is more" was true for desktop and merely incidental for web and mobile, which were
 // saved by `remoteFileContentBudget` defaulting the cap inside `listRuntimeFiles`.
 export const FileListAll = WorktreeSelector.extend({
+  candidatePaths: z
+    .array(z.string().max(64 * 1024))
+    .max(100)
+    .optional(),
+  includeIgnored: z.boolean().optional(),
+  followSymlinks: z.boolean().optional(),
   excludePaths: z.array(z.string()).optional(),
   maxResults: z.number().int().positive().optional()
 })

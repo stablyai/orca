@@ -235,11 +235,7 @@ describeRender(
     }, 120_000)
 
     it('puts the Back control in the accessibility tree by name', async () => {
-      // Inside the shell there is no native chrome behind this control, so a bare Pressable is
-      // absent from the tree: a screen reader has nothing to announce and the device proof has
-      // nothing to find. The source census
-      // (`mobile/src/mobile-web-shell/page-served-back-control-a11y.test.ts`) holds the role and
-      // the wording; this is the half only a browser answers, that the two reach the rendered DOM.
+      // Verify the role and label in the rendered accessibility tree.
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')
       const control = await opened.page.evaluate((label) => {
         const found = document.querySelector(`[aria-label="${label}"]`)
@@ -378,7 +374,6 @@ describeRender(
  * `mobile-web-app-screencast-lane-grant.test.mjs` derives from this closure.
  *
  * **The storage refusals a control makes.** The case above covers the writes a mount makes on its
- * own; a refusal a user's own write earns still needs the control. That chain is
- * `mobile/src/session/mobile-structured-send-page-storage-refusal.test.ts` end to end over the
- * real `page-async-storage`.
+ * own; store-level write refusals are covered by
+ * `mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts`.
  */

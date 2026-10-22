@@ -55,6 +55,11 @@ export type AgentSessionBackgroundTaskState = {
    *  advertise `agent-session.background-task-child-views.v1` never receives a state whose only
    *  rows are settled: to it, as before, the roster is live work. */
   children?: AgentChildWorkView[]
+  /** Some of this session's running child work has no row (its record was refused, has not landed
+   *  yet, or a bounded frame dropped it), so what is listed is not all that runs; no row's absence
+   *  means it ended. A missing child stops counting once a later report of it is admitted or it
+   *  reports its own end, and the whole flag goes once the provider session ends. */
+  incomplete?: true
 }
 
 function backgroundTaskFieldsEqual(

@@ -46,3 +46,21 @@ it('rechecks expiry before a retry', async () => {
   expect(sends).toHaveLength(1)
   expect(parseMobilePushRegistration({ ...registration(), expiresAt: undefined })).toBeUndefined()
 })
+
+it('never lets the workspace window swallow distinct keyed news, but still collapses its repeat', async () => {
+  const { dispatcher, sends } = createHarness({
+    devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+  })
+  // Unkeyed news (a terminal agent) keeps the per-workspace window.
+  dispatcher.enqueue(notification({ emittedAt: 10_000 }))
+  dispatcher.enqueue(notification({ emittedAt: 10_001, agentState: 'blocked', attentionKey: 'p1' }))
+  dispatcher.enqueue(notification({ emittedAt: 10_002, agentState: 'blocked', attentionKey: 'p2' }))
+  dispatcher.enqueue(notification({ emittedAt: 10_003, agentState: 'blocked', attentionKey: 'p2' }))
+  dispatcher.enqueue(notification({ emittedAt: 10_004 }))
+  await flush()
+  expect(sends.map((send) => send.notification.agentState)).toEqual([
+    'finished',
+    'needs-input',
+    'needs-input'
+  ])
+})

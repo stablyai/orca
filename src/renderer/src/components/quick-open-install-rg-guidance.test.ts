@@ -26,14 +26,26 @@ describe('parseQuickOpenInstallRgGuidance', () => {
     })
   })
 
-  // Why: only a remote host can still reach the capped fallback, so the old local wording is
-  // no longer produced anywhere and falls through to plain-text display.
-  it('returns null for the retired local wording and for regular errors', () => {
+  it.each(['on the host running the Quick Open scan', 'on this machine', 'on the remote'])(
+    'accepts legacy peer guidance with nested parentheses: %s',
+    (host) => {
+      expect(
+        parseQuickOpenInstallRgGuidance(
+          `Quick Open scan too large (File listing failed (exit 127)). Install ripgrep ${host} to enable fast, gitignore-aware listing: brew install ripgrep`
+        )
+      ).toEqual({
+        reason: 'File listing failed (exit 127)',
+        command: 'brew install ripgrep',
+        guidance: null
+      })
+    }
+  )
+  it('leaves unrelated errors and unrecognized wording as plain text', () => {
+    expect(parseQuickOpenInstallRgGuidance('git ls-files exited with code 128')).toBeNull()
     expect(
       parseQuickOpenInstallRgGuidance(
-        'Quick Open scan too large (File listing timed out). Install ripgrep on the host running the Quick Open scan to enable fast, gitignore-aware listing: brew install ripgrep'
+        'Quick Open scan too large (reason). Install ripgrep somewhere: sudo apt install ripgrep'
       )
     ).toBeNull()
-    expect(parseQuickOpenInstallRgGuidance('git ls-files exited with code 128')).toBeNull()
   })
 })

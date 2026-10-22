@@ -10,6 +10,11 @@ import { ActivityThreadListPane } from '@/components/activity/activity-thread-li
 import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
 import { ActivityThreadOptionsMenu } from '@/components/activity/activity-thread-controls'
 import type { ActivityGroupBy, ThreadReadFilter } from '@/components/activity/activity-thread-types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 /**
  * The Activity thread list, hosted in the sidebar as a navigator: selecting a
@@ -80,6 +85,8 @@ export default function SidebarAgentsList({
   const {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead,
@@ -94,18 +101,24 @@ export default function SidebarAgentsList({
     setSelectedPaneKey
   })
 
+  const worktreesByRepo = selectWorktreesByRepo(storeData)
+  const detectedWorktreesByRepo = selectDetectedWorktreesByRepo(storeData)
+  const folderWorkspaces = selectFolderWorkspaces(storeData)
+
   const canJumpToWorkspace = useCallback(
     (thread: Parameters<typeof hasActivityThreadWorkspace>[0]) =>
       hasActivityThreadWorkspace(thread, {
-        worktreesByRepo: storeData.worktreesByRepo,
-        detectedWorktreesByRepo: storeData.detectedWorktreesByRepo,
-        folderWorkspaces: storeData.folderWorkspaces,
+        worktreesByRepo,
+        detectedWorktreesByRepo,
+        folderWorkspaces,
+        floatingWorkspacePath: storeData.floatingWorkspacePath,
         defaultHostId: storeData.defaultHostId
       }),
     [
-      storeData.worktreesByRepo,
-      storeData.detectedWorktreesByRepo,
-      storeData.folderWorkspaces,
+      worktreesByRepo,
+      detectedWorktreesByRepo,
+      folderWorkspaces,
+      storeData.floatingWorkspacePath,
       storeData.defaultHostId
     ]
   )
@@ -158,6 +171,8 @@ export default function SidebarAgentsList({
         onJumpToWorkspace={jumpToWorkspace}
         onMarkThreadRead={markThreadRead}
         onMarkThreadUnread={markThreadUnread}
+        onMarkThreadsRead={markThreadsRead}
+        onMarkThreadsUnread={markThreadsUnread}
         canJumpToWorkspace={canJumpToWorkspace}
         allowMarkUnreadWhenSelected
         showJumpAction={false}

@@ -1,3 +1,4 @@
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
@@ -55,7 +56,6 @@ export type BrowserPageGrabAnnotationsOptions = {
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
-  setBrowserAnnotationTrayOpen: Dispatch<SetStateAction<boolean>>
 }
 
 export type BrowserPageRecoveryNavigationValidation = {
@@ -74,4 +74,17 @@ export type BrowserPageFailLoadEvent = {
   errorDescription?: string
   validatedURL?: string
   isMainFrame?: boolean
+}
+
+export type ClientHostedBrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  runtimeEnvironmentId: string
+  worktreeId: string
+  /** Null while the tab is still an optimistic stage: the host mints the placement, not this client. */
+  placement: RuntimeBrowserClientPlacement | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
 }

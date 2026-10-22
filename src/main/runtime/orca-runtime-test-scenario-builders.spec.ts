@@ -216,7 +216,9 @@ function makePostRevealWorkerRecoveryHarness(
     undefined,
     { canRecoverPersistentLocalPtys: () => true }
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
+    reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
       {
@@ -346,14 +348,18 @@ function createMobileCreateTestNotifier(
   }
 }
 
-function createWorktreeRemovalRuntime(runtimeStore: unknown = store): RuntimeService {
+function createWorktreeRemovalRuntime(
+  runtimeStore: unknown = store,
+  deps: ConstructorParameters<typeof OrcaRuntimeService>[2] = {}
+): RuntimeService {
   const emptyPtyProvider = {
     listProcesses: vi.fn(async () => []),
     shutdown: vi.fn(async () => {})
   }
   return new OrcaRuntimeService(runtimeStore as never, undefined, {
-    getLocalProvider: () => emptyPtyProvider as never,
-    getSshProvider: () => emptyPtyProvider as never
+    ...deps,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: removal sweeps call only listProcesses and shutdown.
+    getLocalProvider: () => emptyPtyProvider as never
   })
 }
 

@@ -6,7 +6,10 @@ import {
   launchAgentInExistingWorkspace,
   supportsMobileExistingAgentLaunch
 } from './mobile-existing-agent-launch'
-import { loadMobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
+import {
+  hostRefusesOtherRuntimeWorkspace,
+  loadMobileAgentLaunchContext
+} from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
 
 // Launch path for the phone's AI buttons ("Fix checks with AI", "Resolve conflicts with AI", commit
@@ -38,7 +41,11 @@ export async function launchAgentWithPrompt(args: {
   let resolved
   try {
     resolved = resolveMobileSourceControlLaunchAgent(
-      await loadMobileAgentLaunchContext({ client: args.client, worktreeId: args.worktreeId }),
+      await loadMobileAgentLaunchContext({
+        client: args.client,
+        worktreeId: args.worktreeId,
+        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
+      }),
       args.actionId
     )
   } catch (error) {
@@ -85,6 +92,7 @@ export async function launchAgentWithPrompt(args: {
     case 'unsupported':
       return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
     case 'failed':
+    case 'tab-closed':
       return { kind: 'not-started', message: launched.message }
     case 'unknown':
       return { kind: 'unconfirmed', message: launched.message }

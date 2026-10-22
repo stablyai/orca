@@ -1,9 +1,16 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { applyPickerSuggestion, type NativeChatPickerItem } from './native-chat-picker-items'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
+import {
+  applyPickerSuggestion,
+  type NativeChatPickerItem
+} from '../../../../shared/native-chat-picker-items'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
+import {
+  clearNativeChatComposerDraftIfUnchanged,
+  readNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
 import {
   isBareStructuredAgentSessionGoalCommand,
   structuredAgentSessionGoalObjective
@@ -28,18 +35,20 @@ export type NativeChatComposerGoalMode = {
  */
 export function useNativeChatComposerSubmit(args: {
   structuredTransport?: NativeChatStructuredComposerTransport
+  draftScopeKey: string
   draft: string
   caret: number
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
   sendPty: () => void
   sendStructured: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => void
+  /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
+  consumeOrcaCommand?: (draft: string) => boolean
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
-  setHistory: (updater: (previous: HistoryState) => HistoryState) => void
 }): { send: () => void; goalMode: NativeChatComposerGoalMode } {
-  const { caret, disabled, draft, imageAttachments, sendPty, sendStructured } = args
-  const { setCaret, setDraft, setHistory, structuredTransport } = args
+  const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
+  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -63,11 +72,6 @@ export function useNativeChatComposerSubmit(args: {
 
   // Setting a goal is a host round trip; the draft is cleared only if it is still
   // the one that was submitted, as with any other host command.
-  const composition = useRef(draft)
-  useLayoutEffect(() => {
-    composition.current = draft
-  }, [draft])
-
   // In-flight changes are serialized by the session's goal controller, which
   // answers false to a second submit while the first is unsettled.
   const setGoal = useCallback(() => {
@@ -84,31 +88,27 @@ export function useNativeChatComposerSubmit(args: {
       )
       return
     }
+    structuredTransport.onSubmitted?.()
+    const submitted = readNativeChatComposerDraft(draftScopeKey)
     void threadGoal.setObjective(objective).then((accepted) => {
       if (!accepted) {
         return
       }
       structuredTransport.onError(null)
-      setHistory((previous) => pushHistory(previous, draft))
-      if (composition.current !== draft) {
+      if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
         return
       }
-      setDraft('')
       setCaret(0)
       setEntered(false)
     })
-  }, [
-    draft,
-    imageAttachments.length,
-    setCaret,
-    setDraft,
-    setHistory,
-    structuredTransport,
-    threadGoal
-  ])
+  }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 
   const send = useCallback(() => {
-    if (imageAttachments.some((attachment) => attachment.pending)) {
+    // Before goal mode too: a navigation command must never become an objective.
+    if (consumeOrcaCommand?.(draft)) {
+      return
+    }
+    if (nativeChatImagesHoldSend(imageAttachments)) {
       return
     }
     if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
@@ -128,6 +128,7 @@ export function useNativeChatComposerSubmit(args: {
     }
   }, [
     active,
+    consumeOrcaCommand,
     disabled,
     draft,
     imageAttachments,

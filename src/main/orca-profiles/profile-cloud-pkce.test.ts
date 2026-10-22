@@ -181,4 +181,32 @@ describe('Orca cloud PKCE flow', () => {
     expect(secondResponse.statusCode).toBe(200)
     await expect(second).resolves.toMatchObject({ code: 'second-code', state: secondState })
   })
+  it('hands the opened authorize URL to the caller so it can be copied', async () => {
+    const onAuthorizeUrl = vi.fn()
+    const flow = beginOrcaCloudPkceFlow(config, 'local-default', { onAuthorizeUrl })
+    await vi.waitFor(() => expect(openExternalMock).toHaveBeenCalledTimes(1))
+    const opened = String(openExternalMock.mock.calls[0]?.[0])
+    expect(onAuthorizeUrl).toHaveBeenCalledWith(opened)
+
+    const authUrl = new URL(opened)
+    const redirectUri = authUrl.searchParams.get('redirect_uri') ?? ''
+    const state = authUrl.searchParams.get('state') ?? ''
+    await readHttp(callbackUrl(redirectUri, { code: 'real-code', state }))
+    await expect(flow).resolves.toMatchObject({ code: 'real-code' })
+  })
+
+  it('ends the wait as cancelled when its signal aborts', async () => {
+    const browserWait = new AbortController()
+    const flow = beginOrcaCloudPkceFlow(config, 'local-default', { signal: browserWait.signal })
+    const observedFlow = flow.catch((error: unknown) => error)
+    await vi.waitFor(() => expect(openExternalMock).toHaveBeenCalledTimes(1))
+    const redirectUri = new URL(String(openExternalMock.mock.calls[0]?.[0])).searchParams.get(
+      'redirect_uri'
+    )
+
+    browserWait.abort()
+
+    await expect(observedFlow).resolves.toMatchObject({ message: 'orca_cloud_auth_cancelled' })
+    await expect(readHttp(`${redirectUri}?code=late`)).rejects.toThrow()
+  })
 })

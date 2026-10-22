@@ -1,4 +1,5 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentChildWorkStopAcknowledgement } from '../../shared/agent-child-work-stop-targets'
 import type { ClaudePromptClaim } from './claude-structured-prompt-replies'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
@@ -61,13 +62,15 @@ export async function cancelClaudeTurn(
   }
 }
 
-/** Stops each task the host named. An acknowledged stop ends the task's record: the CLI answers
- *  success for a task it no longer knows without sending that task any frame. */
+/** Stops each task the host named, and names each the CLI accepted the stop of as it does: the host
+ *  ends that run provisionally, since the CLI answers success for a task it no longer knows without
+ *  sending that task any frame. */
 export async function stopClaudeBackgroundTasks(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   isCurrent: ClaudeTurnCancellationGuard,
-  taskIds: readonly string[]
+  taskIds: readonly string[],
+  acknowledge: (acknowledgement: AgentChildWorkStopAcknowledgement) => void = () => {}
 ): Promise<{ cancelled: boolean }> {
   let cancelled = false
   // A failed request for one task still leaves the others to stop; it is reported after them. A
@@ -80,8 +83,8 @@ export async function stopClaudeBackgroundTasks(
     }
     try {
       await session.connection.stopTask(taskId, { timeoutMs })
-      session.childWork.stopAcknowledged(taskId)
       cancelled = true
+      acknowledge({ taskId })
     } catch (error) {
       if (error instanceof ClaudeControlRequestTimeoutError) {
         throw error
@@ -95,6 +98,31 @@ export async function stopClaudeBackgroundTasks(
     throw failure.error
   }
   return { cancelled }
+}
+
+/** Stops the tasks while `session` is still the one the host asked about. */
+export async function stopCurrentClaudeBackgroundTasks(input: {
+  sessions: ReadonlyMap<string, ClaudeSession>
+  session: ClaudeSession
+  sessionId: string
+  fence: number
+  taskIds: readonly string[]
+  timeoutMs: number | undefined
+  acknowledge?: (acknowledgement: AgentChildWorkStopAcknowledgement) => void
+}): Promise<{ cancelled: boolean }> {
+  const { sessions, session, sessionId, fence } = input
+  const acquisitionGeneration = session.acquisitionGeneration
+  const isCurrent = () =>
+    sessions.get(sessionId) === session &&
+    session.fence === fence &&
+    session.acquisitionGeneration === acquisitionGeneration
+  return stopClaudeBackgroundTasks(
+    session,
+    input.timeoutMs,
+    isCurrent,
+    input.taskIds,
+    input.acknowledge
+  )
 }
 
 export async function answerClaudePrompt(

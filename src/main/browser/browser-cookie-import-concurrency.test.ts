@@ -55,6 +55,9 @@ vi.mock('./browser-session-registry', () => ({
 vi.mock('../codex-accounts/fs-utils', () => ({
   copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
 }))
+vi.mock('../../shared/windows-retry-file-operations', () => ({
+  copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
+}))
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
@@ -241,8 +244,7 @@ describe('two concurrent imports into one partition', () => {
     const fileB = writeSource('new-b', '.b.example')
 
     const first = importCookiesFromFile(fileA, 'persist:concurrency-test')
-    // Let the first import reach its write and block there.
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await vi.waitFor(() => expect(events).toContain('set:new-a'))
     const second = importCookiesFromFile(fileB, 'persist:concurrency-test')
     await new Promise((resolve) => setTimeout(resolve, 20))
 

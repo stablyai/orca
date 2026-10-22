@@ -1,32 +1,20 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
+import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { ConnectionState } from '../transport/types'
 import { triggerError, triggerSelection } from '../platform/haptics'
-import { buildMobileDiffLines } from '../session/mobile-diff-lines'
-import {
-  highlightMobileDiffLines,
-  resolveMobileSyntaxLanguage
-} from '../session/mobile-file-syntax'
-import {
-  canOpenMobileBranchCompareDiff,
-  type MobileGitBranchChangeEntry
-} from './mobile-branch-compare'
-import { gitBranchDiffRead } from './mobile-git-read-operations'
+import { useMobileBranchDiffPreview } from './use-mobile-branch-diff-preview'
 import {
   canOpenMobileGitStatusEntry,
   isMobileGitUnavailableReply,
   type MobileGitStatusEntry
 } from './mobile-git-status'
 import { sourceFileDiffOpenRun, sourceFileOpenRun } from './mobile-source-file-open-operations'
-import { buildMobileReviewFileRoute } from './mobile-review-route'
+import { buildMobileReviewFileRoute, type MobileReviewRouteArea } from './mobile-review-route'
 import { revealMobileSourceControlSessionDiff } from './reveal-mobile-source-control-session-diff'
-import type {
-  MobileBranchCompareState,
-  MobileBranchDiffPreviewState
-} from './mobile-source-control-screen-state'
-import type { MobileGitDiffReply } from './git-compare-reply-schema'
+import type { MobileBranchCompareState } from './mobile-source-control-screen-state'
 
 type Params = {
   client: RpcClient | null
@@ -69,14 +57,26 @@ export function useMobileSourceControlOpeners(params: Params) {
   } = params
   // The seam, not expo-router's own: inside the shell's page a push to a route the page does not
   // render has to be handed back to the app, and only this knows which targets those are.
-  const router = useRouteHandoff()
-  const [branchDiffPreview, setBranchDiffPreview] = useState<MobileBranchDiffPreviewState | null>(
-    null
-  )
+  const router = useWorkspaceRouteHandoff()
   const [openingPath, setOpeningPath] = useState<string | null>(null)
-  const [openingBranchPath, setOpeningBranchPath] = useState<string | null>(null)
   const openingPathRef = useRef<string | null>(null)
-  const openingBranchPathRef = useRef<string | null>(null)
+
+  const openReviewScreen = useCallback(
+    (filePath: string, area: MobileReviewRouteArea) => {
+      triggerSelection()
+      router.push(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder only emits the declared /h/[hostId]/review/[worktreeId] route.
+        buildMobileReviewFileRoute({
+          hostId,
+          worktreeId,
+          worktreeName: name,
+          filePath,
+          area
+        }) as Parameters<typeof router.push>[0]
+      )
+    },
+    [hostId, name, router, worktreeId]
+  )
 
   const openFile = useCallback(
     async (entry: MobileGitStatusEntry) => {
@@ -101,16 +101,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       try {
         setActionError(null)
         if (origin !== 'session') {
-          triggerSelection()
-          router.push(
-            buildMobileReviewFileRoute({
-              hostId,
-              worktreeId,
-              worktreeName: name,
-              filePath: entry.path,
-              area: entry.area
-            }) as Parameters<typeof router.push>[0]
-          )
+          openReviewScreen(entry.path, entry.area)
           return
         }
         // Snapshot the active tab now, at tap time, before the openDiff RPC —
@@ -122,6 +113,13 @@ export function useMobileSourceControlOpeners(params: Params) {
           relativePath: entry.path,
           staged: entry.area === 'staged'
         })
+        // Why: a host with no desktop window opens no editor tabs; its diff still reads through git.diff on the review screen.
+        if (isRendererUnavailableReply(diffReply)) {
+          if (mountedRef.current) {
+            openReviewScreen(entry.path, entry.area)
+          }
+          return
+        }
         // Why the raw refusal: a host too old to open a diff tab is a capability gap this flow
         // falls back from, and no acceptance policy carries the code and message through.
         const fallbackToEdit = isMobileGitUnavailableReply(diffReply)
@@ -191,12 +189,11 @@ export function useMobileSourceControlOpeners(params: Params) {
       client,
       connState,
       embedded,
-      hostId,
       mountedRef,
-      name,
       onFileOpenStart,
       onOpenedFileDiff,
       onRequestClose,
+      openReviewScreen,
       origin,
       router,
       setActionError,
@@ -204,113 +201,20 @@ export function useMobileSourceControlOpeners(params: Params) {
     ]
   )
 
-  const openBranchDiff = useCallback(
-    async (entry: MobileGitBranchChangeEntry) => {
-      if (openingBranchPathRef.current || openingPathRef.current || busyActionRef.current) {
-        return
-      }
-      if (!client || connState !== 'connected') {
-        if (!mountedRef.current) {
-          return
-        }
-        setActionError('Waiting for desktop...')
-        return
-      }
-      if (branchCompareState.kind !== 'ready') {
-        return
-      }
-      const summary = branchCompareState.result.summary
-      if (!canOpenMobileBranchCompareDiff(summary) || !summary.headOid || !summary.mergeBase) {
-        return
-      }
-
-      openingBranchPathRef.current = entry.path
-      setOpeningBranchPath(entry.path)
-      if (origin !== 'session') {
-        triggerSelection()
-        router.push(
-          buildMobileReviewFileRoute({
-            hostId,
-            worktreeId,
-            worktreeName: name,
-            filePath: entry.path,
-            area: 'branch'
-          }) as Parameters<typeof router.push>[0]
-        )
-        openingBranchPathRef.current = null
-        if (mountedRef.current) {
-          setOpeningBranchPath(null)
-        }
-        return
-      }
-      setBranchDiffPreview({ kind: 'loading', entry })
-      try {
-        const reply = await gitBranchDiffRead.request(client, {
-          worktree: `id:${worktreeId}`,
-          filePath: entry.path,
-          ...(entry.oldPath ? { oldPath: entry.oldPath } : {}),
-          compare: {
-            baseRef: summary.baseRef,
-            ...(summary.baseOid ? { baseOid: summary.baseOid } : {}),
-            headOid: summary.headOid,
-            mergeBase: summary.mergeBase
-          }
-        })
-        let result: MobileGitDiffReply
-        try {
-          result = gitBranchDiffRead.interpret(reply)
-        } catch (error) {
-          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed diff'))
-        }
-        if (result.kind !== 'text') {
-          throw new Error('Binary branch diff preview unavailable on mobile')
-        }
-        const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
-        const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
-        if (!mountedRef.current) {
-          return
-        }
-        setBranchDiffPreview({
-          kind: 'ready',
-          entry,
-          summary,
-          lines: highlightMobileDiffLines(diff.lines, syntaxLanguage),
-          truncated: diff.truncated
-        })
-        triggerSelection()
-      } catch (err) {
-        if (!mountedRef.current) {
-          return
-        }
-        triggerError()
-        setBranchDiffPreview({
-          kind: 'error',
-          entry,
-          message: err instanceof Error ? err.message : 'Unable to load committed diff'
-        })
-      } finally {
-        if (openingBranchPathRef.current === entry.path) {
-          openingBranchPathRef.current = null
-          if (mountedRef.current) {
-            setOpeningBranchPath(null)
-          }
-        }
-      }
-    },
-    [
-      branchCompareState,
-      busyActionRef,
+  const { branchDiffPreview, setBranchDiffPreview, openingBranchPath, openBranchDiff } =
+    useMobileBranchDiffPreview({
       client,
       connState,
       hostId,
-      mountedRef,
-      name,
+      worktreeId,
       origin,
-      router,
+      branchCompareState,
+      mountedRef,
+      busyActionRef,
+      openingPathRef,
       setActionError,
-      worktreeId
-    ]
-  )
+      openReviewScreen
+    })
 
   return {
     router,

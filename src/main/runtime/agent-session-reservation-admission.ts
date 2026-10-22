@@ -10,6 +10,8 @@
  */
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { assertAgentSessionOptionsAdmitted } from './agent-session-record-options'
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
@@ -38,20 +40,23 @@ import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
   agentSessionProviderHandleRoot,
-  type AgentSessionHandleProvider,
+  type StructuredAgentId,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
+import { agentSessionAccountHomesEqual } from '../../shared/agent-session-account-home'
 
 export type AgentSessionReserveRequest = {
+  /** Host-resolved floating directory committed with the first owner reservation. */
+  launchDirectory?: string
   sessionId: string
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
+  provider: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs
@@ -59,6 +64,8 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
+  /** Saved catalog rows those options are admitted against; transient, never written. */
+  models?: Parameters<typeof assertAgentSessionOptionsAdmitted>[1]
   /** The tab id a create reserved for this conversation, taken when its tab is published. An id
    *  another session's tab holds is refused here, before anything is spawned. */
   surfaceTabId?: string
@@ -140,14 +147,7 @@ export function admitPendingAgentSessionReservationReplay(
   return record
 }
 
-export function applyAgentSessionReservation(
-  state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest,
-  leaseTtlMs: number
-): {
-  record: AgentSessionRecord
-  disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
-} {
+export function validateAgentSessionReservationInput(request: AgentSessionReserveRequest): void {
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
@@ -157,6 +157,18 @@ export function applyAgentSessionReservation(
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
+  assertAgentSessionOptionsAdmitted(request.provider, request.models, request.options)
+}
+
+export function applyAgentSessionReservation(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  leaseTtlMs: number
+): {
+  record: AgentSessionRecord
+  disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
+} {
+  validateAgentSessionReservationInput(request)
   const reservation: AgentSessionReservation = {
     spawnToken:
       typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken,
@@ -184,8 +196,7 @@ export function applyAgentSessionReservation(
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
-    existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    !agentSessionAccountHomesEqual(existing.accountHome, request.accountHome)
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'identityMismatch' })
@@ -226,7 +237,7 @@ export function applyAgentSessionReservation(
  * compare-and-swap never collides and both would pass. Codex permits two app-servers on one thread
  * silently, so the cost of missing this is a corrupted conversation rather than an error.
  */
-function assertAdoptedConversationUnowned(
+export function assertAdoptedConversationUnowned(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
 ): void {
@@ -240,11 +251,17 @@ function assertAdoptedConversationUnowned(
       continue
     }
     const holdsSameConversation = record.providerHandleChain.some(
-      (link) => agentSessionProviderHandleRoot(link.handle) === root
+      (link) =>
+        agentSessionProviderHandleRoot(link.handle) === root ||
+        // One id from two chat agents that open the same conversations (`opencode`, `opencode2`).
+        (link.handle.transport === adopted.handle.transport &&
+          link.handle.nativeId === adopted.handle.nativeId &&
+          chatAgentsShareConversations(link.handle.agent, adopted.handle.agent))
     )
     if (holdsSameConversation) {
       throw agentSessionRefusalError('agent_session_conflict', {
-        reason: 'conversationHeldElsewhere'
+        reason: 'conversationHeldElsewhere',
+        owner: { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
       })
     }
   }
@@ -255,7 +272,7 @@ function assertAdoptedConversationUnowned(
  * Checked, not claimed: the id is taken when the chat's tab is published, so a create that never
  * gets that far leaves nothing in the table to restore or release.
  */
-function assertReservedTabUnheld(
+export function assertReservedTabUnheld(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
 ): void {
@@ -294,7 +311,6 @@ function createAgentSessionRecord(
       leaseDeadlineAt: reservation.now + reservation.leaseTtlMs,
       lastRenewedAt: reservation.now,
       handoffOperationId: reservation.handoffOperationId,
-      journalCheckpoint: null,
       claimKeyId: reservation.claimKeyId,
       claimStatus: 'reserved',
       unreconciled: false,

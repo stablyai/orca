@@ -6,7 +6,14 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
+import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
+
+/** Owners whose rows may go: a paused WSL move keeps its rows for a downgrade. */
+export function withoutWslMoveFrozenOwners(ownerKeys: ReadonlySet<string>): ReadonlySet<string> {
+  const kept = [...ownerKeys].filter((ownerKey) => !isWslMoveWorkspaceSessionFrozen(ownerKey))
+  return kept.length === ownerKeys.size ? ownerKeys : new Set(kept)
+}
 
 // Scans the pane-key-keyed maps, the close records and the shutdown list once, removing
 // every entry owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose
@@ -81,6 +88,9 @@ export function removeWorkspaceSessionOwnerEverywhere(
   ownerKey: string,
   options: { advanceTerminalTopologyRevision?: boolean } = {}
 ): void {
+  if (isWslMoveWorkspaceSessionFrozen(ownerKey)) {
+    return
+  }
   state.workspaceSession = removeWorkspaceSessionOwner(state.workspaceSession, ownerKey, options)!
   const partitions = state.workspaceSessionsByHostId
   if (!partitions) {
@@ -130,4 +140,26 @@ export function removeWorkspaceSessionOwners(
     ownerKeys.has(worktreeId)
   )
   return next
+}
+
+export function removeWorkspaceSessionOwnersEverywhere(
+  state: Pick<PersistedState, 'workspaceSession' | 'workspaceSessionsByHostId'>,
+  allOwnerKeys: ReadonlySet<string>
+): void {
+  const ownerKeys = withoutWslMoveFrozenOwners(allOwnerKeys)
+  if (ownerKeys.size === 0) {
+    return
+  }
+  state.workspaceSession = removeWorkspaceSessionOwners(state.workspaceSession, ownerKeys)!
+  const partitions = state.workspaceSessionsByHostId
+  if (!partitions) {
+    return
+  }
+  const next: Record<string, WorkspaceSessionState> = {}
+  for (const [hostId, partition] of Object.entries(partitions)) {
+    if (partition) {
+      next[hostId] = removeWorkspaceSessionOwners(partition, ownerKeys)!
+    }
+  }
+  state.workspaceSessionsByHostId = next
 }

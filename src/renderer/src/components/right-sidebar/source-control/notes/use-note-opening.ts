@@ -9,6 +9,7 @@ import type {
 } from '../../../../../../shared/git-diff-compare-types'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { openWorkspaceFile } from '@/lib/workspace-file-open'
 import {
   cancelSourceControlEditorRevealFrames,
   requestSourceControlEditorRevealFrame
@@ -25,8 +26,6 @@ export function useSourceControlNoteOpening({
   entries,
   branchEntries,
   branchSummary,
-  handleOpenDiff,
-  openCommittedDiff,
   sourceControlRef
 }: {
   activeWorktreeId: string | null
@@ -34,8 +33,6 @@ export function useSourceControlNoteOpening({
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
   branchSummary: GitBranchCompareSummary | null
-  handleOpenDiff: (entry: GitStatusEntry) => void
-  openCommittedDiff: (entry: GitBranchChangeEntry) => void
   sourceControlRef: RefObject<HTMLDivElement | null>
 }): SourceControlNoteOpening {
   const openFile = useAppStore((s) => s.openFile)
@@ -98,7 +95,14 @@ export function useSourceControlNoteOpening({
         matches.find((e) => e.area === 'untracked') ??
         matches[0]
       if (uncommitted) {
-        handleOpenDiff(uncommitted)
+        openWorkspaceFile({
+          kind: 'uncommitted',
+          intent: 'diff',
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          entry: uncommitted,
+          options: { preview: true }
+        })
         if (commentId) {
           setScrollToDiffCommentId(commentId)
         }
@@ -106,7 +110,15 @@ export function useSourceControlNoteOpening({
       }
       const branchEntry = branchEntries.find((e) => e.path === filePath)
       if (branchEntry && branchSummary?.status === 'ready') {
-        openCommittedDiff(branchEntry)
+        openWorkspaceFile({
+          kind: 'branch',
+          intent: 'diff',
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          entry: branchEntry,
+          compare: branchSummary,
+          options: { preview: true }
+        })
         if (commentId) {
           setScrollToDiffCommentId(commentId)
         }
@@ -132,8 +144,6 @@ export function useSourceControlNoteOpening({
       branchEntries,
       branchSummary,
       entries,
-      handleOpenDiff,
-      openCommittedDiff,
       openFile,
       setEditorViewMode,
       setScrollToDiffCommentId,

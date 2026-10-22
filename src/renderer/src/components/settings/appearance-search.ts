@@ -51,6 +51,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       ...translateSearchKeyword('settings.appearance.language.japanese', '日本語'),
       ...translateSearchKeyword('settings.appearance.language.spanish', 'Español'),
       ...translateSearchKeyword('settings.appearance.language.french', 'Français'),
+      ...translateSearchKeyword('settings.appearance.language.portuguese', 'Português (Brasil)'),
       // Why: the native word for "language" only reaches search via the localized
       // title in its own UI locale — index each here so speakers can find (and
       // switch to) their language whatever the current interface locale is.
@@ -58,7 +59,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       '語言', // Chinese (Traditional)
       '언어', // Korean
       '言語', // Japanese
-      'Idioma', // Spanish
+      'Idioma', // Spanish and Portuguese
       'Langue', // French
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.language.locale',
@@ -117,6 +118,29 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+export const getFollowSymlinkedDirectoriesEntry = (): SettingsSearchEntry => ({
+  title: translate('settings.followSymlinkedDirectories', 'Follow symlinked directories'),
+  description: translate(
+    'settings.followSymlinkedDirectoriesDescription',
+    'Search linked folders in Quick Open and expand local linked folders in File Explorer.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('settings.followSymlinkedDirectoriesKeywords.symlink', 'symlink'),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.linkedFolder',
+      'linked folder'
+    ),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.quickOpen',
+      'quick open'
+    ),
+    ...translateSearchKeyword(
+      'settings.followSymlinkedDirectoriesKeywords.fileExplorer',
+      'file explorer'
+    )
+  ]
+})
+
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
@@ -141,7 +165,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
-  }
+  },
+  getFollowSymlinkedDirectoriesEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [

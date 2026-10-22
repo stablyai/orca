@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
-import { sortMobileTaskItems, taskRepositoryMeta } from './mobile-tasks-repository-presentation'
-import { taskTime } from './mobile-tasks-item-mapping'
+import { sortMobileTaskItems } from './mobile-tasks-repository-presentation'
 
 vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
 
@@ -33,35 +32,6 @@ const items = [
 ]
 
 describe('mobile task sorting', () => {
-  it.each(['repository', 'updated'] as const)(
-    'preserves %s order, ties, fallbacks, and input identity',
-    (sort) => {
-      const compareBefore = (a: TaskItem, b: TaskItem) => {
-        const labelOrder =
-          sort === 'repository'
-            ? taskRepositoryMeta(a, repos).label.localeCompare(
-                taskRepositoryMeta(b, repos).label,
-                undefined,
-                { sensitivity: 'base' }
-              )
-            : 0
-        return labelOrder || taskTime(b.updatedAt) - taskTime(a.updatedAt)
-      }
-      const expected = [...items].sort(compareBefore)
-      const input = Object.freeze([...items])
-      const actual = sortMobileTaskItems(input, sort, repos)
-      expect(actual).toEqual(expected)
-      actual.forEach((item, index) => expect(item).toBe(expected[index]))
-      expect(input).toEqual(items)
-      repos.set('alias', { id: 'alias', displayName: 'zzzz', path: '/repo' })
-      try {
-        expect(sortMobileTaskItems(input, sort, repos)).toEqual([...items].sort(compareBefore))
-      } finally {
-        repos.set('alias', { id: 'alias', displayName: 'Álpha', path: '/repo' })
-      }
-    }
-  )
-
   it.each(['repository', 'updated'] as const)('computes %s keys only once per item', (sort) => {
     const parse = vi.spyOn(Date, 'parse')
     const getRepo = vi.spyOn(repos, 'get')

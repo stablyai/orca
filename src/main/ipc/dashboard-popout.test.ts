@@ -245,7 +245,15 @@ describe('registerDashboardPopoutHandlers', () => {
     handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
       paneKey: 'tab1:leaf1'
     })
-    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:ackDashboardAgent', 'tab1:leaf1')
+    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab1:leaf1',
+      intent: 'explicit'
+    })
+    // Anything but a click's explicit intent reads as a view.
+    expect(sendToTrustedMock.mock.calls).toEqual([
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'view' }],
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'explicit' }]
+    ])
   })
 
   it('relays only valid agent launches from the popout', () => {

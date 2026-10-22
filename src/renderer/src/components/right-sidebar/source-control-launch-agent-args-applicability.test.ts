@@ -39,7 +39,7 @@ describe('sourceControlLaunchAppliesAgentArgs', () => {
 
   it('keeps arguments for a chat-by-default user whose launch falls back to a terminal', () => {
     // A remote host, an agent without a structured session, or a floating workspace all land here.
-    mocks.resolveAgentSessionLaunchRoute.mockReturnValue('legacy-native-chat')
+    mocks.resolveAgentSessionLaunchRoute.mockReturnValue('terminal-tui')
     expect(
       sourceControlLaunchAppliesAgentArgs({
         agent: 'codex',

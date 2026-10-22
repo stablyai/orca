@@ -1,3 +1,6 @@
+import { pairedRuntimeConnectionFromOffer } from './paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from './paired-e2ee-client-handshake'
+import { createFixedKeyLegacyHandshakeForTest } from './paired-e2ee-fixed-key-test-fixture'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -83,16 +86,19 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('releases a pending request when the socket send throws', async () => {
-    const connection = new RemoteRuntimeSharedControlConnection({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:1',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
-    })
+    const connection = new RemoteRuntimeSharedControlConnection(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:1',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+      })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
     const unsafe = connection as unknown as {
       state: string
       ws: { readyState: number; send: () => void; close: () => void } | null
-      sharedKey: Uint8Array | null
+      handshake: PairedE2EEClientHandshake | null
       pendingRequests: Map<string, unknown>
     }
     unsafe.state = 'ready'
@@ -103,7 +109,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       },
       close: vi.fn()
     }
-    unsafe.sharedKey = new Uint8Array(32).fill(2)
+    unsafe.handshake = createFixedKeyLegacyHandshakeForTest(new Uint8Array(32).fill(2))
 
     await expect(connection.request('worktree.ps', undefined, 1000)).rejects.toMatchObject({
       code: 'remote_runtime_unavailable'
@@ -117,12 +123,14 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('replaces a stuck pre-ready socket when a one-shot probe proves reachability', () => {
-    const connection = new RemoteRuntimeSharedControlConnection({
-      v: 2,
-      endpoint: 'ws://127.0.0.1:1',
-      deviceToken: 'token',
-      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
-    })
+    const connection = new RemoteRuntimeSharedControlConnection(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:1',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+      })
+    )
     const close = vi.fn()
     const cleanup = vi.fn()
     const open = vi.fn()
@@ -632,7 +640,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
-        deviceToken: server.pairing.deviceToken,
+        deviceToken: server.pairing.credential.deviceToken,
         method: 'worktree.large',
         params
       })
@@ -687,4 +695,55 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
     connection.close()
   })
+})
+
+it('cancels a pending subscription setup without canceling a sibling on the shared connection', async () => {
+  const server = await createServer({ suppressReadyFrame: true })
+  const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+  const controller = new AbortController()
+  const callbacks = { onResponse: vi.fn(), onError: vi.fn() }
+  try {
+    const pending = connection.subscribe(
+      'files.watch',
+      { worktree: 'one' },
+      10_000,
+      callbacks,
+      controller.signal
+    )
+    const abandoned = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    const sibling = connection.subscribe('files.watch', { worktree: 'two' }, 10_000, callbacks)
+    const siblingClosed = expect(sibling).rejects.toThrow('Remote Orca runtime')
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(1))
+    controller.abort()
+    await abandoned
+    expect(connection.getDiagnostics()).toMatchObject({ subscriptionCount: 1 })
+    expect(server.requests).toEqual([])
+    connection.close()
+    await siblingClosed
+    expect(connection.getDiagnostics()).toMatchObject({ subscriptionCount: 0 })
+  } finally {
+    connection.close()
+  }
+})
+
+it('creates no connection or subscription for a pre-aborted setup', async () => {
+  const server = await createServer()
+  const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+  const controller = new AbortController()
+  controller.abort()
+  try {
+    await expect(
+      connection.subscribe(
+        'files.watch',
+        {},
+        10_000,
+        { onResponse: vi.fn(), onError: vi.fn() },
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(server.connectionCount()).toBe(0)
+    expect(connection.getDiagnostics()).toMatchObject({ subscriptionCount: 0 })
+  } finally {
+    connection.close()
+  }
 })

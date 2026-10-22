@@ -1,25 +1,23 @@
-import {
-  decrypt,
-  decryptBytes,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair,
-  publicKeyToBase64
-} from './e2ee'
+import type { PairedE2EEFraming } from '../../../src/shared/paired-e2ee-client-handshake'
+import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
+import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
-import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
-import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
+import { startSocketDeadlineClock } from './socket-deadline-clock'
+import type { ConnectionLogEmitter, ConnectionState, RpcRequest, RpcResponse } from './types'
 
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 const WEBSOCKET_CONNECTING_STATE = 0
+const UNAUTHORIZED_CLOSE_CODE = 4001
 
 type SocketSessionOptions = {
   endpoint: string
   deviceToken: string
-  serverPublicKey: Uint8Array
+  serverPublicKeyB64: string
+  framingPolicy: PairedE2EEFramingPolicy
   getCurrentSocket: () => WebSocket | null
   getState: () => ConnectionState
   getReconnectAttempt: () => number
@@ -39,7 +37,10 @@ type SocketSessionOptions = {
 export class RpcClientSocketSession {
   readonly socket: WebSocket
   readonly constructedAt = Date.now()
-  private sharedKey: Uint8Array | null = null
+  private framing: DirectSocketFraming | null = null
+  // Why: chosen when the socket opens, so a latch recorded while it was dialing applies.
+  private framingKind: PairedE2EEFraming | null = null
+  private readyAccepted = false
   private authenticated = false
   private lastInboundAt: number | null = null
   private connectTimer: ReturnType<typeof setTimeout> | null = null
@@ -51,11 +52,12 @@ export class RpcClientSocketSession {
     this.armConnectTimeout()
   }
 
-  sendEncrypted(request: unknown): boolean {
-    if (this.socket.readyState === WebSocket.OPEN && this.sharedKey) {
+  sendEncrypted(request: RpcRequest): boolean {
+    if (this.socket.readyState === WebSocket.OPEN && this.framing) {
       try {
-        this.socket.send(encrypt(JSON.stringify(request), this.sharedKey))
-        return true
+        if (this.framing.sendText(JSON.stringify(request))) {
+          return true
+        }
       } catch {
         if (this.options.getCurrentSocket() === this.socket) {
           this.options.onForcedClose(this)
@@ -66,7 +68,7 @@ export class RpcClientSocketSession {
     console.log('[net] sendEncrypted FAILED — channel not ready', {
       hasWs: this.options.getCurrentSocket() !== null,
       readyState: this.socket.readyState,
-      hasKey: this.sharedKey !== null,
+      hasKey: this.framing !== null,
       state: this.options.getState()
     })
     if (
@@ -98,7 +100,8 @@ export class RpcClientSocketSession {
   }
 
   clearKey(): void {
-    this.sharedKey = null
+    this.framing?.dispose()
+    this.framing = null
   }
 
   private attachHandlers(): void {
@@ -110,25 +113,16 @@ export class RpcClientSocketSession {
       this.clearConnectTimer()
       this.options.onHandshakeStarted()
       this.options.emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
-      const ephemeral = generateKeyPair()
-      const hello = JSON.stringify({
-        type: 'e2ee_hello',
-        publicKeyB64: publicKeyToBase64(ephemeral.publicKey)
-      })
-      try {
-        this.socket.send(hello)
-      } catch {
-        this.options.onForcedClose(this)
-        return
-      }
-      this.options.emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
-      this.sharedKey = deriveSharedKey(ephemeral.secretKey, this.options.serverPublicKey)
-      this.armHandshakeTimeout()
+      this.startHandshake()
     }
     this.socket.onmessage = (event) => {
-      if (!this.isStale('message')) {
-        void this.handleMessage(event.data)
+      if (this.isStale('message')) {
+        return
       }
+      const receivedAt = Date.now()
+      this.lastInboundAt = receivedAt
+      this.options.onAnyInbound(receivedAt)
+      this.framing?.handleInbound(event.data)
     }
     this.socket.onclose = (event) => {
       const closeCode = logRpcSocketClose({
@@ -141,7 +135,7 @@ export class RpcClientSocketSession {
         authenticated: this.authenticated,
         lastInboundAt: this.lastInboundAt
       })
-      this.options.onClosed(this, closeCode)
+      this.options.onClosed(this, this.classifyClose(closeCode))
     }
     this.socket.onerror = (event) => {
       if (this.isStale('error')) {
@@ -159,36 +153,76 @@ export class RpcClientSocketSession {
     }
   }
 
-  private async handleMessage(rawData: unknown): Promise<void> {
-    const receivedAt = Date.now()
-    this.lastInboundAt = receivedAt
-    this.options.onAnyInbound(receivedAt)
-    const raw = typeof rawData === 'string' ? rawData : null
-    if (!this.authenticated) {
-      this.handleHandshakeMessage(raw)
-      return
+  // Why: hosts that predate direct v2 refuse the v2 hello with 4001 before any ready;
+  // that is an auth verdict only for a host already proven to speak v2.
+  private classifyClose(closeCode: number | undefined): number | undefined {
+    if (this.framingKind !== 'v2' || this.readyAccepted || closeCode !== UNAUTHORIZED_CLOSE_CODE) {
+      return closeCode
     }
-    if (!this.sharedKey || this.sharedKey.length !== 32) {
-      return
-    }
-    if (raw === null) {
-      const bytes = await websocketPayloadToUint8(rawData)
-      if (this.options.getCurrentSocket() !== this.socket || !bytes) {
-        return
+    const policy = this.options.framingPolicy
+    const countsAsAuthFailure = policy.helloRefusalIsAuthFailure()
+    policy.noteV2HelloRefused()
+    return countsAsAuthFailure ? closeCode : undefined
+  }
+
+  private startHandshake(): void {
+    const isCurrent = () => this.options.getCurrentSocket() === this.socket
+    const policy = this.options.framingPolicy
+    this.framingKind = policy.framingForNextDial()
+    this.framing = createDirectSocketFraming({
+      framing: this.framingKind,
+      mayUseLegacy: policy.mayUseLegacy,
+      socket: this.socket,
+      serverPublicKeyB64: this.options.serverPublicKeyB64,
+      deviceToken: this.options.deviceToken,
+      emitLog: this.options.emitLog,
+      events: {
+        onReadyAccepted: () => {
+          this.readyAccepted = true
+        },
+        onAuthenticated: () => {
+          this.clearHandshakeTimer()
+          this.authenticated = true
+          // Why: latch only once the host proved its key; an unauthenticated ready is forgeable.
+          if (this.framingKind === 'v2') {
+            policy.noteV2Authenticated()
+          }
+          this.options.onAuthenticated(this)
+        },
+        onText: (plaintext) => {
+          this.options.onAuthenticatedInbound(this)
+          this.deliverRpcText(plaintext)
+        },
+        onBinary: (plaintext) => {
+          if (isCurrent()) {
+            this.options.onAuthenticatedInbound(this)
+            this.options.onBinary(plaintext)
+          }
+        },
+        onAuthRejected: () => {
+          if (isCurrent()) {
+            this.clearHandshakeTimer()
+            this.options.onAuthRejected('Unauthorized — pairing may be revoked')
+          }
+        },
+        onProtocolError: (error) => {
+          if (isCurrent()) {
+            console.log('[net] e2ee protocol error — closing', { message: error.message })
+            this.options.onForcedClose(this)
+          }
+        }
       }
-      const plaintext = decryptBytes(bytes, this.sharedKey)
-      if (!plaintext) {
-        return
-      }
-      this.options.onAuthenticatedInbound(this)
-      this.options.onBinary(plaintext)
+    })
+    try {
+      this.framing.start()
+    } catch {
+      this.options.onForcedClose(this)
       return
     }
-    const plaintext = decrypt(raw, this.sharedKey)
-    if (plaintext === null) {
-      return
-    }
-    this.options.onAuthenticatedInbound(this)
+    this.armHandshakeTimeout()
+  }
+
+  private deliverRpcText(plaintext: string): void {
     let response: unknown
     try {
       response = JSON.parse(plaintext)
@@ -200,92 +234,46 @@ export class RpcClientSocketSession {
     }
   }
 
-  private handleHandshakeMessage(raw: string | null): void {
-    if (raw === null) {
-      return
-    }
-    try {
-      const message = JSON.parse(raw) as { type?: unknown }
-      if (message.type === 'e2ee_ready') {
-        this.options.emitLog('success', 'Received e2ee_ready', 'Sending device token')
-        this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.options.deviceToken })
-        return
-      }
-    } catch {
-      // The authenticated handshake messages are encrypted.
-    }
-    if (!this.sharedKey || this.sharedKey.length !== 32) {
-      return
-    }
-    const plaintext = decrypt(raw, this.sharedKey)
-    if (plaintext === null) {
-      return
-    }
-    try {
-      const message = JSON.parse(plaintext) as {
-        type?: unknown
-        ok?: unknown
-        error?: { code?: unknown }
-      }
-      if (message.type === 'e2ee_authenticated') {
-        this.clearHandshakeTimer()
-        this.authenticated = true
-        this.options.onAuthenticated(this)
-      } else if (
-        message.type === 'e2ee_error' ||
-        (message.ok === false && message.error?.code === 'unauthorized')
-      ) {
-        console.log('[net] e2ee auth FAILED', {
-          msgType: message.type,
-          error: message.error
-        })
-        this.clearHandshakeTimer()
-        this.options.onAuthRejected('Unauthorized — pairing may be revoked')
-      }
-    } catch {
-      // Ignore malformed handshake payloads.
-    }
-  }
-
   private armConnectTimeout(): void {
-    this.connectTimer = setTimeout(() => {
-      this.connectTimer = null
-      if (
-        this.options.getCurrentSocket() === this.socket &&
-        this.socket.readyState === WEBSOCKET_CONNECTING_STATE
-      ) {
-        console.log('[net] connect-timeout fired (onopen never arrived)', {
-          attempt: this.options.getReconnectAttempt(),
-          timeoutMs: CONNECT_TIMEOUT_MS
-        })
-        this.options.emitLog(
-          'error',
-          'WebSocket connect timeout',
-          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`,
-          { code: 'connect-timeout' }
-        )
-        this.options.onForcedClose(this)
-      }
-    }, CONNECT_TIMEOUT_MS)
+    this.armSocketDeadline('connect', CONNECT_TIMEOUT_MS)
   }
 
   private armHandshakeTimeout(): void {
-    this.handshakeTimer = setTimeout(() => {
-      this.handshakeTimer = null
-      if (this.options.getCurrentSocket() !== this.socket || this.authenticated) {
+    this.armSocketDeadline('handshake', HANDSHAKE_TIMEOUT_MS)
+  }
+
+  private armSocketDeadline(kind: SocketDeadlineKind, timeoutMs: number): void {
+    const elapsedMs = startSocketDeadlineClock()
+    const timer = setTimeout(() => {
+      if (kind === 'connect') {
+        this.connectTimer = null
+      } else {
+        this.handshakeTimer = null
+      }
+      if (
+        this.options.getCurrentSocket() !== this.socket ||
+        (kind === 'connect'
+          ? this.socket.readyState !== WEBSOCKET_CONNECTING_STATE
+          : this.authenticated)
+      ) {
         return
       }
-      console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
-        timeoutMs: HANDSHAKE_TIMEOUT_MS
-      })
-      this.options.emitLog(
-        'error',
-        'Handshake timeout',
-        `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`,
-        { code: 'handshake-timeout' }
+      reportSocketDeadline(
+        {
+          kind,
+          elapsedMs: elapsedMs(),
+          timeoutMs,
+          ...(kind === 'connect' ? { attempt: this.options.getReconnectAttempt() } : {})
+        },
+        this.options.emitLog,
+        () => this.options.onForcedClose(this)
       )
-      this.options.onForcedClose(this)
-    }, HANDSHAKE_TIMEOUT_MS)
+    }, timeoutMs)
+    if (kind === 'connect') {
+      this.connectTimer = timer
+    } else {
+      this.handshakeTimer = timer
+    }
   }
 
   private clearConnectTimer(): void {

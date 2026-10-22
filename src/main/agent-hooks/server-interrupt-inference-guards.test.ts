@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('keeps Codex lead state terminal after an inferred interrupt', () => {
+  it('keeps Codex lead state terminal after a confirmed interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -50,19 +50,19 @@ describe('AgentHookServer listener replay', () => {
         },
         'conn-1'
       )
-      const baseline = server.getStatusSnapshot()[0]
-
       vi.setSystemTime(1_500)
-      const applied = server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: 'long task',
-        baselineAgentType: 'codex',
-        intent: 'plain-escape'
-      })
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
+          hookEventName: 'Interrupt',
+          payload: { state: 'done', prompt: 'long task', agentType: 'codex', interrupted: true }
+        },
+        'conn-1'
+      )
 
-      expect(applied).toBe(true)
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,

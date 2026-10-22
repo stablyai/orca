@@ -12,6 +12,73 @@ function selectorNotFound(): RuntimeRpcFailureError {
   })
 }
 
+function selectorAmbiguous(): RuntimeRpcFailureError {
+  return new RuntimeRpcFailureError({
+    id: 'req_selector',
+    ok: false,
+    error: { code: 'selector_ambiguous', message: 'selector_ambiguous' },
+    _meta: { runtimeId: 'runtime_local' }
+  })
+}
+
+describe('ambiguous selector recovery', () => {
+  it('names the ambiguous --repo value and the exact forms for twin projects', () => {
+    const output = formatCliError(selectorAmbiguous(), {
+      commandPath: ['worktree', 'create'],
+      repoSelector: 'app'
+    })
+
+    expect(output).toContain('More than one project matches --repo "app"')
+    expect(output).toContain('id:<repo-id> or path:<absolute-path>')
+    expect(output).toContain('orca repo list --json')
+  })
+
+  it('carries the ambiguous --worktree value into the --json failure envelope', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    reportCliError(selectorAmbiguous(), true, {
+      commandPath: ['terminal', 'create'],
+      worktreeSelector: 'name:feature'
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        code: 'selector_ambiguous',
+        data: {
+          ambiguousSelectors: [{ flag: '--worktree', selector: 'name:feature' }],
+          nextSteps: expect.arrayContaining([expect.stringContaining('identity:<identity.key>')])
+        }
+      }
+    })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        data: {
+          nextSteps: expect.arrayContaining([
+            'List the exact values with `orca worktree list --json`.'
+          ])
+        }
+      }
+    })
+    log.mockRestore()
+  })
+
+  it('keeps the listing on the paired server the command chose', () => {
+    const output = formatCliError(selectorAmbiguous(), {
+      commandPath: ['repo', 'show'],
+      repoSelector: 'app',
+      remoteServerSelected: true
+    })
+
+    expect(output).toContain('`orca repo list --json`, passing the same server flag')
+  })
+
+  it('stays silent when no selector flag was passed', () => {
+    expect(formatCliError(selectorAmbiguous(), { commandPath: ['repo', 'list'] })).toBe(
+      'selector_ambiguous'
+    )
+  })
+})
+
 describe('worktree selector recovery', () => {
   it('names the offending value and the valid forms on a bare repo id', () => {
     const output = formatCliError(selectorNotFound(), {
@@ -161,5 +228,53 @@ describe('CLI error recovery', () => {
 
     expect(output).toContain('--retry-request mutation_1')
     expect(output).not.toContain('orca open')
+  })
+})
+
+describe('stale terminal handle recovery', () => {
+  function staleHandle(): RuntimeRpcFailureError {
+    return new RuntimeRpcFailureError({
+      id: 'req_stale',
+      ok: false,
+      error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' },
+      _meta: { runtimeId: 'runtime_local' }
+    })
+  }
+
+  it('points a terminal verb with no server selected at --environment', () => {
+    const output = formatCliError(staleHandle(), {
+      commandPath: ['terminal', 'send'],
+      remoteServerSelected: false
+    })
+
+    expect(output).toContain('terminal_handle_stale')
+    expect(output).toContain('Next step: Terminal handles belong to the Orca server')
+    expect(output).toContain('--environment <server>')
+  })
+
+  it('adds the hint to the --json failure envelope', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    reportCliError(staleHandle(), true, {
+      commandPath: ['terminal', 'read'],
+      remoteServerSelected: false
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      error: {
+        code: 'terminal_handle_stale',
+        data: { nextSteps: [expect.stringContaining('--environment <server>')] }
+      }
+    })
+    log.mockRestore()
+  })
+
+  it('stays silent once a server was already selected', () => {
+    expect(
+      formatCliError(staleHandle(), {
+        commandPath: ['terminal', 'send'],
+        remoteServerSelected: true
+      })
+    ).toBe('terminal_handle_stale')
   })
 })

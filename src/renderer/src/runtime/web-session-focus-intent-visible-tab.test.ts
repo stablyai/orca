@@ -74,7 +74,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
     expect(resolveWebSessionVisibleTabId(state, WT)).toBe('tab-shown')
   })
 
-  // Why: copyUnifiedTabToGroup duplicates contentType + entityId into another group, so a plain
+  // Why: opening a file into a second split group duplicates contentType + entityId, so a plain
   // array scan can return the background copy and drag group focus to it.
   it('prefers the active group copy when one entity exists in two split groups', () => {
     const background = tab({

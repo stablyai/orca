@@ -32,7 +32,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -192,7 +192,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
       let settled = false
       const barrier = (
         kind === 'quit'
-          ? state.store.flushAsync({ exportJsonCompatibility: true })
+          ? state.store.flushAsync()
           : flushActiveProfileBeforeFileMutation(state.store)
       ).then(() => {
         settled = true
@@ -209,9 +209,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
       expect(backups).toHaveLength(2)
       expect(readSnapshot(backups[0].path).state.settings.theme).toBe('dark')
       expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
-      expect(JSON.parse(readFileSync(state.dataFile, 'utf8'))).toEqual(
-        readSnapshot(state.databasePath).state
-      )
+      expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
     }
   )
 

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
+import { FakeLogicalClient } from './mobile-endpoint-supervisor-test-fakes'
 import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -378,6 +380,50 @@ describe('relay reconnect controller', () => {
     expect(relayFailureAllowsGraceRetry(new Error('relay transport error'))).toBe(false)
     expect(relayFailureAllowsGraceRetry(new RelayOuterError(4408))).toBe(false)
     expect(relayFailureAllowsGraceRetry(new RelayOuterError(4429))).toBe(false)
+  })
+
+  it('probes a retained relay once on a real background return, not on a foreground nudge', () => {
+    const reconnect = createController(vi.fn())
+    const session = { getFailure: () => null, probeAfterBackground: vi.fn() }
+    const logical = new FakeLogicalClient('connected', 'relay')
+    reconnect.setActiveSession(session)
+
+    reconnect.handleForeground(logical, true)
+    expect(session.probeAfterBackground).not.toHaveBeenCalled()
+    reconnect.handleForeground(logical, false)
+    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+
+    // A relay the grace dropped (or never kept) is not probed.
+    reconnect.clear()
+    reconnect.handleForeground(logical, false)
+    expect(session.probeAfterBackground).toHaveBeenCalledOnce()
+  })
+
+  it('redials an attach timeout once quickly per failure streak', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const attachTimeout = () =>
+      new RelayOuterError(4404, true, MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT)
+
+    // Jittered over 1–2s; this controller's fixed jitter lands mid-range.
+    reconnect.registerFailure(attachTimeout())
+    vi.advanceTimersByTime(1_499)
+    expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledOnce()
+
+    reconnect.registerFailure(attachTimeout())
+    vi.advanceTimersByTime(9_999)
+    expect(onRetry).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+
+    // A stable connection ends the streak and earns a fresh quick redial.
+    reconnect.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
+    vi.advanceTimersByTime(30_000)
+    reconnect.registerFailure(attachTimeout())
+    vi.advanceTimersByTime(1_500)
+    expect(onRetry).toHaveBeenCalledTimes(3)
   })
 })
 

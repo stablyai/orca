@@ -6,7 +6,8 @@ import {
   identityFor,
   PROVIDER_SESSION_ID,
   recordingJournalSink,
-  tick
+  tick,
+  claudeOpened
 } from './claude-structured-session-test-support'
 
 /** A resumed owner that completed one turn (`a4`) and then saw the next turn's prompt. */
@@ -82,13 +83,15 @@ describe('Claude resume point is the last completed turn on every exit path', ()
       [],
       persisted
     )
-    const acquisition = await adapter.acquire({
+    await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-7',
       events: recordingJournalSink()
     })
-    expect(acquisition.link.handle).toMatchObject({ leafUuid: 'a3' })
+    expect((await claudeOpened(adapter, 'session-1')).link?.handle).toMatchObject({
+      resumeCursor: 'a3'
+    })
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persisted).toEqual([expect.objectContaining({ leafUuid: 'a3' })])
   })

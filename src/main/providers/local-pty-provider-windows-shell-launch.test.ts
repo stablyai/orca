@@ -13,7 +13,7 @@ const {
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
-  wslUncDirectoryExistsMock,
+  wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -27,7 +27,7 @@ const {
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
-  wslUncDirectoryExistsMock: vi.fn(),
+  wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
@@ -108,7 +108,7 @@ vi.mock('../wsl', () => ({
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
   // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
   // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
+  wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
 vi.mock('../shell-prompt-readiness-probe', () => ({
@@ -143,7 +143,7 @@ describe('LocalPtyProvider', () => {
       readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
-      wslUncDirectoryExistsMock,
+      wslUncDirectoryExistsAsyncMock,
       createShellPromptReadinessProbeMock
     })
 
@@ -160,6 +160,34 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('passes the guest Claude pointer and injected-home marker through WSLENV', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          CLAUDE_CONFIG_DIR: '/home/fake/.local/share/orca/claude-profiles/a/home',
+          ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/home/fake/.local/share/orca/claude-profiles/a/home',
+          ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+        })
+      })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\fake\\repo'
+      })
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.WSLENV.split(':')).toEqual(
+        expect.arrayContaining([
+          'CLAUDE_CONFIG_DIR',
+          'ORCA_CLAUDE_PROFILE_POINTER',
+          'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+        ])
+      )
+      expect(env.ORCA_CLAUDE_PROFILE_POINTER).toBe(
+        '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+      )
+    })
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({
@@ -330,7 +358,7 @@ describe('LocalPtyProvider', () => {
           expect.stringContaining(`cd '${cwd}'`)
         ])
         expect(spawnCall[2].cwd).not.toBe(cwd)
-        expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+        expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
       }
     )
 
@@ -347,7 +375,50 @@ describe('LocalPtyProvider', () => {
         terminalWindowsWslDistro: 'Debian'
       })
 
-      expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith('\\\\wsl.localhost\\Debian\\a')
+      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith('\\\\wsl.localhost\\Debian\\a')
+    })
+
+    it('rejects a WSL cwd the distro reports missing without spawning a shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      wslUncDirectoryExistsAsyncMock.mockResolvedValue(false)
+      const spawnCallsBefore = spawnMock.mock.calls.length
+
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Debian\\home\\jin\\gone'
+        })
+      ).rejects.toThrow(/does not exist/)
+      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Debian\\home\\jin\\gone'
+      )
+      expect(spawnMock.mock.calls).toHaveLength(spawnCallsBefore)
+    })
+
+    it('rejects a canceled spawn while its WSL cwd probe is still pending', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const probeStarted = Promise.withResolvers<void>()
+      wslUncDirectoryExistsAsyncMock.mockImplementation(() => {
+        probeStarted.resolve()
+        return new Promise(() => {})
+      })
+      const spawnCallsBefore = spawnMock.mock.calls.length
+
+      const spawn = provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Stalled\\home\\jin\\repo',
+        sessionId: 'stalled-wsl-cwd-session'
+      })
+      const canceledSpawn = expect(spawn).rejects.toThrow(
+        'PTY spawn canceled: stalled-wsl-cwd-session'
+      )
+      await probeStarted.promise
+      await provider.shutdown('stalled-wsl-cwd-session', { immediate: true })
+
+      await canceledSpawn
+      expect(spawnMock.mock.calls).toHaveLength(spawnCallsBefore)
     })
 
     it('resolves and persists the default distro for Windows cwd WSL terminals', async () => {

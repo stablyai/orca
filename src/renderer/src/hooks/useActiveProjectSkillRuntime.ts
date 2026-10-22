@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   getGlobalWindowsExecutionRuntimeContext,
   getLocalProjectExecutionRuntimeContext
@@ -17,6 +17,7 @@ import {
 } from '@/lib/project-skill-runtime'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution
@@ -72,7 +73,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
       projects: state.projects,
       repos: state.repos,
       settings: state.settings,
-      worktreesByRepo: state.worktreesByRepo
+      worktreesByRepo: selectWorktreesByRepo(state)
     }))
   )
   const currentPlatform = getCurrentPlatform()

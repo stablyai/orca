@@ -18,7 +18,7 @@ export type AutomationRunTerminalObserver = {
   resolveRunTerminal: (run: AutomationRun) => string | null
   observeCompletion: (
     handle: string,
-    options: { signal: AbortSignal }
+    options: { signal: AbortSignal; run?: AutomationRun }
   ) => Promise<AutomationRunCompletionObservation>
 }
 
@@ -118,7 +118,10 @@ export class AutomationRunCompletionWatcher {
   ): Promise<void> {
     let observation: AutomationRunCompletionObservation
     try {
-      observation = await this.observer.observeCompletion(handle, { signal: controller.signal })
+      observation = await this.observer.observeCompletion(handle, {
+        signal: controller.signal,
+        run
+      })
     } catch (error) {
       if (controller.signal.aborted) {
         return

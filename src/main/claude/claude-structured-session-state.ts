@@ -1,31 +1,28 @@
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionStartedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionOptionsReportedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import type { StructuredLaunchRequest } from '../runtime/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
-import type {
-  AgentModelCatalogSessionAccess,
-  AgentModelCatalogStore
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
-import type { ClaudeSessionStartup } from './claude-structured-session-startup-state'
+import type { ClaudeInitProof } from './claude-structured-init-proof'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -49,6 +46,8 @@ export type ClaudeStructuredSessionEvent =
       requestedAt?: number
       /** The submission this replay acknowledged, which opens the turn. */
       clientMessageId?: string
+      /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
+      startedSend?: ClaudeStartedSend
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }
@@ -64,8 +63,7 @@ export type ClaudeStructuredSessionEvent =
       fence: number
     }
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
-  /** Startup facts applied and saved options restored; held prompts are about to be written. */
-  | StructuredAgentSessionStartedEvent
+  | StructuredAgentSessionOptionsReportedEvent
   | {
       type: 'ended'
       sessionId: string
@@ -77,9 +75,9 @@ export type ClaudeStructuredSessionEvent =
       acquisitionGeneration?: string
       /** Host clock when the end was observed. */
       observedAt?: number
-      /** The child ended before proving startup, so reacquiring would repeat the same start. */
-      startupUnproven?: true
     }
+
+export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
 export type ClaudeLateDispatchOutcome =
   | {
@@ -93,16 +91,17 @@ export type ClaudeLateDispatchOutcome =
 export type ClaudeStructuredSessionAdapterDeps = {
   /** The `/` surface of a chat whose Claude is not running. */
   atRestCommands?: ClaudeAtRestCommandCatalog
-  resolveLaunch: (input: {
-    identity: AgentSessionJournalIdentity
-  }) => Promise<ClaudeStructuredLaunch>
+  resolveLaunch: (input: StructuredLaunchRequest) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
-  /** The CLI reported `session_state_changed idle`: its turn is over. */
-  onSessionIdle?: (input: { sessionId: string }) => void
   /** What the session's child work did, delivered after the journal handled the frame. */
-  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
+  /** `producer`: the reporting child's own sink, which writes what the report changes. */
+  onChildWorkEvidence?: (
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
   openConnection?: typeof openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -115,6 +114,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string | null
     fence: number
   }) => Promise<void>
+  /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
+  logger?: StructuredAgentSessionLogger
   /** Advance the durable resume point in place at a turn end; bookkeeping, never a turn failure. */
   persistResumePoint?: (input: {
     sessionId: string
@@ -122,8 +123,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string
     fence: number
   }) => Promise<void>
-  /** Host model catalog; sessions write their listings through. */
-  modelCatalog?: AgentModelCatalogStore
 }
 
 export type ClaudeDispatchWaiter = {
@@ -158,6 +157,8 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
+  /** Sends the frame being handled settled, until their settlements reach the host. */
+  unreportedSettlements?: ReadonlySet<string>
   /** Bounded identities for dispatches settled without an echo; a late replay still accepts one. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
@@ -167,6 +168,10 @@ export type ClaudeSession = {
   /** What `get_settings` says the next request will send, after Claude's own env and settings
    *  precedence: the lowest-ranked answer, unconfirmed until a turn reports it. */
   appliedOptions?: { model?: string; effort?: string }
+  /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
+  configuredDefaults?: { model?: string; effort?: string }
+  /** Mutation at which the provider last reported its Fast routing state. */
+  fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
@@ -175,9 +180,14 @@ export type ClaudeSession = {
   reportedModelMutation: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
-  restoreSkippedOptions: Set<string>
-  /** Absent when the adapter runs without a host catalog store (tests). */
-  catalogAccess?: AgentModelCatalogSessionAccess
+  /** Inputs carried by launch or accepted controls, independent of provider reports. */
+  appliedInputOptions: Map<string, string>
+  /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
+  launchedModel: string | null
+  /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
+  retiredModel?: string
+  /** Fast was omitted from launch settings and needs confirmation at message input. */
+  fastModeAtStart: boolean
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker
@@ -203,8 +213,14 @@ export type ClaudeSession = {
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
   unbindReadingControl?: () => void
-  /** Published at spawn; init facts, option restore and queued prompts land when startup does. */
-  startup: ClaudeSessionStartup
+  /** Provider identity and initialize proof retained for the host-awaited open. */
+  link: AgentSessionProviderHandleLink
+  initialization: {
+    proof: ClaudeInitProof
+    account: ClaudeStructuredLaunch['account']
+    resumesTranscript: boolean
+    onLateRefusal: (error: Error) => void
+  }
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {
@@ -217,6 +233,7 @@ export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAda
  * what the ladder observed, not an absence it would otherwise report as proven.
  */
 export type ClaudeSessionExit = {
+  observedAt: number
   connection: ClaudeStreamJsonConnection
   /** Full session identity retained until the exit settles. */
   session: ClaudeSession
@@ -239,6 +256,8 @@ export type ClaudeAcquisitionAttempt = {
   exitProven: boolean
   finished: Promise<void>
   finish: () => void
+  /** The resolved launch's account, read by the translator to word a sign-in failure. */
+  account?: ClaudeStructuredLaunch['account']
 }
 
 export function createClaudeAcquisitionAttempt(
@@ -345,5 +364,7 @@ export type ClaudeAcquireCallbacks = {
     event: ClaudeStructuredSessionEvent
   ) => void
   handleExit: (sessionId: string, attempt: ClaudeAcquisitionAttempt, error: Error) => void
+  /** The root exited during a close Orca began: finishes that close for this exact child. */
+  finishClose: (sessionId: string, attempt: ClaudeAcquisitionAttempt) => void
   settleExit: (sessionId: string, exit: ClaudeSessionExit) => Promise<void>
 }

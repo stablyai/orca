@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
-import { OptionalString, OptionalBoolean, requiredString } from '../../schemas'
+import {
+  OptionalString,
+  OptionalBoolean,
+  requiredString
+} from '../../../../../shared/rpc-contract/rpc-param-primitives'
 import type { TaskStatus } from '../../../orchestration/db'
 import { isGroupAddress } from '../../../orchestration/groups'
 import { MESSAGE_TYPES } from '../../../orchestration/types'

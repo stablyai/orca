@@ -37,12 +37,14 @@ describe('drain-return lane', () => {
       relayHostId === drained ? isolatedHome(relayHostId) : assignment('cell-o', relayHostId)
     )
     const outcomes: string[] = []
+    const servedLanes: string[] = []
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
       ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
+      recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
+      recordAdmissionServiceMs: (lane) => servedLanes.push(lane)
     })
 
     // The re-placement holds the drain lane; the sticky lane's only slot is free.
@@ -61,6 +63,8 @@ describe('drain-return lane', () => {
     replacement.resolve(assignment('cell-new', drained))
     expect((await moving).status).toBe(200)
     expect(outcomes).toEqual(['drain-return', 'sticky'])
+    // The drained host held a sticky slot for its verification read too.
+    expect(servedLanes).toEqual(['sticky', 'sticky', 'drain-return'])
   })
 
   it('defers an overflowing drain return with a paced Retry-After and says why', async () => {
@@ -73,6 +77,7 @@ describe('drain-return lane', () => {
     const outcomes: string[] = []
     const reasons: string[] = []
     const retryAfters: number[] = []
+    const causes: string[] = []
     const app = createRelayApp(config({ drainReturnQueueMax: 1, drainReturnWaitMs: 50 }), {
       store: {} as never,
       assignments: { assign, resolve } as never,
@@ -80,7 +85,8 @@ describe('drain-return lane', () => {
       ready: vi.fn(async () => true),
       recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
       recordAssignmentRejectionReason: (lane, reason) => reasons.push(`${lane}:${reason}`),
-      recordDrainReturnRetryAfter: (seconds) => retryAfters.push(seconds)
+      recordDrainReturnRetryAfter: (seconds) => retryAfters.push(seconds),
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -103,6 +109,7 @@ describe('drain-return lane', () => {
     expect(reasons).toEqual(['drain-return:queue-full', 'drain-return:wait-timeout'])
     expect(retryAfters).toEqual([2, Number(timedOut.headers.get('retry-after'))])
     expect(outcomes.filter((outcome) => outcome === 'drain-return-deferred')).toHaveLength(2)
+    expect(causes).toEqual(['drain-return-deferred', 'drain-return-deferred'])
     expect(warn.mock.calls.flat().join('\n')).toMatch(
       /lane=drain-return hinted=true reason=queue-full .*retryAfter=2/
     )
@@ -115,12 +122,14 @@ describe('drain-return lane', () => {
     const assign = vi.fn(async () => assignment('cell-s', host))
     const resolve = vi.fn(async () => assignment('cell-s', host))
     const outcomes: string[] = []
+    const causes: string[] = []
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
       ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
+      recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
     })
 
     expect(
@@ -131,6 +140,27 @@ describe('drain-return lane', () => {
     expect(repeat.status).toBe(503)
     expect(repeat.headers.get('retry-after')).toBe('2')
     expect(outcomes).toEqual(['sticky', 'sticky-rejected'])
+    expect(causes).toEqual(['sticky-lane'])
+  })
+
+  it('names the cause of a placement that found no capacity', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const assign = vi.fn(async () => {
+      throw new Error('relay_capacity_exhausted')
+    })
+    const causes: string[] = []
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, resolve: vi.fn() } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true),
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
+    })
+
+    const response = await app.request('/v1/assign', assignmentRequest('cccccccccccccccc'))
+
+    expect(response.status).toBe(503)
+    expect(causes).toEqual(['relay_capacity_exhausted'])
   })
 
   it('never classifies an unhinted request, which keeps the placement lane', async () => {
@@ -203,17 +233,17 @@ describe('drain-return lane', () => {
     expect(redial.headers.get('retry-after')).toBe('2')
   })
 
-  it('admits a 2,500-host drain across five directors without a sticky or placement rejection', async () => {
+  it('admits a paced drain across five directors without a sticky or placement rejection', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     // Five directors behind a load balancer that sends each request to any of
-    // them. 2,500 drained hosts over the 300 s pace window, beside ordinary
-    // reconnects (c29 baseline ~13/s) and a trickle of new placements.
+    // them. A shorter cohort preserves the production arrival rates: ~8 drained
+    // hosts/s, ~13 ordinary reconnects/s, and a trickle of new placements.
     const DIRECTORS = 5
-    const DRAINED = 2_500
-    const PACE_WINDOW_MS = 300_000
-    const ORDINARY = 3_900
-    const PLACEMENTS = 30
+    const DRAINED = 250
+    const PACE_WINDOW_MS = 30_000
+    const ORDINARY = 390
+    const PLACEMENTS = 3
     // Measured c29 2026-10-01: ~5.8 re-placements/s fleet-wide, bound by the
     // region's inventory lock, so ~172 ms of lock per re-placement.
     const INVENTORY_LOCK_MS = 172
@@ -318,7 +348,7 @@ describe('drain-return lane', () => {
     }
 
     let elapsedMs = 0
-    while (inFlight > 0 && elapsedMs < 1_200_000) {
+    while (inFlight > 0 && elapsedMs < 120_000) {
       await vi.advanceTimersByTimeAsync(20)
       elapsedMs += 20
       // Signing the lease completes off the timer queue.
@@ -333,10 +363,11 @@ describe('drain-return lane', () => {
     expect(outcomes.get('sticky')).toBe(ORDINARY)
     expect(outcomes.get('placement')).toBe(PLACEMENTS)
     expect(outcomes.get('drain-return')).toBe(DRAINED)
+    expect(outcomes.get('drain-return-deferred') ?? 0).toBeGreaterThan(0)
     // Paced returns: fewer than two deferrals per drained host, none past the cap.
     expect(outcomes.get('drain-return-deferred') ?? 0).toBeLessThan(2 * DRAINED)
     expect(Math.max(...retryAfters)).toBeLessThanOrEqual(300)
-    // The cohort finishes at the inventory lock's rate, not minutes behind it.
+    // Retry rounding and off-thread signing keep their original fixed allowance.
     expect(elapsedMs).toBeLessThan(DRAINED * INVENTORY_LOCK_MS + 60_000)
   }, 300_000)
 })

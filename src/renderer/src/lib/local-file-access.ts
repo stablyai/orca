@@ -1,9 +1,9 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
 import type { OpenFile } from '@/store/slices/editor'
-import type { AppState } from '@/store/types'
 import { getConnectionIdForFile } from './connection-context'
+import { getRuntimeTargetForFileOwner } from './file-owner-runtime-target'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
@@ -45,21 +45,35 @@ type EditorTabAccessFile = Pick<
   | 'liveTail'
 >
 
+/** A read-only tab named by absolute path is this computer's file: an AI Vault log or a client-local link. */
+export function isClientLocalReadOnlyTab(
+  file: Pick<OpenFile, 'filePath' | 'relativePath' | 'readOnly' | 'liveTail'> &
+    Partial<Pick<OpenFile, 'runtimeEnvironmentId'>>
+): boolean {
+  return (
+    file.readOnly === true &&
+    // Why: a server-granted file (live or restored without its grant) names a server path.
+    !file.runtimeEnvironmentId?.trim() &&
+    (file.liveTail === true || file.relativePath === file.filePath)
+  )
+}
+
 /**
  * The file access a persisted editor tab reads and saves with. A tab the user opened outside its owner's
  * root (a floating-workspace tab, or one stored with an absolute path) is user-named, so it reads
  * the same before and after a restart; every other tab stays inside its project root.
  */
 export function editorTabFileAccess(
-  state: Pick<AppState, 'settings'>,
+  state: WorktreeRuntimeOwnerState,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
-  // Why: AI Vault logs are client-local files the user opened, whatever the worktree's host.
-  if (file.readOnly === true && file.liveTail === true) {
+  // Why: these are client-local files the user opened, whatever the worktree's host.
+  if (isClientLocalReadOnlyTab(file)) {
     return USER_FILE_ACCESS
   }
-  const runtimeOwner = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
-  if (file.externalSshTargetId?.trim() || runtimeOwner?.activeRuntimeEnvironmentId?.trim()) {
+  const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+  // Why `!owner`: rows that disagree may put the path on another host.
+  if (file.externalSshTargetId?.trim() || owner?.kind !== 'local') {
     return undefined
   }
   const outsideOwnerRoot =
@@ -76,7 +90,7 @@ export function editorTabFileAccess(
  * user-named, else none, so project tabs keep their project checks.
  */
 export function editorTabDocumentFolderAccess(
-  state: Pick<AppState, 'settings'>,
+  state: WorktreeRuntimeOwnerState,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
   // Why: a read-only tab (an AI Vault log, possibly in an SSH workspace) is never written.

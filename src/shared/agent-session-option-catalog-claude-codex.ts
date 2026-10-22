@@ -181,6 +181,7 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
+  hostListingNamesConfiguredModel: true,
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [

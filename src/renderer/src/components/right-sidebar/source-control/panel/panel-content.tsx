@@ -27,16 +27,17 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     fileListScrollElement,
     filterQuery,
     filteredBranchEntries,
-    filteredGrouped,
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
     handleContextMenu,
-    handleOpenDiff,
+    openUncommittedFile,
     handleResolveConflictsWithAI,
     handleSelect,
     handleStage,
     handleStageAllPaths,
+    handleStageSectionPaths,
+    handleStageWorktreeChanges,
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
@@ -48,7 +49,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     openAllDiffs,
     openBranchAllDiffs,
     openCommitFile,
-    openCommittedDiff,
+    openBranchFile,
     openConflictReview,
     openHistoryCommitDiff,
     refreshActiveGitStatus,
@@ -74,10 +75,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     visibleTreeRowsBySection
   } = model
 
-  const hasFilteredUncommittedEntries =
-    filteredGrouped.staged.length > 0 ||
-    filteredGrouped.unstaged.length > 0 ||
-    filteredGrouped.untracked.length > 0
+  const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
@@ -102,6 +100,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         repositoryHuge={repositoryHuge}
         worktreeId={currentWorktreeId}
         onRetryStatus={refreshActiveGitStatus}
+        onStageAllChanges={handleStageWorktreeChanges}
+        isExecutingBulk={isExecutingBulk}
         showGenericEmptyState={showGenericEmptyState}
         normalizedFilter={normalizedFilter}
         branchBaseRef={branchSummary?.baseRef ?? null}
@@ -146,6 +146,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           isExecutingBulk={isExecutingBulk}
           requestDiscardAllInArea={requestDiscardAllInArea}
           handleStageAllPaths={handleStageAllPaths}
+          handleStageSectionPaths={handleStageSectionPaths}
           handleUnstagePaths={handleUnstagePaths}
           sourceControlViewMode={sourceControlViewMode}
           visibleTreeRowsBySection={visibleTreeRowsBySection}
@@ -164,7 +165,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           handleContextMenu={handleContextMenu}
           revealInExplorer={revealInExplorer}
           activeConnectionId={activeConnectionId}
-          handleOpenDiff={handleOpenDiff}
+          openUncommittedFile={openUncommittedFile}
           handleStage={handleStage}
           handleUnstage={handleUnstage}
           requestDiscardEntry={requestDiscardEntry}
@@ -201,7 +202,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           worktreePath={worktreePath}
           revealInExplorer={revealInExplorer}
           activeConnectionId={activeConnectionId}
-          openCommittedDiff={openCommittedDiff}
+          openBranchFile={openBranchFile}
           openBranchAllDiffs={openBranchAllDiffs}
           diffCommentCountByPath={diffCommentCountByPath}
         />

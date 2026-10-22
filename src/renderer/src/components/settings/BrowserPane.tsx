@@ -17,6 +17,7 @@ import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktre
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
 import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
+import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
@@ -33,6 +34,7 @@ import {
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 export { getBrowserPaneCombinedSearchEntries }
 
 type BrowserPaneProps = {
@@ -114,6 +116,7 @@ export function BrowserPane({
   const showClientHostedRemote = matchesSettingsSearch(searchQuery, [browserSearchEntries[8]])
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[9]])
   const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
+  const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -204,7 +207,7 @@ export function BrowserPane({
         if (!el) {
           return
         }
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
       })
     })
   }
@@ -246,6 +249,8 @@ export function BrowserPane({
       ) : null}
 
       {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+
+      {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
 
       {showLinkRouting ? (
         <BrowserLinkRoutingSetting

@@ -212,6 +212,8 @@ describe('profile.hooks', () => {
     }
     // Codex before its Interrupt hook posts nothing for an Esc, so only its done is trusted.
     expect(hookAuthority('codex')).toBe('turn-end')
+    // DSH posts no hook for an approval pause, so only its Stop is trusted.
+    expect(hookAuthority('dsh')).toBe('turn-end')
     for (const agent of ['claude', 'cursor', 'gemini', 'grok', null] as const) {
       expect(hookAuthority(agent)).toBe('identity-only')
     }
@@ -315,13 +317,13 @@ describe('evaluateTuiIdle hook lane', () => {
     ).toEqual({ kind: 'pending', quietForeground: 'closed' })
   })
 
-  it('never reads hooks for identity-only claude', () => {
+  it('ignores an ordinary done hook for identity-only claude', () => {
     const readHookTurn = vi.fn(() => DONE)
     expect(evaluateTuiIdle(input({ agent: 'claude', readHookTurn }))).toEqual({
       kind: 'pending',
       quietForeground: 'closed'
     })
-    expect(readHookTurn).not.toHaveBeenCalled()
+    expect(readHookTurn).toHaveBeenCalledOnce()
   })
 })
 
@@ -375,5 +377,47 @@ describe('evaluateTuiIdle turn-end hook lane (codex)', () => {
         )
       ).toEqual({ kind: 'blocked', reason: 'agent-trust-workspace' })
     }
+  })
+})
+
+describe('evaluateTuiIdle turn-end hook lane (dsh)', () => {
+  // DSH's title carries no rest status and it emits no OSC 9999, so its hook row is its only
+  // rest signal: before this lane, `terminal wait --for tui-idle` ran to timeout (STA-9409).
+  const dsh = (hookRows: AgentStatusIpcPayload[], over: { lastInputAt?: number } = {}) =>
+    evaluateTuiIdle(
+      input({
+        agent: 'dsh',
+        record: record({ lastOscTitle: '\u2726 \u{1F40B} repo' }),
+        readHookTurn: () =>
+          readTuiIdleHookTurn({
+            agent: 'dsh',
+            handles: [HANDLE],
+            paneKeys: [PANE_KEY],
+            hookRows,
+            resolveBlockedText: () => null,
+            ...over
+          })
+      })
+    )
+  const PENDING = { kind: 'pending', quietForeground: 'closed' }
+
+  it("settles on the hook store's fresh done, with no first-party status", () => {
+    expect(dsh([row({ agentType: 'dsh' })])).toEqual({ kind: 'ready-strong' })
+  })
+
+  it('does not settle on a stale done, one from before the latest input, or a working row', () => {
+    const receivedAt = Date.now() - 1000
+    expect(
+      dsh([row({ agentType: 'dsh', receivedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1 })])
+    ).toEqual(PENDING)
+    expect(dsh([row({ agentType: 'dsh', receivedAt })], { lastInputAt: receivedAt + 1 })).toEqual(
+      PENDING
+    )
+    expect(dsh([row({ agentType: 'dsh', state: 'working' })])).toEqual(PENDING)
+  })
+
+  it("does not settle on a session start or another agent's done", () => {
+    expect(dsh([row({ agentType: 'dsh', sessionBoundary: true })])).toEqual(PENDING)
+    expect(dsh([row({ agentType: 'claude' })])).toEqual(PENDING)
   })
 })

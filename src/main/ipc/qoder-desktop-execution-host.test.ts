@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
-import {
-  registerPtyHandlers,
-  registerSshPtyProvider,
-  unregisterSshPtyProvider,
-  getLocalPtyProvider
-} from './pty'
+import { registerPtyHandlers } from './pty/register-handlers'
 import { isCommandOnPath } from './preflight-command-exec'
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import type * as FsPromises from 'node:fs/promises'
@@ -16,12 +11,12 @@ import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 
 vi.mock('./preflight-command-exec', () => ({ isCommandOnPath: vi.fn() }))
-vi.mock('./local-agent-install-dir-detection', () => ({
+vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: () => new Set()
 }))
-vi.mock('./preflight-wsl-agent-detection', () => ({ detectWslCommandsOnPath: vi.fn() }))
-const { mux } = vi.hoisted(() => ({ mux: vi.fn() }))
-vi.mock('../ssh/ssh-target-registry', () => ({ getActiveMultiplexer: mux }))
+vi.mock('./preflight-wsl-agent-detection', () => ({
+  detectWslCommandsOnPath: vi.fn()
+}))
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
   stat: vi.fn(async () => ({ isDirectory: () => true }))
@@ -81,7 +76,6 @@ describe('desktop Qoder execution-host selection', () => {
   beforeEach(() => {
     nativeProbe.mockReset().mockImplementation(async (cmd) => cmd === 'qodercli')
     wslProbe.mockReset().mockResolvedValue(new Set(['qoder']))
-    mux.mockReset()
   })
   async function spawn(args: Partial<PtySpawnIpcArgs> = {}, store?: Store) {
     const providerSpawn = setupDaemonAdapter()
@@ -176,7 +170,6 @@ describe('desktop Qoder execution-host selection', () => {
     expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ command: args.command }))
     expect(nativeProbe).not.toHaveBeenCalled()
     expect(wslProbe).not.toHaveBeenCalled()
-    expect(mux).not.toHaveBeenCalled()
   })
   it('uses the selected project WSL distro rather than installed native legacy', async () => {
     await withWin32Platform(async () => {
@@ -245,55 +238,4 @@ describe('desktop Qoder execution-host selection', () => {
       expect(wslProbe).not.toHaveBeenCalled()
     })
   })
-  it.each(['modern-only', 'legacy-only', 'missing', 'disposed'] as const)(
-    'lets SSH own detection and refuse absent contact: %s',
-    async (host) => {
-      const remoteSpawn = setupDaemonAdapter()
-      registerSshPtyProvider('ssh-qoder-review', getLocalPtyProvider())
-      const localSpawn = setupDaemonAdapter()
-      const request = vi
-        .fn()
-        .mockResolvedValue({ agents: [host === 'modern-only' ? 'qoder' : 'qodercli'] })
-      mux.mockReturnValue(
-        host === 'missing' ? null : { isDisposed: () => host === 'disposed', request }
-      )
-      registerPtyHandlers(mainWindow)
-      try {
-        const pending = handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          cwd: '/remote/folder',
-          worktreeId: 'repo-ssh::/remote/folder',
-          connectionId: 'ssh-qoder-review',
-          launchAgent: 'qoder',
-          command: "qodercli '--resume' 'same remote id'"
-        })
-        if (host === 'missing' || host === 'disposed') {
-          await expect(pending).rejects.toThrow('execution host connection')
-          expect(remoteSpawn).not.toHaveBeenCalled()
-          expect(request).not.toHaveBeenCalled()
-        } else {
-          await pending
-          expect(remoteSpawn).toHaveBeenCalledWith(
-            expect.objectContaining({
-              cwd: '/remote/folder',
-              command: `${host === 'modern-only' ? 'qoder' : 'qodercli'} '--resume' 'same remote id'`
-            })
-          )
-          expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
-            commands: [
-              { id: 'qodercli', cmd: 'qodercli' },
-              { id: 'qoder', cmd: 'qoder' }
-            ]
-          })
-        }
-        expect(localSpawn).not.toHaveBeenCalled()
-        expect(nativeProbe).not.toHaveBeenCalled()
-        expect(wslProbe).not.toHaveBeenCalled()
-        expect(mux).toHaveBeenCalledWith('ssh-qoder-review')
-      } finally {
-        unregisterSshPtyProvider('ssh-qoder-review')
-      }
-    }
-  )
 })

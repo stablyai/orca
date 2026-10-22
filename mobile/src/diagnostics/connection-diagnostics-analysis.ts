@@ -78,6 +78,14 @@ function diagnoseFailure(
     return relayDial
   }
 
+  if (failure?.code === 'suspended-dial') {
+    return {
+      likelyCause: 'Connection deadline delivery was delayed; the app may have been suspended.',
+      nextStep: 'Orca is re-dialing to check the connection. Keep the app open while it retries.',
+      reportability: 'none'
+    }
+  }
+
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
     const relayLiveness = failure?.code === 'liveness-timeout' && failure.path === 'relay'
     const structuredDirectLiveness =
@@ -257,7 +265,7 @@ function diagnosticEvidence(entry: ConnectionLogEntry): string {
 }
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
-  return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
+  return /suspended-dial|relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
     diagnosticEvidence(entry)
   )
 }

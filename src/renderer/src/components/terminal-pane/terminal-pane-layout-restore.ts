@@ -7,6 +7,8 @@ import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import { resolveParkRevealLiveTuiLeafIds } from './park-reveal-live-tui-leaves'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   mapRestoredPaneTitlesByPaneId,
   replayLayoutWithOneShotParkIntent
@@ -21,20 +23,31 @@ export function restoreTerminalPaneLayout(args: {
 }): Map<string, number> {
   const { manager, deps, refs, ptyDeps, initialLayoutHadBuffers } = args
   const { initialLayoutRef, tabId, worktreeId, isActive, managerRef } = deps
+  // Read before replay consumes the one-shot park intent.
+  const liveAltScreenLeafIds = resolveParkRevealLiveTuiLeafIds(
+    ptyDeps.mountFollowsTerminalPark,
+    initialLayoutRef.current.ptyIdsByLeafId
+  )
   const restoredPaneByLeafId = replayLayoutWithOneShotParkIntent(ptyDeps, () =>
     replayTerminalLayout(manager, initialLayoutRef.current, isActive)
   )
-  const localOnlyBuffers = useAppStore.getState().localOnlyScrollbackByTabId[tabId]
-  const restoredBuffers = resolveLeafScrollbackBuffers({
-    shared: initialLayoutRef.current,
-    localOnly: localOnlyBuffers
-  })
+  // Switch point: history comes only from the terminal's host (L236), never the window's copy.
+  const localOnlyBuffers = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? undefined
+    : useAppStore.getState().localOnlyScrollbackByTabId[tabId]
+  const restoredBuffers = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? undefined
+    : resolveLeafScrollbackBuffers({
+        shared: initialLayoutRef.current,
+        localOnly: localOnlyBuffers
+      })
   restoreScrollbackBuffers(
     manager,
     restoredBuffers,
     restoredPaneByLeafId,
     deps.replayingPanesRef,
-    refs.restoredViewportBlankingPanesRef
+    refs.restoredViewportBlankingPanesRef,
+    liveAltScreenLeafIds
   )
   const hasScrollbackRefs = Boolean(initialLayoutRef.current.scrollbackRefsByLeafId)
   if (

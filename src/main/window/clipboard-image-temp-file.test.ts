@@ -1,21 +1,18 @@
+import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { writeFileMock, getPathMock, writeFileBase64Mock } = vi.hoisted(() => ({
+const { writeFileMock, mkdirMock, getPathMock } = vi.hoisted(() => ({
   writeFileMock: vi.fn(),
-  getPathMock: vi.fn(() => '/var/folders/ab/T'),
-  writeFileBase64Mock: vi.fn()
+  mkdirMock: vi.fn(),
+  getPathMock: vi.fn((name: string) =>
+    name === 'temp' ? '/os/temp' : '/Users/me/Library/Application Support/orca'
+  )
 }))
 
-vi.mock('node:fs/promises', () => ({ default: { writeFile: writeFileMock } }))
+vi.mock('node:fs/promises', () => ({ default: { writeFile: writeFileMock, mkdir: mkdirMock } }))
 vi.mock('node:crypto', () => ({ randomUUID: () => 'uuid-1' }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: getPathMock })
-}))
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  requireSshFilesystemProvider: () => ({
-    getTempDir: async () => '/remote/tmp',
-    writeFileBase64: writeFileBase64Mock
-  })
 }))
 
 import { saveClipboardImageBufferAsTempFile } from './clipboard-image-temp-file'
@@ -25,20 +22,28 @@ beforeEach(() => {
 })
 
 describe('saveClipboardImageBufferAsTempFile', () => {
-  it('writes the pasted image to the local temp folder', async () => {
+  it('keeps a terminal, editor or phone paste in OS temp, as before', async () => {
     const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1, 2, 3]))
 
-    expect(savedPath.startsWith('/var/folders/ab/T')).toBe(true)
+    expect(getPathMock).toHaveBeenCalledWith('temp')
+    expect(getPathMock).not.toHaveBeenCalledWith('userData')
+    expect(mkdirMock).not.toHaveBeenCalled()
+    expect(dirname(savedPath)).toBe('/os/temp')
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
-  it('writes an SSH paste to the remote temp folder', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1]), {
-      connectionId: 'conn-1'
+  it('writes a terminal-backed composer paste into the never-swept paste folder', async () => {
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1, 2, 3]), {
+      forNativeChatDraft: true
     })
 
-    expect(savedPath.startsWith('/remote/tmp/')).toBe(true)
-    expect(writeFileBase64Mock).toHaveBeenCalled()
-    expect(writeFileMock).not.toHaveBeenCalled()
+    expect(mkdirMock).toHaveBeenCalledWith(
+      join('/Users/me/Library/Application Support/orca', 'native-chat-pastes'),
+      { recursive: true }
+    )
+    expect(dirname(savedPath)).toBe(
+      join('/Users/me/Library/Application Support/orca', 'native-chat-pastes')
+    )
+    expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 })

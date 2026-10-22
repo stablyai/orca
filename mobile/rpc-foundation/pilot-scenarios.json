@@ -501,6 +501,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ],
@@ -572,6 +584,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ],
@@ -629,6 +653,18 @@
         },
         {
           "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#1",
           "params": {
             "$undefined": true
           },
@@ -1526,6 +1562,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ]
@@ -1608,6 +1656,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         }
       ]
@@ -1676,6 +1736,18 @@
         },
         {
           "complete": "linear.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#1",
           "params": {
             "$undefined": true
           },
@@ -2809,6 +2881,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         },
         {
@@ -2866,6 +2950,18 @@
         },
         {
           "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#2",
           "params": {
             "$undefined": true
           },
@@ -3411,6 +3507,18 @@
           }
         },
         {
+          "complete": "jira.status#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
           "checkpoint": "settled"
         },
         {
@@ -3476,6 +3584,18 @@
         },
         {
           "complete": "linear.status#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        },
+        {
+          "complete": "jira.status#2",
           "params": {
             "$undefined": true
           },
@@ -7099,7 +7219,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "repoId": "repo-1"
           },
           "reply": {
             "ok": true,
@@ -7838,6 +7958,20 @@
                 "sortBy": "name",
                 "groupBy": "repo",
                 "hideSleepingWorkspaces": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "compactWorktreeCards": true
               }
             }
           }
@@ -9268,7 +9402,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-9::/w"
           },
           "reply": {
             "ok": true,
@@ -9361,7 +9495,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-9::/w"
           },
           "reply": {
             "ok": true,
@@ -9454,7 +9588,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-9::/w"
           },
           "reply": {
             "ok": true,
@@ -11850,10 +11984,8 @@
         {
           "complete": "github.listWorkItems#1",
           "params": {
-            "before": {
-              "$undefined": true
-            },
             "limit": 36,
+            "page": 1,
             "query": "is:issue bug",
             "repo": "id:repo-1"
           },
@@ -15839,7 +15971,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -15990,7 +16122,7 @@
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ ",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
             "enter": false
           },
           "reply": {
@@ -18538,7 +18670,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "workspace-1"
           },
           "reply": {
             "ok": true,
@@ -19249,10 +19381,7 @@
       "id": "codex-reset-credit-consumed",
       "operation": "accounts.codex-reset-credit",
       "family": "components.codex-reset-credit",
-      "sites": [
-        "mobile/src/components/codex-reset-credit.ts",
-        "mobile/src/storage/codex-reset-attempt-journal.ts"
-      ],
+      "sites": ["mobile/src/components/codex-reset-credit.ts"],
       "schedules": [],
       "deviceStore": {},
       "steps": [
@@ -19281,94 +19410,6 @@
             "ok": true,
             "result": {
               "outcome": "reset",
-              "scope": {
-                "target": {
-                  "runtime": "host",
-                  "wslDistro": null
-                },
-                "accountId": "codex-1",
-                "accountRevision": 1700000000000,
-                "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]"
-              },
-              "snapshot": {
-                "claude": {
-                  "accounts": [],
-                  "activeAccountId": null
-                },
-                "codex": {
-                  "accounts": [
-                    {
-                      "id": "codex-1",
-                      "email": "codex@example.test",
-                      "updatedAt": 1700000000000
-                    }
-                  ],
-                  "activeAccountId": "codex-1",
-                  "activeAccountIdsByRuntime": {
-                    "host": "codex-1",
-                    "wsl": {}
-                  }
-                },
-                "rateLimits": {
-                  "claude": null,
-                  "codex": {
-                    "provider": "codex",
-                    "session": null,
-                    "weekly": null,
-                    "rateLimitResetCredits": {
-                      "availableCount": 1
-                    },
-                    "updatedAt": 1700000000000,
-                    "error": null,
-                    "status": "ok"
-                  },
-                  "inactiveClaudeAccounts": [],
-                  "inactiveCodexAccounts": []
-                }
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "consumed"
-        }
-      ]
-    },
-    {
-      "id": "codex-reset-credit-resumed",
-      "operation": "accounts.codex-reset-credit",
-      "family": "components.codex-reset-credit",
-      "sites": ["mobile/src/storage/codex-reset-attempt-journal.ts"],
-      "schedules": [],
-      "deviceStore": {
-        "orca:codex-reset-credit-attempt:v1:0832055c2fa90e8e145c588ad4db656a2fc2840ed2e851a28494eae769db9b3e": "{\"v\":1,\"hostId\":\"host-1\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"},\"idempotencyKey\":\"11111111-1111-4111-8111-111111111111\"}"
-      },
-      "steps": [
-        {
-          "action": "confirm",
-          "id": "confirm"
-        },
-        {
-          "checkpoint": "requested"
-        },
-        {
-          "complete": "accounts.consumeCodexResetCredit#1",
-          "params": {
-            "idempotencyKey": "11111111-1111-4111-8111-111111111111",
-            "expectedScope": {
-              "target": {
-                "runtime": "host",
-                "wslDistro": null
-              },
-              "accountId": "codex-1",
-              "accountRevision": 1700000000000,
-              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]"
-            }
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "outcome": "alreadyRedeemed",
               "scope": {
                 "target": {
                   "runtime": "host",
@@ -23149,7 +23190,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-1::/folder"
           },
           "reply": {
             "ok": true,

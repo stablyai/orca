@@ -10,10 +10,21 @@ function result(output: string, isError?: boolean): NativeChatBlock {
   return { type: 'tool-result', output, isError }
 }
 
+function interrupted(command: string): NativeChatBlock {
+  return {
+    type: 'tool-call',
+    name: 'shell',
+    input: { command },
+    state: 'failed',
+    endedAs: 'interrupted'
+  }
+}
+
 describe('nativeChatToolRunOutcome', () => {
   it('counts a provider failure verdict', () => {
     expect(nativeChatToolRunOutcome([call('a', 'failed'), result('exit 1', true)], {})).toEqual({
       failedCallCount: 1,
+      interruptedCallCount: 0,
       succeeded: false
     })
   })
@@ -21,6 +32,7 @@ describe('nativeChatToolRunOutcome', () => {
   it('counts an error result on a lane that writes no lifecycle state', () => {
     expect(nativeChatToolRunOutcome([call('a'), result('exit 1', true)], {})).toEqual({
       failedCallCount: 1,
+      interruptedCallCount: 0,
       succeeded: false
     })
   })
@@ -103,5 +115,46 @@ describe('nativeChatToolRunOutcome', () => {
         {}
       ).succeeded
     ).toBe(false)
+  })
+
+  it('counts a call a stop cut short apart from failures, and never as a success', () => {
+    expect(
+      nativeChatToolRunOutcome(
+        [call('a', 'completed'), result('ok'), interrupted('b'), result('partial')],
+        {}
+      )
+    ).toEqual({ failedCallCount: 0, interruptedCallCount: 1, succeeded: false })
+  })
+
+  it('counts a failure and an interruption in one run separately', () => {
+    expect(
+      nativeChatToolRunOutcome([call('a', 'failed'), result('exit 1', true), interrupted('b')], {})
+    ).toEqual({ failedCallCount: 1, interruptedCallCount: 1, succeeded: false })
+  })
+
+  it('counts a call an unverified end closed as failed until a proof corrects it', () => {
+    const block: NativeChatBlock = {
+      type: 'tool-call',
+      name: 'shell',
+      input: { command: 'a' },
+      state: 'failed',
+      endedAs: 'unverifiable'
+    }
+    expect(nativeChatToolRunOutcome([block], {})).toEqual({
+      failedCallCount: 1,
+      interruptedCallCount: 0,
+      succeeded: false
+    })
+  })
+
+  it('reads an ending it cannot place as the failed state beside it', () => {
+    // A value a newer build may persist; the schema keeps the field open.
+    const block: NativeChatBlock = JSON.parse(
+      '{"type":"tool-call","name":"shell","input":{},"state":"failed","endedAs":"declined"}'
+    )
+    expect(nativeChatToolRunOutcome([block], {})).toMatchObject({
+      failedCallCount: 1,
+      interruptedCallCount: 0
+    })
   })
 })

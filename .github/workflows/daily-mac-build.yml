@@ -70,20 +70,40 @@ env:
   DAILY_RETAIN_COUNT: 30
 
 jobs:
-  # Why its own job: this package ships relays for Windows SSH hosts, and only a
-  # Windows runner compiles the addon that launches one outside sshd's job.
-  # Why main and not the mac job's head_sha: that is resolved inside the mac job.
-  # A commit or two of drift is harmless; build-relay rejects a stale or wrong-arch addon.
-  relay-windows-process-tree:
+  # Why: the app and the orcad template it ships must come from one commit, so resolve main once.
+  resolve-main:
     if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+    steps:
+      - name: Resolve main
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve main"; exit 1; }
+          echo "head_sha=$head_sha" >>"$GITHUB_OUTPUT"
+
+  # As release-cut does: every SSH host runs orcad, deployed from the template this build ships.
+  orcad-template:
+    needs: resolve-main
     permissions:
       contents: read
-    uses: ./.github/workflows/relay-windows-process-tree.yml
+      actions: read
+    uses: ./.github/workflows/node-server-tests.yml
     with:
-      ref: main
+      ref: ${{ needs.resolve-main.outputs.head_sha }}
+      build_template: true
 
   build-daily-mac:
-    needs: relay-windows-process-tree
+    needs:
+      - resolve-main
+      - orcad-template
     if: github.repository == 'stablyai/orca'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -102,7 +122,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.resolve-main.outputs.head_sha }}
           # Version helpers only read HEAD; published versions come from git tags.
           fetch-depth: 1
           # Why: this job only reads stablyai/orca and never pushes; every write
@@ -168,10 +188,25 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
+
+      # Why: packaging bundles the pinned Node into the macOS terminal host. Keyed on the pin alone
+      # with no restore-keys, so a pin bump starts empty instead of carrying old archives forward.
+      - name: Locate the pinned Node runtime cache
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
+
+      - name: Cache the pinned Node runtime
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Caches/orca-node-runtime
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
         if: steps.freshness.outputs.should_build == 'true'
@@ -249,7 +284,7 @@ jobs:
             node config/scripts/daily-build-version.mjs \
             >"$RUNNER_TEMP/daily-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/daily-identity.txt"
-          # Why check rather than trust: the checkout above pins `ref: main`, but a
+          # Why check rather than trust: the checkout above pins the resolved main commit, but a
           # workflow_dispatch runs this file from whatever branch was dispatched. A
           # branch that edits this step while main still has the old script yields
           # an empty name and an untitled release — silent, and only visible once
@@ -260,15 +295,6 @@ jobs:
           fi
           cat "$RUNNER_TEMP/daily-identity.txt" >>"$GITHUB_OUTPUT"
 
-      # Only a Windows runner compiles these; the relay-windows-process-tree job
-      # built them for this run.
-      - name: Collect the Windows process-table addons for the relay
-        if: steps.freshness.outputs.should_build == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: relay-windows-process-tree
-          path: .build/windows-process-tree
-
       - name: Build app
         if: steps.freshness.outputs.should_build == 'true'
         run: pnpm build:release
@@ -278,9 +304,14 @@ jobs:
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted dev artifacts.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
-          # Fail the build rather than ship a relay that cannot launch outside
-          # sshd's job for a standard user on a Windows SSH host.
-          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       # Why a second mint: everything from here on writes to the daily repo, and
       # the notary round trip inside the publish step can be tens of minutes. The
@@ -359,13 +390,15 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_DAILY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-daily.
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           ORCA_DAILY_BUILD_VERSION: ${{ steps.daily.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.daily.outputs.commit }}
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -570,6 +603,9 @@ jobs:
     # Only once the mac release is actually live: there is no release to upload
     # into otherwise, and the Windows workflow refuses to create one.
     if: needs.build-daily-mac.outputs.published == 'true'
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/dev-channel-win-build.yml
     secrets: inherit
     with:
@@ -577,3 +613,4 @@ jobs:
       tag: ${{ needs.build-daily-mac.outputs.tag }}
       ref: ${{ needs.build-daily-mac.outputs.head_sha }}
       version: ${{ needs.build-daily-mac.outputs.version }}
+      orcad_template: true

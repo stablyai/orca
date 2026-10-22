@@ -4,6 +4,7 @@ import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { settleWorkerForCompletedDispatch } from '../worker-dispatch/worker-dispatch-settlement'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -33,6 +34,7 @@ export function completeDispatch(this: OrchestrationDb, ctxId: string): void {
     // Why: a settled Dispatch can never be answered, and a pending thread on it kept the fleet row
     // demanding input after the work was done.
     this.closeQuestionsForDispatch(ctxId)
+    settleWorkerForCompletedDispatch(this.db, ctxId)
     this.db.exec('RELEASE complete_dispatch_transition')
   } catch (error) {
     this.db.exec('ROLLBACK TO complete_dispatch_transition')
@@ -47,29 +49,37 @@ export function settleActiveDispatchesForTask(
   status: 'completed' | 'failed',
   failure?: string
 ): void {
-  const rawRows = db.db
-    .prepare(
-      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')`
-    )
-    .all(taskId)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
-  const rows = rawRows as DispatchContextRow[]
-  for (const row of rows) {
-    transitionLifecycleWithDb(db.db, {
-      entity: 'dispatch',
-      id: row.id,
-      from: row.status,
-      to: status,
-      projection: {
-        completed_at: row.completed_at ?? new Date().toISOString(),
-        last_failure:
-          status === 'failed'
-            ? (failure ?? row.last_failure ?? 'Task marked failed')
-            : row.last_failure,
-        capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
-      }
-    })
-    db.closeQuestionsForDispatch(row.id)
+  const transaction = beginLifecycleWriteTransaction(db.db, 'settle_task_dispatches')
+  try {
+    const rawRows = db.db
+      .prepare(
+        `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')`
+      )
+      .all(taskId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
+    const rows = rawRows as DispatchContextRow[]
+    for (const row of rows) {
+      transitionLifecycleWithDb(db.db, {
+        entity: 'dispatch',
+        id: row.id,
+        from: row.status,
+        to: status,
+        projection: {
+          completed_at: row.completed_at ?? new Date().toISOString(),
+          last_failure:
+            status === 'failed'
+              ? (failure ?? row.last_failure ?? 'Task marked failed')
+              : row.last_failure,
+          capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
+        }
+      })
+      db.closeQuestionsForDispatch(row.id)
+      settleWorkerForCompletedDispatch(db.db, row.id)
+    }
+    commitLifecycleWriteTransaction(db.db, transaction)
+  } catch (error) {
+    rollbackLifecycleWriteTransaction(db.db, transaction)
+    throw error
   }
 }
 

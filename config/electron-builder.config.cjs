@@ -1,24 +1,46 @@
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
+const {
+  MACOS_FOLDER_USAGE_DESCRIPTIONS,
+  applyMacHelperFolderUsageDescriptions
+} = require('./scripts/macos-folder-usage-descriptions.cjs')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
-  verifyPackagedDaemonEntryBoots
+  verifyPackagedDaemonEntryBoots,
+  verifyPackagedMacTerminalHostBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
+  buildMacTerminalHost,
+  macTerminalHostSignIgnore,
+  verifyMacTerminalHost
+} = require('./scripts/macos-terminal-host-bundle.cjs')
+const {
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const {
+  verifyPackagedWindowsAgentHook
+} = require('./scripts/verify-packaged-windows-agent-hook.cjs')
+const {
+  ensureBundledWaylandClipboard,
+  finalizePackagedWaylandClipboard
+} = require('./wayland-clipboard-resources.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const {
   MOBILE_WEB_BUNDLE_DIR,
   assertMobileWebBundleBuilt
 } = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const {
+  assertPackagedServeSelectionEntry,
+  assertPackagedWebClient
+} = require('./scripts/verify-packaged-serve-payload.cjs')
 const {
   assertBundledRipgrepInstalled,
   bundledRipgrepExtraResources,
@@ -36,8 +58,15 @@ const {
   orcadTemplateMacSignIgnore
 } = require('./scripts/packaged-orcad-template.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const {
+  appImageNodeRuntimeFpmArgs,
+  placeAppImageNodeRuntime,
+  verifyAppImageNodeRuntimeServesPty
+} = require('./scripts/appimage-node-runtime.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
+const { buildMacShipItScheduling } = require('./scripts/macos-shipit-scheduling.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -92,6 +121,12 @@ const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
+// Why a real directory: native-chat agents load this skill plugin by path (Claude --plugin-dir,
+// Codex skill roots), and neither can read inside app.asar.
+const nativeChatVisualsResource = {
+  from: 'resources/native-chat-visuals',
+  to: 'native-chat-visuals'
+}
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
 // instead of paths hidden inside app.asar.
@@ -123,6 +158,7 @@ const commonExtraResources = [
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
   skillFreshnessResources,
+  nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
 // Why: native speech addons must be real files outside app.asar; copy only the
@@ -172,12 +208,34 @@ const TABULAR_FILE_EXTENSIONS = ['csv', 'tsv']
 // Why: the config must load on a host-only install without resolving unused Windows addons.
 // This is load-time tolerance only; beforePack enforces that the target's natives are installed.
 // Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
-// @orca/windows-registry is a workspace link present on every host, so its presence proves nothing.
+// the @orca/windows-* addons are workspace links present on every host, so their presence proves nothing.
 const windowsRuntimeResources = existsSync(
   join(__dirname, '..', 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
 )
   ? createPackagedRuntimeNodeModuleResources('win32')
   : []
+
+// Shared with the terminal host helper so its purpose strings cannot drift from the app's.
+const macUsageDescriptions = {
+  NSAppleEventsUsageDescription:
+    'Orca allows terminal-launched developer tools to automate local apps when you request it.',
+  NSBluetoothAlwaysUsageDescription:
+    'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+  NSBluetoothPeripheralUsageDescription:
+    'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+  NSCameraUsageDescription: "Application requests access to the device's camera.",
+  NSLocationUsageDescription:
+    'Orca allows terminal-launched developer tools to access location when you request it.',
+  NSLocalNetworkUsageDescription:
+    'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
+  NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+  NSAudioCaptureUsageDescription:
+    'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
+  NSBonjourServices: ['_http._tcp', '_https._tcp'],
+  ...MACOS_FOLDER_USAGE_DESCRIPTIONS
+}
+// Developer ID team that signs every release-channel mac build.
+const ORCA_MAC_TEAM_ID = '6CX3WHS9HZ'
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -206,6 +264,12 @@ module.exports = {
     '!out/runtimes{,/**/*}',
     '!out/node-runtime-cache{,/**/*}',
     '!config{,/**/*}',
+    // Cloud services deploy separately; their sources are not desktop runtime resources.
+    '!cloud{,/**/*}',
+    // Release archives and other build staging are not runtime resources.
+    '!.build{,/**/*}',
+    // Worktree-local Vite dependency caches are development inputs.
+    '!.cache/vite{,.lock}{,/**/*}',
     '!docs{,/**/*}',
     '!mobile{,/**/*}',
     '!native{,/**/*}',
@@ -238,6 +302,8 @@ module.exports = {
     '!out/**/*.map',
     // Why: Vite's manifest is only used to project the paired web client.
     '!out/renderer/.vite{,/**/*}',
+    // The installed browser serves its allowlisted assets from the unpacked renderer.
+    '!out/web{,/**/*}',
     // Why: out/electron-dev caches `pnpm dev`'s per-branch Electron.app copies (~270MB each).
     // CI never creates it, but packaging on a machine that has run dev would pack them all.
     '!out/electron-dev{,/**/*}',
@@ -254,6 +320,7 @@ module.exports = {
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
+    '!resources/native-chat-visuals/**',
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',
@@ -290,6 +357,9 @@ module.exports = {
   // disappears from Agent Session History in packaged builds only. Worker
   // entries reached solely from the Electron main process stay packed, since
   // asar redirects their app.asar paths.
+  // Why: `orca serve` runs the orcad selection entry under ELECTRON_RUN_AS_NODE too (#27307).
+  // Why out/renderer and out/mobile-web: their assets are opened by path, and opening a packed file
+  // reads a /tmp extract Electron makes once and never remakes, so a /tmp sweep broke them (#27976).
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -297,7 +367,6 @@ module.exports = {
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
-    'out/main/claude-accounts/keychain.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',
@@ -306,6 +375,8 @@ module.exports = {
     'out/main/gitlab/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
+    'out/main/asar-transparent-fs.js',
+    'out/main/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/startup/http1-compatibility-marker.js',
@@ -316,7 +387,10 @@ module.exports = {
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
+    'out/main/orcad/orcad-local-serve-selection-entry.js',
     'out/main/chunks/**',
+    'out/renderer/**',
+    'out/mobile-web/**',
     'resources/**',
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
@@ -330,11 +404,22 @@ module.exports = {
   },
   // electron-builder calls this with the context alone. The second parameter is the bundle root,
   // so a test can point the guard at a scratch bundle instead of needing the repo's out/ built.
-  beforePack: (context, mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR) => {
+  beforePack: (
+    context,
+    mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
+    ensureWaylandClipboard = ensureBundledWaylandClipboard,
+    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from)
+  ) => {
+    // The template is the server every SSH host gets, so a dark test template must never ship.
+    assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
+    assertProcessHostOutputBuilt()
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
+    if (context.electronPlatformName === 'linux') {
+      ensureWaylandClipboard(context.arch)
+    }
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -354,11 +439,13 @@ module.exports = {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
     }
     if (context.electronPlatformName === 'darwin') {
-      const architectureByEnum = { 1: 'x64', 3: 'arm64' }
-      const architecture = architectureByEnum[context.arch]
-      if (!architecture) {
-        throw new Error(`Unsupported local-build compatibility architecture: ${context.arch}`)
-      }
+      applyMacHelperFolderUsageDescriptions(
+        join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
+        context.packager.appInfo.productFilename
+      )
+      const architecture = macSliceArch(context.arch, 'local-build compatibility')
+      const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)
+      await signMacStandaloneHelper(schedulingAddon, 'ShipIt scheduling', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {
@@ -380,12 +467,15 @@ module.exports = {
     // Why after the prune: `pnpm install:release` widens the CPU set for cross-builds,
     // so an arm64 slice can still carry the x64 @parcel/watcher until
     // prunePackagedRuntimeNodeModules drops it.
+    let appImageNodeRuntime = null
     if (context.electronPlatformName === 'linux') {
+      const targetArch = { 1: 'x64', 3: 'arm64' }[context.arch]
+      // Before the floor gate, so the bundled Node is held to the same glibc floor.
+      appImageNodeRuntime = await placeAppImageNodeRuntime(resourcesDir, targetArch)
       // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
       // so a cross-built slice could ship the host's pty.node and only fail at runtime.
-      verifyLinuxGlibcFloor(context.appOutDir, {
-        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
-      })
+      finalizePackagedWaylandClipboard(resourcesDir)
+      verifyLinuxGlibcFloor(context.appOutDir, { targetArch })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
@@ -398,6 +488,7 @@ module.exports = {
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
       verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
+      verifyPackagedWindowsAgentHook(resourcesDir, context.arch)
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
@@ -409,6 +500,9 @@ module.exports = {
     }
     if (canExecuteTargetArch) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
+      if (appImageNodeRuntime) {
+        await verifyAppImageNodeRuntimeServesPty(resourcesDir, appImageNodeRuntime)
+      }
     } else {
       // Why: a cross-arch slice can't be booted by the host Node, but the
       // unpacked entry must still exist — its absence is a layout regression
@@ -421,6 +515,8 @@ module.exports = {
     // Why: inspect electron-builder's real output so a broken extraResources
     // mapping fails packaging before bundled content reaches users.
     verifyPackagedPluginResources(resourcesDir)
+    assertPackagedWebClient(resourcesDir)
+    assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
     await finalizePackagedOrcadTemplate(resourcesDir, {
       platform: context.electronPlatformName,
@@ -449,6 +545,7 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      await packageMacTerminalHost(join(resourcesDir, '..', '..'), context)
     }
   },
   win: {
@@ -486,6 +583,16 @@ module.exports = {
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
         to: 'bin/orca.exe'
+      },
+      {
+        from: 'native/windows-cli-launcher/.build/orca-administrator-restart.exe',
+        to: 'bin/orca-administrator-restart.exe'
+      },
+      // Why resources/bin: SignPath signs every unsigned PE under win-unpacked, and the hook
+      // installer copies this signed file into ~/.orca/agent-hooks (#20913).
+      {
+        from: 'native/windows-agent-hook/.build/orca-agent-hook.exe',
+        to: 'bin/orca-agent-hook.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -533,28 +640,13 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    signIgnore: [...bundledRipgrepMacSignIgnore, ...orcadTemplateMacSignIgnore],
-    extendInfo: {
-      NSAppleEventsUsageDescription:
-        'Orca allows terminal-launched developer tools to automate local apps when you request it.',
-      NSBluetoothAlwaysUsageDescription:
-        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
-      NSBluetoothPeripheralUsageDescription:
-        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
-      NSCameraUsageDescription: "Application requests access to the device's camera.",
-      NSLocationUsageDescription:
-        'Orca allows terminal-launched developer tools to access location when you request it.',
-      NSLocalNetworkUsageDescription:
-        'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
-      NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
-      NSAudioCaptureUsageDescription:
-        'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
-      NSBonjourServices: ['_http._tcp', '_https._tcp'],
-      NSDocumentsFolderUsageDescription:
-        "Application requests access to the user's Documents folder.",
-      NSDownloadsFolderUsageDescription:
-        "Application requests access to the user's Downloads folder."
-    },
+    ...(isMacRelease ? { sign: resolve(__dirname, 'scripts/sign-mac-app.mjs') } : {}),
+    signIgnore: [
+      ...bundledRipgrepMacSignIgnore,
+      ...orcadTemplateMacSignIgnore,
+      ...macTerminalHostSignIgnore
+    ],
+    extendInfo: macUsageDescriptions,
     // Why: local macOS validation builds should launch without Apple release
     // credentials. Hardened runtime + notarization stay enabled only on the
     // explicit release path so production artifacts remain strict while dev
@@ -641,6 +733,10 @@ module.exports = {
       ...createPackagedRuntimeNodeModuleResources('linux'),
       linuxSpeechNativeResource,
       {
+        from: 'native/wayland-clipboard/.build/${arch}/orca-wayland-clipboard',
+        to: 'bin/orca-wayland-clipboard'
+      },
+      {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'
       },
@@ -683,7 +779,9 @@ module.exports = {
     // GUI-triggered and can never run on a server, so without this the CLI is
     // unreachable from the shell on exactly the hosts that need it.
     afterInstall: 'resources/linux/packaging/after-install.sh',
-    afterRemove: 'resources/linux/packaging/after-remove.sh'
+    afterRemove: 'resources/linux/packaging/after-remove.sh',
+    // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
+    fpm: appImageNodeRuntimeFpmArgs
   },
   rpm: {
     packageName: 'orca-ide',
@@ -700,7 +798,9 @@ module.exports = {
     ],
     // Why: same headless CLI-on-PATH registration as deb; rpm runs these via fpm.
     afterInstall: 'resources/linux/packaging/after-install.sh',
-    afterRemove: 'resources/linux/packaging/after-remove.sh'
+    afterRemove: 'resources/linux/packaging/after-remove.sh',
+    // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
+    fpm: appImageNodeRuntimeFpmArgs
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules
@@ -774,7 +874,41 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   })
 }
 
-async function signMacStandaloneHelper(helperPath, helperName, packager) {
+// electron-builder `Arch` enum: x64=1, arm64=3. A universal (4) slice has no single arch.
+function macSliceArch(archEnum, purpose) {
+  const arch = { 1: 'x64', 3: 'arm64' }[archEnum]
+  if (!arch) {
+    throw new Error(`Unsupported ${purpose} architecture: ${archEnum}`)
+  }
+  return arch
+}
+
+// Why after the node_modules prune: the helper copies this slice's node-pty.
+async function packageMacTerminalHost(appPath, context) {
+  const arch = macSliceArch(context.arch, 'macOS terminal host')
+  await buildMacTerminalHost({
+    appPath,
+    arch,
+    iconPath: resolve(__dirname, '../resources/build/icon.icns'),
+    entitlementsPath: resolve(__dirname, '../resources/build/entitlements.mac.plist'),
+    usageDescriptions: macUsageDescriptions,
+    signCode: (path, { entitlements }) =>
+      signMacStandaloneHelper(path, 'terminal host', context.packager, entitlements)
+  })
+  // Only a local build may skip a slice this host cannot run; a shipped slice must serve a PTY.
+  await verifyPackagedMacTerminalHostBoots(appPath, {
+    arch,
+    required: isMacRelease || process.env.CI === 'true'
+  })
+  await verifyMacTerminalHost({
+    appPath,
+    arch,
+    usageDescriptions: macUsageDescriptions,
+    expectedTeamId: isMacRelease ? ORCA_MAC_TEAM_ID : null
+  })
+}
+
+async function signMacStandaloneHelper(helperPath, helperName, packager, entitlements) {
   if (!existsSync(helperPath)) {
     if (isMacRelease) {
       throw new Error(`Missing ${helperName} helper at ${helperPath}`)
@@ -796,6 +930,9 @@ async function signMacStandaloneHelper(helperPath, helperName, packager) {
   const args = ['--force', '--sign', identity]
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')
+  }
+  if (entitlements) {
+    args.push('--entitlements', entitlements)
   }
   args.push(helperPath)
   execFileSync('codesign', args, { stdio: 'inherit' })

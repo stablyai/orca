@@ -5,8 +5,7 @@ import {
   createMarkdownDocumentListingBudget,
   MARKDOWN_DOCUMENT_LISTING_ERROR_CODE,
   MarkdownDocumentListingCapacityError,
-  retainMarkdownDocument,
-  visitMarkdownDocumentListingEntry
+  retainMarkdownDocument
 } from './markdown-document-listing-limits'
 
 function document(path: string): MarkdownDocument {
@@ -32,31 +31,25 @@ describe('Markdown document listing limits', () => {
     )
   })
 
-  it('rejects aggregate metadata, visited-entry, path, and depth overflow', () => {
+  it('rejects aggregate metadata overflow', () => {
     expect(() =>
       assertMarkdownDocumentsWithinLimit([document('a'.repeat(100))], {
         maxMetadataBytes: 100
       })
     ).toThrow(MarkdownDocumentListingCapacityError)
+  })
 
-    const visited = createMarkdownDocumentListingBudget({
-      maxVisitedEntries: 1,
-      maxPathBytes: 4,
-      maxDepth: 1
-    })
-    visitMarkdownDocumentListingEntry(visited, 'a', 1)
-    expect(() => visitMarkdownDocumentListingEntry(visited, 'b', 1)).toThrow(
+  it('bounds UTF-8 bytes in both live document paths before retaining metadata', () => {
+    const budget = createMarkdownDocumentListingBudget({ maxPathBytes: 4 })
+    expect(() => retainMarkdownDocument(budget, { ...document('a'), filePath: 'ééé' })).toThrow(
       MarkdownDocumentListingCapacityError
     )
-
-    const path = createMarkdownDocumentListingBudget({ maxPathBytes: 4 })
-    expect(() => visitMarkdownDocumentListingEntry(path, 'ééé', 1)).toThrow(
+    expect(() => retainMarkdownDocument(budget, { ...document('ééé'), filePath: 'a' })).toThrow(
       MarkdownDocumentListingCapacityError
     )
-
-    const depth = createMarkdownDocumentListingBudget({ maxDepth: 1 })
-    expect(() => visitMarkdownDocumentListingEntry(depth, 'a/b', 2)).toThrow(
-      MarkdownDocumentListingCapacityError
-    )
+    expect(budget.documents).toBe(0)
+    expect(budget.metadataBytes).toBe(0)
+    retainMarkdownDocument(budget, { ...document('éé'), filePath: 'éé' })
+    expect(budget.documents).toBe(1)
   })
 })

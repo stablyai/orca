@@ -11,6 +11,13 @@ import { getAccountsCodexSearchEntries } from './accounts-search'
 import { getCodexSystemDefaultSubtitle } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
+import { addCodexAccountOnHost } from '@/runtime/runtime-host-account-sign-in-client'
+import { HostAccountSignInPrompt } from './HostAccountSignInPrompt'
+import {
+  accountAdditionShownInPrompt,
+  cancelAccountAddition,
+  trackAccountAddition
+} from './account-add-cancel-target'
 
 export function renderCodexAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
@@ -25,7 +32,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     isRemoteAccountScope,
     remoteAccountScopeNotice,
     runCodexAccountAction,
-    settings,
+    accountOwner,
     systemCodexActive,
     systemCodexIdentity,
     systemCodexMissingSignIn,
@@ -142,8 +149,8 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
             <p className="text-xs text-muted-foreground">
               {isRemoteAccountScope
                 ? translate(
-                    'auto.components.settings.AccountsPane.remoteScopeAccounts',
-                    'Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.',
+                    'accounts.remoteScopeAccountsAddHere',
+                    'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
                     { value0: accountRuntimeSentenceLabel }
                   )
                 : translate(
@@ -159,19 +166,19 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               size="xs"
               onClick={() =>
                 void runCodexAccountAction('adding', () =>
-                  window.api.codexAccounts.add({
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
+                  trackAccountAddition('codex', accountOwner, () =>
+                    // Why the server's own login for a remote owner: one here would sign in this device.
+                    accountOwner.kind === 'environment'
+                      ? addCodexAccountOnHost(accountOwner)
+                      : window.api.codexAccounts.add({
+                          runtime: accountRuntime.runtime,
+                          wslDistro: accountRuntime.wslDistro
+                        })
+                  )
                 )
               }
               disabled={
-                // Why: interactive `codex login` needs a desktop browser and
-                // would authenticate against this device, not the server.
-                isRemoteAccountScope ||
-                codexAction !== 'idle' ||
-                wslCapabilitiesLoading ||
-                accountRuntimeUnavailable
+                codexAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
               }
               className="gap-1.5"
             >
@@ -182,11 +189,16 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               )}
               {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
             </Button>
-            {codexAction === 'adding' ? (
+            {/* Why: follows the running addition; hidden only where its server's prompt has Cancel. */}
+            {codexAction === 'adding' && !accountAdditionShownInPrompt('codex', accountOwner) ? (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => void window.api.codexAccounts.cancelPendingLogin()}
+                onClick={() =>
+                  void cancelAccountAddition('codex', () =>
+                    window.api.codexAccounts.cancelPendingLogin()
+                  )
+                }
                 className="gap-1.5"
               >
                 <X />
@@ -198,14 +210,22 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
         {remoteAccountScopeNotice}
         {/* Why not in a remote scope: the link belongs to a login running on
         this desktop, which has nothing to do with the server named above. */}
-        {isRemoteAccountScope ? null : <CodexLoginLinkNotice />}
+        {isRemoteAccountScope ? (
+          <HostAccountSignInPrompt
+            owner={accountOwner}
+            provider="codex"
+            hostLabel={accountRuntimeSentenceLabel}
+          />
+        ) : (
+          <CodexLoginLinkNotice />
+        )}
 
         <div className="space-y-2">
           <button
             type="button"
             onClick={() =>
               void runCodexAccountAction('select:system', () =>
-                selectCodexProviderAccount(settings, {
+                selectCodexProviderAccount(accountOwner, {
                   accountId: null,
                   runtime: accountRuntime.runtime,
                   wslDistro: accountRuntime.wslDistro

@@ -34,7 +34,8 @@ vi.mock('@/lib/worktree-agent-activation-gate', () => ({
   gateWorktreeAgentActivation: mocks.gate
 }))
 vi.mock('@/lib/structured-agent-session-launch', () => ({
-  getStructuredAgentLaunchStatus: mocks.launchStatus
+  hasStructuredAgentLaunchInWorktree: (worktreeId: string) =>
+    ['claude', 'codex', 'grok'].some((agent) => mocks.launchStatus(worktreeId, agent) !== 'idle')
 }))
 vi.mock('@/lib/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: mocks.resume
@@ -105,6 +106,7 @@ describe('passive terminal seeding during native chat creation', () => {
     ['codex', 'pending', 0],
     ['claude', 'unknown', 0],
     ['codex', 'unknown', 0],
+    ['grok', 'pending', 0],
     ['claude', 'idle', 1]
   ] as const)('handles %s launch status %s', async (agent, status, expectedTabs) => {
     let finishGate!: (outcome: 'empty') => void

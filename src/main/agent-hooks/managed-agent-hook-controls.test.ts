@@ -51,7 +51,6 @@ import {
   installManagedAgentHooks,
   removeManagedAgentHooksAsync,
   resolveStartupManagedHookAction,
-  shouldInstallStartupManagedAgentHook,
   shouldContinueManagedHookStartup
 } from './managed-agent-hook-controls'
 
@@ -310,24 +309,6 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     expect(resolveStartupManagedHookAction({ agentStatusHooksEnabled: true })).toBe('install')
     expect(resolveStartupManagedHookAction({})).toBe('install')
     expect(resolveStartupManagedHookAction(null)).toBe('install')
-  })
-
-  it('only allows startup installs for globally enabled and agent-enabled hooks', () => {
-    expect(shouldInstallStartupManagedAgentHook({ agentStatusHooksEnabled: false }, 'codex')).toBe(
-      false
-    )
-    expect(
-      shouldInstallStartupManagedAgentHook(
-        { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex'] },
-        'codex'
-      )
-    ).toBe(false)
-    expect(
-      shouldInstallStartupManagedAgentHook(
-        { agentStatusHooksEnabled: true, disabledTuiAgents: ['claude'] },
-        'codex'
-      )
-    ).toBe(true)
   })
 
   it('does not remove disabled agents during startup install reconciliation', async () => {

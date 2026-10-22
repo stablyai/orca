@@ -142,6 +142,7 @@ export function installRuntimeFileClientEnvironment(): void {
         },
         runtime: { call: runtimeCall },
         runtimeEnvironments: {
+          cancelSubscription: vi.fn().mockResolvedValue(undefined),
           call: runtimeEnvironmentTransportCall,
           subscribe: runtimeEnvironmentSubscribe
         }

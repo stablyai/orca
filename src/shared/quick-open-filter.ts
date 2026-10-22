@@ -173,6 +173,7 @@ export function buildHiddenDirExcludeGlobs(): string[] {
 
 export type RgArgsOptions = {
   /** rg positional search target: absolute root (strip prefix from output) or `.` (cwd-relative); both need cwd: rootPath. */
+  followSymlinks?: boolean
   searchRoot: string
   /** Root-relative, `/`-separated prefixes (from buildExcludePathPrefixes). */
   excludePathPrefixes: readonly string[]
@@ -190,9 +191,10 @@ export type RgArgs = {
 /**
  * Build the two rg arg arrays for Quick Open. Caller must spawn with `cwd: rootPath` — root-relative
  * globs are evaluated against rg's cwd, so omitting it silently breaks nested-worktree exclusions.
- * Deliberately omits `--follow` so symlinks can't escape the authorized root or cause traversal loops.
+ * Symlink traversal is explicit opt-in; opening discovered paths still requires authorization.
  */
 export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
+  const followArgs = opts.followSymlinks ? ['--follow'] : []
   const sepArgs = opts.forceSlashSeparator ? ['--path-separator', '/'] : []
   const hiddenDirGlobs = buildHiddenDirExcludeGlobs()
   const excludeGlobs: string[] = []
@@ -207,6 +209,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     '--no-config',
     '--null',
     '--hidden',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
@@ -220,6 +223,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     '--null',
     '--hidden',
     '--no-ignore-vcs',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,

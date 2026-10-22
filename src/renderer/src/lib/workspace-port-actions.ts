@@ -1,11 +1,8 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { useAppStore } from '@/store'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
-  RuntimeRpcCallError,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   WorkspacePort,
@@ -15,6 +12,7 @@ import type {
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
+import { createBrowserUuid } from './browser-uuid'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from './client-creation-action-policy'
 
@@ -99,6 +97,23 @@ export function goToWorkspacePortOwner(port: WorkspacePort): boolean {
   return Boolean(worktreeId && activateAndRevealWorktree(worktreeId))
 }
 
+/** The URL a port opens at: its labelled localhost name when one is set up locally, else its raw URL. */
+export async function resolveWorkspacePortBrowserUrl(args: {
+  port: WorkspacePort
+  runtimeTarget: RuntimeClientTarget
+  localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
+}): Promise<string> {
+  const rawUrl = browserUrlForPort(args.port)
+  if (args.runtimeTarget.kind !== 'local' || !args.localhostLabelRoute) {
+    return rawUrl
+  }
+  try {
+    return (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
+  } catch {
+    return rawUrl
+  }
+}
+
 export async function openWorkspacePortInBrowser(args: {
   port: WorkspacePort
   activeWorktreeId?: string | null
@@ -111,15 +126,11 @@ export async function openWorkspacePortInBrowser(args: {
   if (!args.runtimeTarget) {
     return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
   }
-  const rawUrl = browserUrlForPort(args.port)
-  let url = rawUrl
-  if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
-    try {
-      url = (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
-    } catch {
-      url = rawUrl
-    }
-  }
+  const url = await resolveWorkspacePortBrowserUrl({
+    port: args.port,
+    runtimeTarget: args.runtimeTarget,
+    localhostLabelRoute: args.localhostLabelRoute
+  })
   if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)
@@ -151,14 +162,13 @@ export async function openWorkspacePortInBrowser(args: {
         { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
-      const tab = args.createBrowserTab(worktreeId, url, {
+      const browserPageId = createBrowserUuid()
+      args.createBrowserTab(worktreeId, url, {
         activate: true,
-        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
+        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId,
+        browserPageId
       })
-      if (!tab.activePageId) {
-        return { ok: false, reason: 'Failed to create a browser page.' }
-      }
-      args.setRemoteBrowserPageHandle(tab.activePageId, {
+      args.setRemoteBrowserPageHandle(browserPageId, {
         environmentId: args.runtimeTarget.environmentId,
         remotePageId: remotePage.browserPageId
       })

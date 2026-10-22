@@ -12,15 +12,14 @@ import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notifica
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
-import {
-  registerPtyHandlers,
-  type CodexHomePtySpawnedLifecycleArgs,
-  type GetSelectedCodexHomePath,
-  type PrepareCodexSessionResume
-} from '../ipc/pty'
+import { registerPtyHandlers } from '../ipc/pty/register-handlers'
+import type {
+  CodexHomePtySpawnedLifecycleArgs,
+  GetSelectedCodexHomePath,
+  PrepareCodexSessionResume
+} from '../ipc/pty/host-env/types'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
-import { registerSshHandlers } from '../ipc/ssh'
-import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
+import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
@@ -39,7 +38,9 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { registerFileDropRelay } from './native-file-drop-relay'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
+import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -125,8 +126,12 @@ export function attachMainWindowServices(
     void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
-  registerRemoteWorkspaceHandlers(store, () => mainWindow, runtime)
-  registerFileDropRelay(mainWindow)
+  registerDroppedPathPreparation(mainWindow, async () => {
+    await ensureStructuredAgentSessionHostUnlessRefused(() =>
+      runtime.ensureStructuredAgentSessionHost()
+    )
+    return getAgentSessionAttachmentStore()
+  })
   registerTccPromptNoticeHandlers(mainWindow)
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)

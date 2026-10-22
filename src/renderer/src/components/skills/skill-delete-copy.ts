@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../../shared/locale-text-collators'
 import type {
   SkillDeleteBlockReason,
   SkillDeletePlan,

@@ -65,6 +65,13 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
   }
+  // Why: without these the debounced writer kept the first focus's key and host forever.
+  if (changed.has('activeWorkspaceKey')) {
+    patch.activeWorkspaceKey = snapshot.activeWorkspaceKey
+  }
+  if (changed.has('activeWorkspaceExecutionHostId')) {
+    patch.activeWorkspaceExecutionHostId = snapshot.activeWorkspaceExecutionHostId ?? null
+  }
   if (changed.has('activeTabId')) {
     patch.activeTabId = snapshot.activeTabId
   }
@@ -170,6 +177,10 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('clientHostedBrowserCloseIntentsByEnvironment')) {
     patch.clientHostedBrowserCloseIntentsByEnvironment =
       snapshot.clientHostedBrowserCloseIntentsByEnvironment
+  }
+  if (changed.has('pairedTerminalTabCloseIntentsByEnvironment')) {
+    patch.pairedTerminalTabCloseIntentsByEnvironment =
+      snapshot.pairedTerminalTabCloseIntentsByEnvironment
   }
   if (
     stagedVisibilityChanged ||
