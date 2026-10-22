@@ -3,20 +3,29 @@
 import React, { type ReactNode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 
 const mocks = vi.hoisted(() => ({
+  capability: vi.fn(),
   detectAgents: vi.fn(),
   launchContinuation: vi.fn(),
   settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] }
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({ settings: mocks.settings })
+  useAppStore: (selector: (state: unknown) => unknown) =>
+    selector({ settings: mocks.settings, unifiedTabsByWorktree: {} })
 }))
 vi.mock('@/lib/launch-agent-session-continuation', () => ({
   detectAgentSessionContinuationAgents: mocks.detectAgents,
   launchAgentSessionContinuation: mocks.launchContinuation
+}))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  supportsStructuredAgentSessionContinuationContext: mocks.capability
+}))
+vi.mock('@/runtime/structured-conversation-name', () => ({
+  useStructuredChatTabConversationName: () => 'Saved chat'
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => ['claude', 'claude-agent-teams', 'codex'].map((id) => ({ id, label: id })),
@@ -26,13 +35,16 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
   default: ({
     value,
     allowBlankTerminal,
-    agents
+    agents,
+    disabled
   }: {
     value: string | null
     allowBlankTerminal?: boolean
+    disabled?: boolean
     agents: { id: string }[]
   }) =>
     React.createElement('div', {
+      'data-disabled': String(disabled),
       'data-agent': value ?? '',
       'data-options': agents.map((agent) => agent.id).join(','),
       'data-allow-blank': String(allowBlankTerminal === true)
@@ -52,7 +64,8 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }: { children?: ReactNode }) => React.createElement('h2', null, children)
 }))
 vi.mock('@/components/ui/select', () => ({
-  Select: ({ children }: { children?: ReactNode }) => React.createElement('div', null, children),
+  Select: ({ children, disabled }: { children?: ReactNode; disabled?: boolean }) =>
+    React.createElement('fieldset', { disabled, 'data-context-select': true }, children),
   SelectContent: ({ children }: { children?: ReactNode }) =>
     React.createElement('div', null, children),
   SelectItem: ({ children }: { children?: ReactNode }) =>
@@ -82,6 +95,7 @@ describe('AgentSessionContinuationDialog', () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    mocks.capability.mockResolvedValue(false)
     mocks.settings.defaultTuiAgent = 'codex'
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -92,6 +106,31 @@ describe('AgentSessionContinuationDialog', () => {
     act(() => root.unmount())
     container.remove()
   })
+
+  it.each(['chat', undefined] as const)(
+    'labels useful %s fallback without promising older history',
+    async (sourceKind) => {
+      mocks.detectAgents.mockResolvedValue([])
+      await act(async () =>
+        root.render(
+          <AgentSessionContinuationDialog
+            open
+            request={{
+              ...request('wt'),
+              initialCwd: '/inherited',
+              source: { ...request('wt').source, sourceKind }
+            }}
+            onOpenChange={vi.fn()}
+          />
+        )
+      )
+      expect(container.textContent).toContain(
+        sourceKind === 'chat' ? 'recent messages currently loaded' : 'captured text'
+      )
+      expect(container.textContent).not.toContain('reading older transcript details')
+      expect(container.textContent).toContain('Starts in: /inherited')
+    }
+  )
 
   it('cannot start with only the source agent available', async () => {
     mocks.detectAgents.mockResolvedValue(['codex'])
@@ -159,6 +198,88 @@ describe('AgentSessionContinuationDialog', () => {
       }
     }
   )
+
+  it('keeps the replacement chooser open when an earlier accepted launch completes', async () => {
+    const cwd = `/repo/${'long-workspace-directory/'.repeat(12)}project`
+    function Chat({ epoch }: { epoch: string }) {
+      const handOff = useNativeChatHandOff({
+        pane: {
+          tabId: 'tab',
+          sessionId: 'chat',
+          agent: 'codex',
+          isVisible: true,
+          target: { kind: 'local' }
+        },
+        directory: { worktreeId: 'folder', worktreePath: cwd, runtimeEnvironmentId: null },
+        epoch,
+        messages: [
+          {
+            id: '1',
+            source: 'transcript',
+            role: 'user',
+            timestamp: 1,
+            blocks: [{ type: 'text', text: 'Saved task' }]
+          }
+        ],
+        focusComposer: () => {}
+      })
+      return (
+        <>
+          <button onClick={() => handOff.open()}>Open hand-off</button>
+          {handOff.dialog}
+        </>
+      )
+    }
+    const capability = Promise.withResolvers<boolean>()
+    mocks.capability.mockReturnValueOnce(capability.promise)
+    const launchA = Promise.withResolvers<boolean>()
+    mocks.detectAgents.mockResolvedValue(['codex'])
+    mocks.launchContinuation.mockReturnValueOnce(launchA.promise).mockResolvedValueOnce(true)
+    const click = (text: string) =>
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === text)
+        ?.click()
+    await act(async () => root.render(<Chat epoch="a" />))
+    await act(async () => click('Open hand-off'))
+    expect(container.textContent).toContain('Preparing saved chat context')
+    expect(container.textContent).toContain(`Starts in: ${cwd}`)
+    expect(container.textContent).not.toMatch(
+      /Detecting Agents|Uses captured|recent messages currently loaded/
+    )
+    const start = () =>
+      Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Start New Session'
+      )
+    expect(start()?.disabled).toBe(true)
+    expect(container.querySelector('[data-agent]')?.getAttribute('data-disabled')).toBe('true')
+    expect(container.querySelector<HTMLFieldSetElement>('[data-context-select]')?.disabled).toBe(
+      true
+    )
+    await act(async () => click('Cancel'))
+    await act(async () => capability.resolve(false))
+    expect(container.textContent).not.toContain('Start New Session')
+    expect(mocks.detectAgents).not.toHaveBeenCalled()
+    const replacementCapability = Promise.withResolvers<boolean>()
+    mocks.capability.mockReturnValueOnce(replacementCapability.promise)
+    await act(async () => click('Open hand-off'))
+    expect(container.textContent).toContain(`Starts in: ${cwd}`)
+    await act(async () => replacementCapability.resolve(false))
+    expect(container.textContent).toContain(`Starts in: ${cwd}`)
+    expect(start()?.disabled).toBe(false)
+    await act(async () => click('Start New Session'))
+    expect(container.querySelector('[data-agent]')?.getAttribute('data-disabled')).toBe('true')
+    expect(container.querySelector<HTMLFieldSetElement>('[data-context-select]')?.disabled).toBe(
+      true
+    )
+    expect(mocks.launchContinuation).toHaveBeenCalledOnce()
+    await act(async () => root.render(<Chat epoch="b" />))
+    await act(async () => click('Open hand-off'))
+    await act(async () => launchA.resolve(true))
+    expect(container.textContent).toContain('Start New Session')
+    await act(async () => click('Start New Session'))
+    expect(mocks.launchContinuation).toHaveBeenCalledTimes(2)
+    expect(container.textContent).not.toContain('Start New Session')
+  })
 
   it('clears a prior detection failure while detecting a new request', async () => {
     let resolveSecond: (agents: ['codex']) => void = () => {}

@@ -73,6 +73,9 @@ type UseNativeChatContextMenuArgs = {
   }
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>
+  /** A structured chat tab's hand-off; a chat in a terminal pane uses the pane's row instead. */
+  handOffDisabled?: boolean
+  onHandOff?: () => void
 } & NativeChatContextMenuTargetArgs
 
 /** What the menu needs to offer the rows for a right-clicked target. */
@@ -143,6 +146,8 @@ export function useNativeChatContextMenu({
   splitShortcutLabels,
   workspaceLayout,
   resolveOrcaSessionId,
+  onHandOff,
+  handOffDisabled = false,
   messageListRef,
   fileLinkContext = null,
   rewind,
@@ -171,7 +176,7 @@ export function useNativeChatContextMenu({
     state.canPaste ||
     Boolean(target.quoteText ?? target.link ?? target.codeText ?? target.messageText) ||
     (target.rewindItemId !== null && rewind !== undefined)
-  const hasSessionItems = onFind !== undefined || showTerminalPaneActions
+  const hasSessionItems = onFind !== undefined || onHandOff !== undefined || showTerminalPaneActions
   const showWorkspaceLayout =
     workspaceLayout !== undefined &&
     canMoveTabToNewPaneColumn(workspaceLayout.unifiedTabId, workspaceLayout.groupId)
@@ -282,6 +287,9 @@ export function useNativeChatContextMenu({
           ) : null}
           {hasEditItems && hasSessionItems ? <DropdownMenuSeparator /> : null}
           {onFind ? <NativeChatFindMenuItem onSelect={() => onFind(state.returnFocusTo)} /> : null}
+          {onHandOff ? (
+            <AgentSessionContinuationMenuItem disabled={handOffDisabled} onSelect={onHandOff} />
+          ) : null}
           {showTerminalPaneActions ? (
             <>
               {onSwitchToTerminal ? (

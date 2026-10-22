@@ -19133,6 +19133,7 @@
       }
     },
     "agentSessionContinuation": {
+      "preparingContext": "正在准备已保存的聊天上下文…",
       "handOffToAnotherAgent": "移交给另一个智能体",
       "dialogTitle": "移交给另一个智能体",
       "dialogDescription": "从当前进度启动一个新的智能体会话，原会话保持不变。",
@@ -19146,6 +19147,8 @@
       "context": "上下文",
       "modeFocused": "聚焦交接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
+      "modeLoadedDescription": "使用此聊天中当前已加载的最近消息和当前工作区。",
+      "modeCapturedDescription": "使用捕获的文本和当前工作区。",
       "modeFull": "完整会话记录",
       "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
       "startsIn": "启动目录：",
