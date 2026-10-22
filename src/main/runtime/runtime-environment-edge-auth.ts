@@ -2,7 +2,7 @@ import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import { readRuntimeEdgeAuth } from '../credentials/runtime-edge-auth-store'
+import { readCachedRuntimeEdgeAuth } from '../credentials/runtime-edge-auth-store'
 import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime-connect-bound'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 
@@ -19,7 +19,7 @@ export function resolveRuntimeEnvironmentConnection(
   ) {
     return connection
   }
-  const edgeAuth = readRuntimeEdgeAuth(userDataPath, environment)
+  const edgeAuth = readCachedRuntimeEdgeAuth(userDataPath, environment)
   if (!edgeAuth) {
     return connection
   }

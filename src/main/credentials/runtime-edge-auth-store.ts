@@ -18,6 +18,7 @@ import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime-connect
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 
 type EdgeAuth = NonNullable<PairedRuntimeConnection['edgeAuth']>
+const connectionCredentials = new Map<string, { identity: string; edgeAuth: EdgeAuth | null }>()
 const EnvelopeSchema = z
   .object({ v: z.literal(1), ciphertext: z.string().min(1).max(32768) })
   .strict()
@@ -45,6 +46,28 @@ function protectedStore() {
     throw new Error('Protected storage unavailable')
   }
   return store
+}
+
+export function forgetRuntimeEdgeAuth(environmentId: string): void {
+  connectionCredentials.delete(environmentId)
+}
+
+export function readCachedRuntimeEdgeAuth(
+  userDataPath: string,
+  environment: KnownRuntimeEnvironment
+): EdgeAuth | null {
+  const identity = JSON.stringify([
+    userDataPath,
+    environment.pairingRevision ?? environment.createdAt,
+    getPreferredPairedRuntimeConnection(environment)
+  ])
+  const cached = connectionCredentials.get(environment.id)
+  if (cached?.identity === identity) {
+    return cached.edgeAuth
+  }
+  const edgeAuth = readRuntimeEdgeAuth(userDataPath, environment)
+  connectionCredentials.set(environment.id, { identity, edgeAuth })
+  return edgeAuth
 }
 
 export function readRuntimeEdgeAuth(
@@ -118,6 +141,8 @@ export function writeRuntimeEdgeAuth(
     if (Buffer.byteLength(contents, 'utf8') > 32768) {
       throw new Error('Invalid envelope size')
     }
+    // Publication can succeed before the final durability check throws.
+    forgetRuntimeEdgeAuth(environment.id)
     writeSecureFile(credentialPath(userDataPath, environment.id), contents, {
       durable: true,
       requireRestricted: true
@@ -132,6 +157,7 @@ export function writeRuntimeEdgeAuth(
 export function clearRuntimeEdgeAuth(userDataPath: string, environmentId: string): void {
   try {
     rmSync(credentialPath(userDataPath, environmentId), { force: true })
+    forgetRuntimeEdgeAuth(environmentId)
   } catch {
     throw new Error('Could not clear edge authentication.')
   }

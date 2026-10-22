@@ -11,7 +11,7 @@ import {
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 vi.mock('../../credentials/runtime-edge-auth-store', () => ({
-  readRuntimeEdgeAuth: () => {
+  readCachedRuntimeEdgeAuth: () => {
     throw new Error('Could not read edge authentication.')
   }
 }))

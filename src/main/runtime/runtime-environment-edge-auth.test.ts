@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEnvironmentFromPairingOffer } from '../../shared/runtime-environments'
 import { readRuntimeEdgeAuth } from '../credentials/runtime-edge-auth-store'
 import { resolveRuntimeEnvironmentConnection } from './runtime-environment-edge-auth'
-vi.mock('../credentials/runtime-edge-auth-store', () => ({ readRuntimeEdgeAuth: vi.fn() }))
+vi.mock('../credentials/runtime-edge-auth-store', () => {
+  const read = vi.fn()
+  return { readRuntimeEdgeAuth: read, readCachedRuntimeEdgeAuth: read }
+})
 const environment = createEnvironmentFromPairingOffer({
   id: 'env-1',
   name: 'test',
