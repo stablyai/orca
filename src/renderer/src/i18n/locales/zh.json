@@ -19082,6 +19082,10 @@
       },
       "claudeSignIn": {
         "signingIn": "正在登录…"
+      },
+      "terminalQueue": {
+        "deliveryUnknown": "发送结果尚未确认。删除此草稿前请检查对话；系统不会自动重新发送。",
+        "storageError": "无法保存排队消息。草稿已保留。"
       }
     },
     "tab": {

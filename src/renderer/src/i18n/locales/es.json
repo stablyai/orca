@@ -19077,6 +19077,10 @@
       },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"
+      },
+      "terminalQueue": {
+        "deliveryUnknown": "No se ha confirmado la entrega. Revisa la conversación antes de eliminar este borrador; no se volverá a enviar automáticamente.",
+        "storageError": "No se pudieron guardar los mensajes en cola. Se ha conservado tu borrador."
       }
     },
     "tab": {
