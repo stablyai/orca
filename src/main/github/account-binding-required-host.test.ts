@@ -26,16 +26,46 @@ describe('resolveGhAccountRequiredHost', () => {
     expect(resolveAlias).not.toHaveBeenCalled()
   })
 
-  it('keeps a real enterprise host without resolving an alias', async () => {
-    const resolveAlias = vi.fn()
+  it('keeps a real enterprise host that ssh config maps to itself', async () => {
     await expect(
       resolveGhAccountRequiredHost(
         repoFor('git@ghe.example.com:example/sample-app.git'),
         {},
-        resolveAlias
+        async () => ({ hostname: 'ghe.example.com' })
       )
     ).resolves.toBe('ghe.example.com')
-    expect(resolveAlias).not.toHaveBeenCalled()
+  })
+
+  it('keeps a dotted host literal when ssh config cannot resolve it', async () => {
+    for (const resolveAlias of [
+      async () => ({ hostname: null }),
+      async () => {
+        throw new Error('ssh -G failed')
+      }
+    ]) {
+      await expect(
+        resolveGhAccountRequiredHost(
+          repoFor('git@ghe.example.com:example/sample-app.git'),
+          {},
+          resolveAlias
+        )
+      ).resolves.toBe('ghe.example.com')
+    }
+  })
+
+  it('filters a dotted alias that resolves to github.com to github.com', async () => {
+    const resolveAlias = vi.fn(async () => ({ hostname: 'github.com' }))
+    await expect(
+      resolveGhAccountRequiredHost(
+        repoFor('git@work.github.com:example/sample-app.git'),
+        {},
+        resolveAlias
+      )
+    ).resolves.toBe('github.com')
+    expect(resolveAlias).toHaveBeenCalledWith('work.github.com', {
+      repoPath: '/repos/sample-app',
+      connectionId: null
+    })
   })
 
   it('filters an alias that resolves to github.com the same as a direct github.com remote', async () => {
