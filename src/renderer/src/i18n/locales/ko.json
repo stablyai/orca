@@ -19117,6 +19117,10 @@
       },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
+      },
+      "terminalQueue": {
+        "deliveryUnknown": "전송 결과가 확인되지 않았습니다. 이 초안을 삭제하기 전에 대화를 확인하세요. 자동으로 다시 전송되지 않습니다.",
+        "storageError": "대기 중인 메시지를 저장하지 못했습니다. 초안은 보관되었습니다."
       }
     },
     "tab": {

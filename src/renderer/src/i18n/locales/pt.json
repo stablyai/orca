@@ -19746,6 +19746,10 @@
         "checking": "Verificando as permissões de chat deste host…",
         "outdatedHost": "Este host executa uma versão antiga do Orca que ignora as permissões de chat; por isso, o {{value0}} seria executado aqui sem pedir aprovação. Atualize o Orca neste host para usar {{value1}}.",
         "unverified": "O Orca não conseguiu confirmar as permissões do host para {{value0}}."
+      },
+      "terminalQueue": {
+        "deliveryUnknown": "O envio não foi confirmado. Verifique a conversa antes de excluir este rascunho; ele não será reenviado automaticamente.",
+        "storageError": "Não foi possível salvar as mensagens na fila. Seu rascunho foi mantido."
       }
     },
     "tab": {

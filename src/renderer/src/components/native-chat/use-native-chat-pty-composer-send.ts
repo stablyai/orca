@@ -1,3 +1,7 @@
+import {
+  clearNativeChatComposerDraftIfUnchanged,
+  readNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
@@ -25,6 +29,8 @@ import {
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
+  queueMessage?: (text: string, imagePaths: string[]) => Promise<boolean> | null
+  draftScopeKey?: string
   draft: string
   imageAttachments: readonly { path: string }[]
   disabled: boolean
@@ -65,6 +71,23 @@ export function useNativeChatPtyComposerSend(args: {
     const classification = args.classifySend(text)
     if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
       return
+    }
+    if (classification === 'chat' && args.queueMessage && args.draftScopeKey) {
+      const scope = args.draftScopeKey
+      const submitted = readNativeChatComposerDraft(scope)
+      const queued = args.queueMessage(text, imagePaths)
+      if (queued) {
+        void queued.then((accepted) => {
+          if (accepted && clearNativeChatComposerDraftIfUnchanged(scope, submitted)) {
+            args.setDraft('')
+            args.setCaret(0)
+            args.clearSkillOrigin()
+            args.clearImageAttachments()
+            args.setNotice(null)
+          }
+        })
+        return
+      }
     }
     const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,

@@ -27,12 +27,13 @@ function committed(transaction: IDBTransaction): Promise<void> {
 }
 
 export function createIndexedDbNativeChatComposerDraftStorage(
-  factory: IDBFactory
+  factory: IDBFactory,
+  databaseName = DATABASE_NAME
 ): NativeChatComposerDraftStorage {
   let opened: Promise<IDBDatabase> | null = null
   const database = (): Promise<IDBDatabase> => {
     opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const request = factory.open(DATABASE_NAME, DATABASE_VERSION)
+      const request = factory.open(databaseName, DATABASE_VERSION)
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(DRAFTS)) {
           request.result.createObjectStore(DRAFTS)

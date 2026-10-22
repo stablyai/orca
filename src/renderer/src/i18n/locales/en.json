@@ -19514,6 +19514,10 @@
       "imagePreview": {
         "fileActions": "File actions",
         "linkActions": "Link actions"
+      },
+      "terminalQueue": {
+        "deliveryUnknown": "Delivery is unconfirmed. Check the conversation before deleting this draft; it will not be sent again automatically.",
+        "storageError": "Could not save queued messages. Your draft was kept."
       }
     },
     "tab": {

@@ -28,9 +28,11 @@ export type QueuedMessageCardHold =
   /** On its way to the host, which holds no card for it yet: it reads as sending, and nothing
    *  can act on it until the host's card replaces it under the same id. */
   | 'sending'
+  | 'unconfirmed'
 
 export type QueuedMessageCard = {
   messageId: string
+  steerCapable?: boolean
   position: number
   /** The draft's text blocks joined. */
   text: string
@@ -139,7 +141,13 @@ export function queuedMessagesQueuePause(
 /** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
  *  returned is not waiting on the turn, so its action is plainly Send. A command never steers. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
+  return (
+    card.steerCapable !== false &&
+    card.hold !== 'paused' &&
+    card.hold !== 'returned' &&
+    card.hold !== 'unconfirmed' &&
+    !card.command
+  )
 }
 
 /** The card Cmd/Ctrl+Enter steers: the newest one, unless it is a command, which never steers. */

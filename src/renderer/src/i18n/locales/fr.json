@@ -19186,6 +19186,10 @@
       },
       "claudeSignIn": {
         "signingIn": "Connexion…"
+      },
+      "terminalQueue": {
+        "deliveryUnknown": "L’envoi n’est pas confirmé. Vérifiez la conversation avant de supprimer ce brouillon ; il ne sera pas renvoyé automatiquement.",
+        "storageError": "Impossible d’enregistrer les messages en attente. Votre brouillon a été conservé."
       }
     },
     "tab": {
